@@ -264,6 +264,7 @@ struct umem_attr {
 /** instance of an unified memory class */
 struct umem_instance {
 	umem_class_id_t		 umm_id;
+	int			 umm_nospc_rc;
 	const char		*umm_name;
 	PMEMobjpool		*umm_pool;
 	/** Cache the pool id field for umem addresses */

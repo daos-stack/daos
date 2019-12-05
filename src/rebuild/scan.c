@@ -63,8 +63,8 @@ struct rebuild_scan_arg {
 };
 
 static int
-rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
-		     daos_iov_t *val_iov, void *data)
+rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
+		     d_iov_t *val_iov, void *data)
 {
 	struct rebuild_send_arg *arg = data;
 	struct rebuild_root	*root = arg->tgt_root;
@@ -108,8 +108,8 @@ rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 }
 
 static int
-rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
-		     daos_iov_t *val_iov, void *data)
+rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
+		     d_iov_t *val_iov, void *data)
 {
 	struct rebuild_root *root = val_iov->iov_buf;
 	struct rebuild_send_arg *arg = data;
@@ -268,7 +268,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		}
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
-			if (targets[i].ta_comp.co_rank == tgt_id) {
+			if (targets[i].ta_comp.co_id == tgt_id) {
 				target_failed = true;
 				break;
 			}
@@ -305,8 +305,8 @@ out:
 }
 
 static int
-rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
-			     daos_iov_t *val_iov, void *data)
+rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, d_iov_t *key_iov,
+			     d_iov_t *val_iov, void *data)
 {
 	struct rebuild_root *root;
 	struct rebuild_scan_arg *arg = data;
@@ -324,7 +324,7 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc < 0)
 		return rc;
 
-	rc = dbtree_destroy(root->root_hdl);
+	rc = dbtree_destroy(root->root_hdl, NULL);
 	if (rc)
 		return rc;
 
@@ -353,8 +353,8 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 		    void *key, daos_size_t key_size,
 		    struct rebuild_root **rootp)
 {
-	daos_iov_t key_iov;
-	daos_iov_t val_iov;
+	d_iov_t key_iov;
+	d_iov_t val_iov;
 	struct umem_attr uma;
 	struct rebuild_root root;
 	struct btr_root	*broot;
@@ -377,13 +377,13 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 		D_GOTO(out, rc);
 	}
 
-	daos_iov_set(&key_iov, key, key_size);
-	daos_iov_set(&val_iov, &root, sizeof(root));
+	d_iov_set(&key_iov, key, key_size);
+	d_iov_set(&val_iov, &root, sizeof(root));
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
 
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
@@ -393,7 +393,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 out:
 	if (rc < 0) {
 		if (!daos_handle_is_inval(root.root_hdl))
-			dbtree_destroy(root.root_hdl);
+			dbtree_destroy(root.root_hdl, NULL);
 	}
 	return rc;
 }
@@ -421,8 +421,8 @@ rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 		      unsigned int tgt_idx, unsigned int *cnt, int ref)
 {
 	struct rebuild_obj_key	key;
-	daos_iov_t		key_iov;
-	daos_iov_t		val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	int			rc;
 
 	oid.id_shard = shard;
@@ -431,8 +431,8 @@ rebuild_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 	key.tgt_idx = tgt_idx;
 
 	/* look up the object under the container tree */
-	daos_iov_set(&key_iov, &key, sizeof(key));
-	daos_iov_set(&val_iov, &shard, sizeof(shard));
+	d_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&val_iov, &shard, sizeof(shard));
 	rc = dbtree_lookup(cont_root->root_hdl, &key_iov, &val_iov);
 	D_DEBUG(DB_REBUILD, "lookup "DF_UOID" in cont "DF_UUID" eph "
 		DF_U64" rc %d\n", DP_UOID(oid), DP_UUID(co_uuid), eph, rc);
@@ -461,12 +461,12 @@ rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 			rebuild_obj_insert_cb_t obj_cb)
 {
 	struct rebuild_root	*cont_root;
-	daos_iov_t		key_iov;
-	daos_iov_t		val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	int			rc;
 
-	daos_iov_set(&key_iov, co_uuid, sizeof(uuid_t));
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov, co_uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc < 0) {
 		if (rc != -DER_NONEXIST) {
@@ -499,15 +499,15 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		      unsigned int shard, uuid_t pool_uuid, uuid_t co_uuid,
 		      daos_unit_oid_t oid, daos_epoch_t epoch)
 {
-	daos_iov_t		key_iov;
-	daos_iov_t		val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	struct rebuild_root	*tgt_root;
 	daos_handle_t		toh = arg->rebuild_tree_hdl;
 	int			rc;
 
 	/* look up the target tree */
-	daos_iov_set(&key_iov, &tgt_id, sizeof(tgt_id));
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov, &tgt_id, sizeof(tgt_id));
+	d_iov_set(&val_iov, NULL, 0);
 	ABT_mutex_lock(arg->scan_lock);
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc < 0) {
@@ -600,6 +600,11 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 			" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
 			DP_UUID(rpt->rt_pool_uuid), tgts[i], shards[i]);
 
+		struct pool_target *target;
+
+		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
+		D_ASSERT(rc == 1);
+
 		/* During rebuild test, it will manually exclude some target to
 		 * trigger the rebuild, then later add it back, so some objects
 		 * might exist on some illegal target, so they might use its
@@ -607,7 +612,7 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 		 * now. When we have better support from CART exclude/addback,
 		 * myrank should always not equal to tgt_rebuild. XXX
 		 */
-		if (myrank != tgts[i]) {
+		if (myrank != target->ta_comp.co_rank) {
 			rc = rebuild_object_insert(arg, tgts[i], shards[i],
 						   rpt->rt_pool_uuid, co_uuid,
 						   oid, ent->ie_epoch);
@@ -689,7 +694,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rpt->rt_lock);
 	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, true, DEFAULT_PL_TYPE);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);
@@ -733,7 +738,7 @@ put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
-	dbtree_destroy(arg->rebuild_tree_hdl);
+	dbtree_destroy(arg->rebuild_tree_hdl, NULL);
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
@@ -754,6 +759,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_arg		*scan_arg;
 	struct umem_attr		 uma;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
+	d_rank_list_t			*fail_list = NULL;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -795,7 +801,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* Update master rank */
 			rc = ds_pool_iv_ns_update(rpt->rt_pool,
 						  rsi->rsi_master_rank,
-						  &rsi->rsi_ns_iov,
 						  rsi->rsi_ns_id);
 			if (rc)
 				D_GOTO(out, rc);
@@ -861,7 +866,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	D_GOTO(out, rc);
 out_tree:
-	dbtree_destroy(scan_arg->rebuild_tree_hdl);
+	dbtree_destroy(scan_arg->rebuild_tree_hdl, NULL);
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:
@@ -872,25 +877,31 @@ out:
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	if (rc) {
-		d_rank_list_t *fail_list;
-
 		/* If it failed, tell the master the target can not
 		 * start the rebuild, so master will put the target
 		 * into DOWN state.
 		 */
 		fail_list = d_rank_list_alloc(1);
-		if (rpt && rpt->rt_pool)
-			crt_group_rank(rpt->rt_pool->sp_group,
-				       &fail_list->rl_ranks[0]);
-		else
-			crt_group_rank(NULL, &fail_list->rl_ranks[0]);
+		if (fail_list != NULL) {
+			if (rpt && rpt->rt_pool)
+				crt_group_rank(rpt->rt_pool->sp_group,
+					       &fail_list->rl_ranks[0]);
+			else
+				crt_group_rank(NULL, &fail_list->rl_ranks[0]);
 
-		ro->rso_ranks_list = fail_list;
+			ro->rso_ranks_list = fail_list;
+		} else {
+			D_ERROR("failed to alloc rank list.\n");
+		}
 		if (rpt)
 			rpt->rt_abort = 1;
 	}
 
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
+	/* will fix cart to call co_post_reply() for this case, freeing
+	 * it immediately at here is potentially unsafe.
+	 */
+	/* d_rank_list_free(fail_list); */
 }
 
 int
@@ -900,6 +911,9 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
 	int i;
+
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
 
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)
@@ -923,3 +937,13 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
+int
+rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct rebuild_scan_out *out = crt_reply_get(rpc);
+
+	if (out->rso_ranks_list != NULL)
+		d_rank_list_free(out->rso_ranks_list);
+
+	return 0;
+}

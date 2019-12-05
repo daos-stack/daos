@@ -36,7 +36,7 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 	 */
 	nlookup++;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
 		DFUSE_TRA_WARNING(fs_handle, "Unable to find ref for %lu %lu",
 				  ino, nlookup);
@@ -47,7 +47,7 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle,
 		       "ino %lu count %lu",
 		       ino, nlookup);
 
-	rc = d_hash_rec_ndecref(&fs_handle->dfpi_iet, nlookup, rlink);
+	rc = d_hash_rec_ndecref(&fs_handle->dpi_iet, nlookup, rlink);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "Invalid refcount %lu on %p",
 				nlookup,

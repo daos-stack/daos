@@ -7,31 +7,64 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
-    prereqs.require(denv, 'fuse')
+    """If Lustre installed use its headers instead of our local defines"""
+    try:
+        with open('/etc/os-release') as f:
+            for line in f:
+                if 'ID' in line:
+                    line = line.strip()
+                    _, distro = line.strip().split('=')
+                    distro = distro.strip('"')
+                    break
+        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
+            import rpm
+            from pkg_resources import parse_version
 
-    libraries = ['daos_common', 'daos', 'gurt', 'cart', 'uuid']
+            ts = rpm.TransactionSet()
+            headers = ts.dbMatch('name', 'lustre')
+            if not headers:
+                headers = ts.dbMatch('name', 'lustre-client')
+            if headers and parse_version(headers['version']) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            else:
+                print("Found no package lustre nor lustre-client.")
+        elif distro in ('debian', 'ubuntu'):
+            import apt
+            cache = apt.Cache()
+            cache.open()
+            instver = cache["lustre"].installed
+            if not instver:
+                instver = cache["lustre-client"].installed
+            if instver and parse_version(instver.version) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            else:
+                print("Found no package lustre nor lustre-client.")
+        else:
+            print("Unable to identify distro.")
+    except ImportError:
+        pass
+
+    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
+
+    libraries = ['$LIBS', 'daos_common', 'daos', 'uuid']
 
     dfs_src = ['dfs.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib/', dfs)
+    denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
-    dfuse_hl_libs = libraries + ['fuse3']
 
+    fenv = denv.Clone()
+    prereqs.require(fenv, 'fuse')
     dfuse_hl_src = ['dfuse_hl.c']
-    dfuse_hl = daos_build.program(denv, 'dfuse_hl', dfuse_hl_src,
-                                  LIBS=dfuse_hl_libs)
-    denv.Install('$PREFIX/bin/', dfuse_hl)
+    dfuse_hl = daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
+                                  LIBS=libraries)
+    fenv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
-    denv.Install('$PREFIX/lib/', duns)
-
-    libraries = libraries + ['duns']
-    duns_tool = daos_build.program(denv, 'duns', 'duns_tool.c', LIBS=libraries)
-    denv.Install('$PREFIX/bin/', duns_tool)
+    denv.Install('$PREFIX/lib64/', duns)
 
 if __name__ == "SCons.Script":
     scons()

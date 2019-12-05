@@ -30,26 +30,6 @@
 
 #include "dfuse_log.h"
 
-#include <sys/stat.h>
-#include <gurt/common.h>
 
-#include "dfuse_gah.h"
-
-struct dfuse_string_out {
-	d_string_t path;
-	int rc;
-	int err;
-};
-
-struct dfuse_attr_out {
-	struct stat stat;
-	int rc;
-	int err;
-};
-
-struct dfuse_status_out {
-	int rc;
-	int err;
-};
 
 #endif /* __DFUSE_COMMON_H__ */

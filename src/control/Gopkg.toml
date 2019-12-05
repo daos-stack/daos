@@ -9,30 +9,20 @@
   go-tests = true
   unused-packages = true
 
-# ishell: MIT License used for the frontend shell interface for Go components.
-# This is our ishell fork - we control the accepted patches.
-[[constraint]]
-  name = "github.com/daos-stack/ishell"
-  branch = "master"
-
 # protobuf: 3 Clause BSD Licensed and provides go GRPC compiler support
 [[constraint]]
   name = "github.com/golang/protobuf"
-  version = "~1.2.0"
+  version = "~1.3.2"
 
 # go-flags: 3 Clause BSD used for command line parsing with ishell.
 [[constraint]]
   name = "github.com/jessevdk/go-flags"
   version = "~1.4.0"
 
-# go.uuid: MIT Licensed and used for UUID generation in Go components
+# uuid: 3 Clause BSD used for generating UUIDs.
 [[constraint]]
-  name = "github.com/satori/go.uuid"
-# API-breaking changes have gone in since v1.2.0.
-# Uncomment with appropriate version number and remove
-# revision hash when the maintainer tags a new version.
-#  version = "~2.0.0"
-  revision = "36e9d2ebbde5e3f13ab2e25625fd453271d6522e"
+  name = "github.com/google/uuid"
+  version = "~1.1.1"
 
 # net: 3 Clause BSD Licensed
 [[constraint]]
@@ -54,16 +44,14 @@
   name = "gopkg.in/yaml.v2"
   version = "2.2.1"
 
-# go-ipmctl: bindings to interact with libipmctl.so to manage SCM modules
-# maintained within daos-stack
-# pin with commit hash rather than just tip of master until tags exist.
+# go-bytesize: BSD 3-Clause, handle conversion from human readable size
+# strings to bytes.
 [[constraint]]
-  name = "github.com/daos-stack/go-ipmctl"
-  revision = "cb00fdf11001077f5451661448d44e900dfa8489"
+  branch = "master"
+  name = "github.com/inhies/go-bytesize"
 
-# go-spdk: bindings to interact with libspdk.so to manage NVMe SSDs
-# maintained within daos-stack
-# pin with commit hash rather than just tip of master until tags exist.
+# go-cmp: BSD 3-Clause, allows comparison of complex structures in
+# tests
 [[constraint]]
-  name = "github.com/daos-stack/go-spdk"
-  revision = "a7a7a864ea47192de3ce3d55d21e07bb502c40d8"
+  name = "github.com/google/go-cmp"
+  version = "~0.3.1"

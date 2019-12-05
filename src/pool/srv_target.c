@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * ds_pool: Target Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
@@ -36,6 +38,7 @@
  *   Thread-local  ds_pool_child  ds_cont
  *                                ds_cont_hdl
  */
+
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
@@ -102,8 +105,8 @@ ds_pool_child_purge(struct pool_tls *tls)
 }
 
 struct pool_child_lookup_arg {
-	struct ds_pool	*pla_pool;
-	void		*pla_uuid;
+	struct ds_pool *pla_pool;
+	void	       *pla_uuid;
 	uint32_t	pla_map_version;
 };
 
@@ -112,33 +115,35 @@ struct pool_child_lookup_arg {
  * for one thread. This opens the matching VOS pool.
  */
 static int
-ds_pool_child_open(struct ds_pool *pool, uuid_t uuid, unsigned int version)
+pool_child_add_one(void *varg)
 {
+	struct pool_child_lookup_arg   *arg = varg;
 	struct pool_tls		       *tls = pool_tls_get();
 	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
 	int				rc;
 
-	child = ds_pool_child_lookup(uuid);
+	child = ds_pool_child_lookup(arg->pla_uuid);
 	if (child != NULL) {
 		ds_pool_child_put(child);
 		return 0;
 	}
 
-	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
 	D_ALLOC_PTR(child);
 	if (child == NULL)
 		return -DER_NOMEM;
 
-	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
+			      &path);
 	if (rc != 0) {
 		D_FREE(child);
 		return rc;
 	}
 
-	rc = vos_pool_open(path, uuid, &child->spc_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -147,41 +152,13 @@ ds_pool_child_open(struct ds_pool *pool, uuid_t uuid, unsigned int version)
 		return rc;
 	}
 
-	uuid_copy(child->spc_uuid, uuid);
-	child->spc_map_version = version;
+	uuid_copy(child->spc_uuid, arg->pla_uuid);
+	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
-	child->spc_pool = pool;
+	child->spc_pool = arg->pla_pool;
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
-	return 0;
-}
-
-/*
- * Called via dss_collective() to create and add the ds_pool_child object for
- * one thread. This opens the matching VOS pool.
- */
-static int
-pool_child_add_one(void *varg)
-{
-	struct pool_child_lookup_arg   *arg = varg;
-
-	return ds_pool_child_open(arg->pla_pool, arg->pla_uuid,
-				  arg->pla_map_version);
-}
-
-int
-ds_pool_child_close(uuid_t uuid)
-{
-	struct ds_pool_child *child;
-
-	child = ds_pool_child_lookup(uuid);
-	if (child == NULL)
-		return 0;
-
-	d_list_del_init(&child->spc_list);
-	ds_pool_child_put(child); /* -1 for the list */
-	ds_pool_child_put(child); /* -1 for lookup */
 	return 0;
 }
 
@@ -193,7 +170,17 @@ ds_pool_child_close(uuid_t uuid)
 static int
 pool_child_delete_one(void *uuid)
 {
-	return ds_pool_child_close(uuid);
+	struct ds_pool_child *child;
+
+	child = ds_pool_child_lookup(uuid);
+	if (child == NULL)
+		return 0;
+
+	d_list_del_init(&child->spc_list);
+	ds_pool_child_put(child); /* -1 for the list */
+
+	ds_pool_child_put(child); /* -1 for lookup */
+	return 0;
 }
 
 /* ds_pool ********************************************************************/
@@ -216,6 +203,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct pool_child_lookup_arg	collective_arg;
 	int				rc;
 	int				rc_tmp;
+
+	if (arg == NULL) {
+		/* The caller doesn't want to create a ds_pool object. */
+		rc = -DER_NONEXIST;
+		goto err;
+	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(key));
 
@@ -516,7 +509,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_ERROR("Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
 		return;
 	}
 
@@ -547,6 +540,9 @@ pool_query_xs_reduce(void *agg_arg, void *xs_arg)
 {
 	struct pool_query_xs_arg	*a_arg = agg_arg;
 	struct pool_query_xs_arg	*x_arg = xs_arg;
+
+	if (x_arg->qxa_space.ps_ntargets == 0)
+		return;
 
 	D_ASSERT(x_arg->qxa_space.ps_ntargets == 1);
 	aggregate_pool_space(&a_arg->qxa_space, &x_arg->qxa_space);
@@ -617,7 +613,7 @@ static int
 pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
 	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
+	struct dss_coll_args		coll_args = { 0 };
 	struct pool_query_xs_arg	agg_arg = { 0 };
 	int				rc;
 
@@ -637,7 +633,18 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
+					&coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		return rc;
+	}
+
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -653,7 +660,6 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_connect_in	*in = crt_req_get(rpc);
 	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
-	struct pool_map			*map = NULL;
 	struct ds_pool			*pool;
 	struct ds_pool_hdl		*hdl;
 	struct ds_pool_create_arg	 arg;
@@ -686,8 +692,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	arg.pca_map_version = in->tci_map_version;
-	arg.pca_need_group = 0;
-
+	arg.pca_need_group = 1;
 	rc = ds_pool_lookup_create(in->tci_uuid, &arg, &pool);
 	if (rc != 0) {
 		D_FREE(hdl);
@@ -704,21 +709,15 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (pool->sp_iv_ns == NULL) {
-		rc = ds_pool_iv_ns_update(pool, in->tci_master_rank,
-					  &in->tci_iv_ctxt,
-					  in->tci_iv_ns_id);
-		if (rc) {
-			D_ERROR("attach iv ns failed rc %d\n", rc);
-			D_GOTO(out, rc);
-		}
+	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, in->tci_iv_ns_id);
+	if (rc) {
+		D_ERROR("attach iv ns failed rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = pool_tgt_query(pool, &out->tco_space);
+	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_tgt_query(pool, &out->tco_space);
 out:
-	if (rc != 0 && map != NULL)
-		pool_map_decref(map);
-
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
@@ -836,7 +835,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			struct pool_map *tmp = pool->sp_map;
 
 			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true);
+					   pool->sp_map != NULL ? false : true,
+					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				D_ERROR(DF_UUID": failed update pl_map: %d\n",
@@ -863,7 +863,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		struct pool_map *tmp = pool->sp_map;
 
 		rc = pl_map_update(pool->sp_uuid, map,
-				   pool->sp_map != NULL ? false : true);
+				   pool->sp_map != NULL ? false : true,
+				   DEFAULT_PL_TYPE);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
@@ -906,14 +907,14 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	}
 
 	if (rpc->cr_co_bulk_hdl != NULL) {
-		daos_iov_t	iov;
-		daos_sg_list_t	sgl;
+		d_iov_t	iov;
+		d_sg_list_t	sgl;
 
 		memset(&iov, 0, sizeof(iov));
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		buf = iov.iov_buf;

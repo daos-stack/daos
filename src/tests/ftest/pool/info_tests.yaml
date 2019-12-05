@@ -1,30 +1,30 @@
 hosts:
-  test_machines1:
+  test_servers:
     - boro-A
 server_config:
-   name: daos_server
-testparams:
-   setnames:
-      validsetname:
-        setname: daos_server
-   modes: !mux
-      modeall:
-        mode: 511
-      readonly:
-        mode: 292
-      writeonly:
-        mode: 146
-      execonly:
-        mode: 73
-   sizes: !mux
-      size1gb:
-        size: 1073741824
-      size3gb:
-        size: 3221225472
-   connectperms: !mux
-      permro:
-        perms: 0
-      permrw:
-        perms: 1
-      permex:
-        perms: 2
+  name: daos_server
+  servers:
+    targets: 1
+pool:
+  createmode: !mux
+    mode_all:
+      mode: 511
+    mode_ex:
+      mode: 292
+    mode_rw:
+      mode: 146
+  createset:
+    name: daos_server
+  createsize: !mux
+    size1gb:
+      scm_size: 1073741824
+    size3gb:
+      scm_size: 3221225472
+test:
+  poolconnect: !mux
+    ro:
+      permissions: 0
+    rw:
+      permissions: 1
+    ex:
+      permissions: 2

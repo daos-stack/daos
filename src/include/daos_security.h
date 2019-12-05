@@ -51,6 +51,24 @@ extern "C" {
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
+ * String values for the special principal types
+ */
+#define DAOS_ACL_PRINCIPAL_OWNER	"OWNER@"
+#define DAOS_ACL_PRINCIPAL_OWNER_GRP	"GROUP@"
+#define DAOS_ACL_PRINCIPAL_EVERYONE	"EVERYONE@"
+
+/**
+ * Maximum length of daos_acl::dal_ace (dal_len's value).
+ */
+#define DAOS_ACL_MAX_ACE_LEN		(8192)
+
+/**
+ * Maximum length of an ACE provided in string format:
+ *	<access>:<flags>:<principal>:<perms>
+ */
+#define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
+
+/**
  * Header for the Access Control List, followed by the table of variable-length
  * Access Control Entries.
  * The entry list may be walked by inspecting the principal length and
@@ -326,7 +344,7 @@ daos_ace_get_size(struct daos_ace *ace);
  * \param	tabs	Number of tabs to indent at top level
  */
 void
-daos_ace_dump(struct daos_ace *ace, uint tabs);
+daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
 
 /**
  * Sanity check the Access Control Entry structure for valid values and internal
@@ -416,6 +434,95 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid);
  */
 int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
+
+/**
+ * Convert an Access Control Entry formatted as a string to a daos_ace
+ * structure.
+ *
+ * \param[in]	str	String defining an ACE
+ * \param[out]	ace	Newly allocated ACE structure
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_ace_from_str(const char *str, struct daos_ace **ace);
+
+/**
+ * Convert an Access Control Entry in the form of a daos_ace structure to a
+ * compact string.
+ *
+ * Limitation: A valid ACE with different permissions for different access types
+ * cannot be formatted as a single string, and will be rejected as invalid.
+ *
+ * \param[in]	ace		ACE structure
+ * \param[out]	buf		Buffer to write the string
+ * \param[out]	buf_len		Size of buffer
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ */
+int
+daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
+
+/**
+ * Convert a list of Access Control Entries formatted as strings to a daos_acl
+ * structure.
+ *
+ * \param[in]	ace_strs	Array of strings defining ACEs
+ * \param[in]	ace_nr		Length of ace_strs
+ * \param[out]	acl		Newly allocated ACL structure
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
+
+/**
+ * Convert an Access Control List (daos_acl) to a list of Access Control Entries
+ * formatted as strings.
+ *
+ * Each entry in ace_strs is dynamically allocated. So is the array itself. It
+ * is the caller's responsibility to free all of them.
+ *
+ * \param[in]	acl		DAOS ACL
+ * \param[out]	ace_strs	Newly allocated array of strings
+ * \param[out]	ace_nr		Length of ace_strs
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
+
+/**
+ * Convert a formatted principal string to an ACL principal type and name
+ * suitable for creating or looking up an Access Control Entry.
+ *
+ * The format of the input string is:
+ * - For named user: "u:username@"
+ * - For named group: "g:groupname@"
+ * - For special types: "OWNER@", "GROUP@", or "EVERYONE@"
+ *
+ * \param[in]	principal_str	Formatted principal string
+ * \param[out]	type		Type determined from the string
+ * \param[out]	name		Newly-allocated name string. Caller is
+ *				responsible for freeing.
+ *				Result may be NULL if the principal is one of
+ *				the special types.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_from_str(const char *principal_str,
+			    enum daos_acl_principal_type *type,
+			    char **name);
 
 #if defined(__cplusplus)
 }

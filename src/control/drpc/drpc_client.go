@@ -24,8 +24,8 @@
 package drpc
 
 import (
-	"fmt"
 	"net"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -34,30 +34,24 @@ import (
 // DomainSocketClient is the interface to a dRPC client communicating over a
 // Unix Domain Socket
 type DomainSocketClient interface {
+	sync.Locker
 	IsConnected() bool
 	Connect() error
 	Close() error
 	SendMsg(call *Call) (*Response, error)
 }
 
-// domainSocketConn is an interface representing a connection to a Unix Domain
-// Socket. Should play nicely with net.UnixConn
-type domainSocketConn interface {
-	ReadMsgUnix(b, oob []byte) (n, oobn, flags int, addr *net.UnixAddr, err error)
-	WriteMsgUnix(b, oob []byte, addr *net.UnixAddr) (n, oobn int, err error)
-	Close() error
-}
-
 // domainSocketDialer is an interface that connects to a Unix Domain Socket
 type domainSocketDialer interface {
-	dial(socketPath string) (domainSocketConn, error)
+	dial(socketPath string) (net.Conn, error)
 }
 
 // ClientConnection represents a client connection to a dRPC server
 type ClientConnection struct {
+	sync.Mutex
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
-	conn       domainSocketConn   // UDS connection
+	conn       net.Conn           // Connection to socket
 	sequence   int64              // Increment each time we send
 }
 
@@ -75,7 +69,7 @@ func (c *ClientConnection) Connect() error {
 
 	conn, err := c.dialer.dial(c.socketPath)
 	if err != nil {
-		return fmt.Errorf("dRPC connect: %v", err)
+		return errors.Wrap(err, "dRPC connect")
 	}
 
 	c.conn = conn
@@ -92,7 +86,7 @@ func (c *ClientConnection) Close() error {
 
 	err := c.conn.Close()
 	if err != nil {
-		return fmt.Errorf("dRPC close: %v", err)
+		return errors.Wrap(err, "dRPC close")
 	}
 
 	c.conn = nil
@@ -106,11 +100,10 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("failed to marshall dRPC call: %v", err)
+		return errors.Wrap(err, "failed to marshal dRPC request")
 	}
 
-	_, _, err = c.conn.WriteMsgUnix(callBytes, nil, nil)
-	if err != nil {
+	if _, err := c.conn.Write(callBytes); err != nil {
 		return errors.Wrap(err, "dRPC send")
 	}
 
@@ -118,8 +111,8 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 }
 
 func (c *ClientConnection) recvResponse() (*Response, error) {
-	respBytes := make([]byte, MAXMSGSIZE)
-	numBytes, _, _, _, err := c.conn.ReadMsgUnix(respBytes, nil)
+	respBytes := make([]byte, MaxMsgSize)
+	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "dRPC recv")
 	}
@@ -127,8 +120,7 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 	resp := &Response{}
 	err = proto.Unmarshal(respBytes[:numBytes], resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal dRPC response: %v",
-			err)
+		return nil, errors.Wrap(err, "failed to unmarshal dRPC response")
 	}
 
 	return resp, nil
@@ -138,11 +130,11 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 // response to the caller.
 func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 	if !c.IsConnected() {
-		return nil, fmt.Errorf("dRPC not connected")
+		return nil, errors.Errorf("dRPC not connected")
 	}
 
 	if msg == nil {
-		return nil, fmt.Errorf("invalid dRPC call")
+		return nil, errors.Errorf("invalid dRPC call")
 	}
 
 	err := c.sendCall(msg)
@@ -167,7 +159,7 @@ type clientDialer struct {
 }
 
 // dial connects to the real unix domain socket located at socketPath
-func (c *clientDialer) dial(socketPath string) (domainSocketConn, error) {
+func (c *clientDialer) dial(socketPath string) (net.Conn, error) {
 	addr := &net.UnixAddr{
 		Net:  "unixpacket",
 		Name: socketPath,

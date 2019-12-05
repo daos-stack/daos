@@ -40,26 +40,10 @@
 static char *mgmt_svc_id_s;
 
 /* Management service ID */
-static daos_iov_t mgmt_svc_id;
+static d_iov_t mgmt_svc_id;
 
 /* Management service DB UUID */
 static uuid_t mgmt_svc_db_uuid;
-
-/* Management service */
-struct mgmt_svc {
-	struct ds_rsvc	ms_rsvc;
-	ABT_rwlock	ms_lock;
-	rdb_path_t	ms_root;
-	rdb_path_t	ms_servers;
-	rdb_path_t	ms_uuids;
-	ABT_mutex	ms_mutex;
-	bool		ms_step_down;
-	bool		ms_distribute;
-	ABT_cond	ms_distribute_cv;
-	ABT_thread	ms_distributord;
-	uint32_t	ms_map_version;
-	uint32_t	ms_rank_next;
-};
 
 static struct mgmt_svc *
 mgmt_svc_obj(struct ds_rsvc *rsvc)
@@ -68,7 +52,7 @@ mgmt_svc_obj(struct ds_rsvc *rsvc)
 }
 
 static int
-mgmt_svc_name_cb(daos_iov_t *id, char **name)
+mgmt_svc_name_cb(d_iov_t *id, char **name)
 {
 	char *s;
 
@@ -80,26 +64,26 @@ mgmt_svc_name_cb(daos_iov_t *id, char **name)
 }
 
 static int
-mgmt_svc_load_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+mgmt_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	uuid_copy(db_uuid, mgmt_svc_db_uuid);
 	return 0;
 }
 
 static int
-mgmt_svc_store_uuid_cb(daos_iov_t *id, uuid_t db_uuid)
+mgmt_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
 {
 	return 0;
 }
 
 static int
-mgmt_svc_delete_uuid_cb(daos_iov_t *id)
+mgmt_svc_delete_uuid_cb(d_iov_t *id)
 {
 	return 0;
 }
 
 static int
-mgmt_svc_locate_cb(daos_iov_t *id, char **path)
+mgmt_svc_locate_cb(d_iov_t *id, char **path)
 {
 	char *s;
 
@@ -111,7 +95,7 @@ mgmt_svc_locate_cb(daos_iov_t *id, char **path)
 }
 
 static int
-mgmt_svc_alloc_cb(daos_iov_t *id, struct ds_rsvc **rsvc)
+mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 {
 	struct mgmt_svc	       *svc;
 	int			rc;
@@ -152,25 +136,18 @@ mgmt_svc_alloc_cb(daos_iov_t *id, struct ds_rsvc **rsvc)
 	if (rc != 0)
 		goto err_uuids;
 
-	rc = ABT_mutex_create(&svc->ms_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create mutex: %d\n", rc);
-		rc = dss_abterr2der(rc);
+	rc = rdb_path_clone(&svc->ms_root, &svc->ms_pools);
+	if (rc != 0)
 		goto err_uuids;
-	}
-
-	rc = ABT_cond_create(&svc->ms_distribute_cv);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create distribute_cv: %d\n", rc);
-		rc = dss_abterr2der(rc);
-		goto err_mutex;
-	}
+	rc = rdb_path_push(&svc->ms_pools, &ds_mgmt_prop_pools);
+	if (rc != 0)
+		goto err_pools;
 
 	*rsvc = &svc->ms_rsvc;
 	return 0;
 
-err_mutex:
-	ABT_mutex_free(&svc->ms_mutex);
+err_pools:
+	rdb_path_fini(&svc->ms_pools);
 err_uuids:
 	rdb_path_fini(&svc->ms_uuids);
 err_servers:
@@ -190,8 +167,7 @@ mgmt_svc_free_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc *svc = mgmt_svc_obj(rsvc);
 
-	ABT_cond_free(&svc->ms_distribute_cv);
-	ABT_mutex_free(&svc->ms_mutex);
+	rdb_path_fini(&svc->ms_pools);
 	rdb_path_fini(&svc->ms_uuids);
 	rdb_path_fini(&svc->ms_servers);
 	rdb_path_fini(&svc->ms_root);
@@ -214,7 +190,7 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	struct bootstrap_arg   *arg = varg;
 	struct rdb_tx		tx;
 	struct rdb_kvs_attr	attr;
-	daos_iov_t		value;
+	d_iov_t		value;
 	uint32_t		map_version = 1;
 	uint32_t		rank_next = 0;
 	int			rc;
@@ -244,11 +220,17 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	if (rc != 0)
 		goto out_lock;
 
+	attr.dsa_class = RDB_KVS_GENERIC;
+	attr.dsa_order = 4;
+	rc = rdb_tx_create_kvs(&tx, &svc->ms_root, &ds_mgmt_prop_pools, &attr);
+	if (rc != 0)
+		goto out_lock;
+
 	rc = add_server(&tx, svc, arg->sa_rank, &arg->sa_server);
 	if (rc != 0)
 		goto out_lock;
 
-	daos_iov_set(&value, &map_version, sizeof(map_version));
+	d_iov_set(&value, &map_version, sizeof(map_version));
 	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
 			   &value);
 	if (rc != 0)
@@ -256,7 +238,7 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 
 	if (rank_next == arg->sa_rank)
 		rank_next++;
-	daos_iov_set(&value, &rank_next, sizeof(rank_next));
+	d_iov_set(&value, &rank_next, sizeof(rank_next));
 	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_rank_next, &value);
 	if (rc != 0)
 		goto out_lock;
@@ -270,15 +252,12 @@ out:
 	return rc;
 }
 
-static void map_distributord(void *arg);
-static void notify_map_distributord(struct mgmt_svc *svc);
-
 static int
 mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
-	daos_iov_t		value;
+	d_iov_t		value;
 	int			rc;
 
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
@@ -287,7 +266,7 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 
 	ABT_rwlock_rdlock(svc->ms_lock);
 
-	daos_iov_set(&value, &svc->ms_map_version, sizeof(svc->ms_map_version));
+	d_iov_set(&value, &svc->ms_map_version, sizeof(svc->ms_map_version));
 	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
 			   &value);
 	if (rc != 0) {
@@ -298,14 +277,8 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out_lock;
 	}
 
-	daos_iov_set(&value, &svc->ms_rank_next, sizeof(svc->ms_rank_next));
+	d_iov_set(&value, &svc->ms_rank_next, sizeof(svc->ms_rank_next));
 	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_rank_next, &value);
-	if (rc != 0)
-		goto out_lock;
-
-	svc->ms_step_down = false;
-	rc = dss_ult_create(map_distributord, svc, DSS_ULT_MISC, DSS_TGT_SELF,
-			    0, &svc->ms_distributord);
 	if (rc != 0)
 		goto out_lock;
 
@@ -313,7 +286,7 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * Just in case the previous leader didn't complete distributing the
 	 * system map before stepping down.
 	 */
-	notify_map_distributord(svc);
+	ds_rsvc_request_map_dist(&svc->ms_rsvc);
 
 out_lock:
 	ABT_rwlock_unlock(svc->ms_lock);
@@ -325,19 +298,142 @@ out:
 static void
 mgmt_svc_step_down_cb(struct ds_rsvc *rsvc)
 {
-	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
-	int			rc;
-
-	svc->ms_step_down = true;
-	ABT_cond_broadcast(svc->ms_distribute_cv);
-	rc = ABT_thread_join(svc->ms_distributord);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	ABT_thread_free(&svc->ms_distributord);
 }
 
 static void
 mgmt_svc_drain_cb(struct ds_rsvc *rsvc)
 {
+}
+
+struct enum_server_arg {
+	struct server_entry    *esa_servers;
+	int			esa_servers_cap;
+	int			esa_servers_len;
+};
+
+static int
+enum_server_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct enum_server_arg *arg = varg;
+	uint64_t	       *rank_key;
+	struct server_rec      *rec;
+	struct server_entry    *entry;
+
+	if (key->iov_len != sizeof(*rank_key) ||
+	    val->iov_len != sizeof(*rec)) {
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+			key->iov_len, val->iov_len);
+		return -DER_IO;
+	}
+	rank_key = key->iov_buf;
+	if (*rank_key > UINT32_MAX) {
+		D_ERROR("invalid key: "DF_U64"\n", *rank_key);
+		return -DER_IO;
+	}
+	rec = val->iov_buf;
+
+	/* Make sure arg->esa_servers[] have enough space for this server. */
+	if (arg->esa_servers_len + 1 > arg->esa_servers_cap) {
+		struct server_entry    *servers;
+		int			servers_cap;
+
+		if (arg->esa_servers_cap == 0)
+			servers_cap = 1;
+		else
+			servers_cap = arg->esa_servers_cap * 2;
+		D_REALLOC_ARRAY(servers, arg->esa_servers, servers_cap);
+		if (servers == NULL)
+			return -DER_NOMEM;
+		arg->esa_servers = servers;
+		arg->esa_servers_cap = servers_cap;
+	}
+
+	/*
+	 * Note that D_REALLOC_ARRAY doesn't zero the new memory region. Also,
+	 * we use pointers to persistent memory addresses.
+	 */
+	entry = &arg->esa_servers[arg->esa_servers_len];
+	entry->se_rank = (uint32_t)*rank_key;
+	entry->se_flags = rec->sr_flags;
+	entry->se_nctxs = rec->sr_nctxs;
+	entry->se_uri = rec->sr_uri;
+	arg->esa_servers_len++;
+
+	return 0;
+}
+
+static int
+map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
+		 int nservers, struct server_entry servers[])
+{
+	struct mgmt_tgt_map_update_in  *in;
+	struct mgmt_tgt_map_update_out *out;
+	crt_opcode_t			opc;
+	crt_rpc_t		       *rpc;
+	int				rc;
+
+	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
+		nservers);
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE, 1);
+	rc = crt_corpc_req_create(ctx, NULL /* grp */,
+				  NULL /* excluded_ranks */, opc,
+				  NULL /* co_bulk_hdl */, NULL /* priv */,
+				  0 /* flags */,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create system map update RPC: %d\n", rc);
+		goto out;
+	}
+	in = crt_req_get(rpc);
+	in->tm_servers.ca_count = nservers;
+	in->tm_servers.ca_arrays = servers;
+	in->tm_map_version = map_version;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	if (out->tm_rc != 0)
+		rc = -DER_IO;
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: %d\n", map_version,
+		nservers, rc);
+	return rc;
+}
+
+static int
+mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
+{
+	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
+	struct rdb_tx		tx;
+	struct enum_server_arg	arg = {};
+	struct dss_module_info *info = dss_get_module_info();
+	int			rc;
+
+	if (!dss_pmixless())
+		return 0;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		return rc;
+	ABT_rwlock_rdlock(svc->ms_lock);
+	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
+			    enum_server_cb, &arg);
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		return rc;
+
+	rc = map_update_bcast(info->dmi_ctx, svc, svc->ms_map_version,
+			      arg.esa_servers_len, arg.esa_servers);
+
+	D_FREE(arg.esa_servers);
+	return rc;
 }
 
 static struct ds_rsvc_class mgmt_svc_rsvc_class = {
@@ -351,7 +447,8 @@ static struct ds_rsvc_class mgmt_svc_rsvc_class = {
 	.sc_bootstrap	= mgmt_svc_bootstrap_cb,
 	.sc_step_up	= mgmt_svc_step_up_cb,
 	.sc_step_down	= mgmt_svc_step_down_cb,
-	.sc_drain	= mgmt_svc_drain_cb
+	.sc_drain	= mgmt_svc_drain_cb,
+	.sc_map_dist	= mgmt_svc_map_dist_cb
 };
 
 /**
@@ -435,8 +532,8 @@ ds_mgmt_svc_stop(void)
 	return rc;
 }
 
-static int
-mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
+int
+ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
 {
 	struct ds_rsvc *rsvc;
 	int		rc;
@@ -449,67 +546,10 @@ mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
 	return 0;
 }
 
-static void
-mgmt_svc_put_leader(struct mgmt_svc *svc)
+void
+ds_mgmt_svc_put_leader(struct mgmt_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ms_rsvc);
-}
-
-struct enum_server_arg {
-	struct server_entry    *esa_servers;
-	int			esa_servers_cap;
-	int			esa_servers_len;
-};
-
-static int
-enum_server_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
-{
-	struct enum_server_arg *arg = varg;
-	uint64_t	       *rank_key;
-	struct server_rec      *rec;
-	struct server_entry    *entry;
-
-	if (key->iov_len != sizeof(*rank_key) ||
-	    val->iov_len != sizeof(*rec)) {
-		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
-			key->iov_len, val->iov_len);
-		return -DER_IO;
-	}
-	rank_key = key->iov_buf;
-	if (*rank_key > UINT32_MAX) {
-		D_ERROR("invalid key: "DF_U64"\n", *rank_key);
-		return -DER_IO;
-	}
-	rec = val->iov_buf;
-
-	/* Make sure arg->esa_servers[] have enough space for this server. */
-	if (arg->esa_servers_len + 1 > arg->esa_servers_cap) {
-		struct server_entry    *servers;
-		int			servers_cap;
-
-		if (arg->esa_servers_cap == 0)
-			servers_cap = 1;
-		else
-			servers_cap = arg->esa_servers_cap * 2;
-		D_REALLOC_ARRAY(servers, arg->esa_servers, servers_cap);
-		if (servers == NULL)
-			return -DER_NOMEM;
-		arg->esa_servers = servers;
-		arg->esa_servers_cap = servers_cap;
-	}
-
-	/*
-	 * Note that D_REALLOC_ARRAY doesn't zero the new memory region. Also,
-	 * we use pointers to persistent memory addresses.
-	 */
-	entry = &arg->esa_servers[arg->esa_servers_len];
-	entry->se_rank = (uint32_t)*rank_key;
-	entry->se_flags = rec->sr_flags;
-	entry->se_nctxs = rec->sr_nctxs;
-	entry->se_uri = rec->sr_uri;
-	arg->esa_servers_len++;
-
-	return 0;
 }
 
 /*
@@ -520,8 +560,8 @@ static int
 alloc_rank(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t *rank,
 	   uint32_t *rank_next)
 {
-	daos_iov_t	key;
-	daos_iov_t	value;
+	d_iov_t		key;
+	d_iov_t		value;
 	int		rc;
 
 	/*
@@ -532,8 +572,8 @@ alloc_rank(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t *rank,
 	for (;;) {
 		uint64_t rank_key = *rank;
 
-		daos_iov_set(&key, &rank_key, sizeof(rank_key));
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&key, &rank_key, sizeof(rank_key));
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(tx, &svc->ms_servers, &key, &value);
 		if (rc != 0)
 			break;
@@ -547,7 +587,7 @@ alloc_rank(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t *rank,
 	 * TX commits successfully.
 	 */
 	*rank_next = *rank + 1;
-	daos_iov_set(&value, rank_next, sizeof(*rank_next));
+	d_iov_set(&value, rank_next, sizeof(*rank_next));
 	return rdb_tx_update(tx, &svc->ms_root, &ds_mgmt_prop_rank_next,
 			     &value);
 }
@@ -557,18 +597,18 @@ add_server(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t rank,
 	   struct server_rec *server)
 {
 	uint64_t	rank_key = rank;
-	daos_iov_t	key;
-	daos_iov_t	value;
+	d_iov_t		key;
+	d_iov_t		value;
 	int		rc;
 
-	daos_iov_set(&key, &rank_key, sizeof(rank_key));
-	daos_iov_set(&value, server, sizeof(*server));
+	d_iov_set(&key, &rank_key, sizeof(rank_key));
+	d_iov_set(&value, server, sizeof(*server));
 	rc = rdb_tx_update(tx, &svc->ms_servers, &key, &value);
 	if (rc != 0)
 		return rc;
 
-	daos_iov_set(&key, server->sr_uuid, sizeof(uuid_t));
-	daos_iov_set(&value, &rank, sizeof(rank));
+	d_iov_set(&key, server->sr_uuid, sizeof(uuid_t));
+	d_iov_set(&value, &rank, sizeof(rank));
 	rc = rdb_tx_update(tx, &svc->ms_uuids, &key, &value);
 	if (rc != 0)
 		return rc;
@@ -584,14 +624,14 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 {
 	struct mgmt_svc	       *svc;
 	struct rdb_tx		tx;
-	daos_iov_t		key;
-	daos_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	uint32_t		rank;
 	uint32_t		rank_next;
 	uint32_t		map_version;
 	int			rc;
 
-	rc = mgmt_svc_lookup_leader(&svc, &out->jo_hint);
+	rc = ds_mgmt_svc_lookup_leader(&svc, &out->jo_hint);
 	if (rc != 0)
 		goto out;
 
@@ -602,8 +642,8 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	ABT_rwlock_wrlock(svc->ms_lock);
 
 	/* Look up the server by UUID. */
-	daos_iov_set(&key, in->ji_server.sr_uuid, sizeof(uuid_t));
-	daos_iov_set(&value, &rank, sizeof(rank));
+	d_iov_set(&key, in->ji_server.sr_uuid, sizeof(uuid_t));
+	d_iov_set(&value, &rank, sizeof(rank));
 	rc = rdb_tx_lookup(&tx, &svc->ms_uuids, &key, &value);
 	if (rc == 0) {
 		uint64_t		rank_key = rank;
@@ -616,8 +656,8 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 			goto out_lock;
 		}
 		out->jo_rank = rank;
-		daos_iov_set(&key, &rank_key, sizeof(rank_key));
-		daos_iov_set(&value, NULL, sizeof(*r));
+		d_iov_set(&key, &rank_key, sizeof(rank_key));
+		d_iov_set(&value, NULL, sizeof(*r));
 		rc = rdb_tx_lookup(&tx, &svc->ms_servers, &key, &value);
 		if (rc != 0) {
 			D_ERROR("failed to find server rank %u record: %d\n",
@@ -631,7 +671,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 			goto out_lock;
 		}
 		D_DEBUG(DB_TRACE, "rank %u rejoined\n", rank);
-		notify_map_distributord(svc);
+		ds_rsvc_request_map_dist(&svc->ms_rsvc);
 		rc = 0;
 		goto out_lock;
 	} else if (rc != -DER_NONEXIST) {
@@ -651,8 +691,8 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	} else {
 		uint64_t rank_key = in->ji_rank;
 
-		daos_iov_set(&key, &rank_key, sizeof(rank_key));
-		daos_iov_set(&value, NULL, 0);
+		d_iov_set(&key, &rank_key, sizeof(rank_key));
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(&tx, &svc->ms_servers, &key, &value);
 		if (rc == 0) {
 			D_ERROR("rank %u requested by server "DF_UUID
@@ -676,7 +716,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	}
 
 	map_version = svc->ms_map_version + 1;
-	daos_iov_set(&value, &map_version, sizeof(map_version));
+	d_iov_set(&value, &map_version, sizeof(map_version));
 	rc = rdb_tx_update(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
 			   &value);
 	if (rc != 0) {
@@ -697,7 +737,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	svc->ms_map_version = map_version;
 	if (in->ji_rank != -1)
 		svc->ms_rank_next = rank_next;
-	notify_map_distributord(svc);
+	ds_rsvc_request_map_dist(&svc->ms_rsvc);
 	out->jo_rank = rank;
 	out->jo_flags = SERVER_IN;
 
@@ -705,121 +745,73 @@ out_lock:
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	mgmt_svc_put_leader(svc);
+	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }
 
-static int
-map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
-		 int nservers, struct server_entry servers[])
+/* Callers are responsible for freeing resp->psrs. */
+int
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 {
-	struct mgmt_tgt_map_update_in  *in;
-	struct mgmt_tgt_map_update_out *out;
-	crt_opcode_t			opc;
-	crt_rpc_t		       *rpc;
-	int				rc;
-
-	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
-		nservers);
-
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE, 1);
-	rc = crt_corpc_req_create(ctx, NULL /* grp */,
-				  NULL /* excluded_ranks */, opc,
-				  NULL /* co_bulk_hdl */, NULL /* priv */,
-				  0 /* flags */,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
-	if (rc != 0) {
-		D_ERROR("failed to create system map update RPC: %d\n", rc);
-		goto out;
-	}
-	in = crt_req_get(rpc);
-	in->tm_servers.ca_count = nservers;
-	in->tm_servers.ca_arrays = servers;
-	in->tm_map_version = map_version;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		goto out_rpc;
-
-	out = crt_reply_get(rpc);
-	if (out->tm_rc != 0)
-		rc = -DER_IO;
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: %d\n", map_version,
-		nservers, rc);
-	return rc;
-}
-
-static int
-distribute_map(crt_context_t ctx, struct mgmt_svc *svc)
-{
-	struct rdb_tx		tx;
-	struct enum_server_arg	arg = {};
+	struct mgmt_svc	       *svc;
+	d_rank_list_t	       *ranks;
+	crt_group_t	       *grp;
+	int			i;
 	int			rc;
 
-	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		goto out;
 
-	ABT_rwlock_rdlock(svc->ms_lock);
-
-	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
-			    enum_server_cb, &arg);
+	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
 	if (rc != 0)
-		goto out_lock;
+		goto out_svc;
 
-	rc = map_update_bcast(ctx, svc, svc->ms_map_version,
-			      arg.esa_servers_len, arg.esa_servers);
+	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
+	if (resp->psrs == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
+	for (i = 0; i < ranks->rl_nr; i++) {
+		d_rank_t rank = ranks->rl_ranks[i];
 
-	D_FREE(arg.esa_servers);
-out_lock:
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
+		D_ALLOC(resp->psrs[i], sizeof(*(resp->psrs[i])));
+		if (resp->psrs[i] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		mgmt__get_attach_info_resp__psr__init(resp->psrs[i]);
+		resp->psrs[i]->rank = rank;
+		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
+				      &(resp->psrs[i]->uri));
+		if (rc != 0) {
+			D_ERROR("unable to get rank %u URI: %d\n", rank, rc);
+			break;
+		}
+	}
+	if (rc != 0) {
+		for (; i >= 0; i--) {
+			if (resp->psrs[i] != NULL) {
+				if (resp->psrs[i]->uri != NULL)
+					D_FREE(resp->psrs[i]->uri);
+				D_FREE(resp->psrs[i]);
+			}
+		}
+		D_FREE(resp->psrs);
+		resp->psrs = NULL; /* paranoid */
+		goto out_ranks;
+	}
+	resp->n_psrs = ranks->rl_nr;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
-}
-
-static void
-map_distributord(void *arg)
-{
-	struct mgmt_svc	       *svc = arg;
-	struct dss_module_info *info = dss_get_module_info();
-
-	for (;;) {
-		bool	step_down;
-		int	rc;
-
-		ABT_mutex_lock(svc->ms_mutex);
-		for (;;) {
-			step_down = svc->ms_step_down;
-			if (step_down)
-				break;
-			if (svc->ms_distribute) {
-				svc->ms_distribute = false;
-				break;
-			}
-			ABT_cond_wait(svc->ms_distribute_cv, svc->ms_mutex);
-		}
-		ABT_mutex_unlock(svc->ms_mutex);
-		if (step_down)
-			break;
-		rc = distribute_map(info->dmi_ctx, svc);
-		if (rc != 0)
-			/* Try again. */
-			svc->ms_distribute = true;
-		dss_sleep(1000 /* ms */);
-	}
-}
-
-static void
-notify_map_distributord(struct mgmt_svc *svc)
-{
-	svc->ms_distribute = true;
-	ABT_cond_broadcast(svc->ms_distribute_cv);
 }
 
 int
@@ -836,7 +828,7 @@ ds_mgmt_system_module_init(void)
 	D_STRNDUP(mgmt_svc_id_s, group->cg_grpid, len);
 	if (mgmt_svc_id_s == NULL)
 		return -DER_NOMEM;
-	daos_iov_set(&mgmt_svc_id, mgmt_svc_id_s, len + 1);
+	d_iov_set(&mgmt_svc_id, mgmt_svc_id_s, len + 1);
 
 	/* Set the MS DB UUID bytes to the system name bytes. */
 	D_CASSERT(DAOS_SYS_NAME_MAX + 1 <= sizeof(mgmt_svc_db_uuid));

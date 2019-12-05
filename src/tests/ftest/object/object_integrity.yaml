@@ -5,7 +5,8 @@ hosts:
   test_machines:
     - boro-A
     - boro-B
-timeout: 2400
+#JIRA-3132 tmp update timeout from 2400 to 4800
+timeout: 4800
 server_config:
    name: daos_server
 pool:

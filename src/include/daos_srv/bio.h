@@ -72,6 +72,7 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -84,6 +85,28 @@ struct bio_blob_hdr {
 	uint64_t	bbh_blob_id;
 	uuid_t		bbh_blobstore;
 	uuid_t		bbh_pool;
+};
+
+/*
+ * Current device health state (health statistics). Periodically updated in
+ * bio_bs_monitor(). Used to determine faulty device status.
+ */
+struct bio_dev_state {
+	uint64_t	 bds_timestamp;
+	uint64_t	*bds_media_errors; /* supports 128-bit values */
+	uint64_t	 bds_error_count; /* error log page */
+	/* I/O error counters */
+	uint32_t	 bds_bio_read_errs;
+	uint32_t	 bds_bio_write_errs;
+	uint32_t	 bds_bio_unmap_errs;
+	uint32_t	 bds_checksum_errs;
+	uint16_t	 bds_temperature; /* in Kelvin */
+	/* Critical warnings */
+	uint8_t		 bds_temp_warning	: 1;
+	uint8_t		 bds_avail_spare_warning	: 1;
+	uint8_t		 bds_dev_reliabilty_warning : 1;
+	uint8_t		 bds_read_only_warning	: 1;
+	uint8_t		 bds_volatile_mem_warning: 1; /*volatile memory backup*/
 };
 
 static inline void
@@ -132,11 +155,11 @@ bio_sgl_fini(struct bio_sglist *sgl)
 }
 
 /*
- * Convert bio_sglist into daos_sg_list_t, caller is responsible to
+ * Convert bio_sglist into d_sg_list_t, caller is responsible to
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 {
 	int i, rc;
 
@@ -151,7 +174,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		daos_iov_t	*iov = &sgl->sg_iovs[i];
+		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		iov->iov_buf = biov->bi_buf;
 		iov->iov_len = biov->bi_data_len;
@@ -160,6 +183,28 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 
 	return 0;
 }
+
+/**
+ * Callbacks called on NVMe device state transition
+ *
+ * \param tgt_ids[IN]	Affected target IDs
+ * \param tgt_cnt[IN]	Target count
+ *
+ * \return		0: Reaction finished;
+ *			1: Reaction is in progress;
+ *			-ve: Error happened;
+ */
+struct bio_reaction_ops {
+	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
+	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
+};
+
+/*
+ * Register faulty/reint reaction callbacks.
+ *
+ * \param ops[IN]	Reaction callback functions
+ */
+void bio_register_ract_ops(struct bio_reaction_ops *ops);
 
 /**
  * Global NVMe initialization.
@@ -183,11 +228,11 @@ void bio_nvme_fini(void);
  * Initialize SPDK env and per-xstream NVMe context.
  *
  * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] xs_id	xstream ID
+ * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -203,9 +248,11 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
- * \return		Executed message count
+ * \return		0: If no work was done
+ *			1: If work was done
+ *			-1: If thread has exited
  */
-size_t bio_nvme_poll(struct bio_xs_context *ctxt);
+int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
@@ -272,7 +319,7 @@ int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Read from per VOS instance blob.
@@ -283,7 +330,7 @@ int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Write SGL to per VOS instance blob.
@@ -295,7 +342,7 @@ int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  * \returns		Zero on success, negative value on error
  */
 int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	       daos_sg_list_t *sgl);
+	       d_sg_list_t *sgl);
 
 /**
  * Read SGL from per VOS instance blob.
@@ -307,7 +354,7 @@ int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  * \returns		Zero on success, negative value on error
  */
 int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	      daos_sg_list_t *sgl);
+	      d_sg_list_t *sgl);
 
 /*
  * Finish setting up blob header and write info to blob offset 0.
@@ -398,5 +445,18 @@ bio_yield(void)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	ABT_thread_yield();
 }
+
+/*
+ * Helper function to get the device health state for a given xstream.
+ * Used for querying the BIO health information from the control plane command.
+ *
+ * \param dev_state	[OUT]	BIO device health state
+ * \param xs		[IN]	xstream context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_get_dev_state(struct bio_dev_state *dev_state,
+		      struct bio_xs_context *xs);
+
 
 #endif /* __BIO_API_H__ */

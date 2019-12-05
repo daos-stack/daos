@@ -7,6 +7,7 @@ hosts:
             - boro-D
 server_config:
     name: daos_server
+timeout: 180
 createtests:
     createmode:
         mode_RW:
@@ -24,7 +25,8 @@ createtests:
             svc:
                 - 1
                 - 'PASS'
-        svc3:
-            svc:
-                - 3
-                - 'PASS'
+# Uncomment once DAOS-2979 is resolved.
+#        svc3:
+#            svc:
+#                - 3
+#                - 'PASS'

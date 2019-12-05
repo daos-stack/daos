@@ -20,293 +20,317 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * DAOS Server Persistent Metadata
- * NVMe Device Persistent Metadata Storage
- */
 #define D_LOGFAC	DD_FAC(bio)
 
-#include <daos_errno.h>
 #include <daos/common.h>
-#include <daos/mem.h>
-#include <gurt/hash.h>
-#include <daos/btree.h>
-#include <daos_types.h>
-
+#include <daos/dtx.h>
 #include "smd_internal.h"
-#define SMD_DTAB_ORDER 32
 
-static int
-dtab_df_hkey_size(void)
-{
-	return sizeof(struct d_uuid);
-}
-
-static void
-dtab_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
-{
-	D_ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
-	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
-}
-
-static int
-dtab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
-{
-	struct umem_instance		*umm = &tins->ti_umm;
-
-	if (UMOFF_IS_NULL(rec->rec_off))
-		return -DER_NONEXIST;
-
-	return umem_free(umm, rec->rec_off);
-}
-
-static int
-dtab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		  daos_iov_t *val_iov, struct btr_record *rec)
-{
-	umem_off_t			 ndev_off;
-	struct smd_nvme_dev_df		*ndev_df;
-	struct d_uuid			*ukey = NULL;
-
-	D_ASSERT(key_iov->iov_len == sizeof(struct d_uuid));
-	ukey = (struct d_uuid *)key_iov->iov_buf;
-	D_DEBUG(DB_DF, "Allocating device uuid=%s\n", DP_UUID(ukey->uuid));
-
-	ndev_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_dev_df));
-	if (UMOFF_IS_NULL(ndev_off))
-		return -DER_NOMEM;
-	ndev_df = umem_off2ptr(&tins->ti_umm, ndev_off);
-	uuid_copy(ndev_df->nd_dev_id, ukey->uuid);
-	memcpy(ndev_df, val_iov->iov_buf, sizeof(*ndev_df));
-	rec->rec_off = ndev_off;
-	return 0;
-}
-
-static int
-dtab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key_iov, daos_iov_t *val_iov)
-{
-	struct smd_nvme_dev_df		*ndev_df;
-
-	ndev_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	memcpy(val_iov->iov_buf, ndev_df, sizeof(*ndev_df));
-	return 0;
-}
-
-static int
-dtab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key_iov, daos_iov_t *val_iov)
-{
-	struct smd_nvme_dev_df		*ndev_df;
-	int				 rc;
-
-	rc = umem_tx_add(&tins->ti_umm, rec->rec_off,
-			 sizeof(struct smd_nvme_pool_df));
-	if (rc != 0)
-		return rc;
-
-	ndev_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	memcpy(ndev_df, val_iov->iov_buf, val_iov->iov_len);
-	return 0;
-}
-
-btr_ops_t dtab_ops = {
-	.to_hkey_size	= dtab_df_hkey_size,
-	.to_hkey_gen	= dtab_df_hkey_gen,
-	.to_rec_alloc	= dtab_df_rec_alloc,
-	.to_rec_free	= dtab_df_rec_free,
-	.to_rec_fetch	= dtab_df_rec_fetch,
-	.to_rec_update	= dtab_df_rec_update,
+struct smd_dev_entry {
+	enum smd_dev_state	sde_state;
+	uint32_t		sde_tgt_cnt;
+	int			sde_tgts[SMD_MAX_TGT_CNT];
 };
 
 int
-smd_nvme_dtab_register()
+smd_dev_assign(uuid_t dev_id, int tgt_id)
 {
-	int	rc;
+	struct smd_dev_entry	entry = { 0 };
+	d_iov_t			key, val;
+	struct d_uuid		key_dev, bond_dev;
+	int			rc;
 
-	D_DEBUG(DB_DF, "Register persistent metadata device index: %d\n",
-		DBTREE_CLASS_SMD_DTAB);
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
 
-	rc = dbtree_class_register(DBTREE_CLASS_SMD_DTAB, 0, &dtab_ops);
-	if (rc)
-		D_ERROR("DBTREE DTAB registration failed\n");
+	uuid_copy(key_dev.uuid, dev_id);
+	smd_lock(&smd_store);
 
-	return rc;
-}
-
-int
-smd_nvme_md_dtab_create(struct umem_attr *d_umem_attr,
-			struct smd_nvme_dev_tab_df *table_df)
-{
-
-	int		rc = 0;
-	daos_handle_t	btr_hdl;
-
-	D_ASSERT(table_df->ndt_btr.tr_class == 0);
-	D_DEBUG(DB_DF, "Create Persistent NVMe MD Device Index, type=%d\n",
-		DBTREE_CLASS_SMD_DTAB);
-
-	rc = dbtree_create_inplace(DBTREE_CLASS_SMD_DTAB, 0, SMD_DTAB_ORDER,
-				   d_umem_attr, &table_df->ndt_btr, &btr_hdl);
-	if (rc) {
-		D_ERROR("Persistent NVMe device dbtree create failed\n");
-		D_GOTO(exit, rc);
+	/* Check if the target is already bound to a device */
+	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
+	d_iov_set(&val, &bond_dev, sizeof(bond_dev));
+	rc = dbtree_fetch(smd_store.ss_tgt_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc == 0) {
+		D_ERROR("Target %d is already bound to dev "DF_UUID"\n",
+			tgt_id, DP_UUID(&bond_dev.uuid));
+		rc = -DER_EXIST;
+		goto out;
+	} else if (rc != -DER_NONEXIST) {
+		D_ERROR("Get target %d failed. %d\n", tgt_id, rc);
+		goto out;
 	}
 
-	rc = dbtree_close(btr_hdl);
-	if (rc)
-		D_ERROR("Error in closing btree handle\n");
-exit:
-	return rc;
-}
-
-static int
-smd_dtab_df_lookup(struct smd_store *nvme_obj, struct d_uuid *ukey,
-		   struct smd_nvme_dev_df *ndev_df)
-{
-	daos_iov_t	key, value;
-
-	daos_iov_set(&key, ukey, sizeof(struct d_uuid));
-	daos_iov_set(&value, ndev_df, sizeof(struct smd_nvme_dev_df));
-	return dbtree_lookup(nvme_obj->sms_dev_tab, &key, &value);
-}
-
-
-static int
-smd_dtab_df_update(struct smd_store *nvme_obj, struct d_uuid *ukey,
-		   struct smd_nvme_dev_df *ndev_df)
-{
-	int		rc = 0;
-	daos_iov_t	key, value;
-
-	daos_iov_set(&key, ukey, sizeof(struct d_uuid));
-	daos_iov_set(&value, ndev_df, sizeof(struct smd_nvme_dev_df));
-
-	rc = smd_tx_begin(nvme_obj);
-	if (rc != 0)
-		goto failed;
-
-	rc = dbtree_update(nvme_obj->sms_dev_tab, &key, &value);
-
-	rc = smd_tx_end(nvme_obj, rc);
-failed:
-	if (rc != 0)
-		D_ERROR("Adding/updating a device entry: %d\n", rc);
-
-	return rc;
-}
-
-int
-smd_dtab_df_find_update(struct smd_store *nvme_obj, struct d_uuid *ukey,
-			uint32_t status)
-{
-	int			rc = 0;
-	struct smd_nvme_dev_df	ndev_df;
-
-	smd_lock(SMD_DTAB_LOCK);
-	rc = smd_dtab_df_lookup(nvme_obj, ukey, &ndev_df);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_TRACE, "Device %s not found in dev table\n",
-			DP_UUID(ukey->uuid));
-		memset(&ndev_df, 0, sizeof(ndev_df));
-		uuid_copy(ndev_df.nd_dev_id, ukey->uuid);
-		ndev_df.nd_status = status;
-		rc = smd_dtab_df_update(nvme_obj, ukey, &ndev_df);
-		if (rc)
-			D_ERROR("Adding device in dev table failed: %d\n",
-				rc);
-	}
-	smd_unlock(SMD_DTAB_LOCK);
-	return rc;
-}
-
-
-
-/**
- * Server NVMe set device status will update the status of the NVMe device
- * in the SMD device table, if the device is not found it adds a new entry
- *
- * \param	[IN]	device_id	UUID of device
- * \param	[IN]	status		Status of device
- *
- * \returns				Zero on success,
- *					negative value on error
- */
-int
-smd_nvme_set_device_status(uuid_t device_id, enum smd_device_status status)
-{
-	struct d_uuid		ukey;
-	struct smd_nvme_dev_df	nvme_dtab_args;
-	struct smd_store	*store  = get_smd_store();
-	int			rc	  = 0;
-
-	smd_lock(SMD_DTAB_LOCK);
-	uuid_copy(ukey.uuid, device_id);
-	uuid_copy(nvme_dtab_args.nd_dev_id, device_id);
-	nvme_dtab_args.nd_status = status;
-	rc = smd_dtab_df_update(store, &ukey, &nvme_dtab_args);
-	smd_unlock(SMD_DTAB_LOCK);
-	return rc;
-}
-
-/**
- * DAOS NVMe metadata index get device status
- *
- * \param device_id [IN]	 NVMe device UUID
- * \param info	    [OUT]	 NVMe device info
- *
- * \return			 0 on success and negative on
- *				 failure
- *
- */
-int
-smd_nvme_get_device(uuid_t device_id,
-		    struct smd_nvme_device_info *info)
-{
-	struct smd_store		*store = get_smd_store();
-	struct d_uuid			ukey;
-	struct smd_nvme_dev_df		nvme_dtab_args;
-	struct smd_nvme_stream_bond	streams[DEV_MAX_STREAMS];
-	int				i, rc	= 0;
-	uint32_t			nr;
-
-	if (info == NULL) {
-		rc = -DER_INVAL;
-		D_ERROR("Retun value memory NULL: %d\n", rc);
-		return rc;
-	}
-
-	memset(info, 0, sizeof(*info));
-	uuid_copy(ukey.uuid, device_id);
-
-	smd_lock(SMD_DTAB_LOCK);
-	rc = smd_dtab_df_lookup(store, &ukey, &nvme_dtab_args);
-	if (rc) {
-		smd_unlock(SMD_DTAB_LOCK);
-		return rc;
-	}
-	smd_unlock(SMD_DTAB_LOCK);
-
-	uuid_copy(info->ndi_dev_id, nvme_dtab_args.nd_dev_id);
-	info->ndi_status = nvme_dtab_args.nd_status;
-	nr = DEV_MAX_STREAMS;
-
-	rc = smd_nvme_list_streams(&nr, &streams[0], NULL);
-	if (rc) {
-		D_ERROR("Error in retrieving streams from stream table\n");
-		return rc;
-	}
-	D_DEBUG(DB_TRACE, "total streams returned after listing: %d\n", nr);
-
-	for (i = 0; i < nr; i++) {
-		rc = uuid_compare(device_id, streams[i].nsm_dev_id);
-		if (!rc) {
-			info->ndi_xstreams[info->ndi_xs_cnt] =
-				streams[i].nsm_stream_id;
-			info->ndi_xs_cnt++;
+	/* Fetch device if it's already existing */
+	d_iov_set(&key, &key_dev, sizeof(key_dev));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc == 0) {
+		if (entry.sde_tgt_cnt >= SMD_MAX_TGT_CNT) {
+			D_ERROR("Dev "DF_UUID" is assigned to too many "
+				"targets (%d)\n", DP_UUID(&key_dev.uuid),
+				entry.sde_tgt_cnt);
+			rc = -DER_OVERFLOW;
+			goto out;
 		}
+		entry.sde_tgts[entry.sde_tgt_cnt] = tgt_id;
+		entry.sde_tgt_cnt += 1;
+	} else if (rc == -DER_NONEXIST) {
+		entry.sde_state = SMD_DEV_NORMAL;
+		entry.sde_tgt_cnt = 1;
+		entry.sde_tgts[0] = tgt_id;
+	} else {
+		D_ERROR("Fetch dev "DF_UUID" failed. %d\n",
+			DP_UUID(&key_dev.uuid), rc);
+		goto out;
 	}
+
+	/* Update device and target tables in same transaction */
+	rc = smd_tx_begin(&smd_store);
+	if (rc)
+		goto out;
+
+	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
+	if (rc) {
+		D_ERROR("Update dev "DF_UUID" failed. %d\n",
+			DP_UUID(&key_dev.uuid), rc);
+		goto tx_end;
+	}
+
+	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
+	d_iov_set(&val, &key_dev, sizeof(key_dev));
+	rc = dbtree_update(smd_store.ss_tgt_hdl, &key, &val);
+	if (rc) {
+		D_ERROR("Update target %d failed. %d\n", tgt_id, rc);
+		goto tx_end;
+	}
+tx_end:
+	rc = smd_tx_end(&smd_store, rc);
+out:
+	smd_unlock(&smd_store);
+	return rc;
+}
+
+int
+smd_dev_unassign(uuid_t dev_id, int tgt_id)
+{
+	return -DER_NOSYS;
+}
+
+static char *
+smd_state_enum_to_str(enum smd_dev_state state)
+{
+	switch (state) {
+	case SMD_DEV_NORMAL: return "NORMAL";
+	case SMD_DEV_FAULTY: return "FAULTY";
+	}
+
+	return "Undefined state";
+}
+
+int
+smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
+{
+	struct smd_dev_entry	entry = { 0 };
+	d_iov_t			key, val;
+	struct d_uuid		key_dev;
+	int			rc;
+
+	D_ASSERT(state == SMD_DEV_NORMAL || state == SMD_DEV_FAULTY);
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+
+	uuid_copy(key_dev.uuid, dev_id);
+	smd_lock(&smd_store);
+
+	d_iov_set(&key, &key_dev, sizeof(key_dev));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_ERROR("Fetch dev "DF_UUID" failed. %d\n",
+			DP_UUID(&key_dev.uuid), rc);
+		goto out;
+	}
+
+	entry.sde_state = state;
+	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
+	if (rc) {
+		D_ERROR("SMD dev "DF_UUID" state set failed. %d\n",
+			DP_UUID(&key_dev.uuid), rc);
+		goto out;
+	} else
+		D_DEBUG(DB_MGMT, "SMD dev "DF_UUID" state set to %s\n",
+			DP_UUID(&key_dev.uuid),
+			smd_state_enum_to_str(state));
+out:
+	smd_unlock(&smd_store);
+	return rc;
+}
+
+static struct smd_dev_info *
+create_dev_info(uuid_t dev_id, struct smd_dev_entry *entry)
+{
+	struct smd_dev_info	*info;
+	int			 i;
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return NULL;
+
+	D_ALLOC_ARRAY(info->sdi_tgts, SMD_MAX_TGT_CNT);
+	if (info->sdi_tgts == NULL) {
+		D_FREE(info);
+		return NULL;
+	}
+
+	D_INIT_LIST_HEAD(&info->sdi_link);
+	uuid_copy(info->sdi_id, dev_id);
+	info->sdi_state = entry->sde_state;
+	info->sdi_tgt_cnt = entry->sde_tgt_cnt;
+	for (i = 0; i < info->sdi_tgt_cnt; i++)
+		info->sdi_tgts[i] = entry->sde_tgts[i];
+
+	return info;
+}
+
+static int
+fetch_dev_info(uuid_t dev_id, struct smd_dev_info **dev_info)
+{
+	struct smd_dev_info	*info;
+	struct smd_dev_entry	 entry = { 0 };
+	struct d_uuid		 key_dev;
+	d_iov_t			 key, val;
+	int			 rc;
+
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+
+	uuid_copy(key_dev.uuid, dev_id);
+
+	d_iov_set(&key, &key_dev, sizeof(key_dev));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch dev "DF_UUID" failed. %d\n",
+			 DP_UUID(&key_dev.uuid), rc);
+		return rc;
+	}
+
+	info = create_dev_info(dev_id, &entry);
+	if (info == NULL)
+		return -DER_NOMEM;
+
+	*dev_info = info;
 	return 0;
 }
 
+int
+smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info)
+{
+	int	rc;
 
+	smd_lock(&smd_store);
+	rc = fetch_dev_info(dev_id, dev_info);
+	smd_unlock(&smd_store);
+	return rc;
+}
+
+int
+smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info)
+{
+	struct d_uuid	bond_dev;
+	d_iov_t		key, val;
+	int		rc;
+
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
+	smd_lock(&smd_store);
+
+	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
+	d_iov_set(&val, &bond_dev, sizeof(bond_dev));
+	rc = dbtree_fetch(smd_store.ss_tgt_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch target %d failed. %d\n", tgt_id, rc);
+		goto out;
+	}
+
+	rc = fetch_dev_info(bond_dev.uuid, dev_info);
+out:
+	smd_unlock(&smd_store);
+	return rc;
+}
+
+int
+smd_dev_list(d_list_t *dev_list, int *devs)
+{
+	struct smd_dev_info	*info;
+	struct smd_dev_entry	 entry = { 0 };
+	daos_handle_t		 iter_hdl;
+	struct d_uuid		 key_dev;
+	d_iov_t			 key, val;
+	int			 dev_cnt = 0;
+	int			 rc;
+
+	D_ASSERT(dev_list && d_list_empty(dev_list));
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
+
+	smd_lock(&smd_store);
+
+	rc = dbtree_iter_prepare(smd_store.ss_dev_hdl, 0, &iter_hdl);
+	if (rc) {
+		D_ERROR("Prepare device iterator failed. %d\n", rc);
+		goto out;
+	}
+
+	rc = dbtree_iter_probe(iter_hdl, BTR_PROBE_FIRST, DAOS_INTENT_DEFAULT,
+			       NULL, NULL);
+	if (rc) {
+		if (rc != -DER_NONEXIST)
+			D_ERROR("Probe first device failed. %d\n", rc);
+		else
+			rc = 0;
+		goto done;
+	}
+
+	d_iov_set(&key, &key_dev, sizeof(key_dev));
+	d_iov_set(&val, &entry, sizeof(entry));
+
+	while (1) {
+		rc = dbtree_iter_fetch(iter_hdl, &key, &val, NULL);
+		if (rc != 0) {
+			D_ERROR("Iterate fetch failed. %d\n", rc);
+			break;
+		}
+
+		info = create_dev_info(key_dev.uuid, &entry);
+		if (info == NULL) {
+			rc = -DER_NOMEM;
+			D_ERROR("Create device info failed. %d\n", rc);
+			break;
+		}
+		d_list_add_tail(&info->sdi_link, dev_list);
+
+		dev_cnt++;
+
+		rc = dbtree_iter_next(iter_hdl);
+		if (rc) {
+			if (rc != -DER_NONEXIST)
+				D_ERROR("Iterate next failed. %d\n", rc);
+			else
+				rc = 0;
+			break;
+		}
+	}
+done:
+	dbtree_iter_finish(iter_hdl);
+out:
+	smd_unlock(&smd_store);
+
+	/* return device count along with dev list */
+	*devs = dev_cnt;
+
+	return rc;
+}

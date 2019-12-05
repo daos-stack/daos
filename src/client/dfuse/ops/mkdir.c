@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-bool
+void
 dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	       const char *name, mode_t mode)
 {
@@ -36,37 +36,35 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
-	}
 
 	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
 
-	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(err, 0);
-	}
+	if (rc)
+		D_GOTO(err, rc);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
-	}
+	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
+	if (rc)
+		D_GOTO(release, rc);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
-	return true;
+	return;
 release:
 	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);
 
-	return false;
+	return;
 }

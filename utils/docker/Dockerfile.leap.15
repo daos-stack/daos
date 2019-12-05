@@ -6,8 +6,8 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.0
-MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+FROM opensuse/leap:15
+MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via -build-arg
 # use same UID as host and default value of 1000 if not specified
@@ -17,7 +17,8 @@ ARG UID=1000
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper --non-interactive update; \
+RUN zypper --non-interactive --no-gpg-checks refresh; \
+    zypper --non-interactive update; \
     zypper --non-interactive install                                  \
            boost-devel clang cmake cunit-devel curl doxygen flex      \
            gcc gcc-c++ git go graphviz gzip                           \
@@ -25,7 +26,8 @@ RUN zypper --non-interactive update; \
            libltdl7 libnuma-devel libopenssl-devel libtool            \
            libuuid-devel libyaml-devel                                \
            make man meson nasm ninja pandoc patch python2-pip         \
-           readline-devel sg3_utils which yasm
+           readline-devel sg3_utils which yasm                        \
+	   python-devel python3-devel valgrind-devel
 
 RUN pip install --upgrade pip; \
     pip install -U setuptools; \
@@ -50,7 +52,7 @@ RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
 
 # Switch to new user
-USER $USER
+#USER $USER
 WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
@@ -61,11 +63,12 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
 
 # Set environment variables
-ENV PATH=/home/daos/daos/install/bin:$PATH
-ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
-ENV CPATH=/home/daos/daos/install/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
+ENV DAOS_SINGLETON_CLI=1
+ENV CRT_ATTACH_INFO_PATH=/tmp/uri

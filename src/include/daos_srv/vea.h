@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -315,5 +315,13 @@ int vea_get_ext_vector(struct vea_space_info *vsi, uint64_t blk_off,
  */
 int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	      struct vea_stat *stat);
+
+/**
+ * Force flushing the free extents in aging buffer and make them available
+ * for allocation immediately.
+ *
+ * \param vsi       [IN]	In-memory compund index
+ */
+void vea_flush(struct vea_space_info *vsi);
 
 #endif /* __VEA_API_H__ */

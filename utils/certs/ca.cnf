@@ -12,7 +12,7 @@ certificate		= $dir/daosCA.crt
 private_key		= $dir/private/daosCA.key
 
 default_md		= sha512	# SAFE Crypto Requires SHA-512
-default_days		= 365		# how long to certify for
+default_days		= 3650		# how long to certify for
 copy_extensions		= copy
 unique_subject		= no
 
@@ -41,6 +41,6 @@ extendedKeyUsage = clientAuth
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
 
-[ signing_shell ]
+[ signing_admin ]
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = clientAuth

@@ -23,6 +23,8 @@
 
 package common
 
+import "unicode"
+
 // Include returns true if string target in slice.
 func Include(ss []string, target string) bool {
 	return Index(ss, target) >= 0
@@ -76,4 +78,22 @@ func Filter(ss []string, f func(string) bool) (nss []string) {
 		}
 	}
 	return
+}
+
+// IsAlphabetic checks of a string just contains alphabetic characters.
+func IsAlphabetic(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// Pluralise appends "s" to input string unless n==1.
+func Pluralise(s string, n int) string {
+	if n == 1 {
+		return s
+	}
+	return s + "s"
 }

@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -52,8 +53,8 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
  */
 static unsigned int	nr_threads;
 
-/** Server crt group ID */
-static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
+/** DAOS system name (corresponds to crt group ID) */
+static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage path (hack) */
 const char	       *dss_storage_path = "/mnt/daos";
@@ -67,6 +68,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
+/** IO server instance index */
+unsigned int		dss_instance_idx;
+
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
 const char	       *attach_info_path;
@@ -79,15 +83,15 @@ int			dss_core_depth;
 int			dss_core_nr;
 /** start offset index of the first core for service XS */
 int			dss_core_offset;
-
+/** NUMA node to bind to */
+int			dss_numa_node = -1;
+hwloc_bitmap_t	core_allocation_bitmap;
+/** a copy of the NUMA node object in the topology */
+hwloc_obj_t		numa_obj;
+/** number of cores in the given NUMA node */
+int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
-
-/** System map path */
-static const char      *sys_map_path;
-
-/** Self rank */
-static d_rank_t		self_rank = -1;
 
 d_rank_t
 dss_self_rank(void)
@@ -145,14 +149,6 @@ register_dbtree_classes(void)
 		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
 		return rc;
 	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_recx_ops);
-	/* DBTREE_CLASS_RECX possibly be registered by client-stack also */
-	if (rc == -DER_EXIST)
-		rc = 0;
-	if (rc != 0)
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
 
 	return rc;
 }
@@ -217,7 +213,12 @@ dss_tgt_nr_get(int ncores, int nr)
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
 	 * as the number of main XS based on number of cores.
 	 */
-	nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	if (dss_numa_node == -1)
+		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	else
+		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
+			      DSS_XS_NR_PER_TGT);
+
 	if (nr_default == 0)
 		nr_default = 1;
 
@@ -238,34 +239,137 @@ dss_tgt_nr_get(int ncores, int nr)
 static int
 dss_topo_init()
 {
+	int		depth;
+	int		numa_node_nr;
+	int		num_cores_visited;
+	char		*cpuset;
+	int		k;
+	hwloc_obj_t	corenode;
+
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
 
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
-	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
+	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
-	if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_core_nr - 1);
+	/* if no NUMA node was specified, or NUMA data unavailable */
+	/* fall back to the legacy core allocation algorithm */
+	if (dss_numa_node == -1 || numa_node_nr <= 0) {
+		D_PRINT("Using legacy core allocation algorithm\n");
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %d "
+				"(set by \"-f\" option),"
+				" should within range [0, %d]",
+				dss_core_offset, dss_core_nr - 1);
+			return -DER_INVAL;
+		}
+		return 0;
+	}
+
+	if (dss_numa_node > numa_node_nr) {
+		D_ERROR("Invalid NUMA node selected. "
+			"Must be no larger than %d\n",
+			numa_node_nr);
 		return -DER_INVAL;
 	}
 
+	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
+	if (numa_obj == NULL) {
+		D_ERROR("NUMA node %d was not found in the topology",
+			dss_numa_node);
+		return -DER_INVAL;
+	}
+
+	/* create an empty bitmap, then set each bit as we */
+	/* find a core that matches */
+	core_allocation_bitmap = hwloc_bitmap_alloc();
+	if (core_allocation_bitmap == NULL) {
+		D_ERROR("Unable to allocate core allocation bitmap\n");
+		return -DER_INVAL;
+	}
+
+	dss_num_cores_numa_node = 0;
+	num_cores_visited = 0;
+
+	for (k = 0; k < dss_core_nr; k++) {
+		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
+		if (corenode == NULL)
+			continue;
+		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
+					    numa_obj->allowed_cpuset) != 0) {
+			if (num_cores_visited++ >= dss_core_offset) {
+				hwloc_bitmap_set(core_allocation_bitmap, k);
+				hwloc_bitmap_asprintf(&cpuset,
+						      corenode->allowed_cpuset);
+			}
+			dss_num_cores_numa_node++;
+		}
+	}
+	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
+	free(cpuset);
+
+	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
+	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+			"should within range [0, %d]", dss_core_offset,
+			dss_num_cores_numa_node - 1);
+		return -DER_INVAL;
+	}
+
+	D_PRINT("Using NUMA core allocation algorithm\n");
 	return 0;
 }
 
-static ABT_mutex	rank_mutex;
-static ABT_cond		rank_cv;
-static bool		rank_set;
+static ABT_mutex		server_init_state_mutex;
+static ABT_cond			server_init_state_cv;
+static enum dss_init_state	server_init_state;
+
+static int
+server_init_state_init(void)
+{
+	int rc;
+
+	rc = ABT_mutex_create(&server_init_state_mutex);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+	rc = ABT_cond_create(&server_init_state_cv);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&server_init_state_mutex);
+		return dss_abterr2der(rc);
+	}
+	return 0;
+}
+
+static void
+server_init_state_fini(void)
+{
+	server_init_state = DSS_INIT_STATE_INIT;
+	ABT_cond_free(&server_init_state_cv);
+	ABT_mutex_free(&server_init_state_mutex);
+}
+
+static void
+server_init_state_wait(enum dss_init_state state)
+{
+	D_INFO("waiting for server init state %d\n", state);
+	ABT_mutex_lock(server_init_state_mutex);
+	while (server_init_state != state)
+		ABT_cond_wait(server_init_state_cv, server_init_state_mutex);
+	ABT_mutex_unlock(server_init_state_mutex);
+}
 
 void
-dss_notify_rank_set(void)
+dss_init_state_set(enum dss_init_state state)
 {
-	ABT_mutex_lock(rank_mutex);
-	rank_set = true;
-	ABT_cond_broadcast(rank_cv);
-	ABT_mutex_unlock(rank_mutex);
+	D_INFO("setting server init state to %d\n", state);
+	ABT_mutex_lock(server_init_state_mutex);
+	server_init_state = state;
+	ABT_cond_broadcast(server_init_state_cv);
+	ABT_mutex_unlock(server_init_state_mutex);
 }
 
 static int
@@ -334,6 +438,17 @@ abt_fini(void)
 	ABT_finalize();
 }
 
+bool
+dss_pmixless(void)
+{
+	bool pmixless = false;
+
+	if (getenv("PMIX_RANK") == NULL)
+		return true;
+	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
+	return pmixless;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -341,7 +456,7 @@ server_init(int argc, char *argv[])
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
-	bool		pmixless = false;
+	char		hostname[256] = { 0 };
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -368,31 +483,12 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	if (getenv("PMIX_RANK") == NULL)
-		pmixless = true;
-	if (sys_map_path != NULL || pmixless)
+	if (dss_pmixless())
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	rc = crt_init_opt(server_group_id, flags,
+	rc = crt_init_opt(daos_sysname, flags,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
-	if (sys_map_path != NULL) {
-		if (self_rank == -1) {
-			D_ERROR("self rank required\n");
-			D_GOTO(exit_crt_init, rc = -DER_INVAL);
-		}
-		rc = crt_rank_self_set(self_rank);
-		if (rc != 0)
-			D_ERROR("failed to set self rank %u: %d\n", self_rank,
-				rc);
-		rc = dss_sys_map_load(sys_map_path, server_group_id, self_rank,
-				      DSS_CTX_NR_TOTAL);
-		if (rc) {
-			D_ERROR("failed to load %s: %d\n", sys_map_path, rc);
-			D_GOTO(exit_crt_init, rc);
-		}
-	}
 	D_INFO("Network successfully initialized\n");
 
 	ds_iv_init();
@@ -404,7 +500,7 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
-	/* start up service */
+	/* initialize service */
 	rc = dss_srv_init();
 	if (rc) {
 		D_ERROR("DAOS cannot be initialized using the configured "
@@ -413,7 +509,7 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-	D_INFO("Service is now running\n");
+	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
@@ -428,40 +524,33 @@ server_init(int argc, char *argv[])
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
-		D_INFO("daos handle hash-table initialized\n");
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_srv_init;
+		}
+		D_INFO("handle hash table and placement initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
-	rc = ABT_mutex_create(&rank_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
+	rc = server_init_state_init();
+	if (rc != 0) {
+		D_ERROR("failed to init server init state: %d\n", rc);
 		goto exit_daos_fini;
-	}
-	rc = ABT_cond_create(&rank_cv);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto exit_rank_mutex;
 	}
 
 	rc = drpc_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize dRPC: %d\n", rc);
-		goto exit_rank_cv;
+		goto exit_init_state;
 	}
 
-	if (pmixless) {
-		D_INFO("Waiting for rank to be set\n");
-		ABT_mutex_lock(rank_mutex);
-		while (!rank_set)
-			ABT_cond_wait(rank_cv, rank_mutex);
-		ABT_mutex_unlock(rank_mutex);
-	}
+	if (dss_pmixless())
+		server_init_state_wait(DSS_INIT_STATE_RANK_SET);
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	if (sys_map_path != NULL)
-		D_ASSERTF(rank == self_rank, "%u == %u\n", rank, self_rank);
 	rc = crt_group_size(NULL, &size);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
@@ -482,36 +571,44 @@ server_init(int argc, char *argv[])
 		D_INFO("server group attach info saved\n");
 	}
 
+	server_init_state_wait(DSS_INIT_STATE_SET_UP);
+
 	rc = dss_module_setup_all();
 	if (rc != 0)
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	dss_xstreams_open_barrier();
+	D_INFO("Service fully up\n");
+
+	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s), %d helper XS "
-		"per target, firstcore %d.\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset);
+		"(out of %u) with %u target, %d helper XS per target, "
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
+		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
+		hostname);
+
+	if (numa_obj)
+		D_PRINT("Using NUMA node: %d", dss_numa_node);
 
 	return 0;
 
 exit_drpc_fini:
 	drpc_fini();
-exit_rank_cv:
-	ABT_cond_free(&rank_cv);
-exit_rank_mutex:
-	ABT_mutex_free(&rank_mutex);
+exit_init_state:
+	server_init_state_fini();
 exit_daos_fini:
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
 	dss_module_unload_all();
 	ds_iv_fini();
-exit_crt_init:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
@@ -528,12 +625,13 @@ server_fini(bool force)
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
 	drpc_fini();
-	ABT_cond_free(&rank_cv);
-	ABT_mutex_free(&rank_mutex);
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	server_init_state_fini();
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();
@@ -573,14 +671,14 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
-  --map=path, -y path\n\
-      [Temporary] System map configuration file (default none)\n\
-  --rank=rank, -r rank\n\
-      [Temporary] Self rank (default none; ignored if no --map|-y)\n\
+  --instance_idx=idx, -I idx\n\
+      Identifier for this server instance (default %u)\n\
+  --pinned_numa_node=numanode, -p numanode\n\
+      Bind to cores within the specified NUMA node\n\
   --help, -h\n\
       Print this description\n",
-		prog, prog, modules, server_group_id, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf);
+		prog, prog, modules, daos_sysname, dss_storage_path,
+		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
 static int
@@ -596,11 +694,11 @@ parse(int argc, char **argv)
 		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "rank",		required_argument,	NULL,	'r' },
+		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
-		{ "map",		required_argument,	NULL,	'y' },
+		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -608,8 +706,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:r:t:s:x:y:",
-			opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
+				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
 
@@ -658,12 +756,12 @@ parse(int argc, char **argv)
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
 			    DAOS_SYS_NAME_MAX) {
-				printf("group name must be at most %d bytes\n",
-				       DAOS_SYS_NAME_MAX);
+				printf("DAOS system name must be at most "
+				       "%d bytes\n", DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
-			server_group_id = optarg;
+			daos_sysname = optarg;
 			break;
 		case 's':
 			dss_storage_path = optarg;
@@ -673,6 +771,9 @@ parse(int argc, char **argv)
 			break;
 		case 'n':
 			dss_nvme_conf = optarg;
+			break;
+		case 'p':
+			dss_numa_node = atoi(optarg);
 			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
@@ -684,11 +785,8 @@ parse(int argc, char **argv)
 			save_attach_info = true;
 			attach_info_path = optarg;
 			break;
-		case 'y':
-			sys_map_path = optarg;
-			break;
-		case 'r':
-			self_rank = atoi(optarg);
+		case 'I':
+			dss_instance_idx = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);
@@ -706,7 +804,7 @@ struct sigaction old_handlers[_NSIG];
 static int
 daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 {
-	struct sigaction	act;
+	struct sigaction	act = {0};
 	int			rc;
 
 	if ((signo < 0) || (signo >= _NSIG)) {

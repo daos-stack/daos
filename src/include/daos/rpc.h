@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * DAOS common code for RPC management. Infrastructure for registering the
  * protocol between the client library and the server module as well as between
  * the server modules.
@@ -201,53 +203,17 @@ daos_rpc_unregister(struct crt_proto_format *proto_fmt)
 	return 0;
 }
 
-static inline d_sg_list_t *
-daos2crt_sg(daos_sg_list_t *sgl)
-{
-	/** XXX better integration with CaRT required */
-	D_CASSERT(sizeof(daos_sg_list_t) == sizeof(d_sg_list_t));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_nr) ==
-		  offsetof(d_sg_list_t, sg_nr));
-	D_CASSERT(offsetof(daos_sg_list_t, sg_iovs) ==
-		  offsetof(d_sg_list_t, sg_iovs));
-	D_CASSERT(sizeof(daos_iov_t) == sizeof(d_iov_t));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf) ==
-		  offsetof(d_iov_t, iov_buf));
-	D_CASSERT(offsetof(daos_iov_t, iov_buf_len) ==
-		  offsetof(d_iov_t, iov_buf_len));
-	D_CASSERT(offsetof(daos_iov_t, iov_len) ==
-		  offsetof(d_iov_t, iov_len));
-	return (d_sg_list_t *)sgl;
-}
-
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_send_wait(crt_rpc_t *rpc);
 
-#define DAOS_DEFAULT_GROUP_ID "daos_server"
-
-static inline int
-daos_group_attach(const char *group_id, crt_group_t **group)
-{
-	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
-	if (group_id == NULL)
-		group_id = DAOS_DEFAULT_GROUP_ID;
-	return crt_group_attach((char *)group_id, group);
-}
-
-static inline int
-daos_group_detach(crt_group_t *group)
-{
-	D_ASSERT(group != NULL);
-	D_DEBUG(DB_NET, "detaching from group '%s'\n", group->cg_grpid);
-	return crt_group_detach(group);
-}
+#define DAOS_DEFAULT_SYS_NAME "daos_server"
 
 /* Currently, this is used on rcs in metadata RPC reply buffers. */
 static inline bool
 daos_rpc_retryable_rc(int rc)
 {
-	return rc == -DER_TIMEDOUT || rc == -DER_HG;
+	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT;
 }
 
 #endif /* __DRPC_API_H__ */

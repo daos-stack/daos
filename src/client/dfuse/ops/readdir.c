@@ -24,239 +24,277 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-/* TODO: This implementation is not complete, in particular it does not
- * correctly handle calls where offset != 0, which potentially generates
- * incorrect results if the number of files is greater than can be observed in
- * one call (approx 25).
- *
- * If the filesystem is only modified from one client then the results should
- * however be correct.
- */
+#define LOOP_COUNT 128
 
-#define LOOP_COUNT 10
+struct iterate_data {
+	fuse_req_t			req;
+	struct dfuse_inode_entry	*inode;
+	struct dfuse_obj_hdl		*oh;
+	size_t				size;
+	size_t				fuse_size;
+	size_t				b_off;
+	uint8_t				stop;
+};
+
+int
+filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
+{
+	struct iterate_data	*udata = (struct iterate_data *)_udata;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(udata->req);
+	struct dfuse_obj_hdl	*oh = udata->oh;
+	dfs_obj_t		*obj;
+	daos_obj_id_t		oid;
+	struct stat		stbuf = {0};
+	int			ns = 0;
+	int			rc;
+
+	/*
+	 * MSC - from fuse fuse_add_direntry: "From the 'stbuf' argument the
+	 * st_ino field and bits 12-15 of the st_mode field are used. The other
+	 * fields are ignored." So we only need to lookup the entry for the
+	 * mode.
+	 */
+
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode,
+			    NULL);
+	if (rc)
+		return rc;
+
+	rc = dfs_obj2id(obj, &oid);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = dfuse_lookup_inode(fs_handle, udata->inode->ie_dfs, &oid,
+				&stbuf.st_ino);
+	if (rc)
+		D_GOTO(out, rc);
+
+	/*
+	 * If we are still within the fuse size limit (less than 4k - we have
+	 * not gone beyond 4k and cur_off is still 0).
+	 */
+	if (oh->doh_cur_off == 0) {
+		/** try to add the entry within the 4k size limit. */
+		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
+				       udata->fuse_size - udata->b_off, name,
+				       &stbuf, oh->doh_fuse_off + 1);
+
+		/** if entry fits, increment the stream and fuse buf offset. */
+		if (ns <= udata->fuse_size - udata->b_off) {
+			udata->b_off += ns;
+			oh->doh_fuse_off++;
+			D_GOTO(out, rc = 0);
+		}
+
+		/*
+		 * If entry does not fit within the 4k fuse imposed size, we now
+		 * add the entry, but within the larger size limitation of the
+		 * OH buffer (16k). But we also need to save the state of the
+		 * current offset since this will not be returned in the current
+		 * readdir call but will be consumed in subsequent calls.
+		 */
+		oh->doh_start_off[oh->doh_idx] = udata->b_off;
+		oh->doh_cur_off = udata->b_off;
+		oh->doh_dir_off[oh->doh_idx] = oh->doh_fuse_off;
+
+		ns = fuse_add_direntry(udata->req, oh->doh_buf + udata->b_off,
+				       udata->size - udata->b_off, name, &stbuf,
+				       oh->doh_dir_off[oh->doh_idx] + 1);
+
+		/** Entry should fit now */
+		D_ASSERT(ns <= udata->size - udata->b_off);
+		oh->doh_cur_off += ns;
+		oh->doh_dir_off[oh->doh_idx]++;
+
+		/** no need to issue futher dfs_iterate() calls. */
+		udata->stop = 1;
+		D_GOTO(out, rc = 0);
+	}
+
+insert:
+	/*
+	 * At this point, we are already adding to the buffer within the large
+	 * size limitation where it will be consumed in future readdir calls.
+	 */
+	ns = fuse_add_direntry(udata->req, oh->doh_buf + oh->doh_cur_off,
+			       udata->size - oh->doh_cur_off, name, &stbuf,
+			       oh->doh_dir_off[oh->doh_idx] + 1);
+	/*
+	 * In the case where the OH handle does not fit, we still need to add
+	 * the entry since DFS already enumerated it. So, realloc to fit the
+	 * entries that were already enumerated and insert again.
+	 */
+	if (ns > udata->size - oh->doh_cur_off) {
+		udata->size = udata->size * 2;
+		oh->doh_buf = realloc(oh->doh_buf, udata->size);
+		if (oh->doh_buf == NULL)
+			D_GOTO(out, rc = -ENOMEM);
+		goto insert;
+	}
+
+	/** update the end offset in the OH buffer */
+	oh->doh_cur_off += ns;
+
+	/*
+	 * Since fuse can process a max of 4k size of entries, it's mostly the
+	 * case that the offset where the last entry that can fit in a 4k buf
+	 * size is not aligned at the 4k bnoundary. So we need to keep track of
+	 * offsets before the last entry that exceeds 4k in the buffer size for
+	 * further calls to readdir to consume.
+	 */
+	if (oh->doh_cur_off - oh->doh_start_off[oh->doh_idx] >
+	    udata->fuse_size) {
+		oh->doh_idx++;
+		oh->doh_dir_off[oh->doh_idx] = oh->doh_dir_off[oh->doh_idx - 1];
+		oh->doh_start_off[oh->doh_idx] = oh->doh_cur_off - ns;
+	}
+	oh->doh_dir_off[oh->doh_idx]++;
+
+out:
+	dfs_release(obj);
+	/* we return the negative errno back to DFS */
+	return rc;
+}
 
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
-		 size_t size, off_t offset)
+		 size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	size_t				b_offset = 0;
-	daos_anchor_t			anchor = {0};
-	uint32_t			nr = LOOP_COUNT;
-	struct dirent			dirents[LOOP_COUNT];
-	int				next_offset = 0;
-	int				i;
-	void				*buf = NULL;
-	int				ns;
-	int				rc;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+	uint32_t		nr = LOOP_COUNT;
+	size_t			buf_size;
+	struct iterate_data	udata;
+	int			rc;
 
-	DFUSE_TRA_DEBUG(inode, "Offset %zi",
-			offset);
+	if (offset < 0)
+		D_GOTO(err, rc = EINVAL);
 
-	/* TODO:
-	 * To do this properly we need a way to convert from a offset into
-	 * a daos_anchor_t, in all cases.
-	 *
-	 * For now simply consume the first "offset" entries in a directory and
-	 * start iterating from there.  This will be correct only if the
-	 * directory contents aren't modified between calls.
+	D_ASSERT(oh);
+
+	/*
+	 * the DFS size should be less than what we want in fuse to account for
+	 * the fuse metadata for each entry, so just use 1/2 for now.
 	 */
-	if (offset != 0) {
-		uint32_t count = nr;
+	buf_size = size * READDIR_BLOCKS / 2;
 
-		DFUSE_TRA_ERROR(inode,
-				"Unable to correctly handle non-zero offsets");
+	if (offset == 0) {
+		/*
+		 * if starting from the begnning, reset the anchor attached to
+		 * the open handle.
+		 */
+		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
 
-		while (offset > 0) {
+		/** also reset dir stream and buffer offsets */
+		oh->doh_fuse_off = 0;
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
+	} else if (offset != oh->doh_fuse_off) {
+		uint32_t num, keys;
 
-			if (offset < count) {
-				count = offset;
-			}
+		/*
+		 * otherwise we are starting at an earlier offset where we left
+		 * off on last readdir, so restart by first enumerating that
+		 * many entries. This is the telldir/seekdir use case.
+		 */
 
-			rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
-					 &anchor, &count, dirents);
-			if (rc != -DER_SUCCESS) {
-				D_GOTO(err, 0);
-			}
-			offset -= count;
-			next_offset += count;
+		memset(&oh->doh_anchor, 0, sizeof(oh->doh_anchor));
+		num = (uint32_t)offset;
+		keys = 0;
+		while (num) {
+			rc = dfs_iterate(oh->doh_dfs, oh->doh_obj,
+					 &oh->doh_anchor, &num, buf_size,
+					 NULL, NULL);
+			if (rc)
+				D_GOTO(err, rc);
+
+			if (daos_anchor_is_eof(&oh->doh_anchor))
+				return;
+
+			keys += num;
+			num = offset - keys;
 		}
+		/** set the dir stream to 'offset' elements enumerated */
+		oh->doh_fuse_off = offset;
+
+		/** discard everything in the OH buffers we have cached. */
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
 	}
 
-	D_ALLOC(buf, size);
-	if (!buf) {
-		D_GOTO(err, rc = ENOMEM);
-	}
-
-	while (!daos_anchor_is_eof(&anchor)) {
-
-		rc = dfs_readdir(inode->ie_dfs->dffs_dfs, inode->ie_obj,
-				 &anchor, &nr, dirents);
-		if (rc != -DER_SUCCESS) {
-			D_GOTO(err_or_buf, 0);
+	/*
+	 * On subsequent calls to readdir, if there was anything to consume on
+	 * the buffer attached to the dir handle from the previous call, either
+	 * consume a 4k block or whatever remains.
+	 */
+	if (offset && oh->doh_cur_off) {
+		/*
+		 * if remaining does not fit in the fuse buf, return a 4k (or
+		 * less block) and advance the idx tracking number of blocks
+		 * consumed.
+		 */
+		if (size < oh->doh_cur_off - oh->doh_start_off[oh->doh_idx]) {
+			fuse_reply_buf(req, oh->doh_buf +
+				       oh->doh_start_off[oh->doh_idx],
+				       oh->doh_start_off[oh->doh_idx + 1] -
+				       oh->doh_start_off[oh->doh_idx]);
+			oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
+			oh->doh_idx++;
+			return;
 		}
 
-		for (i = 0; i < nr; i++) {
-			struct dfuse_inode_entry *ie = NULL;
-			d_list_t		*rlink;
-			struct fuse_entry_param entry = {};
-			daos_obj_id_t	oid;
-			mode_t		mode;
+		/** otherwise return everything left since it should fit. */
+		fuse_reply_buf(req,
+			       oh->doh_buf + oh->doh_start_off[oh->doh_idx],
+			       oh->doh_cur_off -
+			       oh->doh_start_off[oh->doh_idx]);
 
-			DFUSE_TRA_DEBUG(inode, "Filename '%s'",
-					dirents[i].d_name);
+		oh->doh_fuse_off = oh->doh_dir_off[oh->doh_idx];
 
-			/* Make an initial call to add_direntry() to query the
-			 * size required.  This allows us to exit at this point
-			 * if there is no buffer space, before opening the
-			 * object, and allocating an inode for it.  It also
-			 * avoids an error path later on, where there is already
-			 * a reference taken on the inode entry.
-			 *
-			 * fuse_add_direntry_plus() accepts NULL values for buf
-			 * to allow exactly this, assume that NULL/0 is also
-			 * accepted for other values than name as well based on
-			 * a reading of the source code.
-			 */
-			ns = fuse_add_direntry_plus(req,
-						    NULL,
-						    0,
-						    dirents[i].d_name,
-						    NULL,
-						    0);
-			if (ns > size - b_offset) {
-				D_GOTO(out, 0);
-			}
-
-			D_ALLOC_PTR(ie);
-			if (!ie) {
-				D_GOTO(err_or_buf, rc = ENOMEM);
-			}
-
-			ie->ie_parent = inode->ie_stat.st_ino;
-			ie->ie_dfs = inode->ie_dfs;
-
-			strncpy(ie->ie_name, dirents[i].d_name, NAME_MAX);
-			atomic_fetch_add(&ie->ie_ref, 1);
-
-			/* As this code needs to know the stat struct, including
-			 * the inode number we need to do a lookup, then a stat
-			 * from the object, rather than a stat on the path.
-			 */
-			rc = dfs_lookup_rel(inode->ie_dfs->dffs_dfs,
-					    inode->ie_obj, dirents[i].d_name,
-					    O_RDONLY, &ie->ie_obj, &mode);
-			if (rc != -DER_SUCCESS) {
-				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
-			}
-
-			rc = dfs_ostat(inode->ie_dfs->dffs_dfs, ie->ie_obj,
-				       &ie->ie_stat);
-			if (rc != -DER_SUCCESS) {
-				dfs_release(ie->ie_obj);
-				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
-			}
-
-			rc = dfs_obj2id(ie->ie_obj, &oid);
-			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(inode, "no oid");
-				dfs_release(ie->ie_obj);
-				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
-			}
-
-			rc = dfuse_lookup_inode(fs_handle,
-						inode->ie_dfs,
-						&oid,
-						&ie->ie_stat.st_ino);
-			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(inode, "no ino");
-				dfs_release(ie->ie_obj);
-				D_FREE(ie);
-				D_GOTO(err_or_buf, 0);
-			}
-
-			entry.attr = ie->ie_stat;
-			entry.generation = 1;
-			entry.ino = entry.attr.st_ino;
-
-			/* Add the new entry to the inode table, or take an
-			 * additional reference if it's already present.
-			 *
-			 * It's not clear if the new dentry is supposed to take
-			 * a reference on the parent or not, so for now this
-			 * code does not.
-			 *
-			 * TODO: Verify the parent inode count is correct after
-			 * this.
-			 */
-			rlink = d_hash_rec_find_insert(&fs_handle->dfpi_iet,
-						       &ie->ie_stat.st_ino,
-						       sizeof(ie->ie_stat.st_ino),
-						       &ie->ie_htl);
-
-			if (rlink != &ie->ie_htl) {
-				/* The lookup has resulted in an existing file,
-				 * so reuse that entry, drop the inode in the
-				 * lookup descriptor and do not keep a reference
-				 * on the parent.
-				 */
-				atomic_fetch_sub(&ie->ie_ref, 1);
-				ie->ie_parent = 0;
-
-				ie_close(fs_handle, ie);
-			}
-
-			/* This code does not use rlink at this point, and ie
-			 * may no longer be valid so do not access that either,
-			 * however the information required is already copied
-			 * into entry so simply use that.
-			 */
-			ie = NULL;
-
-			ns = fuse_add_direntry_plus(req,
-						    buf + b_offset,
-						    size - b_offset,
-						    dirents[i].d_name,
-						    &entry,
-						    ++next_offset);
-			DFUSE_TRA_DEBUG(inode, "ns is %d",
-					ns);
-			/* Assert here rather than handle this case, see comment
-			 * on previous call for fuse_add_direntry_plus() to
-			 * see why this cannot happen
-			 */
-			D_ASSERTF(ns <= size - b_offset, "Buffer size error");
-			b_offset += ns;
-		}
+		/** reset buffer offset counters to reuse the OH buffer. */
+		oh->doh_cur_off = 0;
+		oh->doh_idx = 0;
+		return;
 	}
 
-out:
-	DFUSE_TRA_DEBUG(req, "Returning %zi bytes", b_offset);
-
-	rc = fuse_reply_buf(req, buf, b_offset);
-	if (rc != 0) {
-		DFUSE_TRA_ERROR(req, "fuse_reply_buf() failed: (%d)", rc);
+	/** Allocate readdir buffer on OH if it has not been allocated before */
+	if (oh->doh_buf == NULL) {
+		/** buffer will be freed when this oh is closed */
+		D_ALLOC(oh->doh_buf, buf_size);
+		if (!oh->doh_buf)
+			D_GOTO(err, rc = ENOMEM);
 	}
 
-	D_FREE(buf);
+	udata.req = req;
+	udata.size = buf_size;
+	udata.fuse_size = size;
+	udata.b_off = 0;
+	udata.inode = inode;
+	udata.oh = oh;
+	udata.stop = 0;
+
+	while (!daos_anchor_is_eof(&oh->doh_anchor)) {
+		/** should not be here if we exceeded the fuse 4k buf size */
+		D_ASSERT(oh->doh_cur_off == 0);
+
+		rc = dfs_iterate(oh->doh_dfs, oh->doh_obj, &oh->doh_anchor, &nr,
+				 buf_size - udata.b_off, filler_cb, &udata);
+
+		/** if entry does not fit in buffer, just return */
+		if (rc == E2BIG)
+			break;
+		/** otherwise a different error occured */
+		if (rc)
+			D_GOTO(err, rc);
+
+		/** if the fuse buffer is full, break enumeration */
+		if (udata.stop)
+			break;
+	}
+
+	oh->doh_idx = 0;
+	fuse_reply_buf(req, oh->doh_buf, udata.b_off);
 	return;
-
-err_or_buf:
-	/* Handle error cases where the buffer may be partially filled, in this
-	 * case the contents of the buffer may be discarded but there is already
-	 * a reference taken in the inode entry hash table for the contents, so
-	 * return the buffer is there are entries, or return the error code if
-	 * the buffer is empty.
-	 */
-	if (b_offset != 0) {
-		D_GOTO(out, 0);
-	}
 
 err:
 	DFUSE_FUSE_REPLY_ERR(req, rc);
-
-	D_FREE(buf);
 }

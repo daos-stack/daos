@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_SECURITY_H__
-#define __DAOS_SECURITY_H__
+#ifndef __DAOS_SECURITY_INT_H__
+#define __DAOS_SECURITY_INT_H__
 
 #include <stdint.h>
 #include <stddef.h>
@@ -48,6 +48,6 @@
  *		-DER_NOREPLY	No response from agent
  *		-DER_MISC	Invalid response from agent
  */
-int dc_sec_request_creds(daos_iov_t *creds);
+int dc_sec_request_creds(d_iov_t *creds);
 
-#endif /* __DAOS_SECURITY_H__ */
+#endif /* __DAOS_SECURITY_INT_H__ */

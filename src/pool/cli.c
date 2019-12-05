@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2018 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,19 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * dc_pool: Pool Client
  *
  * This module is part of libdaos. It implements the pool methods of DAOS API
  * as well as daos/pool.h.
  */
+
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
 #include <daos/security.h>
@@ -40,8 +44,11 @@
 /** Replicated Service client state (used by Management API) */
 struct rsvc_client_state {
 	struct rsvc_client  scs_client;
-	crt_group_t	   *scs_group;
+	struct dc_mgmt_sys *scs_sys;
 };
+
+static uint64_t
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
 
 /**
  * Initialize pool interface
@@ -84,8 +91,8 @@ pool_free(struct d_hlink *hlink)
 		pool_map_decref(pool->dp_map);
 
 	rsvc_client_fini(&pool->dp_client);
-	if (pool->dp_group != NULL)
-		daos_group_detach(pool->dp_group);
+	if (pool->dp_sys != NULL)
+		dc_mgmt_sys_detach(pool->dp_sys);
 
 	D_FREE(pool);
 }
@@ -143,7 +150,7 @@ flags_are_valid(unsigned int flags)
 #define DC_POOL_DEFAULT_COMPONENTS_NR 128
 
 static struct dc_pool *
-pool_alloc(void)
+pool_alloc(unsigned int nr)
 {
 	struct dc_pool *pool;
 	int rc = 0;
@@ -172,7 +179,7 @@ pool_alloc(void)
 		goto failed;
 	}
 
-	pool->dp_map_sz = pool_buf_size(DC_POOL_DEFAULT_COMPONENTS_NR);
+	pool->dp_map_sz = pool_buf_size(nr);
 
 	return pool;
 
@@ -185,20 +192,20 @@ static int
 map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
 		unsigned int nr)
 {
-	daos_iov_t	iov;
-	daos_sg_list_t	sgl;
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
 	int		rc;
 
 	*buf = pool_buf_alloc(nr);
 	if (*buf == NULL)
 		return -DER_NOMEM;
 
-	daos_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = crt_bulk_create(ctx, daos2crt_sg(&sgl), CRT_BULK_RW, bulk);
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
 	if (rc != 0) {
 		pool_buf_free(*buf);
 		*buf = NULL;
@@ -223,7 +230,8 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 
 	D_ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map, connect);
+		rc = pl_map_update(pool->dp_pool, map, connect,
+				DEFAULT_PL_TYPE);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -244,7 +252,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = pl_map_update(pool->dp_pool, map, connect);
+	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
 		D_ERROR("Failed to refresh placement map: %d\n", rc);
 		D_GOTO(out, rc);
@@ -265,8 +273,7 @@ out:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t uid, uint32_t gid,
-		    uint32_t mode, uint32_t leader_rank,
+		    uint32_t map_version, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t *tgts, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
@@ -318,9 +325,6 @@ out_unlock:
 		info->pi_ntargets	= map_buf->pb_target_nr;
 		info->pi_nnodes		= map_buf->pb_node_nr;
 		info->pi_map_ver	= map_version;
-		info->pi_uid		= uid;
-		info->pi_gid		= gid;
-		info->pi_mode		= mode;
 		info->pi_leader		= leader_rank;
 		if (info->pi_bits & DPI_SPACE)
 			info->pi_space		= *ps;
@@ -404,12 +408,13 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_uid, pco->pco_gid, pco->pco_mode,
 				 pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
@@ -430,6 +435,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
 		dc_pool_put(pool);
 	return rc;
@@ -465,7 +471,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	}
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_map_comp_cnt(map));
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -475,7 +481,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	pool->dp_capas = flags;
 
 	/** attach to the server group and initialize rsvc_client */
-	rc = daos_group_attach(NULL, &pool->dp_group);
+	rc = dc_mgmt_sys_attach(NULL, &pool->dp_sys);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -545,7 +551,7 @@ dc_pool_connect(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		pool = pool_alloc();
+		pool = pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
 		if (pool == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		uuid_copy(pool->dp_pool, args->uuid);
@@ -553,7 +559,7 @@ dc_pool_connect(tse_task_t *task)
 		pool->dp_capas = args->flags;
 
 		/** attach to the server group and initialize rsvc_client */
-		rc = daos_group_attach(args->grp, &pool->dp_group);
+		rc = dc_mgmt_sys_attach(args->grp, &pool->dp_sys);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		rc = rsvc_client_init(&pool->dp_client, args->svc);
@@ -567,7 +573,7 @@ dc_pool_connect(tse_task_t *task)
 	}
 
 	/** Choose an endpoint and create an RPC. */
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -592,6 +598,7 @@ dc_pool_connect(tse_task_t *task)
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_capas = args->flags;
+	pci->pci_query_bits = pool_query_bits(args->info, NULL);
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,
 			     pool_buf_nr(pool->dp_map_sz));
@@ -722,7 +729,7 @@ dc_pool_disconnect(tse_task_t *task)
 		D_GOTO(out_pool, rc);
 	}
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -773,8 +780,7 @@ struct dc_pool_glob {
 	/* magic number, DC_POOL_GLOB_MAGIC */
 	uint32_t	dpg_magic;
 	uint32_t	dpg_padding;
-	/* pool group_id, uuid, and capas */
-	char		dpg_group_id[CRT_GROUP_ID_MAX_LEN];
+	/* pool UUID, pool handle UUID, and capas */
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
 	uint64_t	dpg_capas;
@@ -784,13 +790,14 @@ struct dc_pool_glob {
 	uint32_t	dpg_map_pb_nr;
 	struct pool_buf	dpg_map_buf[0];
 	/* rsvc_client */
+	/* dc_mgmt_sys */
 };
 
 static inline daos_size_t
-dc_pool_glob_buf_size(unsigned int pb_nr, size_t client_len)
+dc_pool_glob_buf_size(unsigned int pb_nr, size_t client_len, size_t sys_len)
 {
 	return offsetof(struct dc_pool_glob, dpg_map_buf) +
-	       pool_buf_size(pb_nr) + client_len;
+	       pool_buf_size(pb_nr) + client_len + sys_len;
 }
 
 static inline void
@@ -826,7 +833,6 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 
 	D_SWAP32S(&pool_glob->dpg_magic);
 	/* skip pool_glob->dpg_padding */
-	/* skip pool_glob->dpg_group_id[] */
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -836,7 +842,7 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 }
 
 static int
-dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
@@ -846,6 +852,8 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	uint32_t		 pb_nr;
 	void			*client_buf;
 	size_t			 client_len;
+	size_t			 sys_len;
+	void			*p;
 	int			 rc = 0;
 
 	D_ASSERT(glob != NULL);
@@ -871,8 +879,10 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	rsvc_client_encode(&pool->dp_client, client_buf);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 
+	sys_len = dc_mgmt_sys_encode(pool->dp_sys, NULL /* buf */, 0 /* cap */);
+
 	pb_nr = map_buf->pb_nr;
-	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len);
+	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len, sys_len);
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
 		D_GOTO(out_client_buf, rc = 0);
@@ -889,17 +899,21 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	/* init pool global handle */
 	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
-	strncpy(pool_glob->dpg_group_id, pool->dp_group->cg_grpid,
-		sizeof(pool_glob->dpg_group_id) - 1);
-	pool_glob->dpg_group_id[sizeof(pool_glob->dpg_group_id) - 1] = '\0';
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
 	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
 	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
-	memcpy((unsigned char *)pool_glob->dpg_map_buf + pool_buf_size(pb_nr),
-	       client_buf, client_len);
+	/* rsvc_client */
+	p = (void *)pool_glob->dpg_map_buf + pool_buf_size(pb_nr);
+	memcpy(p, client_buf, client_len);
+	/* dc_mgmt_sys */
+	p += client_len;
+	rc = dc_mgmt_sys_encode(pool->dp_sys, p,
+				glob_buf_size - (p - (void *)pool_glob));
+	D_ASSERTF(rc == sys_len, "%d == %zu\n", rc, sys_len);
+	rc = 0;
 
 out_client_buf:
 	D_FREE(client_buf);
@@ -914,7 +928,7 @@ out:
 }
 
 int
-dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_local2global(daos_handle_t poh, d_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -941,20 +955,16 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
-	void			*client_buf;
-	size_t			 client_len;
+	void			*p;
 	int			 rc = 0;
 
 	D_ASSERT(pool_glob != NULL);
 	D_ASSERT(poh != NULL);
 	map_buf = pool_glob->dpg_map_buf;
 	D_ASSERT(map_buf != NULL);
-	client_len = len - sizeof(*pool_glob) - pool_buf_size(map_buf->pb_nr);
-	client_buf = (unsigned char *)pool_glob + sizeof(*pool_glob) +
-		     pool_buf_size(map_buf->pb_nr);
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_glob->dpg_map_pb_nr);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -964,13 +974,17 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
 
-	rc = daos_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = rsvc_client_decode(client_buf, client_len, &pool->dp_client);
+	p = (void *)map_buf + pool_buf_size(map_buf->pb_nr);
+	rc = rsvc_client_decode(p, len - (p - (void *)pool_glob),
+				&pool->dp_client);
 	if (rc < 0)
-		D_GOTO(out, rc);
-	D_ASSERTF(rc == client_len, "%d == %zu\n", rc, client_len);
+		goto out;
+
+	p += rc;
+	rc = dc_mgmt_sys_decode(p, len - (p - (void *)pool_glob),
+				&pool->dp_sys);
+	if (rc < 0)
+		goto out;
 
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
@@ -979,7 +993,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D_GOTO(out, rc);
 	}
 
-	rc = pl_map_update(pool->dp_pool, pool->dp_map, true);
+	rc = pl_map_update(pool->dp_pool, pool->dp_map, true,
+			DEFAULT_PL_TYPE);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1000,7 +1015,7 @@ out:
 }
 
 int
-dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 {
 	struct dc_pool_glob	 *pool_glob;
 	int			  rc = 0;
@@ -1022,7 +1037,7 @@ dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1036,7 +1051,7 @@ out:
 
 struct pool_update_state {
 	struct rsvc_client	client;
-	crt_group_t	       *group;
+	struct dc_mgmt_sys     *sys;
 };
 
 static int
@@ -1090,7 +1105,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
 	}
 	return rc;
@@ -1108,22 +1123,16 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				i;
 	int				rc;
 
+	if (args->tgts == NULL || args->tgts->tl_nr == 0) {
+		D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
+		D_GOTO(out_task, rc = -DER_INVAL);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u tgts[0]=%u/%d\n",
+		DP_UUID(args->uuid), opc, args->tgts->tl_nr,
+		args->tgts->tl_ranks[0], args->tgts->tl_tgts[0]);
+
 	if (state == NULL) {
-		if (args->tgts == NULL || args->tgts->tl_nr == 0) {
-			D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		} else if ((opc == POOL_EXCLUDE || opc == POOL_EXCLUDE_OUT) &&
-			   args->tgts->tl_nr > 1) {
-			D_ERROR("pool exclude can only work with "
-				"(tgts->tl_nr == 1) for now.\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		}
-
-		D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u"
-			" tgts[0]=%u/%d\n", DP_UUID(args->uuid), opc,
-			args->tgts->tl_nr, args->tgts->tl_ranks[0],
-			args->tgts->tl_tgts[0]);
-
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
 			D_ERROR(DF_UUID": failed to allocate state\n",
@@ -1131,17 +1140,23 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
-		if (rc != 0)
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to sys attach, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
+		}
 		rc = rsvc_client_init(&state->client, args->svc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_group, rc);
+		}
 
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->group;
+	ep.ep_grp = state->sys->sy_group;
 	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
@@ -1154,11 +1169,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	rc = pool_target_addr_list_alloc(args->tgts->tl_nr, &list);
 	if (rc) {
+		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
+			DP_UUID(args->uuid), rc);
 		crt_req_decref(rpc);
 		D_GOTO(out_client, rc);
 	}
 
-	/* XXX Let's update all targets on the node */
 	for (i = 0; i < args->tgts->tl_nr; i++) {
 		list.pta_addrs[i].pta_rank = args->tgts->tl_ranks[i];
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
@@ -1188,7 +1204,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
 out_task:
@@ -1279,7 +1295,6 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
-				 out->pqo_uid, out->pqo_gid, out->pqo_mode,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
 				 arg->dqa_tgts, arg->dqa_info,
@@ -1354,7 +1369,8 @@ out:
  * \param[in]	pool	pool handle object
  * \param[in]	ctx	RPC context
  * \param[out]	tgts	if not NULL, pool target ranks returned on success
- * \param[out]	info	if not NULL, pool information returned on success
+ * \param[in,out]
+ *		info	if not NULL, pool information returned on success
  * \param[in]	cb	callback called only on success
  * \param[in]	cb_arg	argument passed to \a cb
  * \return		zero or error
@@ -1387,7 +1403,7 @@ dc_pool_query(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
 		args->tgts, args->info);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -1441,9 +1457,174 @@ out_task:
 	return rc;
 }
 
+static int
+list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+static void
+list_cont_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+
+struct pool_lc_arg {
+	crt_rpc_t			*rpc;
+	struct dc_pool			*lca_pool;
+	daos_size_t			 lca_req_ncont;
+	daos_size_t			*lca_ncont;
+	struct daos_pool_cont_info	*lca_cont_buf;
+};
+
+static int
+pool_list_cont_cb(tse_task_t *task, void *data)
+{
+	struct pool_lc_arg		*arg = (struct pool_lc_arg *) data;
+	struct pool_list_cont_in	*in = crt_req_get(arg->rpc);
+	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
+	int				 rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
+					   &out->plco_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DF_DSMC, DF_UUID": list cont rpc done: %d\n",
+		DP_UUID(arg->lca_pool->dp_pool), rc);
+
+	if (rc) {
+		D_ERROR("RPC error while listing containers: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->plco_op.po_rc;
+	*arg->lca_ncont = out->plco_ncont;
+	/* arg->lca_cont_buf written by bulk transfer if buffer provided */
+
+	if (arg->lca_cont_buf && (rc == -DER_TRUNC)) {
+		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
+				in->plci_ncont, out->plco_ncont);
+		D_GOTO(out, rc);
+	} else if (rc != 0) {
+		D_ERROR("failed to list containers %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_pool_put(arg->lca_pool);
+	list_cont_bulk_destroy(in->plci_cont_bulk);
+	return rc;
+}
+
+int
+dc_pool_list_cont(tse_task_t *task)
+{
+	daos_pool_list_cont_t		*args;
+	struct dc_pool			*pool;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct pool_list_cont_in	*in;
+	struct pool_lc_arg		 lc_cb_args;
+
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	/** Lookup bumps pool ref ,1 */
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMC, DF_UUID": list containers: hdl="DF_UUID"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool list cont rpc: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(out_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->plci_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->plci_op.pi_hdl, pool->dp_pool_hdl);
+	/* If provided cont_buf is NULL, caller needs the number of containers
+	 * to be returned in ncont. Set ncont=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->cont_buf == NULL)
+		in->plci_ncont = 0;
+	else
+		in->plci_ncont = *args->ncont;
+	in->plci_cont_bulk = CRT_BULK_NULL;
+
+	D_DEBUG(DF_DSMC, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
+			 in->plci_ncont, args->cont_buf,
+			 *args->ncont);
+
+	/** +1 for args */
+	crt_req_addref(rpc);
+
+	if ((*args->ncont > 0) && args->cont_buf) {
+		rc = list_cont_bulk_create(daos_task2ctx(task),
+					   &in->plci_cont_bulk,
+					   args->cont_buf, in->plci_ncont);
+		if (rc != 0)
+			D_GOTO(out_rpc, rc);
+	}
+
+	lc_cb_args.lca_pool = pool;
+	lc_cb_args.lca_ncont = args->ncont;
+	lc_cb_args.lca_cont_buf = args->cont_buf;
+	lc_cb_args.rpc = rpc;
+	lc_cb_args.lca_req_ncont = in->plci_ncont;
+
+	rc = tse_task_register_comp_cb(task, pool_list_cont_cb, &lc_cb_args,
+				       sizeof(lc_cb_args));
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
+
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
+
+	return rc;
+out_bulk:
+	if (in->plci_ncont > 0)
+		list_cont_bulk_destroy(in->plci_cont_bulk);
+
+out_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
 struct pool_evict_state {
 	struct rsvc_client	client;
-	crt_group_t	       *group;
+	struct dc_mgmt_sys     *sys;
 };
 
 static int
@@ -1475,6 +1656,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -1485,7 +1668,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
 	}
 	return rc;
@@ -1518,7 +1701,7 @@ dc_pool_evict(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
 		rc = rsvc_client_init(&state->client, args->svc);
@@ -1528,7 +1711,7 @@ dc_pool_evict(tse_task_t *task)
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->group;
+	ep.ep_grp = state->sys->sy_group;
 	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
@@ -1558,7 +1741,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
 out_task:
@@ -1687,7 +1870,7 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
 	if (args->pra_pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	ep.ep_grp  = args->pra_pool->dp_group;
+	ep.ep_grp  = args->pra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->pra_pool->dp_client_lock);
 	rsvc_client_choose(&args->pra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->pra_pool->dp_client_lock);
@@ -1734,17 +1917,17 @@ dc_pool_list_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.pra_rpc);
 	if (*args->size > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->buf,
 			.iov_buf_len = *args->size,
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->pali_bulk);
 		if (rc != 0) {
 			pool_req_cleanup(CLEANUP_RPC, &cb_args);
@@ -1782,7 +1965,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		rc;
 	int		i;
 	int		j;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 
 	/* Buffers = 'n' names + non-null values + 1 sizes */
 	sgl.sg_nr_out	= 0;
@@ -1797,20 +1980,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 
 	/* names */
 	for (j = 0, i = 0; j < n; ++j)
-		daos_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
+		d_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
 	/* sizes */
-	daos_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
 	for (j = 0; j < n; ++j)
 		if (sizes[j] > 0)
-			daos_iov_set(&sgl.sg_iovs[i++],
+			d_iov_set(&sgl.sg_iovs[i++],
 				     values[j], sizes[j]);
 
-	rc = crt_bulk_create(crt_ctx, daos2crt_sg(&sgl), perm, bulk);
+	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
 out:
 	return rc;
@@ -2035,7 +2218,7 @@ dc_pool_stop_svc(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": stopping svc: hdl="DF_UUID"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -2088,7 +2271,7 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 	case CCS_CU_CLI:
 		rsvc_client_fini(&state->scs_client);
 	case CCS_CU_GRP:
-		daos_group_detach(state->scs_group);
+		dc_mgmt_sys_detach(state->scs_sys);
 	case CCS_CU_MEM:
 		D_FREE_PTR(state);
 	}
@@ -2109,7 +2292,7 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 			D_ERROR("Failed to allocate state\n");
 			return -DER_NOMEM;
 		}
-		rc = daos_group_attach(group, &state->scs_group);
+		rc = dc_mgmt_sys_attach(group, &state->scs_sys);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_MEM, state);
 			return rc;
@@ -2122,7 +2305,7 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->scs_group;
+	ep.ep_grp = state->scs_sys->sy_group;
 	rsvc_client_choose(&state->scs_client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, rpcp);
 	if (rc != 0) {

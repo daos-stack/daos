@@ -23,23 +23,45 @@
 
 #define D_LOGFAC DD_FAC(il)
 #include "dfuse_common.h"
-#include "dfuse_gah.h"
 #include "intercept.h"
+#include "daos.h"
+#include "daos_array.h"
 
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode)
+	       struct fd_entry *entry, int *errcode)
 {
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+	d_iov_t			iov = {};
+	d_sg_list_t		sgl = {};
+	int rc;
 
-	DFUSE_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position,
-		       position + len - 1, GAH_PRINT_VAL(f_info->gah));
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
 
-	return 0;
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
+
+	iod.arr_nr = 1;
+	rg.rg_len = len;
+	rg.rg_idx = position;
+	iod.arr_rgs = &rg;
+
+	rc = daos_array_write(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl, NULL,
+			      NULL);
+	if (rc) {
+		DFUSE_TRA_INFO(entry, "daos_array_write() failed %d", rc);
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
+
+	return len;
 }
 
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct dfuse_file_common *f_info, int *errcode)
+		struct fd_entry *entry, int *errcode)
 {
 	ssize_t bytes_written;
 	ssize_t total_write = 0;
@@ -47,7 +69,7 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
 
 	for (i = 0; i < count; i++) {
 		bytes_written = ioil_do_writex(iov[i].iov_base, iov[i].iov_len,
-					       position, f_info, errcode);
+					       position, entry, errcode);
 
 		if (bytes_written == -1)
 			return (ssize_t)-1;

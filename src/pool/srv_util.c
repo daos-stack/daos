@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,15 +26,12 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
+#include <daos_srv/bio.h>
+#include <daos_srv/smd.h>
 
 #include <daos/pool_map.h>
 #include "rpc.h"
 #include "srv_internal.h"
-
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
 
 static inline int
 map_ranks_include(enum map_ranks_class class, int status)
@@ -53,7 +50,7 @@ map_ranks_include(enum map_ranks_class class, int status)
 }
 
 /* Build a rank list of targets with certain status. */
-static int
+int
 map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	       d_rank_list_t *ranks)
 {
@@ -100,7 +97,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	return 0;
 }
 
-static void
+void
 map_ranks_fini(d_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
@@ -267,14 +264,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			int opc)
 {
 	uint32_t	version;
-	int		nchanges = 0;
 	int		i;
 	int		rc;
 
 	D_ASSERT(tgts != NULL);
 
-	version = pool_map_get_version(map) + 1;
-
+	version = pool_map_get_version(map);
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
 		struct pool_domain	*dom = NULL;
@@ -306,14 +301,17 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
-			target->ta_comp.co_fseq = version;
-			nchanges++;
+			target->ta_comp.co_fseq = ++version;
+
+			D_PRINT("Target (rank %u idx %u) is down.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
 			if (pool_map_node_status_match(dom,
 				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
 					dom->do_comp.co_rank);
 				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-				dom->do_comp.co_fseq = version;
+				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
 			}
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
@@ -330,17 +328,23 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
+			D_PRINT("Target (rank %u idx %u) is added.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
+			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			target->ta_comp.co_fseq = 1;
-			nchanges++;
-			dom->do_comp.co_status = PO_COMP_ST_UP;
+			version++;
+			dom->do_comp.co_status = PO_COMP_ST_UPIN;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			nchanges++;
+			version++;
+			D_PRINT("Target (rank %u idx %u) is excluded.\n",
+				target->ta_comp.co_rank,
+				target->ta_comp.co_index);
 			if (pool_map_node_status_match(dom,
 						PO_COMP_ST_DOWNOUT)) {
 				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
@@ -351,9 +355,9 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	}
 
 	/* Set the version only if actual changes have been made. */
-	if (nchanges > 0) {
-		D_DEBUG(DF_DSMS, "generating map %p version %u: nchanges=%d\n",
-			map, version, nchanges);
+	if (version > pool_map_get_version(map)) {
+		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
+			map, version);
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
@@ -361,3 +365,423 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	return 0;
 }
 
+#define SWAP_RANKS(ranks, i, j)					\
+	do {							\
+		d_rank_t r = ranks->rl_ranks[i];		\
+								\
+		ranks->rl_ranks[i] = ranks->rl_ranks[j];	\
+		ranks->rl_ranks[j] = r;				\
+	} while (0)
+
+/*
+ * Find failed ranks in `replicas` and copy to a new list `failed`
+ * Replace the failed ranks with ranks which are up and running.
+ * `alt` points to the subset of `replicas` containing replacements.
+ */
+int
+ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
+			      d_rank_list_t *failed, d_rank_list_t *alt)
+{
+	struct pool_domain	*nodes = NULL;
+	int			 nnodes;
+	int			 nfailed;
+	int			 nreplaced;
+	int			 idx;
+	int			 i;
+	int			 rc;
+
+	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &nodes);
+	if (nnodes == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+	/**
+	 * Move all ranks in the list of replicas which are marked as DOWN
+	 * in the pool map to the end of the list.
+	 **/
+	for (i = 0, nfailed = 0; i < nnodes; i++) {
+		if (!map_ranks_include(MAP_RANKS_DOWN,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (!daos_rank_list_find(replicas,
+					 nodes[i].do_comp.co_rank, &idx))
+			continue;
+		if (idx < replicas->rl_nr - (nfailed + 1))
+			SWAP_RANKS(replicas, idx,
+				   replicas->rl_nr - (nfailed + 1));
+		++nfailed;
+	}
+
+	if (nfailed == 0) {
+		memset(failed, 0, sizeof(*failed));
+		memset(alt, 0, sizeof(*alt));
+		return 0;
+	}
+
+	/** Make `alt` point to failed subset towards the end **/
+	alt->rl_nr = nfailed;
+	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
+
+	/** Copy failed ranks to make room for replacements **/
+	memset(failed, 0, sizeof(*failed));
+	rc = daos_rank_list_copy(failed, alt);
+	if (rc != 0)
+		return rc;
+
+	/**
+	 * For replacements, search all ranks which are marked as UP
+	 * in the pool map and not present in the list of replicas.
+	 **/
+	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
+		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
+			continue;
+		if (!map_ranks_include(MAP_RANKS_UP,
+				       nodes[i].do_comp.co_status))
+			continue;
+		if (daos_rank_list_find(replicas,
+					nodes[i].do_comp.co_rank, &idx))
+			continue;
+		alt->rl_ranks[nreplaced++] = nodes[i].do_comp.co_rank;
+	}
+
+	if (nreplaced < nfailed) {
+		D_WARN("Not enough ranks available; Failed %d, Replacements %d",
+			nfailed, nreplaced);
+		alt->rl_nr = nreplaced;
+		replicas->rl_nr -= (nfailed - nreplaced);
+	}
+	return 0;
+}
+
+/** The caller are responsible for freeing the ranks */
+int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
+		      d_rank_list_t *ranks)
+{
+	struct ds_pool	*pool;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return 0;
+
+	/* This may not be the pool leader node, so down targets
+	 * may not be updated, then the following collective RPC
+	 * might be timeout. XXX
+	 */
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = map_ranks_init(pool->sp_map, status, ranks);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+
+	ds_pool_put(pool);
+	return rc;
+}
+
+/* Get failed target index on the current node */
+int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt)
+{
+	struct ds_pool		*pool;
+	struct pool_target	**tgts = NULL;
+	d_rank_t		myrank;
+	int			rc;
+
+	*failed_tgts_cnt = 0;
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL || pool->sp_map == NULL)
+		return 0;
+
+	/* Check if we need excluded the failure targets, NB:
+	 * since the ranks in the pool map are ranks of primary
+	 * group, so we have to use primary group here.
+	 */
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc) {
+		D_ERROR("Can not get rank %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
+					       failed_tgts_cnt, myrank);
+	if (rc) {
+		D_ERROR("get failed tgts %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	if (*failed_tgts_cnt != 0) {
+		int i;
+
+		D_ALLOC(*failed_tgts, *failed_tgts_cnt * sizeof(int));
+		if (*failed_tgts == NULL) {
+			D_FREE(tgts);
+			*failed_tgts_cnt = 0;
+			D_GOTO(output, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < *failed_tgts_cnt; i++)
+			(*failed_tgts)[i] = tgts[i]->ta_comp.co_index;
+
+		D_FREE(tgts);
+	}
+
+output:
+	if (pool)
+		ds_pool_put(pool);
+	return rc;
+}
+
+/* See nvme_faulty_reaction() for return values */
+static int
+check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, d_rank_t *pl_rank)
+{
+	struct ds_pool		*pool;
+	struct pool_target	*target = NULL;
+	d_rank_t		 rank = dss_self_rank();
+	int			 nr_downout, nr_down;
+	int			 i, nr, rc = 0;
+
+	/* Get pool map to check the target status */
+	pool = ds_pool_lookup(pool_id);
+	/*
+	 * FIXME: Not supporting offline faulty reaction so far.
+	 *
+	 * The pool cache & pool map IV implementation will be improved
+	 * later to not rely on pool connect or rebuild later, then we can
+	 * setup pool cache/IV by a local pool open.
+	 */
+	if (pool == NULL) {
+		D_DEBUG(DB_MGMT, DF_UUID": Pool cache not found\n",
+			DP_UUID(pool_id));
+		return -DER_NOSYS;
+	}
+
+	nr_downout = nr_down = 0;
+	ABT_rwlock_rdlock(pool->sp_lock);
+	for (i = 0; i < tgt_cnt; i++) {
+		nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank,
+						      tgt_ids[i], &target);
+		if (nr != 1) {
+			D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n",
+				DP_UUID(pool_id), rank, tgt_ids[i]);
+			rc = -DER_NONEXIST;
+			break;
+		}
+
+		D_ASSERT(target != NULL);
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_DOWNOUT:
+			nr_downout++;
+			break;
+		case PO_COMP_ST_DOWN:
+			nr_down++;
+			break;
+		default:
+			break;
+		}
+	}
+	D_ASSERT(nr_downout + nr_down <= tgt_cnt);
+
+	if (pool->sp_iv_ns != NULL)
+		*pl_rank = pool->sp_iv_ns->iv_master_rank;
+	else
+		*pl_rank = -1;
+
+	ABT_rwlock_unlock(pool->sp_lock);
+	ds_pool_put(pool);
+
+	if (rc)
+		return rc;
+	else if (nr_downout == tgt_cnt)
+		return 0;
+	else if (nr_downout + nr_down == tgt_cnt)
+		return 1;
+	else
+		return (*pl_rank == -1) ? -DER_NOSYS : 2;
+}
+
+struct exclude_targets_arg {
+	uuid_t		 eta_pool_id;
+	d_rank_t	 eta_pl_rank;
+	d_rank_t	*eta_ranks;
+	int		*eta_tgts;
+	int		 eta_nr;
+};
+
+static void
+free_exclude_targets_arg(struct exclude_targets_arg *eta)
+{
+	D_ASSERT(eta != NULL);
+	if (eta->eta_ranks != NULL)
+		D_FREE(eta->eta_ranks);
+	if (eta->eta_tgts != NULL)
+		D_FREE(eta->eta_tgts);
+	D_FREE(eta);
+}
+
+static struct exclude_targets_arg *
+alloc_exclude_targets_arg(uuid_t pool_id, int *tgt_ids, int tgt_cnt,
+			  d_rank_t pl_rank)
+{
+	struct exclude_targets_arg	*eta;
+	d_rank_t			 rank;
+	int				 i;
+
+	D_ASSERT(tgt_cnt > 0);
+	D_ASSERT(tgt_ids != NULL);
+
+	D_ALLOC_PTR(eta);
+	if (eta == NULL)
+		return NULL;
+
+	D_ALLOC_ARRAY(eta->eta_ranks, tgt_cnt);
+	if (eta->eta_ranks == NULL)
+		goto free;
+
+	D_ALLOC_ARRAY(eta->eta_tgts, tgt_cnt);
+	if (eta->eta_tgts == NULL)
+		goto free;
+
+	uuid_copy(eta->eta_pool_id, pool_id);
+	eta->eta_pl_rank = pl_rank;
+	eta->eta_nr = tgt_cnt;
+	rank = dss_self_rank();
+	for (i = 0; i < eta->eta_nr; i++) {
+		eta->eta_ranks[i] = rank;
+		eta->eta_tgts[i] = tgt_ids[i];
+	}
+
+	return eta;
+free:
+	free_exclude_targets_arg(eta);
+	return NULL;
+}
+
+static void
+exclude_targets_ult(void *arg)
+{
+	struct exclude_targets_arg	*eta = arg;
+	struct d_tgt_list		 tgt_list;
+	d_rank_list_t			 svc;
+	int				 rc;
+
+	svc.rl_ranks = &eta->eta_pl_rank;
+	svc.rl_nr = 1;
+
+	tgt_list.tl_nr = eta->eta_nr;
+	tgt_list.tl_ranks = eta->eta_ranks;
+	tgt_list.tl_tgts = eta->eta_tgts;
+
+	rc = dsc_pool_tgt_exclude(eta->eta_pool_id, NULL /* grp */, &svc,
+				  &tgt_list);
+	if (rc)
+		D_ERROR(DF_UUID": Exclude targets failed. %d\n",
+			DP_UUID(eta->eta_pool_id), rc);
+
+	free_exclude_targets_arg(eta);
+}
+
+/*
+ * The NVMe faulty reaction is called from bio_nvme_poll() which is on
+ * progress (hardware poll) ULT, and it will call into client stack to
+ * exclude pool targets, blocking calls could be made in this code path,
+ * so we have to perform the faulty reactions asynchronously in a new ULT
+ * to avoid blocking the hardware poll.
+ */
+static int
+exclude_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt,
+		     d_rank_t pl_rank)
+{
+	struct exclude_targets_arg	*eta;
+	int				 rc;
+
+	eta = alloc_exclude_targets_arg(pool_id, tgt_ids, tgt_cnt, pl_rank);
+	if (eta == NULL)
+		return -DER_NOMEM;
+
+	rc = dss_ult_create(exclude_targets_ult, eta, DSS_ULT_MISC,
+			    DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		D_ERROR(DF_UUID": Failed to start excluding ULT. %d\n",
+			DP_UUID(pool_id), rc);
+		free_exclude_targets_arg(eta);
+	}
+
+	return rc;
+}
+
+static int
+nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
+{
+	struct smd_pool_info	*pool_info, *tmp;
+	d_list_t		 pool_list;
+	d_rank_t		 pl_rank;
+	int			 pool_cnt, ret, rc;
+
+	D_ASSERT(tgt_cnt > 0);
+	D_ASSERT(tgt_ids != NULL);
+
+	D_INIT_LIST_HEAD(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_cnt);
+	if (rc) {
+		D_ERROR("Failed to list pools: %d\n", rc);
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		ret = check_pool_targets(pool_info->spi_id, tgt_ids, tgt_cnt,
+					 &pl_rank);
+		switch (ret) {
+		case 0:
+			/*
+			 * All affected targets are in DOWN_OUT, it's safe to
+			 * transit NVMe state to BIO_BS_STATE_TEARDOWN now.
+			 */
+			D_DEBUG(DB_MGMT, DF_UUID": Targets are excluded out.\n",
+				DP_UUID(pool_info->spi_id));
+			break;
+		case 1:
+			/*
+			 * Some affected targets are still in DOWN, the NVMe
+			 * state needs to stick to BIO_BS_STATE_FAULTY.
+			 */
+			D_DEBUG(DB_MGMT, DF_UUID": Targets are in excluding.\n",
+				DP_UUID(pool_info->spi_id));
+			if (rc == 0)
+				rc = 1;
+			break;
+		case 2:
+			/*
+			 * Some affected targets are still in UP or UPIN, need
+			 * to send exclude RPC.
+			 */
+			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets exclude.\n",
+				DP_UUID(pool_info->spi_id));
+			rc = exclude_pool_targets(pool_info->spi_id, tgt_ids,
+						  tgt_cnt, pl_rank);
+			if (rc == 0)
+				rc = 1;
+			break;
+		default:
+			/* Errors */
+			D_ERROR(DF_UUID": Check targets status failed: %d\n",
+				DP_UUID(pool_info->spi_id), ret);
+			if (rc >= 0)
+				rc = ret;
+			break;
+		}
+
+		d_list_del(&pool_info->spi_link);
+		smd_free_pool_info(pool_info);
+	}
+
+	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
+		tgt_cnt, rc);
+	return rc;
+}
+
+struct bio_reaction_ops nvme_reaction_ops = {
+	.faulty_reaction	= nvme_faulty_reaction,
+	.reint_reaction		= NULL,
+};

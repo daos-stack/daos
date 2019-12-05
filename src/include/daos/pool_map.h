@@ -175,6 +175,8 @@ int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 
+int pool_map_comp_cnt(struct pool_map *map);
+
 int  pool_map_create(struct pool_buf *buf, uint32_t version,
 		     struct pool_map **mapp);
 void pool_map_addref(struct pool_map *map);
@@ -198,15 +200,23 @@ int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
 int pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			      unsigned int *tgt_cnt);
-int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+int pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
 int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 				 uint32_t tgt_idx, struct pool_target **tgts);
+int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
+				  struct pool_target ***tgt_ppp,
+				  unsigned int *tgt_cnt, d_rank_t rank);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
 struct pool_domain *
 pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank);
+
+int pool_map_find_by_rank_status(struct pool_map *map,
+				 struct pool_target ***tgt_ppp,
+				 unsigned int *tgt_cnt, unsigned int status,
+				 d_rank_t rank);
 
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)

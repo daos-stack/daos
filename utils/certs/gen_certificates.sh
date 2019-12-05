@@ -40,7 +40,6 @@
 __usage="
 Usage: gen_certificates.sh [OPTIONS]
 Generate certificates for DAOS deployment in the ./daosCA.
-Certificates will be named in the format daos_Component
 "
 
 function print_usage () {
@@ -57,9 +56,10 @@ function setup_directories () {
 function generate_ca_cert () {
 	# Generate Private key and set permissions
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
-	chmod 400 $PRIVATE/daosCA.key
+	chmod 0400 $PRIVATE/daosCA.key
 	# Generate CA Certificate
-	openssl req -new -x509 -config ca.cnf -key $PRIVATE/daosCA.key \
+	openssl req -new -x509 -config ca.cnf -days 3650 -sha512 \
+		-key $PRIVATE/daosCA.key \
 		-out $CERTS/daosCA.crt -batch
 	# Reset the the CA index
 	rm -f ./daosCA/index.txt ./daosCA/serial.txt
@@ -71,7 +71,7 @@ function generate_agent_cert () {
 	echo "Generating Agent Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/agent.key 4096
-	chmod 400 $CERTS/agent.key
+	chmod 0400 $CERTS/agent.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config agent.cnf -key $CERTS/agent.key \
 		-out agent.csr -batch
@@ -87,31 +87,31 @@ function generate_agent_cert () {
 	$CERTS/agent.crt"
 }
 
-function generate_shell_cert () {
-	echo "Generating Shell Certificate"
+function generate_admin_cert () {
+	echo "Generating Admin Certificate"
 	# Generate Private key and set its permissions
-	openssl genrsa -out $CERTS/shell.key 4096
-	chmod 400 $CERTS/shell.key
+	openssl genrsa -out $CERTS/admin.key 4096
+	chmod 0400 $CERTS/admin.key
 	# Generate a Certificate Signing Request (CRS)
-	openssl req -new -config shell.cnf -key $CERTS/shell.key \
-		-out shell.csr -batch
+	openssl req -new -config admin.cnf -key $CERTS/admin.key \
+		-out admin.csr -batch
 	# Create Certificate from request
 	openssl ca -config ca.cnf -keyfile $PRIVATE/daosCA.key \
 		-cert $CERTS/daosCA.crt -policy signing_policy \
-		-extensions signing_shell -out $CERTS/shell.crt \
-		-outdir $CERTS -in shell.csr -batch
+		-extensions signing_admin -out $CERTS/admin.crt \
+		-outdir $CERTS -in admin.csr -batch
 
-	echo "Required Shell Certificate Files:
+	echo "Required Admin Certificate Files:
 	$CERTS/daosCA.crt
-	$CERTS/shell.key
-	$CERTS/shell.crt"
+	$CERTS/admin.key
+	$CERTS/admin.crt"
 }
 
 function generate_server_cert () {
 	echo "Generating Server Certificate"
 	# Generate Private key and set its permissions
 	openssl genrsa -out $CERTS/server.key 4096
-	chmod 400 $CERTS/server.key
+	chmod 0400 $CERTS/server.key
 	# Generate a Certificate Signing Request (CRS)
 	openssl req -new -config server.cnf -key $CERTS/server.key \
 		-out server.csr -batch
@@ -130,16 +130,22 @@ function generate_server_cert () {
 function cleanup () {
 	rm -f $CERTS/*pem
 	rm -f agent.csr
-	rm -f shell.csr
+	rm -f admin.csr
 	rm -f server.csr
+}
+
+function fixup_permissions() {
+	chmod 0400 $CERTS/*.key
+	chmod 0664 $CERTS/*.crt
 }
 
 function main () {
 	setup_directories
 	generate_ca_cert
 	generate_agent_cert
-	generate_shell_cert
+	generate_admin_cert
 	generate_server_cert
+	fixup_permissions
 	cleanup
 }
 

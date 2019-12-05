@@ -24,6 +24,7 @@
 
 #include "obj_internal.h"
 #include <daos_api.h>
+#include <isa-l.h>
 
 /** DAOS object class */
 struct daos_obj_class {
@@ -34,252 +35,286 @@ struct daos_obj_class {
 	struct daos_oclass_attr		 oc_attr;
 };
 
+#define ca_rp_nr	u.rp.r_num
+#define ca_ec_k		u.ec.e_k
+#define ca_ec_p		u.ec.e_p
+#define ca_ec_cell	u.ec.e_len
+
 /** predefined object classes */
 static struct daos_obj_class daos_obj_classes[] = {
+	/**
+	 * Object classes with no data protection.
+	 */
 	{
-		.oc_name	= "tiny_rw",
-		.oc_id		= DAOS_OC_TINY_RW,
+		.oc_name	= "S1",
+		.oc_id		= OC_S1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 1,
-			},
+			.ca_rp_nr		= 1,
 		},
 	},
 	{
-		.oc_name	= "small_rw",
-		.oc_id		= DAOS_OC_SMALL_RW,
+		.oc_name	= "S2",
+		.oc_id		= OC_S2,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 2,
+			.ca_rp_nr		= 1,
+		},
+	},
+	{
+		.oc_name	= "S4",
+		.oc_id		= OC_S4,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 4,
-			.u.repl			= {
-				.r_num		= 1,
-			},
+			.ca_rp_nr		= 1,
 		},
 	},
+	/* TODO: add more */
 	{
-		.oc_name	= "large_rw",
-		.oc_id		= DAOS_OC_LARGE_RW,
+		.oc_name	= "SX",
+		.oc_id		= OC_SX,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
-			.u.repl			= {
-				.r_num		= 1,
-			},
+			.ca_rp_nr		= 1,
 		},
 	},
+	/**
+	 * Object classes protected by 2-way replication
+	 */
 	{
-		.oc_name	= "repl_2_small_rw",
-		.oc_id		= DAOS_OC_R2S_RW,
+		.oc_name	= "RP_2G1",
+		.oc_id		= OC_RP_2G1,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 2,
-			},
+			.ca_rp_nr		= 2,
 		},
 	},
 	{
-		.oc_name	= "repl_2_rw",
-		.oc_id		= DAOS_OC_R2_RW,
+		.oc_name	= "RP_2G2",
+		.oc_id		= OC_RP_2G2,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 2,
+			.ca_rp_nr		= 2,
+		},
+	},
+	/* TODO: add more */
+	{
+		.oc_name	= "RP_2GX",
+		.oc_id		= OC_RP_2GX,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
-			.u.repl			= {
-				.r_num		= 2,
-			},
+			.ca_rp_nr		= 2,
 		},
 	},
+	/**
+	 * Object classes protected by 3-way replication
+	 */
 	{
-		.oc_name	= "repl_3_small_rw",
-		.oc_id		= DAOS_OC_R3S_RW,
+		.oc_name	= "RP_3G1",
+		.oc_id		= OC_RP_3G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 3,
-			},
+			.ca_rp_nr		= 3,
 		},
 	},
 	{
-		.oc_name	= "repl_3_rw",
-		.oc_id		= DAOS_OC_R3_RW,
+		.oc_name	= "RP_3G2",
+		.oc_id		= OC_RP_3G2,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 2,
-			.u.repl			= {
-				.r_num		= 3,
-			},
+			.ca_rp_nr		= 3,
 		},
 	},
+	/* TODO: add more */
 	{
-		.oc_name	= "repl_4_small_rw",
-		.oc_id		= DAOS_OC_R4S_RW,
+		.oc_name	= "RP_3GX",
+		.oc_id		= OC_RP_3GX,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
+			.ca_rp_nr		= 3,
+		},
+	},
+	/**
+	 * Object classes protected by 4-way replication
+	 */
+	{
+		.oc_name	= "RP_4G1",
+		.oc_id		= OC_RP_4G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 4,
-			},
+			.ca_rp_nr		= 4,
 		},
 	},
 	{
-		.oc_name	= "repl_4_rw",
-		.oc_id		= DAOS_OC_R4_RW,
+		.oc_name	= "RP_4G2",
+		.oc_id		= OC_RP_4G2,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 2,
-			.u.repl			= {
-				.r_num		= 4,
-			},
+			.ca_rp_nr		= 4,
 		},
 	},
+	/* TODO: add more */
 	{
-		.oc_name	= "repl_max_rw",
-		.oc_id		= DAOS_OC_REPL_MAX_RW,
+		.oc_name	= "RP_4GX",
+		.oc_id		= OC_RP_4GX,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
+			.ca_rp_nr		= 4,
+		},
+	},
+	/*
+	 * Object class to support extremely scalable fetch
+	 * It is replicated to everywhere
+	 */
+	{
+		.oc_name	= "RP_XSF",
+		.oc_id		= OC_RP_XSF,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= DAOS_OBJ_REPL_MAX,
-			},
+			.ca_rp_nr		= DAOS_OBJ_REPL_MAX,
 		},
-	}, {
-		.oc_name	= "echo_rw",
+	},
+	/*
+	 * Internal classes
+	 * XXX: needs further cleanup
+	 */
+	{
+		.oc_name	= "S1_ECHO",
 		.oc_id		= DAOS_OC_ECHO_TINY_RW,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 1,
-			},
+			.ca_rp_nr		= 1,
 		},
-	}, {
-		.oc_name	= "echo_rw",
+	},
+	{
+		.oc_name	= "RP_2G1_ECHO",
 		.oc_id		= DAOS_OC_ECHO_R2S_RW,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 2,
-			},
+			.ca_rp_nr		= 2,
 		},
-	}, {
-		.oc_name	= "echo_rw",
+	},
+	{
+		.oc_name	= "RP_3G1_ECHO",
 		.oc_id		= DAOS_OC_ECHO_R3S_RW,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 3,
-			},
+			.ca_rp_nr		= 3,
 		},
-	}, {
-		.oc_name	= "echo_rw",
+	},
+	{
+		.oc_name	= "RP_4G1_ECHO",
 		.oc_id		= DAOS_OC_ECHO_R4S_RW,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 4,
-			},
+			.ca_rp_nr		= 4,
 		},
-	}, {
-		.oc_name	= "repl_3_small_rw_spec_rank",
+	},
+	{
+		.oc_name	= "RP_3G1_SR",
 		.oc_id		= DAOS_OC_R3S_SPEC_RANK,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 3,
-			},
+			.ca_rp_nr		= 3,
 		},
 	},
 	{
-		.oc_name	= "repl_2_small_rw_spec_rank",
+		.oc_name	= "RP_2G1_SR",
 		.oc_id		= DAOS_OC_R2S_SPEC_RANK,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 2,
-			},
+			.ca_rp_nr		= 2,
 		},
 	},
 	{
-		.oc_name	= "repl_1_small_rw_spec_rank",
+		.oc_name	= "S1_SR",
 		.oc_id		= DAOS_OC_R1S_SPEC_RANK,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 1,
-			.u.repl			= {
-				.r_num		= 1,
-			},
+			.ca_rp_nr		= 1,
 		},
 	},
 	{
-		.oc_name	= "ec_k2p1_len32k",
-		.oc_id		= DAOS_OC_EC_K2P1_L32K,
+		.oc_name	= "EC_2P1G1",
+		.oc_id		= OC_EC_2P1G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
-			.u.ec			= {
-				.e_k		= 2,
-				.e_p		= 1,
-				.e_len		= 1 << 15,
-			},
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{
-		.oc_name	= "ec_k2p2_len32k",
-		.oc_id		= DAOS_OC_EC_K2P2_L32K,
+		.oc_name	= "EC_2P2G1",
+		.oc_id		= OC_EC_2P2G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
-			.u.ec			= {
-				.e_k		= 2,
-				.e_p		= 2,
-				.e_len		= 1 << 15,
-			},
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 15,
 		},
 	},
 	{
-		.oc_name	= "ec_k8p2_len1m",
-		.oc_id		= DAOS_OC_EC_K8P2_L1M,
+		.oc_name	= "EC_8P2G1",
+		.oc_id		= OC_EC_8P2G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
-			.u.ec			= {
-				.e_k		= 8,
-				.e_p		= 2,
-				.e_len		= 1 << 20,
-			},
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 2,
+			.ca_ec_cell		= 1 << 20,
 		},
 	},
 	{
 		.oc_name	= NULL,
-		.oc_id		= DAOS_OC_UNKNOWN,
+		.oc_id		= OC_UNKNOWN,
 	},
 };
 
@@ -292,12 +327,12 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 
 	/* see daos_objid_generate */
 	ocid = daos_obj_id2class(oid);
-	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_id == ocid)
 			break;
 	}
 
-	if (oc->oc_id == DAOS_OC_UNKNOWN) {
+	if (oc->oc_id == OC_UNKNOWN) {
 		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
 			ocid, DP_OID(oid));
 		return NULL;
@@ -313,14 +348,29 @@ daos_oclass_name2id(const char *name)
 {
 	struct daos_obj_class	*oc;
 
-	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (strncmp(oc->oc_name, name, strlen(name)) == 0)
-			break;
+			return oc->oc_id;
 	}
-	if (oc->oc_id == DAOS_OC_UNKNOWN)
-		return -1;
 
-	return oc->oc_id;
+	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	return OC_UNKNOWN;
+}
+
+int
+daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
+{
+	struct daos_obj_class   *oc;
+
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		if (oc->oc_id == oc_id) {
+			strcpy(str, oc->oc_name);
+			return 0;
+		}
+	}
+
+	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	return -1;
 }
 
 /** Return the redundancy group size of @oc_attr */
@@ -332,34 +382,33 @@ daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)
 		return -DER_INVAL;
 
 	case DAOS_RES_REPL:
-		return oc_attr->u.repl.r_num;
+		return oc_attr->ca_rp_nr;
 
 	case DAOS_RES_EC:
-		return oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		return oc_attr->ca_ec_k + oc_attr->ca_ec_p;
 	}
 }
 
 int
 dc_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
-		   daos_oclass_attr_t *cattr, daos_event_t *ev)
+		   struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }
 
 int
 dc_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		daos_oclass_attr_t *cattr, daos_event_t *ev)
+		struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
+dc_oclass_list(daos_handle_t coh, struct daos_oclass_list *clist,
 	       daos_anchor_t *anchor, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }
-
 /**
  * Return the number of redundancy groups for the object class @oc_attr with
  * the provided metadata @md
@@ -393,7 +442,7 @@ obj_ec_codec_fini(void)
 	if (oc_ec_codecs == NULL)
 		return;
 
-	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
 			ocnr++;
 	}
@@ -402,7 +451,7 @@ obj_ec_codec_fini(void)
 		  oc_ec_codec_nr, ocnr);
 
 	for (i = 0; i < ocnr; i++) {
-		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		ec_codec = &oc_ec_codecs[i].ec_codec;
 		if (ec_codec->ec_en_matrix != NULL)
 			D_FREE(ec_codec->ec_en_matrix);
 		if (ec_codec->ec_gftbls != NULL)
@@ -429,7 +478,7 @@ obj_ec_codec_init()
 		return 0;
 
 	ocnr = 0;
-	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
 			ocnr++;
 	}
@@ -442,14 +491,14 @@ obj_ec_codec_init()
 	oc_ec_codec_nr = ocnr;
 
 	i = 0;
-	for (oc = &daos_obj_classes[0]; oc->oc_id != DAOS_OC_UNKNOWN; oc++) {
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_attr.ca_resil != DAOS_RES_EC)
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
 		ec_codec = &oc_ec_codecs[i++].ec_codec;
-		k = oc->oc_attr.u.ec.e_k;
-		p = oc->oc_attr.u.ec.e_p;
+		k = oc->oc_attr.ca_ec_k;
+		p = oc->oc_attr.ca_ec_p;
 		m = k + p;
 		/* 32B needed for data generated for each input coefficient */
 		D_ALLOC(ec_codec->ec_gftbls, k * p * 32);
@@ -508,15 +557,16 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
  * p_idx	[IN]		Index into parity p_bufs array.
  */
 int
-obj_encode_full_stripe(daos_obj_id_t oid, daos_sg_list_t *sgl, uint32_t *sg_idx,
-		       size_t *sg_off, struct obj_ec_parity *parity, int p_idx)
+obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
+		       size_t *sg_off, struct obj_ec_parity *parity,
+		       uint32_t p_idx)
 {
 	struct obj_ec_codec		*codec = obj_ec_codec_get(
 							daos_obj_id2class(oid));
 	struct daos_oclass_attr		*oca = daos_oclass_attr_find(oid);
-	unsigned int			 len = oca->u.ec.e_len;
-	unsigned int			 k = oca->u.ec.e_k;
-	unsigned int			 p = oca->u.ec.e_p;
+	unsigned int			 len = oca->ca_ec_cell;
+	unsigned int			 k = oca->ca_ec_k;
+	unsigned int			 p = oca->ca_ec_p;
 	unsigned char			*data[k];
 	unsigned char			*ldata[k];
 	int				 i, lcnt = 0;

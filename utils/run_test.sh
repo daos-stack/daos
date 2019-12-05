@@ -19,10 +19,7 @@
 #check for existence of /mnt/daos first:
 failed=0
 failures=()
-
-if [ -d /work ]; then
-    export D_LOG_FILE=/work/daos.log
-fi
+log_num=0
 
 # this can be rmeoved once we are no longer using the old CI system
 if ${OLD_CI:-true}; then
@@ -43,6 +40,12 @@ fi
 
 run_test()
 {
+    local in="$*"
+    local a="${in// /-}"
+    local b="${a////-}"
+    export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
+    echo "Running $* with log file: ${D_LOG_FILE}"
+
     # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
     #     at the same time.
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
@@ -56,6 +59,8 @@ run_test()
         ((failed = failed + 1))
         failures+=("$*")
     fi
+
+    ((log_num += 1))
 }
 
 if [ -d "/mnt/daos" ]; then
@@ -67,26 +72,38 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
         SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
     fi
+
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+    export DAOS_IO_BYPASS=pm
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    export DAOS_IO_BYPASS=pm_snap
+    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
+    unset DAOS_IO_BYPASS
     run_test src/common/tests/btree.sh ukey -s 20000
     run_test src/common/tests/btree.sh direct -s 20000
     run_test src/common/tests/btree.sh -s 20000
     run_test src/common/tests/btree.sh perf -s 20000
     run_test src/common/tests/btree.sh perf direct -s 20000
     run_test src/common/tests/btree.sh perf ukey -s 20000
+    run_test src/common/tests/btree.sh dyn ukey -s 20000
+    run_test src/common/tests/btree.sh dyn -s 20000
+    run_test src/common/tests/btree.sh dyn perf -s 20000
+    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
     run_test build/src/common/tests/umem_test
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
+	run_test build/src/bio/smd/tests/smd_ut
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
-    run_test build/src/vos/vea/tests/vea_ut
+    run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
     # Satisfy CGO requirements for go-spdk binding and internal daos imports
-    LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
-    export LD_LIBRARY_PATH
-    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
+    LD_LIBRARY_PATH="${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
+
+    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib64"
     export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
@@ -99,10 +116,12 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
     run_test build/src/common/tests/acl_util_tests
-    run_test build/src/common/tests/acl_util_real
+    run_test build/src/common/tests/acl_principal_tests
+    run_test build/src/common/tests/acl_real_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests
+    run_test build/src/mgmt/tests/srv_drpc_tests
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"

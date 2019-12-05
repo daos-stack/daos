@@ -31,6 +31,7 @@ from apricot import TestWithServers
 
 import check_for_pool
 
+# pylint: disable=fixme, broad-except
 class ConnectTest(TestWithServers):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
@@ -42,7 +43,7 @@ class ConnectTest(TestWithServers):
         """
         Test connecting to a pool.
 
-        :avocado: tags=pool,poolconnect,quick
+        :avocado: tags=all,pool,smoke,pr,small,poolconnect
         """
 
         # Accumulate a list of pass/fail indicators representing what is

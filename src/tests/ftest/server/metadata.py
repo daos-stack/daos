@@ -24,180 +24,90 @@
 from __future__ import print_function
 
 import os
-import json
 import traceback
 import uuid
 import threading
-import Queue
 import avocado
-from apricot import Test, skipForTicket
 
-import agent_utils
-import server_utils
-import write_host_file
-import ior_utils
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
 
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError, DaosLog
+from apricot import TestWithServers, skipForTicket
+from agent_utils import run_agent, stop_agent
+from pydaos.raw import DaosContainer, DaosApiError
+from ior_utils import IorCommand
+from command_utils import Orterun, CommandFailure
+from server_utils import run_server, stop_server
+from write_host_file import write_host_file
+from test_utils import TestPool
+
 NO_OF_MAX_CONTAINER = 13180
 
-def ior_runner_thread(result_queue, tname, operation, **kwargs):
-    """
-    IOR Run thread method
+
+def ior_runner_thread(manager, uuids, results):
+    """IOR run thread method.
+
     Args:
-        result_queue: To have the result(PASS/FAIL) in the queue
-        tname: Thread name
-        operation: IOR Write/Read operation
-        kwargs: Dictionary contain the IOR parameters
+        manager (str): mpi job manager command
+        uuids (list): [description]
+        results (queue): queue for returning thread results
     """
-    ior_flag = ""
-    cont_uuid = ""
-    ior_args = kwargs
-    for no_file in range(ior_args['files_per_thread']):
-        if operation == "write":
-            with open("/{0}/{1}".format(ior_args['tmp_dir'],
-                                        tname), "a") as contfile:
-                cont_uuid = str(uuid.uuid4())
-                contfile.write(cont_uuid + "\n")
-            ior_flag = ior_args['iorwriteflags']
-        elif operation == "read":
-            filep = open("/{0}/{1}".format(ior_args['tmp_dir'],
-                                           tname))
-            lines = filep.readlines()
-            ior_flag = ior_args['iorreadflags']
-            cont_uuid = lines[no_file].rstrip()
-
+    for index, cont_uuid in enumerate(uuids):
+        manager.job.daos_cont.update(cont_uuid, "ior.cont_uuid")
         try:
-            ior_utils.run_ior(ior_args['client_hostfile_servers'],
-                              ior_flag,
-                              ior_args['iteration'],
-                              ior_args['stripe_size'],
-                              ior_args['stripe_size'],
-                              ior_args['pool_uuid'],
-                              ior_args['svc_list'],
-                              ior_args['stripe_size'],
-                              ior_args['stripe_size'],
-                              ior_args['stripe_count'],
-                              ior_args['async_io'],
-                              ior_args['object_class'],
-                              ior_args['basepath'],
-                              ior_args['slots'],
-                              filename=cont_uuid,
-                              display_output=False)
-            result_queue.put("PASS")
-        except ior_utils.IorFailed as exe:
-            result_queue.put("FAIL")
-            print("--- FAIL --- {0} Failed to run IOR {1} Exception {2}"
-                  .format(tname,
-                          no_file,
-                          str(exe)))
-            return
+            manager.run()
+        except CommandFailure as error:
+            print(
+                "--- FAIL --- Thread-{0} Failed to run IOR {1}: "
+                "Exception {2}".format(
+                    index,
+                    "read" if "-r" in manager.job.flags.value else "write",
+                    str(error)))
+            results.put("FAIL")
 
-class ObjectMetadata(Test):
-    """
+
+class ObjectMetadata(TestWithServers):
+    """Test class for metadata testing.
+
     Test Class Description:
         Test the general Metadata operations and boundary conditions.
+
     :avocado: recursive
     """
 
-    def setUp(self):
-        self.agent_sessions = None
-        self.pool = None
-        self.hostlist_servers = None
-        self.hostfile_clients = None
-        self.hostfile_servers = None
+    def __init__(self, *args, **kwargs):
+        """Initialize a ObjectMetadata object."""
+        super(ObjectMetadata, self).__init__(*args, **kwargs)
         self.out_queue = None
-        self.pool_connect = True
 
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
+    def setUp(self):
+        """Set up each test case."""
+        # Start the servers and agents
+        super(ObjectMetadata, self).setUp()
 
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.server_group = self.params.get("name",
-                                            '/server_config/',
-                                            'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(self.context)
-        self.hostlist_servers = self.params.get("servers", '/run/hosts/*')
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-        self.hostlist_clients = self.params.get("clients", '/run/hosts/*')
-        self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir)
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers,
-                                                    self.hostlist_clients)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath)
+        # Recreate the client hostfile without slots defined
+        self.hostfile_clients = write_host_file(
+            self.hostlist_clients, self.workdir, None)
 
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         nvme_size=self.params.get("size",
-                                                   '/run/pool/nvmesize/*'))
-
-    def tearDown(self):
-        try:
-            if self.pool_connect:
-                self.pool.disconnect()
-            if self.pool:
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions,
-                                       self.hostlist_clients)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-
-    @skipForTicket("DAOS-1936/DAOS-1946")
-    def test_metadata_fillup(self):
-        """
-        Test ID: DAOS-1512
-        Test Description: Test to verify no IO happens after metadata is full.
-        :avocado: tags=metadata,metadata_fill,nvme,small
-        """
-        self.pool.connect(2)
-        container = DaosContainer(self.context)
-        self.d_log.debug("Fillup Metadata....")
-        for _cont in range(NO_OF_MAX_CONTAINER):
-            container.create(self.pool.handle)
-        self.d_log.debug("Metadata Overload...")
-        #This should fail with no Metadata space Error.
-        try:
-            for _cont in range(250):
-                container.create(self.pool.handle)
-        except DaosApiError as exe:
-            print (exe, traceback.format_exc())
-            return
-
-        self.fail("Test was expected to fail but it passed.\n")
-
-    @skipForTicket("DAOS-1965")
-    @avocado.fail_on(DaosApiError)
-    def test_metadata_addremove(self):
-        """
-        Test ID: DAOS-1512
-        Test Description: Verify metadata release the space
-                          after container delete.
-        :avocado: tags=metadata,metadata_free_space,nvme,small
-        """
-        self.pool.connect(2)
-        for k in range(10):
-            container_array = []
-            self.d_log.debug("Container Create Iteration {}".format(k))
-            for cont in range(NO_OF_MAX_CONTAINER):
-                container = DaosContainer(self.context)
-                container.create(self.pool.handle)
-                container_array.append(container)
-            self.d_log.debug("Container Remove Iteration {} ".format(k))
-            for cont in container_array:
-                cont.destroy()
+        # Create a pool
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.create()
 
     def thread_control(self, threads, operation):
-        """
-        Start threads and wait till all threads execution is finished.
-        It check queue for "FAIL" message and fail the avocado test.
+        """Start threads and wait until all threads are finished.
+
+        Args:
+            threads (list): list of threads to execute
+            operation (str): IOR operation, e.g. "read" or "write"
+
+        Returns:
+            str: "PASS" if all threads completed successfully; "FAIL" otherwise
+
         """
         self.d_log.debug("IOR {0} Threads Started -----".format(operation))
         for thrd in threads:
@@ -211,80 +121,141 @@ class ObjectMetadata(Test):
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
 
+    @skipForTicket("DAOS-1936/DAOS-1946")
+    def test_metadata_fillup(self):
+        """JIRA ID: DAOS-1512.
+
+        Test Description:
+            Test to verify no IO happens after metadata is full.
+
+        Use Cases:
+            ?
+
+        :avocado: tags=all,metadata,pr,small,metadatafill
+        """
+        self.pool.pool.connect(2)
+        container = DaosContainer(self.context)
+
+        self.d_log.debug("Fillup Metadata....")
+        for _cont in range(NO_OF_MAX_CONTAINER):
+            container.create(self.pool.pool.handle)
+
+        # This should fail with no Metadata space Error.
+        self.d_log.debug("Metadata Overload...")
+        try:
+            for _cont in range(250):
+                container.create(self.pool.pool.handle)
+            self.fail("Test expected to fail with a no metadata space error")
+
+        except DaosApiError as exe:
+            print(exe, traceback.format_exc())
+            return
+
+        self.fail("Test was expected to fail but it passed.\n")
+
+    @skipForTicket("DAOS-1965")
+    @avocado.fail_on(DaosApiError)
+    def test_metadata_addremove(self):
+        """JIRA ID: DAOS-1512.
+
+        Test Description:
+            Verify metadata release the space after container delete.
+
+        Use Cases:
+            ?
+
+        :avocado: tags=metadata,metadata_free_space,nvme,small
+        """
+        self.pool.pool.connect(2)
+        for k in range(10):
+            container_array = []
+            self.d_log.debug("Container Create Iteration {}".format(k))
+            for cont in range(NO_OF_MAX_CONTAINER):
+                container = DaosContainer(self.context)
+                container.create(self.pool.pool.handle)
+                container_array.append(container)
+
+            self.d_log.debug("Container Remove Iteration {} ".format(k))
+            for cont in container_array:
+                cont.destroy()
+
     @avocado.fail_on(DaosApiError)
     def test_metadata_server_restart(self):
-        """
-        Test ID: DAOS-1512
-        Test Description: This test will verify 2000 IOR small size container
-                          after server restart. Test will write IOR in 5
-                          different threads for faster execution time. Each
-                          thread will create 400 (8bytes) containers to the
-                          same pool. Restart the servers, read IOR container
-                          file written previously and validate data integrity
-                          by using IOR option "-R -G 1".
+        """JIRA ID: DAOS-1512.
+
+        Test Description:
+            This test will verify 2000 IOR small size container after server
+            restart. Test will write IOR in 5 different threads for faster
+            execution time. Each thread will create 400 (8bytes) containers to
+            the same pool. Restart the servers, read IOR container file written
+            previously and validate data integrity by using IOR option
+            "-R -G 1".
+
+        Use Cases:
+            ?
+
         :avocado: tags=metadata,metadata_ior,nvme,small
         """
-        self.pool_connect = False
         files_per_thread = 400
         total_ior_threads = 5
-        threads = []
-        ior_args = {}
+        self.out_queue = queue.Queue()
 
-        createsvc = self.params.get("svcn", '/run/pool/createsvc/')
-        svc_list = ""
-        for i in range(createsvc):
-            svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
-        svc_list = svc_list[:-1]
+        processes = self.params.get("slots", "/run/ior/clientslots/*")
 
-        ior_args['client_hostfile_servers'] = self.hostfile_clients
-        ior_args['pool_uuid'] = self.pool.get_uuid_str()
-        ior_args['svc_list'] = svc_list
-        ior_args['basepath'] = self.basepath
-        ior_args['server_group'] = self.server_group
-        ior_args['tmp_dir'] = self.workdir
-        ior_args['iorwriteflags'] = self.params.get("F",
-                                                    '/run/ior/iorwriteflags/')
-        ior_args['iorreadflags'] = self.params.get("F",
-                                                   '/run/ior/iorreadflags/')
-        ior_args['iteration'] = self.params.get("iter", '/run/ior/iteration/')
-        ior_args['stripe_size'] = self.params.get("s", '/run/ior/stripesize/*')
-        ior_args['stripe_count'] = self.params.get("c", '/run/ior/stripecount/')
-        ior_args['async_io'] = self.params.get("a", '/run/ior/asyncio/')
-        ior_args['object_class'] = self.params.get("o", '/run/ior/objectclass/')
-        ior_args['slots'] = self.params.get("slots", '/run/ior/clientslots/*')
+        list_of_uuid_lists = [
+            [str(uuid.uuid4()) for _ in range(files_per_thread)]
+            for _ in range(total_ior_threads)]
 
-        ior_args['files_per_thread'] = files_per_thread
-        self.out_queue = Queue.Queue()
+        # Launch threads to run IOR to write data, restart the agents and
+        # servers, and then run IOR to read the data
+        for operation in ("write", "read"):
+            # Create the IOR threads
+            threads = []
+            for index in range(total_ior_threads):
+                # Define the arguments for the ior_runner_thread method
+                ior_cmd = IorCommand()
+                ior_cmd.get_params(self)
+                ior_cmd.set_daos_params(self.server_group, self.pool)
+                ior_cmd.flags.value = self.params.get(
+                    "F", "/run/ior/ior{}flags/".format(operation))
 
-        #IOR write threads
-        for i in range(total_ior_threads):
-            threads.append(threading.Thread(target=ior_runner_thread,
-                                            args=(self.out_queue,
-                                                  "Thread-{}".format(i),
-                                                  "write"),
-                                            kwargs=ior_args))
-        if self.thread_control(threads, "write") == "FAIL":
-            self.d_log.error(" IOR write Thread FAIL")
-            self.fail(" IOR write Thread FAIL")
+                # Define the job manager for the IOR command
+                path = os.path.join(self.ompi_prefix, "bin")
+                manager = Orterun(ior_cmd, path)
+                env = ior_cmd.get_default_env(str(manager), self.tmp)
+                manager.setup_command(env, self.hostfile_clients, processes)
 
-        #Server Restart
-        if self.agent_sessions:
-            agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
-        server_utils.stop_server(hosts=self.hostlist_servers)
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_clients,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath)
+                # Add a thread for these IOR arguments
+                threads.append(
+                    threading.Thread(
+                        target=ior_runner_thread,
+                        kwargs={
+                            "manager": manager,
+                            "uuids": list_of_uuid_lists[index],
+                            "results": self.out_queue}))
 
-        #Read IOR with verification with same number of threads
-        threads = []
-        for i in range(total_ior_threads):
-            threads.append(threading.Thread(target=ior_runner_thread,
-                                            args=(self.out_queue,
-                                                  "Thread-{}".format(i),
-                                                  "read"),
-                                            kwargs=ior_args))
-        if self.thread_control(threads, "read") == "FAIL":
-            self.d_log.error(" IOR write Thread FAIL")
-            self.fail(" IOR read Thread FAIL")
+                self.log.info(
+                    "Creatied %s thread %s with container uuids %s", operation,
+                    index, list_of_uuid_lists[index])
+
+            # Launch the IOR threads
+            if self.thread_control(threads, operation) == "FAIL":
+                self.d_log.error("IOR {} Thread FAIL".format(operation))
+                self.fail("IOR {} Thread FAIL".format(operation))
+
+            # Restart the agents and servers after the write / before the read
+            if operation == "write":
+                # Stop the agents and servers
+                if self.agent_sessions:
+                    stop_agent(self.agent_sessions, self.hostlist_clients)
+                stop_server(hosts=self.hostlist_servers)
+
+                # Start the agents
+                self.agent_sessions = run_agent(
+                    self, self.hostlist_clients,
+                    self.hostlist_servers)
+
+                # Start the servers
+                run_server(
+                    self, self.hostfile_servers, self.server_group,
+                    clean=False)

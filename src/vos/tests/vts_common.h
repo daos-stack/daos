@@ -27,20 +27,18 @@
  */
 #ifndef __VTS_COMMON_H__
 #define __VTS_COMMON_H__
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
+
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
@@ -84,9 +82,6 @@ vts_alloc_gen_fname(char **fname);
 int
 vts_pool_fallocate(char **fname);
 
-void
-vts_io_set_oid(daos_unit_oid_t *oid);
-
 /**
  * Init and Fini context, Sets up
  * test context for I/O tests
@@ -98,22 +93,36 @@ vts_ctx_init(struct vos_test_ctx *tcx,
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);
 
+/**
+ * Initialize I/O test context:
+ * - create and connect to pool based on the input pool uuid and size
+ * - create and open container based on the input container uuid
+ */
+int dts_ctx_init(struct dts_context *tsc);
+/**
+ * Finalize I/O test context:
+ * - close and destroy the test container
+ * - disconnect and destroy the test pool
+ */
+void dts_ctx_fini(struct dts_context *tsc);
+
+/**
+ * Try to obtain a free credit from the I/O context.
+ */
+struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
 
 /**
  * VOS test suite run tests
  */
-int
-run_pool_test(void);
-
-int
-run_co_test(void);
-
-int
-run_discard_tests(void);
-
-int
-run_aggregate_tests(bool slow);
-
+int run_pool_test(void);
+int run_co_test(void);
+int run_discard_tests(void);
+int run_aggregate_tests(bool slow);
+int run_dtx_tests(void);
+int run_gc_tests(void);
+int run_pm_tests(void);
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
+
+int run_ilog_tests(void);
 
 #endif

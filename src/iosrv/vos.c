@@ -31,18 +31,6 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
-
-/* obj_enum_rec.rec_flags */
-#define RECX_INLINE	(1U << 0)
-
-struct obj_enum_rec {
-	daos_recx_t		rec_recx;
-	daos_epoch_range_t	rec_epr;
-	uint64_t		rec_size;
-	uint32_t		rec_version;
-	uint32_t		rec_flags;
-};
-
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	   struct dss_enum_arg *arg, vos_iter_type_t type)
@@ -77,7 +65,7 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 }
 
 static int
-is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
+is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 {
 	d_sg_list_t *sgl = arg->sgl;
 
@@ -87,7 +75,7 @@ is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
 	 * we only use one IOV.
 	 */
 	while (arg->sgl_idx < sgl->sg_nr) {
-		daos_iov_t *iovs = sgl->sg_iovs;
+		d_iov_t *iovs = sgl->sg_iovs;
 
 		if (iovs[arg->sgl_idx].iov_len + size >=
 		    iovs[arg->sgl_idx].iov_buf_len) {
@@ -106,10 +94,9 @@ is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
 		sgl->sg_nr_out = arg->sgl_idx + 1;
 
 	/* Check if the sgl is full */
-	if (arg->sgl_idx >= sgl->sg_nr || arg->kds_len >= arg->kds_cap) {
-		D_DEBUG(DB_IO, "sgl or kds full sgl %d/%d kds %d/%d size "
-			DF_U64"\n", arg->sgl_idx, sgl->sg_nr,
-			arg->kds_len, arg->kds_cap, size);
+	if (arg->sgl_idx >= sgl->sg_nr) {
+		D_DEBUG(DB_IO, "sgl is full sgl %d/%d size "DF_U64"\n",
+			arg->sgl_idx, sgl->sg_nr, size);
 		return 1;
 	}
 
@@ -118,20 +105,24 @@ is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
 
 static int
 fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
-	 vos_iter_type_t type)
+	 vos_iter_type_t vos_type)
 {
-	daos_iov_t *iovs = arg->sgl->sg_iovs;
+	d_iov_t *iovs = arg->sgl->sg_iovs;
+	int type;
 
-	D_ASSERTF(type == VOS_ITER_OBJ, "%d\n", type);
+	D_ASSERTF(vos_type == VOS_ITER_OBJ, "%d\n", vos_type);
 
-	if (is_sgl_kds_full(arg, sizeof(entry->ie_oid)))
+	/* Check if sgl or kds is full */
+	if (is_sgl_full(arg, sizeof(entry->ie_oid)) ||
+	    arg->kds_len >= arg->kds_cap)
 		return 1;
 
+	type = vos_iter_type_2pack_type(vos_type);
 	/* Append a new descriptor to kds. */
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
 	arg->kds[arg->kds_len].kd_key_len = sizeof(entry->ie_oid);
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
 	/* Append the object ID to iovs. */
@@ -149,72 +140,101 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 
 static int
 fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
-	 vos_iter_type_t type)
+	 vos_iter_type_t vos_type)
 {
-	daos_iov_t	*iovs = arg->sgl->sg_iovs;
-	daos_size_t	 size;
+	d_iov_t		*iov;
+	daos_size_t	total_size;
+	int		type;
+	int		kds_cap;
 
-	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
-	size = key_ent->ie_key.iov_len;
+	D_ASSERT(vos_type == VOS_ITER_DKEY || vos_type == VOS_ITER_AKEY);
 
+	total_size = key_ent->ie_key.iov_len;
+	if (key_ent->ie_key_punch)
+		total_size += sizeof(key_ent->ie_key_punch);
+
+	type = vos_iter_type_2pack_type(vos_type);
 	/* for tweaking kds_len in fill_rec() */
 	arg->last_type = type;
 
-	if (is_sgl_kds_full(arg, size)) {
+	/* Check if sgl or kds is full */
+	if (arg->need_punch && key_ent->ie_key_punch != 0)
+		kds_cap = arg->kds_cap - 1; /* one extra kds for punch eph */
+	else
+		kds_cap = arg->kds_cap;
+
+	if (is_sgl_full(arg, total_size) || arg->kds_len >= kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
 		 * (kds_len < 2) before return KEY2BIG.
 		 */
 		if (arg->kds_len == 0 ||
 		    (arg->chk_key2big && arg->kds_len < 2)) {
-			if (arg->kds[0].kd_key_len < size)
-				arg->kds[0].kd_key_len = size;
+			if (arg->kds[0].kd_key_len < total_size)
+				arg->kds[0].kd_key_len = total_size;
 			return -DER_KEY2BIG;
 		} else {
 			return 1;
 		}
 	}
 
+	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
+
 	D_ASSERT(arg->kds_len < arg->kds_cap);
-	arg->kds[arg->kds_len].kd_key_len = size;
+	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
 	arg->kds[arg->kds_len].kd_csum_len = 0;
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
-	if (arg->eprs != NULL) {
-		arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
-		arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
-		arg->eprs_len++;
+	D_ASSERT(iov->iov_len + key_ent->ie_key.iov_len <
+		 iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, key_ent->ie_key.iov_buf,
+	       key_ent->ie_key.iov_len);
+
+	iov->iov_len += key_ent->ie_key.iov_len;
+
+	if (key_ent->ie_key_punch != 0 && arg->need_punch) {
+		int pi_size = sizeof(key_ent->ie_key_punch);
+
+		arg->kds[arg->kds_len].kd_key_len = pi_size;
+		arg->kds[arg->kds_len].kd_csum_len = 0;
+		if (type == OBJ_ITER_AKEY)
+			arg->kds[arg->kds_len].kd_val_type =
+						OBJ_ITER_AKEY_EPOCH;
+		else
+			arg->kds[arg->kds_len].kd_val_type =
+						OBJ_ITER_DKEY_EPOCH;
+		arg->kds_len++;
+
+		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_key_punch,
+		       pi_size);
+
+		iov->iov_len += pi_size;
 	}
 
-	D_ASSERT(iovs[arg->sgl_idx].iov_len + key_ent->ie_key.iov_len <
-		 iovs[arg->sgl_idx].iov_buf_len);
-	memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
-	       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
-
-	iovs[arg->sgl_idx].iov_len += key_ent->ie_key.iov_len;
-	D_DEBUG(DB_IO, "Pack key %d %s iov total %zd kds len %d eph "
-		DF_U64"\n", (int)key_ent->ie_key.iov_len,
-		(char *)key_ent->ie_key.iov_buf,
-		iovs[arg->sgl_idx].iov_len, arg->kds_len - 1,
-		key_ent->ie_epoch);
-
+	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
+		DF_U64" punched eph num "DF_U64"\n", DP_KEY(&key_ent->ie_key),
+		iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
+		key_ent->ie_key_punch);
 	return 0;
 }
 
 /* Callers are responsible for incrementing arg->kds_len. See iter_akey_cb. */
 static int
 fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
-	 vos_iter_type_t type, vos_iter_param_t *param, unsigned int *acts)
+	 vos_iter_type_t vos_type, vos_iter_param_t *param, unsigned int *acts)
 {
-	daos_iov_t		*iovs = arg->sgl->sg_iovs;
+	d_iov_t			*iovs = arg->sgl->sg_iovs;
 	struct obj_enum_rec	*rec;
-	daos_size_t		 data_size, iod_size;
-	daos_size_t		 size = sizeof(*rec);
-	bool			 inline_data = false, bump_kds_len = false;
-	int			 rc = 0;
+	daos_size_t		data_size, iod_size;
+	daos_size_t		size = sizeof(*rec);
+	bool			inline_data = false, bump_kds_len = false;
+	int			type;
+	int			rc = 0;
 
-	D_ASSERT(type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
+	D_ASSERT(vos_type == VOS_ITER_SINGLE || vos_type == VOS_ITER_RECX);
+	type = vos_iter_type_2pack_type(vos_type);
 
 	/* Client needs zero iod_size to tell a punched record */
 	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr))
@@ -240,7 +260,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		bump_kds_len = true;
 	}
 
-	if (is_sgl_kds_full(arg, size)) {
+	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
 		 * (kds_len < 3) before return KEY2BIG.
@@ -254,7 +274,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	/* Grow the next new descriptor (instead of creating yet a new one). */
-	arg->kds[arg->kds_len].kd_val_types = type;
+	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds[arg->kds_len].kd_key_len += sizeof(*rec);
 
 	/* Append the recx record to iovs. */
@@ -274,12 +294,12 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 * NB: Punched recxs do not have any data to copy.
 	 */
 	if (inline_data && data_size > 0) {
-		daos_iov_t iov_out;
+		d_iov_t iov_out;
 
 		/* inline packing for the small recx located on SCM */
 		D_ASSERT(key_ent->ie_biov.bi_addr.ba_type == DAOS_MEDIA_SCM);
 
-		daos_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
+		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
 		rc = vos_iter_copy(ih, key_ent, &iov_out);
 		if (rc != 0) {
@@ -303,18 +323,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (arg->last_type != type) {
 		arg->last_type = type;
 		bump_kds_len = true;
-		/** This eprs will not be used during rebuild,
-		 * because the epoch for each record will be returned
-		 * through obj_enum_rec anyway, see fill_rec().
-		 * This "empty" eprs is just for eprs and kds to
-		 * be matched, so it would be easier for unpacking
-		 * see dss_enum_unpack().
-		 */
-		if (arg->eprs != NULL) {
-			arg->eprs[arg->eprs_len].epr_lo = DAOS_EPOCH_MAX;
-			arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
-			arg->eprs_len++;
-		}
 	}
 out:
 	if (bump_kds_len)
@@ -406,30 +414,25 @@ enum {
 
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
-unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
+unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 	     daos_key_t *akey, daos_key_desc_t *kds, void **data,
 	     daos_size_t len, uint32_t *version)
 {
 	int rc = 0;
 	int type;
 
-	if (iod->iod_name.iov_len == 0)
-		daos_iov_copy(&iod->iod_name, akey);
-	else
-		D_ASSERT(daos_key_match(&iod->iod_name, akey));
-
+	D_ASSERT(daos_key_match(&iod->iod_name, akey));
 	if (kds == NULL)
 		return 0;
 
-	if (kds->kd_val_types == VOS_ITER_SINGLE)
+	if (kds->kd_val_type == OBJ_ITER_SINGLE)
 		type = DAOS_IOD_SINGLE;
 	else
 		type = DAOS_IOD_ARRAY;
 
 	while (len > 0) {
 		struct obj_enum_rec *rec = *data;
-
-		D_DEBUG(DB_REBUILD, "data %p len "DF_U64"\n", *data, len);
+		daos_size_t len_bak = len;
 
 		/* Every recx begins with an obj_enum_rec. */
 		if (len < sizeof(*rec)) {
@@ -442,7 +445,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 		if (*version == 0) {
 			*version = rec->rec_version;
 		} else if (*version != rec->rec_version) {
-			D_DEBUG(DB_REBUILD, "different version %u != %u\n",
+			D_DEBUG(DB_IO, "different version %u != %u\n",
 				*version, rec->rec_version);
 			rc = UNPACK_COMPLETE_IO;
 			break;
@@ -505,13 +508,13 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 
 		/* Append the data, if inline. */
 		if (sgl != NULL && rec->rec_size > 0) {
-			daos_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
+			d_iov_t *iov = &sgl->sg_iovs[sgl->sg_nr];
 
 			if (rec->rec_flags & RECX_INLINE) {
-				daos_iov_set(iov, *data, rec->rec_size *
-							 rec->rec_recx.rx_nr);
+				d_iov_set(iov, *data, rec->rec_size *
+						      rec->rec_recx.rx_nr);
 			} else {
-				daos_iov_set(iov, NULL, 0);
+				d_iov_set(iov, NULL, 0);
 			}
 
 			sgl->sg_nr++;
@@ -521,15 +524,16 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
 			len -= iov->iov_len;
 		}
 
-		D_DEBUG(DB_REBUILD, "unpack %p idx/nr "DF_U64"/"DF_U64 "ver %u"
-			" epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
-			*data, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
+		D_DEBUG(DB_IO,
+			"unpacked data %p len "DF_U64" idx/nr "DF_U64"/"DF_U64
+			" ver %u epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
+			rec, len_bak, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 			iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
 			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size);
 	}
 
-	D_DEBUG(DB_REBUILD, "pack nr %d version/type /%u/%d rc %d\n",
+	D_DEBUG(DB_IO, "unpacked nr %d version/type /%u/%d rc %d\n",
 		iod->iod_nr, *version, iod->iod_type, rc);
 	return rc;
 }
@@ -542,20 +546,16 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_sg_list_t *sgl,
  * \param[in]		iods		daos_iod_t array
  * \param[in]		recxs_caps	recxs capacity array
  * \param[in]		sgls		optional sgl array for inline recxs
- * \param[in]		ephs		epoch array
+ * \param[in]		ephs		akey punched ephs
  * \param[in]		iods_cap	maximal number of elements in \a iods,
  *					\a recxs_caps, \a sgls, and \a ephs
  */
 static void
 dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
-			int *recxs_caps, daos_sg_list_t *sgls,
+			int *recxs_caps, d_sg_list_t *sgls,
 			daos_epoch_t *ephs, int iods_cap)
 {
-	int i;
-
 	memset(io, 0, sizeof(*io));
-
-	io->ui_dkey_eph = DAOS_EPOCH_MAX;
 
 	D_ASSERTF(iods_cap > 0, "%d\n", iods_cap);
 	io->ui_iods_cap = iods_cap;
@@ -568,19 +568,20 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 	memset(recxs_caps, 0, sizeof(*recxs_caps) * iods_cap);
 	io->ui_recxs_caps = recxs_caps;
 
+	io->ui_iods_top = -1;
 	if (sgls != NULL) {
 		memset(sgls, 0, sizeof(*sgls) * iods_cap);
 		io->ui_sgls = sgls;
 	}
 
-	for (i = 0; i < iods_cap; i++)
-		ephs[i] = DAOS_EPOCH_MAX;
-
-	io->ui_akey_ephs = ephs;
+	if (ephs != NULL) {
+		memset(ephs, 0, sizeof(*ephs) * iods_cap);
+		io->ui_akey_punch_ephs = ephs;
+	}
 }
 
 static void
-clear_iod(daos_iod_t *iod, daos_sg_list_t *sgl, int *recxs_cap)
+clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
 {
 	daos_iov_free(&iod->iod_name);
 	if (iod->iod_recxs != NULL)
@@ -608,18 +609,19 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 {
 	int i;
 
-	for (i = 0; i < io->ui_iods_len; i++) {
-		daos_sg_list_t *sgl = NULL;
+	for (i = 0; i <= io->ui_iods_top; i++) {
+		d_sg_list_t *sgl = NULL;
 
 		if (io->ui_sgls != NULL)
 			sgl = &io->ui_sgls[i];
 		clear_iod(&io->ui_iods[i], sgl, &io->ui_recxs_caps[i]);
-		if (io->ui_akey_ephs)
-			io->ui_akey_ephs[i] = DAOS_EPOCH_MAX;
 	}
 
-	io->ui_dkey_eph = DAOS_EPOCH_MAX;
-	io->ui_iods_len = 0;
+	if (io->ui_akey_punch_ephs)
+		memset(io->ui_akey_punch_ephs, 0,
+		       sizeof(daos_epoch_t) * io->ui_iods_cap);
+	io->ui_dkey_punch_eph = 0;
+	io->ui_iods_top = -1;
 	io->ui_version = 0;
 }
 
@@ -631,32 +633,58 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 static void
 dss_enum_unpack_io_fini(struct dss_enum_unpack_io *io)
 {
-	D_ASSERTF(io->ui_iods_len == 0, "%d\n", io->ui_iods_len);
+	D_ASSERTF(io->ui_iods_top == -1, "%d\n", io->ui_iods_top);
 	daos_iov_free(&io->ui_dkey);
 }
 
-/*
- * Close the current iod (i.e., io->ui_iods[io->ui_iods_len]). If it contains
- * recxs, append it to io by incrementing io->ui_iods_len. If it doesn't
- * contain any recx, clear it.
- */
 static void
-close_iod(struct dss_enum_unpack_io *io)
+clear_top_iod(struct dss_enum_unpack_io *io)
 {
-	D_ASSERTF(io->ui_iods_cap > 0, "%d > 0\n", io->ui_iods_cap);
-	D_ASSERTF(io->ui_iods_len < io->ui_iods_cap, "%d < %d\n",
-		  io->ui_iods_len, io->ui_iods_cap);
-	if (io->ui_iods[io->ui_iods_len].iod_nr > 0) {
-		io->ui_iods_len++;
-	} else {
-		daos_sg_list_t *sgl = NULL;
+	int idx = io->ui_iods_top;
 
-		D_DEBUG(DB_TRACE, "iod without recxs: %d\n", io->ui_iods_len);
+	if (idx == -1)
+		return;
+
+	if (io->ui_iods[idx].iod_nr == 0) {
+		d_sg_list_t *sgl = NULL;
+
+		D_DEBUG(DB_IO, "iod without recxs: %d\n", idx);
 		if (io->ui_sgls != NULL)
-			sgl = &io->ui_sgls[io->ui_iods_len];
-		clear_iod(&io->ui_iods[io->ui_iods_len], sgl,
-			  &io->ui_recxs_caps[io->ui_iods_len]);
+			sgl = &io->ui_sgls[idx];
+		clear_iod(&io->ui_iods[idx], sgl, &io->ui_recxs_caps[idx]);
+		io->ui_iods_top--;
 	}
+}
+
+/*
+ * Move to next iod of io.
+ * If it contains recxs, append it to io by incrementing
+ * io->ui_iods_top. If it doesn't contain any recx, clear it.
+ * return 1 if it reach the cap, otherwise return 0.
+ */
+static int
+next_iod(struct dss_enum_unpack_io *io)
+{
+	int idx;
+
+	D_ASSERTF(io->ui_iods_cap > 0, "%d > 0\n", io->ui_iods_cap);
+
+	if (io->ui_iods_top == io->ui_iods_cap - 1)
+		return 1;
+
+	idx = io->ui_iods_top;
+	if (idx != -1 && io->ui_iods[idx].iod_nr == 0) {
+		/* if the current top is empty, for example if there is
+		 * no records under dkey/akey, then it can just clear
+		 * and reuse the top iod, i.e. it does not need increase
+		 * the top.
+		 */
+		clear_top_iod(io);
+	}
+
+	io->ui_iods_top++;
+
+	return 0;
 }
 
 /* Close io, pass it to cb, and clear it. */
@@ -665,13 +693,207 @@ complete_io(struct dss_enum_unpack_io *io, dss_enum_unpack_cb_t cb, void *arg)
 {
 	int rc = 0;
 
-	if (io->ui_iods_len == 0) {
-		D_DEBUG(DB_TRACE, "io empty\n");
+	if (io->ui_iods_top == -1) {
+		D_DEBUG(DB_IO, "io empty\n");
 		goto out;
 	}
+
+	/* in case there are some garbage */
+	clear_top_iod(io);
+
 	rc = cb(io, arg);
 out:
 	dss_enum_unpack_io_clear(io);
+	return rc;
+}
+
+/**
+ * Unpack dkey and akey
+ */
+static int
+enum_unpack_key(daos_key_desc_t *kds, char *key_data,
+		struct dss_enum_unpack_io *io,
+		dss_enum_unpack_cb_t cb, void *cb_arg)
+{
+	daos_key_t	key;
+	int		rc = 0;
+
+	D_ASSERT(kds->kd_val_type == OBJ_ITER_DKEY ||
+		 kds->kd_val_type == OBJ_ITER_AKEY);
+
+	key.iov_buf = key_data;
+	key.iov_buf_len = kds->kd_key_len;
+	key.iov_len = kds->kd_key_len;
+	if (kds->kd_val_type == OBJ_ITER_AKEY &&
+	    io->ui_dkey.iov_buf == NULL) {
+		D_ERROR("No dkey for akey "DF_KEY" invalid buf.\n",
+			DP_KEY(&key));
+		return -DER_INVAL;
+	}
+
+	if (kds->kd_val_type == OBJ_ITER_DKEY) {
+		if (io->ui_dkey.iov_len == 0) {
+			daos_iov_copy(&io->ui_dkey, &key);
+		} else if (!daos_key_match(&io->ui_dkey, &key)) {
+			/* Close current IOD if dkey are different */
+			rc = complete_io(io, cb, cb_arg);
+			if (rc != 0)
+				return rc;
+
+			/* Update to the new dkey */
+			daos_iov_free(&io->ui_dkey);
+			rc = daos_iov_copy(&io->ui_dkey, &key);
+		}
+		D_DEBUG(DB_IO, "process dkey "DF_KEY": rc %d\n",
+			DP_KEY(&key), rc);
+		return rc;
+	}
+
+	D_DEBUG(DB_IO, "process akey %d %s\n",
+		(int)key.iov_len, (char *)key.iov_buf);
+
+	if (io->ui_iods_top == -1 ||
+	    !daos_key_match(&io->ui_iods[io->ui_iods_top].iod_name, &key)) {
+		/* empty io or current key does not match */
+		rc = next_iod(io);
+		D_ASSERT(rc == 0);
+		rc = daos_iov_copy(&io->ui_iods[io->ui_iods_top].iod_name,
+				   &key);
+	}
+
+	return rc;
+}
+
+/**
+ * Unpack punched epochs.
+ */
+static int
+enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
+			 struct dss_enum_unpack_io *io)
+{
+	int idx;
+
+	if (kds->kd_key_len != sizeof(daos_epoch_t))
+		return -DER_INVAL;
+
+	if (kds->kd_val_type == OBJ_ITER_DKEY_EPOCH) {
+		memcpy(&io->ui_dkey_punch_eph, data, kds->kd_key_len);
+		return 0;
+	}
+
+	if (io->ui_iods_top == -1) {
+		D_ERROR("punched epoch for empty akey rc %d\n", -DER_INVAL);
+		return -DER_INVAL;
+	}
+
+	idx = io->ui_iods_top;
+	D_ASSERT(io->ui_akey_punch_ephs != NULL);
+	memcpy(&io->ui_akey_punch_ephs[idx], data, kds->kd_key_len);
+
+	return 0;
+}
+
+static int
+enum_unpack_recxs(daos_key_desc_t *kds, void *data,
+		  struct dss_enum_unpack_io *io,
+		  dss_enum_unpack_cb_t cb, void *cb_arg)
+{
+	daos_iod_t	*iod;
+	daos_key_t	iod_akey;
+	daos_key_t	*dkey;
+	void		*ptr = data;
+	int		rc = 0;
+
+	if (io->ui_iods_top == -1)
+		return -DER_INVAL;
+
+	iod = &io->ui_iods[io->ui_iods_top];
+	rc = daos_iov_copy(&iod_akey, &iod->iod_name);
+	if (rc)
+		return rc;
+
+	dkey = &io->ui_dkey;
+	if (dkey->iov_len == 0 || iod_akey.iov_len == 0) {
+		rc = -DER_INVAL;
+		D_ERROR("invalid list buf %c\n", rc);
+		D_GOTO(free, rc);
+	}
+
+	while (ptr < data + kds->kd_key_len) {
+		int		j = io->ui_iods_top;
+		daos_size_t	len;
+
+		D_ASSERT(j >= 0);
+		/* Because vos_obj_update only accept single
+		 * version, let's go through the records to
+		 * check different version, and* queue rebuild.
+		 */
+		len = data + kds->kd_key_len - ptr;
+		rc = unpack_recxs(&io->ui_iods[j],
+				  &io->ui_recxs_caps[j],
+				  io->ui_sgls == NULL ?
+				  NULL : &io->ui_sgls[j], &iod_akey,
+				  kds, &ptr, len,
+				  &io->ui_version);
+		if (rc <= 0) /* normal case */
+			break;
+
+		/* there must be data left in this case,
+		 * otherwise it will break above
+		 */
+		D_ASSERT(ptr < data + kds->kd_key_len);
+		D_ASSERT(rc == UNPACK_COMPLETE_IOD ||
+			 rc == UNPACK_COMPLETE_IO);
+		if (rc == UNPACK_COMPLETE_IO || next_iod(io) == 1) {
+			rc = complete_io(io, cb, cb_arg);
+			if (rc < 0)
+				break;
+
+			rc = next_iod(io);
+			D_ASSERT(rc == 0);
+		}
+
+		/* Initialize the new iod_name */
+		rc = daos_iov_copy(&io->ui_iods[io->ui_iods_top].iod_name,
+				   &iod_akey);
+		if (rc)
+			break;
+	}
+free:
+	daos_iov_free(&iod_akey);
+	D_DEBUG(DB_IO, "unpack recxs: %d\n", rc);
+	return rc;
+}
+
+static int
+enum_unpack_oid(daos_key_desc_t *kds, void *data,
+		struct dss_enum_unpack_io *io,
+		dss_enum_unpack_cb_t cb, void *cb_arg)
+{
+	daos_unit_oid_t	*oid = data;
+	int		 rc = 0;
+
+	if (kds->kd_key_len != sizeof(*oid)) {
+		D_ERROR("Invalid object ID size: "DF_U64
+			" != %zu\n", kds->kd_key_len, sizeof(*oid));
+		rc = -DER_INVAL;
+		return rc;
+	}
+
+	if (daos_unit_oid_is_null(io->ui_oid)) {
+		io->ui_oid = *oid;
+	} else if (daos_unit_oid_compare(io->ui_oid, *oid) !=
+		   0) {
+		rc = complete_io(io, cb, cb_arg);
+		if (rc != 0)
+			return rc;
+		daos_iov_free(&io->ui_dkey);
+		io->ui_oid = *oid;
+	}
+
+	D_DEBUG(DB_REBUILD, "process obj "DF_UOID"\n",
+		DP_UOID(io->ui_oid));
+
 	return rc;
 }
 
@@ -680,25 +902,24 @@ out:
  * be used to issue a VOS update. \a arg->*_anchor are ignored currently. \a cb
  * will be called, for the caller to consume the recxs accumulated in \a io.
  *
- * \param[in]		type	enumeration type
- * \param[in]		arg	enumeration argument
- * \param[in]		cb	callback
- * \param[in]		cb_arg	callback argument
+ * \param[in]		vos_type	enumeration type
+ * \param[in]		arg		enumeration argument
+ * \param[in]		cb		callback
+ * \param[in]		cb_arg		callback argument
  */
 int
-dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
+dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 		dss_enum_unpack_cb_t cb, void *cb_arg)
 {
 	struct dss_enum_unpack_io	io;
 	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS];
 	int				recxs_caps[DSS_ENUM_UNPACK_MAX_IODS];
+	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
-	daos_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	daos_key_t			akey = {0};
-	daos_epoch_range_t		*eprs = arg->eprs;
 	void				*ptr;
 	unsigned int			i;
 	int				rc = 0;
+	int				type;
 
 	/* Currently, this function is only for unpacking recursive
 	 * enumerations from arg->kds and arg->sgl.
@@ -707,15 +928,16 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 
 	D_ASSERT(arg->kds_len > 0);
 	D_ASSERT(arg->kds != NULL);
-	if (arg->kds[0].kd_val_types != type) {
+	type = vos_iter_type_2pack_type(vos_type);
+	if (arg->kds[0].kd_val_type != type) {
 		D_ERROR("the first kds type %d != %d\n",
-			arg->kds[0].kd_val_types, type);
+			arg->kds[0].kd_val_type, type);
 		return -DER_INVAL;
 	}
 
 	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls, ephs,
 				DSS_ENUM_UNPACK_MAX_IODS);
-	if (type > VOS_ITER_OBJ)
+	if (type != OBJ_ITER_OBJ)
 		io.ui_oid = arg->oid;
 
 	D_ASSERTF(arg->sgl->sg_nr > 0, "%u\n", arg->sgl->sg_nr);
@@ -723,172 +945,60 @@ dss_enum_unpack(vos_iter_type_t type, struct dss_enum_arg *arg,
 	ptr = arg->sgl->sg_iovs[0].iov_buf;
 
 	for (i = 0; i < arg->kds_len; i++) {
+		daos_key_desc_t *kds = &arg->kds[i];
+
 		D_DEBUG(DB_REBUILD, "process %d type %d ptr %p len "DF_U64
-			" total %zd\n", i, arg->kds[i].kd_val_types, ptr,
-			arg->kds[i].kd_key_len, arg->sgl->sg_iovs[0].iov_len);
+			" total %zd\n", i, kds->kd_val_type, ptr,
+			kds->kd_key_len, arg->sgl->sg_iovs[0].iov_len);
 
-		D_ASSERT(arg->kds[i].kd_key_len > 0);
-		if (arg->kds[i].kd_val_types == VOS_ITER_OBJ) {
-			daos_unit_oid_t *oid = ptr;
-
-			if (arg->kds[i].kd_key_len != sizeof(*oid)) {
-				D_ERROR("Invalid object ID size: "DF_U64
-					" != %zu\n", arg->kds[i].kd_key_len,
-					sizeof(*oid));
-				rc = -DER_INVAL;
-				break;
-			}
-			if (daos_unit_oid_is_null(io.ui_oid)) {
-				io.ui_oid = *oid;
-			} else if (daos_unit_oid_compare(io.ui_oid, *oid) !=
-				   0) {
-				close_iod(&io);
-				rc = complete_io(&io, cb, cb_arg);
-				if (rc != 0)
-					break;
-				daos_iov_free(&io.ui_dkey);
-				io.ui_oid = *oid;
-			}
-			D_DEBUG(DB_REBUILD, "process obj "DF_UOID"\n",
-				DP_UOID(io.ui_oid));
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_DKEY) {
-			daos_key_t tmp_key;
-
-			tmp_key.iov_buf = ptr;
-			tmp_key.iov_buf_len = arg->kds[i].kd_key_len;
-			tmp_key.iov_len = arg->kds[i].kd_key_len;
-
-			if (io.ui_dkey.iov_len == 0) {
-				daos_iov_copy(&io.ui_dkey, &tmp_key);
-			} else if (!daos_key_match(&io.ui_dkey, &tmp_key) ||
-				   (eprs != NULL &&
-				    io.ui_dkey_eph != eprs[i].epr_lo)) {
-				close_iod(&io);
-				rc = complete_io(&io, cb, cb_arg);
-				if (rc != 0)
-					break;
-
-				if (!daos_key_match(&io.ui_dkey, &tmp_key)) {
-					daos_iov_free(&io.ui_dkey);
-					daos_iov_copy(&io.ui_dkey, &tmp_key);
-				}
-			}
-
-			if (eprs != NULL)
-				io.ui_dkey_eph = eprs[i].epr_lo;
-
-			D_DEBUG(DB_REBUILD, "process dkey %d %s eph "DF_U64"\n",
-				(int)io.ui_dkey.iov_len,
-				(char *)io.ui_dkey.iov_buf,
-				eprs ? io.ui_dkey_eph : 0);
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_AKEY) {
-			daos_key_t *iod_akey;
-
-			akey.iov_buf = ptr;
-			akey.iov_buf_len = arg->kds[i].kd_key_len;
-			akey.iov_len = arg->kds[i].kd_key_len;
-			if (io.ui_dkey.iov_buf == NULL) {
-				D_ERROR("No dkey for akey %*.s invalid buf.\n",
-				      (int)akey.iov_len, (char *)akey.iov_buf);
-				rc = -DER_INVAL;
-				break;
-			}
-
-			D_DEBUG(DB_REBUILD, "process akey %d %s eph "DF_U64"\n",
-				(int)akey.iov_len, (char *)akey.iov_buf,
-				eprs ? eprs[i].epr_lo : 0);
-
-			if (io.ui_iods_len >= io.ui_iods_cap) {
-				close_iod(&io);
-				rc = complete_io(&io, cb, cb_arg);
-				if (rc < 0)
-					goto out;
-			}
-
-			/* If there are no records for akey(punched akey rec),
-			 * then ui_iods_len might still point to the last dkey,
-			 * i.e. close_iod are not being called.
-			 */
-			iod_akey = &io.ui_iods[io.ui_iods_len].iod_name;
-			if ((iod_akey->iov_len != 0 &&
-			    !daos_key_match(iod_akey, &akey)) ||
-			    (eprs != NULL &&
-			     io.ui_akey_ephs[io.ui_iods_len] != eprs[i].epr_lo))
-				io.ui_iods_len++;
-
-			rc = unpack_recxs(&io.ui_iods[io.ui_iods_len],
-					  NULL, NULL, &akey, NULL, NULL,
-					  0, NULL);
-			if (rc < 0)
-				goto out;
-
-			if (eprs)
-				io.ui_akey_ephs[io.ui_iods_len] =
-							eprs[i].epr_lo;
-		} else if (arg->kds[i].kd_val_types == VOS_ITER_SINGLE ||
-			   arg->kds[i].kd_val_types == VOS_ITER_RECX) {
-			void *data = ptr;
-
-			if (io.ui_dkey.iov_len == 0 || akey.iov_len == 0) {
-				D_ERROR("invalid list buf for kds %d\n", i);
-				rc = -DER_INVAL;
-				break;
-			}
-
-			while (data < ptr + arg->kds[i].kd_key_len) {
-				daos_size_t	len;
-				int		j = io.ui_iods_len;
-
-				/* Because vos_obj_update only accept single
-				 * version, let's go through the records to
-				 * check different version, and* queue rebuild.
-				 */
-				len = ptr + arg->kds[i].kd_key_len - data;
-				rc = unpack_recxs(&io.ui_iods[j],
-						  &io.ui_recxs_caps[j],
-						  io.ui_sgls == NULL ?
-						  NULL : &io.ui_sgls[j], &akey,
-						  &arg->kds[i], &data, len,
-						  &io.ui_version);
-				if (rc < 0)
-					goto out;
-
-				/* All records referred by this kds has been
-				 * packed, then it does not need to send
-				 * right away, might pack more next round.
-				 */
-				if (rc == 0)
-					break;
-
-				D_ASSERT(rc == UNPACK_COMPLETE_IOD ||
-					 rc == UNPACK_COMPLETE_IO);
-				/* Close current IOD or even current I/O.*/
-				close_iod(&io);
-				if (rc == UNPACK_COMPLETE_IOD)
-					continue;
-
-				rc = complete_io(&io, cb, cb_arg);
-				if (rc < 0)
-					goto out;
-			}
-		} else {
-			D_ERROR("unknow kds type %d\n",
-				arg->kds[i].kd_val_types);
+		D_ASSERT(kds->kd_key_len > 0);
+		switch (kds->kd_val_type) {
+		case OBJ_ITER_OBJ:
+			rc = enum_unpack_oid(&arg->kds[i], ptr, &io, cb,
+					     cb_arg);
+			break;
+		case OBJ_ITER_DKEY:
+		case OBJ_ITER_AKEY:
+			rc = enum_unpack_key(kds, ptr, &io, cb, cb_arg);
+			break;
+		case OBJ_ITER_RECX:
+		case OBJ_ITER_SINGLE:
+			rc = enum_unpack_recxs(kds, ptr, &io, cb, cb_arg);
+			break;
+		case OBJ_ITER_DKEY_EPOCH:
+		case OBJ_ITER_AKEY_EPOCH:
+			rc = enum_unpack_punched_ephs(kds, ptr, &io);
+			break;
+		default:
+			D_ERROR("unknown kds type %d\n", kds->kd_val_type);
 			rc = -DER_INVAL;
 			break;
 		}
-		ptr += arg->kds[i].kd_key_len;
+
+		if (rc) {
+			D_ERROR("unpack %dth failed: rc%d\n", i, rc);
+			goto out;
+		}
+
+		/* Complete the IO if it reaches to the limit */
+		if (io.ui_iods_top == io.ui_iods_cap - 1) {
+			rc = complete_io(&io, cb, cb_arg);
+			if (rc != 0) {
+				D_ERROR("complete io failed: rc %d\n", rc);
+				goto out;
+			}
+		}
+
+		ptr += kds->kd_key_len;
 	}
 
-	if (io.ui_iods_len > 0 || io.ui_iods[0].iod_nr > 0) {
-		close_iod(&io);
+	if (io.ui_iods_top >= 0)
 		rc = complete_io(&io, cb, cb_arg);
-	}
 
+out:
 	D_DEBUG(DB_REBUILD, "process list buf "DF_UOID" rc %d\n",
 		DP_UOID(io.ui_oid), rc);
 
-out:
 	dss_enum_unpack_io_fini(&io);
 	return rc;
 }

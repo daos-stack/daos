@@ -84,6 +84,8 @@ co_create(void **state)
 
 	/** destroy container */
 	if (arg->myrank == 0) {
+		/* XXX check if this is a real leak or out-of-sync close */
+		sleep(5);
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
 		rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */,
@@ -213,6 +215,7 @@ co_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
+	daos_pool_info_t	 info = {0};
 	int			 rc;
 
 	print_message("create container with properties, and query/verify.\n");
@@ -230,41 +233,132 @@ co_properties(void **state)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
 	assert_int_equal(rc, 0);
 
-	prop_query = daos_prop_alloc(4);
+	if (arg->myrank == 0) {
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+			DSS_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	const int prop_count = 6;
+
+	prop_query = daos_prop_alloc(prop_count);
 	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	prop_query->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
-	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_ENCRYPT;
-	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	prop_query->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	prop_query->dpp_entries[4].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	prop_query->dpp_entries[5].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_int_equal(prop_query->dpp_nr, 4);
+	assert_int_equal(prop_query->dpp_nr, prop_count);
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
-		print_message("label verification filed.\n");
+		print_message("label verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SNAPSHOT_MAX);
 	if (entry == NULL || entry->dpe_val != snapshot_max) {
-		print_message("snapshot_max verification filed.\n");
+		print_message("snapshot_max verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
-		print_message("csum verification filed.\n");
+		print_message("csum verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	if (entry == NULL || entry->dpe_val != 32 * 1024) {
+		print_message("csum chunk size verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	entry = daos_prop_entry_get(prop_query,
+				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_OFF) {
+		print_message("csum server verify verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
-		print_message("encrypt verification filed.\n");
+		print_message("encrypt verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);
 	test_teardown((void **)&arg);
+}
+
+static void
+co_op_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid);
+
+	print_message("creating container ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("opening container ... ");
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
+			    NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_QUERY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("querying container ... ");
+	rc = daos_cont_query(coh, &info, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_CLOSE_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("closing container ... ");
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_DESTROY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("destroying container ... ");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
 }
 
 static int
@@ -303,6 +397,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_attribute, co_setup_async, test_case_teardown},
 	{ "CONT6: create container with properties and query",
 	  co_properties, NULL, test_case_teardown},
+	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
+	  co_op_retry, NULL, test_case_teardown}
 };
 
 int

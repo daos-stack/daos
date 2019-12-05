@@ -21,60 +21,108 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
-const sockFileName = "daos_server.sock"
-
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
+func getDrpcServerSocketPath(sockDir string) string {
+	return filepath.Join(sockDir, "daos_server.sock")
 }
 
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
-}
-
-// drpcSetup creates socket directory, specifies socket path and then
-// starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv) error {
-	// Create our socket directory if it doesn't exist
-	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
-		}
+func checkDrpcClientSocketPath(socketPath string) error {
+	if socketPath == "" {
+		return errors.New("socket path empty")
 	}
 
-	sockPath := filepath.Join(sockDir, sockFileName)
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	f, err := os.Stat(socketPath)
+	if err != nil {
+		return errors.Errorf("socket path %q could not be accessed: %s",
+			socketPath, err.Error())
+	}
+
+	if (f.Mode() & os.ModeSocket) == 0 {
+		return errors.Errorf("path %q is not a socket",
+			socketPath)
+	}
+
+	return nil
+}
+
+// checkSocketDir verifies socket directory exists, has appropriate permissions
+// and is a directory. SocketDir should be created during configuration management
+// as locations may not be user creatable.
+func checkSocketDir(sockDir string) error {
+	f, err := os.Stat(sockDir)
+	if err != nil {
+		msg := "unexpected error locating"
+		if os.IsPermission(err) {
+			msg = "permissions failure accessing"
+		} else if os.IsNotExist(err) {
+			msg = "missing"
+		}
+
+		return errors.WithMessagef(err, "%s socket directory %s", msg, sockDir)
+	}
+	if !f.IsDir() {
+		return errors.Errorf("path %s not a directory", sockDir)
+	}
+
+	return nil
+}
+
+// drpcSetup specifies socket path and starts drpc server.
+func drpcSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+	// Clean up any previous execution's sockets before we create any new sockets
+	if err := drpcCleanup(sockDir); err != nil {
+		return err
+	}
+
+	sockPath := getDrpcServerSocketPath(sockDir)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(&SecurityModule{})
+	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrv})
+	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
 
-	err = drpcServer.Start()
+	if err := drpcServer.Start(); err != nil {
+		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
+	}
+
+	return nil
+}
+
+// drpcCleanup deletes any DAOS sockets in the socket directory
+func drpcCleanup(sockDir string) error {
+	if err := checkSocketDir(sockDir); err != nil {
+		return err
+	}
+
+	srvSock := getDrpcServerSocketPath(sockDir)
+	os.Remove(srvSock)
+
+	pattern := filepath.Join(sockDir, "daos_io_server*.sock")
+	iosrvSocks, err := filepath.Glob(pattern)
 	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
+		return errors.WithMessage(err, "couldn't get list of iosrv sockets")
+	}
+
+	for _, s := range iosrvSocks {
+		os.Remove(s)
 	}
 
 	return nil
@@ -116,14 +164,16 @@ func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.C
 // makeDrpcCall opens a drpc connection, sends a message with the
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
-func makeDrpcCall(
-	client drpc.DomainSocketClient, module int32, method int32,
+func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 	body proto.Message) (drpcResp *drpc.Response, err error) {
 
 	drpcCall, err := newDrpcCall(module, method, body)
 	if err != nil {
 		return drpcResp, errors.Wrap(err, "build drpc call")
 	}
+
+	client.Lock()
+	defer client.Unlock()
 
 	// Forward the request to the I/O server via dRPC
 	if err = client.Connect(); err != nil {

@@ -24,12 +24,10 @@
 from __future__ import print_function
 
 import os
-import time
 import traceback
+
 from apricot import TestWithServers
-
-
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class PunchTest(TestWithServers):
     """
@@ -66,35 +64,11 @@ class PunchTest(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
-    def tearDown(self):
-
-        try:
-            if self.container:
-                self.container.close()
-
-            # wait a few seconds and then destroy
-            time.sleep(5)
-            if self.container:
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excpn:
-            print(excpn)
-            print(traceback.format_exc())
-            self.fail("Test failed during teardown.\n")
-
-        finally:
-            super(PunchTest, self).tearDown()
-
     def test_dkey_punch(self):
         """
         The most basic test of the dkey punch function.
 
-        :avocado: tags=object,punch,dkeypunch,regression,vm,small
+        :avocado: tags=all,object,pr,small,dkeypunch
         """
 
         try:
@@ -132,7 +106,6 @@ class PunchTest(TestWithServers):
         except DaosApiError as dummy_e:
             self.fail("Punch should have worked.\n")
 
-
         # there are a bunch of other cases to test here,
         #    --test punching the same updating and punching the same data in
         #    the same tx, should fail
@@ -142,7 +115,7 @@ class PunchTest(TestWithServers):
         """
         The most basic test of the akey punch function.
 
-        :avocado: tags=object,punch,akeypunch,regression,vm,small
+        :avocado: tags=all,object,pr,small,akeypunch
         """
 
         try:
@@ -180,14 +153,14 @@ class PunchTest(TestWithServers):
 
         # expecting it to work this time so error
         except DaosApiError as excep:
-            self.fail("Punch should have worked.\n")
+            self.fail("Punch should have worked: {}\n".format(excep))
 
     def test_obj_punch(self):
         """
         The most basic test of the object punch function.  Really similar
         to above except the whole object is deleted.
 
-        :avocado: tags=object,punch,objpunch,regression,vm,small
+        :avocado: tags=all,object,pr,small,objpunch
         """
 
         try:

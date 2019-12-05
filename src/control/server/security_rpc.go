@@ -21,40 +21,59 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
-	"bytes"
+	"crypto"
+	"encoding/hex"
+	"fmt"
+	"path/filepath"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
-)
-
-// Module id for the Server security module
-const securityModuleID int32 = 1
-
-const (
-	methodValidateCredentials int32 = 101
 )
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
+	config *security.TransportConfig
 }
 
-func processValidateCredentials(body []byte) ([]byte, error) {
+// NewSecurityModule creates a new security module with a transport config
+func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
+	mod := &SecurityModule{
+		config: tc,
+	}
+	return mod
+}
+
+func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
+	var key crypto.PublicKey
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
 		return nil, err
 	}
 
+	if m.config.AllowInsecure {
+		key = nil
+	} else {
+		certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
+		certPath := filepath.Join(m.config.ClientCertDir, certName)
+		cert, err := security.LoadCertificate(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "loading certificate %s failed:", certPath)
+		}
+		key = cert.PublicKey
+	}
+
 	// Check our verifier
-	hash, err := security.HashFromToken(credential.Token)
-	if bytes.Compare(hash, credential.Verifier.Data) != 0 {
-		return nil, errors.Errorf("Verifier does not match token")
+	err = auth.VerifyToken(key, credential.GetToken(), credential.GetVerifier().GetData())
+	if err != nil {
+		return nil, errors.Wrapf(err, "credential verification failed for verifier %s", hex.Dump(credential.GetVerifier().GetData()))
 	}
 
 	responseBytes, err := proto.Marshal(credential.Token)
@@ -65,19 +84,16 @@ func processValidateCredentials(body []byte) ([]byte, error) {
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodValidateCredentials {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+	if method != drpc.MethodValidateCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	responseBytes, err := processValidateCredentials(body)
+	responseBytes, err := m.processValidateCredentials(body)
 	return responseBytes, err
 }
 
-// InitModule is empty for this module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
-
 // ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurity
 }

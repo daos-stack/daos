@@ -1,10 +1,11 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-    test_machines1:
+    test_servers:
       - boro-A
 server_config:
    name: daos_server
+timeout: 300
 conttests:
    createmode:
      mode: 511

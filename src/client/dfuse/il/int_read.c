@@ -23,32 +23,69 @@
 
 #define D_LOGFAC DD_FAC(il)
 #include "dfuse_common.h"
-#include "dfuse_gah.h"
 #include "intercept.h"
+#include "daos.h"
+#include "daos_array.h"
 
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
-	  struct dfuse_file_common *f_info, int *errcode)
+	  struct fd_entry *entry, int *errcode)
 {
-	ssize_t				read_len = 0;
+	daos_array_iod_t	iod;
+	daos_size_t		array_size;
+	daos_size_t		max_read;
+	daos_range_t		rg;
+	d_iov_t			iov = {};
+	d_sg_list_t		sgl = {};
+	int rc;
 
-	DFUSE_LOG_INFO("Read complete %#zx", read_len);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
 
-	return read_len;
+	rc = daos_array_get_size(entry->fd_aoh, DAOS_TX_NONE, &array_size,
+				 NULL);
+	if (rc) {
+		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
+
+	if (position >= array_size)
+		return 0;
+
+	max_read = array_size - position;
+
+	if (max_read < len)
+		len = max_read;
+
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
+
+	iod.arr_nr = 1;
+	rg.rg_len = len;
+	rg.rg_idx = position;
+	iod.arr_rgs = &rg;
+
+	rc = daos_array_read(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl, NULL,
+			     NULL);
+	if (rc) {
+		DFUSE_TRA_INFO(entry, "daos_array_read() failed %d", rc);
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
+
+	return len;
 }
 
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
-		      struct dfuse_file_common *f_info, int *errcode)
+		      struct fd_entry *entry, int *errcode)
 {
-	DFUSE_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position, position + len - 1,
-		       GAH_PRINT_VAL(f_info->gah));
-
-	return read_bulk(buff, len, position, f_info, errcode);
+	return read_bulk(buff, len, position, entry, errcode);
 }
 
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode)
+	       struct fd_entry *entry, int *errcode)
 {
 	ssize_t bytes_read;
 	ssize_t total_read = 0;
@@ -56,7 +93,7 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position,
 
 	for (i = 0; i < count; i++) {
 		bytes_read = read_bulk(iov[i].iov_base, iov[i].iov_len,
-				       position, f_info, errcode);
+				       position, entry, errcode);
 
 		if (bytes_read == -1)
 			return (ssize_t)-1;

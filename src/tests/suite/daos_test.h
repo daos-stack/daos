@@ -26,13 +26,6 @@
  */
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -71,11 +64,20 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
+
 /** Server crt group ID */
 extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+
+/** Checksum Type & info*/
+extern unsigned int dt_csum_type;
+extern unsigned int dt_csum_chunksize;
+extern bool dt_csum_server_verify;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -92,6 +94,14 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	/* Updated if some ranks are killed during degraged or rebuild
+	 * test, so we know whether some tests is allowed to be run.
+	 */
+	d_rank_list_t		alive_svc;
+	/* Used for all pool related operation, since client will
+	 * use this rank list to find out the real leader, so it
+	 * can not be changed.
+	 */
 	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
@@ -107,7 +117,8 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1;
+	int			op_no_verify:1,
+				op_ec:1; /* true for EC, false for replica */
 };
 
 typedef struct {
@@ -138,7 +149,6 @@ typedef struct {
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
-
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
@@ -157,6 +167,12 @@ typedef struct {
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
+
+	/* List pools resources (mgmt tests) */
+	void			*mgmt_lp_args;
+
+	/* List containers (pool tests) */
+	void			*pool_lc_args;
 } test_arg_t;
 
 enum {
@@ -195,6 +211,11 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
+int
+test_setup_pool_create(void **state, struct test_pool *ipool,
+		       struct test_pool *opool, daos_prop_t *prop);
+int
+pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline int
 async_enable(void **state)
@@ -253,13 +274,21 @@ int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
+int run_daos_obj_array_test(int rank, int size);
 int run_daos_array_test(int rank, int size);
+int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
+int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_vc_test(int rank, int size, int *tests, int test_size);
+int run_daos_checksum_test(int rank, int size);
+int run_daos_fs_test(int rank, int size, int *tests, int test_size);
+int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
+			     int sub_tests_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -299,7 +328,7 @@ static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
 {
-	daos_iov_t	ghdl = { NULL, 0, 0 };
+	d_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
 	if (rank == 0) {
@@ -367,24 +396,6 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-static inline void
-daos_sync_ranks(MPI_Comm comm)
-{
-	daos_epoch_t e = daos_ts2epoch();
-	daos_epoch_t ge;
-
-	MPI_Allreduce(&e, &ge, 1, MPI_UINT64_T, MPI_MAX, comm);
-
-	e = daos_ts2epoch();
-	if (ge > e) {
-		struct timespec ts;
-
-		ts.tv_sec = 0;
-		ts.tv_nsec = ge - e;
-		nanosleep(&ts, NULL);
-	}
-}
-
 #define MAX_KILLS	3
 extern d_rank_t ranks_to_kill[MAX_KILLS];
 d_rank_t test_get_last_svr_rank(test_arg_t *arg);
@@ -441,13 +452,8 @@ test_rmdir(const char *path, bool force)
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	D_ALLOC(fullpath, PATH_MAX);
-	if (fullpath == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	dir = opendir(path);
 	if (dir == NULL) {
-		D_FREE(fullpath);
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
 		D_ERROR("can't open directory %s, %d (%s)",
@@ -459,21 +465,28 @@ test_rmdir(const char *path, bool force)
 		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;   /* skips the dots */
 
-		sprintf(fullpath, "%s/%s", path, ent->d_name);
+		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
+		if (fullpath == NULL)
+			D_GOTO(out, -DER_NOMEM);
+
 		switch (ent->d_type) {
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
+			if (rc != 0)
+				D_ERROR("test_rmdir %s failed, rc %d",
+						fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
+			if (rc != 0)
+				D_ERROR("unlink %s failed, rc %d",
+						fullpath, rc);
 			break;
 		default:
 			D_WARN("find unexpected type %d", ent->d_type);
 		}
-		if (rc != 0)
-			D_ERROR("unlink %s failed, rc %d", fullpath, rc);
 
-		memset(fullpath, 0, PATH_MAX);
+		D_FREE(fullpath);
 	}
 
 	rc = closedir(dir);
@@ -482,9 +495,9 @@ test_rmdir(const char *path, bool force)
 		if (rc != 0)
 			rc = errno;
 	}
-	D_FREE(fullpath);
 
 out:
+	D_FREE(fullpath);
 	return rc;
 }
 

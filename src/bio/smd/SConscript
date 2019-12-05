@@ -1,11 +1,14 @@
 """Build Per-server Metadata"""
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots')
+
     denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
 
     SConscript('tests/SConscript', exports='denv')

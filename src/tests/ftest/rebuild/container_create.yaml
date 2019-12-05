@@ -1,0 +1,48 @@
+hosts:
+  test_servers:
+    - boro-A
+    - boro-B
+    - boro-C
+    - boro-D
+    - boro-E
+  test_clients:
+    - boro-F
+timeout: 700
+server_config:
+  name: daos_server
+  servers:
+    targets: 1
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 8589934592
+  svcn: 3
+container:
+  object_qty: 1
+  record_qty: 1
+  akey_size: 4
+  dkey_size: 4
+  data_size: 64
+ior:
+  api: DAOS
+  block_size: 16m
+  segment_count: 16
+  transfer_size: 16m
+  daos_oclass: RP_3GX
+test:
+  loop_quantity: !mux
+    one_loop:
+      loops: 1
+    three_loops:
+      loops: 3
+  pool_quantity: !mux
+    one_pool:
+      pools: 1
+    two_pools:
+      pools: 2
+  exclude_rank: !mux
+    last_rank:
+      rank: 4
+  containers: 70
+  container_obj_class: "OC_RP_3GX"
+  use_ior: True

@@ -24,67 +24,32 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static bool
-dfuse_rename_cb(struct dfuse_request *request)
-{
-	struct dfuse_status_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
-		DFUSE_REPLY_ERR(request, request->rc);
-		D_GOTO(out, 0);
-	}
-
-	DFUSE_REPLY_ZERO(request);
-
-out:
-
-	D_FREE(request);
-	return false;
-}
-
-static const struct dfuse_request_api api = {
-	.on_result	= dfuse_rename_cb,
-};
 
 void
-dfuse_cb_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
-		fuse_ino_t newparent, const char *newname, unsigned int flags)
+dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
+		const char *name, struct dfuse_inode_entry *newparent,
+		const char *newname, unsigned int flags)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_request	*request;
-	int ret = EIO;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	int rc;
 
-	D_ALLOC_PTR(request);
-	if (!request) {
-		D_GOTO(out_no_request, ret = ENOMEM);
-	}
+	if (flags != 0)
+		D_GOTO(out, rc = ENOTSUP);
 
-	DFUSE_REQUEST_INIT(request, fs_handle);
-	DFUSE_REQUEST_RESET(request);
+	if (!newparent)
+		newparent = parent;
 
-	DFUSE_TRA_UP(request, fs_handle, "rename");
-	DFUSE_TRA_DEBUG(request, "renaming %s to %s", name, newname);
+	rc = dfs_move(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
+		      newparent->ie_obj, (char *)newname, NULL);
+	if (rc)
+		D_GOTO(out, rc);
 
-	request->req = req;
-	request->ir_api = &api;
+	DFUSE_TRA_INFO(parent, "Renamed %s to %s in %p",
+		       name, newname, newparent);
 
-	request->ir_inode_num = parent;
-	request->ir_ht = RHS_INODE_NUM;
-
-	rc = dfuse_fs_send(request);
-	if (rc != 0) {
-		D_GOTO(out_err, ret = EIO);
-	}
-
+	DFUSE_REPLY_ZERO(req);
 	return;
 
-out_no_request:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
-	return;
-
-out_err:
-	DFUSE_REPLY_ERR(request, ret);
-	D_FREE(request);
+out:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }

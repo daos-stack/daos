@@ -24,9 +24,9 @@ import os
 import random
 import string
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
-from daos_api import DaosContainer, DaosApiError
 
 class FullPoolContainerCreate(TestWithServers):
     """
@@ -38,20 +38,10 @@ class FullPoolContainerCreate(TestWithServers):
         self.cont = None
         self.cont2 = None
 
-    def tearDown(self):
-        # shut 'er down
-        """
-        wrap pool destroy in a try; in case pool create didn't succeed, we
-        still need the server to be shut down in any case
-        """
-        try:
-            self.pool.destroy(1)
-        finally:
-            super(FullPoolContainerCreate, self).tearDown()
-
+    @skipForTicket("DAOS-3142")
     def test_no_space_cont_create(self):
         """
-        :avocado: tags=pool,cont,fullpoolcontcreate,small,vm
+        :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
         """
         # full storage rc
         err = "-1007"
@@ -59,6 +49,7 @@ class FullPoolContainerCreate(TestWithServers):
         err2 = "-1009"
 
         # create pool
+        self.pool = DaosPool(self.context)
         mode = self.params.get("mode", '/conttests/createmode/')
         self.d_log.debug("mode is {0}".format(mode))
         uid = os.geteuid()
@@ -97,7 +88,7 @@ class FullPoolContainerCreate(TestWithServers):
 
         # generate random dkey, akey each time
         # write 1mb until no space, then 1kb, etc. to fill pool quickly
-        for obj_sz in [1048576, 1024, 1]:
+        for obj_sz in [1048576, 10240, 10, 1]:
             write_count = 0
             while True:
                 self.d_log.debug("writing obj {0}, sz {1} to "
@@ -109,10 +100,8 @@ class FullPoolContainerCreate(TestWithServers):
                 akey = (
                     ''.join(random.choice(string.lowercase) for i in range(5)))
                 try:
-                    dummy_oid, dummy_tx = self.cont.write_an_obj(my_str,
-                                                                 my_str_sz,
-                                                                 dkey, akey,
-                                                                 obj_cls=1)
+                    dummy_oid, dummy_tx = self.cont.write_an_obj(
+                        my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     obj_sz))
                     write_count += 1
@@ -142,8 +131,10 @@ class FullPoolContainerCreate(TestWithServers):
             self.d_log.debug("opened container 2")
 
             self.d_log.debug("writing one more object, write expected to fail")
-            self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey, obj_cls=1)
-            self.d_log.debug("wrote one more object--this should never print")
+            self.cont2.write_an_obj(my_str, my_str_sz, dkey, akey,
+                                    obj_cls="OC_SX")
+            self.fail("wrote one more object after pool was completely filled,"
+                      " this should never print")
         except DaosApiError as excep:
             if not (err in repr(excep) or err2 in repr(excep)):
                 self.d_log.error("caught unexpected exception while "

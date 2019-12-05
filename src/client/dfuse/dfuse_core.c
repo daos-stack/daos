@@ -23,46 +23,6 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "dfuse_da.h"
-
-/*
- * Wrapper function that is called from FUSE to send RPCs. The idea is to
- * decouple the FUSE implementation from the actual sending of RPCs. The
- * FUSE callbacks only need to specify the inputs and outputs for the RPC,
- * without bothering about how RPCs are sent. This function is also intended
- * for abstracting various other features related to RPCs such as fail-over
- * and load balance, at the same time preventing code duplication.
- *
- */
-int
-dfuse_fs_send(struct dfuse_request *request)
-{
-	int rc;
-
-	D_ASSERT(request->ir_api->on_result);
-	/* If the API has passed in a simple inode number then translate it
-	 * to either root, or do a hash table lookup on the inode number.
-	 * Keep a reference on the inode open which will be dropped after
-	 * a call to on_result().
-	 */
-	if (request->ir_ht == RHS_INODE_NUM) {
-
-		if (request->ir_inode_num == 1) {
-			request->ir_ht = RHS_ROOT;
-		} else {
-			rc = find_inode(request);
-			if (rc != 0) {
-				D_GOTO(err, 0);
-			}
-			request->ir_ht = RHS_INODE;
-		}
-	}
-	return EIO;
-err:
-	DFUSE_TRA_ERROR(request, "Could not send rpc, rc = %d", rc);
-
-	return rc;
-}
 
 /* Inode record hash table operations */
 
@@ -102,19 +62,13 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		return true;
 	}
 
-	/* Now check the pool name */
-	if (strncmp(ir->ir_id.irid_dfs->dffs_pool,
-		    ir_id->irid_dfs->dffs_pool,
-		    NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_pool,
+			 ir_id->irid_dfs->dfs_pool) != 0)
 		return false;
-	}
 
-	/* Now check the container name */
-	if (strncmp(ir->ir_id.irid_dfs->dffs_cont,
-		    ir_id->irid_dfs->dffs_cont,
-			NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
+			 ir_id->irid_dfs->dfs_cont) != 0)
 		return false;
-	}
 
 	/* This case means it's the same container name, but a different dfs
 	 * struct which can happen with repeated lookups of already open
@@ -174,7 +128,7 @@ static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
-	struct dfuse_inode_entry		*ie;
+	struct dfuse_inode_entry	*ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -196,73 +150,6 @@ static d_hash_table_ops_t ir_hops = {
 
 };
 
-#define COMMON_INIT(type)						\
-	static void type##_common_init(void *arg, void *handle)		\
-	{								\
-		struct common_req *req = arg;				\
-		DFUSE_REQUEST_INIT(&req->request, handle);		\
-	}
-COMMON_INIT(getattr);
-COMMON_INIT(setattr);
-
-/* Reset and prepare for use a common descriptor */
-static bool
-common_reset(void *arg)
-{
-	struct common_req *req = arg;
-
-	req->request.req = NULL;
-
-	DFUSE_REQUEST_RESET(&req->request);
-
-	return true;
-}
-
-#define ENTRY_INIT(type)						\
-	static void type##_entry_init(void *arg, void *handle)		\
-	{								\
-		struct entry_req *req = arg;				\
-		DFUSE_REQUEST_INIT(&req->request, handle);		\
-		req->dest = NULL;					\
-		req->ie = NULL;						\
-	}
-ENTRY_INIT(symlink);
-
-static bool
-entry_reset(void *arg)
-{
-	struct entry_req	*req = arg;
-
-	/* If this descriptor has previously been used then destroy the
-	 * existing RPC
-	 */
-	DFUSE_REQUEST_RESET(&req->request);
-
-	req->request.ir_ht = RHS_INODE_NUM;
-	/* Free any destination string on this descriptor.  This is only used
-	 * for symlink to store the link target whilst the RPC is being sent
-	 */
-	D_FREE(req->dest);
-
-	if (!req->ie) {
-		D_ALLOC_PTR(req->ie);
-		if (!req->ie)
-			return false;
-		atomic_fetch_add(&req->ie->ie_ref, 1);
-	}
-
-	return true;
-}
-
-/* Destroy a descriptor which could be either getattr or getfattr */
-static void
-entry_release(void *arg)
-{
-	struct entry_req *req = arg;
-
-	D_FREE(req->ie);
-}
-
 int
 dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 {
@@ -272,41 +159,30 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	struct dfuse_da_reg common = {.reset = common_reset,
-				      POOL_TYPE_INIT(common_req, list)};
-
-	struct dfuse_da_reg entry = {.reset = entry_reset,
-				     .release = entry_release,
-				     POOL_TYPE_INIT(entry_req, list)};
-
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return false;
 
-	fs_handle->dfuse_info = dfuse_info;
+	fs_handle->dpi_info = dfuse_info;
 
-	rc = dfuse_da_init(&fs_handle->da, fs_handle);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err, 0);
+	/* Max read and max write are handled differently because of the way
+	 * the interception library handles reads vs writes
+	 */
+	fs_handle->dpi_max_read = 1024 * 1024 * 4;
+	fs_handle->dpi_max_write = 1024 * 1024 * 4;
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK |
-					  D_HASH_FT_EPHEMERAL,
-					  3,
-					  fs_handle, &ie_hops,
-					  &fs_handle->dfpi_iet);
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
+					 3, fs_handle, &ie_hops,
+					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK,
-					 3,
-					 fs_handle, &ir_hops,
-					 &fs_handle->dfpi_irt);
+	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK, 3, fs_handle,
+					 &ir_hops, &fs_handle->dpi_irt);
 	if (rc != 0)
 		D_GOTO(err, 0);
 
-	fs_handle->proj.progress_thread = 1;
-
-	atomic_fetch_add(&fs_handle->dfpi_ino_next, 2);
+	atomic_fetch_add(&fs_handle->dpi_ino_next, 2);
 
 	args.argc = 4;
 
@@ -323,11 +199,11 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!args.argv[1])
 		D_GOTO(err, 0);
 
-	D_STRNDUP(args.argv[2], "-osubtype=pam", 32);
+	D_STRNDUP(args.argv[2], "-osubtype=daos", 32);
 	if (!args.argv[2])
 		D_GOTO(err, 0);
 
-	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->max_read);
+	D_ASPRINTF(args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
 	if (!args.argv[3])
 		D_GOTO(err, 0);
 
@@ -335,35 +211,29 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!fuse_ops)
 		D_GOTO(err, 0);
 
-	common.init = getattr_common_init;
-	fs_handle->fgh_da = dfuse_da_register(&fs_handle->da, &common);
-	if (!fs_handle->fgh_da)
-		D_GOTO(err, 0);
-
-	common.init = setattr_common_init;
-	fs_handle->fsh_da = dfuse_da_register(&fs_handle->da, &common);
-	if (!fs_handle->fsh_da)
-		D_GOTO(err, 0);
-
-	entry.init = symlink_entry_init;
-	fs_handle->symlink_da = dfuse_da_register(&fs_handle->da,
-						      &entry);
-	if (!fs_handle->symlink_da)
-		D_GOTO(err, 0);
-
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, 0);
-	}
 
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_stat.st_ino = 1;
-	dfs->dffs_root = ie->ie_stat.st_ino;
+	ie->ie_stat.st_mode = 0700 | S_IFDIR;
+	dfs->dfs_root = ie->ie_stat.st_ino;
 
-	rc = d_hash_rec_insert(&fs_handle->dfpi_iet,
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
+				NULL, NULL);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
+					strerror(rc));
+			D_GOTO(err, 0);
+		}
+	}
+
+	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
 			       sizeof(ie->ie_stat.st_ino),
 			       &ie->ie_htl,
@@ -384,7 +254,6 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	return -DER_SUCCESS;
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed");
-	dfuse_da_destroy(&fs_handle->da);
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	D_FREE(fs_handle);
@@ -406,7 +275,7 @@ ino_flush(d_list_t *rlink, void *arg)
 	if (ie->ie_parent != 1)
 		return 0;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->session,
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
 					      ie->ie_parent,
 					      ie->ie_name,
 					      strlen(ie->ie_name));
@@ -442,17 +311,16 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
-	rc = d_hash_table_traverse(&fs_handle->dfpi_iet, ino_flush,
-				   fs_handle);
+	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: %d", rc);
 
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
 		struct dfuse_inode_entry *ie;
-		uint ref;
+		uint32_t ref;
 
-		rlink = d_hash_rec_first(&fs_handle->dfpi_iet);
+		rlink = d_hash_rec_first(&fs_handle->dpi_iet);
 
 		if (!rlink)
 			break;
@@ -464,58 +332,45 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
-		ie->ie_parent = 0;
-		d_hash_rec_ndecref(&fs_handle->dfpi_iet, ref, rlink);
+		d_hash_rec_ndecref(&fs_handle->dpi_iet, ref, rlink);
 		handles++;
 	} while (rlink);
 
 	if (handles) {
-		DFUSE_TRA_WARNING(fs_handle,
-				  "dropped %lu refs on %u inodes",
+		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
 				  refs, handles);
 	} else {
-		DFUSE_TRA_INFO(fs_handle,
-			       "dropped %lu refs on %u inodes",
+		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
 			       refs, handles);
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_iet, false);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dfpi_irt, true);
-	if (rc) {
-		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
-		rcp = EINVAL;
-	}
-
+	DFUSE_TRA_INFO(fs_handle, "Draining inode record table");
 	do {
-		/* If this context has a da associated with it then reap
-		 * any descriptors with it so there are no pending RPCs when
-		 * we call context_destroy.
-		 */
-		bool active;
+		struct dfuse_inode_record *ir;
 
-		do {
+		rlink = d_hash_rec_first(&fs_handle->dpi_irt);
 
-			active = dfuse_da_reclaim(&fs_handle->da);
+		if (!rlink)
+			break;
 
-			if (!active)
-				break;
+		ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
-			DFUSE_TRA_INFO(fs_handle,
-				       "Active descriptors, waiting for one second");
+		d_hash_rec_delete_at(&fs_handle->dpi_irt, rlink);
 
-		} while (active && rc == -DER_SUCCESS);
+		D_FREE(ir);
+	} while (rlink);
 
-	} while (rc == -DER_BUSY);
-
-	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(fs_handle, "Count not destroy context");
-
-	dfuse_da_destroy(&fs_handle->da);
+	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, false);
+	if (rc) {
+		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
+		rcp = EINVAL;
+	}
 
 	return rcp;
 }

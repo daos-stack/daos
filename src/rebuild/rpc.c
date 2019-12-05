@@ -27,6 +27,7 @@
  */
 #define D_LOGFAC       DD_FAC(rebuild)
 
+#include <daos/object.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 

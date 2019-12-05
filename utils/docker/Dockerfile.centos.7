@@ -1,5 +1,5 @@
-#
-# Copyright 2018-2019, Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
+# All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted for any purpose (including commercial purposes)
@@ -41,7 +41,7 @@
 
 # Pull base image
 FROM centos:7
-MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
@@ -58,22 +58,29 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch                                                   \
-        pylint python python-pep8 python-requests python2-pygithub     \
-        readline-devel scons sg3_utils ShellCheck yasm
+        pandoc patch python python-devel python36-devel                \
+        python-pep8 python-pygit2 python2-pygithub python-requests     \
+        readline-devel scons sg3_utils ShellCheck yasm pciutils        \
+        valgrind-devel python36-pylint
 
 # DAOS specific
 RUN yum -y install \
-        python2-avocado python2-avocado-plugins-output-html            \
-        python2-avocado-plugins-varianter-yaml-to-mux                  \
-        yum-plugin-copr; \
-    yum -y copr enable jhli/ipmctl; \
-    yum -y copr enable jhli/safeclib; \
+           python2-avocado python2-avocado-plugins-output-html \
+           python2-avocado-plugins-varianter-yaml-to-mux       \
+           yum-plugin-copr python-pathlib                      \
+           ndctl ipmctl                                        \
+           python2-clustershell python2-Cython python2-pip     \
+           python36-clustershell python36-paramiko             \
+           python36-numpy python36-jira python3-pip;           \
+    yum -y copr enable jhli/ipmctl;                            \
+    yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
 
-# Dependencies
-# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are
-# unfortunately outdated. The DAOS build system will rebuild those packages.
+# DAOS python 3 packages required for pylint
+#  - excluding mpi4py as it depends on CORCI-635
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
 # Add DAOS user
 ENV USER daos
@@ -85,8 +92,51 @@ RUN echo "$USER:$PASSWD" | chpasswd
 RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
+# Dependencies
+# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are
+# unfortunately outdated. The DAOS build system will rebuild those packages.
+ARG JENKINS_URL=""
+ARG QUICKBUILD=1
+ARG CART_COMMIT=""
+ARG REPOS=""
+RUN if [ $QUICKBUILD -eq 0 ]; then                                               \
+        echo -e "[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]\n\
+name=created by dnf config-manager from https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
+baseurl=https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
+        for repo in $REPOS; do                                                   \
+            branch="master";                                                     \
+            build_number="lastSuccessfulBuild";                                  \
+            if [[ $repo = *@* ]]; then                                           \
+                branch="${repo#*@}";                                             \
+                repo="${repo%@*}";                                               \
+                if [[ $branch = *:* ]]; then                                     \
+                    build_number="${branch#*:}";                                 \
+                    branch="${branch%:*}";                                       \
+                fi;                                                              \
+            fi;                                                                  \
+            echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
+        done;                                                                    \
+        pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
+              libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
+              fio-3.3-4.el7 libisa-l-devel mercury-devel-1.0.1-13.el7            \
+              openpa-devel libfabric-devel                                       \
+              ompi-devel pmix-devel hwloc-devel dpdk-devel-18.02";               \
+        echo "Installing: $pkgs";                                                \
+        yum -y install $pkgs;                                                    \
+    fi
+
+# force an upgrade to get any newly built RPMs
+ARG CACHEBUST=1
+RUN yum -y upgrade --exclude=dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
+
 # Switch to new user
-USER $USER
+#USER $USER
 WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
@@ -98,11 +148,12 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
 
 # Set environment variables
-ENV PATH=/home/daos/daos/install/bin:$PATH
-ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
-ENV CPATH=/home/daos/daos/install/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
+ENV DAOS_SINGLETON_CLI=1
+ENV CRT_ATTACH_INFO_PATH=/tmp/uri

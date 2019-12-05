@@ -31,11 +31,10 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	int				rc;
 
-	rc = dfs_remove(parent->ie_dfs->dffs_dfs, parent->ie_obj, name, false);
-
-	if (rc == -DER_SUCCESS) {
-		DFUSE_FUSE_REPLY_ZERO(req);
-	} else {
+	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false,
+			NULL);
+	if (rc == 0)
+		DFUSE_REPLY_ZERO(req);
+	else
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	}
 }

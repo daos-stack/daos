@@ -24,24 +24,25 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-bool
+void
 dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_obj_hdl		*oh = NULL;
+	struct fuse_file_info	        fi_out = {0};
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent->ie_stat.st_ino,
+		       name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
 	 * would otherwise be using and check that is set.
 	 */
 	if (!(fi->flags & LARGEFILE)) {
-		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o",
-			       fi->flags);
+		DFUSE_TRA_INFO(req, "O_LARGEFILE required 0%o", fi->flags);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
@@ -55,50 +56,68 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	/* Check that only the flag for a regular file is specified */
 	if ((mode & S_IFMT) != S_IFREG) {
-		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o",
-			       mode);
+		DFUSE_TRA_INFO(req, "unsupported mode requested 0%o", mode);
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	D_ALLOC_PTR(ie);
-	if (!ie) {
+	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
-	}
+	D_ALLOC_PTR(oh);
+	if (!oh)
+		D_GOTO(err, rc = ENOMEM);
 
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
-	rc = dfs_open(parent->ie_dfs->dffs_dfs, parent->ie_obj, name,
-		      mode, O_CREAT, 0, 0, NULL, &ie->ie_obj);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
+		      mode, fi->flags, 0, 0, NULL, &ie->ie_obj);
+	if (rc) {
+		DFUSE_TRA_DEBUG(parent, "dfs_open() failed %d", rc);
+		D_GOTO(err, rc);
 	}
 
-	/* TODO: Add a dfs_dup() call to get a object for the handle as well
-	 * as the inode.
-	 */
+	/** duplicate the file handle for the fuse handle */
+	rc = dfs_dup(parent->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
+		     &oh->doh_obj);
+	if (rc) {
+		DFUSE_TRA_DEBUG(parent, "dfs_dup() failed %d", rc);
+		D_GOTO(release1, rc);
+	}
+
+	oh->doh_dfs = parent->ie_dfs->dfs_ns;
+	oh->doh_ie = ie;
+
+	if (fi->direct_io)
+		fi_out.direct_io = 1;
+	fi_out.fh = (uint64_t)oh;
+
 	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	rc = dfs_ostat(parent->ie_dfs->dffs_dfs, ie->ie_obj, &ie->ie_stat);
-	if (rc != -DER_SUCCESS) {
-		D_GOTO(release, 0);
+	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);
+	if (rc) {
+		DFUSE_TRA_DEBUG(parent, "dfs_ostat() failed %d", rc);
+		D_GOTO(release2, rc);
 	}
 
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, true, req);
+	dfuse_reply_entry(fs_handle, ie, &fi_out, req);
 
-	return true;
-release:
+	return;
+release2:
+	dfs_release(oh->doh_obj);
+release1:
 	dfs_release(ie->ie_obj);
-
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	D_FREE(oh);
 	D_FREE(ie);
-	return false;
+	return;
 }

@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"bytes"
@@ -29,43 +29,37 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/daos-stack/go-spdk/spdk"
 	"github.com/pkg/errors"
+
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
-	spdkSetupPath      = "share/control/setup_spdk.sh"
-	spdkFioPluginDir   = "share/spdk/fio_plugin"
-	fioExecPath        = "bin/fio"
+	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
-)
 
-var (
+	msgBdevEmpty            = "bdev device list entry empty"
 	msgBdevAlreadyFormatted = "nvme storage has already been formatted and " +
 		"reformat not implemented"
-	msgBdevNotFound          = "controller at pci addr not found"
+	msgBdevNotFound = "controller at pci addr not found, check device exists " +
+		"and can be discovered, you may need to run `sudo daos_server " +
+		"storage prepare --nvme-only` to setup SPDK to access SSDs"
 	msgBdevNotInited         = "nvme storage not initialized"
 	msgBdevClassNotSupported = "operation unsupported on bdev class"
 	msgSpdkInitFail          = "SPDK env init, has setup been run?"
 	msgSpdkDiscoverFail      = "SPDK controller discovery"
+	msgBdevNoDevs            = "no controllers specified"
+	msgBdevClassIsFile       = "nvme emulation initialized with backend file"
+	msgBdevScmNotReady       = "nvme format not performed because scm not ready"
 )
-
-// newNvmeStorageErrLogger is a factory creating context aware local log util
-func newNvmeStorageErrLogger(op string) func(e error) {
-	return func(e error) {
-		log.Errordf(
-			common.UtilLogDepth,
-			errors.WithMessage(e, "nvme storage "+op).Error())
-	}
-}
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
 // shell script
@@ -76,6 +70,7 @@ type SpdkSetup interface {
 
 // spdkSetup is an implementation of the SpdkSetup interface
 type spdkSetup struct {
+	log         logging.Logger
 	scriptPath  string
 	nrHugePages int
 }
@@ -90,6 +85,8 @@ type spdkSetup struct {
 func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
+	var stdout bytes.Buffer
+	srv.Stdout = &stdout
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
 	var hPages, tUsr, whitelist string
@@ -99,22 +96,26 @@ func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 	}
 	hPages = nrHugepagesEnv + "=" + strconv.Itoa(nrHugepages)
 	srv.Env = append(srv.Env, hPages)
-	log.Debugf("spdk setup with %s\n", hPages)
+	s.log.Debugf("spdk setup with %s\n", hPages)
 
 	tUsr = targetUserEnv + "=" + usr
 	srv.Env = append(srv.Env, tUsr)
-	log.Debugf("spdk setup with %s\n", tUsr)
+	s.log.Debugf("spdk setup with %s\n", tUsr)
 
 	if wlist != "" {
 		whitelist = pciWhiteListEnv + "=" + wlist
 		srv.Env = append(srv.Env, whitelist)
-		log.Debugf("spdk setup with %s\n", whitelist)
+		s.log.Debugf("spdk setup with %s\n", whitelist)
 	}
 
-	return errors.Wrapf(
-		srv.Run(),
-		"spdk setup failed (%s, %s, %s, %s)",
-		hPages, tUsr, whitelist, stderr.String())
+	if err := srv.Run(); err != nil {
+		return errors.Wrapf(err, "spdk setup failed (%s, %s, %s, %s)",
+			hPages, tUsr, whitelist, stderr.String())
+	}
+
+	s.log.Debugf("spdk setup run:\n%s", stdout.String())
+
+	return nil
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -132,29 +133,32 @@ func (s *spdkSetup) reset() error {
 		stderr.String())
 }
 
-// NvmeStorage interface specifies basic functionality for subsystem
-type NvmeStorage interface {
-	Setup() error
-	Teardown() error
-	Format(int) error
-	Discover() error
-	Update(string) error
-}
-
 // nvmeStorage gives access to underlying SPDK interfaces
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	env         spdk.ENV       // SPDK ENV interface
-	nvme        spdk.NVME      // SPDK NVMe interface
-	spdk        SpdkSetup      // SPDK shell configuration interface
-	config      *configuration // server configuration structure
-	controllers []*pb.NvmeController
+	log         logging.Logger
+	ext         External
+	env         spdk.ENV  // SPDK ENV interface
+	nvme        spdk.NVME // SPDK NVMe interface
+	spdk        SpdkSetup // SPDK shell configuration interface
+	shmID       int
+	controllers types.NvmeControllers
 	initialized bool
 	formatted   bool
 }
 
-func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
+func (n *nvmeStorage) hasControllers(pciAddrs []string) (missing []string, ok bool) {
+	for _, addr := range pciAddrs {
+		if n.getController(addr) == nil {
+			missing = append(missing, addr)
+		}
+	}
+
+	return missing, len(missing) == 0
+}
+
+func (n *nvmeStorage) getController(pciAddr string) *ctlpb.NvmeController {
 	for _, c := range n.controllers {
 		if c.Pciaddr == pciAddr {
 			return c
@@ -170,14 +174,7 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
-	n.Discover(resp)
-
-	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return errors.New("nvme scan: " + resp.Nvmestate.Error)
-	}
-
-	return nil
+	return n.Discover()
 }
 
 // Teardown method implementation for nvmeStorage.
@@ -189,8 +186,8 @@ func (n *nvmeStorage) Teardown() (err error) {
 	// TODO: Decide whether to rebind PCI devices back to their original
 	// drivers and release hugepages here.
 	// err = n.setup.reset()
-
 	n.initialized = false
+
 	return
 }
 
@@ -207,61 +204,34 @@ func (n *nvmeStorage) Teardown() (err error) {
 // TODO: This is currently a one-time only discovery for the lifetime of this
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
-func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
-	addStateDiscover := func(
-		status pb.ResponseStatus, errMsg string,
-		infoMsg string) *pb.ResponseState {
-
-		return addState(
-			status, errMsg, infoMsg, common.UtilLogDepth+1,
-			"nvme storage discover")
-	}
-
+func (n *nvmeStorage) Discover() error {
 	if n.initialized {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "")
-		resp.Ctrlrs = n.controllers
-		return
+		return nil
 	}
 
 	// specify shmID to be set as opt in SPDK env init
-	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkInitFail+": "+err.Error(), "")
-		return
+	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
-	cs, ns, err := n.nvme.Discover()
+	cs, ns, dh, err := n.nvme.Discover()
 	if err != nil {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkDiscoverFail+": "+err.Error(), "")
-		return
+		return errors.WithMessage(err, msgSpdkDiscoverFail)
 	}
-	n.controllers = loadControllers(cs, ns)
-
-	resp.Nvmestate = addStateDiscover(
-		pb.ResponseStatus_CTRL_SUCCESS, "", "")
-	resp.Ctrlrs = n.controllers
-
+	n.controllers = loadControllers(cs, ns, dh)
 	n.initialized = true
+
+	return nil
 }
 
-// addCret populates and adds to response NVMe ctrlr results list in addition
-// to logging any err.
-func addCret(
-	resp *pb.FormatStorageResp, op string, pciaddr string,
-	status pb.ResponseStatus, errMsg string, logDepth int) {
+// newCret creates and populates NVMe controller result and logs error
+func newCret(log logging.Logger, op string, pciaddr string, status ctlpb.ResponseStatus, errMsg string,
+	infoMsg string) *ctlpb.NvmeControllerResult {
 
-	resp.Crets = append(
-		resp.Crets,
-		&pb.NvmeControllerResult{
-			Pciaddr: pciaddr,
-			State: addState(
-				status, errMsg, "", logDepth+1,
-				"nvme storage "+op),
-		})
+	return &ctlpb.NvmeControllerResult{
+		Pciaddr: pciaddr,
+		State:   newState(log, status, errMsg, infoMsg, "nvme controller "+op),
+	}
 }
 
 // Format attempts to format (forcefully) NVMe devices on a given server
@@ -271,185 +241,93 @@ func addCret(
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
-func (n *nvmeStorage) Format(i int, resp *pb.FormatStorageResp) {
+func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControllerResults)) {
 	var pciAddr string
-	srv := n.config.Servers[i]
-	log.Debugf("performing device format on NVMe controllers")
+	n.log.Debugf("performing device format on NVMe controllers")
 
-	// wraps around addCret to provide format specific function
-	addCretFormat := func(status pb.ResponseStatus, errMsg string) {
-		// log depth should be stack layer registering result
-		addCret(
-			resp, "format", pciAddr, status, errMsg,
-			common.UtilLogDepth+1)
-	}
-
-	if !n.initialized {
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
-		return
+	// appends results to response to provide format specific function
+	addCretFormat := func(status ctlpb.ResponseStatus, errMsg string, infoMsg string) {
+		*results = append(*results,
+			newCret(n.log, "format", pciAddr, status, errMsg, infoMsg))
 	}
 
 	if n.formatted {
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_APP,
-			msgBdevAlreadyFormatted)
+		addCretFormat(ctlpb.ResponseStatus_CTL_ERR_APP, msgBdevAlreadyFormatted, "")
 		return
 	}
 
-	switch srv.BdevClass {
-	case bdNVMe:
-		for _, pciAddr = range srv.BdevList {
+	switch cfg.Class {
+	case storage.BdevClassMalloc:
+		n.log.Debugf("malloc bdev format successful (%s)\n", pciAddr)
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
+	case storage.BdevClassKdev:
+		n.log.Debugf("kernel bdev format successful (%s)\n", pciAddr)
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
+	case storage.BdevClassFile:
+		n.log.Debugf("bdev file format successful (%s)\n", pciAddr)
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", msgBdevClassIsFile)
+	case storage.BdevClassNvme:
+		for _, pciAddr = range cfg.DeviceList {
 			if pciAddr == "" {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_CONF,
-					msgBdevEmpty)
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_CONF,
+					msgBdevEmpty, "")
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound)
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound, "")
 				continue
 			}
 
-			log.Debugf(
-				"formatting nvme controller at %s, may take "+
-					"several minutes!...", pciAddr)
+			n.log.Debugf("formatting nvme controller at %s, may take "+
+				"several minutes!...", pciAddr)
 
 			cs, ns, err := n.nvme.Format(pciAddr)
 			if err != nil {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+err.Error())
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_NVME,
+					pciAddr+": "+err.Error(), "")
 				continue
 			}
 
-			log.Debugf(
-				"controller format successful (%s)\n", pciAddr)
+			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
-			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
-			n.controllers = loadControllers(cs, ns)
+			addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
+			n.controllers = loadControllers(cs, ns, nil)
 		}
 	default:
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_CONF,
-			string(srv.BdevClass)+": "+msgBdevClassNotSupported)
+		addCretFormat(ctlpb.ResponseStatus_CTL_ERR_CONF,
+			fmt.Sprintf("%s: %s", cfg.Class, msgBdevClassNotSupported), "")
 		return
 	}
 
-	log.Debugf("device format on NVMe controllers completed")
+	// add info to result if no controllers have been formatted
+	if len(*results) == 0 && len(cfg.DeviceList) == 0 {
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS,
+			"", msgBdevNoDevs)
+	}
+
+	n.log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
-	return
-}
-
-// Update method implementation for nvmeStorage attempts to update firmware on
-// NVMe controllers attached to a given server identified by PCI addresses as
-// specified in per-server section of the config file.
-//
-// Firmware will only be updated if the controller reports the current fw rev
-// to be the same as the "startRev" fn parameter. path and slot refer to the
-// fw image file location and controller fw register to update respectively.
-func (n *nvmeStorage) Update(
-	i int, startRev string, path string, slot int32) error {
-
-	srv := n.config.Servers[i]
-
-	if !n.initialized {
-		return errors.New(msgBdevNotInited)
-	}
-
-	switch srv.BdevClass {
-	case bdNVMe:
-		for _, pciAddr := range srv.BdevList {
-			if pciAddr == "" {
-				continue
-			}
-
-			ctrlr := n.getController(pciAddr)
-			if ctrlr == nil {
-				continue
-			}
-			if ctrlr.Fwrev != startRev {
-				continue
-			}
-
-			cs, ns, err := n.nvme.Update(pciAddr, path, slot)
-			if err != nil {
-				// in case of a failure in the update process
-				// itself, return failure and don't continue
-				return err
-			}
-			n.controllers = loadControllers(cs, ns)
-		}
-	default:
-		return errors.Errorf(
-			msgBdevClassNotSupported + string(srv.BdevClass))
-	}
-
-	return nil
-}
-
-// BurnIn method implementation for nvmeStorage
-// Doesn't call through go-spdk, returns cmds to be issued over shell
-func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
-	fioPath string, cmds []string, env string, err error) {
-
-	if !n.initialized {
-		err = errors.New(msgBdevNotInited)
-		return
-	}
-
-	pluginDir := ""
-	pluginDir, err = n.config.ext.getAbsInstallPath(spdkFioPluginDir)
-	if err != nil {
-		return
-	}
-
-	fioPath, err = n.config.ext.getAbsInstallPath(fioExecPath)
-	if err != nil {
-		return
-	}
-
-	// run fio with spdk plugin specified in LD_PRELOAD env
-	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
-	// limitation of fio_plugin for spdk is that traddr needs
-	// to not contain colon chars, convert to full-stops
-	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
-	// shm_id specified within fio configs to enable spdk multiprocess
-	// mode required to perform burn-in from Go process.
-	// eta options provided to trigger periodic client responses.
-	cmds = []string{
-		fmt.Sprintf(
-			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
-			strings.Replace(pciAddr, ":", ".", -1), nsID),
-		"--ioengine=spdk",
-		"--eta=always",
-		"--eta-newline=10",
-		configPath,
-	}
-	log.Debugf(
-		"BurnIn command string: %s %s %v", env, fioPath, cmds)
-
-	return
 }
 
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
-	pbCtrlrs []*pb.NvmeController) {
+func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
+	healthStats []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
+
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
 			pbCtrlrs,
-			&pb.NvmeController{
-				Model:   c.Model,
-				Serial:  c.Serial,
-				Pciaddr: c.PCIAddr,
-				Fwrev:   c.FWRev,
-				// repeated pb field
-				Namespaces: loadNamespaces(c.PCIAddr, nss),
+			&ctlpb.NvmeController{
+				Model:       c.Model,
+				Serial:      c.Serial,
+				Pciaddr:     c.PCIAddr,
+				Fwrev:       c.FWRev,
+				Socketid:    c.SocketID,
+				Healthstats: loadHealthStats(c.PCIAddr, healthStats),
+				Namespaces:  loadNamespaces(c.PCIAddr, nss), // repeated pb field
 			})
 	}
 	return pbCtrlrs
@@ -457,15 +335,12 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(
-	ctrlrPciAddr string, nss []spdk.Namespace) (
-	_nss []*pb.NvmeController_Namespace) {
-
+func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeNamespaces) {
 	for _, ns := range nss {
 		if ns.CtrlrPciAddr == ctrlrPciAddr {
 			_nss = append(
 				_nss,
-				&pb.NvmeController_Namespace{
+				&ctlpb.NvmeController_Namespace{
 					Id:       ns.ID,
 					Capacity: ns.Size,
 				})
@@ -474,17 +349,41 @@ func loadNamespaces(
 	return
 }
 
-// newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
-
-	scriptPath, err := config.ext.getAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return nil, err
+// loadHealthStats find health statistics for a given control identified by PCI
+// address.
+func loadHealthStats(ctrlrPciAddr string, hss []spdk.DeviceHealth) *ctlpb.NvmeController_Health {
+	for _, hs := range hss {
+		if hs.CtrlrPciAddr == ctrlrPciAddr {
+			return &ctlpb.NvmeController_Health{
+				Temp:            hs.Temp,
+				Tempwarn:        hs.TempWarnTime,
+				Tempcrit:        hs.TempCritTime,
+				Ctrlbusy:        hs.CtrlBusyTime,
+				Powercycles:     hs.PowerCycles,
+				Poweronhours:    hs.PowerOnHours,
+				Unsafeshutdowns: hs.UnsafeShutdowns,
+				Mediaerrors:     hs.MediaErrors,
+				Errorlogs:       hs.ErrorLogEntries,
+				Tempwarning:     hs.TempWarn,
+				Availspare:      hs.AvailSpareWarn,
+				Reliability:     hs.ReliabilityWarn,
+				Readonly:        hs.ReadOnlyWarn,
+				Volatilemem:     hs.VolatileWarn,
+			}
+		}
 	}
+
+	return nil // none found
+}
+
+// newNvmeStorage creates a new instance of nvmeStorage struct.
+func newNvmeStorage(log logging.Logger, shmID int, spdkScript *spdkSetup, ext External) *nvmeStorage {
 	return &nvmeStorage{
-		env:    &spdk.Env{},
-		nvme:   &spdk.Nvme{},
-		spdk:   &spdkSetup{scriptPath, config.NrHugepages},
-		config: config,
-	}, nil
+		log:   log,
+		ext:   ext,
+		spdk:  spdkScript,
+		env:   &spdk.Env{},
+		nvme:  &spdk.Nvme{},
+		shmID: shmID,
+	}
 }

@@ -26,9 +26,11 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
+#include <spdk/bdev.h>
 
-#define BIO_DMA_PAGE_SHIFT	12		/* 4K */
-#define	BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
+#define BIO_DMA_PAGE_SHIFT	12	/* 4K */
+#define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
+#define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
 
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
@@ -56,36 +58,86 @@ struct bio_dma_buffer {
 	ABT_mutex		 bdb_mutex;
 };
 
+enum bio_bs_state {
+	/* Healthy and fully functional */
+	BIO_BS_STATE_NORMAL	= 0,
+	/* Being detected as faulty */
+	BIO_BS_STATE_FAULTY,
+	/* Affected targets are marked as DOWN, safe to tear down blobstore */
+	BIO_BS_STATE_TEARDOWN,
+	/* Blobstore is torn down */
+	BIO_BS_STATE_OUT,
+	/* New device hotplugged, start to initialize blobstore & blobs */
+	BIO_BS_STATE_REPLACED,
+	/* Blobstore & blobs initialized, start to reint affected targets */
+	BIO_BS_STATE_REINT
+};
+
+/*
+ * SPDK device health monitoring.
+ */
+struct bio_dev_health {
+	struct bio_dev_state	 bdh_health_state;
+	/* writable open descriptor for health info polling */
+	struct spdk_bdev_desc	*bdh_desc;
+	struct spdk_io_channel	*bdh_io_channel;
+	void			*bdh_health_buf; /* health info logs */
+	void			*bdh_ctrlr_buf; /* controller data */
+	void			*bdh_error_buf; /* device error logs */
+	uint64_t		 bdh_stat_age;
+	unsigned int		 bdh_inflights;
+};
+
 /*
  * SPDK blobstore isn't thread safe and there can be only one SPDK
  * blobstore for certain NVMe device.
  */
 struct bio_blobstore {
 	ABT_mutex		 bb_mutex;
+	ABT_cond		 bb_barrier;
 	struct spdk_blob_store	*bb_bs;
-	struct bio_xs_context	*bb_ctxt;
+	/*
+	 * The xstream resposible for blobstore load/unload, monitor
+	 * and faulty/reint reaction.
+	 */
+	struct bio_xs_context	*bb_owner_xs;
+	/* All the xstreams using the blobstore */
+	struct bio_xs_context	**bb_xs_ctxts;
+	/* Device/blobstore health monitoring info */
+	struct bio_dev_health	 bb_dev_health;
+	enum bio_bs_state	 bb_state;
+	/* Blobstore used by how many xstreams */
 	int			 bb_ref;
+	/*
+	 * Blobstore is held and being accessed by requests from upper
+	 * layer, teardown procedure needs be postponed.
+	 */
+	int			 bb_holdings;
 };
 
 /* Per-xstream NVMe context */
 struct bio_xs_context {
-	int			 bxc_xs_id;
-	struct spdk_ring	*bxc_msg_ring;
+	int			 bxc_tgt_id;
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
-	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
-	struct spdk_bdev_desc	*bxc_desc; /* for io stat only */
-	uint64_t		 bxc_stat_age;
+	d_list_t		 bxc_io_ctxts;
+	struct spdk_bdev_desc	*bxc_desc; /* for io stat only, read-only */
+	uint64_t		 bxc_io_stat_age;
 };
 
 /* Per VOS instance I/O context */
 struct bio_io_context {
+	d_list_t		 bic_link; /* link to bxc_io_ctxts */
 	struct umem_instance	*bic_umem;
 	uint64_t		 bic_pmempool_uuid;
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_context	*bic_xs_ctxt;
+	uint32_t		 bic_inflight_dmas;
+	uint32_t		 bic_io_unit;
+	unsigned int		 bic_opening:1,
+				 bic_closing:1;
 };
 
 /* A contiguous DMA buffer region reserved by certain io descriptor */
@@ -119,17 +171,10 @@ struct bio_rsrvd_dma {
 /* I/O descriptor */
 struct bio_desc {
 	struct bio_io_context	*bd_ctxt;
-	/* SG lists involved in this io descriptor */
-	unsigned int		 bd_sgl_cnt;
-	struct bio_sglist	*bd_sgls;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
-	/*
-	 * SPDK blob io completion could run on different xstream
-	 * when the NVMe device is shared by multiple xstreams.
-	 */
-	ABT_mutex		 bd_mutex;
-	ABT_cond		 bd_dma_done;
+	/* Report blob i/o completion */
+	ABT_eventual		 bd_dma_done;
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
@@ -138,17 +183,69 @@ struct bio_desc {
 				 bd_update:1,
 				 bd_dma_issued:1,
 				 bd_retry:1;
+	/* SG lists involved in this io descriptor */
+	unsigned int		 bd_sgl_cnt;
+	struct bio_sglist	 bd_sgls[0];
+};
+
+static inline struct spdk_thread *
+owner_thread(struct bio_blobstore *bbs)
+{
+	return bbs->bb_owner_xs->bxc_thread;
+}
+
+static inline bool
+is_blob_valid(struct bio_io_context *ctxt)
+{
+	return ctxt->bic_blob != NULL && !ctxt->bic_closing;
+}
+
+static inline uint64_t
+page2io_unit(struct bio_io_context *ctxt, uint64_t page)
+{
+	return page * (BIO_DMA_PAGE_SZ / ctxt->bic_io_unit);
+}
+
+enum {
+	BDEV_CLASS_NVME = 0,
+	BDEV_CLASS_MALLOC,
+	BDEV_CLASS_AIO,
+	BDEV_CLASS_UNKNOWN
+};
+
+struct media_error_msg {
+	struct bio_blobstore	*mem_bs;
+	bool			 mem_update; /* read or write error */
+	bool			 mem_unmap; /* unmap error */
+	int			 mem_tgt_id;
 };
 
 /* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
+extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
+int get_bdev_type(struct spdk_bdev *bdev);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
+
+/* bio_monitor.c */
+int bio_init_health_monitoring(struct bio_blobstore *bb,
+			       struct spdk_bdev *bdev);
+void bio_fini_health_monitoring(struct bio_blobstore *bb);
+void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
+void bio_media_error(void *msg_arg);
+
+/* bio_context.c */
+int bio_blob_close(struct bio_io_context *ctxt, bool async);
+
+/* bio_recovery.c */
+int bio_bs_state_transit(struct bio_blobstore *bbs);
+int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 #endif /* __BIO_INTERNAL_H__ */

@@ -29,6 +29,8 @@ struct utest_context {
 	struct umem_instance	uc_umm;
 	struct umem_attr	uc_uma;
 	umem_off_t		uc_root;
+	daos_size_t		initial_value;
+	daos_size_t		prev_value;
 };
 
 struct utest_root {
@@ -77,7 +79,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	struct utest_context	*ctx;
 	struct utest_root	*root;
 	PMEMoid			 root_oid;
-	int			 rc;
+	int			 rc, enabled = 1;
 
 	if (strnlen(name, UTEST_POOL_NAME_MAX + 1) > UTEST_POOL_NAME_MAX)
 		return -DER_INVAL;
@@ -94,6 +96,12 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	if (ctx->uc_uma.uma_pool == NULL) {
 		perror("Utest pmem pool couldn't be created");
 		rc = -DER_NOMEM;
+		goto free_ctx;
+	}
+
+	rc = pmemobj_ctl_set(ctx->uc_uma.uma_pool, "stats.enabled", &enabled);
+	if (rc) {
+		perror("Enable SCM usage statistics failed. rc:%d\n");
 		goto free_ctx;
 	}
 
@@ -155,7 +163,7 @@ utest_vmem_create(size_t root_size, struct utest_context **utx)
 	ctx->uc_root = umem_zalloc(&ctx->uc_umm, sizeof(*root) + root_size);
 
 	if (UMOFF_IS_NULL(ctx->uc_root)) {
-		rc = -DER_NOMEM;
+		rc = ctx->uc_umm.umm_nospc_rc;
 		goto free_ctx;
 	}
 
@@ -251,7 +259,7 @@ utest_alloc(struct utest_context *utx, umem_off_t *off, size_t size,
 
 	*off = umem_alloc(&utx->uc_umm, size);
 	if (UMOFF_IS_NULL(*off)) {
-		rc = -DER_NOMEM;
+		rc = utx->uc_umm.umm_nospc_rc;
 		goto end;
 	}
 
@@ -285,4 +293,106 @@ struct umem_attr *
 utest_utx2uma(struct utest_context *utx)
 {
 	return &utx->uc_uma;
+}
+
+int
+utest_get_scm_used_space(struct utest_context *utx,
+	daos_size_t *used_space)
+{
+	int			rc;
+	struct umem_instance	*um_ins;
+
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id != UMEM_CLASS_VMEM) {
+		rc = pmemobj_ctl_get(um_ins->umm_pool,
+			"stats.heap.curr_allocated",
+			used_space);
+	} else {
+		/* VMEM . Just return zero */
+		rc = 0;
+	}
+	return rc;
+}
+
+int
+utest_sync_mem_status(struct utest_context	*utx)
+{
+	int			rc;
+	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
+
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
+	rc = utest_get_scm_used_space(utx, &scm_used);
+	if (utx->initial_value == 0)
+		utx->initial_value = scm_used;
+	utx->prev_value = scm_used;
+	return rc;
+}
+
+int
+utest_check_mem_increase(struct utest_context *utx)
+{
+	int			rc;
+	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
+
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
+	rc = utest_get_scm_used_space(utx, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (utx->prev_value > scm_used) {
+		D_ERROR("SCM Usage not increased\n");
+		return 1;
+	}
+	return 0;
+}
+
+int
+utest_check_mem_decrease(struct utest_context *utx)
+{
+	int			rc;
+	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
+
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
+	rc = utest_get_scm_used_space(utx, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (utx->prev_value < scm_used) {
+		D_ERROR("SCM Usage not decreased\n");
+		return 1;
+	}
+	return 0;
+}
+
+int
+utest_check_mem_initial_status(struct utest_context *utx)
+{
+	int			rc;
+	daos_size_t		scm_used;
+	struct umem_instance	*um_ins;
+
+	um_ins = utest_utx2umm(utx);
+	if (um_ins->umm_id == UMEM_CLASS_VMEM)
+		return 0;
+	rc = utest_get_scm_used_space(utx, &scm_used);
+	if (rc) {
+		D_ERROR("Get SCM Usage failed\n");
+		return rc;
+	}
+	if (utx->initial_value != scm_used) {
+		D_ERROR("SCM not freed up in full\n");
+		return 1;
+	}
+	return 0;
 }

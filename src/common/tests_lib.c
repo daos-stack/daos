@@ -31,7 +31,7 @@
 #include <daos.h>
 #include <gurt/debug.h>
 
-#define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
+#define DTS_OCLASS_DEF		OC_RP_XSF
 
 static uint32_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
@@ -52,7 +52,7 @@ dts_oid_gen(uint16_t oclass, uint8_t ofeats, unsigned seed)
 	oid.lo	= obj_id_gen++;
 	oid.lo	|= hdr;
 	oid.hi	= rand() % 100;
-	daos_obj_generate_id(&oid, ofeats, oclass);
+	daos_obj_generate_id(&oid, ofeats, oclass, 0);
 
 	return oid;
 }
@@ -119,11 +119,7 @@ dts_buf_render_uppercase(char *buf, unsigned int buf_len)
 void
 dts_freeline(char *line)
 {
-#if HAVE_LIB_READLINE
 	D_FREE(line);
-#else
-	D_FREE(line);
-#endif
 }
 
 /**
@@ -132,9 +128,6 @@ dts_freeline(char *line)
 char *
 dts_readline(const char *prompt)
 {
-#if HAVE_LIB_READLINE
-	return readline(prompt);
-#else
 	char	*line;
 	char	*cur;
 	bool	 eof;
@@ -179,7 +172,6 @@ dts_readline(const char *prompt)
  out_free:
 	dts_freeline(line);
 	return NULL;
-#endif
 }
 
 int
@@ -206,7 +198,6 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 			continue; /* empty line */
 
 		cmd = daos_str_trimwhite(line);
-		dts_add_history(cmd);
 
 		for (i = 0, opc = 0;; i++) {
 			struct option *opt;
@@ -264,7 +255,7 @@ static daos_sort_ops_t rand_iarr_ops = {
 };
 
 int *
-dts_rand_iarr_alloc(int nr, int base)
+dts_rand_iarr_alloc(int nr, int base, bool shuffle)
 {
 	int	*array;
 	int	 i;
@@ -276,7 +267,9 @@ dts_rand_iarr_alloc(int nr, int base)
 	for (i = 0; i < nr; i++)
 		array[i] = base + i;
 
-	daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+	if (shuffle)
+		daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+
 	return array;
 }
 
@@ -311,4 +304,54 @@ dts_log(const char *msg, const char *file, const char *func, int line,
 
 	if (mask)
 		d_log(mask, "%s:%d %s() %s", file, line, func, msg);
+}
+
+static void
+v_dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
+				   uint32_t count, char *d,
+				   va_list valist)
+{
+	char *arg = d;
+	int i, j;
+
+	d_sgl_init(sgl, count);
+	for (i = 0; i < count; i++) {
+		size_t arg_len = strlen(arg);
+
+		char *buf = NULL;
+		size_t buf_len = arg_len * repeat + 1; /** +1 for NULL
+							* Terminator
+							*/
+		D_ALLOC(buf, buf_len);
+		D_ASSERT(buf != 0);
+		for (j = 0; j < repeat; j++)
+			memcpy(buf + j * arg_len, arg, arg_len);
+		buf[buf_len - 1] = '\0';
+
+		sgl->sg_iovs[i].iov_buf = buf;
+		sgl->sg_iovs[i].iov_buf_len = sgl->sg_iovs[i].iov_len = buf_len;
+
+		arg = va_arg(valist, char *);
+	}
+}
+
+void
+dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...)
+{
+	va_list valist;
+
+	va_start(valist, d);
+	v_dts_sgl_init_with_strings_repeat(sgl, 1, count, d, valist);
+	va_end(valist);
+}
+
+void
+dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
+				 uint32_t count, char *d, ...)
+{
+	va_list valist;
+
+	va_start(valist, d);
+	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
+	va_end(valist);
 }

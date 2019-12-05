@@ -21,9 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of the DAOS server. It implements the server .
+ * Container Object ID IV.
  */
-#define DDSUBSYS	DDFAC(pool)
+#define D_LOGFAC	DD_FAC(container)
 
 #include <abt.h>
 #include <cart/iv.h>
@@ -32,7 +32,6 @@
 #include <daos_srv/iv.h>
 #include "srv_internal.h"
 
-/** #define OID_IV_DEBUG */
 #define OID_BLOCK 32
 
 struct oid_iv_key {
@@ -79,15 +78,16 @@ oid_iv_key_cmp(void *key1, void *key2)
 }
 
 static int
-oid_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst, d_sg_list_t *src,
-		 void **priv)
+oid_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *src, d_sg_list_t *dst, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
 }
 
 static int
-oid_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **_priv)
+oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
+		   d_sg_list_t *src, int ref_rc, void **_priv)
 {
 	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
 	daos_size_t		num_oids;
@@ -97,12 +97,10 @@ oid_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc, void **_priv)
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
-#endif
+	D_DEBUG(DB_TRACE, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
 	D_ASSERT(num_oids != 0);
 
-	entry = dst->sg_iovs[0].iov_buf;
+	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
 	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
@@ -129,7 +127,7 @@ out:
 }
 
 static int
-oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
+oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		  d_sg_list_t *src, void **_priv)
 {
 	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
@@ -142,18 +140,16 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 
 	D_ASSERT(priv != NULL);
 
-	entry = dst->sg_iovs[0].iov_buf;
+	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
 	ABT_mutex_lock(entry->lock);
 	avail = &entry->rg;
 
 	oids = src->sg_iovs[0].iov_buf;
 	num_oids = oids->num_oids;
 
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: ON UPDATE, num_oids = %zu\n", myrank, num_oids);
-	fprintf(stderr, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
+	D_DEBUG(DB_TRACE, "%u: ON UPDATE, num_oids = %zu\n", myrank, num_oids);
+	D_DEBUG(DB_TRACE, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
 		myrank, avail->num_oids, avail->oid);
-#endif
 
 	if (ns_entry->ns->iv_master_rank == myrank) {
 		struct oid_iv_key *key;
@@ -168,19 +164,15 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 		}
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
-#ifdef OID_IV_DEBUG
-		fprintf(stderr, "%u: ROOT MAX_OID = %"PRIu64"\n",
-			myrank, avail->oid);
-#endif
+		D_DEBUG(DB_TRACE, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank,
+			avail->oid);
 		priv->num_oids = 0;
 		ABT_mutex_unlock(entry->lock);
 		return 0;
 	}
 
 	if (avail->num_oids >= num_oids) {
-#ifdef OID_IV_DEBUG
-		fprintf(stderr, "%u: IDs available\n", myrank);
-#endif
+		D_DEBUG(DB_TRACE, "%u: IDs available\n", myrank);
 		/** set the oid value in the iv value */
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
@@ -205,10 +197,8 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, d_sg_list_t *dst,
 	/** Keep track of how much this node originally requested */
 	priv->num_oids = num_oids;
 
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: IDs not available, FORWARD %zu oids\n",
+	D_DEBUG(DB_TRACE, "%u: IDs not available, FORWARD %zu oids\n",
 		myrank, oids->num_oids);
-#endif
 
 	/** entry->lock will be released in on_refresh() */
 	return -DER_IVCB_FORWARD;
@@ -223,9 +213,7 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 {
 	struct oid_iv_priv	*priv;
 
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: OID GET\n", dss_self_rank());
-#endif
+	D_DEBUG(DB_TRACE, "%u: OID GET\n", dss_self_rank());
 
 	D_ALLOC_PTR(priv);
 	if (priv == NULL)
@@ -240,9 +228,7 @@ oid_iv_ent_put(struct ds_iv_entry *entry, void **_priv)
 {
 	struct oid_iv_priv *priv = (struct oid_iv_priv *)_priv;
 
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%u: ON PUT\n", dss_self_rank());
-#endif
+	D_DEBUG(DB_TRACE, "%u: ON PUT\n", dss_self_rank());
 
 	D_FREE(priv);
 	_priv = NULL;
@@ -338,10 +324,8 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	struct oid_iv_range	*oids;
 	int		rc;
 
-#ifdef OID_IV_DEBUG
-	fprintf(stderr, "%d: OID alloc CoUUID "DF_UUIDF" num_oids %"PRIu64"\n",
+	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF" num_oids %"PRIu64"\n",
 		dss_self_rank(), DP_UUID(co_uuid), num_oids);
-#endif
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_OID;
@@ -355,7 +339,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	oids->num_oids = num_oids;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
-			  CRT_IV_SYNC_BIDIRECTIONAL);
+			  CRT_IV_SYNC_BIDIRECTIONAL, false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 

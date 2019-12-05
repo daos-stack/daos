@@ -490,7 +490,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	/* Initialize the root */
 	parent = &tree[0]; /* root */
 	parent->do_comp.co_type   = PO_COMP_TP_ROOT;
-	parent->do_comp.co_status = PO_COMP_ST_UP;
+	parent->do_comp.co_status = PO_COMP_ST_UPIN;
 	if (buf->pb_domain_nr == 0) {
 		/* nodes are directly attached under the root */
 		parent->do_target_nr = buf->pb_node_nr;
@@ -694,6 +694,17 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 		}
 		dom_nr = child_nr;
 	}
+}
+
+int
+pool_map_comp_cnt(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+
+	D_ASSERT(map->po_tree != NULL);
+	pool_tree_count(&map->po_tree[1], &cntr);
+
+	return cntr.cc_domains + cntr.cc_targets;
 }
 
 /**
@@ -962,7 +973,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		for (j = 0; j < sorter->cs_nr; j++) {
 			if (activate &&
 			    tree[j].do_comp.co_status == PO_COMP_ST_NEW)
-				tree[j].do_comp.co_status = PO_COMP_ST_UP;
+				tree[j].do_comp.co_status = PO_COMP_ST_UPIN;
 
 			sorter->cs_comps[j] = &tree[j].do_comp;
 		}
@@ -986,7 +997,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
 
 		if (activate && ta->ta_comp.co_status == PO_COMP_ST_NEW)
-			ta->ta_comp.co_status = PO_COMP_ST_UP;
+			ta->ta_comp.co_status = PO_COMP_ST_UPIN;
 	}
 
 	rc = comp_sorter_sort(&map->po_target_sorter);
@@ -1081,7 +1092,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 				if (existed)
 					return -DER_NO_PERM;
 
-			} else if (dc->co_status == PO_COMP_ST_UP) {
+			} else if (dc->co_status == PO_COMP_ST_UPIN) {
 				if (!existed)
 					return -DER_INVAL;
 
@@ -1268,7 +1279,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 						pool_comp_type2str(dc->co_type),
 						dc->co_id);
 
-					dc->co_status = PO_COMP_ST_UP;
+					dc->co_status = PO_COMP_ST_UPIN;
 
 					*child = sdom->do_children[j];
 					child++;
@@ -1299,7 +1310,7 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 					D_DEBUG(DB_MGMT, "New target[%d]\n",
 						tc->co_id);
 
-					tc->co_status = PO_COMP_ST_UP;
+					tc->co_status = PO_COMP_ST_UPIN;
 
 					*target = sdom->do_targets[j];
 					target++;
@@ -1812,19 +1823,67 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 				  tgt_cnt);
 }
 
+
+/**
+ * Find all targets with @status in specific rank. Note: &tgt_pp will be
+ * allocated and the caller is reponsible to free it.
+ */
+int
+pool_map_find_by_rank_status(struct pool_map *map,
+			     struct pool_target ***tgt_ppp,
+			     unsigned int *tgt_cnt, unsigned int status,
+			     d_rank_t rank)
+{
+	struct pool_domain	*dom;
+	int			i;
+
+	*tgt_ppp = NULL;
+	*tgt_cnt = 0;
+	dom = pool_map_find_node_by_rank(map, rank);
+	if (dom == NULL)
+		return 0;
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		if (dom->do_targets[i].ta_comp.co_status & status) {
+			if (*tgt_ppp == NULL) {
+				D_ALLOC(*tgt_ppp,
+					dom->do_target_nr * sizeof(**tgt_ppp));
+				if (*tgt_ppp == NULL)
+					return -DER_NOMEM;
+			}
+			(*tgt_ppp)[(*tgt_cnt)++] = &dom->do_targets[i];
+		}
+	}
+	return 0;
+}
+
+/**
+ * Find all targets with DOWN|DOWNOUT state in specific rank.
+ */
+int
+pool_map_find_failed_tgts_by_rank(struct pool_map *map,
+				  struct pool_target ***tgt_ppp,
+				  unsigned int *tgt_cnt, d_rank_t rank)
+{
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt,
+					    PO_COMP_ST_DOWN|PO_COMP_ST_DOWNOUT,
+					    rank);
+}
+
+
 /**
  * Find all targets in DOWN state. Raft leader can use it drive target
  * rebuild one by one.
  */
 int
-pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 		      unsigned int *tgt_cnt)
 {
 	struct find_tgts_param param;
 
 	memset(&param, 0, sizeof(param));
 	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_UP;
+	param.ftp_status = PO_COMP_ST_UPIN;
 
 	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
 				  tgt_cnt);

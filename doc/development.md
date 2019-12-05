@@ -28,7 +28,7 @@ With this approach DAOS would get built using the prebuilt dependencies in ${dao
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on the scons command line.   This option is also saved for future compilations.
 
-## Golang dependencies
+## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,22 @@ init(void)
 	rc = ds_oid_iv_init();
 	if (rc)
 		D_GOTO(err, rc);
+
+	rc = ds_cont_cache_init();
+	if (rc)
+		D_GOTO(err_oid_iv, rc);
+
+	rc = ds_cont_iv_init();
+	if (rc)
+		D_GOTO(err_cont_cache, rc);
+
 	return 0;
 
+err_cont_cache:
+	ds_cont_cache_fini();
+
+err_oid_iv:
+	ds_oid_iv_fini();
 err:
 	return rc;
 }
@@ -50,17 +64,14 @@ err:
 static int
 fini(void)
 {
+	ds_cont_iv_fini();
+	ds_cont_cache_fini();
 	ds_oid_iv_fini();
 	return 0;
 }
 
 static struct crt_corpc_ops ds_cont_tgt_destroy_co_ops = {
 	.co_aggregate   = ds_cont_tgt_destroy_aggregator,
-	.co_pre_forward = NULL,
-};
-
-static struct crt_corpc_ops ds_cont_tgt_open_co_ops = {
-	.co_aggregate   = ds_cont_tgt_open_aggregator,
 	.co_pre_forward = NULL,
 };
 
@@ -81,6 +92,11 @@ static struct crt_corpc_ops ds_cont_tgt_epoch_discard_co_ops = {
 
 static struct crt_corpc_ops ds_cont_tgt_epoch_aggregate_co_ops = {
 	.co_aggregate   = ds_cont_tgt_epoch_aggregate_aggregator,
+	.co_pre_forward = NULL,
+};
+
+static struct crt_corpc_ops ds_cont_tgt_snapshot_notify_co_ops = {
+	.co_aggregate   = ds_cont_tgt_snapshot_notify_aggregator,
 	.co_pre_forward = NULL,
 };
 
@@ -112,7 +128,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
-	rc = ds_cont_cache_create(&tls->dt_cont_cache);
+	rc = ds_cont_child_cache_create(&tls->dt_cont_cache);
 	if (rc != 0) {
 		D_ERROR("failed to create thread-local container cache: %d\n",
 			rc);
@@ -122,9 +138,9 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
-		D_ERROR("failed to create thread-local container handle cache: "
-			"%d\n", rc);
-		ds_cont_cache_destroy(tls->dt_cont_cache);
+		D_ERROR("failed to create thread-local container handle cache:"
+			" %d\n", rc);
+		ds_cont_child_cache_destroy(tls->dt_cont_cache);
 		D_FREE(tls);
 		return NULL;
 	}
@@ -139,7 +155,7 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct dsm_tls *tls = data;
 
 	ds_cont_hdl_hash_destroy(&tls->dt_cont_hdl_hash);
-	ds_cont_cache_destroy(tls->dt_cont_cache);
+	ds_cont_child_cache_destroy(tls->dt_cont_cache);
 	D_FREE(tls);
 }
 

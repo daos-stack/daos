@@ -33,8 +33,8 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-/* NB: tse_task_private is TSE_PRIV_SIZE = 504 bytes for now */
-#define TSE_TASK_ARG_LEN		376
+/* NB: tse_task_private is TSE_PRIV_SIZE = 1016 bytes for now */
+#define TSE_TASK_ARG_LEN		888
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -70,7 +70,7 @@ struct tse_task_private {
 					 dtp_completing:1,
 					/* task is in running state */
 					 dtp_running:1,
-					 dtp_dep_cnt:30;
+					 dtp_dep_cnt:29;
 	/* refcount of the task */
 	uint32_t			 dtp_refcnt;
 	/**

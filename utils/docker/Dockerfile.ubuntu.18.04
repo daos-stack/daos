@@ -7,7 +7,7 @@
 
 # Pull base image
 FROM ubuntu:18.04
-MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via -build-arg
 # use same UID as host and default value of 1000 if not specified
@@ -27,14 +27,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
-            pylint python-dev scons sg3-utils uuid-dev yasm
+            pylint python-dev python3-dev scons         \
+            sg3-utils uuid-dev yasm valgrind
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
     add-apt-repository ppa:jhli/libsafec;                               \
     add-apt-repository ppa:jhli/ipmctl;                                 \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       libsafec-dev libipmctl-dev
+                       libsafec-dev libipmctl-dev ndctl ipmctl
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
@@ -54,7 +55,7 @@ RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
 # Switch to new user
-USER $USER
+#USER $USER
 WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
@@ -66,11 +67,12 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
 
 # Set environment variables
-ENV PATH=/home/daos/daos/install/bin:$PATH
-ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
-ENV CPATH=/home/daos/daos/install/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
+ENV DAOS_SINGLETON_CLI=1
+ENV CRT_ATTACH_INFO_PATH=/tmp/uri

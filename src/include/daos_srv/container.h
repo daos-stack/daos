@@ -31,6 +31,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
@@ -52,18 +53,43 @@ void ds_cont_svc_step_down(struct cont_svc *svc);
  * Stores per-thread, per-container information, such as the vos container
  * handle.
  */
-struct ds_cont {
+struct ds_cont_child {
 	struct daos_llink	 sc_list;
 	daos_handle_t		 sc_hdl;
 	uuid_t			 sc_uuid;
+	ABT_mutex		 sc_mutex;
+	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	void			*sc_dtx_resync_cbdata;
 	/* The time for the latest DTX resync operation. */
 	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
-				 sc_closing:1;
+				 sc_vos_aggregating:1,
+				 sc_abort_vos_aggregating:1,
+				 sc_closing:1,
+				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
+
+	/* Aggregate ULT */
+	struct dss_sleep_ult	 *sc_agg_ult;
+	/*
+	 * Lower bound of aggregation epoch, it can be:
+	 *
+	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
+	 *			  round of aggregation
+	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
+	 *			  aggregation
+	 */
+	uint64_t		 sc_aggregation_min;
+	/* Upper bound of aggregation epoch, it can be:
+	 *
+	 * 0			: When snapshot list isn't retrieved yet
+	 * DAOS_EPOCH_MAX	: When snapshot list is retrieved
+	 * snapshot epoch	: When the snapshot creation is in-progress
+	 */
+	uint64_t		 sc_aggregation_max;
+	uint64_t		*sc_snapshots;
+	uint32_t		 sc_snapshots_nr;
 };
 
 /*
@@ -76,8 +102,9 @@ struct ds_cont_hdl {
 	d_list_t		sch_entry;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_capas;
-	struct ds_pool_child   *sch_pool;
-	struct ds_cont	       *sch_cont;
+	struct ds_pool_child	*sch_pool;
+	struct ds_cont_child	*sch_cont;
+	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
 	uint32_t		sch_dtx_registered:1,
 				sch_deleted:1;
@@ -89,6 +116,8 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
@@ -96,14 +125,49 @@ int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int
-ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid);
-int
-ds_cont_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont **ds_cont);
+ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
+		     struct ds_cont_child **ds_cont);
 
-void ds_cont_put(struct ds_cont *cont);
-void ds_cont_get(struct ds_cont *cont);
+void ds_cont_child_put(struct ds_cont_child *cont);
+void ds_cont_child_get(struct ds_cont_child *cont);
 
 int
 ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 	     void *arg, uint32_t type);
+
+int
+cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
+int
+cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
+			 uint64_t *snapshots, int snap_count);
+
+
+/**
+ * Query container properties.
+ *
+ * \param[in]	ns	pool IV namespace
+ * \param[in]	cont_hdl_uuid container handle uuid
+ * \param[out]	cont_prop returned container properties
+ *			If it is NULL, return -DER_INVAL;
+ *			If cont_prop is non-NULL but its dpp_entries is NULL,
+ *			will query all pool properties, DAOS internally
+ *			allocates the needed buffers and assign pointer to
+ *			dpp_entries.
+ *			If cont_prop's dpp_nr > 0 and dpp_entries is non-NULL,
+ *			will query the properties for specific dpe_type(s), DAOS
+ *			internally allocates the needed buffer for dpe_str or
+ *			dpe_val_ptr, if the dpe_type with immediate value then
+ *			will directly assign it to dpe_val.
+ *			User can free the associated buffer by calling
+ *			daos_prop_free().
+ *
+ * \return		0 if Success, negative if failed.
+ */
+int
+cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
+		   daos_prop_t *cont_prop);
+int
+cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
+		   uuid_t cont_uuid, struct ds_cont_hdl **cont_hdl);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

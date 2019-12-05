@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dmg(8): DAOS Management Utility
+ * dmg_old(8): DAOS Management Utility
  */
 #include <getopt.h>
 #include <stdio.h>
@@ -34,12 +34,19 @@
 const unsigned int	 default_mode = 0731;
 const char		*default_scm_size = "256M";
 const char		*default_nvme_size = "8G";
-const char		*default_group = DAOS_DEFAULT_GROUP_ID;
+const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 const unsigned int	 default_svc_nreplicas = 1;
 
 const int max_svc_nreplicas = 13;
 
 typedef int (*command_hdlr_t)(int, char *[]);
+
+/* NOTE about command-line arguments --group= (deprecated) and --sys-name= :
+ * In new tools (dmg, daos) --group= will have a different meaning.
+ * Keeping --group= option here for now (this dmg_old tool is to be replaced).
+ * A new, preferred option is --sys-name= (or --sys= shorter version).
+ */
+
 
 daos_size_t
 tobytes(const char *str)
@@ -96,8 +103,10 @@ tobytes(const char *str)
 static int
 create_hdlr(int argc, char *argv[])
 {
+	/* See above note about --group to -sys-name transition */
 	struct option		options[] = {
 		{"gid",		required_argument,	NULL,	'g'},
+		{"sys-name",	required_argument,	NULL,	'G'},
 		{"group",	required_argument,	NULL,	'G'},
 		{"mode",	required_argument,	NULL,	'm'},
 		{"size",	required_argument,	NULL,	's'},
@@ -112,7 +121,7 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		gid = getegid();
 	daos_size_t		scm_size = tobytes(default_scm_size);
 	daos_size_t		nvme_size = tobytes(default_nvme_size);
-	const char	       *group = default_group;
+	const char	       *sysname = default_sysname;
 	const char	       *targets_str = NULL;
 	d_rank_list_t	       *targets = NULL;
 	d_rank_t		ranks[max_svc_nreplicas];
@@ -133,7 +142,7 @@ create_hdlr(int argc, char *argv[])
 			gid = atoi(optarg);
 			break;
 		case 'G':
-			group = optarg;
+			sysname = optarg;
 			break;
 		case 'm':
 			val = strtoul(optarg, &endptr, 0 /* base */);
@@ -182,14 +191,15 @@ create_hdlr(int argc, char *argv[])
 		fprintf(stderr, "--svcn must be in [1, %lu]\n",
 			ARRAY_SIZE(ranks));
 		if (targets != NULL)
-			daos_rank_list_free(targets);
+			d_rank_list_free(targets);
 		return 2;
 	}
 
-	rc = daos_pool_create(mode, uid, gid, group, targets, "pmem", scm_size,
-			      nvme_size, NULL, &svc, pool_uuid, NULL /* ev */);
+	rc = daos_pool_create(mode, uid, gid, sysname, targets, "pmem",
+			      scm_size, nvme_size, NULL, &svc, pool_uuid,
+			      NULL /* ev */);
 	if (targets != NULL)
-		daos_rank_list_free(targets);
+		d_rank_list_free(targets);
 	if (rc != 0) {
 		fprintf(stderr, "failed to create pool: %d\n", rc);
 		return rc;
@@ -208,13 +218,15 @@ create_hdlr(int argc, char *argv[])
 static int
 destroy_hdlr(int argc, char *argv[])
 {
+	/* See above note about --group to -sys-name transition */
 	struct option		options[] = {
 		{"force",	no_argument,		NULL,	'f'},
+		{"sys-name",	required_argument,	NULL,	'G'},
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{NULL,		0,			NULL,	0}
 	};
-	const char	       *group = default_group;
+	const char	       *sysname = default_sysname;
 	uuid_t			pool_uuid;
 	int			force = 0;
 	int			rc;
@@ -227,7 +239,7 @@ destroy_hdlr(int argc, char *argv[])
 			force = 1;
 			break;
 		case 'G':
-			group = optarg;
+			sysname = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -247,12 +259,84 @@ destroy_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_pool_destroy(pool_uuid, group, force, NULL /* ev */);
+	rc = daos_pool_destroy(pool_uuid, sysname, force, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to destroy pool: %d\n", rc);
 		return rc;
 	}
 
+	return 0;
+}
+
+
+static int
+list_pools_hdlr(int argc, char *argv[])
+{
+	/* See above note about --group to -sys-name transition */
+	struct option		options[] = {
+		{"sys-name",	required_argument,	NULL,	'G'},
+		{"group",	required_argument,	NULL,	'G'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char		*sysname = default_sysname;
+	daos_size_t		 npools;
+	const daos_size_t	 extra_npools_margin = 16;
+	daos_mgmt_pool_info_t	*pools;
+	daos_size_t		 pc;
+	daos_size_t		 sc;
+	int			 rc;
+
+	/* TODOs:
+	 * verbose option, return full pool query results
+	 * accept npools option, exercise subset responses
+	 */
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			sysname = optarg;
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	/* First: request number of pools (to size our buffer) */
+	rc = daos_mgmt_list_pools(sysname, &npools, NULL /* pools */,
+				  NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to get number of pools in %s: %d\n",
+				sysname, rc);
+		return rc;
+	}
+
+	/* If no pools, no need for a second call */
+	if (npools == 0)
+		return rc;
+
+	/* Allocate pools[]. Note: svc ranks per pool allocated by API */
+	npools += extra_npools_margin;
+	D_ALLOC_ARRAY(pools, npools);
+	D_ASSERT(pools != NULL);
+
+	/* Second: request list of pools */
+	rc = daos_mgmt_list_pools(sysname, &npools, pools, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to list pools: %d\n", rc);
+		D_FREE(pools);
+		return rc;
+	}
+
+	for (pc = 0; pc < npools; pc++) {
+		daos_mgmt_pool_info_t	*pool = &pools[pc];
+
+		printf(DF_UUIDF" ", DP_UUID(pool->mgpi_uuid));
+
+		for (sc = 0; sc < pool->mgpi_svc->rl_nr - 1; sc++)
+			printf("%u:", pool->mgpi_svc->rl_ranks[sc]);
+		printf("%u\n", pool->mgpi_svc->rl_ranks[sc]);
+	}
+
+	D_FREE(pools);
 	return 0;
 }
 
@@ -281,11 +365,13 @@ pool_op_parse(const char *str)
 	return -1;
 }
 
-/* For operations that take <pool_uuid, pool_group, pool_svc_ranks>. */
+/* For operations that take <pool_uuid, pool_sysname, pool_svc_ranks>. */
 static int
 pool_op_hdlr(int argc, char *argv[])
 {
+	/* See above note about --group to -sys-name transition */
 	struct option		options[] = {
+		{"sys-name",	required_argument,	NULL,	'G'},
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
 		{"svc",		required_argument,	NULL,	'v'},
@@ -293,7 +379,7 @@ pool_op_hdlr(int argc, char *argv[])
 		{"target",	required_argument,	NULL,	't'},
 		{NULL,		0,			NULL,	0}
 	};
-	const char	       *group = default_group;
+	const char	       *sysname = default_sysname;
 	uuid_t			pool_uuid;
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
@@ -313,7 +399,7 @@ pool_op_hdlr(int argc, char *argv[])
 				 NULL)) != -1) {
 		switch (rc) {
 		case 'G':
-			group = optarg;
+			sysname = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -365,7 +451,7 @@ pool_op_hdlr(int argc, char *argv[])
 	if (ranks == NULL &&
 	    (op == POOL_EXCLUDE || op == REPLICA_ADD || op == REPLICA_DEL)) {
 		fprintf(stderr, "valid target ranks required\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
@@ -379,7 +465,7 @@ pool_op_hdlr(int argc, char *argv[])
 
 	switch (op) {
 	case POOL_EVICT:
-		rc = daos_pool_evict(pool_uuid, group, svc, NULL /* ev */);
+		rc = daos_pool_evict(pool_uuid, sysname, svc, NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to evict pool connections: "
 				"%d\n", rc);
@@ -397,7 +483,7 @@ pool_op_hdlr(int argc, char *argv[])
 			tgt_list.tl_tgts = &tgt;
 		}
 
-		rc = daos_pool_tgt_exclude(pool_uuid, group, svc, &tgt_list,
+		rc = daos_pool_tgt_exclude(pool_uuid, sysname, svc, &tgt_list,
 				       NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to exclude target: "
@@ -405,7 +491,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_ADD:
-		rc = daos_pool_add_replicas(pool_uuid, group, svc, ranks,
+		rc = daos_pool_add_replicas(pool_uuid, sysname, svc, ranks,
 					    NULL /* failed */, NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to add replicas: "
@@ -413,7 +499,7 @@ pool_op_hdlr(int argc, char *argv[])
 		break;
 
 	case REPLICA_DEL:
-		rc = daos_pool_remove_replicas(pool_uuid, group, svc, ranks,
+		rc = daos_pool_remove_replicas(pool_uuid, sysname, svc, ranks,
 					       NULL /* failed */,
 					       NULL /* ev */);
 		if (rc != 0)
@@ -422,20 +508,20 @@ pool_op_hdlr(int argc, char *argv[])
 
 	/* Make a pool connection for operations that need one. */
 	case POOL_QUERY:
-		rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO, &pool,
-				       NULL /* info */, NULL /* ev */);
+		rc = daos_pool_connect(pool_uuid, sysname, svc, DAOS_PC_RO,
+				       &pool, NULL /* info */, NULL /* ev */);
 		if (rc != 0)
 			fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		break;
 	}
-	daos_rank_list_free(svc);
-	daos_rank_list_free(ranks);
-	daos_rank_list_free(targets);
+	d_rank_list_free(svc);
+	d_rank_list_free(ranks);
+	d_rank_list_free(targets);
 	if (rc != 0)
 		return rc;
 
 	if (op == POOL_QUERY) {
-		daos_pool_info_t		 pinfo;
+		daos_pool_info_t		 pinfo = {0};
 		struct daos_pool_space		*ps = &pinfo.pi_space;
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
@@ -497,13 +583,15 @@ pool_op_hdlr(int argc, char *argv[])
 static int
 kill_hdlr(int argc, char *argv[])
 {
+	/* See above note about --group to -sys-name transition */
 	struct option		options[] = {
+		{"sys-name",	required_argument,	NULL,	'G'},
 		{"group",	required_argument,	NULL,	'G'},
 		{"force",	0,			NULL,	'f'},
 		{"rank",	required_argument,	NULL,	'r'},
 		{NULL,		0,			NULL,	0}
 	};
-	const char	       *group = default_group;
+	const char	       *sysname = default_sysname;
 	bool			force = false;
 	d_rank_t		rank = -1;
 	int			rc;
@@ -511,7 +599,7 @@ kill_hdlr(int argc, char *argv[])
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
-			group = optarg;
+			sysname = optarg;
 			break;
 		case 'f':
 			force = true;
@@ -529,7 +617,7 @@ kill_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_mgmt_svc_rip(group, rank, force, NULL);
+	rc = daos_mgmt_svc_rip(sysname, rank, force, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "failed to kill rank: %d\n", rank);
 		return rc;
@@ -568,7 +656,7 @@ obj_op_hdlr(int argc, char *argv[])
 		{"svc",		required_argument,	NULL,	's'},
 		{NULL,		0,			NULL,	0}
 	};
-	const char	       *group = default_group;
+	const char	       *sysname = default_sysname;
 	uuid_t			pool_uuid;
 	uuid_t			cont_uuid;
 	daos_handle_t		poh;
@@ -639,13 +727,13 @@ obj_op_hdlr(int argc, char *argv[])
 	}
 	if (svc->rl_nr == 0) {
 		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
+		d_rank_list_free(svc);
 		return 2;
 	}
 
-	rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO,
+	rc = daos_pool_connect(pool_uuid, sysname, svc, DAOS_PC_RO,
 			       &poh, NULL /* info */, NULL /* ev */);
-	daos_rank_list_free(svc);
+	d_rank_list_free(svc);
 	if (rc) {
 		fprintf(stderr, "failed to connect to pool: %d\n", rc);
 		return rc;
@@ -836,7 +924,7 @@ static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
-usage: dmg COMMAND [OPTIONS]\n\
+usage: dmg_old COMMAND [OPTIONS]\n\
 commands:\n\
   create	create a pool\n\
   destroy	destroy a pool\n\
@@ -851,54 +939,62 @@ commands:\n\
 	printf("\
 create options:\n\
   --gid=GID	pool GID (getegid()) \n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --mode=MODE	pool mode (%#o)\n\
   --size=BYTES	target SCM size in bytes (%s)\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --nvme=BYTES	target NVMe size in bytes (%s)\n\
   --svcn=N	number of pool service replicas (\"%u\")\n\
-  --target=RANKS\n\
-		pool targets like 0:1:2:3:4 (whole group)\n\
-  --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
+  --target=N	pool targets on server like 0:1:2:3:4 (whole group)\n\
+  --uid=UID	pool UID (geteuid())\n", default_sysname, default_mode,
 	       default_scm_size, default_nvme_size, default_svc_nreplicas);
 	printf("\
 destroy options:\n\
   --force	destroy the pool even if there are connections\n\
-  --group=STR	pool server process group (\"%s\")\n\
-  --pool=UUID	pool UUID\n", default_group);
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
+  --pool=UUID	pool UUID\n", default_sysname);
 	printf("\
 evict options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --pool=UUID	pool UUID\n\
-  --svc=RANKS	pool service replicas like 1:2:3\n", default_group);
+  --svc=RANKS	pool service replicas like 1:2:3\n", default_sysname);
 	printf("\
 exclude options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
-  --target=RANK	target rank\n", default_group);
+  --rank=N	storage server rank \n\
+  --target=RANK	target rank\n", default_sysname);
 	printf("\
 add options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
-  --target=RANK	target rank\n", default_group);
+  --target=RANK	target rank\n", default_sysname);
 	printf("\
 remove options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n\
-  --target=RANK	target rank\n", default_group);
+  --target=RANK	target rank\n", default_sysname);
 	printf("\
 kill options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --force	unclean shutdown\n\
-  --rank=INT	rank of the DAOS server to kill\n", default_group);
+  --rank=INT	rank of the DAOS server to kill\n", default_sysname);
 	printf("\
 query options:\n\
-  --group=STR	pool server process group (\"%s\")\n\
+  --sys-name=S	DAOS system name (\"%s\")\n\
+  --group=STR	deprecated, use --sys-name or --sys\n\
   --pool=UUID	pool UUID\n\
-  --svc=RANKS	pool service replicas like 1:2:3\n", default_group);
+  --svc=RANKS	pool service replicas like 1:2:3\n", default_sysname);
 	printf("\
 query obj layout options: \n\
   --pool=UUID	pool uuid\n\
@@ -919,6 +1015,8 @@ main(int argc, char *argv[])
 		hdlr = create_hdlr;
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
+	else if (strcmp(argv[1], "list-pools") == 0)
+		hdlr = list_pools_hdlr;
 	else if (strcmp(argv[1], "evict") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)

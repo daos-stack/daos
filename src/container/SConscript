@@ -3,18 +3,20 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c'])
     # ds_cont: Container Server
     ds_cont = daos_build.library(denv, 'cont',
                                  ['srv.c', 'srv_container.c', 'srv_epoch.c',
                                   'srv_target.c', 'srv_layout.c', 'oid_iv.c',
-                                  common])
-    denv.Install('$PREFIX/lib/daos_srv', ds_cont)
+                                  'container_iv.c', common])
+    denv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
     # dc_cont: Container Client
     dc_co_tgts = denv.SharedObject(['cli.c', 'cli_tx.c']) + common

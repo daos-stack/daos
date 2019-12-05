@@ -33,10 +33,18 @@
 #include <daos_srv/pool.h>
 
 /**
+ * Structure representing the pool's ownership by user and group, respectively.
+ */
+struct pool_owner {
+	char *user;	/** name of the user owner */
+	char *group;	/** name of the group owner */
+};
+
+/**
  * Determine whether the provided credentials can access a pool.
  *
  * \param[in]	acl		Access Control List for pool
- * \param[in]	ugm		Pool ownership uid/gid
+ * \param[in]	ownership	Pool ownership information
  * \param[in]	cred		Credentials of user attempting access
  * \param[in]	capas		Requested access capabilities (DAOS_PC_* flags
  *				from include/daos_types.h)
@@ -52,7 +60,7 @@
  *		-DER_PROTO	Unexpected or corrupt payload from control plane
  */
 int
-ds_sec_check_pool_access(struct daos_acl *acl, struct pool_prop_ugm *ugm,
+ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
 			 d_iov_t *cred, uint64_t capas);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

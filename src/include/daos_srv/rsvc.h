@@ -40,6 +40,7 @@
 enum ds_rsvc_class_id {
 	DS_RSVC_CLASS_MGMT,
 	DS_RSVC_CLASS_POOL,
+	DS_RSVC_CLASS_TEST,
 	DS_RSVC_CLASS_COUNT
 };
 
@@ -51,25 +52,25 @@ struct ds_rsvc_class {
 	 * Name the service identified by the generic \a id. The returned name
 	 * string will later be passed to D_FREE.
 	 */
-	int (*sc_name)(daos_iov_t *id, char **name);
+	int (*sc_name)(d_iov_t *id, char **name);
 
 	/** Retrieve the stored UUID of the service database. */
-	int (*sc_load_uuid)(daos_iov_t *id, uuid_t db_uuid);
+	int (*sc_load_uuid)(d_iov_t *id, uuid_t db_uuid);
 
 	/** Store the UUID of the service database. */
-	int (*sc_store_uuid)(daos_iov_t *id, uuid_t db_uuid);
+	int (*sc_store_uuid)(d_iov_t *id, uuid_t db_uuid);
 
 	/** Delete the stored UUID of the service database. */
-	int (*sc_delete_uuid)(daos_iov_t *id);
+	int (*sc_delete_uuid)(d_iov_t *id);
 
 	/**
 	 * Locate the DB of the service identified by \a id. The returned DB
 	 * path will later be passed to D_FREE.
 	 */
-	int (*sc_locate)(daos_iov_t *id, char **path);
+	int (*sc_locate)(d_iov_t *id, char **path);
 
 	/** Allocate a ds_rsvc object and initialize its s_id member. */
-	int (*sc_alloc)(daos_iov_t *id, struct ds_rsvc **svc);
+	int (*sc_alloc)(d_iov_t *id, struct ds_rsvc **svc);
 
 	/**
 	 * Free the ds_rsvc object, after finalizing its s_id member (if
@@ -98,6 +99,12 @@ struct ds_rsvc_class {
 	 * down but before sc_step_down. See rsvc_step_down_cb.
 	 */
 	void (*sc_drain)(struct ds_rsvc *svc);
+
+	/**
+	 * Distribute the system/pool map in the system/pool. This callback is
+	 * optional.
+	 */
+	int (*sc_map_dist)(struct ds_rsvc *svc);
 };
 
 void ds_rsvc_class_register(enum ds_rsvc_class_id id,
@@ -116,7 +123,7 @@ enum ds_rsvc_state {
 struct ds_rsvc {
 	d_list_t		s_entry;	/* in rsvc_hash */
 	enum ds_rsvc_class_id	s_class;
-	daos_iov_t		s_id;		/**< for lookups */
+	d_iov_t			s_id;		/**< for lookups */
 	char		       *s_name;		/**< for printing */
 	struct rdb	       *s_db;		/**< DB handle */
 	char		       *s_db_path;
@@ -129,22 +136,35 @@ struct ds_rsvc {
 	ABT_cond		s_state_cv;
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
+	bool			s_map_dist;	/* has a map dist request? */
+	ABT_cond		s_map_dist_cv;
+	ABT_thread		s_map_distd;
+	bool			s_map_distd_stop;
 };
 
-int ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		  bool create, size_t size, d_rank_list_t *replicas, void *arg);
-int ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy);
+int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
-int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
-int ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
+int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		       const uuid_t dbid, const d_rank_list_t *ranks,
 		       bool create, bool bootstrap, size_t size);
-int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
-		      const d_rank_list_t *ranks, bool destroy);
-int ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
+int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
+		      const d_rank_list_t *ranks, d_rank_list_t *excluded,
+		      bool destroy);
+int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
+			   size_t size);
+int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+			 d_rank_list_t *ranks, size_t size,
+			 struct rsvc_hint *hint);
+int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks);
+int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+			    d_rank_list_t *ranks, struct rsvc_hint *hint);
+int ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 		   struct ds_rsvc **svc);
-int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			  struct ds_rsvc **svcp, struct rsvc_hint *hint);
 void ds_rsvc_put(struct ds_rsvc *svc);
 void ds_rsvc_put_leader(struct ds_rsvc *svc);
@@ -159,5 +179,7 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		      crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t *size);
 
 size_t ds_rsvc_get_md_cap(void);
+
+void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

@@ -11,18 +11,18 @@ hosts:
 timeout: 5000
 server_config:
   name: daos_server
+  servers:
+    targets: 8
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 1073741824
+container:
+  akey_size: 5
+  dkey_size: 5
+  data_size: 256
 testparams:
   ranks:
-    rank5:
-      rank: 5
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 1073741824
-  numobjects:
-    one:
-      objcount: 1
-  datasize:
-    size: 250
+    rank0:
+      rank: 0
+  object_class: DAOS_OC_R3_RW

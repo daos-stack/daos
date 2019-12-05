@@ -39,9 +39,9 @@ message Token {
 message Sys {
 	uint64 stamp = 1;
 	string machinename = 2;
-	uint32 uid = 3;
-	uint32 gid = 4;
-	repeated uint32 gids = 5;
+	string user = 3;
+	string group = 4;
+	repeated string groups = 5;
 	string secctx = 6; // Additional field for MAC label
 }
 
@@ -55,4 +55,5 @@ message SysVerifier {
 message Credential {
 	Token token = 1;
 	Token verifier = 2;
+	string origin = 3;
 }

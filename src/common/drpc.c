@@ -58,10 +58,8 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
 	}
 
 	D_ALLOC_PTR(call);
-	if (call == NULL) {
-		D_ERROR("Could not allocate new drpc call\n");
+	if (call == NULL)
 		return NULL;
-	}
 
 	drpc__call__init(call);
 	call->sequence = ctx->sequence;
@@ -101,10 +99,8 @@ drpc_response_create(Drpc__Call *call)
 	}
 
 	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		D_ERROR("Could not allocate new drpc response\n");
+	if (resp == NULL)
 		return NULL;
-	}
 
 	drpc__response__init(resp);
 	resp->sequence = call->sequence;
@@ -129,17 +125,19 @@ new_unixcomm_socket(int flags)
 	struct unixcomm	*comm;
 
 	D_ALLOC_PTR(comm);
-	if (comm == NULL) {
+	if (comm == NULL)
 		return NULL;
-	}
 
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
+		D_ERROR("Failed to open socket, errno=%d\n", errno);
 		D_FREE(comm);
 		return NULL;
 	}
 
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -166,14 +164,15 @@ unixcomm_connect(char *sockaddr, int flags)
 	struct unixcomm		*handle = NULL;
 
 	handle = new_unixcomm_socket(flags);
-	if (handle == NULL) {
+	if (handle == NULL)
 		return NULL;
-	}
 
 	fill_socket_address(sockaddr, &address);
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
+		D_ERROR("Failed to connect to socket fd %d, errno=%d\n",
+			handle->fd, errno);
 		unixcomm_close(handle);
 		return NULL;
 	}
@@ -188,18 +187,21 @@ unixcomm_listen(char *sockaddr, int flags)
 	struct unixcomm		*comm;
 
 	comm = new_unixcomm_socket(flags);
-	if (comm == NULL) {
+	if (comm == NULL)
 		return NULL;
-	}
 
 	fill_socket_address(sockaddr, &address);
 	if (bind(comm->fd, (struct sockaddr *)&address,
-			sizeof(struct sockaddr_un)) < 0) {
+		 sizeof(struct sockaddr_un)) < 0) {
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
+			sockaddr, comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
 
 	if (listen(comm->fd, SOMAXCONN) < 0) {
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
+			comm->fd, errno);
 		unixcomm_close(comm);
 		return NULL;
 	}
@@ -213,13 +215,13 @@ unixcomm_accept(struct unixcomm *listener)
 	struct unixcomm *comm;
 
 	D_ALLOC_PTR(comm);
-	if (comm == NULL) {
+	if (comm == NULL)
 		return NULL;
-	}
 
 	comm->fd = accept(listener->fd, NULL, NULL);
 	if (comm->fd < 0) {
-		/* couldn't get a connection */
+		D_ERROR("Failed to accept connection on listener fd %d, "
+			"errno=%d\n", listener->fd, errno);
 		D_FREE(comm);
 		return NULL;
 	}
@@ -231,13 +233,18 @@ static int
 unixcomm_close(struct unixcomm *handle)
 {
 	int ret;
+	int fd;
 
 	if (!handle)
 		return 0;
-	ret = close(handle->fd);
+
+	fd = handle->fd;
+	ret = close(fd);
 	D_FREE(handle);
 
 	if (ret < 0) {
+		D_ERROR("Failed to close socket fd %d, errno=%d\n",
+			fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -262,11 +269,12 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
+		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
-		if (sent != NULL) {
+		if (sent != NULL)
 			*sent = bsent;
-		}
 		ret = 0;
 	}
 	return ret;
@@ -290,11 +298,12 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
+		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
+			hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
-		if (rcvd != NULL) {
+		if (rcvd != NULL)
 			*rcvd = brcvd;
-		}
 		ret = 0;
 	}
 	return ret;
@@ -307,15 +316,15 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	uint8_t	*buf;
 
 	if (!msg) {
+		D_ERROR("NULL Drpc__Call\n");
 		return -DER_INVAL;
 	}
 
 	buf_len = drpc__call__get_packed_size(msg);
 
 	D_ALLOC(buf, buf_len);
-	if (!buf) {
+	if (!buf)
 		return -DER_NOMEM;
-	}
 
 	drpc__call__pack(msg, buf);
 
@@ -356,16 +365,14 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 
 	msg->sequence = ctx->sequence++;
 	pbLen = drpc_marshal_call(msg, &messagePb);
-	if (pbLen < 0) {
-		return -DER_NOMEM;
-	}
+	if (pbLen < 0)
+		return pbLen;
 
 	ret = unixcomm_send(ctx->comm, messagePb, pbLen, &sent);
 	D_FREE(messagePb);
 
-	if (ret < 0) {
+	if (ret < 0)
 		return ret;
-	}
 
 	if (!(flags & R_SYNC)) {
 		response = drpc_response_create(msg);
@@ -375,9 +382,8 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	}
 
 	D_ALLOC(responseBuf, UNIXCOMM_MAXMSGSIZE);
-	if (!responseBuf) {
+	if (!responseBuf)
 		return -DER_NOMEM;
-	}
 
 	ret = unixcomm_recv(ctx->comm, responseBuf, UNIXCOMM_MAXMSGSIZE, &recv);
 	if (ret < 0) {
@@ -389,6 +395,15 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 
 	*resp = response;
 	return 0;
+}
+
+static void
+init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
+{
+	ctx->comm = comm;
+	ctx->handler = handler;
+	ctx->sequence = 0;
+	ctx->ref_count = 1;
 }
 
 /**
@@ -405,9 +420,8 @@ drpc_connect(char *sockaddr)
 	struct unixcomm	*comms;
 
 	D_ALLOC_PTR(ctx);
-	if (!ctx) {
+	if (!ctx)
 		return NULL;
-	}
 
 	comms = unixcomm_connect(sockaddr, 0);
 	if (!comms) {
@@ -415,9 +429,7 @@ drpc_connect(char *sockaddr)
 		return NULL;
 	}
 
-	ctx->comm = comms;
-	ctx->sequence = 0;
-	ctx->handler = NULL;
+	init_drpc_ctx(ctx, comms, NULL);
 	return ctx;
 }
 
@@ -435,25 +447,26 @@ drpc_connect(char *sockaddr)
 struct drpc *
 drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
-	struct drpc *ctx;
+	struct drpc	*ctx;
+	struct unixcomm *comm;
 
 	if (sockaddr == NULL || handler == NULL) {
+		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
+			sockaddr, handler);
 		return NULL;
 	}
 
 	D_ALLOC_PTR(ctx);
-	if (ctx == NULL) {
+	if (ctx == NULL)
 		return NULL;
-	}
 
-	ctx->comm = unixcomm_listen(sockaddr, O_NONBLOCK);
-	if (ctx->comm == NULL) {
+	comm = unixcomm_listen(sockaddr, O_NONBLOCK);
+	if (comm == NULL) {
 		D_FREE(ctx);
 		return NULL;
 	}
 
-	ctx->handler = handler;
-
+	init_drpc_ctx(ctx, comm, handler);
 	return ctx;
 }
 
@@ -485,25 +498,25 @@ drpc_is_valid_listener(struct drpc *ctx)
 struct drpc *
 drpc_accept(struct drpc *listener_ctx)
 {
-	struct drpc *session_ctx;
+	struct drpc	*session_ctx;
+	struct unixcomm	*comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
+		D_ERROR("dRPC context is not a listener\n");
 		return NULL;
 	}
 
 	D_ALLOC_PTR(session_ctx);
-	if (session_ctx == NULL) {
+	if (session_ctx == NULL)
 		return NULL;
-	}
 
-	session_ctx->comm = unixcomm_accept(listener_ctx->comm);
-	if (session_ctx->comm == NULL) {
+	comm = unixcomm_accept(listener_ctx->comm);
+	if (comm == NULL) {
 		D_FREE(session_ctx);
 		return NULL;
 	}
 
-	session_ctx->handler = listener_ctx->handler;
-
+	init_drpc_ctx(session_ctx, comm, listener_ctx->handler);
 	return session_ctx;
 }
 
@@ -517,9 +530,8 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 	buffer_len = drpc__response__get_packed_size(response);
 
 	D_ALLOC(buffer, buffer_len);
-	if (buffer == NULL) {
+	if (buffer == NULL)
 		return -DER_NOMEM;
-	}
 
 	drpc__response__pack(response, buffer);
 	rc = unixcomm_send(ctx->comm, buffer, buffer_len, NULL);
@@ -529,18 +541,16 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 }
 
 static int
-handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
+get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 {
 	int		rc;
 	uint8_t		*buffer;
 	size_t		buffer_size = UNIXCOMM_MAXMSGSIZE;
 	ssize_t		message_len = 0;
-	Drpc__Call	*request;
 
 	D_ALLOC(buffer, buffer_size);
-	if (buffer == NULL) {
+	if (buffer == NULL)
 		return -DER_NOMEM;
-	}
 
 	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
@@ -549,76 +559,146 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 		return rc;
 	}
 
-	request = drpc__call__unpack(NULL, message_len, buffer);
+	*call = drpc__call__unpack(NULL, message_len, buffer);
 	D_FREE(buffer);
-	if (request == NULL) {
+	if (*call == NULL) {
 		D_ERROR("Couldn't unpack message into Drpc__Call\n");
-		return -DER_MISC;
+		return -DER_PROTO;
 	}
 
-	*response = drpc_response_create(request);
-	if (*response == NULL) {
-		drpc_call_free(request);
-		return -DER_NOMEM;
-	}
-
-	ctx->handler(request, *response);
-
-	drpc_call_free(request);
-	return rc;
+	return 0;
 }
 
 /**
- * Listen for a client message on a drpc session, handle the message, and send
- * the response back to the client.
+ * Listen for a client message on a dRPC session and return the Drpc__Call
+ * received.
  *
- * \param	ctx		drpc context on which to listen
+ * \param[in]	session_ctx	Valid dRPC session context
+ * \param[out]	call		Newly allocated Drpc__Call
  *
- * \return	DER_SUCCESS	Successfully got and handled the message
- *		-DER_INVAL	Invalid drpc session context
+ * \return	0		Successfully got a message
+ *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Out of memory
  *		-DER_AGAIN	Listener socket is nonblocking and there was no
- *					pending message on the pipe.
- *		-DER_MISC	Error processing message
+ *				pending message on the pipe
+ *		-DER_PROTO	Badly-formed incoming message
  */
 int
-drpc_recv(struct drpc *session_ctx)
+drpc_recv_call(struct drpc *session_ctx, Drpc__Call **call)
 {
-	int		rc;
-	Drpc__Response	*response;
-
-	if (!drpc_is_valid_listener(session_ctx)) {
+	if (call == NULL) {
+		D_ERROR("Call pointer is NULL\n");
 		return -DER_INVAL;
 	}
 
-	rc = handle_incoming_message(session_ctx, &response);
-	if (rc != DER_SUCCESS) {
-		return rc;
+	if (!drpc_is_valid_listener(session_ctx)) {
+		D_ERROR("dRPC context isn't a valid listener\n");
+		return -DER_INVAL;
 	}
 
-	rc = send_response(session_ctx, response);
+	return get_incoming_call(session_ctx, call);
+}
 
-	drpc_response_free(response);
-	return rc;
+/**
+ * Send a given Drpc__Response to the client on a dRPC session.
+ *
+ * \param[in]	ctx	Valid dRPC session context
+ * \param[in]	resp	Response to be sent
+ *
+ * \return	0		Successfully sent message
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Out of memory
+ *		-DER_NO_PERM	Bad socket permissions
+ *		-DER_NO_HDL	Invalid socket fd in ctx
+ *		-DER_AGAIN	Operation blocked, try again
+ *		-DER_MISC	Miscellaneous error sending response
+ */
+int
+drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
+{
+	if (resp == NULL) {
+		D_ERROR("Response was NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (!drpc_is_valid_listener(session_ctx)) {
+		D_ERROR("dRPC context isn't a valid listener\n");
+		return -DER_INVAL;
+	}
+
+	return send_response(session_ctx, resp);
 }
 
 /**
  * Close the existing drpc connection.
  *
- * \param ctx	The drpc context representing the connection (will be freed)
+ * If there are multiple references to the context, the ref count will be
+ * decremented. Otherwise the context will be freed.
+ *
+ * \param ctx	The drpc context representing the connection (will be freed if
+ *		last reference is removed)
  *
  * \returns	Whether the underlying close on the socket was successful.
  */
 int
 drpc_close(struct drpc *ctx)
 {
-	int ret;
+	int		ret;
+	uint32_t	new_count;
 
 	if (!ctx || !ctx->comm) {
+		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
 
-	ret = unixcomm_close(ctx->comm);
-	D_FREE(ctx);
-	return ret;
+	if (ctx->ref_count == 0) {
+		D_ERROR("Ref count is already zero\n");
+		return -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)\n",
+		ctx->ref_count);
+	ctx->ref_count--;
+
+	new_count = ctx->ref_count;
+
+	if (new_count == 0) {
+		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
+
+		ret = unixcomm_close(ctx->comm);
+		if (ret != 0)
+			D_ERROR("Failed to close dRPC socket (rc=%d)\n", ret);
+		D_FREE(ctx);
+	}
+	return 0;
 }
+
+/**
+ * Adds to the reference count of the dRPC context.
+ *
+ * \param	ctx	dRPC context
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Context is not valid
+ */
+int
+drpc_add_ref(struct drpc *ctx)
+{
+	int rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("Context is null\n");
+		return -DER_INVAL;
+	}
+
+	if (ctx->ref_count == UINT_MAX) {
+		D_ERROR("Can't increment current ref count (count=%u)\n",
+			ctx->ref_count);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	ctx->ref_count++;
+out:
+	return rc;
+}
+

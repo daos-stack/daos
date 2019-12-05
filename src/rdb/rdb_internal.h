@@ -32,6 +32,7 @@
 #include <gurt/hash.h>
 #include <daos/lru.h>
 #include <daos/rpc.h>
+#include <daos/object.h>
 #include "rdb_layout.h"
 
 /* rdb_raft.c (parts required by struct rdb) **********************************/
@@ -218,8 +219,8 @@ CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
 		DAOS_OSEQ_RDB_APPENDENTRIES)
 
 struct rdb_local {
-	daos_iov_t		rl_kds_iov;	/* isi_kds buffer */
-	daos_iov_t		rl_data_iov;	/* isi_data buffer */
+	d_iov_t		rl_kds_iov;	/* isi_kds buffer */
+	d_iov_t		rl_data_iov;	/* isi_data buffer */
 };
 
 #define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
@@ -254,7 +255,6 @@ CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db);
 int rdb_abort_raft_rpcs(struct rdb *db);
-int rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc);
 void rdb_recvd(void *arg);
 
 /* rdb_tx.c *******************************************************************/
@@ -283,7 +283,7 @@ void rdb_kvs_evict(struct rdb *db, struct rdb_kvs *kvs);
 /* rdb_path.c *****************************************************************/
 
 int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
-typedef int (*rdb_path_iterate_cb_t)(daos_iov_t *key, void *arg);
+typedef int (*rdb_path_iterate_cb_t)(d_iov_t *key, void *arg);
 int rdb_path_iterate(const rdb_path_t *path, rdb_path_iterate_cb_t cb,
 		     void *arg);
 int rdb_path_pop(rdb_path_t *path);
@@ -294,10 +294,10 @@ int rdb_path_pop(rdb_path_t *path);
 #define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len
 
 extern const daos_size_t rdb_iov_max;
-size_t rdb_encode_iov(const daos_iov_t *iov, void *buf);
-ssize_t rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov);
+size_t rdb_encode_iov(const d_iov_t *iov, void *buf);
+ssize_t rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov);
 ssize_t rdb_decode_iov_backward(const void *buf_end, size_t len,
-				daos_iov_t *iov);
+				d_iov_t *iov);
 
 void rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid);
 
@@ -315,18 +315,18 @@ void rdb_anchor_from_hashes(struct rdb_anchor *anchor,
 			    daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor);
 
 int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-		  daos_key_t *akey, daos_iov_t *value);
+		  daos_key_t *akey, d_iov_t *value);
 int rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-		       daos_key_t *akey, daos_iov_t *value);
+		       daos_key_t *akey, d_iov_t *value);
 int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       enum rdb_probe_opc opc, daos_key_t *akey_in,
-		       daos_key_t *akey_out, daos_iov_t *value);
+		       daos_key_t *akey_out, d_iov_t *value);
 int rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		    bool backward, rdb_iterate_cb_t cb, void *arg);
 int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-		   daos_iov_t akeys[], daos_iov_t values[]);
+		   d_iov_t akeys[], d_iov_t values[]);
 int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-		  daos_iov_t akeys[]);
+		  d_iov_t akeys[]);
 int rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high);
 int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
@@ -339,8 +339,8 @@ int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
 /* Update n (<= RDB_VOS_BATCH_MAX) a-keys atomically. */
 static inline int
-rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, daos_iov_t akeys[],
-	      daos_iov_t values[])
+rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
+	      d_iov_t values[])
 {
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
 		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
@@ -349,8 +349,8 @@ rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, daos_iov_t akeys[],
 }
 
 static inline int
-rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, daos_iov_t *akey,
-	      daos_iov_t *value)
+rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, d_iov_t *akey,
+	      d_iov_t *value)
 {
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" akey=<%p, %zd> "
 		"value=<%p, %zd, %zd>\n", mc.cookie, oid, akey->iov_buf,
@@ -361,7 +361,7 @@ rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, daos_iov_t *akey,
 
 static inline int
 rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
-	      daos_iov_t akeys[], daos_iov_t values[])
+	      d_iov_t akeys[], d_iov_t values[])
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>\n", lc.cookie,
@@ -372,7 +372,7 @@ rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
 
 static inline int
 rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
-	     daos_iov_t akeys[])
+	     d_iov_t akeys[])
 {
 	if (n > 0)
 		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
@@ -403,7 +403,7 @@ rdb_lc_aggregate(daos_handle_t lc, uint64_t high)
 
 static inline int
 rdb_lc_lookup(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
-	      daos_iov_t *akey, daos_iov_t *value)
+	      d_iov_t *akey, d_iov_t *value)
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" akey=<%p, %zd> value=<%p, %zd, %zd>\n", lc.cookie, index, oid,
@@ -417,8 +417,8 @@ rdb_lc_lookup(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 
 static inline int
 rdb_lc_iter_fetch(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
-		  enum rdb_probe_opc opc, daos_iov_t *akey_in,
-		  daos_iov_t *akey_out, daos_iov_t *value)
+		  enum rdb_probe_opc opc, d_iov_t *akey_in,
+		  d_iov_t *akey_out, d_iov_t *value)
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64" opc=%d"
 		" akey_in=<%p, %zd> akey_out=<%p, %zd> value=<%p, %zd, %zd>\n",

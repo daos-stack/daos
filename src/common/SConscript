@@ -7,33 +7,37 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    # Hack alert.   Add pmem to pmdk libs so libpmem is found
-    # in the rpath.   It is normally only included by libpmemobj
-    # but that library doesn't contain the installed location
-    # in the rpath.
-    prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
-                    'protobufc', pmdk_libs=['pmemobj', 'pmem'])
+    # Hack alert, the argobots headers are required but the shared
+    # library isn't so add the dependancy so the include path
+    # is correct, but set _libs to [] so that the library isn't
+    # linked in.
 
-    if platform_arm:
-        prereqs.require(env, 'mchecksum')
-    else:
+    prereqs.require(env, 'pmdk', 'cart')
+
+    if not platform_arm:
         prereqs.require(env, 'isal')
 
     denv = env.Clone()
+
+    prereqs.require(denv, 'protobufc', 'cart')
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
-                  'misc.c', 'pool_map.c', 'sort.c', 'btree.c',
+                  'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
-                  'drpc.c', 'drpc.pb-c.c', 'proc.c', 'acl_api.c',
-                  'acl_util.c']
+                  'drpc.c', 'drpc.pb-c.c', 'proc.c',
+                  'acl_api.c', 'acl_util.c', 'acl_principal.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
-    denv.Install('$PREFIX/lib/', common)
+    denv.Install('$PREFIX/lib64/', common)
+
+    tenv = denv.Clone()
+
+    prereqs.require(tenv, 'argobots')
 
     tests_lib_src = ['tests_lib.c']
-    tests_lib = daos_build.library(denv, 'libdaos_tests', tests_lib_src)
-    denv.Install('$PREFIX/lib/', tests_lib)
+    tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
+    tenv.Install('$PREFIX/lib64/', tests_lib)
 
-    SConscript('tests/SConscript', exports='denv')
+    SConscript('tests/SConscript', exports='tenv')
 
 if __name__ == "SCons.Script":
     scons()

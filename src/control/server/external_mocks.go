@@ -21,58 +21,74 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
 	"os/user"
-
-	"github.com/pkg/errors"
+	"sync"
 )
 
 // mockExt implements the External interface.
 type mockExt struct {
+	sync.RWMutex
 	// return error if cmd in shell fails
 	cmdRet error
 	// return true if file already exists
-	existsRet   bool
-	mountRet    error
-	unmountRet  error
-	mkdirRet    error
-	removeRet   error
-	lUsrRet     *user.User  // lookup user
-	lGrpRet     *user.Group // lookup group
-	lUsrErr     error       // lookup user error
-	lGrpErr     error       // lookup group error
-	listGrpsErr error       // list groups error
-	listGrpsRet []string    // list of user's groups
-	sUIDErr     error       // set uid error
-	sGIDErr     error       // set gid error
-	chownErr    error
-	history     []string
+	existsRet       bool
+	mountRet        error
+	isMountPointRet bool
+	unmountRet      error
+	mkdirRet        error
+	removeRet       error
+	lUsrRet         *user.User  // lookup user
+	lGrpRet         *user.Group // lookup group
+	lUsrErr         error       // lookup user error
+	lGrpErr         error       // lookup group error
+	listGrpsErr     error       // list groups error
+	listGrpsRet     []string    // list of user's groups
+	chownRErr       error
+	isRoot          bool
+	history         []string
+	files           []string
 }
 
 func (m *mockExt) getHistory() []string {
+	m.RLock()
+	defer m.RUnlock()
+
 	return m.history
 }
 
-var files []string // record file content written in mocks
+func (m *mockExt) appendHistory(update string) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.history = append(m.history, update)
+}
+
+func (m *mockExt) appendFiles(update string) {
+	m.Lock()
+	defer m.Unlock()
+
+	m.files = append(m.files, update)
+}
 
 func (m *mockExt) runCommand(cmd string) error {
-	m.history = append(m.history, fmt.Sprintf(msgCmd, cmd))
+	m.appendHistory(fmt.Sprintf(msgCmd, cmd))
 
 	return m.cmdRet
 }
 
 func (m *mockExt) writeToFile(in string, outPath string) error {
-	files = append(files, fmt.Sprint(outPath, ":", in))
+	m.appendFiles(fmt.Sprint(outPath, ":", in))
 
 	return nil
 }
 
 func (m *mockExt) createEmpty(path string, size int64) error {
 	if !m.existsRet {
-		files = append(files, fmt.Sprint(path, ":empty size ", size))
+		m.appendFiles(fmt.Sprint(path, ":empty size ", size))
 	}
 	return nil
 }
@@ -82,25 +98,31 @@ func (m *mockExt) mount(
 
 	op := fmt.Sprintf(msgMount, dev, mount, typ, fmt.Sprint(flags), opts)
 
-	m.history = append(m.history, op)
+	m.appendHistory(op)
 
 	return m.mountRet
 }
 
+func (m *mockExt) isMountPoint(path string) (bool, error) {
+	m.appendHistory(fmt.Sprintf(msgIsMountPoint, path))
+
+	return m.isMountPointRet, nil
+}
+
 func (m *mockExt) unmount(path string) error {
-	m.history = append(m.history, fmt.Sprintf(msgUnmount, path))
+	m.appendHistory(fmt.Sprintf(msgUnmount, path))
 
 	return m.unmountRet
 }
 
 func (m *mockExt) mkdir(path string) error {
-	m.history = append(m.history, fmt.Sprintf(msgMkdir, path))
+	m.appendHistory(fmt.Sprintf(msgMkdir, path))
 
 	return m.mkdirRet
 }
 
 func (m *mockExt) remove(path string) error {
-	m.history = append(m.history, fmt.Sprintf(msgRemove, path))
+	m.appendHistory(fmt.Sprintf(msgRemove, path))
 
 	return m.removeRet
 }
@@ -125,38 +147,29 @@ func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
 	return m.listGrpsRet, m.listGrpsErr
 }
 
-func (m *mockExt) setUID(uid int64) error {
-	m.history = append(m.history, fmt.Sprintf(msgSetUID, uid))
-
-	return m.sUIDErr
+func (m *mockExt) checkSudo() (bool, string) {
+	return m.isRoot, ""
 }
 
-func (m *mockExt) setGID(gid int64) error {
-	m.history = append(m.history, fmt.Sprintf(msgSetGID, gid))
+func (m *mockExt) chownR(root string, uid int, gid int) error {
+	m.appendHistory(fmt.Sprintf(msgChownR, root, uid, gid))
 
-	return m.sGIDErr
-}
-
-func (m *mockExt) chown(path string, uid int, gid int) error {
-	m.history = append(m.history, fmt.Sprintf(msgChown, path, uid, gid))
-
-	return m.chownErr
+	return m.chownRErr
 }
 
 func newMockExt(
-	cmdRet error, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) External {
+	cmdRet error, existsRet bool, mountRet error, isMountPointRet bool,
+	unmountRet error, mkdirRet error, removeRet error, isRoot bool,
+) External {
 
 	return &mockExt{
-		cmdRet, existsRet, mountRet, unmountRet, mkdirRet, removeRet,
-		nil, nil, nil, nil, nil, []string{}, nil, nil, nil, []string{},
+		sync.RWMutex{},
+		cmdRet, existsRet, mountRet, isMountPointRet, unmountRet, mkdirRet,
+		removeRet, nil, nil, nil, nil, nil, []string{}, nil, isRoot,
+		[]string{}, []string{},
 	}
 }
 
 func defaultMockExt() External {
 	return &mockExt{}
-}
-
-func cmdFailMockExt() External {
-	return &mockExt{cmdRet: errors.New("exit status 1")}
 }

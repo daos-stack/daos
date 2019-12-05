@@ -3,11 +3,9 @@
 
 package drpc
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -39,7 +37,6 @@ var Status_name = map[int32]string{
 	3: "UNKNOWN_MODULE",
 	4: "UNKNOWN_METHOD",
 }
-
 var Status_value = map[string]int32{
 	"SUCCESS":        0,
 	"SUBMITTED":      1,
@@ -51,9 +48,8 @@ var Status_value = map[string]int32{
 func (x Status) String() string {
 	return proto.EnumName(Status_name, int32(x))
 }
-
 func (Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_e4c8b3f839895dc3, []int{0}
+	return fileDescriptor_drpc_db615eefc8eedc95, []int{0}
 }
 
 // *
@@ -78,17 +74,16 @@ func (m *Call) Reset()         { *m = Call{} }
 func (m *Call) String() string { return proto.CompactTextString(m) }
 func (*Call) ProtoMessage()    {}
 func (*Call) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e4c8b3f839895dc3, []int{0}
+	return fileDescriptor_drpc_db615eefc8eedc95, []int{0}
 }
-
 func (m *Call) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Call.Unmarshal(m, b)
 }
 func (m *Call) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Call.Marshal(b, m, deterministic)
 }
-func (m *Call) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Call.Merge(m, src)
+func (dst *Call) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Call.Merge(dst, src)
 }
 func (m *Call) XXX_Size() int {
 	return xxx_messageInfo_Call.Size(m)
@@ -146,17 +141,16 @@ func (m *Response) Reset()         { *m = Response{} }
 func (m *Response) String() string { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()    {}
 func (*Response) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e4c8b3f839895dc3, []int{1}
+	return fileDescriptor_drpc_db615eefc8eedc95, []int{1}
 }
-
 func (m *Response) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Response.Unmarshal(m, b)
 }
 func (m *Response) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Response.Marshal(b, m, deterministic)
 }
-func (m *Response) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Response.Merge(m, src)
+func (dst *Response) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Response.Merge(dst, src)
 }
 func (m *Response) XXX_Size() int {
 	return xxx_messageInfo_Response.Size(m)
@@ -189,14 +183,14 @@ func (m *Response) GetBody() []byte {
 }
 
 func init() {
-	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 	proto.RegisterType((*Call)(nil), "drpc.Call")
 	proto.RegisterType((*Response)(nil), "drpc.Response")
+	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 }
 
-func init() { proto.RegisterFile("drpc.proto", fileDescriptor_e4c8b3f839895dc3) }
+func init() { proto.RegisterFile("drpc.proto", fileDescriptor_drpc_db615eefc8eedc95) }
 
-var fileDescriptor_e4c8b3f839895dc3 = []byte{
+var fileDescriptor_drpc_db615eefc8eedc95 = []byte{
 	// 241 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0x29, 0x2a, 0x48,
 	0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0x95, 0xd2, 0xb8, 0x58, 0x9c, 0x13,

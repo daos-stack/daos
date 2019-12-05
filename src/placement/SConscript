@@ -3,18 +3,24 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    prereqs.require(env, 'isal')
+
     denv = env.Clone()
 
+    denv.AppendUnique(LIBS=['isal'])
+
     # Common placement code
-    common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c'])
+    common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
+                                     'jump_map.c', 'pl_map_common.c',
+				     'tests/place_obj_common.c'])
 
     # generate server module
     srv = daos_build.library(denv, 'placement', common_tgts)
-    denv.Install('$PREFIX/lib/daos_srv', srv)
+    denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # placement client library
     dc_placement_tgts = common_tgts

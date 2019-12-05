@@ -137,9 +137,12 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 		    rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "%s iterator does not exist\n",
 				dict->id_name);
+		else if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch nested tree from "
+				"because of conflict modification: %d\n", rc);
 		else
 			D_ERROR("Problem fetching nested tree from iterator:"
-				" %d", rc);
+				" %d\n", rc);
 		return rc;
 	}
 
@@ -216,7 +219,8 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		return rc;
 	}
 
-	iter->it_type		= type;
+	D_ASSERT(iter->it_type == type);
+
 	iter->it_ops		= dict->id_ops;
 	iter->it_state		= VOS_ITS_NONE;
 	iter->it_ref_cnt	= 1;
@@ -271,6 +275,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
 
+	D_DEBUG(DB_IO, "probing iterator\n");
 	D_ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_probe(iter, anchor);
 	if (rc == 0)
@@ -279,6 +284,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 		iter->it_state = VOS_ITS_END;
 	else
 		iter->it_state = VOS_ITS_NONE;
+	D_DEBUG(DB_IO, "done probing iterator rc = %d\n", rc);
 
 	return rc;
 }
@@ -336,7 +342,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 int
 vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int rc;
@@ -446,10 +452,11 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 
 static inline void
 set_reprobe(vos_iter_type_t type, unsigned int acts,
-	    struct vos_iter_anchors *anchors, bool unsorted)
+	    struct vos_iter_anchors *anchors, uint32_t flags)
 {
 	bool yield = (acts & VOS_ITER_CB_YIELD);
 	bool delete = (acts & VOS_ITER_CB_DELETE);
+	bool sorted;
 
 	switch (type) {
 	case VOS_ITER_SINGLE:
@@ -457,8 +464,9 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
+		sorted = flags & (VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED);
 		/* evtree only need reprobe on yield for unsorted iteration */
-		if (unsorted && yield && (type == VOS_ITER_RECX))
+		if (!sorted && yield && (type == VOS_ITER_RECX))
 			anchors->ia_reprobe_ev = 1;
 		/* fallthrough */
 	case VOS_ITER_AKEY:
@@ -555,8 +563,13 @@ probe:
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to probe iterator (type=%d anchor=%p): "
-				"%d\n", type, probe_anchor, rc);
+			if (rc == -DER_INPROGRESS)
+				D_DEBUG(DB_TRACE, "Cannot probe because of "
+					"some conflict modification: %d\n", rc);
+			else
+				D_ERROR("failed to probe iterator (type=%d "
+					"anchor=%p): %d\n",
+					type, probe_anchor, rc);
 		}
 		D_GOTO(out, rc);
 	}
@@ -564,8 +577,13 @@ probe:
 	while (1) {
 		rc = vos_iter_fetch(ih, &iter_ent, anchor);
 		if (rc != 0) {
-			D_ERROR("failed to fetch iterator (type=%d): %d\n",
-				type, rc);
+			if (rc == -DER_INPROGRESS)
+				D_DEBUG(DB_TRACE, "Cannot fetch iterator "
+					"(type=%d) because of conflict "
+					"modification: %d\n", type, rc);
+			else
+				D_ERROR("failed to fetch iterator (type=%d): "
+					"%d\n", type, rc);
 			break;
 		}
 
@@ -573,8 +591,7 @@ probe:
 		if (rc != 0)
 			break;
 
-		set_reprobe(type, acts, anchors,
-			    param->ip_flags == VOS_IT_RECX_ALL);
+		set_reprobe(type, acts, anchors, param->ip_flags);
 		skipped = (acts & VOS_ITER_CB_SKIP);
 		acts = 0;
 
@@ -584,7 +601,8 @@ probe:
 			goto probe;
 		}
 
-		if (recursive && !is_last_level(type) && !skipped) {
+		if (recursive && !is_last_level(type) && !skipped &&
+		    iter_ent.ie_child_type != VOS_ITER_NONE) {
 			vos_iter_param_t	child_param = *param;
 
 			child_param.ip_ih = ih;

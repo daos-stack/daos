@@ -26,46 +26,22 @@ from __future__ import print_function
 import os
 import traceback
 
-from avocado.utils import process
 from apricot import TestWithServers
 
-import agent_utils
-import server_utils
-import write_host_file
-from daos_api import DaosPool, DaosServer, DaosApiError
+from pydaos.raw import DaosPool, DaosServer, DaosApiError
+
 
 class PoolSvc(TestWithServers):
     """
     Tests svc argument while pool create.
     :avocado: recursive
     """
-    def setUp(self):
-        super(PoolSvc, self).setUp()
-        self.pool = None
-
-        self.hostfile_servers = None
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/*')
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-        print("Host file is: {}".format(self.hostfile_servers))
-
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath)
-
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            super(PoolSvc, self).tearDown()
 
     def test_poolsvc(self):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=pool,svc
+        :avocado: tags=all,pool,pr,medium,svc
         """
 
         # parameters used in pool create
@@ -94,25 +70,30 @@ class PoolSvc(TestWithServers):
                     int(self.pool.svc.rl_ranks[iterator]) != 999999
             ):
                 iterator += 1
-                if iterator != createsvc[0]:
-                    self.fail("Length of Returned Rank list is not equal to "
-                              "the number of Pool Service members.\n")
+            if iterator != createsvc[0]:
+                self.fail("Length of Returned Rank list is not equal to "
+                          "the number of Pool Service members.\n")
             rank_list = []
             for iterator in range(createsvc[0]):
                 rank_list.append(int(self.pool.svc.rl_ranks[iterator]))
                 if len(rank_list) != len(set(rank_list)):
                     self.fail("Duplicate values in returned rank list")
 
+            self.pool.pool_query()
+            leader = self.pool.pool_info.pi_leader
             if createsvc[0] == 3:
+                # kill pool leader and exclude it
+                self.pool.pool_svc_stop()
+                self.pool.exclude([leader])
+                # perform pool disconnect, try connect again and disconnect
                 self.pool.disconnect()
-                cmd = ('{0} kill-leader  --uuid={1}'
-                       .format(self.daosctl, self.pool.get_uuid_str()))
-                process.system(cmd)
                 self.pool.connect(1 << 1)
                 self.pool.disconnect()
-                server = DaosServer(self.context, self.server_group, 2)
+                # kill another server which is not a leader and exclude it
+                server = DaosServer(self.context, self.server_group, 3)
                 server.kill(1)
-                self.pool.exclude([2])
+                self.pool.exclude([3])
+                # perform pool connect
                 self.pool.connect(1 << 1)
 
             if expected_result in ['FAIL']:

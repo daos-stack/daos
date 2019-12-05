@@ -46,12 +46,6 @@ extern "C" {
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15
 
-/** Scatter/gather list for memory buffers */
-#define daos_sg_list_t d_sg_list_t
-
-/** free function for d_rank_list_t */
-#define daos_rank_list_free d_rank_list_free
-
 /**
  * Generic data type definition
  */
@@ -59,17 +53,9 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-#define daos_iov_t		d_iov_t
 #define crt_proc_daos_key_t	crt_proc_d_iov_t
 #define crt_proc_daos_size_t	crt_proc_uint64_t
 #define crt_proc_daos_epoch_t	crt_proc_uint64_t
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -92,60 +78,6 @@ typedef struct {
 	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
 
-static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
-					  uint32_t csum_buf_size,
-					  uint16_t csum_size,
-					  uint32_t csum_count,
-					  uint32_t chunksize)
-{
-	csum_buf->cs_csum = buf;
-	csum_buf->cs_len = csum_size;
-	csum_buf->cs_buf_len = csum_buf_size;
-	csum_buf->cs_nr = csum_count;
-	csum_buf->cs_chunksize = chunksize;
-}
-
-static inline bool
-daos_csum_isvalid(const daos_csum_buf_t *csum)
-{
-	return csum != NULL &&
-	       csum->cs_len > 0 &&
-	       csum->cs_buf_len > 0 &&
-	       csum->cs_csum != NULL &&
-	       csum->cs_chunksize > 0 &&
-	       csum->cs_nr > 0;
-}
-
-static inline void
-daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
-{
-	daos_csum_set_multiple(csum, buf, size, size, 1, 0);
-}
-
-static inline uint32_t
-daos_csum_idx_from_off(daos_csum_buf_t *csum, uint32_t offset_bytes)
-{
-	return offset_bytes / csum->cs_chunksize;
-}
-
-static inline uint8_t *
-daos_csum_from_idx(daos_csum_buf_t *csum, uint32_t idx)
-{
-	return csum->cs_csum + csum->cs_len * idx;
-}
-
-static inline uint8_t *
-daos_csum_from_offset(daos_csum_buf_t *csum, uint32_t offset_bytes)
-{
-	return daos_csum_from_idx(csum,
-				  daos_csum_idx_from_off(csum, offset_bytes));
-}
-
-enum daos_anchor_flags {
-	/* The RPC will be sent to leader replica. */
-	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
-};
-
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
 	DAOS_ANCHOR_TYPE_HKEY	= 1,
@@ -165,7 +97,7 @@ typedef struct {
 static inline void
 daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
 {
-	anchor->da_flags |= flags;
+	anchor->da_flags = flags;
 }
 
 static inline uint32_t
@@ -288,14 +220,20 @@ struct daos_pool_space {
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
-	/** padding bytes */
-	uint32_t		rs_pad_32;
+	/** Time (Seconds) for the rebuild */
+	uint32_t		rs_seconds;
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
 	 * rebuild is done or not, it is valid only if @rs_version is non-zero
 	 */
 	int32_t			rs_done;
+
+	/* padding of rebuild status */
+	int32_t			rs_padding32;
+
+	/* Failure on which rank */
+	int32_t			rs_fail_rank;
 	/** # total to-be-rebuilt objects, it's non-zero and increase when
 	 * rebuilding in progress, when rs_done is 1 it will not change anymore
 	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
@@ -306,6 +244,9 @@ struct daos_rebuild_status {
 	uint64_t		rs_obj_nr;
 	/** # rebuilt records, it's non-zero only if rs_done is 1 */
 	uint64_t		rs_rec_nr;
+
+	/** rebuild space cost */
+	uint64_t		rs_size;
 };
 
 /**
@@ -337,12 +278,6 @@ typedef struct {
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
 	uint32_t			pi_map_ver;
-	/** pool UID */
-	uid_t				pi_uid;
-	/** pool GID */
-	gid_t				pi_gid;
-	/** Mode */
-	uint32_t			pi_mode;
 	/** current raft leader */
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */
@@ -352,6 +287,26 @@ typedef struct {
 	/** rebuild status */
 	struct daos_rebuild_status	pi_rebuild_st;
 } daos_pool_info_t;
+
+/*
+ * DAOS management pool information
+ */
+typedef struct {
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
+	uuid_t				 mgpi_uuid;
+	/** List of current pool service replica ranks */
+	d_rank_list_t			*mgpi_svc;
+} daos_mgmt_pool_info_t;
+
+/* DAOS pool container information
+ *
+ */
+struct daos_pool_cont_info {
+	uuid_t		pci_uuid;
+};
 
 /**
  * DAOS_PC_RO connects to the pool for reading only.
@@ -376,15 +331,6 @@ typedef struct {
  */
 
 typedef uint64_t	daos_epoch_t;
-
-static inline daos_epoch_t
-daos_ts2epoch(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_REALTIME, &ts);
-	return ts.tv_sec * 1e9 + ts.tv_nsec;
-}
 
 typedef struct {
 	/** Low bound of the epoch range */
@@ -424,417 +370,12 @@ typedef struct {
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
+	/** The minimal "Highest aggregated epoch" among all targets */
+	daos_epoch_t		ci_hae;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
-/**
- * Object
- */
-
-/**
- * ID of an object, 128 bits
- * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
- * provided by the user and assumed to be unique inside a container.
- */
-typedef struct {
-	uint64_t	lo;
-	uint64_t	hi;
-} daos_obj_id_t;
-
-enum {
-	/** Shared read */
-	DAOS_OO_RO             = (1 << 1),
-	/** Shared read & write, no cache for write */
-	DAOS_OO_RW             = (1 << 2),
-	/** Exclusive write, data can be cached */
-	DAOS_OO_EXCL           = (1 << 3),
-	/** Random I/O */
-	DAOS_OO_IO_RAND        = (1 << 4),
-	/** Sequential I/O */
-	DAOS_OO_IO_SEQ         = (1 << 5),
-};
-
-typedef struct {
-	/** Input/output number of oids */
-	uint32_t	ol_nr;
-	uint32_t	ol_nr_out;
-	/** OID buffer */
-	daos_obj_id_t	*ol_oids;
-} daos_oid_list_t;
-
-enum {
-	/** DKEY's are hashed and sorted in hashed order */
-	DAOS_OF_DKEY_HASHED	= 0,
-	/** AKEY's are hashed and sorted in hashed order */
-	DAOS_OF_AKEY_HASHED	= 0,
-	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
-	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
-	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
-	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
-	/** Mask for convenience */
-	DAOS_OF_MASK		= ((1 << 4) - 1),
-};
-
-/** Mask for daos_obj_key_query() flags to indicate what is being queried */
-enum {
-	/** retrieve the max of dkey, akey, and/or idx of array value */
-	DAOS_GET_MAX	= (1 << 0),
-	/** retrieve the min of dkey, akey, and/or idx of array value */
-	DAOS_GET_MIN	= (1 << 1),
-	/** retrieve the dkey */
-	DAOS_GET_DKEY	= (1 << 2),
-	/** retrieve the akey */
-	DAOS_GET_AKEY	= (1 << 3),
-	/** retrieve the idx of array value */
-	DAOS_GET_RECX	= (1 << 4),
-};
-
-/** Number of reserved by daos in object id for version */
-#define DAOS_OVERSION_BITS	8
-/** Number of reserved by daos in object id for features */
-#define DAOS_OFEAT_BITS		8
-/** Number of reserved by daos in object id for class id */
-#define DAOS_OCLASS_BITS	(32 - DAOS_OVERSION_BITS - DAOS_OFEAT_BITS)
-/** Bit shift for object version in object id */
-#define DAOS_OVERSION_SHIFT	(64 - DAOS_OVERSION_BITS)
-/** Bit shift for object features in object id */
-#define DAOS_OFEAT_SHIFT	(DAOS_OVERSION_SHIFT - DAOS_OFEAT_BITS)
-/** Bit shift for object class id in object id */
-#define DAOS_OCLASS_SHIFT	(DAOS_OFEAT_SHIFT - DAOS_OCLASS_BITS)
-/** Maximum valid object version setting */
-#define DAOS_OVERSION_MAX	((1ULL << DAOS_OVERSION_BITS) - 1)
-/** Maximum valid object feature setting */
-#define DAOS_OFEAT_MAX		((1ULL << DAOS_OFEAT_BITS) - 1)
-/** Maximum valid object class setting */
-#define DAOS_OCLASS_MAX		((1ULL << DAOS_OCLASS_BITS) - 1)
-/** Mask for object version */
-#define DAOS_OVERSION_MASK	(DAOS_OVERSION_MAX << DAOS_OVERSION_SHIFT)
-/** Mask for object features */
-#define DAOS_OFEAT_MASK		(DAOS_OFEAT_MAX << DAOS_OFEAT_SHIFT)
-/** Mask for object class id */
-#define DAOS_OCLASS_MASK	(DAOS_OCLASS_MAX << DAOS_OCLASS_SHIFT)
-
-typedef uint16_t daos_oclass_id_t;
-typedef uint8_t daos_ofeat_t;
-
-enum {
-	/** Use private class for the object */
-	DAOS_OCLASS_NONE		= 0,
-};
-
-typedef enum {
-	DAOS_OS_SINGLE,		/**< Single stripe object */
-	DAOS_OS_STRIPED,	/**< Fix striped object */
-	DAOS_OS_DYN_STRIPED,	/**< Dynamically striped object */
-	DAOS_OS_DYN_CHUNKED,	/**< Dynamically chunked object */
-} daos_obj_schema_t;
-
-typedef enum {
-	DAOS_RES_EC,		/**< Erasure code */
-	DAOS_RES_REPL,		/**< Replication */
-} daos_obj_resil_t;
-
-#define DAOS_OBJ_GRP_MAX	(~0)
-#define DAOS_OBJ_REPL_MAX	(~0)
-
-/**
- * List of default object class
- * R = replicated (number after R is number of replicas
- * S = small (1 stripe)
- */
-enum {
-	DAOS_OC_UNKNOWN,
-	DAOS_OC_TINY_RW,
-	DAOS_OC_SMALL_RW,
-	DAOS_OC_LARGE_RW,
-	DAOS_OC_R2S_RW,
-	DAOS_OC_R2_RW,
-	DAOS_OC_R3S_RW,		/* temporary class for testing */
-	DAOS_OC_R3_RW,		/* temporary class for testing */
-	DAOS_OC_R4S_RW,		/* temporary class for testing */
-	DAOS_OC_R4_RW,		/* temporary class for testing */
-	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
-	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
-	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
-	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
-	DAOS_OC_R1S_SPEC_RANK,	/* 1 replica with specified rank */
-	DAOS_OC_R2S_SPEC_RANK,	/* 2 replica start with specified rank */
-	DAOS_OC_R3S_SPEC_RANK,	/* 3 replica start with specified rank.
-				 * These 3 XX_SPEC are mostly for testing
-				 * purpose.
-				 */
-	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
-				 * cell size 32KB.
-				 */
-	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
-				 * cell size 32KB.
-				 */
-	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
-				 * cell size 1MB.
-				 */
-};
-
-/** Object class attributes */
-typedef struct daos_oclass_attr {
-	/** Object placement schema */
-	daos_obj_schema_t		 ca_schema;
-	/**
-	 * TODO: define HA degrees for object placement
-	 * - performance oriented
-	 * - high availability oriented
-	 * ......
-	 */
-	unsigned int			 ca_resil_degree;
-	/** Resilience method, replication or erasure code */
-	daos_obj_resil_t		 ca_resil;
-	/** Initial # redundancy group, unnecessary for some schemas */
-	unsigned int			 ca_grp_nr;
-	union {
-		/** Replication attributes */
-		struct daos_repl_attr {
-			/** Method of replicating */
-			unsigned int	 r_method;
-			/** Number of replicas */
-			unsigned int	 r_num;
-			/** TODO: add members to describe */
-		} repl;
-
-		/** Erasure coding attributes */
-		struct daos_ec_attr {
-			/** number of data cells (k) */
-			unsigned short	 e_k;
-			/** number of parity cells (p) */
-			unsigned short	 e_p;
-			/** length of each block of data (cell) */
-			unsigned int	 e_len;
-		} ec;
-	} u;
-	/** TODO: add more attributes */
-} daos_oclass_attr_t;
-
-/** List of object classes, used for class enumeration */
-typedef struct {
-	/** List length, actual buffer size */
-	uint32_t		 cl_llen;
-	/** Number of object classes in the list */
-	uint32_t		 cl_cn;
-	/** Actual list of class IDs */
-	daos_oclass_id_t	*cl_cids;
-	/** Attributes of each listed class, optional */
-	daos_oclass_attr_t	*cl_cattrs;
-} daos_oclass_list_t;
-
-/**
- * Object attributes (metadata).
- * \a oa_class and \a oa_oa are mutually exclusive.
- */
-typedef struct {
-	/** Optional, affinity target for the object */
-	d_rank_t		 oa_rank;
-	/** Optional, class attributes of object with private class */
-	daos_oclass_attr_t	*oa_oa;
-} daos_obj_attr_t;
-
-/** key type */
-typedef daos_iov_t daos_key_t;
-
-/**
- * Record
- *
- * A record is an atomic blob of arbitrary length which is always
- * fetched/updated as a whole. The size of a record can change over time.
- * A record is uniquely identified by the following composite key:
- * - the distribution key (aka dkey) denotes a set of arrays co-located on the
- *   same storage targets. The dkey has an arbitrary size.
- * - the attribute key (aka akey) distinguishes individual arrays. Likewise, the
- *   akey has a arbitrary size.
- * - the index within an array discriminates individual records. The index
- *   is an integer that ranges from zero to infinity. A range of indices
- *   identifies a contiguous set of records called extent. All records inside an
- *   extent must have the same size.
- */
-
-/**
- * A record extent is a range of contiguous records of the same size inside an
- * array. \a rx_idx is the first array index of the extent and \a rx_nr is the
- * number of records covered by the extent.
- */
-typedef struct {
-	/** Indice of the first record in the extent */
-	uint64_t	rx_idx;
-	/**
-	 * Number of contiguous records in the extent
-	 * If \a rx_nr is equal to 1, the extent is composed of a single record
-	 * at indice \a rx_idx
-	 */
-	uint64_t	rx_nr;
-} daos_recx_t;
-
-/** Type of the value accessed in an IOD */
-typedef enum {
-	/** is a dkey */
-	DAOS_IOD_NONE		= 0,
-	/** one indivisble value udpate atomically */
-	DAOS_IOD_SINGLE		= (1 << 0),
-	/** an array of records where each record is update atomically */
-	DAOS_IOD_ARRAY		= (1 << 1),
-} daos_iod_type_t;
-
-/**
- * An I/O descriptor is a list of extents (effectively records associated with
- * contiguous array indices) to update/fetch in a particular array identified by
- * its akey.
- */
-typedef struct {
-	/** akey for this iod */
-	daos_key_t		iod_name;
-	/** akey checksum */
-	daos_csum_buf_t		iod_kcsum;
-	/*
-	 * Type of the value in an iod can be either a single type that is
-	 * always overwritten when updated, or it can be an array of EQUAL sized
-	 * records where the record is updated atomically. Note that an akey can
-	 * only support one type of value which is set on the first update. If
-	 * user attempts to mix types in the same akey, the behavior is
-	 * undefined, even after the object, key, or value is punched. If
-	 * \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to be 1, and
-	 * \a iod_size would be the size of the single atomic value. The idx is
-	 * ignored and the rx_nr is also required to be 1.
-	 */
-	daos_iod_type_t		iod_type;
-	/** Size of the single value or the record size of the array */
-	daos_size_t		iod_size;
-	/*
-	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value.
-	 */
-	unsigned int		iod_nr;
-	/*
-	 * Array of extents, where each extent defines the index of the first
-	 * record in the extent and the number of records to access. If the
-	 * type of the iod is single, this is ignored.
-	 */
-	daos_recx_t		*iod_recxs;
-	/*
-	 * Checksum associated with each extent. If the type of the iod is
-	 * single, will only have a single checksum.
-	 */
-	daos_csum_buf_t		*iod_csums;
-	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*iod_eprs;
-} daos_iod_t;
-
-/** Get a specific checksum given an index */
-static inline daos_csum_buf_t *
-daos_iod_csum(daos_iod_t *iod, int csum_index)
-{
-	return iod->iod_csums ? &iod->iod_csums[csum_index] : NULL;
-}
-
-/**
- * A I/O map represents the physical extent mapping inside an array for a
- * given range of indices.
- */
-typedef struct {
-	/** akey associated with the array */
-	daos_key_t		 iom_name;
-	/** akey checksum */
-	daos_csum_buf_t		 iom_kcsum;
-	/** type of akey value (SV or AR)*/
-	daos_iod_type_t		 iom_type;
-	/** First index of this mapping (0 for SV) */
-	uint64_t		 iom_start;
-	/** Logical number of indices covered by this mapping (1 for SV) */
-	uint64_t                 iom_len;
-	/** Size of the single value or the record size */
-	daos_size_t		 iom_size;
-	/**
-	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below. 1 for SV.
-	 */
-	unsigned int		 iom_nr;
-	/** External array of extents - NULL for SV */
-	daos_recx_t		*iom_recxs;
-	/** Checksum associated with each extent */
-	daos_csum_buf_t		*iom_xcsums;
-	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*iom_eprs;
-} daos_iom_t;
-
-/** record status */
-enum {
-	/** Reserved for cache miss */
-	DAOS_REC_MISSING	= -1,
-	/** Any record size, it is used by fetch */
-	DAOS_REC_ANY		= 0,
-};
-
-typedef enum {
-	/* Hole extent */
-	VOS_EXT_HOLE	= (1 << 0),
-} vos_ext_flag_t;
-
-/**
- * Key descriptor used for key enumeration. The actual key and checksum are
- * stored in a separate buffer (i.e. sgl)
- */
-typedef struct {
-	/** Key length */
-	daos_size_t	kd_key_len;
-	/**
-	 * flag for akey value types: DAOS_IOD_SINGLE, DAOS_IOD_ARRAY, or
-	 * both. Ignored for dkey enumeration.
-	 */
-	uint32_t	kd_val_types;
-	/** Checksum type */
-	unsigned int	kd_csum_type;
-	/** Checksum length */
-	unsigned short	kd_csum_len;
-} daos_key_desc_t;
-
-/**
- * 256-bit object ID, it can identify a unique bottom level object.
- * (a shard of upper level object).
- */
-typedef struct {
-	/** Public section, high level object ID */
-	daos_obj_id_t		id_pub;
-	/** Private section, object shard index */
-	uint32_t		id_shard;
-	/** Padding */
-	uint32_t		id_pad_32;
-} daos_unit_oid_t;
-
-static inline bool
-daos_obj_is_null_id(daos_obj_id_t oid)
-{
-	return oid.lo == 0 && oid.hi == 0;
-}
-
-static inline int
-daos_obj_compare_id(daos_obj_id_t a, daos_obj_id_t b)
-{
-	if (a.hi < b.hi)
-		return -1;
-	else if (a.hi > b.hi)
-		return 1;
-
-	if (a.lo < b.lo)
-		return -1;
-	else if (a.lo > b.lo)
-		return 1;
-
-	return 0;
-}
+typedef d_iov_t daos_key_t;
 
 /**
  * Event and event queue
@@ -871,7 +412,10 @@ typedef enum {
 	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
 
-/* rank/target list for target */
+/**
+ * Pool target list, each target is identified by rank & target
+ * index within the rank
+ */
 struct d_tgt_list {
 	d_rank_t	*tl_ranks;
 	int32_t		*tl_tgts;
@@ -880,191 +424,6 @@ struct d_tgt_list {
 };
 
 struct daos_eq;
-/**
- * DAOS pool property types
- * valid in range (DAOS_PROP_PO_MIN, DAOS_PROP_PO_MAX)
- */
-enum daos_pool_prop_type {
-	DAOS_PROP_PO_MIN = 0,
-	/**
-	 * Label - a string that a user can associated with a pool.
-	 * default = ""
-	 */
-	DAOS_PROP_PO_LABEL,
-	/**
-	 * ACL: access control list for pool
-	 * An ordered list of access control entries detailing user and group
-	 * access privileges.
-	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
-	 */
-	DAOS_PROP_PO_ACL,
-	/**
-	 * Reserve space ratio: amount of space to be reserved on each target
-	 * for rebuild purpose. default = 0%.
-	 */
-	DAOS_PROP_PO_SPACE_RB,
-	/**
-	 * Automatic/manual self-healing. default = auto
-	 * auto/manual exclusion
-	 * auto/manual rebuild
-	 */
-	DAOS_PROP_PO_SELF_HEAL,
-	/**
-	 * Space reclaim strategy = time|batched|snapshot. default = snapshot
-	 * time interval
-	 * batched commits
-	 * snapshot creation
-	 */
-	DAOS_PROP_PO_RECLAIM,
-	/**
-	 * The user who acts as the owner of the pool.
-	 * Format: user@[domain]
-	 */
-	DAOS_PROP_PO_OWNER,
-	/**
-	 * The group that acts as the owner of the pool.
-	 * Format: group@[domain]
-	 */
-	DAOS_PROP_PO_OWNER_GROUP,
-	DAOS_PROP_PO_MAX,
-};
-
-/**
- * Number of pool property types
- */
-#define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
-
-/** DAOS space reclaim strategy */
-enum {
-	DAOS_RECLAIM_SNAPSHOT,
-	DAOS_RECLAIM_BATCH,
-	DAOS_RECLAIM_TIME,
-};
-
-/** self headling strategy bits */
-#define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
-#define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
-
-/**
- * DAOS container property types
- * valid in rage (DAOS_PROP_CO_MIN, DAOS_PROP_CO_MAX).
- */
-enum daos_cont_prop_type {
-	DAOS_PROP_CO_MIN = 0x1000,
-	/**
-	 * Label - a string that a user can associated with a container.
-	 * default = ""
-	 */
-	DAOS_PROP_CO_LABEL,
-	/**
-	 * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-	 * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
-	 */
-	DAOS_PROP_CO_LAYOUT_TYPE,
-	/**
-	 * Layout version: specific to middleware for interop.
-	 * default = 1
-	 */
-	DAOS_PROP_CO_LAYOUT_VER,
-	/**
-	 * Checksum on/off + checksum type (CRC16, CRC32, SHA-1 & SHA-2).
-	 * default = DAOS_PROP_CO_CSUM_OFF
-	 */
-	DAOS_PROP_CO_CSUM,
-	/**
-	 * Redundancy factor:
-	 * RF1: no data protection. scratched data.
-	 * RF3: 3-way replication, EC 4+2, 8+2, 16+2
-	 * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
-	 */
-	DAOS_PROP_CO_REDUN_FAC,
-	/**
-	 * Redundancy level: default fault domain level for placement.
-	 * default = rack (DAOS_PROP_CO_REDUN_RACK)
-	 */
-	DAOS_PROP_CO_REDUN_LVL,
-	/**
-	 * Maximum number of snapshots to retain.
-	 */
-	DAOS_PROP_CO_SNAPSHOT_MAX,
-	/** ACL: access control list for container */
-	DAOS_PROP_CO_ACL,
-	/** Compression on/off + compression type */
-	DAOS_PROP_CO_COMPRESS,
-	/** Encryption on/off + encryption type */
-	DAOS_PROP_CO_ENCRYPT,
-	DAOS_PROP_CO_MAX,
-};
-
-typedef uint16_t daos_cont_layout_t;
-
-/** container layout type */
-enum {
-	DAOS_PROP_CO_LAYOUT_UNKOWN,
-	DAOS_PROP_CO_LAYOUT_POSIX,
-	DAOS_PROP_CO_LAYOUT_HDF5,
-};
-
-/** container checksum type */
-enum {
-	DAOS_PROP_CO_CSUM_OFF,
-	DAOS_PROP_CO_CSUM_CRC16,
-	DAOS_PROP_CO_CSUM_CRC32,
-	DAOS_PROP_CO_CSUM_SHA1,
-	DAOS_PROP_CO_CSUM_SHA2,
-};
-
-/** container compress type */
-enum {
-	DAOS_PROP_CO_COMPRESS_OFF,
-};
-
-/** container encryption type */
-enum {
-	DAOS_PROP_CO_ENCRYPT_OFF,
-};
-
-/** container redundancy factor */
-enum {
-	DAOS_PROP_CO_REDUN_RF1,
-	DAOS_PROP_CO_REDUN_RF3,
-};
-
-enum {
-	DAOS_PROP_CO_REDUN_RACK,
-	DAOS_PROP_CO_REDUN_NODE,
-};
-
-struct daos_prop_entry {
-	/** property type, see enum daos_pool_prop_type/daos_cont_prop_type */
-	uint32_t		 dpe_type;
-	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpe_reserv;
-	/**
-	 * value can be either a uint64_t, or a string, or any other type
-	 * data such as the struct daos_acl pointer.
-	 */
-	union {
-		uint64_t	 dpe_val;
-		d_string_t	 dpe_str;
-		void		*dpe_val_ptr;
-	};
-};
-
-/** Allowed max number of property entries in daos_prop_t */
-#define DAOS_PROP_ENTRIES_MAX_NR	(128)
-/** max length for pool/container label */
-#define DAOS_PROP_LABEL_MAX_LEN		(256)
-
-/** daos properties, for pool or container */
-typedef struct {
-	/** number of entries */
-	uint32_t		 dpp_nr;
-	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpp_reserv;
-	/** property entries array */
-	struct daos_prop_entry	*dpp_entries;
-} daos_prop_t;
 
 /**
  * DAOS Hash Table Handle Types

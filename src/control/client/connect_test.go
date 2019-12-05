@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,94 +25,68 @@ package client
 
 import (
 	"fmt"
-	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
+	"github.com/google/go-cmp/cmp"
 	. "google.golang.org/grpc/connectivity"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var (
-	addresses    = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
-	features     = []*pb.Feature{MockFeaturePB()}
-	ctrlrs       = NvmeControllers{MockControllerPB("")}
-	ctrlrResults = NvmeControllerResults{
-		&pb.NvmeControllerResult{
-			Pciaddr: "0000:81:00.s",
-			State: &pb.ResponseState{
-				Status: pb.ResponseStatus_CTRL_ERR_APP,
-				Error:  "example application error",
-			},
-		},
-	}
-	modules      = ScmModules{MockModulePB()}
-	mountResults = ScmMountResults{
-		&pb.ScmMountResult{
-			Mntpoint: "/mnt/daos",
-			State: &pb.ResponseState{
-				Status: pb.ResponseStatus_CTRL_ERR_APP,
-				Error:  "example application error",
-			},
-		},
-	}
-	errExample = errors.New("unknown failure")
-)
-
-func init() {
-	log.NewDefaultLogger(log.Error, "connect_test: ", os.Stderr)
-}
-
-type mockControllerFactory struct {
-	state        State
-	features     []*pb.Feature
-	ctrlrs       NvmeControllers
-	ctrlrResults NvmeControllerResults
-	modules      ScmModules
-	mountResults ScmMountResults
-	// to provide error injection into Control objects
-	scanRet    error
-	formatRet  error
-	killRet    error
-	connectRet error
-}
-
-func (m *mockControllerFactory) create(address string) (Control, error) {
-	// returns controller with mock properties specified in constructor
-	controller := newMockControl(
-		address, m.state, m.features, m.ctrlrs, m.ctrlrResults,
-		m.modules, m.mountResults,
-		m.scanRet, m.formatRet, m.killRet, m.connectRet)
-
-	err := controller.connect(address)
-
-	return controller, err
-}
-
-func newMockConnect(
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
+func connectSetupServers(
+	servers Addresses, log logging.Logger, state State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
-	mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error,
-	connectRet error) Connect {
+	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
+	scanRet error, formatRet error, killRet error, connectRet error,
+	ACLRet *mockACLResult) Connect {
 
-	return &connList{
-		factory: &mockControllerFactory{
-			state, features, ctrlrs, ctrlrResults, modules,
-			mountResults, scanRet, formatRet, killRet, connectRet,
-		},
-	}
+	connect := newMockConnect(
+		log, state, ctrlrs, ctrlrResults, modules,
+		moduleResults, pmems, mountResults, scanRet, formatRet,
+		killRet, connectRet, ACLRet)
+
+	_ = connect.ConnectClients(servers)
+
+	return connect
 }
 
-func defaultMockConnect() Connect {
-	return newMockConnect(
-		Ready, features, ctrlrs, ctrlrResults, modules, mountResults,
-		nil, nil, nil, nil)
+func connectSetup(
+	log logging.Logger,
+	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
+	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
+	mountResults ScmMountResults, scanRet error, formatRet error,
+	killRet error, connectRet error, ACLRet *mockACLResult) Connect {
+
+	return connectSetupServers(MockServers, log, state, ctrlrs,
+		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
+		formatRet, killRet, connectRet, ACLRet)
+}
+
+func defaultClientSetup(log logging.Logger) Connect {
+	cc := defaultMockConnect(log)
+
+	_ = cc.ConnectClients(MockServers)
+
+	return cc
+}
+
+func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
+	t.Helper()
+
+	// duplicates ignored
+	AssertEqual(t, len(results), len(addrs), "unexpected number of results")
+
+	for _, res := range results {
+		AssertEqual(t, res.Err, e, "unexpected error value in results")
+	}
 }
 
 func TestConnectClients(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
 	eMsg := "socket connection is not active (%s)"
 
 	var conntests = []struct {
@@ -121,19 +95,20 @@ func TestConnectClients(t *testing.T) {
 		connRet error
 		errMsg  string
 	}{
-		{addresses, Idle, nil, ""},
-		{addresses, Connecting, nil, fmt.Sprintf(eMsg, Connecting)},
-		{addresses, Ready, nil, ""},
-		{addresses, TransientFailure, nil, fmt.Sprintf(eMsg, TransientFailure)},
-		{addresses, Shutdown, nil, fmt.Sprintf(eMsg, Shutdown)},
-		{addresses, Idle, errExample, "unknown failure"},
-		{addresses, Connecting, errExample, "unknown failure"},
-		{addresses, Ready, errExample, "unknown failure"},
+		{MockServers, Idle, nil, ""},
+		{MockServers, Connecting, nil, fmt.Sprintf(eMsg, Connecting)},
+		{MockServers, Ready, nil, ""},
+		{MockServers, TransientFailure, nil, fmt.Sprintf(eMsg, TransientFailure)},
+		{MockServers, Shutdown, nil, fmt.Sprintf(eMsg, Shutdown)},
+		{MockServers, Idle, MockErr, "unknown failure"},
+		{MockServers, Connecting, MockErr, "unknown failure"},
+		{MockServers, Ready, MockErr, "unknown failure"},
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			tt.state, features, ctrlrs, ctrlrResults, modules, mountResults,
-			nil, nil, nil, tt.connRet)
+			log, tt.state, MockCtrlrs, MockCtrlrResults, MockScmModules,
+			MockModuleResults, MockScmNamespaces, MockMountResults,
+			nil, nil, nil, tt.connRet, nil)
 
 		results := cc.ConnectClients(tt.addrsIn)
 
@@ -156,157 +131,439 @@ func TestConnectClients(t *testing.T) {
 	}
 }
 
-func clientSetup(
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	mountResults ScmMountResults,
-	scanRet error, formatRet error, killRet error, connectRet error) Connect {
-
-	cc := newMockConnect(
-		state, features, ctrlrs, ctrlrResults, modules, mountResults,
-		scanRet, formatRet, killRet, connectRet)
-
-	_ = cc.ConnectClients(addresses)
-
-	return cc
-}
-
-func defaultClientSetup() Connect {
-	cc := defaultMockConnect()
-
-	_ = cc.ConnectClients(addresses)
-
-	return cc
-}
-
-func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
-	AssertEqual(
-		t, len(results), len(addrs), // duplicates ignored
-		"unexpected number of results")
-
-	for _, res := range results {
-		AssertEqual(
-			t, res.Err, e,
-			"unexpected error value in results")
-	}
-}
-
 func TestDuplicateConns(t *testing.T) {
-	cc := defaultMockConnect()
-	results := cc.ConnectClients(append(addresses, addresses...))
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
 
-	checkResults(t, addresses, results, nil)
+	cc := defaultMockConnect(log)
+	results := cc.ConnectClients(append(MockServers, MockServers...))
+
+	checkResults(t, MockServers, results, nil)
 }
 
 func TestGetClearConns(t *testing.T) {
-	cc := defaultClientSetup()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	cc := defaultClientSetup(log)
 
 	results := cc.GetActiveConns(ResultMap{})
-	checkResults(t, addresses, results, nil)
+	checkResults(t, MockServers, results, nil)
 
 	results = cc.ClearConns()
-	checkResults(t, addresses, results, nil)
+	checkResults(t, MockServers, results, nil)
 
 	results = cc.GetActiveConns(ResultMap{})
 	AssertEqual(t, results, ResultMap{}, "unexpected result map")
 
-	results = cc.ConnectClients(addresses)
-	checkResults(t, addresses, results, nil)
+	results = cc.ConnectClients(MockServers)
+	checkResults(t, MockServers, results, nil)
 
 	results = cc.GetActiveConns(results)
-	checkResults(t, addresses, results, nil)
+	checkResults(t, MockServers, results, nil)
 }
 
-func TestListFeatures(t *testing.T) {
-	cc := defaultClientSetup()
+func TestStorageScan(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
 
-	clientFeatures := cc.ListFeatures()
+	cc := defaultClientSetup(log)
 
-	AssertEqual(
-		t, clientFeatures, NewClientFM(features, addresses),
-		"unexpected client features returned")
+	clientResp := cc.StorageScan(&StorageScanReq{})
+
+	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
 }
 
-func TestScanStorage(t *testing.T) {
-	cc := defaultClientSetup()
+func TestStorageFormat(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
 
-	clientNvme, clientScm := cc.ScanStorage()
-
-	AssertEqual(
-		t, clientNvme, NewClientNvme(ctrlrs, addresses),
-		"unexpected client NVMe SSD controllers returned")
-
-	AssertEqual(
-		t, clientScm, NewClientScm(modules, addresses),
-		"unexpected client SCM modules returned")
-}
-
-func TestFormatStorage(t *testing.T) {
-	tests := []struct {
+	for name, tt := range map[string]struct {
 		formatRet error
+		reformat  bool
 	}{
-		{
-			nil,
+		"ok": {},
+		"fails": {
+			formatRet: MockErr,
 		},
-		{
-			errExample,
-		},
-	}
+	} {
+		t.Run(name, func(t *testing.T) {
+			cc := connectSetup(
+				log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, tt.formatRet, nil, nil, MockACL)
 
-	for _, tt := range tests {
-		cc := clientSetup(
-			Ready, features, ctrlrs, ctrlrResults, modules,
-			mountResults, nil, tt.formatRet, nil, nil)
+			cNvmeMap, cMountMap := cc.StorageFormat(tt.reformat)
 
-		cNvmeMap, cMountMap := cc.FormatStorage()
-
-		if tt.formatRet != nil {
-			for _, addr := range addresses {
-				AssertEqual(
-					t, cNvmeMap[addr],
-					NvmeResult{Err: tt.formatRet},
-					"unexpected error for nvme result")
-				AssertEqual(
-					t, cMountMap[addr],
-					MountResult{Err: tt.formatRet},
-					"unexpected error for scm mount result")
+			if tt.formatRet != nil {
+				for _, addr := range MockServers {
+					AssertEqual(
+						t, cNvmeMap[addr],
+						CtrlrResults{Err: tt.formatRet},
+						"unexpected error for nvme result")
+					AssertEqual(
+						t, cMountMap[addr],
+						MountResults{Err: tt.formatRet},
+						"unexpected error for scm mount result")
+				}
+				return
 			}
-			continue
-		}
 
-		AssertEqual(
-			t, cNvmeMap, NewClientNvmeResults(
-				ctrlrResults,
-				addresses),
-			"unexpected client NVMe SSD controller results returned")
+			AssertEqual(
+				t, cNvmeMap, NewClientNvmeResults(MockCtrlrResults, MockServers),
+				"unexpected client NVMe SSD controller results returned")
 
-		AssertEqual(
-			t, cMountMap, NewClientMountResults(
-				mountResults,
-				addresses),
-			"unexpected client SCM Mount results returned")
+			AssertEqual(
+				t, cMountMap, NewClientScmMountResults(MockMountResults, MockServers),
+				"unexpected client SCM Mount results returned")
+		})
 	}
 }
 
 func TestKillRank(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
 	tests := []struct {
 		killRet error
 	}{
 		{
 			nil,
 		},
-		{
-			errExample,
-		},
 	}
 
 	for _, tt := range tests {
-		cc := clientSetup(
-			Ready, features, ctrlrs, ctrlrResults, modules,
-			mountResults, nil, nil, tt.killRet, nil)
+		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
+			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
+			nil, tt.killRet, nil, MockACL)
 
-		resultMap := cc.KillRank("acd", 0)
+		resultMap := cc.KillRank(0)
 
-		checkResults(t, addresses, resultMap, tt.killRet)
+		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
+	}
+}
+
+func TestPoolGetACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	for name, tt := range map[string]struct {
+		addr             Addresses
+		getACLRespStatus int32
+		getACLErr        error
+		expectedResp     *PoolGetACLResp
+		expectedErr      string
+	}{
+		"no service leader": {
+			addr:         nil,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
+		},
+		"gRPC call failed": {
+			addr:         MockServers,
+			getACLErr:    MockErr,
+			expectedResp: nil,
+			expectedErr:  MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:             MockServers,
+			getACLRespStatus: -5000,
+			expectedResp:     nil,
+			expectedErr:      "DAOS returned error code: -5000",
+		},
+		"success": {
+			addr:             MockServers,
+			getACLRespStatus: 0,
+			expectedResp:     &PoolGetACLResp{ACL: MockACL.ACL()},
+			expectedErr:      "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.getACLRespStatus,
+				err:    tt.getACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult)
+
+			req := PoolGetACLReq{
+				UUID: "TestUUID",
+			}
+
+			resp, err := cc.PoolGetACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolOverwriteACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	testACL := &AccessControlList{
+		Entries: MockACL.acl,
+	}
+
+	for name, tt := range map[string]struct {
+		addr                   Addresses
+		inputACL               *AccessControlList
+		overwriteACLRespStatus int32
+		overwriteACLErr        error
+		expectedResp           *PoolOverwriteACLResp
+		expectedErr            string
+	}{
+		"no service leader": {
+			addr:         nil,
+			inputACL:     testACL,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
+		},
+		"gRPC call failed": {
+			addr:            MockServers,
+			inputACL:        testACL,
+			overwriteACLErr: MockErr,
+			expectedResp:    nil,
+			expectedErr:     MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                   MockServers,
+			inputACL:               testACL,
+			overwriteACLRespStatus: -5001,
+			expectedResp:           nil,
+			expectedErr:            "DAOS returned error code: -5001",
+		},
+		"success": {
+			addr:                   MockServers,
+			inputACL:               testACL,
+			overwriteACLRespStatus: 0,
+			expectedResp:           &PoolOverwriteACLResp{ACL: testACL},
+			expectedErr:            "",
+		},
+		"nil input": {
+			addr:                   MockServers,
+			inputACL:               nil,
+			overwriteACLRespStatus: 0,
+			expectedResp:           &PoolOverwriteACLResp{ACL: &AccessControlList{}},
+			expectedErr:            "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.overwriteACLRespStatus,
+				err:    tt.overwriteACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult)
+
+			req := PoolOverwriteACLReq{
+				UUID: "TestUUID",
+				ACL:  tt.inputACL,
+			}
+
+			resp, err := cc.PoolOverwriteACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolUpdateACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	testACL := &AccessControlList{
+		Entries: MockACL.acl,
+	}
+
+	for name, tt := range map[string]struct {
+		addr                Addresses
+		inputACL            *AccessControlList
+		updateACLRespStatus int32
+		updateACLErr        error
+		expectedResp        *PoolUpdateACLResp
+		expectedErr         string
+	}{
+		"no service leader": {
+			addr:         nil,
+			inputACL:     testACL,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
+		},
+		"gRPC call failed": {
+			addr:         MockServers,
+			inputACL:     testACL,
+			updateACLErr: MockErr,
+			expectedResp: nil,
+			expectedErr:  MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                MockServers,
+			inputACL:            testACL,
+			updateACLRespStatus: -5001,
+			expectedResp:        nil,
+			expectedErr:         "DAOS returned error code: -5001",
+		},
+		"success": {
+			addr:                MockServers,
+			inputACL:            testACL,
+			updateACLRespStatus: 0,
+			expectedResp:        &PoolUpdateACLResp{ACL: testACL},
+			expectedErr:         "",
+		},
+		"nil input": {
+			addr:         MockServers,
+			inputACL:     nil,
+			expectedResp: nil,
+			expectedErr:  "no entries requested",
+		},
+		"empty ACL input": {
+			addr:         MockServers,
+			inputACL:     &AccessControlList{},
+			expectedResp: nil,
+			expectedErr:  "no entries requested",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.updateACLRespStatus,
+				err:    tt.updateACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult)
+
+			req := PoolUpdateACLReq{
+				UUID: "TestUUID",
+				ACL:  tt.inputACL,
+			}
+
+			resp, err := cc.PoolUpdateACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolDeleteACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	for name, tt := range map[string]struct {
+		addr                Addresses
+		inputPrincipal      string
+		deleteACLRespStatus int32
+		deleteACLErr        error
+		expectedResp        *PoolDeleteACLResp
+		expectedErr         string
+	}{
+		"no service leader": {
+			addr:           nil,
+			inputPrincipal: "OWNER@",
+			expectedResp:   nil,
+			expectedErr:    "no active connections",
+		},
+		"empty principal": {
+			addr:         MockServers,
+			expectedResp: nil,
+			expectedErr:  "no principal provided",
+		},
+		"gRPC call failed": {
+			addr:           MockServers,
+			inputPrincipal: "OWNER@",
+			deleteACLErr:   MockErr,
+			expectedResp:   nil,
+			expectedErr:    MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                MockServers,
+			inputPrincipal:      "OWNER@",
+			deleteACLRespStatus: -5000,
+			expectedResp:        nil,
+			expectedErr:         "DAOS returned error code: -5000",
+		},
+		"success": {
+			addr:           MockServers,
+			inputPrincipal: "OWNER@",
+			expectedResp:   &PoolDeleteACLResp{ACL: &AccessControlList{}},
+			expectedErr:    "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.deleteACLRespStatus,
+				err:    tt.deleteACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult)
+
+			req := PoolDeleteACLReq{
+				UUID:      "TestUUID",
+				Principal: tt.inputPrincipal,
+			}
+
+			resp, err := cc.PoolDeleteACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,7 @@ This script runs the rdb tests. From the command line the tests are run with:
 server:
 orterun -N 1 --report-uri /tmp/urifile -x LD_LIBRARY_PATH
 daos_server -o <builddir>/utils/config/examples/daos_server_rdb_tests.yml
--d ./ -c 1 -m vos,rdb,rdbt
+start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt
 
 client:
 orterun --ompi-server file:/tmp/urifile <debug_cmds> -np 1 rdbt init
@@ -104,8 +104,8 @@ def start_server(binfo):
     cmd += "-N 1 --report-uri {} ".format(urifile)
     cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
-    cmd += "-o {} ".format(config_file)
-    cmd += "-d ./ -c 1 -m vos,rdb,rdbt "
+    cmd += "--debug --config {} ".format(config_file)
+    cmd += "start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i --recreate-superblocks "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 

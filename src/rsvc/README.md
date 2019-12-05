@@ -8,7 +8,7 @@ Certain DAOS RPC services, such as Management Service (`mgmt_svc`), Pool Service
 
 ### Architecture
 
-An RPC service handles incoming _service requests_ (or just _requests_) based on its current _service state_ (or just _state_). To replicate a service is therefore to replicate its state, so that each request is handled based on the state reached through all prior requests.
+An RPC service handles incoming _service requests_ (or just _requests_) based on its current _service state_ (or just _state_). To replicate a service is, therefore, to replicate its state so that each request is handled based on the state reached through all prior requests.
 
 The state of a service is replicated with a Raft log. The service transforms requests into state queries and deterministic state updates. All state updates are committed to the Raft log first, before being applied to the state. Since Raft guarantees the consistency among the log replicas, the service replicas end up applying the same set of state updates in the same order and go through identical state histories.
 
@@ -16,15 +16,15 @@ Raft adopts a strong leadership design, so does each replicated service. A servi
 
 A replicated service is implemented using a stack of modules:
 
-	[ mgmt_svc, pool_svc, ... ]
+	[ mgmt_svc, pool_svc, cont_svc, ... ]
 	[ ds_rsvc ]
-	[           rdb           ]
+	[                rdb                ]
 	[ raft ]
-	[           vos           ]
+	[                vos                ]
 
 `mgmt_svc`, `pool_svc`, and `cont_svc` implement the request handlers and the leadership change event handlers of the respective services. They define their respective service state in terms of the RDB data model provided by `rdb`, implement state queries and updates using RDB transactions, and register their leadership change event handlers into the framework `rsvc` offers.
 
-`rdb` (`daos_srv/rdb`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and store its data model as well as internal metadata using the VOS data model.
+`rdb` (`daos_srv/rdb`) implements a hierarchical key-value store data model with transactions, replicated using Raft. It delivers Raft leadership change events to `ds_rsvc`, implements transactions using the Raft log, and stores a service's data model and its internal metadata using the VOS data model.
 
 `raft` (`rdb/raft/include/raft.h`) implements the Raft core protocol in a library. Its integration with VOS and CaRT is done inside `rdb`.
 
@@ -32,6 +32,8 @@ A replicated service client (e.g., `dc_pool`) uses `dc_rsvc` to search for the c
 
 	[ dc_pool ]
 	[ dc_rsvc ]
+
+The search is currently accomplished with a combination of a client maintained list of candidate service replicas and server RPC error responses in some cases containing a hint where the current leader may be found. A server not running the service responds with an error a client uses to remove that server from its list. A server acting in a non-leader role responds with an error, including a hint a client uses to (if necessary) add to its list and alter its search for the leader. A future patch will provide a management service interface that dc_rsvc will use (e.g., when its list becomes empty) to retrieve the current list of service replicas.
 
 ## Module `rsvc`
 

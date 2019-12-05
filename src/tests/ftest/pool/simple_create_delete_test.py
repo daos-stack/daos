@@ -27,8 +27,8 @@ import os
 import traceback
 
 from apricot import TestWithServers
+from pydaos.raw import DaosPool, DaosApiError
 
-from daos_api import DaosPool, DaosApiError
 
 class SimpleCreateDeleteTest(TestWithServers):
     """
@@ -36,18 +36,12 @@ class SimpleCreateDeleteTest(TestWithServers):
 
     :avocado: recursive
     """
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            super(SimpleCreateDeleteTest, self).tearDown()
 
     def test_create(self):
         """
         Test basic pool creation.
 
-        :avocado: tags=pool,poolcreate,simplecreate
+        :avocado: tags=all,pool,smoke,full_regression,tiny,simplecreate
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

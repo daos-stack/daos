@@ -39,7 +39,10 @@
 #include "dfuse_ioctl.h"
 #include "ioil_api.h"
 
-static char *mount_dir;
+/* This test isn't presently enabled.  If mount_dir is NULL, it causes compiler
+ * warning in sanity(...) with some newer compilers
+ */
+static char *mount_dir = "/tmp";
 static uint64_t max_read_size;
 static uint64_t max_iov_read_size;
 

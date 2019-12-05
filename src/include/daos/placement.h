@@ -33,11 +33,16 @@
 #include <daos/pool_map.h>
 #include <daos/object.h>
 
+/** default placement map when none are specified */
+#define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP
+
 /** types of placement maps */
 typedef enum {
 	PL_TYPE_UNKNOWN,
 	/** only support ring map for the time being */
 	PL_TYPE_RING,
+	/**Prototype placement map*/
+	PL_TYPE_JUMP_MAP,
 	/** reserved */
 	PL_TYPE_PETALS,
 } pl_map_type_t;
@@ -49,6 +54,9 @@ struct pl_map_init_attr {
 			pool_comp_type_t	domain;
 			unsigned int		ring_nr;
 		} ia_ring;
+		struct pl_jump_map_init_attr {
+			pool_comp_type_t	domain;
+		} ia_jump_map;
 	};
 };
 
@@ -75,6 +83,8 @@ struct pl_obj_shard {
 
 struct pl_obj_layout {
 	uint32_t		 ol_ver;
+	uint32_t		 ol_grp_size;
+	uint32_t		 ol_grp_nr;
 	uint32_t		 ol_nr;
 	struct pl_obj_shard	*ol_shards;
 };
@@ -99,13 +109,17 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
+int pl_init(void);
+void pl_fini(void);
+
 int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		  struct pl_map **pl_mapp);
 void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 
 struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
-int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
+		pl_map_type_t default_type);
 void pl_map_disconnect(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
@@ -143,7 +157,7 @@ pl_obj_get_shard(void *data, int idx)
 	return &layout->ol_shards[idx];
 }
 
-int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);

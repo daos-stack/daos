@@ -129,12 +129,14 @@ parse_pool_test_args_cb(int key, char *arg,
 int
 cmd_connect_pool(int argc, const char **argv, void *ctx)
 {
-	d_rank_list_t     pool_service_list;
-	daos_handle_t     poh;
-	unsigned int      flag = DAOS_PC_RO;
-	daos_pool_info_t  info;
-	uuid_t            uuid;
-	int rc = 1;
+	d_rank_list_t		pool_service_list;
+	daos_handle_t		poh;
+	unsigned int		flag = DAOS_PC_RO;
+	daos_pool_info_t	info = {0};
+	daos_pool_info_t	info2 = {0};
+	uuid_t			uuid;
+	char			uuid_str2[100];
+	int			rc = 1;
 	struct test_pool_options cp_options = {
 		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
 		1024*1024*1024, 1, NULL};
@@ -192,21 +194,17 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 		return 1;
 	}
 
-	daos_pool_info_t pool_info;
-
-	rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
+	rc = daos_pool_query(poh, NULL, &info2, NULL, NULL);
 
 	/* TODO not ready for this test yet */
 	/* the info returned by connect should match query */
-	/* if (memcmp(&info, &pool_info, sizeof(daos_pool_info_t))) {
+	/* if (memcmp(&info, &info2, sizeof(daos_pool_info_t))) {
 	 *  printf("pool info mismatch\n");
 	 *  return 1;
 	 *  }
 	 */
 
-	char uuid_str2[100];
-
-	uuid_unparse(pool_info.pi_uuid, uuid_str2);
+	uuid_unparse(info2.pi_uuid, uuid_str2);
 
 	if (strcmp(cp_options.uuid, uuid_str2)) {
 		printf("uuids don't match: %s %s\n",
@@ -231,7 +229,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 	/*d_rank_list_t     tgts;*/
 	daos_handle_t     poh;
 	unsigned int      flag = DAOS_PC_RO;
-	daos_pool_info_t  info;
+	daos_pool_info_t  info = {0};
 	struct test_pool_options cp_options = {
 		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
 		1024*1024*1024, 1, NULL};
@@ -315,7 +313,7 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
 		       rc);
 	} else {
-		daos_pool_info_t pool_info;
+		daos_pool_info_t pool_info = {0};
 
 		rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
@@ -348,11 +346,6 @@ cmd_test_connect_pool(int argc, const char **argv, void *ctx)
 		if (pool_info.pi_ndisabled != 0) {
 			printf("badtgts should be zero: %i\n",
 			       pool_info.pi_ndisabled);
-			return 1;
-		}
-		if (pool_info.pi_mode != cp_options.mode) {
-			printf("mode is %i but should be: %i\n",
-			       pool_info.pi_mode, cp_options.mode);
 			return 1;
 		}
 		/* seems to not be implemented yet */
@@ -446,7 +439,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 	/*d_rank_list_t     tgts;*/
 	daos_handle_t     poh;
 	unsigned int      flag = DAOS_PC_RO;
-	daos_pool_info_t  info;
+	daos_pool_info_t  info = {0};
 	struct test_pool_options ep_options = {
 		"daos_server", NULL, NULL, 0, 0, 0, 0, 0, 0,
 		1024*1024*1024, 1, NULL};
@@ -530,7 +523,7 @@ cmd_test_evict_pool(int argc, const char **argv, void *ctx)
 		printf("<<<daosctl>>> Pool connect fail, result: %d\n",
 		       rc);
 	} else {
-		daos_pool_info_t pool_info;
+		daos_pool_info_t pool_info = {0};
 
 		rc = daos_pool_query(poh, NULL, &pool_info, NULL, NULL);
 
@@ -579,7 +572,7 @@ int
 cmd_test_query_pool(int argc, const char **argv, void *ctx)
 {
 	daos_handle_t poh;
-	daos_pool_info_t pool_info;
+	daos_pool_info_t pool_info = {0};
 	int rc;
 	struct argp_option options[] = {
 		{"handle",   'h',   "INTERNAL-HANDLE",   0,

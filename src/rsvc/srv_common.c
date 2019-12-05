@@ -35,11 +35,11 @@ struct attr_list_iter_args {
 	size_t		 length; /* Aggregate length of attribute names */
 	size_t		 iov_index;
 	size_t		 iov_count;
-	daos_iov_t	*iovs;
+	d_iov_t	*iovs;
 };
 
 static int
-attr_list_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 		  void *arg);
 static int
 attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
@@ -52,8 +52,8 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 {
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
-	daos_iov_t			 iov;
-	daos_sg_list_t			 sgl;
+	d_iov_t			 iov;
+	d_sg_list_t			 sgl;
 	void				*data;
 	char				*names;
 	char				*values;
@@ -76,9 +76,8 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = sgl.sg_nr;
 	sgl.sg_iovs = &iov;
-	daos_iov_set(&iov, data, bulk_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
+	d_iov_set(&iov, data, bulk_size);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
 	if (rc != 0)
 		goto out_mem;
 
@@ -97,13 +96,13 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 	for (i = 0; i < count; i++) {
 		size_t len;
-		daos_iov_t key;
-		daos_iov_t value;
+		d_iov_t key;
+		d_iov_t value;
 
 		len = strlen(names) /* trailing '\0' */ + 1;
-		daos_iov_set(&key, names, len);
+		d_iov_set(&key, names, len);
 		names += len;
-		daos_iov_set(&value, values, sizes[i]);
+		d_iov_set(&value, values, sizes[i]);
 		values += sizes[i];
 
 		rc = rdb_tx_update(tx, path, &key, &value);
@@ -130,8 +129,8 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
 	daos_size_t			 input_size;
-	daos_iov_t			*iovs;
-	daos_sg_list_t			 sgl;
+	d_iov_t			*iovs;
+	d_sg_list_t			 sgl;
 	void				*data;
 	char				*names;
 	size_t				*sizes;
@@ -164,9 +163,8 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = sgl.sg_nr;
 	sgl.sg_iovs = &iovs[0];
-	daos_iov_set(&iovs[0], data, input_size);
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RW, &local_bulk);
+	d_iov_set(&iovs[0], data, input_size);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &local_bulk);
 	if (rc != 0)
 		goto out_iovs;
 
@@ -178,17 +176,17 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 	names = data;
 	sizes = (size_t *)(names + key_length);
-	daos_iov_set(&iovs[0], (void *)sizes,
+	d_iov_set(&iovs[0], (void *)sizes,
 		     count * sizeof(*sizes));
 
 	for (i = 0, j = 1; i < count; ++i) {
 		size_t len;
-		daos_iov_t key;
+		d_iov_t key;
 
 		len = strlen(names) + /* trailing '\0' */ 1;
-		daos_iov_set(&key, names, len);
+		d_iov_set(&key, names, len);
 		names += len;
-		daos_iov_set(&iovs[j], NULL, 0);
+		d_iov_set(&iovs[j], NULL, 0);
 
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
@@ -208,8 +206,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	sgl.sg_nr = j;
 	sgl.sg_nr_out = sgl.sg_nr;
 	sgl.sg_iovs = iovs;
-	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
-			     CRT_BULK_RO, &local_bulk);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RO, &local_bulk);
 	if (rc != 0)
 		goto out_iovs;
 
@@ -267,12 +264,12 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		goto out_mem;
 
 	if (iter_args.iov_index > 0) {
-		daos_sg_list_t	 sgl = {
+		d_sg_list_t	 sgl = {
 			.sg_nr_out = iter_args.iov_index,
 			.sg_nr	   = iter_args.iov_index,
 			.sg_iovs   = iter_args.iovs
 		};
-		rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&sgl),
+		rc = crt_bulk_create(rpc->cr_ctx, &sgl,
 				     CRT_BULK_RW, &local_bulk);
 		if (rc != 0)
 			goto out_mem;
@@ -344,7 +341,7 @@ out:
 }
 
 static int
-attr_list_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
+attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 {
 	struct attr_list_iter_args *i_args = arg;
 
@@ -358,13 +355,13 @@ attr_list_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
 		 * if the client buffer is 'N' bytes, it can hold at the most
 		 * N/2 keys, which requires that many IOVs to be allocated.
 		 * Thus, the upper limit on the space required for IOVs is:
-		 * sizeof(daos_iov_t) * N/2 = 24 * N/2 = 12*N bytes.
+		 * sizeof(d_iov_t) * N/2 = 24 * N/2 = 12*N bytes.
 		 */
 		if (i_args->iov_index == i_args->iov_count) {
 			void *ptr;
 
 			D_REALLOC(ptr, i_args->iovs,
-				  i_args->iov_count * 2 * sizeof(daos_iov_t));
+				  i_args->iov_count * 2 * sizeof(d_iov_t));
 			/*
 			 * TODO: Fail or continue transferring
 			 *	 iteratively using available memory?
@@ -376,7 +373,7 @@ attr_list_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *arg)
 		}
 
 		memcpy(&i_args->iovs[i_args->iov_index],
-		       key, sizeof(daos_iov_t));
+		       key, sizeof(d_iov_t));
 		i_args->iovs[i_args->iov_index]
 			.iov_buf_len = key->iov_len;
 		i_args->available -= key->iov_len;

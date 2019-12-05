@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,62 +25,74 @@ package client
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
-// Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
-type Addresses []string
+const (
+	msgBadType      = "type assertion failed, wanted %+v got %+v"
+	msgConnInactive = "socket connection is not active (%s)"
+)
 
-// ClientResult is a container for output of any type of client request.
-type ClientResult struct {
-	Address string
-	Value   interface{}
-	Err     error
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
+	}
+
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
-// ResultMap map client addresses to method call ClientResults
-type ResultMap map[string]ClientResult
-
-// ControllerFactory is an interface providing capability to connect clients.
-type ControllerFactory interface {
-	create(string) (Control, error)
-}
-
-// controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct{}
-
-// create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string) (Control, error) {
-	controller := &control{}
-
-	err := controller.connect(address)
-
-	return controller, err
-}
-
-// Connect is an interface providing functionality across multiple
+// Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	ClearConns() ResultMap
-	ScanStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() (ClientNvmeMap, ClientMountMap)
-	// TODO: implement Update and Burnin client features
-	//UpdateStorage() (ClientNvmeMap, ClientScmMap)
-	//BurninStorage() (ClientNvmeMap, ClientScmMap)
-	ListFeatures() ClientFeatureMap
-	KillRank(uuid string, rank uint32) ResultMap
+	ConnectClients(Addresses) ResultMap
+	GetActiveConns(ResultMap) ResultMap
+	KillRank(rank uint32) ResultMap
+	NetworkListProviders() ResultMap
+	NetworkScanDevices(searchProvider string) NetworkScanResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
+	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
+	SetTransportConfig(*security.TransportConfig)
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	StorageScan(*StorageScanReq) *StorageScanResp
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	SystemMemberQuery() (common.SystemMembers, error)
+	SystemStop() (common.SystemMemberResults, error)
 }
 
 // connList is an implementation of Connect and stores controllers
-// (connections to clients, one per target server).
+// (connections to clients, one per DAOS server).
 type connList struct {
-	factory     ControllerFactory
-	controllers []Control
+	log             logging.Logger
+	transportConfig *security.TransportConfig
+	factory         ControllerFactory
+	controllers     []Control
+}
+
+// SetTransportConfig sets the internal transport credentials to be passed
+// to subsequent connect calls as the gRPC dial credentials.
+func (c *connList) SetTransportConfig(cfg *security.TransportConfig) {
+	c.transportConfig = cfg
 }
 
 // ConnectClients populates collection of client-server controllers.
@@ -93,7 +105,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 	for _, address := range addresses {
 		go func(f ControllerFactory, addr string, ch chan ClientResult) {
-			c, err := f.create(addr)
+			c, err := f.create(addr, c.transportConfig)
 			ch <- ClientResult{addr, c, err}
 		}(c.factory, address, ch)
 	}
@@ -108,10 +120,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 		controller, ok := res.Value.(Control)
 		if !ok {
-			res.Err = fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				control{}, res.Value)
-
+			res.Err = fmt.Errorf(msgBadType, control{}, res.Value)
 			results[res.Address] = res
 			continue
 		}
@@ -119,6 +128,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 		c.controllers = append(c.controllers, controller)
 	}
 
+	time.Sleep(100 * time.Millisecond)
 	return c.GetActiveConns(results)
 }
 
@@ -126,6 +136,9 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
 func (c *connList) GetActiveConns(results ResultMap) ResultMap {
+	if results == nil {
+		results = make(ResultMap)
+	}
 	addresses := []string{}
 
 	controllers := c.controllers[:0]
@@ -142,8 +155,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 			addresses = append(addresses, address)
 			controllers = append(controllers, mc)
 		} else {
-			err = fmt.Errorf(
-				"socket connection is not active (%s)", state)
+			err = fmt.Errorf(msgConnInactive, state)
 		}
 
 		results[address] = ClientResult{address, state, err}
@@ -177,8 +189,8 @@ func (c *connList) ClearConns() ResultMap {
 
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
-func (c *connList) makeRequests(
-	requestFn func(Control, chan ClientResult)) ResultMap {
+func (c *connList) makeRequests(req interface{},
+	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
@@ -186,7 +198,7 @@ func (c *connList) makeRequests(
 	addrs := []string{}
 	for _, mc := range c.controllers {
 		addrs = append(addrs, mc.getAddress())
-		go requestFn(mc, ch)
+		go requestFn(mc, req, ch)
 	}
 
 	for {
@@ -211,9 +223,13 @@ func (c *connList) makeRequests(
 
 // NewConnect is a factory for Connect interface to operate over
 // multiple clients.
-func NewConnect() Connect {
+func NewConnect(log logging.Logger) Connect {
 	return &connList{
-		factory:     &controllerFactory{},
+		log:             log,
+		transportConfig: nil,
+		factory: &controllerFactory{
+			log: log,
+		},
 		controllers: []Control{},
 	}
 }

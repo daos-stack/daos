@@ -1,2 +1,0 @@
-bdev_class value thrash not supported in config (nvme/malloc/kdev/file)
-

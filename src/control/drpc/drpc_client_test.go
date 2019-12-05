@@ -26,71 +26,17 @@ package drpc
 import (
 	"fmt"
 	"net"
-	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
 // don't touch the real filesystem.
 const testSockPath string = "/my/test/socket.sock"
-
-func init() {
-	log.NewDefaultLogger(log.Error, "drpc_client_test: ", os.Stderr)
-}
-
-// mockConn is a mock of the net.Conn interface, for testing
-type mockConn struct {
-	ReadOutputNumBytes  int
-	ReadOutputError     error
-	ReadOutputBytes     []byte // Bytes copied into buffer
-	ReadInputBytes      []byte
-	WriteOutputNumBytes int
-	WriteOutputError    error
-	WriteInputBytes     []byte
-	CloseCallCount      int // Number of times called
-	CloseOutputError    error
-}
-
-func (m *mockConn) ReadMsgUnix(b, oob []byte) (n, oobn, flags int, addr *net.UnixAddr, err error) {
-	copy(b, m.ReadOutputBytes)
-	m.ReadInputBytes = b
-	return m.ReadOutputNumBytes, 0, 0, nil, m.ReadOutputError
-}
-
-func (m *mockConn) WriteMsgUnix(b, oob []byte, addr *net.UnixAddr) (n, oobn int, err error) {
-	m.WriteInputBytes = b
-	return m.WriteOutputNumBytes, 0, m.WriteOutputError
-}
-
-func (m *mockConn) Close() error {
-	m.CloseCallCount++
-	return m.CloseOutputError
-}
-
-func (m *mockConn) SetReadOutputBytesToResponse(t *testing.T, resp *Response) {
-	rawRespBytes := marshallResponseToBytes(t, resp)
-	m.ReadOutputNumBytes = len(rawRespBytes)
-
-	// The result from Read() will be MAXMSGSIZE since we have no way to
-	// know the size of a read before we read it
-	m.ReadOutputBytes = make([]byte, MAXMSGSIZE)
-	copy(m.ReadOutputBytes, rawRespBytes)
-}
-
-func (m *mockConn) SetWriteOutputBytesForCall(t *testing.T, call *Call) []byte {
-	callBytes := marshallCallToBytes(t, call)
-	m.WriteOutputNumBytes = len(callBytes)
-
-	return callBytes
-}
-
-func newMockConn() *mockConn {
-	return &mockConn{}
-}
 
 // mockDialer is a mock DomainSocketDialer for testing
 type mockDialer struct {
@@ -102,7 +48,7 @@ type mockDialer struct {
 
 // Dial is a mock that saves off its inputs and returns the mock output in the
 // mockDialer struct
-func (m *mockDialer) dial(socketPath string) (domainSocketConn, error) {
+func (m *mockDialer) dial(socketPath string) (net.Conn, error) {
 	m.InputSockPath = socketPath
 	m.DialCallCount++
 	return m.OutputConn, m.OutputErr
@@ -136,118 +82,115 @@ func newTestClientConnection(dialer *mockDialer, conn *mockConn) *ClientConnecti
 func TestNewClientConnection(t *testing.T) {
 	client := NewClientConnection(testSockPath)
 
-	AssertTrue(t, client != nil, "Expected a real client")
-	AssertEqual(t, client.socketPath, testSockPath,
+	common.AssertTrue(t, client != nil, "Expected a real client")
+	common.AssertEqual(t, client.socketPath, testSockPath,
 		"Should match the path we passed in")
-	AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
+	common.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
 
 	// Dialer should be the private implementation type
 	_ = client.dialer.(*clientDialer)
 }
 
-func TestConnect_Success(t *testing.T) {
+func TestClient_Connect_Success(t *testing.T) {
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, nil)
 	client.sequence = 10
 
 	err := client.Connect()
 
-	AssertTrue(t, err == nil, "Expected no error")
-	AssertTrue(t, client.IsConnected(), "Should be connected")
-	AssertEqual(t, client.conn, dialer.OutputConn,
+	common.AssertTrue(t, err == nil, "Expected no error")
+	common.AssertTrue(t, client.IsConnected(), "Should be connected")
+	common.AssertEqual(t, client.conn, dialer.OutputConn,
 		"Expected conn returned from the mock dialer")
-	AssertEqual(t, dialer.InputSockPath, testSockPath,
+	common.AssertEqual(t, dialer.InputSockPath, testSockPath,
 		"Should be using passed-in socket path")
-	AssertEqual(t, client.sequence, int64(0),
+	common.AssertEqual(t, client.sequence, int64(0),
 		"Expected sequence number to have been reset")
 }
 
-func TestConnect_Error(t *testing.T) {
+func TestClient_Connect_Error(t *testing.T) {
 	dialer := newMockDialer()
-	errStr := "a strange error occurred"
-	dialer.SetError(errStr)
+	dialer.SetError("mock dialer failure")
 	client := newTestClientConnection(dialer, nil)
 
 	err := client.Connect()
 
-	ExpectError(t, err, fmt.Sprintf("dRPC connect: %s", errStr),
-		"Expected error from mock dialer")
-	AssertFalse(t, client.IsConnected(), "Should not be connected")
-	AssertTrue(t, client.conn == nil, "Expected no connection")
+	common.CmpErr(t, dialer.OutputErr, err)
+	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
+	common.AssertTrue(t, client.conn == nil, "Expected no connection")
 }
 
-func TestConnect_AlreadyConnected(t *testing.T) {
+func TestClient_Connect_AlreadyConnected(t *testing.T) {
 	originalConn := newMockConn()
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, originalConn)
 
 	err := client.Connect()
 
-	AssertTrue(t, err == nil, "Expected no error")
-	AssertEqual(t, client.conn, originalConn,
+	common.AssertTrue(t, err == nil, "Expected no error")
+	common.AssertEqual(t, client.conn, originalConn,
 		"Connection should be unchanged")
-	AssertEqual(t, dialer.DialCallCount, 0,
+	common.AssertEqual(t, dialer.DialCallCount, 0,
 		"Should not have tried to connect")
 }
 
-func TestClose_Success(t *testing.T) {
+func TestClient_Close_Success(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	err := client.Close()
 
-	AssertTrue(t, err == nil, "Expected no error")
-	AssertEqual(t, conn.CloseCallCount, 1,
+	common.AssertTrue(t, err == nil, "Expected no error")
+	common.AssertEqual(t, conn.CloseCallCount, 1,
 		"Expected conn.Close() to be called")
-	AssertFalse(t, client.IsConnected(), "Should not be connected")
+	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
 }
 
-func TestClose_Error(t *testing.T) {
+func TestClient_Close_Error(t *testing.T) {
 	conn := newMockConn()
-	expectedErr := "conn.Close() failed"
-	conn.CloseOutputError = fmt.Errorf(expectedErr)
+	conn.CloseOutputError = errors.New("mock close failure")
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	err := client.Close()
 
-	ExpectError(t, err,
-		fmt.Sprintf("dRPC close: %s", expectedErr),
-		"Expected the error from conn.Close()")
-	AssertEqual(t, conn.CloseCallCount, 1,
+	common.CmpErr(t, conn.CloseOutputError, err)
+	common.AssertEqual(t, conn.CloseCallCount, 1,
 		"Expected conn.Close() to be called")
-	AssertTrue(t, client.IsConnected(),
+	common.AssertTrue(t, client.IsConnected(),
 		"Should have left the connection alone")
 }
 
-func TestClose_NotConnected(t *testing.T) {
+func TestClient_Close_NotConnected(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), nil)
 
 	err := client.Close()
 
 	// Effectively a no-op, but no point reporting failure on a double close
-	AssertTrue(t, err == nil, "Should report success")
-	AssertFalse(t, client.IsConnected(), "Should not be connected")
+	common.AssertTrue(t, err == nil, "Should report success")
+	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
 }
 
-func TestSendMsg_NilInput(t *testing.T) {
+func TestClient_SendMsg_NilInput(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	response, err := client.SendMsg(nil)
 
-	AssertTrue(t, response == nil, "Expected no response")
-	ExpectError(t, err, "invalid dRPC call", "Expect error on nil input")
+	common.AssertTrue(t, response == nil, "Expected no response")
+	common.ExpectError(t, err, "invalid dRPC call", "Expect error on nil input")
 }
 
 func marshallCallToBytes(t *testing.T, call *Call) []byte {
+	t.Helper()
 	callBytes, protoErr := proto.Marshal(call)
-	AssertTrue(t, protoErr == nil, "Failed to marshal Call to bytes")
+	common.AssertTrue(t, protoErr == nil, "Failed to marshal Call to bytes")
 	return callBytes
 }
 
 func marshallResponseToBytes(t *testing.T, resp *Response) []byte {
+	t.Helper()
 	respBytes, protoErr := proto.Marshal(resp)
-	AssertTrue(t, protoErr == nil, "Failed to marshal Response to bytes")
+	common.AssertTrue(t, protoErr == nil, "Failed to marshal Response to bytes")
 	return respBytes
 }
 
@@ -266,7 +209,7 @@ func newTestResponse(sequence int64) *Response {
 	}
 }
 
-func TestSendMsg_Success(t *testing.T) {
+func TestClient_SendMsg_Success(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 	client.sequence = 2 // ClientConnection keeps track of sequence
@@ -280,49 +223,46 @@ func TestSendMsg_Success(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	AssertTrue(t, err == nil, "Expected no error")
-	AssertTrue(t, response != nil, "Expected a real response")
-	AssertEqual(t, response.Sequence, expectedResp.Sequence,
+	common.AssertTrue(t, err == nil, "Expected no error")
+	common.AssertTrue(t, response != nil, "Expected a real response")
+	common.AssertEqual(t, response.Sequence, expectedResp.Sequence,
 		"Response should match expected")
-	AssertEqual(t, response.Status, expectedResp.Status,
+	common.AssertEqual(t, response.Status, expectedResp.Status,
 		"Response should match expected")
-	AssertEqual(t, response.Body, expectedResp.Body,
+	common.AssertEqual(t, response.Body, expectedResp.Body,
 		"Response should match expected")
-	AssertEqual(t, conn.WriteInputBytes, callBytes,
+	common.AssertEqual(t, conn.WriteInputBytes, callBytes,
 		"Expected call to be marshalled and passed to write")
-	AssertTrue(t, conn.ReadInputBytes != nil,
+	common.AssertTrue(t, conn.ReadInputBytes != nil,
 		"Expected read called with buffer")
-	AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
+	common.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
 		"Marshalled response should be copied into the buffer")
 }
 
-func TestSendMsg_NotConnected(t *testing.T) {
+func TestClient_SendMsg_NotConnected(t *testing.T) {
 	client := newTestClientConnection(newMockDialer(), nil)
 
 	response, err := client.SendMsg(newTestCall())
 
-	AssertTrue(t, response == nil, "Expected no response")
-	ExpectError(t, err, "dRPC not connected",
+	common.AssertTrue(t, response == nil, "Expected no response")
+	common.ExpectError(t, err, "dRPC not connected",
 		"Expected error for unconnected client")
 }
 
-func TestSendMsg_WriteError(t *testing.T) {
+func TestClient_SendMsg_WriteError(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
 	call := newTestCall()
-	conn.WriteOutputNumBytes = 0
-	expectedErr := "failed to write message"
-	conn.WriteOutputError = fmt.Errorf(expectedErr)
+	conn.WriteOutputError = errors.New("mock write failure")
 
 	response, err := client.SendMsg(call)
 
-	AssertTrue(t, response == nil, "Expected no response")
-	ExpectError(t, err, fmt.Sprintf("dRPC send: %s", expectedErr),
-		"Expected conn.Write() error")
+	common.AssertTrue(t, response == nil, "Expected no response")
+	common.CmpErr(t, conn.WriteOutputError, err)
 }
 
-func TestSendMsg_ReadError(t *testing.T) {
+func TestClient_SendMsg_ReadError(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -330,17 +270,15 @@ func TestSendMsg_ReadError(t *testing.T) {
 	conn.SetWriteOutputBytesForCall(t, call)
 
 	conn.ReadOutputNumBytes = 0
-	expectedErr := "failed to read response"
-	conn.ReadOutputError = fmt.Errorf(expectedErr)
+	conn.ReadOutputError = errors.New("mock read failure")
 
 	response, err := client.SendMsg(call)
 
-	AssertTrue(t, response == nil, "Expected no response")
-	ExpectError(t, err, fmt.Sprintf("dRPC recv: %s", expectedErr),
-		"Expected conn.Read() error")
+	common.AssertTrue(t, response == nil, "Expected no response")
+	common.CmpErr(t, conn.ReadOutputError, err)
 }
 
-func TestSendMsg_UnmarshalResponseFailure(t *testing.T) {
+func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -357,6 +295,6 @@ func TestSendMsg_UnmarshalResponseFailure(t *testing.T) {
 	response, err := client.SendMsg(call)
 
 	expectedErr := "failed to unmarshal dRPC response: unexpected EOF"
-	AssertTrue(t, response == nil, "Expected no response")
-	ExpectError(t, err, expectedErr, "Expected protobuf error")
+	common.AssertTrue(t, response == nil, "Expected no response")
+	common.ExpectError(t, err, expectedErr, "Expected protobuf error")
 }

@@ -3,22 +3,27 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+
     # Common object code
-    common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c'])
+    common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
+                                     'obj_utils.c'])
 
     # generate server module
     srv = daos_build.library(denv, 'obj',
-                             common_tgts + ['srv_obj.c', 'srv_mod.c'])
-    denv.Install('$PREFIX/lib/daos_srv', srv)
+                             common_tgts + ['srv_obj.c', 'srv_mod.c',
+                                            'srv_obj_remote.c', 'srv_ec.c'])
+    denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # Object client library
-    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c'])
+    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c',
+                                     'cli_ec.c', 'obj_verify.c'])
     dc_obj_tgts += common_tgts
     Export('dc_obj_tgts')
 

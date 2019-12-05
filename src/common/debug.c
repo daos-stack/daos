@@ -180,7 +180,7 @@ daos_debug_init(char *logfile)
 		D_PRINT_ERR("Failed to register daos debug bits: %d\n", rc);
 
 	/* Register DAOS debug bit groups */
-	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default");
+	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default", D_LOG_SET_AS_DEFAULT);
 	if (rc < 0) {
 		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
 		rc = -DER_UNINIT;
@@ -220,5 +220,32 @@ DP_UUID(const void *uuid)
 	else
 		uuid_unparse_lower(uuid, buf);
 	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % DF_UUID_MAX;
+	return buf;
+}
+
+#define DF_KEY_MAX		8
+#define DF_KEY_STR_SIZE		64
+
+static __thread int thread_key_buf_idx;
+static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
+
+char *
+daos_key2str(daos_key_t *key)
+{
+	char *buf = thread_key_buf[thread_key_buf_idx];
+
+	if (!key->iov_buf || key->iov_len == 0) {
+		strcpy(buf, "<NULL>");
+	} else {
+		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+
+		if (isprint(*(char *)key->iov_buf)) {
+			strncpy(buf, key->iov_buf, len);
+			buf[len] = 0;
+		} else {
+			strcpy(buf, "????");
+		}
+	}
+	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }

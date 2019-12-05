@@ -35,9 +35,9 @@
 #include "rdb_internal.h"
 
 /*
- * daos_iov_t encoding/decoding utilities
+ * d_iov_t encoding/decoding utilities
  *
- * These functions convert between a daos_iov_t object and a byte stream in a
+ * These functions convert between a d_iov_t object and a byte stream in a
  * buffer. The format of such a byte stream is:
  *
  *   size_head (rdb_iov_size_t)
@@ -45,7 +45,7 @@
  *   size_tail (rdb_iov_size_t)
  *
  * size_head and size_tail are identical, both indicates the size of data,
- * which equals iov_len of the corresponding daos_iov_t object. The two sizes
+ * which equals iov_len of the corresponding d_iov_t object. The two sizes
  * allows decoding from the tail as well as from the head.
  */
 
@@ -56,7 +56,7 @@ const daos_size_t rdb_iov_max = (rdb_iov_size_t)-1LL;
 
 /* If buf is NULL, then just calculate and return the length required. */
 size_t
-rdb_encode_iov(const daos_iov_t *iov, void *buf)
+rdb_encode_iov(const d_iov_t *iov, void *buf)
 {
 	size_t len = sizeof(rdb_iov_size_t) * 2 + iov->iov_len;
 
@@ -82,9 +82,9 @@ rdb_encode_iov(const daos_iov_t *iov, void *buf)
 
 /* Returns the number of bytes processed or -DER_IO if the content is bad. */
 ssize_t
-rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov)
+rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov)
 {
-	daos_iov_t	v = {};
+	d_iov_t	v = {};
 	const void     *p = buf;
 
 	/* iov_len (head) */
@@ -129,9 +129,9 @@ rdb_decode_iov(const void *buf, size_t len, daos_iov_t *iov)
 
 /* Returns the number of bytes processed or -DER_IO if the content is bad. */
 ssize_t
-rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
+rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 {
-	daos_iov_t	v = {};
+	d_iov_t	v = {};
 	const void     *p = buf_end;
 
 	/* iov_len (tail) */
@@ -179,16 +179,15 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, daos_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	daos_ofeat_t feat;
+	daos_ofeat_t feat = 0;
 
 	memset(uoid, 0, sizeof(*uoid));
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
-	if ((oid & RDB_OID_CLASS_MASK) == RDB_OID_CLASS_GENERIC)
-		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_HASHED;
-	else
-		feat = DAOS_OF_DKEY_HASHED | DAOS_OF_AKEY_UINT64;
-	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */);
+	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
+		feat = DAOS_OF_AKEY_UINT64;
+
+	daos_obj_generate_id(&uoid->id_pub, feat, 0 /* cid */, 0);
 }
 
 void
@@ -239,8 +238,8 @@ enum rdb_vos_op {
 };
 
 static void
-rdb_vos_set_iods(enum rdb_vos_op op, int n, daos_iov_t akeys[],
-		 daos_iov_t values[], daos_iod_t iods[])
+rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
+		 d_iov_t values[], daos_iod_t iods[])
 {
 	int i;
 
@@ -257,8 +256,8 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, daos_iov_t akeys[],
 }
 
 static void
-rdb_vos_set_sgls(enum rdb_vos_op op, int n, daos_iov_t values[],
-		 daos_sg_list_t sgls[])
+rdb_vos_set_sgls(enum rdb_vos_op op, int n, d_iov_t values[],
+		 d_sg_list_t sgls[])
 {
 	int i;
 
@@ -272,7 +271,7 @@ rdb_vos_set_sgls(enum rdb_vos_op op, int n, daos_iov_t values[],
 }
 
 static inline int
-rdb_vos_fetch_check(daos_iov_t *value, daos_iov_t *value_orig)
+rdb_vos_fetch_check(d_iov_t *value, d_iov_t *value_orig)
 {
 	/*
 	 * An emtpy value represents nonexistence. Keep the caller value intact
@@ -294,12 +293,12 @@ rdb_vos_fetch_check(daos_iov_t *value, daos_iov_t *value_orig)
 
 int
 rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-	      daos_key_t *akey, daos_iov_t *value)
+	      daos_key_t *akey, d_iov_t *value)
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iod;
-	daos_sg_list_t	sgl;
-	daos_iov_t	value_orig = *value;
+	d_sg_list_t	sgl;
+	d_iov_t	value_orig = *value;
 	int		rc;
 
 	rdb_oid_to_uoid(oid, &uoid);
@@ -322,13 +321,13 @@ rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
  */
 int
 rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-		   daos_key_t *akey, daos_iov_t *value)
+		   daos_key_t *akey, d_iov_t *value)
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iod;
 	daos_handle_t	io;
 	struct bio_sglist *bsgl;
-	daos_iov_t	value_orig = *value;
+	d_iov_t	value_orig = *value;
 	int		rc;
 
 	rdb_oid_to_uoid(oid, &uoid);
@@ -378,7 +377,7 @@ out:
 int
 rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		   enum rdb_probe_opc opc, daos_key_t *akey_in,
-		   daos_key_t *akey_out, daos_iov_t *value)
+		   daos_key_t *akey_out, d_iov_t *value)
 {
 	vos_iter_param_t	param = {};
 	daos_handle_t		iter;
@@ -465,14 +464,14 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	}
 
 	for (;;) {
-		daos_iov_t		value;
+		d_iov_t		value;
 		vos_iter_entry_t	entry;
 
 		/* Fetch the a-key and the address of its value. */
 		rc = vos_iter_fetch(iter, &entry, NULL /* anchor */);
 		if (rc != 0)
 			break;
-		daos_iov_set(&value, NULL /* buf */, 0 /* size */);
+		d_iov_set(&value, NULL /* buf */, 0 /* size */);
 		rc = rdb_vos_fetch_addr(cont, epoch, oid, &entry.ie_key,
 					&value);
 		if (rc != 0)
@@ -504,11 +503,11 @@ out:
 
 int
 rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	       daos_iov_t akeys[], daos_iov_t values[])
+	       d_iov_t akeys[], d_iov_t values[])
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iods[n];
-	daos_sg_list_t	sgls[n];
+	d_sg_list_t	sgls[n];
 
 	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
 	rdb_oid_to_uoid(oid, &uoid);
@@ -520,7 +519,7 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 
 int
 rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	      daos_iov_t akeys[])
+	      d_iov_t akeys[])
 {
 	daos_unit_oid_t	uoid;
 

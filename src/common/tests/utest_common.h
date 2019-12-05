@@ -153,3 +153,42 @@ int utest_tx_begin(struct utest_context *utx);
  *  \return 0 on success
  */
 int utest_tx_end(struct utest_context *utx, int rc);
+
+
+/** Get the SCM used space information.
+ *  \param	utx[IN]		utest_context
+ *	\param	used_space[OUT]		SCM current allocated space
+ *
+ *  \return 0 on success
+ */
+int utest_get_scm_used_space(struct utest_context *utx,
+		daos_size_t *used_space);
+
+/** Sync the SCM usage memory status
+ *  \param	utx[IN]	utest_context
+ *
+ *  \return 0 on success
+ */
+int utest_sync_mem_status(struct utest_context *utx);
+
+/** Check whether SCM usage decrease
+ *  \param	utx[IN]	utest_context
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_decrease(struct utest_context *utx);
+
+/** Check whether SCM usage increase
+ *  \param	utx[IN]	utest_context
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_increase(struct utest_context *utx);
+
+/** Check initial SCM usage with current value
+ *  \param	utx[IN]	utest_context
+ *
+ *  \return 0 on success
+ */
+int utest_check_mem_initial_status(struct utest_context *utx);
+

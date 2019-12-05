@@ -46,7 +46,7 @@ crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &dti->dti_sec);
+	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -139,6 +139,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t		*req = cb_info->cci_rpc;
 	struct dtx_req_rec	*drr = cb_info->cci_arg;
 	struct dtx_req_args	*dra = drr->drr_parent;
+	struct dtx_in		*din = crt_req_get(req);
 	struct dtx_out		*dout;
 	int			 rc = cb_info->cci_rc;
 
@@ -154,17 +155,20 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, rc);
 
 	D_DEBUG(DB_TRACE,
-		"DTX req for opc %x got reply from %d/%d: rc = %d.\n",
-		dra->dra_opc, drr->drr_rank, drr->drr_tag, rc);
+		"DTX req for opc %x (req %p future %p) got reply from %d/%d: "
+		"epoch :"DF_X64", rc %d.\n", dra->dra_opc, req,
+		dra->dra_future, drr->drr_rank, drr->drr_tag,
+		din != NULL ? din->di_epoch : 0, drr->drr_result);
 }
 
 static int
-dtx_req_send(struct dtx_req_rec *drr)
+dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 {
 	struct dtx_req_args	*dra = drr->drr_parent;
 	crt_rpc_t		*req;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
+	struct dtx_in		*din = NULL;
 	int			 rc;
 
 	tgt_ep.ep_grp = NULL;
@@ -174,11 +178,10 @@ dtx_req_send(struct dtx_req_rec *drr)
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
-		struct dtx_in	*din;
-
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
+		din->di_epoch = epoch;
 		din->di_dtx_array.ca_count = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
@@ -187,8 +190,10 @@ dtx_req_send(struct dtx_req_rec *drr)
 			crt_req_decref(req);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x sent: rc = %d.\n",
-		dra->dra_opc, rc);
+	D_DEBUG(DB_TRACE, "DTX req for opc %x to %d/%d (req %p future %p) sent "
+		"epoch "DF_X64" : rc %d.\n", dra->dra_opc, drr->drr_rank,
+		drr->drr_tag, req, dra->dra_future,
+		din != NULL ? din->di_epoch : 0, rc);
 
 	if (rc != 0) {
 		drr->drr_result = rc;
@@ -211,31 +216,21 @@ dtx_req_list_cb(void **args)
 			switch (drr->drr_result) {
 			case DTX_ST_COMMITTED:
 				dra->dra_result = DTX_ST_COMMITTED;
-				/* As long as one replica has committed the DTX,
-				 * then the DTX is committable on all replicas.
+				/* As long as one target has committed the DTX,
+				 * then the DTX is committable on all targets.
 				 */
 				D_DEBUG(DB_TRACE,
 					"The DTX "DF_DTI" has been committed "
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case DTX_ST_INIT:
-				if (dra->dra_result != DTX_ST_COMMITTED)
-					dra->dra_result = DTX_ST_INIT;
-				break;
 			case DTX_ST_PREPARED:
 				if (dra->dra_result == 0)
 					dra->dra_result = DTX_ST_PREPARED;
 				break;
 			default:
-				if (drr->drr_result == -DER_NONEXIST) {
-					if (dra->dra_result <= 0 ||
-					    dra->dra_result == DTX_ST_PREPARED)
-						dra->dra_result = DTX_ST_INIT;
-				} else if (dra->dra_result != DTX_ST_INIT) {
-					dra->dra_result = drr->drr_result >= 0 ?
-						-DER_IO : drr->drr_result;
-				}
+				dra->dra_result = drr->drr_result >= 0 ?
+					-DER_IO : drr->drr_result;
 				break;
 			}
 
@@ -263,7 +258,7 @@ dtx_req_list_cb(void **args)
 
 static int
 dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
-		  uuid_t co_uuid)
+		  uuid_t co_uuid, daos_epoch_t epoch)
 {
 	ABT_future		 future;
 	struct dtx_req_args	 dra;
@@ -284,11 +279,13 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 		return dss_abterr2der(rc);
 	}
 
+	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p start.\n",
+		opc, future);
 	dra.dra_future = future;
 	d_list_for_each_entry(drr, head, drr_link) {
 		drr->drr_parent = &dra;
 		drr->drr_result = 0;
-		rc = dtx_req_send(drr);
+		rc = dtx_req_send(drr, epoch);
 		if (rc != 0)
 			break;
 	}
@@ -308,17 +305,17 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 		  "ABT_future_wait failed for opc %x, length = %d: rc = %d.\n",
 		  opc, length, rc);
 
+	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
+		opc, future, rc);
 	ABT_future_free(&future);
 	rc = dra.dra_result;
-
-	D_DEBUG(DB_TRACE, "DTX req for opc %x: rc = %d\n", opc, rc);
 
 	return rc;
 }
 
 static int
-dtx_cf_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		 daos_iov_t *val_iov, struct btr_record *rec)
+dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		 d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -364,7 +361,7 @@ dtx_cf_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	D_ASSERTF(0, "We should not come here.\n");
 	return 0;
@@ -372,7 +369,7 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -394,29 +391,33 @@ btr_ops_t dbtree_dtx_cf_ops = {
 #define DTX_CF_BTREE_ORDER	20
 
 static int
-dtx_get_replicas(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
+dtx_get_tgt_cnt(daos_unit_oid_t *oid, struct pl_obj_layout *layout)
 {
 	struct daos_oclass_attr	*oc_attr;
-	int			 replicas;
+	int			 tgt_cnt;
 
 	if (layout->ol_nr <= oid->id_shard)
 		return -DER_INVAL;
 
 	oc_attr = daos_oclass_attr_find(oid->id_pub);
 
-	/* XXX: Need some special handling for EC case in the future. */
 
-	if (oc_attr->ca_resil != DAOS_RES_REPL)
+	if (oc_attr->ca_resil != DAOS_RES_REPL &&
+	    oc_attr->ca_resil != DAOS_RES_EC)
 		return -DER_NOTAPPLICABLE;
+	if (oc_attr->ca_resil == DAOS_RES_REPL)
+		tgt_cnt = oc_attr->u.rp.r_num;
+	else {
+		tgt_cnt = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+	}
 
-	replicas = oc_attr->u.repl.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = layout->ol_nr;
+	if (tgt_cnt == DAOS_OBJ_REPL_MAX)
+		tgt_cnt = layout->ol_grp_size;
 
-	if (replicas < 1)
+	if (tgt_cnt < 1)
 		return -DER_INVAL;
 
-	return replicas;
+	return tgt_cnt;
 }
 
 static int
@@ -429,7 +430,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	struct daos_obj_md		 md = { 0 };
 	struct dtx_cf_rec_bundle	 dcrb;
 	d_rank_t			 myrank;
-	int				 replicas;
+	int				 tgt_cnt;
 	int				 start;
 	int				 rc;
 	int				 i;
@@ -440,14 +441,14 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	if (rc != 0)
 		return rc;
 
-	replicas = dtx_get_replicas(oid, layout);
-	if (replicas < 0) {
-		rc = replicas;
+	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
+	if (tgt_cnt < 0) {
+		rc = tgt_cnt;
 		goto out;
 	}
 
-	/* Skip single replicated object. */
-	if (replicas == 1)
+	/* Skip single-redundancy object. */
+	if (tgt_cnt == 1)
 		D_GOTO(out, rc = 0);
 
 	dcrb.dcrb_count = count;
@@ -455,17 +456,17 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	dcrb.dcrb_head = head;
 	dcrb.dcrb_length = length;
 
-	crt_group_rank(pool->sp_group, &myrank);
-	start = (oid->id_shard / replicas) * replicas;
-	for (i = start; i < start + replicas && rc >= 0; i++) {
+	crt_group_rank(NULL, &myrank);
+	start = (oid->id_shard / tgt_cnt) * tgt_cnt;
+	for (i = start; i < start + tgt_cnt && rc >= 0; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
-		daos_iov_t		 kiov;
-		daos_iov_t		 riov;
+		d_iov_t		 kiov;
+		d_iov_t		 riov;
 
-		/* skip unavailable replica(s). */
+		/* skip unavailable target(s). */
 		shard = &layout->ol_shards[i];
-		if (shard->po_target == -1 || shard->po_rebuilding)
+		if (shard->po_target == -1)
 			continue;
 
 		rc = pool_map_find_target(pool->sp_map, shard->po_target,
@@ -473,14 +474,16 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 		D_ASSERT(rc == 1);
 
 		/* skip myself. */
-		if (myrank == target->ta_comp.co_rank)
+		if (myrank == target->ta_comp.co_rank &&
+		    dss_get_module_info()->dmi_tgt_id ==
+		    target->ta_comp.co_index)
 			continue;
 
 		dcrb.dcrb_rank = target->ta_comp.co_rank;
 		dcrb.dcrb_tag = target->ta_comp.co_index;
 
-		daos_iov_set(&riov, &dcrb, sizeof(dcrb));
-		daos_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
+		d_iov_set(&riov, &dcrb, sizeof(dcrb));
+		d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
 		rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
 				   &kiov, &riov);
 	}
@@ -550,16 +553,16 @@ out:
  * be committed by remote server via signle PMDK transaction.
  *
  * After the DTX classification, send DTX_COMMIT RPC to related servers, and
- * then call DTX commit locally. For a DTX, it is possible that some replicas
+ * then call DTX commit locally. For a DTX, it is possible that some targets
  * have committed successfully, but others failed. That is no matter. As long
- * as one replica has committed, then the DTX logic can re-sync those failed
- * replicas when dtx_resync() is triggered next time
+ * as one target has committed, then the DTX logic can re-sync those failed
+ * targets when dtx_resync() is triggered next time
  */
 int
 dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	   int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
@@ -569,7 +572,7 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	int			 rc;
 	int			 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -586,13 +589,19 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
-	if (!d_list_empty(&head))
-		rc = dtx_req_list_send(DTX_COMMIT, &head, length, po_uuid,
-				       co_uuid);
-
+	/* Local commit firstly. Then if client resend related RPC during the
+	 * subseqent remote commit, it will reply to the client with success.
+	 */
 	if (dti != NULL)
-		/* We cannot rollback the commit, so commit locally anyway. */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
+		rc = vos_dtx_commit(cont->sc_hdl, dti, count);
+
+	if (rc == 0 && !d_list_empty(&head))
+		/* If local commit is successful, then even if remote commit
+		 * hit failure, it is still recoverable, so let's ignore the
+		 * remote commit failure.
+		 */
+		rc1 = dtx_req_list_send(DTX_COMMIT, &head, length, po_uuid,
+					co_uuid, crt_hlc_get());
 
 out:
 	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d\n",
@@ -602,21 +611,21 @@ out:
 		D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
-		dbtree_destroy(tree_hdl);
+		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
-	return rc >= 0 ? rc1 : rc;
+	return rc > 0 ? 0 : rc;
 }
 
 int
-dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
-	  int count, uint32_t version)
+dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
+	  struct dtx_entry *dtes, int count, uint32_t version)
 {
-	struct ds_cont		*cont = NULL;
+	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
@@ -626,7 +635,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	int			 rc;
 	int			 rc1 = 0;
 
-	rc = ds_cont_lookup(po_uuid, co_uuid, &cont);
+	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -646,11 +655,17 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	D_ASSERT(dti != NULL);
 
 	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, dti, count, false);
+	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count, false);
+
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	if (!d_list_empty(&head))
 		rc1 = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
-					co_uuid);
+					co_uuid, epoch);
 
 out:
 	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d\n",
@@ -660,20 +675,14 @@ out:
 		D_FREE(dti);
 
 	if (!daos_handle_is_inval(tree_hdl))
-		dbtree_destroy(tree_hdl);
+		dbtree_destroy(tree_hdl, NULL);
 
 	D_ASSERT(d_list_empty(&head));
 
 	if (cont != NULL)
-		ds_cont_put(cont);
+		ds_cont_child_put(cont);
 
-	if (rc == -DER_NONEXIST)
-		rc = 0;
-
-	if (rc < 0)
-		return rc;
-
-	return rc1 == -DER_NONEXIST ? 0 : rc1;
+	return rc > 0 ? 0 : rc;
 }
 
 int
@@ -686,7 +695,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	struct dtx_req_rec	*next;
 	d_list_t		 head;
 	d_rank_t		 myrank;
-	int			 replicas;
+	int			 tgt_cnt;
 	int			 length = 0;
 	int			 start;
 	int			 rc = 0;
@@ -695,14 +704,14 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	if (layout->ol_nr <= oid->id_shard)
 		return -DER_INVAL;
 
-	replicas = dtx_get_replicas(oid, layout);
-	if (replicas < 0)
-		return replicas;
+	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
+	if (tgt_cnt < 0)
+		return tgt_cnt;
 
-	/* If no other replica, then currnet replica is the unique
+	/* If no other target, then current target is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
-	if (replicas == 1)
+	if (tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
 	pool = ds_pool_lookup(po_uuid);
@@ -710,13 +719,13 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		return -DER_INVAL;
 
 	D_INIT_LIST_HEAD(&head);
-	crt_group_rank(pool->sp_group, &myrank);
-	start = (oid->id_shard / replicas) * replicas;
-	for (i = start; i < start + replicas; i++) {
+	crt_group_rank(NULL, &myrank);
+	start = (oid->id_shard / tgt_cnt) * tgt_cnt;
+	for (i = start; i < start + tgt_cnt; i++) {
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
 
-		/* skip unavailable replica(s). */
+		/* skip unavailable or in-rebuilding target(s). */
 		shard = &layout->ol_shards[i];
 		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;
@@ -726,7 +735,9 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		D_ASSERT(rc == 1);
 
 		/* skip myself. */
-		if (myrank == target->ta_comp.co_rank)
+		if (myrank == target->ta_comp.co_rank &&
+		    dss_get_module_info()->dmi_tgt_id ==
+		    target->ta_comp.co_index)
 			continue;
 
 		D_ALLOC_PTR(drr);
@@ -743,14 +754,14 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		length++;
 	}
 
-	/* If no other available replicas, then currnet replica is the
+	/* If no other available targets, then current target is the
 	 * unique valid one, it can be committed if it is also 'prepared'.
 	 */
 	if (d_list_empty(&head))
 		rc = DTX_ST_PREPARED;
 	else
 		rc = dtx_req_list_send(DTX_CHECK, &head, length, po_uuid,
-				       co_uuid);
+				       co_uuid, crt_hlc_get());
 
 out:
 	d_list_for_each_entry_safe(drr, next, &head, drr_link) {

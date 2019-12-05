@@ -1,0 +1,6 @@
+name: 'Make Release'
+description: 'Make a release when requested'
+author: 'Brian J. Murrell'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

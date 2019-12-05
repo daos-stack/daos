@@ -97,8 +97,8 @@ rebuild_iv_ent_destroy(d_sg_list_t *sgl)
 }
 
 static int
-rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
-		     d_sg_list_t *src, void **priv)
+rebuild_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		     d_sg_list_t *dst, d_sg_list_t *src, void **priv)
 {
 	D_ASSERT(0);
 	return 0;
@@ -106,11 +106,11 @@ rebuild_iv_ent_fetch(struct ds_iv_entry *entry, d_sg_list_t *dst,
 
 /* Update the rebuild status from leaves to the master */
 static int
-rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
+rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		      d_sg_list_t *src, void **priv)
 {
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
-	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_global_pool_tracker *rgt;
 	d_rank_t	  rank;
 	int		  rc;
@@ -138,12 +138,15 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 				src_iv->riv_toberb_obj_count;
 			rgt->rgt_status.rs_obj_nr += src_iv->riv_obj_count;
 			rgt->rgt_status.rs_rec_nr += src_iv->riv_rec_count;
+			rgt->rgt_status.rs_size += src_iv->riv_size;
 		}
 
 		rebuild_global_status_update(rgt, src_iv);
-		if (rgt->rgt_status.rs_errno == 0)
+		if (rgt->rgt_status.rs_errno == 0) {
 			rgt->rgt_status.rs_errno = src_iv->riv_status;
-
+			if (src_iv->riv_status != 0)
+				rgt->rgt_status.rs_fail_rank = src_iv->riv_rank;
+		}
 		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
 			"toberb_obj/rb_obj/rec/global done/status/rank "
 			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
@@ -162,10 +165,10 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, d_sg_list_t *dst,
 
 /* Distribute the rebuild uuid/master rank from master to leaves */
 static int
-rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
-		       void **priv)
+rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		       d_sg_list_t *src, int ref_rc, void **priv)
 {
-	struct rebuild_iv *dst_iv = dst->sg_iovs[0].iov_buf;
+	struct rebuild_iv *dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
@@ -200,7 +203,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 		rc = crt_group_rank(NULL, &rank);
 		if (dst_iv->riv_global_done && rc == 0 &&
 		    d_rank_in_rank_list(rpt->rt_svc_list, rank)) {
-			struct daos_rebuild_status rs;
+			struct daos_rebuild_status rs = { 0 };
 
 			rs.rs_version	= src_iv->riv_ver;
 			rs.rs_errno	= src_iv->riv_status;
@@ -209,6 +212,7 @@ rebuild_iv_ent_refresh(d_sg_list_t *dst, d_sg_list_t *src, int ref_rc,
 			rs.rs_rec_nr	= src_iv->riv_rec_count;
 			rs.rs_toberb_obj_nr	=
 				src_iv->riv_toberb_obj_count;
+			rs.rs_size	= src_iv->riv_size;
 
 			rc = rebuild_status_completed_update(
 					src_iv->riv_pool_uuid, &rs);
@@ -249,7 +253,7 @@ int
 rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 
@@ -263,7 +267,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_fetch(ns, &key, &sgl);
+	rc = ds_iv_fetch(ns, &key, &sgl, true /* retry */);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -275,7 +279,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 		  unsigned int shortcut, unsigned int sync_mode)
 {
 	d_sg_list_t		sgl;
-	daos_iov_t		iov;
+	d_iov_t		iov;
 	struct ds_iv_key	key;
 	int			rc;
 
@@ -288,7 +292,8 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
+			  true /* retry */);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 

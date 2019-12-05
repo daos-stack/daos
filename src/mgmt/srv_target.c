@@ -297,35 +297,35 @@ tgt_vos_create_one(void *varg)
 	return rc;
 }
 
-static int
-tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+struct vos_create {
+	uuid_t		vc_uuid;
+	daos_size_t	vc_scm_size;
+	int		vc_tgt_nr;
+	int		vc_rc;
+};
+
+static void *
+tgt_vos_preallocate(void *arg)
 {
-	daos_size_t	 scm_size, nvme_size;
-	char		*path = NULL;
-	int		 i, fd = -1, rc = 0;
+	char			*path = NULL;
+	struct vos_create	*vc = arg;
+	int			 i;
+	int			 fd = -1;
 
-	/**
-	 * Create one VOS file per execution stream
-	 * 16MB minimum per pmemobj file (SCM partition)
-	 */
-	D_ASSERT(dss_tgt_nr > 0);
-	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
-	nvme_size = tgt_nvme_size / dss_tgt_nr;
-	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
-
-	for (i = 0; i < dss_tgt_nr; i++) {
-		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
-		if (rc)
+	for (i = 0; i < vc->vc_tgt_nr; i++) {
+		vc->vc_rc = path_gen(vc->vc_uuid, newborns_path, VOS_FILE, &i,
+				     &path);
+		if (vc->vc_rc)
 			break;
 
 		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
-			DP_UUID(uuid), path);
+			DP_UUID(vc->vc_uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
 			break;
 		}
 
@@ -336,30 +336,73 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		 * Use fallocate(2) instead of posix_fallocate(3) since the
 		 * latter is bogus with tmpfs.
 		 */
-		rc = fallocate(fd, 0, 0, scm_size);
-		if (rc) {
-			rc = daos_errno2der(errno);
+		vc->vc_rc = fallocate(fd, 0, 0, vc->vc_scm_size);
+		if (vc->vc_rc) {
+			vc->vc_rc = daos_errno2der(errno);
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64", rc: %d, %s.\n", DP_UUID(uuid),
-				path, scm_size, rc, strerror(errno));
+				"size: "DF_U64", rc: %d, %s.\n",
+				DP_UUID(vc->vc_uuid), path, vc->vc_scm_size,
+				vc->vc_rc, strerror(errno));
 			break;
 		}
 
-		rc = fsync(fd);
+		vc->vc_rc = fsync(fd);
 		(void)close(fd);
 		fd = -1;
-		if (rc) {
+		if (vc->vc_rc) {
 			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der(errno);
+				DP_UUID(vc->vc_uuid), path, vc->vc_rc);
+			vc->vc_rc = daos_errno2der(errno);
 			break;
 		}
-	}
-	if (path)
 		D_FREE(path);
-	if (fd >= 0)
-		(void)close(fd);
+	}
 
+	if (fd != -1)
+		close(fd);
+
+	D_FREE(path);
+
+	return NULL;
+}
+
+static int
+tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
+{
+	daos_size_t		scm_size, nvme_size;
+	struct vos_create	vc = {0};
+	int			rc = 0;
+	pthread_t		thread;
+
+
+	/**
+	 * Create one VOS file per execution stream
+	 * 16MB minimum per pmemobj file (SCM partition)
+	 */
+	D_ASSERT(dss_tgt_nr > 0);
+	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
+	nvme_size = tgt_nvme_size / dss_tgt_nr;
+
+	vc.vc_tgt_nr = dss_tgt_nr;
+	vc.vc_scm_size = scm_size;
+	uuid_copy(vc.vc_uuid, uuid);
+
+	rc = pthread_create(&thread, NULL, tgt_vos_preallocate, &vc);
+	if (rc != 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create thread for vos file "
+			"creation: %d\n", DP_UUID(uuid), rc);
+		return rc;
+	}
+
+	for (;;) {
+		rc = pthread_tryjoin_np(thread, NULL);
+		if (rc == 0)
+			break;
+		ABT_thread_yield();
+	}
+
+	rc = vc.vc_rc;
 	if (!rc) {
 		struct vos_pool_arg	vpa;
 
@@ -567,11 +610,25 @@ out:
 	crt_reply_send(tc_req);
 }
 
+int
+tgt_kill_pool(void *args)
+{
+	struct d_uuid	*id = args;
+
+	/* XXX: there are a few test cases that leak pool close
+	 * before destroying pool, we have to force the kill to pass
+	 * those tests, but we should try to disable "force" and
+	 * fix those issues in the future.
+	 */
+	return vos_pool_kill(id->uuid, true);
+}
+
 static int
 tgt_destroy(uuid_t pool_uuid, char *path)
 {
-	char	*zombie = NULL;
-	int	 rc;
+	char	      *zombie = NULL;
+	struct d_uuid  id;
+	int	       rc;
 
 	/** XXX: many synchronous/blocking operations below */
 
@@ -581,7 +638,8 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 		return rc;
 
 	/* destroy blobIDs first */
-	rc = dss_thread_collective(vos_blob_destroy, pool_uuid, 0);
+	uuid_copy(id.uuid, pool_uuid);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -737,87 +795,23 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
-/*
- * Return a URI string, like "ofi+sockets://192.168.1.70:44821", that callers
- * are responsible for freeing with D_FREE.
+/**
+ * Do Mark on a single target.
  */
-static int
-create_tag_uri(const char *base_uri, int i, char **uri)
+void
+ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
 {
-	char   *type = "ofi+sockets:";
-	char   *u;
-	char   *p;
-	int	port;
+	struct mgmt_mark_in	*in;
+	struct mgmt_mark_out	*out;
 
-	/* TODO: Support other URI types. */
-	if (strncmp(base_uri, type, strlen(type)) != 0) {
-		D_ERROR("URI %s type not supported\n", base_uri);
-		return -DER_NOSYS;
-	}
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
 
-	/* Locate the ":" between the host and the port. */
-	p = strrchr(base_uri, ':');
-	if (p == NULL) {
-		D_ERROR("no ':' in base URI %s\n", base_uri);
-		return -DER_INVAL;
-	}
+	D_DEBUG(DB_TRACE, "Mark trace %s.\n", in->m_mark);
 
-	/* Calculate the port. */
-	port = atoi(p + 1) + i;
-	if (port > 65535 /* maximal port number */) {
-		D_ERROR("port %d out of range\n", port);
-		return -DER_INVAL;
-	}
-
-	/* Print the base URI with the port into u. */
-	D_ASPRINTF(u, "%.*s%d", (int)(p + 1 - base_uri), base_uri, port);
-	if (u == NULL)
-		return -DER_NOMEM;
-
-	*uri = u;
-	return 0;
-}
-
-static int
-add_server(crt_group_t *group, struct server_entry *server)
-{
-	int i;
-
-	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
-		server->se_uri, server->se_nctxs);
-
-	for (i = 0; i < server->se_nctxs; i++) {
-		crt_node_info_t	info;
-		int		rc;
-
-		rc = create_tag_uri(server->se_uri, i, &info.uri);
-		if (rc != 0)
-			return rc;
-		rc = crt_group_node_add(group, server->se_rank, i, info);
-		if (rc != 0)
-			D_ERROR("failed to add rank=%u tag=%d uri=%s: %d\n",
-				server->se_rank, i, info.uri, rc);
-		D_FREE(info.uri);
-		if (rc != 0)
-			return rc;
-	}
-
-	return 0;
-}
-
-static int
-remove_server(crt_group_t *group, struct server_entry *server)
-{
-	int rc;
-
-	D_DEBUG(DB_MGMT, "rank=%u uri=%s nctxs=%u\n", server->se_rank,
-		server->se_uri, server->se_nctxs);
-
-	rc = crt_group_rank_remove(group, server->se_rank);
-	if (rc != 0)
-		D_ERROR("failed to remove rank=%u: %d\n", server->se_rank, rc);
-
-	return rc;
+	out = crt_reply_get(rpc);
+	out->m_rc = 0;
+	crt_reply_send(rpc);
 }
 
 /* State of the local system map (i.e., the CaRT PG membership) */
@@ -856,11 +850,26 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 		if (servers[i].se_flags & SERVER_IN) {
 			if (existing)
 				continue;
-			rc = add_server(group, &servers[i]);
+			D_DEBUG(DB_MGMT, "add rank=%u uri=%s nctxs=%u\n",
+				servers[i].se_rank, servers[i].se_uri,
+				servers[i].se_nctxs);
+			rc = crt_group_primary_rank_add(rpc->cr_ctx, group,
+							servers[i].se_rank,
+							servers[i].se_uri);
+			if (rc != 0)
+				D_ERROR("failed to add rank=%u uri=%s: %d\n",
+					servers[i].se_rank, servers[i].se_uri,
+					rc);
 		} else {
 			if (!existing)
 				continue;
-			rc = remove_server(group, &servers[i]);
+			D_DEBUG(DB_MGMT, "remove rank=%u uri=%s nctxs=%u\n",
+				servers[i].se_rank, servers[i].se_uri,
+				servers[i].se_nctxs);
+			rc = crt_group_rank_remove(group, servers[i].se_rank);
+			if (rc != 0)
+				D_ERROR("failed to remove rank=%u: %d\n",
+					servers[i].se_rank, rc);
 		}
 		/*
 		 * Commit suicide upon errors, so that others can detect and

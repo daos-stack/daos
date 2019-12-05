@@ -36,27 +36,29 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos_srv/dtx_srv.h>
+#include "ilog.h"
 
 /**
  * VOS metadata structure declarations
  * TODO: use df (durable format) as postfix of structures.
  *
  * opaque structure expanded inside implementation
- * Container table for holding container UUIDs
  * DAOS two-phase commit transaction table (DTX)
  * Object table for holding object IDs
  * B-Tree for Key Value stores
  * EV-Tree for Byte array stores
+ * Garbage collection bin
+ * Garbage collection bag
  */
-struct vos_cont_table_df;
 struct vos_cont_df;
 struct vos_dtx_table_df;
 struct vos_dtx_entry_df;
 struct vos_dtx_record_df;
-struct vos_obj_table_df;
 struct vos_obj_df;
 struct vos_krec_df;
 struct vos_irec_df;
+struct vos_gc_bin_df;
+struct vos_gc_bag_df;
 
 /**
  * Typed Layout named using Macros from libpmemobj
@@ -72,24 +74,70 @@ struct vos_irec_df;
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
 
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_entry_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_record_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bin_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bag_df);
+
 POBJ_LAYOUT_END(vos_pool_layout);
 
+struct vos_gc_bin_df {
+	/** address of the first(oldest) bag */
+	umem_off_t		bin_bag_first;
+	/** address of the last(newest) bag */
+	umem_off_t		bin_bag_last;
+	/** max bag size in this bin */
+	uint16_t		bin_bag_size;
+	/** total number of bags within this bin */
+	uint16_t		bin_bag_nr;
+	/**
+	 * reserved: max number of bags within this bin.
+	 * TODO: we should set a limit for number of bags per bin, and start
+	 * to eagerly run GC and free spaces if there are too many bags and
+	 * queued items.
+	 */
+	uint16_t		bin_bag_max;
+	/** reserved */
+	uint16_t		bin_pad16;
+};
 
-/**
- * VOS container table
- * PMEM container index in each pool
- */
-struct vos_cont_table_df {
-	struct btr_root		ctb_btree;
+struct vos_gc_bag_df {
+	/** index of the first item in FIFO */
+	uint16_t		bag_item_first;
+	/** index of the last item in FIFO */
+	uint16_t		bag_item_last;
+	/** number of queued items in FIFO */
+	uint16_t		bag_item_nr;
+	/** reserved */
+	uint16_t		bag_pad16;
+	/** next GC bag chained on vos_gc_bin_df */
+	umem_off_t		bag_next;
+	struct vos_gc_item {
+		/* address of the item to be freed */
+		umem_off_t		it_addr;
+		/** Reserved, argument for GC_VEA/BIO (e.g. size of extent) */
+		uint64_t		it_args;
+	}			bag_items[0];
+};
+
+enum vos_gc_type {
+	/* XXX: we could define GC_VEA, which can free NVMe/SCM space.
+	 * So svt_rec_free() and evt_desc_bio_free() only need to call
+	 * gc_add_item() to register BIO address for GC.
+	 *
+	 * However, GC_VEA could have extra overhead of reassigning SCM
+	 * pointers, but it also has low latency for undo changes.
+	 */
+	GC_AKEY,
+	GC_DKEY,
+	GC_OBJ,
+	GC_CONT,
+	GC_MAX,
 };
 
 /**
@@ -111,9 +159,10 @@ struct vos_pool_df {
 	/* # of containers in this pool */
 	uint64_t				pd_cont_nr;
 	/* Typed PMEMoid pointer for the container index table */
-	struct vos_cont_table_df		pd_ctab_df;
+	struct btr_root				pd_cont_root;
 	/* Free space tracking for NVMe device */
 	struct vea_space_df			pd_vea_df;
+	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
 };
 
 /**
@@ -121,10 +170,9 @@ struct vos_pool_df {
  * array value that is changed in the transaction (DTX).
  */
 enum vos_dtx_record_types {
-	DTX_RT_OBJ	= 1,
-	DTX_RT_KEY	= 2,
-	DTX_RT_SVT	= 3,
-	DTX_RT_EVT	= 4,
+	DTX_RT_ILOG	= 1,
+	DTX_RT_SVT	= 2,
+	DTX_RT_EVT	= 3,
 };
 
 enum vos_dtx_record_flags {
@@ -164,10 +212,10 @@ struct vos_dtx_record_df {
 };
 
 enum vos_dtx_entry_flags {
-	/* The DTX contains exchange of some record(s). */
-	DTX_EF_EXCHANGE_PENDING		= (1 << 0),
 	/* The DTX shares something with other DTX(s). */
-	DTX_EF_SHARES			= (1 << 1),
+	DTX_EF_SHARES			= (1 << 0),
+	/* The DTX is the leader */
+	DTX_EF_LEADER			= (1 << 1),
 };
 
 /**
@@ -191,8 +239,8 @@ struct vos_dtx_entry_df {
 	uint32_t			te_flags;
 	/** The intent of related modification. */
 	uint32_t			te_intent;
-	/** The second timestamp when handles the transaction. */
-	uint64_t			te_sec;
+	/** The timestamp when handles the transaction. */
+	uint64_t			te_time;
 	/** The list of vos_dtx_record_df in SCM. */
 	umem_off_t			te_records;
 	/** The next committed DTX in global list. */
@@ -217,14 +265,6 @@ struct vos_dtx_table_df {
 	struct btr_root			tt_active_btr;
 };
 
-/**
- * VOS object table
- * It is just a in-place btree for the time being.
- */
-struct vos_obj_table_df {
-	struct btr_root			obt_btr;
-};
-
 enum vos_io_stream {
 	/**
 	 * I/O stream for generic purpose, like client updates, updates
@@ -242,7 +282,7 @@ struct vos_cont_df {
 	uint64_t			cd_nobjs;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
-	struct vos_obj_table_df		cd_otab_df;
+	struct btr_root			cd_obj_root;
 	/** The DTXs table. */
 	struct vos_dtx_table_df		cd_dtx_table_df;
 	/** Allocation hints for block allocator. */
@@ -255,10 +295,8 @@ enum vos_krec_bf {
 	KREC_BF_EVT			= (1 << 0),
 	/* Single Value or Key (btree) */
 	KREC_BF_BTR			= (1 << 1),
-	/* The key is punched at time kr_latest */
-	KREC_BF_PUNCHED			= (1 << 2),
-	/* The key has been (or will be) removed */
-	KREC_BF_REMOVED			= (1 << 3),
+	/* it's a dkey, otherwise is akey */
+	KREC_BF_DKEY			= (1 << 2),
 };
 
 /**
@@ -276,16 +314,10 @@ struct vos_krec_df {
 	uint8_t				kr_pad_8;
 	/** key length */
 	uint32_t			kr_size;
-	/* Latest known update timestamp or punched timestamp */
-	daos_epoch_t			kr_latest;
-	/* Earliest known modification timestamp */
-	daos_epoch_t			kr_earliest;
+	/** Incarnation log for key */
+	struct ilog_df			kr_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			kr_dtx;
-	/** The count of uncommitted DTXs that share the key. */
-	uint32_t			kr_dtx_shares;
-	/** For 64-bits alignment. */
-	uint32_t			kr_padding;
 	union {
 		/** btree root under the key */
 		struct btr_root			kr_btr;
@@ -294,13 +326,6 @@ struct vos_krec_df {
 	};
 	/* Checksum and key are stored after tree root */
 };
-
-/* Assumptions made about relative placement of these fields so
- * assert that they are true
- */
-D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
-	  offsetof(struct vos_krec_df, kr_latest) +
-	  sizeof(((struct vos_krec_df *)0)->kr_latest));
 
 /**
  * Persisted VOS single value & epoch record, it is referenced by
@@ -331,26 +356,16 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
+	/** The latest sync epoch */
+	daos_epoch_t			vo_sync;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
-	/** Latest known update timestamp or punched timestamp */
-	daos_epoch_t			vo_latest;
-	/** Earliest known update timestamp */
-	daos_epoch_t			vo_earliest;
+	/** Incarnation log for the object */
+	struct ilog_df			vo_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			vo_dtx;
-	/** The count of uncommitted DTXs that share the object. */
-	uint32_t			vo_dtx_shares;
-	/** Incarnation of the object, it's increased each time it's punched. */
-	uint32_t			vo_incarnation;
-	/** VOS object btree root */
+	/** VOS dkey btree root */
 	struct btr_root			vo_tree;
 };
 
-/* Assumptions made about relative placement of these fields so
- * assert that they are true
- */
-D_CASSERT(offsetof(struct vos_obj_df, vo_earliest) ==
-	  offsetof(struct vos_obj_df, vo_latest) +
-	  sizeof(((struct vos_obj_df *)0)->vo_latest));
 #endif

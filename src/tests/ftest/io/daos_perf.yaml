@@ -1,0 +1,66 @@
+hosts:
+    test_servers:
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
+    test_clients:
+        - boro-E
+        - boro-F
+        - boro-G
+        - boro-H
+timeout: 600
+server_config:
+    name: daos_server
+daos_perf:
+  pool_size:
+    scm:
+      size: '20G'
+  client_processes: !mux
+    np_1:
+      np: 1
+      mode: 'vos'
+      value_size:
+        size_1k:
+          size: '1k'
+      value_type: !mux
+        single_value:
+          obj: 8
+          dkeys: '1k'
+          akeys: '512'
+          records: 1
+          flags: !mux
+            with_shuffle:
+              F: "-S"
+            without_shuffle:
+              F: " "
+        array_value:
+          obj: 1
+          dkeys: 1
+          akeys: 1
+          records: '2m'
+          flags: !mux
+            with_shuffle:
+              F: "-A -S"
+            without_shuffle:
+              F: "-A"
+    np_16:
+      np: 16
+      mode: 'daos'
+      value_size:
+       size_1k:
+         size: '1k'
+      value_type:
+        single_value:
+          obj: 8
+          dkeys: '256'
+          akeys: 64
+          records: 1
+          flags:
+            for_singlevalue:
+              F: ' '
+      oclass: !mux
+        large:
+          o: 'LARGE'
+        r2:
+          o: 'R2S'

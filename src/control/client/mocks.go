@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,151 +24,422 @@
 package client
 
 import (
-	"fmt"
 	"io"
+	"sort"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
-type mgmtControlFormatStorageClient struct {
+var (
+	MockServers      = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
+	MockCtrlrs       = NvmeControllers{MockControllerPB()}
+	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS}
+	MockState        = ctlpb.ResponseState{
+		Status: ctlpb.ResponseStatus_CTL_ERR_APP,
+		Error:  "example application error",
+	}
+	MockCtrlrResults = NvmeControllerResults{
+		&ctlpb.NvmeControllerResult{
+			Pciaddr: "0000:81:00.0",
+			State:   &MockState,
+		},
+	}
+	MockScmModules    = ScmModules{MockModulePB()}
+	MockModuleResults = ScmModuleResults{
+		&ctlpb.ScmModuleResult{
+			Loc:   &ctlpb.ScmModule_Location{},
+			State: &MockState,
+		},
+	}
+	MockScmNamespaces = ScmNamespaces{MockPmemDevicePB()}
+	MockMounts        = ScmMounts{MockMountPB()}
+	MockMountResults  = ScmMountResults{
+		&ctlpb.ScmMountResult{
+			Mntpoint: "/mnt/daos",
+			State:    &MockState,
+		},
+	}
+	MockACL = &mockACLResult{
+		acl: []string{
+			"A::OWNER@:rw",
+			"A::GROUP@:r",
+		},
+	}
+	MockErr = errors.New("unknown failure")
+)
+
+type mgmtCtlStorageFormatClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
 	mountResults  ScmMountResults
 	alreadyCalled bool
 }
 
-func (m mgmtControlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
+func (m *mgmtCtlStorageFormatClient) Recv() (*ctlpb.StorageFormatResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
 	m.alreadyCalled = true
 
-	return &pb.FormatStorageResp{
+	return &ctlpb.StorageFormatResp{
 		Crets: m.ctrlrResults,
 		Mrets: m.mountResults,
 	}, nil
 }
 
-// implement mock/stub behaviour for Control
-type mockControl struct {
-	address      string
-	connState    connectivity.State
-	features     []*pb.Feature
-	ctrlrs       NvmeControllers
-	ctrlrResults NvmeControllerResults
-	modules      ScmModules
-	mountResults ScmMountResults
-	scanRet      error
-	formatRet    error
-	killRet      error
-	connectRet   error
+type mockMgmtCtlClient struct {
+	ctrlrs        NvmeControllers
+	ctrlrResults  NvmeControllerResults
+	modules       ScmModules
+	moduleResults ScmModuleResults
+	pmems         ScmNamespaces
+	mountResults  ScmMountResults
+	scanRet       error
+	formatRet     error
 }
 
-func (m *mockControl) connect(addr string) error {
+func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
+	// return successful prepare results, state member messages
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &ctlpb.StoragePrepareResp{
+		Nvme: &ctlpb.PrepareNvmeResp{
+			State: &MockSuccessState,
+		},
+		Scm: &ctlpb.PrepareScmResp{
+			State: &MockSuccessState,
+		},
+	}, m.scanRet
+}
+
+func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq, o ...grpc.CallOption) (*ctlpb.StorageScanResp, error) {
+	// return successful query results, state member messages
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &ctlpb.StorageScanResp{
+		Nvme: &ctlpb.ScanNvmeResp{
+			State:  &MockSuccessState,
+			Ctrlrs: m.ctrlrs,
+		},
+		Scm: &ctlpb.ScanScmResp{
+			State:   &MockSuccessState,
+			Modules: m.modules,
+			Pmems:   m.pmems,
+		},
+	}, m.scanRet
+}
+
+func (m *mockMgmtCtlClient) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_StorageFormatClient, error) {
+	return &mgmtCtlStorageFormatClient{ctrlrResults: m.ctrlrResults, mountResults: m.mountResults}, m.formatRet
+}
+
+type mgmtCtlNetworkScanDevicesClient struct {
+	grpc.ClientStream
+}
+
+func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error) {
+	return &ctlpb.DeviceScanReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
+	return &mgmtCtlNetworkScanDevicesClient{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
+	return &ctlpb.ProviderListReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
+	return &ctlpb.SystemMemberQueryResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
+	return &ctlpb.SystemStopResp{}, nil
+}
+
+func newMockMgmtCtlClient(
+	ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults,
+	modules ScmModules,
+	moduleResults ScmModuleResults,
+	pmems ScmNamespaces,
+	mountResults ScmMountResults,
+	scanRet error,
+	formatRet error,
+) ctlpb.MgmtCtlClient {
+	return &mockMgmtCtlClient{
+		ctrlrs, ctrlrResults, modules, moduleResults, pmems, mountResults,
+		scanRet, formatRet,
+	}
+}
+
+type mockACLResult struct {
+	acl    []string
+	status int32
+	err    error
+}
+
+// ACL returns a properly formed AccessControlList from the mock data
+func (m *mockACLResult) ACL() *AccessControlList {
+	return &AccessControlList{
+		Entries: m.acl,
+	}
+}
+
+type mockMgmtSvcClient struct {
+	ACLRet *mockACLResult
+}
+
+func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
+	// return successful pool creation results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolCreateResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
+	// return successful pool destroy results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+// returnACLResult returns the mock ACL results - either an error or an ACLResp
+func (m *mockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
+	if m.ACLRet.err != nil {
+		return nil, m.ACLRet.err
+	}
+	return &mgmtpb.ACLResp{ACL: m.ACLRet.acl, Status: m.ACLRet.status}, nil
+}
+
+func (m *mockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *mockMgmtSvcClient) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *mockMgmtSvcClient) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *mockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
+func (m *mockMgmtSvcClient) BioHealthQuery(
+	ctx context.Context,
+	req *mgmtpb.BioHealthReq,
+	o ...grpc.CallOption,
+) (*mgmtpb.BioHealthResp, error) {
+
+	// return successful bio health results
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.BioHealthResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) SmdListDevs(
+	ctx context.Context,
+	req *mgmtpb.SmdDevReq,
+	o ...grpc.CallOption,
+) (*mgmtpb.SmdDevResp, error) {
+
+	// return successful SMD device list
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.SmdDevResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) SmdListPools(
+	ctx context.Context,
+	req *mgmtpb.SmdPoolReq,
+	o ...grpc.CallOption,
+) (*mgmtpb.SmdPoolResp, error) {
+
+	// return successful SMD pool list
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.SmdPoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
+
+	return &mgmtpb.JoinResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
+	return &mgmtpb.GetAttachInfoResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+	return &mgmtpb.DaosResp{}, nil
+}
+
+func newMockMgmtSvcClient(getACLResult *mockACLResult) mgmtpb.MgmtSvcClient {
+	return &mockMgmtSvcClient{
+		getACLResult,
+	}
+}
+
+func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
+	// return successful list pools results
+	return &mgmtpb.ListPoolsResp{}, nil
+}
+
+// implement mock/stub behaviour for Control
+type mockControl struct {
+	address    string
+	connState  connectivity.State
+	connectRet error
+	ctlClient  ctlpb.MgmtCtlClient
+	svcClient  mgmtpb.MgmtSvcClient
+	log        logging.Logger
+}
+
+func (m *mockControl) connect(addr string, cfg *security.TransportConfig) error {
 	if m.connectRet == nil {
 		m.address = addr
 	}
 
 	return m.connectRet
 }
+
 func (m *mockControl) disconnect() error { return nil }
+
 func (m *mockControl) connected() (connectivity.State, bool) {
 	return m.connState, checkState(m.connState)
 }
+
 func (m *mockControl) getAddress() string { return m.address }
-func (m *mockControl) listAllFeatures() (FeatureMap, error) {
-	fm := make(FeatureMap)
-	for _, f := range m.features {
-		fm[f.Fname.Name] = fmt.Sprintf(
-			"category %s, %s", f.Category.Category, f.Description)
-	}
-	return fm, nil
-}
-func (m *mockControl) scanStorage() (*pb.ScanStorageResp, error) {
-	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.ScanStorageResp{
-		Ctrlrs:  m.ctrlrs,
-		Modules: m.modules,
-	}, m.scanRet
-}
-func (m *mockControl) formatStorage(ctx context.Context) (
-	pb.MgmtControl_FormatStorageClient, error) {
 
-	return mgmtControlFormatStorageClient{
-		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
-	}, m.formatRet
+func (m *mockControl) getCtlClient() ctlpb.MgmtCtlClient {
+	return m.ctlClient
 }
-func (m *mockControl) killRank(uuid string, rank uint32) error {
-	return m.killRet
+
+func (m *mockControl) getSvcClient() mgmtpb.MgmtSvcClient {
+	return m.svcClient
 }
+
+func (m *mockControl) logger() logging.Logger {
+	return m.log
+}
+
 func newMockControl(
-	address string, state connectivity.State, features []*pb.Feature,
-	ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
-	modules ScmModules, mountResults ScmMountResults, scanRet error,
-	formatRet error, killRet error, connectRet error) Control {
+	log logging.Logger,
+	address string, state connectivity.State, connectRet error,
+	cClient ctlpb.MgmtCtlClient, sClient mgmtpb.MgmtSvcClient) Control {
 
-	return &mockControl{
-		address, state, features, ctrlrs, ctrlrResults, modules,
-		mountResults, scanRet, formatRet, killRet, connectRet,
+	return &mockControl{address, state, connectRet, cClient, sClient, log}
+}
+
+type mockControllerFactory struct {
+	log           logging.Logger
+	state         connectivity.State
+	ctrlrs        NvmeControllers
+	ctrlrResults  NvmeControllerResults
+	modules       ScmModules
+	moduleResults ScmModuleResults
+	pmems         ScmNamespaces
+	mountResults  ScmMountResults
+	// to provide error injection into Control objects
+	scanRet      error
+	formatRet    error
+	killRet      error
+	connectRet   error
+	getACLResult *mockACLResult
+}
+
+func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
+	// returns controller with mock properties specified in constructor
+	cClient := newMockMgmtCtlClient(m.ctrlrs, m.ctrlrResults, m.modules,
+		m.moduleResults, m.pmems, m.mountResults, m.scanRet, m.formatRet)
+
+	sClient := newMockMgmtSvcClient(m.getACLResult)
+
+	controller := newMockControl(m.log, address, m.state, m.connectRet, cClient, sClient)
+
+	err := controller.connect(address, cfg)
+
+	return controller, err
+}
+
+func newMockConnect(log logging.Logger,
+	state connectivity.State, ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults, modules ScmModules,
+	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
+	scanRet error, formatRet error, killRet error, connectRet error, ACLRet *mockACLResult) Connect {
+
+	return &connList{
+		log: log,
+		factory: &mockControllerFactory{
+			log, state, ctrlrs, ctrlrResults, modules, moduleResults,
+			pmems, mountResults, scanRet, formatRet, killRet,
+			connectRet, ACLRet,
+		},
 	}
 }
 
-// NewClientFM provides a mock ClientFeatureMap for testing.
-func NewClientFM(features []*pb.Feature, addrs Addresses) ClientFeatureMap {
-	cf := make(ClientFeatureMap)
+func defaultMockConnect(log logging.Logger) Connect {
+	return newMockConnect(
+		log, connectivity.Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
+		MockModuleResults, MockScmNamespaces, MockMountResults,
+		nil, nil, nil, nil, nil)
+}
+
+// MockScanResp mocks scan results from scm and nvme for multiple servers.
+// Each result indicates success or failure through presence of Err.
+func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses, summary bool) *StorageScanResp {
+	nvmeResults := make(NvmeScanResults)
+	scmResults := make(ScmScanResults)
+
 	for _, addr := range addrs {
-		fMap := make(FeatureMap)
-		for _, f := range features {
-			fMap[f.Fname.Name] = fmt.Sprintf(
-				"category %s, %s", f.Category.Category, f.Description)
+		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: cs}
+
+		scmResults[addr] = &ScmScanResult{
+			Modules:    scmModulesFromPB(ms),
+			Namespaces: scmNamespacesFromPB(nss),
 		}
-		cf[addr] = FeatureResult{fMap, nil}
 	}
-	return cf
+
+	sort.Strings(addrs)
+
+	return &StorageScanResp{
+		summary: summary, Servers: addrs, Nvme: nvmeResults, Scm: scmResults,
+	}
 }
 
-// NewClientNvmeResults provides a mock ClientNvmeMap populated with controller
+// NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
 // operation responses
-func NewClientNvmeResults(
-	results []*pb.NvmeControllerResult, addrs Addresses) ClientNvmeMap {
-
-	cMap := make(ClientNvmeMap)
+func NewClientNvmeResults(results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
+	cMap := make(ClientCtrlrMap)
 	for _, addr := range addrs {
-		cMap[addr] = NvmeResult{Responses: results}
+		cMap[addr] = CtrlrResults{Responses: results}
 	}
 	return cMap
 }
 
-// NewClientNvme provides a mock ClientNvmeMap populated with ctrlr details
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientNvmeMap {
-	cMap := make(ClientNvmeMap)
+// NewClientScmMount provides a mock ClientMountMap populated with scm mount details
+func NewClientScmMount(mounts ScmMounts, addrs Addresses) ClientMountMap {
+	cMap := make(ClientMountMap)
 	for _, addr := range addrs {
-		cMap[addr] = NvmeResult{Ctrlrs: ctrlrs}
+		cMap[addr] = MountResults{Mounts: mounts}
 	}
 	return cMap
 }
 
-// NewClientScm provides a mock ClientScmMap populated with scm module details
-func NewClientScm(mms ScmModules, addrs Addresses) ClientScmMap {
-	cMap := make(ClientScmMap)
-	for _, addr := range addrs {
-		cMap[addr] = ScmResult{Modules: mms}
-	}
-	return cMap
-}
-
-// NewClientMountResults provides a mock ClientMountMap populated with scm mount
+// NewClientScmMountResults provides a mock ClientMountMap populated with scm mount
 // operation responses
-func NewClientMountResults(
-	results []*pb.ScmMountResult, addrs Addresses) ClientMountMap {
+func NewClientScmMountResults(
+	results []*ctlpb.ScmMountResult, addrs Addresses) ClientMountMap {
 
 	cMap := make(ClientMountMap)
 	for _, addr := range addrs {
-		cMap[addr] = MountResult{Responses: results}
+		cMap[addr] = MountResults{Responses: results}
 	}
 	return cMap
 }

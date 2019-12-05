@@ -1,12 +1,12 @@
 name: daos
 servers:
 - rank: 0
-  targets:
-  - 1-20
+  targets: 20
   nr_xs_helpers: 0
   first_core: 1
   fabric_iface: qib0
   fabric_iface_port: 20000
+  pinned_numa_node: 0
   log_mask: WARN
   log_file: /tmp/daos_server1.log
   env_vars:
@@ -21,13 +21,14 @@ servers:
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  hostname: ""
 - rank: 1
-  targets:
-  - 21-40
+  targets: 20
   nr_xs_helpers: 1
-  first_core: 21
-  fabric_iface: qib0
+  first_core: 22
+  fabric_iface: qib1
   fabric_iface_port: 20000
+  pinned_numa_node: 1
   log_mask: WARN
   log_file: /tmp/daos_server2.log
   env_vars:
@@ -44,6 +45,7 @@ servers:
   bdev_number: 1
   bdev_size: 16
   cliopts: []
+  hostname: ""
 provider: ofi+verbs;ofi_rxm
 socket_dir: ./.daos/daos_server
 access_points:
@@ -51,9 +53,12 @@ access_points:
 - hostname2
 - hostname3
 port: 10001
-ca_cert: ./.daos/ca.crt
-cert: ./.daosa/daos_server.crt
-key: ./.daosa/daos_server.key
+transport_config:
+  allow_insecure: false
+  client_cert_dir: .daos/clients
+  ca_cert: .daos/daosCA.crt
+  cert: .daos/daos_server.crt
+  key: .daos/daos_server.key
 fault_path: /vcdu0/rack1/hostname
 fault_cb: ./.daos/fd_callback
 fabric_ifaces:

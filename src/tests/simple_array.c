@@ -104,8 +104,8 @@ struct ioreq {
 	daos_recx_t	recx;
 	daos_iod_t	iod;
 
-	daos_iov_t	iov;
-	daos_sg_list_t	sg;
+	d_iov_t	iov;
+	d_sg_list_t	sg;
 
 	daos_event_t	ev;
 };
@@ -202,7 +202,7 @@ ioreqs_init(struct ioreq *reqs) {
 		req->iod.iod_recxs	= &req->recx;
 
 		/** initialize scatter/gather */
-		req->iov = (daos_iov_t) {
+		req->iov = (d_iov_t) {
 			.iov_buf	= &data,
 			.iov_buf_len	= SLICE_SIZE * sizeof(data[0]),
 			.iov_len	= SLICE_SIZE * sizeof(data[0]),
@@ -519,16 +519,16 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	daos_obj_generate_id(&oid, 0, cid);
+	daos_obj_generate_id(&oid, 0, cid, 0);
 
 	if (rank == 0) {
-		daos_oclass_attr_t	cattr = {
+		struct daos_oclass_attr	cattr = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil_degree	= 0 /* TBD */,
 			.ca_resil		= DAOS_RES_REPL,
 			.ca_grp_nr		= 4,
-			.u.repl			= {
-				.r_method	= 0 /* TBD */,
+			.u.rp			= {
+				.r_proto	= 0 /* TBD */,
 				.r_num		= 2 /* TBD */,
 			},
 		};

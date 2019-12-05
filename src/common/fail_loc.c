@@ -35,7 +35,7 @@ uint64_t daos_fail_value;
 uint64_t daos_fail_num;
 
 void
-daos_reset_fail_loc()
+daos_fail_loc_reset()
 {
 	daos_fail_loc_set(0);
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
@@ -143,7 +143,7 @@ daos_fail_init(void)
 }
 
 void
-daos_fail_fini()
+daos_fail_fini(void)
 {
 	d_fault_inject_fini();
 }

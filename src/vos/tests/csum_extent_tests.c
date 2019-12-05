@@ -22,6 +22,7 @@
  */
 
 #include <daos_types.h>
+#include <daos/checksum.h>
 #include <evt_priv.h>
 #include "csum_extent_tests.h"
 #include "vts_io.h"
@@ -209,9 +210,9 @@ sgl_init(d_sg_list_t *sgl, uint8_t *buf, uint32_t buf_len)
 {
 	memset(sgl, 0, sizeof((*sgl)));
 	sgl->sg_nr = 1;
-	sgl->sg_iovs = calloc(sgl->sg_nr, sizeof(daos_iov_t));
+	sgl->sg_iovs = calloc(sgl->sg_nr, sizeof(d_iov_t));
 
-	daos_iov_set(&sgl->sg_iovs[0], buf, buf_len);
+	d_iov_set(&sgl->sg_iovs[0], buf, buf_len);
 }
 
 /*
@@ -247,11 +248,11 @@ iod_csum_calculate(struct csum_test *test, uint32_t extent_nr, daos_iod_t *iod)
 		else
 			memset(extent_csum_buf, i + 1, csum_buf_len);
 
-		daos_csum_set_multiple(csum, buf, csum_buf_len,
-				       test->csum_bytes,
-				       get_csums_per_extent(test, extent_nr),
-				       test->csum_chunk_records *
-				       test->record_bytes);
+		dcb_set(csum, buf, csum_buf_len,
+			test->csum_bytes,
+			get_csums_per_extent(test, extent_nr),
+			test->csum_chunk_records *
+			test->record_bytes);
 	}
 }
 
@@ -262,7 +263,7 @@ static int
 update(struct csum_test *test, const uint32_t extent_nr,
 	uint32_t epoch)
 {
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_iod_t		iod;
 
 	iod_init(&iod, extent_nr, test);
@@ -285,12 +286,12 @@ update(struct csum_test *test, const uint32_t extent_nr,
  * number of csums that were fetched and return to be verified.
  */
 static int
-fetch(struct csum_test *test, int extent_nr,
-	uint32_t *csum_count_per_extent, uint32_t *csum_len,
+fetch(struct csum_test *test, int extent_nr, uint32_t *csum_count_per_extent,
 	uint32_t *csum_count_total, uint32_t epoch)
 {
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_iod_t		iod;
+	int			i;
 
 	iod_init(&iod, extent_nr, test);
 	iod_recx_init(&iod, extent_nr, test);
@@ -298,7 +299,6 @@ fetch(struct csum_test *test, int extent_nr,
 
 	daos_csum_buf_t *csums = iod.iod_csums;
 
-	int i;
 
 	uint64_t len_per_extent = get_csum_buf_len_per_extent(test, extent_nr);
 
@@ -307,6 +307,8 @@ fetch(struct csum_test *test, int extent_nr,
 		csums[i].cs_csum = &test->fetch_csum_buf[i * len_per_extent];
 		csums[i].cs_chunksize = test->csum_chunk_records *
 			test->record_bytes;
+		csums[i].cs_len = test->csum_bytes;
+		csums[i].cs_nr = get_csums_per_extent(test, extent_nr);
 	}
 
 	int rc = vos_obj_fetch(test->extent_key.container_hdl,
@@ -316,7 +318,6 @@ fetch(struct csum_test *test, int extent_nr,
 
 	*csum_count_total = 0;
 	*csum_count_per_extent = 0;
-	*csum_len = 0;
 	for (i = 0; i < extent_nr; i++) {
 		/*
 		 * Count total checksums fetched
@@ -327,16 +328,12 @@ fetch(struct csum_test *test, int extent_nr,
 		 * Each extent's csum values should be the same ... so just save
 		 * the first
 		 */
-		if (i == 0) {
+		if (i == 0)
 			*csum_count_per_extent = csums[i].cs_nr;
-			*csum_len = csums[i].cs_len;
-		} else {
+		else
 			assert_int_equal(*csum_count_per_extent,
 					 csums[i].cs_nr);
-			assert_int_equal(*csum_len, csums[i].cs_len);
-		}
 	}
-
 
 	iod_free(&iod);
 	sgl_free(&sgl);
@@ -396,21 +393,20 @@ csum_multiple_extents_tests(void **state)
 		printf("Update Extents: %d, Fetch Extents: %d\n",
 		       update_extents, fetch_extents);
 
-		uint32_t csums_count_total, csum_count_per_extent, csum_len;
+		uint32_t csums_count_total, csum_count_per_extent;
 
-		rc = update(&test, update_extents, i);
+		rc = update(&test, update_extents, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error updating extent with csum: %s\n",
 				 d_errstr(rc));
 
 		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
-			   &csum_len, &csums_count_total, i);
+			   &csums_count_total, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error fetching extent with csum: %s\n",
 				 d_errstr(rc));
 
 		/* Verify */
-		assert_int_equal(test.csum_bytes, csum_len);
 		assert_int_equal(get_csums_per_extent(&test, fetch_extents),
 				 csum_count_per_extent);
 		assert_int_equal(get_csum_total(&test, fetch_extents),
@@ -438,12 +434,12 @@ void csum_test_csum_buffer_of_0_during_fetch(void **state)
 
 	csum_test_setup(&test, state, &params);
 
-	daos_epoch_t epoch = 0;
+	daos_epoch_t epoch = 1;
 
 	update(&test, 1, epoch);
 
 	/* Fetch ... */
-	daos_sg_list_t	 sgl;
+	d_sg_list_t	 sgl;
 	daos_iod_t	 iod;
 	uint32_t	 extent_nr = 1;
 
@@ -464,56 +460,6 @@ void csum_test_csum_buffer_of_0_during_fetch(void **state)
 	sgl_free(&sgl);
 
 
-}
-
-/*******************************************************************************
- * Tests with estents that don't span the entire block of memory
- */
-
-static uint32_t
-csum_needed_for_extent(uint32_t chunk_size, daos_recx_t extent,
-		       uint32_t record_size)
-{
-	return (uint32_t) csum_chunk_count(chunk_size,
-					   extent.rx_idx,
-					   extent.rx_idx + extent.rx_nr - 1,
-					   record_size);
-}
-
-void
-csum_helper_functions_tests(void **state)
-{
-	daos_csum_buf_t csum;
-
-	csum.cs_len = 2;
-	csum.cs_chunksize = 4;
-	csum.cs_buf_len = 4;
-	csum.cs_nr = 2;
-	csum.cs_csum = calloc(csum.cs_buf_len, 1);
-	csum.cs_csum[0] = 1;
-	csum.cs_csum[1] = 1;
-	csum.cs_csum[2] = 2;
-	csum.cs_csum[3] = 2;
-
-
-	assert_int_equal(0x0101, *(uint16_t *) daos_csum_from_idx(&csum, 0));
-	assert_int_equal(0x0202, *(uint16_t *) daos_csum_from_idx(&csum, 1));
-
-	assert_int_equal(0, daos_csum_idx_from_off(&csum, 0));
-	assert_int_equal(1, daos_csum_idx_from_off(&csum, 4));
-	assert_int_equal(1, daos_csum_idx_from_off(&csum, 5));
-
-	assert_int_equal(0x0101, *(uint16_t *) daos_csum_from_offset(&csum, 0));
-	assert_int_equal(0x0202, *(uint16_t *) daos_csum_from_offset(&csum, 4));
-
-
-	/** try some larger values */
-	csum.cs_chunksize = 1024 * 16; /** 16K */
-	assert_int_equal(0, daos_csum_idx_from_off(&csum, 1024 * 16 - 1));
-	assert_int_equal(1, daos_csum_idx_from_off(&csum, 1024 * 16));
-	assert_int_equal(1024, daos_csum_idx_from_off(&csum, 1024 * 1024 * 16));
-
-	free(csum.cs_csum);
 }
 
 struct evt_csum_test_args {
@@ -731,7 +677,7 @@ csum_test_holes(void **state)
 	csum.cs_len = 8; /** CRC64 maybe? */
 	csum.cs_type = 1;
 	csum.cs_chunksize = chunk_size;
-	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
 	csum_buf_1 = allocate_random(csum.cs_buf_len);
@@ -760,9 +706,10 @@ csum_test_holes(void **state)
 	memset(&read_csum, 0, sizeof(read_csum));
 	read_csum.cs_len = csum.cs_len;
 	read_csum.cs_chunksize = chunk_size;
-	read_csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	read_csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	read_csum.cs_buf_len = read_csum.cs_len * read_csum.cs_nr;
 	read_csum.cs_csum = csum_read_buf;
+	read_csum.cs_type = 1;
 
 
 	read_from_extent(&extent_key, &extent,
@@ -808,7 +755,7 @@ csum_extent_not_starting_at_0(void **state)
 	csum.cs_len = 8; /** CRC64 maybe? */
 	csum.cs_type = 1;
 	csum.cs_chunksize = chunk_size;
-	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
 	csum_buf_1 = allocate_random(csum.cs_buf_len);
@@ -820,8 +767,9 @@ csum_extent_not_starting_at_0(void **state)
 
 	memset(&read_csum, 0, sizeof(read_csum));
 	read_csum.cs_len = csum.cs_len;
+	read_csum.cs_type = csum.cs_type;
 	read_csum.cs_chunksize = chunk_size;
-	read_csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	read_csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	read_csum.cs_buf_len = read_csum.cs_len * read_csum.cs_nr;
 	read_csum.cs_csum = csum_read_buf;
 
@@ -860,7 +808,7 @@ csum_extent_not_chunk_aligned(void **state)
 	csum.cs_len = 8; /** CRC64 maybe? */
 	csum.cs_type = 1;
 	csum.cs_chunksize = chunk_size;
-	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
 	ALLOC_RAND(csum_buf_1, csum.cs_buf_len);
@@ -878,6 +826,8 @@ csum_extent_not_chunk_aligned(void **state)
 	read_csum.cs_chunksize = chunk_size;
 	read_csum.cs_buf_len = csum.cs_buf_len;
 	read_csum.cs_csum = csum_read_buf;
+	read_csum.cs_type = csum.cs_type;
+	read_csum.cs_nr = csum.cs_nr;
 
 	read_from_extent(&extent_key, &extent, read_data_buf, data_size,
 			 &read_csum);
@@ -911,7 +861,7 @@ void csum_invalid_input_tests(void **state)
 	csum.cs_len = 8; /** CRC64 maybe? */
 	csum.cs_type = 1;
 	csum.cs_chunksize = 0; /** Invalid */
-	csum.cs_nr = csum_needed_for_extent(chunk_size, extent, 1);
+	csum.cs_nr = daos_recx_calc_chunks(extent, 1, chunk_size);
 	csum.cs_buf_len = csum.cs_len * csum.cs_nr;
 
 	ALLOC_RAND(data_buf_1, data_size);
@@ -925,7 +875,7 @@ void csum_invalid_input_tests(void **state)
 	write_to_extent(&extent_key, &extent, data_buf_1, data_size, &csum);
 
 	memset(&read_csum, 0, sizeof(read_csum));
-	read_csum.cs_len = csum.cs_len;
+	read_csum.cs_len = 0;
 	read_csum.cs_chunksize = chunk_size;
 	read_csum.cs_buf_len = csum.cs_buf_len;
 	read_csum.cs_csum = csum_read_buf;
@@ -941,4 +891,87 @@ void csum_invalid_input_tests(void **state)
 	free(data_buf_1);
 	free(read_data_buf);
 	free(csum_buf_1);
+}
+
+/* Inject fault on the update and fetch.
+* The update will initialize checksum value to zero.
+* Fetch operation will return random values in checksum field.
+* Test will compare the update and fetch output for pass/fail
+*/
+void
+csum_fault_injection_multiple_extents_tests(void **state)
+{
+	int rc;
+	int i;
+	int update_extents;
+	int fetch_extents;
+	struct csum_test test;
+	/* Setup Test */
+	struct csum_test_params params;
+	uint32_t csums_count_total, csum_count_per_extent;
+	/* extent counts for update and fetch. The extents will span the same
+	 * amount of data, the extents themselves will be of different lengths
+	 */
+	const int END = 0;
+	const int table[][2] = {
+	/*	update, fetch  */
+		{1,	1},
+		{1,	4},
+		{2,	4},
+		{4,	4},
+		{4,	1},
+		{4,	2},
+		{END,	END}
+	};
+
+
+	params.total_records = 1024 * 1024 * 64;
+	params.record_bytes = 1;
+	params.csum_bytes = 8; /* CRC64? */
+	params.csum_chunk_records = 1024 * 16; /* 16K */
+	params.use_rand_csum = true;
+
+	csum_test_setup(&test, state, &params);
+
+
+	for (i = 0; table[i][0] != END; i++) {
+		update_extents = table[i][0];
+		fetch_extents = table[i][1];
+
+		printf("Update Extents: %d, Fetch Extents: %d\n",
+		       update_extents, fetch_extents);
+
+		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
+		rc = update(&test, update_extents, i + 1);
+		if (!SUCCESS(rc))
+			fail_msg("Error updating extent with csum: %s\n",
+				 d_errstr(rc));
+
+		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
+		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
+			   &csums_count_total, i + 1);
+		if (!SUCCESS(rc))
+			fail_msg("Error fetching extent with csum: %s\n",
+				 d_errstr(rc));
+
+		/* Verify */
+		assert_int_equal(get_csums_per_extent(&test, fetch_extents),
+				 csum_count_per_extent);
+		assert_int_equal(get_csum_total(&test, fetch_extents),
+				csums_count_total);
+		/* It looks is there is random issues in setting
+		* the fault injection flag. If last fault injection flag is not
+		* set the data will be same.
+		*/
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+			assert_memory_not_equal(test.update_csum_buf,
+						test.fetch_csum_buf,
+						test.csum_buf_len);
+		else
+			assert_memory_equal(test.update_csum_buf,
+					test.fetch_csum_buf,
+					test.csum_buf_len);
+	}
+	daos_fail_loc_set(0);
+	csum_test_teardown(&test);
 }

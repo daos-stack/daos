@@ -72,13 +72,13 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 }
 
 int
-daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+daos_pool_local2global(daos_handle_t poh, d_iov_t *glob)
 {
 	return dc_pool_local2global(poh, glob);
 }
 
 int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 {
 	return dc_pool_global2local(glob, poh);
 }
@@ -117,6 +117,33 @@ daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
 		       daos_event_t *ev)
 {
 	return -DER_NOSYS;
+}
+
+int
+daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
+		    struct daos_pool_cont_info *cbuf, daos_event_t *ev)
+{
+	daos_pool_list_cont_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_LIST_CONT);
+
+	if (ncont == NULL) {
+		D_ERROR("ncont must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_pool_list_cont, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->ncont	= ncont;
+	args->cont_buf	= cbuf;
+
+	return dc_task_schedule(task, true);
 }
 
 int

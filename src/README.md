@@ -51,11 +51,11 @@ Applications, users and administrators can interact with a DAOS system through t
 
 The DAOS management Go package allows to administrate a DAOS system from any nodes that can communicate with the DAOS servers through the out-of-band management channel. This API is reserved for the DAOS system administrators who are authenticated through a specific certificate. The DAOS management API is intended to be integrated with different vendor-specific storage management or open-source orchestration frameworks. A CLI tool called dmg is built over the DAOS management API. For further reading on the management API and the dmg tool:
 - <a href="https://godoc.org/github.com/daos-stack/daos/src/control/client">DAOS management Go package</a>
-- <a href="control/dmg/README.md">DAOS Management tool (aka dmg)</a>
+- <a href="control/cmd/dmg/README.md">DAOS Management tool (aka dmg)</a>
 
 The DAOS library (i.e. libdaos) implements the DAOS storage model and is primarily targeted at application and I/O middleware developers who want to store datasets into DAOS containers. It can be used from any nodes connected to the fabric used by the targeted DAOS system. The application process is authenticated via the DAOS agent (see next section). The API exported by libdaos is commonly called the DAOS API (in opposition to the DAOS management API) and allows to manage containers and access DAOS objects through different interfaces (e.g. key-value store or array API). The libdfs library emulates POSIX file and directory abstractions over libdaos and provides a smooth migration path for applications that require a POSIX namespace. For further reading on libdaos, bindings for different programming languages and libdfs:
-- <a href="client/api/README.md">DAOS Library (libdaos)</a> and <a href="client/addons/README.md">array/kv interface built on top of the native DAOS API</a>
-- <a href="utils/py/README.md">Python API bindings</a>
+- <a href="client/api/README.md">DAOS Library (libdaos)</a> and <a href="client/array/README.md">array interface</a> and <a href="client/kv/README.md">KV interface</a> built on top of the native DAOS API</a>
+- <a href="src/client/pydaos/raw/README.md">Python API bindings</a>
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
 - <a href="client/dfs/README.md">POSIX File & Directory Emulation (libdfs)</a>
 
@@ -66,7 +66,7 @@ The libdaos and libdfs libraries provide the foundation to support domain-specif
 <a id="13"></a>
 ### Agent
 
-The <a href="control/agent/README.md">DAOS agent</a> is a daemon residing on the client node and interacts with the DAOS client library through dRPC to authenticate the application process. It is a trusted entity that can sign the DAOS Client credentials using local certificates. The agent can support different authentication frameworks and uses a Unix Domain Socket to communicate with the client library. The DAOS agent is written in Go and communicates through gRPC with the control plane component of each DAOS server to provide DAOS system membership information to the client library and to support pool listing.
+The <a href="control/cmd/agent/README.md">DAOS agent</a> is a daemon residing on the client node and interacts with the DAOS client library through dRPC to authenticate the application process. It is a trusted entity that can sign the DAOS Client credentials using local certificates. The agent can support different authentication frameworks and uses a Unix Domain Socket to communicate with the client library. The DAOS agent is written in Go and communicates through gRPC with the control plane component of each DAOS server to provide DAOS system membership information to the client library and to support pool listing.
 
 <a id="2"></a>
 ## Network Transport and Communications

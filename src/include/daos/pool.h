@@ -49,7 +49,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
 	uuid_t			dp_pool;
-	crt_group_t	       *dp_group;
+	struct dc_mgmt_sys     *dp_sys;
 	pthread_mutex_t		dp_client_lock;
 	struct rsvc_client	dp_client;
 	uuid_t			dp_pool_hdl;
@@ -67,8 +67,8 @@ struct dc_pool *dc_hdl2pool(daos_handle_t hdl);
 void dc_pool_get(struct dc_pool *pool);
 void dc_pool_put(struct dc_pool *pool);
 
-int dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
-int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+int dc_pool_local2global(daos_handle_t poh, d_iov_t *glob);
+int dc_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 int dc_pool_connect(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
@@ -81,6 +81,7 @@ int dc_pool_exclude_out(tse_task_t *task);
 int dc_pool_add(tse_task_t *task);
 int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
+int dc_pool_list_cont(tse_task_t *task);
 
 int dc_pool_add_replicas(tse_task_t *task);
 int dc_pool_remove_replicas(tse_task_t *task);

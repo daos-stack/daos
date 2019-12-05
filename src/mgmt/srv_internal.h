@@ -35,7 +35,13 @@
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
+#include <daos_srv/smd.h>
+#include <daos_security.h>
 
+#include "srv.pb-c.h"
+#include "storage_query.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -44,13 +50,29 @@ void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
+
+/* Management service */
+struct mgmt_svc {
+	struct ds_rsvc		ms_rsvc;
+	ABT_rwlock		ms_lock;
+	rdb_path_t		ms_root;
+	rdb_path_t		ms_servers;
+	rdb_path_t		ms_uuids;
+	rdb_path_t		ms_pools;
+	uint32_t		ms_map_version;
+	uint32_t		ms_rank_next;
+};
+
 int ds_mgmt_system_module_init(void);
 void ds_mgmt_system_module_fini(void);
 int ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		      char *addr);
 int ds_mgmt_svc_stop(void);
+int ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint);
+void ds_mgmt_svc_put_leader(struct mgmt_svc *svc);
 struct mgmt_join_in {
 	uint32_t		ji_rank;
 	struct server_rec	ji_server;
@@ -61,10 +83,40 @@ struct mgmt_join_out {
 	struct rsvc_hint	jo_hint;
 };
 int ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out);
+int ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp);
 
 /** srv_pool.c */
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
+			d_rank_list_t *targets, size_t scm_size,
+			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
+			d_rank_list_t **svcp);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
+int ds_mgmt_list_pools(const char *group, uint64_t *npools,
+		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
+void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
+int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			       struct daos_acl **result);
+int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			    struct daos_acl **result);
+int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			    struct daos_acl **result);
+
+/** srv_query.c */
+
+/* Device health stats from bio_dev_state */
+struct mgmt_bio_health {
+	struct bio_dev_state	 mb_dev_state;
+	uuid_t			 mb_devid;
+};
+
+int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
+			     char *tgt_id);
+int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
+int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);
@@ -78,5 +130,6 @@ int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
+void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

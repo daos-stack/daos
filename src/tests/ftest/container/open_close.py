@@ -28,35 +28,22 @@ import traceback
 import uuid
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
-import server_utils
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+
 
 class OpenClose(TestWithServers):
     """
     Tests DAOS container open/close function with handle parameter.
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        super(OpenClose, self).__init__(*args, **kwargs)
-        self.container1 = None
-        self.container2 = None
-
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            try:
-                super(OpenClose, self).tearDown()
-            except server_utils.ServerFailed:
-                pass
 
     def test_closehandle(self):
         """
         Test container close function with container handle paramter.
 
-        :avocado: tags=container,openclose,closehandle
+        :avocado: tags=all,smoke,full_regression,tiny,container,closehandle
         """
+        self.container = []
         saved_coh = None
 
         # parameters used in pool create
@@ -81,28 +68,28 @@ class OpenClose(TestWithServers):
             self.pool.connect(1 << 1)
 
             # Container initialization and creation
-            self.container1 = DaosContainer(self.context)
-            self.container1.create(poh)
-            str_cuuid = self.container1.get_uuid_str()
+            self.container.append(DaosContainer(self.context))
+            self.container[0].create(poh)
+            str_cuuid = self.container[0].get_uuid_str()
             cuuid = uuid.UUID(str_cuuid)
-            self.container1.open(poh, cuuid, 2, None)
+            self.container[0].open(poh, cuuid, 2, None)
 
             # Defining 'good' and 'bad' container handles
-            saved_coh = self.container1.coh
+            saved_coh = self.container[0].coh
             if coh_params[0] == 'GOOD':
-                coh = self.container1.coh
+                coh = self.container[0].coh
             else:
                 # create a second container, open to get a handle
                 # then close & destroy so handle is invalid
-                self.container2 = DaosContainer(self.context)
-                self.container2.create(poh)
-                self.container2.open(poh, cuuid, 2, None)
-                coh = self.container2.coh
-                self.container2.close()
-                self.container2.destroy()
+                self.container.append(DaosContainer(self.context))
+                self.container[1].create(poh)
+                self.container[1].open(poh, cuuid, 2, None)
+                coh = self.container[1].coh
+                self.container[1].close()
+                self.container[1].destroy()
 
             # close container with either good or bad handle
-            self.container1.close(coh)
+            self.container[0].close(coh)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -115,10 +102,4 @@ class OpenClose(TestWithServers):
 
             # close above failed so close for real with the right coh
             if saved_coh is not None:
-                self.container1.close(saved_coh)
-
-        finally:
-            self.container1.destroy(1)
-            self.pool.disconnect()
-            self.pool.destroy(1)
-            self.pool = None
+                self.container[0].close(saved_coh)

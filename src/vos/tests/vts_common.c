@@ -98,6 +98,7 @@ vts_pool_fallocate(char **fname)
 		goto exit;
 	}
 	ret = fallocate(fd, 0, 0, VPOOL_16M);
+
 exit:
 	return ret;
 }
@@ -131,8 +132,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 
 	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl);
 	if (rc) {
-		print_error("vos pool open %s error: %d\n",
-			    tcx->tc_po_name, rc);
+		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
+			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_PO_OPEN;
@@ -185,6 +186,194 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
 		assert_int_equal(rc, 0);
 		/* fallthrough */
+		free(tcx->tc_po_name);
 	}
 	memset(tcx, 0, sizeof(*tcx));
+}
+
+enum {
+	DTS_INIT_NONE,		/* nothing has been initialized */
+	DTS_INIT_DEBUG,		/* debug system has been initialized */
+	DTS_INIT_MODULE,	/* modules have been loaded */
+	DTS_INIT_POOL,		/* pool has been created */
+	DTS_INIT_CONT,		/* container has been created */
+	DTS_INIT_CREDITS,	/* I/O credits have been initalized */
+};
+
+/** try to obtain a free credit */
+struct dts_io_credit *
+dts_credit_take(struct dts_context *tsc)
+{
+	return &tsc->tsc_cred_buf[0];
+}
+
+static int
+credits_init(struct dts_context *tsc)
+{
+	int	i;
+
+	tsc->tsc_eqh		= DAOS_HDL_INVAL;
+	tsc->tsc_cred_nr	= 1;  /* take one slot in the buffer */
+	tsc->tsc_cred_avail	= -1; /* always available */
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++) {
+		struct dts_io_credit *cred = &tsc->tsc_cred_buf[i];
+
+		memset(cred, 0, sizeof(*cred));
+		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
+		if (!cred->tc_vbuf) {
+			fprintf(stderr, "Cannt allocate buffer size=%d\n",
+				tsc->tsc_cred_vsize);
+			return -1;
+		}
+		tsc->tsc_credits[i] = cred;
+	}
+	return 0;
+}
+
+static void
+credits_fini(struct dts_context *tsc)
+{
+	int	i;
+
+	D_ASSERT(!tsc->tsc_cred_inuse);
+
+	for (i = 0; i < tsc->tsc_cred_nr; i++)
+		D_FREE(tsc->tsc_cred_buf[i].tc_vbuf);
+}
+
+static int
+pool_init(struct dts_context *tsc)
+{
+	char		*pmem_file = tsc->tsc_pmem_file;
+	daos_handle_t	 poh = DAOS_HDL_INVAL;
+	int		 fd;
+	int		 rc;
+
+	if (tsc->tsc_scm_size == 0)
+		tsc->tsc_scm_size = (1ULL << 30);
+
+	if (!daos_file_is_dax(pmem_file)) {
+		rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
+		if (rc < 0)
+			goto out;
+
+		fd = rc;
+		rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
+		if (rc)
+			goto out;
+	}
+
+	/* Use pool size as blob size for this moment. */
+	rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
+			     tsc->tsc_nvme_size);
+	if (rc)
+		goto out;
+
+	rc = vos_pool_open(pmem_file, tsc->tsc_pool_uuid, &poh);
+	if (rc)
+		goto out;
+
+	tsc->tsc_poh = poh;
+ out:
+	return rc;
+}
+
+static void
+pool_fini(struct dts_context *tsc)
+{
+	int	rc;
+
+	vos_pool_close(tsc->tsc_poh);
+	rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
+	D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+}
+
+static int
+cont_init(struct dts_context *tsc)
+{
+	daos_handle_t	coh = DAOS_HDL_INVAL;
+	int		rc;
+
+	rc = vos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid);
+	if (rc)
+		goto out;
+
+	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
+	if (rc)
+		goto out;
+
+	tsc->tsc_coh = coh;
+ out:
+	return rc;
+}
+
+static void
+cont_fini(struct dts_context *tsc)
+{
+	if (tsc->tsc_pmem_file) /* VOS mode */
+		vos_cont_close(tsc->tsc_coh);
+}
+
+/* see comments in dts_common.h */
+int
+dts_ctx_init(struct dts_context *tsc)
+{
+	int	rc;
+
+	tsc->tsc_init = DTS_INIT_NONE;
+	rc = daos_debug_init(NULL);
+	if (rc)
+		goto out;
+	tsc->tsc_init = DTS_INIT_DEBUG;
+
+	rc = vos_init();
+	if (rc)
+		goto out;
+	tsc->tsc_init = DTS_INIT_MODULE;
+
+	rc = pool_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = DTS_INIT_POOL;
+
+	rc = cont_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = DTS_INIT_CONT;
+
+	/* initialize I/O credits, which include EQ, event, I/O buffers... */
+	rc = credits_init(tsc);
+	if (rc)
+		goto out;
+	tsc->tsc_init = DTS_INIT_CREDITS;
+
+	return 0;
+ out:
+	fprintf(stderr, "Failed to initialize step=%d, rc=%d\n",
+		tsc->tsc_init, rc);
+	dts_ctx_fini(tsc);
+	return rc;
+}
+
+/* see comments in dts_common.h */
+void
+dts_ctx_fini(struct dts_context *tsc)
+{
+	switch (tsc->tsc_init) {
+	case DTS_INIT_CREDITS:	/* finalize credits */
+		credits_fini(tsc);
+		/* fall through */
+	case DTS_INIT_CONT:	/* close and destroy container */
+		cont_fini(tsc);
+		/* fall through */
+	case DTS_INIT_POOL:	/* close and destroy pool */
+		pool_fini(tsc);
+		/* fall through */
+	case DTS_INIT_MODULE:	/* finalize module */
+		vos_fini();
+		/* fall through */
+	case DTS_INIT_DEBUG:	/* finalize debug system */
+		daos_debug_fini();
+	}
 }

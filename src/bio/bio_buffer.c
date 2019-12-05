@@ -21,9 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 #define D_LOGFAC	DD_FAC(bio)
-
 #include <spdk/env.h>
 #include <spdk/blob.h>
+#include <spdk/thread.h>
 #include "bio_internal.h"
 
 static void
@@ -176,11 +176,12 @@ bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 struct bio_desc *
 bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 {
-	struct bio_desc *biod;
+	struct bio_desc	*biod;
+
 	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
-	D_ALLOC_PTR(biod);
+	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
 	if (biod == NULL)
 		return NULL;
 
@@ -188,14 +189,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 	biod->bd_update = update;
 	biod->bd_sgl_cnt = sgl_cnt;
 
-	D_ALLOC_ARRAY(biod->bd_sgls, sgl_cnt);
-	if (biod->bd_sgls == NULL) {
-		D_FREE(biod);
-		return NULL;
-	}
-
-	biod->bd_mutex = ABT_MUTEX_NULL;
-	biod->bd_dma_done = ABT_COND_NULL;
+	biod->bd_dma_done = ABT_EVENTUAL_NULL;
 	return biod;
 }
 
@@ -206,14 +200,11 @@ bio_iod_free(struct bio_desc *biod)
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
-	if (biod->bd_dma_done != ABT_COND_NULL)
-		ABT_cond_free(&biod->bd_dma_done);
-	if (biod->bd_mutex != ABT_MUTEX_NULL)
-		ABT_mutex_free(&biod->bd_mutex);
+	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
+		ABT_eventual_free(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
-	D_FREE(biod->bd_sgls);
 	D_FREE(biod);
 }
 
@@ -368,7 +359,7 @@ iod_last_region(struct bio_desc *biod)
 {
 	unsigned int cnt = biod->bd_rsrvd.brd_rg_cnt;
 
-	D_ASSERT(!cnt || cnt < biod->bd_rsrvd.brd_rg_max);
+	D_ASSERT(!cnt || cnt <= biod->bd_rsrvd.brd_rg_max);
 	return (cnt != 0) ? &biod->bd_rsrvd.brd_regions[cnt - 1] : NULL;
 }
 
@@ -629,19 +620,27 @@ add_region:
 static void
 rw_completion(void *cb_arg, int err)
 {
-	struct bio_desc *biod = cb_arg;
-
-	ABT_mutex_lock(biod->bd_mutex);
+	struct bio_desc		*biod = cb_arg;
+	struct media_error_msg	*mem = NULL;
 
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
-	if (biod->bd_result == 0 && err != 0)
+
+	if (biod->bd_result == 0 && err != 0) {
 		biod->bd_result = daos_errno2der(-err);
+		D_ALLOC_PTR(mem);
+		if (mem == NULL)
+			goto skip_media_error;
+		mem->mem_update = biod->bd_update;
+		mem->mem_bs = biod->bd_ctxt->bic_xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_tgt_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
+				     mem);
+	}
 
+skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_cond_broadcast(biod->bd_dma_done);
-
-	ABT_mutex_unlock(biod->bd_mutex);
+		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
 }
 
 static void
@@ -662,18 +661,27 @@ dma_rw(struct bio_desc *biod, bool prep)
 	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 	blob = biod->bd_ctxt->bic_blob;
 	channel = xs_ctxt->bxc_io_channel;
-	D_ASSERT(blob != NULL && channel != NULL);
+
+	biod->bd_inflights = 0;
+	biod->bd_dma_issued = 0;
+	biod->bd_result = 0;
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
 	if (daos_io_bypass & IOBP_NVME)
 		return;
 
+	if (!is_blob_valid(biod->bd_ctxt)) {
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
+			blob, biod->bd_ctxt->bic_closing);
+		biod->bd_result = -DER_NO_HDL;
+		return;
+	}
+
+	D_ASSERT(channel != NULL);
+	biod->bd_ctxt->bic_inflight_dmas++;
+
 	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
 		blob, biod->bd_update, rmw_read);
-
-	biod->bd_inflights = 0;
-	biod->bd_dma_issued = 0;
-	biod->bd_result = 0;
 
 	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
 		rg = &rsrvd_dma->brd_regions[i];
@@ -689,9 +697,7 @@ dma_rw(struct bio_desc *biod, bool prep)
 			D_ASSERT(pg_cnt > pg_idx);
 			pg_cnt -= pg_idx;
 
-			ABT_mutex_lock(biod->bd_mutex);
 			biod->bd_inflights++;
-			ABT_mutex_unlock(biod->bd_mutex);
 
 			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
 				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
@@ -700,12 +706,14 @@ dma_rw(struct bio_desc *biod, bool prep)
 
 			if (biod->bd_update)
 				spdk_blob_io_write(blob, channel, payload,
-						   pg_idx, pg_cnt,
-						   rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			else
 				spdk_blob_io_read(blob, channel, payload,
-						  pg_idx, pg_cnt,
-						  rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			continue;
 		}
 
@@ -739,17 +747,16 @@ dma_rw(struct bio_desc *biod, bool prep)
 		}
 	}
 
-	if (xs_ctxt->bxc_xs_id == -1) {
+	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
 	} else {
-		ABT_mutex_lock(biod->bd_mutex);
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
-			ABT_cond_wait(biod->bd_dma_done, biod->bd_mutex);
-		ABT_mutex_unlock(biod->bd_mutex);
+			ABT_eventual_wait(biod->bd_dma_done, NULL);
 	}
 
+	biod->bd_ctxt->bic_inflight_dmas--;
 	D_DEBUG(DB_IO, "DMA done, blob:%p, update:%d, rmw:%d\n",
 		blob, biod->bd_update, rmw_read);
 }
@@ -899,13 +906,7 @@ retry:
 	bdb = iod_dma_buf(biod);
 	bdb->bdb_active_iods++;
 
-	rc = ABT_mutex_create(&biod->bd_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = -DER_NOMEM;
-		goto failed;
-	}
-
-	rc = ABT_cond_create(&biod->bd_dma_done);
+	rc = ABT_eventual_create(0, &biod->bd_dma_done);
 	if (rc != ABT_SUCCESS) {
 		rc = -DER_NOMEM;
 		goto failed;
@@ -965,4 +966,134 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 	arg.ca_sgl_cnt = nr_sgl;
 
 	return iterate_biov(biod, copy_one, &arg);
+}
+
+static int
+bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
+	d_sg_list_t *sgl, bool update)
+{
+	struct bio_sglist	*bsgl;
+	struct bio_desc		*biod;
+	int			 i, rc;
+
+	/* allocate blob I/O descriptor */
+	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */, update);
+	if (biod == NULL)
+		return -DER_NOMEM;
+
+	/*
+	 * copy the passed in @bsgl_in to the bsgl attached on bio_desc,
+	 * since we don't want following bio ops change caller's bsgl.
+	 */
+	bsgl = bio_iod_sgl(biod, 0);
+
+	rc = bio_sgl_init(bsgl, bsgl_in->bs_nr);
+	if (rc)
+		goto out;
+
+	for (i = 0; i < bsgl->bs_nr; i++) {
+		D_ASSERT(bsgl_in->bs_iovs[i].bi_buf == NULL);
+		D_ASSERT(bsgl_in->bs_iovs[i].bi_data_len != 0);
+		bsgl->bs_iovs[i] = bsgl_in->bs_iovs[i];
+	}
+	bsgl->bs_nr_out = bsgl->bs_nr;
+
+	/* map the biov to DMA safe buffer, fill DMA buffer if read operation */
+	rc = bio_iod_prep(biod);
+	if (rc)
+		goto out;
+
+	for (i = 0; i < bsgl->bs_nr; i++)
+		D_ASSERT(bsgl->bs_iovs[i].bi_buf != NULL);
+
+	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	if (rc)
+		D_ERROR("Copy biod failed, rc:%d\n", rc);
+
+	/* release DMA buffer, write data back to NVMe device for write */
+	rc = bio_iod_post(biod);
+
+out:
+	bio_iod_free(biod); /* also calls bio_sgl_fini */
+
+	return rc;
+}
+
+int
+bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
+	  d_sg_list_t *sgl)
+{
+	int	rc;
+
+	rc = bio_rwv(ioctxt, bsgl, sgl, false);
+	if (rc)
+		D_ERROR("Readv to blob:%p failed for xs:%p, rc:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_IO, "Readv to blob %p for xs:%p successfully\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
+int
+bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
+	   d_sg_list_t *sgl)
+{
+	int	rc;
+
+	rc = bio_rwv(ioctxt, bsgl, sgl, true);
+	if (rc)
+		D_ERROR("Writev to blob:%p failed for xs:%p, rc:%d\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_IO, "Writev to blob %p for xs:%p successfully\n",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
+static int
+bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov,
+	bool update)
+{
+	struct bio_sglist	bsgl;
+	struct bio_iov		biov;
+	d_sg_list_t		sgl;
+	int			rc;
+
+	biov.bi_buf = NULL;
+	biov.bi_addr = addr;
+	biov.bi_data_len = iov->iov_len;
+	bsgl.bs_iovs = &biov;
+	bsgl.bs_nr = bsgl.bs_nr_out = 1;
+
+	sgl.sg_iovs = iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+
+	rc = bio_rwv(ioctxt, &bsgl, &sgl, update);
+	if (rc)
+		D_ERROR("%s to blob:%p failed for xs:%p, rc:%d\n",
+			update ? "Write" : "Read", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt, rc);
+	else
+		D_DEBUG(DB_IO, "%s to blob %p for xs:%p successfully\n",
+			update ? "Write" : "Read", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt);
+
+	return rc;
+}
+
+int
+bio_read(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+	return bio_rw(ioctxt, addr, iov, false);
+}
+
+
+int
+bio_write(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov)
+{
+	return bio_rw(ioctxt, addr, iov, true);
 }

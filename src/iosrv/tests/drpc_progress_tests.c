@@ -31,7 +31,48 @@
 #include <cmocka.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
+#include <abt.h>
 #include "../drpc_internal.h"
+#include "../srv_internal.h"
+
+/*
+ * Mocks
+ */
+int		dss_ult_create_return;
+void		(*dss_ult_create_func)(void *);
+void		*dss_ult_create_arg_ptr;
+int		dss_ult_create_ult_type;
+int		dss_ult_create_tgt_idx;
+size_t		dss_ult_create_stack_size;
+ABT_thread	*dss_ult_create_ult_ptr;
+int
+dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
+	       size_t stack_size, ABT_thread *ult)
+{
+	struct drpc_call_ctx *call_ctx;
+
+	dss_ult_create_func = func;
+	dss_ult_create_arg_ptr = arg;
+	dss_ult_create_ult_type = ult_type;
+	dss_ult_create_tgt_idx = tgt_idx;
+	dss_ult_create_stack_size = stack_size;
+	dss_ult_create_ult_ptr = ult;
+
+	/*
+	 * arg is dynamically allocated and owned by the ULT. In cases where the
+	 * real ULT is expected to be executed, we need to clean up the memory
+	 * here.
+	 */
+	if (arg != NULL && dss_ult_create_return == 0) {
+		call_ctx = (struct drpc_call_ctx *)arg;
+		drpc_call_free(call_ctx->call);
+		drpc_response_free(call_ctx->resp);
+		call_ctx->session->ref_count--;
+		D_FREE(call_ctx);
+	}
+
+	return dss_ult_create_return;
+}
 
 /*
  * Setup and teardown
@@ -45,6 +86,14 @@ drpc_progress_test_setup(void **state)
 	mock_sendmsg_setup();
 	mock_drpc_handler_setup();
 	mock_close_setup();
+
+	dss_ult_create_return = 0;
+	dss_ult_create_func = NULL;
+	dss_ult_create_arg_ptr = NULL;
+	dss_ult_create_ult_type = -1;
+	dss_ult_create_tgt_idx = -1;
+	dss_ult_create_stack_size = -1;
+	dss_ult_create_ult_ptr = NULL;
 
 	return 0;
 }
@@ -356,7 +405,7 @@ test_drpc_progress_single_session_success(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(listener_fd));
 	add_new_drpc_node_to_list(&ctx.session_ctx_list,
-			new_drpc_with_fd(session_fd));
+				  new_drpc_with_fd(session_fd));
 	memcpy(&original_ctx, &ctx, sizeof(struct drpc_progress_context));
 	mock_valid_drpc_call_in_recvmsg();
 
@@ -385,12 +434,13 @@ test_drpc_progress_single_session_success(void **state)
 	assert_int_equal(recvmsg_call_count, 1);
 	assert_int_equal(recvmsg_sockfd, session_fd);
 
-	/* Session calls handler */
-	assert_int_equal(mock_drpc_handler_call_count, 1);
-
-	/* Session sends response */
-	assert_int_equal(sendmsg_call_count, 1);
-	assert_int_equal(sendmsg_sockfd, session_fd);
+	/* ULT spawned to deal with the message */
+	assert_non_null(dss_ult_create_func);
+	assert_non_null(dss_ult_create_arg_ptr);
+	assert_int_equal(dss_ult_create_ult_type, DSS_ULT_DRPC_HANDLER);
+	assert_int_equal(dss_ult_create_tgt_idx, 0);
+	assert_int_equal(dss_ult_create_stack_size, 0);
+	assert_null(dss_ult_create_ult_ptr); /* self-freeing ULT */
 
 	/* Final ctx should be unchanged */
 	assert_memory_equal(&ctx, &original_ctx,
@@ -539,6 +589,41 @@ test_drpc_progress_session_cleanup_if_pollhup(void **state)
 	/* disconnected session should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
 			&session_fds[dead_session_idx], 1);
+
+	cleanup_drpc_progress_context(&ctx);
+}
+
+static void
+test_drpc_progress_session_cleanup_if_ult_fails(void **state)
+{
+	struct drpc_progress_context	ctx;
+	int				session_fds[] = { 36, 37 };
+	int				num_sessions = 2;
+
+	init_drpc_progress_context(&ctx, new_drpc_with_fd(25));
+	add_sessions_to_drpc_progress_context(&ctx, session_fds, num_sessions);
+	set_poll_revents_for_sessions(POLLIN, num_sessions);
+	mock_valid_drpc_call_in_recvmsg();
+
+	poll_revents_return[num_sessions] = POLLIN; /* listener */
+
+	dss_ult_create_return = -DER_UNKNOWN;
+
+	/* the error was handled by closing the sessions */
+	assert_int_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
+
+	/* Don't give up after failure - try them all */
+	assert_int_equal(recvmsg_call_count, 2);
+
+	/* Handled listener activity even if sessions failed */
+	assert_int_equal(accept_call_count, 1);
+
+	/* Failed sessions should have been closed */
+	assert_int_equal(close_call_count, 2);
+
+	/* Failed sessions should be removed */
+	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
+			session_fds, num_sessions);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -715,6 +800,7 @@ main(void)
 		DRPC_UTEST(test_drpc_progress_session_fails_if_no_data),
 		DRPC_UTEST(test_drpc_progress_session_cleanup_if_pollerr),
 		DRPC_UTEST(test_drpc_progress_session_cleanup_if_pollhup),
+		DRPC_UTEST(test_drpc_progress_session_cleanup_if_ult_fails),
 		DRPC_UTEST(test_drpc_progress_listener_fails_if_pollerr),
 		DRPC_UTEST(test_drpc_progress_listener_fails_if_pollhup),
 		DRPC_UTEST(test_drpc_progress_context_create_with_bad_input),

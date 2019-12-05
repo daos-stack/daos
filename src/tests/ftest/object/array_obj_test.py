@@ -31,8 +31,7 @@ from avocado import main
 from apricot import TestWithServers
 
 
-from conversion import c_uuid_to_str
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class ArrayObjTest(TestWithServers):
     """
@@ -51,7 +50,7 @@ class ArrayObjTest(TestWithServers):
         Test Description: Writes an array to an object and then reads it
         back and verifies it.
 
-        :avocado: tags=object,arrayobj,regression,vm,small
+        :avocado: tags=all,smoke,pr,object,tiny,basicobject
         """
         try:
             # parameters used in pool create

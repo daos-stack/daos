@@ -1,8 +1,7 @@
 name: daos_server
 servers:
 - rank: null
-  targets:
-  - 0-7
+  targets: 8
   nr_xs_helpers: 2
   first_core: 0
   fabric_iface: ib0
@@ -14,7 +13,6 @@ servers:
   - CRT_CTX_SHARE_ADDR=0
   - CRT_TIMEOUT=30
   - CRT_CREDIT_EP_CTX=0
-  - DD_MASK=daos_default
   scm_mount: /mnt/daos
   scm_class: ram
   scm_list: []
@@ -25,14 +23,18 @@ servers:
   bdev_number: 0
   bdev_size: 0
   cliopts: []
+  hostname: ""
 provider: ofi+psm2
 socket_dir: /tmp/daos_psm2
 access_points:
 - localhost
 port: 10001
-ca_cert: ""
-cert: ./.daos/daos_server.crt
-key: ./.daos/daos_server.key
+transport_config:
+  allow_insecure: false
+  client_cert_dir: .daos/clients
+  ca_cert: .daos/daosCA.crt
+  cert: .daos/daos_server.crt
+  key: .daos/daos_server.key
 fault_path: ""
 fault_cb: ""
 fabric_ifaces: []

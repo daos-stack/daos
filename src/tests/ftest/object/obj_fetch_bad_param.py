@@ -30,7 +30,7 @@ from avocado import main
 from apricot import TestWithServers
 
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class ObjFetchBadParam(TestWithServers):
     """
@@ -91,24 +91,13 @@ class ObjFetchBadParam(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test failed during the initial setup.\n")
 
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            super(ObjFetchBadParam, self).tearDown()
-
     def test_bad_handle(self):
         """
         Test ID: DAOS-1377
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=object,objfetch,objfetchbadhand,regression,vm,small
+        :avocado: tags=all,object,full_regression,small,objbadhandle
         """
 
         try:
@@ -137,7 +126,7 @@ class ObjFetchBadParam(TestWithServers):
 
         Test Description: Pass null pointers for various fetch parameters.
 
-        :avocado: tags=object,objfetch,objfetchnull,regression,vm,small
+        :avocado: tags=all,object,full_regression,small,objfetchnull
         """
         try:
             # now try it with a bad dkey, expecting this to fail with -1003

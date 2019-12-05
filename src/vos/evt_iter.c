@@ -95,6 +95,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
 	iter->it_filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	iter->it_filter.fr_punch = 0;
 	if (filter)
 		iter->it_filter = *filter;
  out:
@@ -215,6 +216,7 @@ evt_iter_intent(struct evt_iterator *iter)
 static int
 evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 {
+	struct evt_desc		*desc;
 	uint32_t		 intent;
 	int			 rc = 0;
 	int			 rc1;
@@ -235,12 +237,10 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 
 			entry = evt_ent_array_get(&iter->it_entries,
 						  iter->it_index);
-			rc1 = evt_dtx_check_availability(tcx, entry->en_dtx,
-							 intent);
-			if (rc1 < 0)
-				return rc1;
+			if (entry->en_avail_rc < 0)
+				return entry->en_avail_rc;
 
-			if (rc1 == ALB_UNAVAILABLE)
+			if (entry->en_avail_rc == ALB_UNAVAILABLE)
 				continue;
 
 			if (iter->it_options & EVT_ITER_SKIP_HOLES &&
@@ -260,11 +260,8 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		if (evt_node_is_leaf(tcx, nd)) {
-			struct evt_desc		*desc;
-
 			desc = evt_node_desc_at(tcx, nd, trace->tr_at);
-			rc1 = evt_dtx_check_availability(tcx, desc->dc_dtx,
-							 intent);
+			rc1 = evt_desc_log_status(tcx, desc, intent);
 			if (rc1 < 0)
 				return rc1;
 
@@ -332,7 +329,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
 				&rtmp, enta);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, enta, flags);
+		rc = evt_ent_array_sort(tcx, enta, &iter->it_filter, flags);
 
 	if (rc != 0)
 		return rc;
@@ -367,6 +364,13 @@ out:
 	return evt_iter_skip_holes(tcx, iter);
 }
 
+static void
+ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
+{
+	ent_array->ea_ent_nr = 0;
+	ent_array->ea_inob = tcx->tc_inob;
+}
+
 int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
@@ -388,6 +392,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	enta = &iter->it_entries;
+	ent_array_reset(tcx, enta);
 
 	if (evt_iter_is_sorted(iter))
 		return evt_iter_probe_sorted(tcx, iter, opc, rect, anchor);
@@ -480,16 +485,14 @@ evt_iter_empty(daos_handle_t ih)
 	return tcx->tc_depth == 0;
 }
 
-int evt_iter_delete(daos_handle_t ih, void *value_out)
+int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 {
 	struct evt_context	*tcx;
 	struct evt_iterator	*iter;
-	struct evt_entry	 entry;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
 	int			 rc;
 	int			 i;
-	unsigned int		 inob;
 	bool			 reset = false;
 
 	tcx = evt_hdl2tcx(ih);
@@ -505,10 +508,14 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 	if (rc != 0)
 		return rc;
 
-	rc = evt_iter_fetch(ih, &inob, &entry, NULL);
 
-	if (value_out != NULL)
-		*(bio_addr_t *)value_out = entry.en_addr;
+	if (ent != NULL) {
+		unsigned int inob;
+
+		rc = evt_iter_fetch(ih, &inob, ent, NULL);
+		if (rc)
+			return rc;
+	}
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	for (i = 0; i < tcx->tc_depth; i++) {
@@ -520,8 +527,7 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 	if (rc != 0)
 		return rc;
 
-	rc = evt_node_delete(tcx, value_out == NULL);
-
+	rc = evt_node_delete(tcx);
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
 		reset = true;
@@ -592,7 +598,14 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	rect  = evt_node_rect_at(tcx, node, trace->tr_at);
 
 	if (entry)
-		evt_entry_fill(tcx, node, trace->tr_at, NULL, entry);
+		evt_entry_fill(tcx, node, trace->tr_at, NULL,
+			       evt_iter_intent(iter), entry);
+
+	/* There is no visiblity flag for sorted entries but go ahead and set it
+	 * EVT_COVERED if user has specified a punch epoch in the filter
+	 */
+	if (entry->en_epoch <= iter->it_filter.fr_punch)
+		entry->en_visibility = EVT_COVERED;
 set_anchor:
 	*inob = tcx->tc_inob;
 

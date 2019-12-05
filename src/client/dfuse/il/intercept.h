@@ -27,8 +27,6 @@
 #include <stdlib.h>
 #include <sys/uio.h>
 #include "dfuse_log.h"
-#include "dfuse_gah.h"
-#include "dfuse_fs.h"
 #include "ioil_io.h"
 #include "ioil_api.h"
 
@@ -120,17 +118,24 @@
 
 #endif /* IOIL_PRELOAD */
 
+struct fd_entry {
+	daos_handle_t	fd_aoh;
+	off_t		fd_pos;
+	int		fd_flags;
+	int		fd_status;
+};
+
 ssize_t
 ioil_do_pread(char *buff, size_t len, off_t position,
-	      struct dfuse_file_common *f_info, int *errcode);
+	      struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode);
+	       struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode);
+	       struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct dfuse_file_common *f_info, int *errcode);
+		struct fd_entry *entry, int *errcode);
 
 #endif /* __INTERCEPT_H__ */

@@ -28,56 +28,26 @@ import traceback
 import json
 
 from avocado.utils import process
-from apricot import Test
+from apricot import TestWithServers
 
 import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
 
-class MultipleCreatesTest(Test):
+# pylint: disable = broad-except
+class MultipleCreatesTest(TestWithServers):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
 
     :avocado: recursive
     """
 
-    # super wasteful since its doing this for every variation
-    def setUp(self):
-
-        # there is a presumption that this test lives in a specific
-        # spot in the repo
-        with open('../../../.build_vars.json') as build_file:
-            build_paths = json.load(build_file)
-        basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
-
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-
-        server_group = self.params.get("name", '/server_config/',
-                                       'daos_server')
-
-        self.agent_sessions = agent_utils.run_agent(basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, server_group, basepath)
-
-        self.daosctl = basepath + '/install/bin/daosctl'
-
-
-    def tearDown(self):
-        try:
-            os.remove(self.hostfile_servers)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-
     def test_create_one(self):
         """
         Test issuing a single  pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createone
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -147,7 +117,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createtwo
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -232,7 +202,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,pr,small,createthree
         """
 
         # Accumulate a list of pass/fail indicators representing what is

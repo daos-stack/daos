@@ -29,18 +29,17 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 )
 
-const (
-	sudoUserEnv = "SUDO_USER"
-	rootUser    = "root"
-)
+// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+// log message context refers to caller not callee.
+const UtilLogDepth = 4
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
 func GetAbsInstallPath(relPath string) (string, error) {
@@ -125,8 +124,8 @@ func WriteSlice(path string, slice []string) (err error) {
 			return
 		}
 	}
-	file.Sync()
-	return
+
+	return file.Sync()
 }
 
 // WriteString writes string to specified file, wrapper around WriteSlice.
@@ -227,21 +226,8 @@ func SyncDir(path string) (err error) {
 	return d.Sync()
 }
 
-// CheckSudo returns true if current process is running as root or with sudo.
-// Returns either sudoer or current user if not running under sudo.
-func CheckSudo() (bool, string) {
-	usr := os.Getenv(sudoUserEnv)
-	if usr == "" {
-		usr = rootUser
-	}
-
-	return (os.Geteuid() == 0), usr
-}
-
 // Run executes command in os and builds useful error message.
 func Run(cmd string) error {
-	log.Debugdf(UtilLogDepth, "exec '%s'\n", cmd)
-
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
@@ -250,4 +236,28 @@ func Run(cmd string) error {
 	}
 
 	return err
+}
+
+// FindBinary attempts to locate the named binary by checking
+// $PATH first. If the binary is not found in $PATH, then
+// it looks in the directory containing the binary for
+// the running process.
+func FindBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,177 +21,186 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Server-side metadata API offering the following functionalities:
- * - per-server persistent metadata for NVMe SSD devices.
+ * Per-server metadata
  */
 
 #ifndef __SMD_H__
 #define __SMD_H__
 
-#include <daos_types.h>
+#include <uuid/uuid.h>
+#include <gurt/common.h>
+#include <gurt/list.h>
 
-#define	DEV_MAX_STREAMS 64
-
-/** NVMe metadata table type */
-enum smd_device_status {
-	SMD_NVME_UNKNOWN = 5000,
-	/** NVMe device normal */
-	SMD_NVME_NORMAL,
-	/** NVMe device in restore mode */
-	SMD_NVME_RESTORE,
-	/** NMVe device faulty */
-	SMD_NVME_FAULT,
+enum smd_dev_state {
+	SMD_DEV_NORMAL	= 0,
+	SMD_DEV_FAULTY,
 };
 
-struct smd_nvme_stream_bond {
-	/** stream ID */
-	int	nsm_stream_id;
-	/** Device ID of the NVMe SSD device */
-	uuid_t	nsm_dev_id;
+struct smd_dev_info {
+	d_list_t		 sdi_link;
+	uuid_t			 sdi_id;
+	enum smd_dev_state	 sdi_state;
+	uint32_t		 sdi_tgt_cnt;
+	int			*sdi_tgts;
 };
 
-struct smd_nvme_device_info {
-	/** Device ID of the NVMe SSD device */
-	uuid_t			ndi_dev_id;
-	/** Status of this device */
-	enum smd_device_status	ndi_status;
-	/** Number of streams bound to this device */
-	int			ndi_xs_cnt;
-	/** Stream ID(s) bound to this device */
-	int			ndi_xstreams[DEV_MAX_STREAMS];
-};
-
-struct smd_nvme_pool_info {
-	/** Pool UUID */
-	uuid_t		npi_pool_uuid;
-	/** Stream ID mapped to this pool */
-	int		npi_stream_id;
-	/** NVMe Blob ID */
-	uint64_t	npi_blob_id;
+struct smd_pool_info {
+	d_list_t	 spi_link;
+	uuid_t		 spi_id;
+	uint32_t	 spi_tgt_cnt;
+	int		*spi_tgts;
+	uint64_t	*spi_blobs;
 };
 
 static inline void
-smd_nvme_set_stream_bond(int stream_id, uuid_t uid,
-			 struct smd_nvme_stream_bond *mapping)
+smd_free_dev_info(struct smd_dev_info *dev_info)
 {
-	mapping->nsm_stream_id = stream_id;
-	uuid_copy(mapping->nsm_dev_id, uid);
+	if (dev_info->sdi_tgts != NULL)
+		D_FREE(dev_info->sdi_tgts);
+	D_FREE(dev_info);
 }
 
 static inline void
-smd_nvme_set_device_info(uuid_t uid, int status,
-			 struct smd_nvme_device_info *info)
+smd_free_pool_info(struct smd_pool_info *pool_info)
 {
-	uuid_copy(info->ndi_dev_id, uid);
-	info->ndi_status = status;
-}
-
-static inline void
-smd_nvme_set_pool_info(uuid_t pid, int stream_id, uint64_t blob_id,
-		       struct smd_nvme_pool_info *pinfo)
-{
-	uuid_copy(pinfo->npi_pool_uuid, pid);
-	pinfo->npi_stream_id = stream_id;
-	pinfo->npi_blob_id = blob_id;
+	if (pool_info->spi_tgts != NULL)
+		D_FREE(pool_info->spi_tgts);
+	if (pool_info->spi_blobs != NULL)
+		D_FREE(pool_info->spi_blobs);
+	D_FREE(pool_info);
 }
 
 /**
- * Initialize SMD library
- * Creates SMD pool file if it doesn't exist.
+ * Initialize SMD store, create store if it's not existing
  *
- * \param [IN]	 path	Path of directory for creating
- *				SMD pool file
- * \param [IN]	 fname	Optional pool file-name (d: nvme-meta)
- * \param [IN]	 size	Optional pool file-size (d: 256M)
+ * \param [IN]	path	Path of SMD store
  *
- * \return		 Zero on success, negative value on error
+ * \return		Zero on success, negative value on error
  */
-int smd_create_initialize(const char *path, const char *fname,
-			  daos_size_t size);
+int smd_init(const char *path);
 
 /**
- * Global finalization for Server Metadata (SMD) library.
- *
- * \return		 Zero on success, negative value on error
+ * Finalize SMD store
  */
 void smd_fini(void);
 
 /**
- * Remove Server Metadata Library completely
+ * Destroy SMD store
+ *
+ * \param [IN]	path	Path of SMD store
  */
-void smd_remove(const char *path, const char *file);
+int smd_store_destroy(const char *path);
 
 /**
- * Server NMVe add Stream to Device mapping SMD stream table
- * Check for the device entry in device table and
- * Adds a device entry to the SMD device table if device
- * is not found.
+ * Assign a NVMe device to a target (VOS xstream)
  *
- * \param	[IN]	stream_bond	SMD NVMe device/stream
- *					mapping
+ * \param [IN]	dev_id	NVMe device ID
+ * \param [IN]	tgt_id	Target ID
  *
- * \returns				Zero on success,
- *					negative value on error
+ * \return		Zero on success, negative value on error
  */
-int smd_nvme_add_stream_bond(struct smd_nvme_stream_bond *mapping);
+int smd_dev_assign(uuid_t dev_id, int tgt_id);
 
 /**
- * Server NVMe get device corresponding to a stream
+ * Unassign a NVMe device from a target (VOS xstream)
  *
- * \param	[IN]	stream_id	SMD NVMe stream ID
- * \param	[OUT]	mapping		SMD mapping information
+ * \param [IN]	dev_id	NVMe device ID
+ * \param [IN]	tgt_id	Target ID
  *
- * \returns				Zero on success,
- *					negative value on error
+ * \return		Zero on success, negative value on error
  */
-int smd_nvme_get_stream_bond(int stream_id,
-			     struct smd_nvme_stream_bond *mapping);
-/**
- * Server NVMe set device status will update the status of the NVMe device
- * in the SMD device table, if the device is not found it adds a new entry
- *
- * \param	[IN]	device_id	UUID of device
- * \param	[IN]	status		Status of device
- *
- * \returns				Zero on success,
- *					negative value on error
- */
-int smd_nvme_set_device_status(uuid_t device_id, enum smd_device_status status);
+int smd_dev_unassign(uuid_t dev_id, int tgt_id);
 
 /**
- * Server NVMe get device info using device ID
+ * Set a NVMe device state
  *
- * \param	[IN]	 device_id	NVMe device UUID
- * \param	[OUT]	 info		SMD store NVMe device info
+ * \param [IN]	dev_id	NVMe device ID
+ * \param [IN]	state	Device state
  *
- * \returns				Zero on success, negative
- *					value on error
+ * \return		Zero on success, negative value on error
  */
-int smd_nvme_get_device(uuid_t device_id,
-			struct smd_nvme_device_info *info);
+int smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state);
 
 /**
- * Server NMVe add pool metadata to SMD store
+ * Get NVMe device info, caller is responsible to free @dev_info
  *
- * \param	[IN]	pool	SMD store NVMe pool table info
+ * \param [IN]	dev_id		NVMe device ID
+ * \param [OUT]	dev_info	Device info
  *
- * \returns			Zero on success, negative value
- *				on error
+ * \return			Zero on success, negative value on error
  */
-int smd_nvme_add_pool(struct smd_nvme_pool_info *pool);
+int smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info);
 
 /**
- * Server NMVe get pool metadata to SMD store
+ * Get NVMe device info by target ID, caller is responsible to free @dev_info
  *
- * \param	[IN]	 pool_id	Pool UUID to search
- * \param	[IN]	 stream_id	Xstream ID to search
- * \param	[IN/OUT] info		SMD store NVMe pool table info
+ * \param [IN]	tgt_id		Target ID
+ * \param [OUT]	dev_info	Device info
  *
- * \returns				Zero on success, negative value
- *					on error
+ * \return			Zero on success, negative value on error
  */
-int smd_nvme_get_pool(uuid_t pool_id, int stream_id,
-		      struct smd_nvme_pool_info *info);
+int smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info);
 
-/** TODO: Add iterator API to list devices and pools */
+/**
+ * List all NVMe devices, caller is responsible to free list items
+ *
+ * \param [OUT]	dev_list	Device list
+ * \param [OUT] dev_cnt		Number of devices in list
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_dev_list(d_list_t *dev_list, int *dev_cnt);
+
+/**
+ * Assign a blob to a VOS pool target
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [IN]	tgt_id		Target ID
+ * \param [IN]	blob_id		Blob ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id);
+
+/**
+ * Unassign a VOS pool target
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [IN]	tgt_id		Target ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_unassign(uuid_t pool_id, int tgt_id);
+
+/**
+ * Get pool info, caller is responsible to free @pool_info
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [OUT]	pool_info	Pool info
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info);
+
+/**
+ * Get blob ID mapped to pool:target
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [IN]	tgt_id		Target ID
+ * \param [OUT]	blob_id		Blob ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id);
+
+/**
+ * Get pool info, caller is responsible to free list items
+ *
+ * \param [OUT]	pool_list	Pool list
+ * \param [OUT]	pool_cnt	Number of pools in list
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
+
 #endif /* __SMD_H__ */

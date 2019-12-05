@@ -81,7 +81,8 @@ int
 daos_eq_lib_init()
 {
 	bool		singleton = false;
-	uint32_t	flags;
+	bool		pmixless = false;
+	uint32_t	flags = 0;
 	int		rc;
 
 	D_MUTEX_LOCK(&daos_eq_lock);
@@ -96,7 +97,11 @@ daos_eq_lib_init()
 	 * benefit of independent with PMIx.
 	 */
 	d_getenv_bool("DAOS_SINGLETON_CLI", &singleton);
-	flags = singleton ? CRT_FLAG_BIT_SINGLETON : 0;
+	if (singleton)
+		flags |= CRT_FLAG_BIT_SINGLETON;
+	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
+	if (pmixless)
+		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
 	rc = crt_init_opt(NULL, flags, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: %d\n", rc);

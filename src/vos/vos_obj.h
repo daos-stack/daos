@@ -36,35 +36,69 @@
 #include <daos/btree.h>
 #include <daos/lru.h>
 #include "vos_layout.h"
+#include "vos_ilog.h"
 
 #define LRU_CACHE_BITS 16
 
-/**
- * Reference of a cached object.
- * NB: DRAM data structure.
- */
-struct vos_object;
-
 /* Internal container handle structure */
 struct vos_container;
+
+/**
+ * A cached object (DRAM data structure).
+ */
+struct vos_object {
+	/** llink for daos lru cache */
+	struct daos_llink		obj_llink;
+	/** Cache of incarnation log */
+	struct vos_ilog_info		obj_ilog_info;
+	/** Key for searching, object ID within a container */
+	daos_unit_oid_t			obj_id;
+	/** dkey tree open handle of the object */
+	daos_handle_t			obj_toh;
+	/** btree iterator handle */
+	daos_handle_t			obj_ih;
+	/** epoch when the object(cache) is initialized */
+	daos_epoch_t			obj_epoch;
+	/** The latest sync epoch */
+	daos_epoch_t			obj_sync_epoch;
+	/** cached vos_obj_df::vo_incarnation, for revalidation. */
+	uint32_t			obj_incarnation;
+	/** nobody should access this object */
+	bool				obj_zombie;
+	/** Persistent memory address of the object */
+	struct vos_obj_df		*obj_df;
+	/** backref to container */
+	struct vos_container		*obj_cont;
+};
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
  * not in cache, this function will load it from PMEM pool or create it, then
  * add it to the cache.
  *
- * \param occ	[IN]	Object cache, it could be a percpu data structure.
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	VOS object ID.
- * \param no_create [IN]
- *			Do not allocate object if it's not there yet.
- * \param intent [IN]	The request intent.
- * \param obj_p [OUT]	Returned object cache reference.
+ * \param occ		[IN]		Object cache, can be per cpu
+ * \param cont		[IN]		Open container.
+ * \param oid		[IN]		VOS object ID.
+ * \param epr		[IN,OUT]	Epoch range.   High epoch should be set
+ *					to requested epoch.   The lower epoch
+ *					can be 0 or bounded.
+ * \param no_create	[IN]		If object doesn't exist, do not create
+ * \param intent	[IN]		The request intent.
+ * \param visible_only	[IN]		Return the object only if it's visible
+ * \param obj_p		[OUT]		Returned object cache reference.
+ *
+ * \return	0			The object is visible or, if
+ *					\p visible_only is false, it has
+ *					punched data or is entirely empty.
+ * \return	-DER_NONEXIST		The conditions for success don't apply
+ *		-DER_INPROGRESS		The local target doesn't have the
+ *					definitive state of the object.
+ *		other			Another error occurred
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-	     daos_unit_oid_t oid, daos_epoch_t epoch,
-	     bool no_create, uint32_t intent, struct vos_object **obj_p);
+vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
+	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
+	     uint32_t intent, bool visible_only, struct vos_object **obj_p);
 
 /**
  * Release the object cache reference.
@@ -72,20 +106,19 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
 
-/**
- * Varify if the object reference is still valid, and refresh it if it's
- * invalide (evicted)
- */
-int vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		       struct vos_object **obj_p);
+static inline int
+vos_obj_refcount(struct vos_object *obj)
+{
+	return obj->obj_llink.ll_ref;
+}
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct vos_object *obj);
 
-/** Check if an object reference has been evicted from the cache */
-bool vos_obj_evicted(struct vos_object *obj);
+int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
+			 daos_unit_oid_t oid);
 
 /**
  * Create an object cache.
@@ -140,9 +173,10 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  * If the object is not found, create a new object for the @oid and return
  * the direct pointer of the new allocated object.
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
- * \param intent [IN]	The request intent
+ * \param epoch [IN]	Epoch for the lookup
+ * \param log   [IN]	Add entry to ilog
  * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
@@ -150,17 +184,15 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, uint32_t intent,
-		  struct vos_obj_df **obj);
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj);
 
 /**
  * Find an enty in the obj_index by @oid
  * Created to us in tests for checking sanity of obj index
  * after deletion
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
- * \param intent [IN]	The operation intent
  * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
@@ -168,7 +200,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj);
+	    struct vos_obj_df **obj);
 
 /**
  * Punch an object from the OI table
@@ -176,5 +208,10 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj);
+
+
+/** delete an object from OI table */
+int
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
 
 #endif

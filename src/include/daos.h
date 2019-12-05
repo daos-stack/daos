@@ -23,10 +23,35 @@
 #define __DAOS_H__
 
 #include <daos_types.h>
-#include <daos_errno.h>
 #include <daos_event.h>
 
-#include <daos_api.h>
+#include <daos_obj.h>
+#include <daos_array.h>
+#include <daos_kv.h>
+#include <daos_prop.h>
+
 #include <daos_mgmt.h>
+#include <daos_security.h>
+
+#include <daos_api.h>
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+/**
+ * Initialize the DAOS library.
+ */
+int
+daos_init(void);
+
+/**
+ * Finalize the DAOS library.
+ */
+int
+daos_fini(void);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __DAOS_H__ */

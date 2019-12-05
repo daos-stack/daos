@@ -39,10 +39,6 @@ Control the DAOS IO mode: server dispatches modification RPCs to replicas or cli
 
 Environment variables in this section only apply to the server side.
 
-### `VOS_CHECKSUM`
-
-Checksum algorithm used by VOS. `STRING`. Default to disabling checksums.
-
 These checksum algorithms are currently supported: `crc64` and `crc32`.
 
 ### `VOS_MEM_CLASS`
