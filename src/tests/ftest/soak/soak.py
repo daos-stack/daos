@@ -77,10 +77,9 @@ class Soak(TestWithServers):
         """
         pool_obj_list = []
         for pool_name in pools:
-            path = "/run/" + pool_name + "/*"
             # Create a pool
             pool_obj_list.append(TestPool(self.context, self.log))
-            pool_obj_list[-1].namespace = path
+            pool_obj_list[-1].namespace = "/".join(["/run", pool_name, "*"])
             pool_obj_list[-1].get_params(self)
             pool_obj_list[-1].create()
             self.log.info("Valid Pool UUID is %s", pool_obj_list[-1].uuid)
@@ -134,14 +133,15 @@ class Soak(TestWithServers):
         """
         command = []
         iteration = self.test_iteration
-        ior_params = "/run/" + job_spec + "/"
+        ior_params = "/".join(["run", job_spec, "*"])
 
         ior_cmd = IorCommand()
         ior_cmd.namespace = ior_params
         ior_cmd.get_params(self)
         if iteration is not None and iteration < 0:
             ior_cmd.repetitions.update(1000000)
-        ior_cmd.max_duration.update(self.params.get("time", job_params + '*'))
+        ior_cmd.max_duration.update(self.params.get(
+            "time", "/".join([job_params, "*"])))
         # IOR job specs with a list of parameters; update each value
         #   transfer_size
         #   block_size
@@ -216,11 +216,11 @@ class Soak(TestWithServers):
         script_list = []
         # create one batch script per cmdline
         # get job params
-        job_params = "/run/" + job + "/"
-        job_name = self.params.get("name", job_params + "*")
-        job_specs = self.params.get("jobspec", job_params + "*")
-        task_list = self.params.get("tasks", job_params + "*")
-        job_time = self.params.get("time", job_params + "*")
+        job_params = "/run/" + job
+        job_name = self.params.get("name", "/".join([job_params, "*"]))
+        job_specs = self.params.get("jobspec", "/".join([job_params, "*"]))
+        task_list = self.params.get("tasks", "/".join([job_params, "*"]))
+        job_time = self.params.get("time", "/".join([job_params, "*"]))
 
         # job_time in minutes:seconds format
         job_time = str(job_time) + ":00"
@@ -247,11 +247,11 @@ class Soak(TestWithServers):
                         "_results.out_%j_%t_" + str(tasks) + "_")
                     num_tasks = nodesperjob * tasks
                     sbatch = {
-                            "ntasks-per-node": tasks,
-                            "ntasks": num_tasks,
-                            "time": job_time,
-                            "partition": self.partition_clients,
-                            "exclude": NodeSet.fromlist(self.hostlist_servers)}
+                        "ntasks-per-node": tasks,
+                        "ntasks": num_tasks,
+                        "time": job_time,
+                        "partition": self.partition_clients,
+                        "exclude": NodeSet.fromlist(self.hostlist_servers)}
                     script = slurm_utils.write_slurm_script(
                         self.rem_pass_dir, job_name, output, nodesperjob,
                         [cmd], sbatch)
@@ -262,7 +262,7 @@ class Soak(TestWithServers):
         """Create the slurm job batch script .
 
         Args:
-            test_param (str): test_params from yaml file
+            test_param (str): test_param from yaml file
             pool (obj): TestPool obj
 
         Returns:
@@ -272,10 +272,11 @@ class Soak(TestWithServers):
         # Get jobmanager
         self.job_manager = self.params.get("jobmanager", "/run/*")
         # Get test params
-        self.test_name = self.params.get("name", test_param)
-        self.test_iteration = self.params.get("test_iteration", test_param)
-        self.job_list = self.params.get("joblist", test_param + "*")
-        self.nodesperjob = self.params.get("nodesperjob", test_param)
+        test_params = "".join([test_param, "*"])
+        self.test_name = self.params.get("name", test_params)
+        self.test_iteration = self.params.get("test_iteration", test_params)
+        self.job_list = self.params.get("joblist", test_params)
+        self.nodesperjob = self.params.get("nodesperjob", test_params)
         self.soak_results = {}
         script_list = []
 
@@ -440,7 +441,7 @@ class Soak(TestWithServers):
             test_param (str): test_params from yaml file
 
         """
-        pool_list = self.params.get("poollist", test_param + "*")
+        pool_list = self.params.get("poollist", "".join([test_param, "*"]))
         self.test_timeout = self.params.get("test_timeout", test_param)
         self.job_id_list = []
         start_time = time.time()
@@ -453,7 +454,7 @@ class Soak(TestWithServers):
         self.pool = self.create_pool(["pool_reserved"])
         self.pool[0].connect()
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved/"
+        self.container.namespace = "/run/container_reserved/*"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
@@ -506,13 +507,13 @@ class Soak(TestWithServers):
         self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
-        # self.test_node = [socket.gethostname().split('.', 1)[0]]
-        # if self.test_node[0] in self.hostlist_clients:
-        #     self.hostlist_clients.remove(self.test_node[0])
-        #     self.log.info(
-        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # self.node_list = self.hostlist_clients + self.test_node
-        self.node_list = self.hostlist_clients
+        self.test_node = [socket.gethostname().split('.', 1)[0]]
+        if self.test_node[0] in self.hostlist_clients:
+            self.hostlist_clients.remove(self.test_node[0])
+            self.log.info(
+                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        self.node_list = self.hostlist_clients + self.test_node
+        # self.node_list = self.hostlist_clients
 
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
@@ -603,7 +604,7 @@ class Soak(TestWithServers):
         self.run_soak(test_param)
 
     def test_soak_stress(self):
-        """Run soak test with IOR -a mpiio.
+        """Run soak stress.
 
         Test ID: DAOS-2256
         Test Description: This will create a slurm batch job that runs
