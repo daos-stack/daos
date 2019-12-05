@@ -291,7 +291,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 				continue
 			}
 
-			n.log.Debugf("controller format successful (%s)\n", pciAddr)
+			.log.Debugf("controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
 			n.controllers = loadControllers(cs)
@@ -351,19 +351,19 @@ func nvmeHealthToPB(dh *spdk.DeviceHealth) *ctlpb.NvmeController_Health {
 
 	return &ctlpb.NvmeController_Health{
 		Temp:            dh.Temp,
-		Tempwarn:        dh.TempWarnTime,
-		Tempcrit:        dh.TempCritTime,
-		Ctrlbusy:        dh.CtrlBusyTime,
+		Tempwarntime:        dh.TempWarnTime,
+		Tempcrittime:        dh.TempCritTime,
+		Ctrlbusytime:        dh.CtrlBusyTime,
 		Powercycles:     dh.PowerCycles,
 		Poweronhours:    dh.PowerOnHours,
 		Unsafeshutdowns: dh.UnsafeShutdowns,
 		Mediaerrors:     dh.MediaErrors,
-		Errorlogs:       dh.ErrorLogEntries,
-		Tempwarning:     dh.TempWarn,
-		Availspare:      dh.AvailSpareWarn,
-		Reliability:     dh.ReliabilityWarn,
-		Readonly:        dh.ReadOnlyWarn,
-		Volatilemem:     dh.VolatileWarn,
+		Errorlogentries:       dh.ErrorLogEntries,
+		Tempwarn:     dh.TempWarn,
+		Availsparewarn:      dh.AvailSpareWarn,
+		Reliabilitywarn:     dh.ReliabilityWarn,
+		Readonlywarn:        dh.ReadOnlyWarn,
+		Volatilewarn:     dh.VolatileWarn,
 	}
 }
 

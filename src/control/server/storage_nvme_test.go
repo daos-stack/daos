@@ -20,7 +20,6 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package server
 
 import (
@@ -42,7 +41,7 @@ func MockNamespace() *Namespace {
 	n := common.MockNamespacePB()
 	return &Namespace{
 		ID:   n.Id,
-		Size: n.Capacity,
+		Size: n.Size,
 	}
 }
 
@@ -51,19 +50,19 @@ func MockDeviceHealth() *DeviceHealth {
 	h := common.MockDeviceHealthPB()
 	return &DeviceHealth{
 		Temp:            h.Temp,
-		TempWarnTime:    h.Tempwarn,
-		TempCritTime:    h.Tempcrit,
-		CtrlBusyTime:    h.Ctrlbusy,
+		TempWarnTime:    h.Tempwarntime,
+		TempCritTime:    h.Tempcrittime,
+		CtrlBusyTime:    h.Ctrlbusytime,
 		PowerCycles:     h.Powercycles,
 		PowerOnHours:    h.Poweronhours,
 		UnsafeShutdowns: h.Unsafeshutdowns,
 		MediaErrors:     h.Mediaerrors,
-		ErrorLogEntries: h.Errorlogs,
-		TempWarn:        h.Tempwarning,
-		AvailSpareWarn:  h.Availspare,
-		ReliabilityWarn: h.Reliability,
-		ReadOnlyWarn:    h.Readonly,
-		VolatileWarn:    h.Volatilemem,
+		ErrorLogEntries: h.Errorlogentries,
+		TempWarn:        h.Tempwarn,
+		AvailSpareWarn:  h.Availsparewarn,
+		ReliabilityWarn: h.Reliabilitywarn,
+		ReadOnlyWarn:    h.Readonlywarn,
+		VolatileWarn:    h.Volatilewarn,
 	}
 }
 
