@@ -9,12 +9,12 @@ hosts:
         - client-F
         - client-G
         - client-H
-timeout: 1200
+timeout: 2400
 server_config:
     name: daos_server
     server:
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
 pool:
     createmode:
         mode_RW:
@@ -23,28 +23,29 @@ pool:
         group: daos_server
     createsize:
         scm_size: 60000000000
+        nvme_size: 128000000000
     createsvc:
         svcn: 1
 ior:
     client_processes:
         np_16:
-            np: 16
+            np: 16 
     test_file: daos:testFile
     repetitions: 2
 # Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
-    iorflags: !mux
+    iorflags:
         ssf:
-          flags: "-v -w -W -r -R"
-          ior_api: !mux
+          flags: "-F -e -v -D 120 -w -r" 
+          ior_api:
             posix:
               api: POSIX
-          transfersize_blocksize: !mux
+          transfersize_blocksize:
             1M:
-              transfer_size: '1M'
-              block_size: '1G'
+              transfer_size: '4K'
+              block_size: '256M'
 
-          objectclass: !mux
+          objectclass:
             oclass_SX:
               daos_oclass: "SX"
 dfuse:

@@ -26,8 +26,8 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
 
-class IorIntercept(IorTestBase):
-    # pylint: disable=too-many-ancestors
+class IorIntercept(IorTestBase): 
+    # pylint: disable=too-many-arguments
     """Test class Description: Runs IOR with and without interception
        library on a multi server and multi client settings with
        basic parameters.
@@ -64,7 +64,7 @@ class IorIntercept(IorTestBase):
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
         mean_mib = int(IorMetrics.Mean_MiB)
-        x_improvement = 2
+        x_improvement = 1
 
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
