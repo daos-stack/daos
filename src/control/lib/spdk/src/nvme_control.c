@@ -78,8 +78,6 @@ nvme_format(char *ctrlr_pci_addr)
 	struct spdk_nvme_ns			*ns;
 	struct spdk_nvme_format			format = {};
 	struct ctrlr_entry			*ctrlr_entry;
-	struct spdk_pci_device			*pci_dev;
-	struct spdk_pci_addr			pci_addr;
 	struct ret_t				*ret;
 
 	ret = init_ret();
