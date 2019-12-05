@@ -118,6 +118,14 @@ public class DaosFile {
     createNewFile(mode, objectType, chunkSize);
   }
 
+  /**
+   * create new file with mode, object type and chunk size
+   *
+   * @param mode should be octal number, like 0775
+   * @param objectType
+   * @param chunkSize
+   * @throws IOException
+   */
   public void createNewFile(int mode, DaosObjectType objectType, int chunkSize) throws IOException {
     if(objId != 0){
       throw new IOException("file existed already");

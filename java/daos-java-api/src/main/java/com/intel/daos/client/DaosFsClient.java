@@ -50,7 +50,7 @@ import java.util.concurrent.*;
  * User cannot instantiate this class directly since we need to make sure single instance of {@linkplain DaosFsClient}
  * per pool and container. User should get this object from {@link DaosFsClientBuilder}.
  *
- * After getting {@linkplain DaosFsClient}, user usually get {@link DaosFile} object via {@linkplain #newFile} methods.
+ * After getting {@linkplain DaosFsClient}, user usually get {@link DaosFile} object via {@linkplain #getFile} methods.
  *
  * @see DaosFsClientBuilder
  * @see DaosFile
@@ -193,6 +193,7 @@ public final class DaosFsClient {
 
   public static String createPool(DaosFsClientBuilder builder)throws IOException {
     return daosCreatePool(builder.serverGroup,
+                          builder.poolSvcReplics,
                           builder.poolMode,
                           builder.poolScmSize,
                           builder.poolNvmeSize);
@@ -224,11 +225,11 @@ public final class DaosFsClient {
     pcFsMap.remove(poolId+contId);
   }
 
-  public DaosFile newFile(String path) {
-    return newFile(path, builder.defFileAccessFlag, builder.defFileMode);
+  public DaosFile getFile(String path) {
+    return getFile(path, builder.defFileAccessFlag, builder.defFileMode);
   }
 
-  public DaosFile newFile(String path, int accessFlags, int mode) {
+  public DaosFile getFile(String path, int accessFlags, int mode) {
     DaosFile daosFile = new DaosFile(path, this);
     daosFile.setAccessFlags(accessFlags);
     daosFile.setMode(mode);
@@ -237,11 +238,11 @@ public final class DaosFsClient {
     return daosFile;
   }
 
-  public DaosFile newFile(String parent, String path){
-    return newFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
+  public DaosFile getFile(String parent, String path){
+    return getFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
   }
 
-  public DaosFile newFile(String parent, String path, int accessFlags, int mode) {
+  public DaosFile getFile(String parent, String path, int accessFlags, int mode) {
     DaosFile daosFile = new DaosFile(parent, path, this);
     daosFile.setAccessFlags(accessFlags);
     daosFile.setMode(mode);
@@ -250,11 +251,11 @@ public final class DaosFsClient {
     return daosFile;
   }
 
-  public DaosFile newFile(DaosFile parent, String path){
-    return newFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
+  public DaosFile getFile(DaosFile parent, String path){
+    return getFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
   }
 
-  public DaosFile newFile(DaosFile parent, String path, int accessFlags, int mode) {
+  public DaosFile getFile(DaosFile parent, String path, int accessFlags, int mode) {
     DaosFile daosFile = new DaosFile(parent, path, this);
     daosFile.setAccessFlags(accessFlags);
     daosFile.setMode(mode);
@@ -340,6 +341,7 @@ public final class DaosFsClient {
    * create DAOS pool
    *
    * @param serverGroup
+   * @param poolSvcReplics
    * @param mode
    * @param scmSize
    * @param nvmeSize
@@ -347,7 +349,8 @@ public final class DaosFsClient {
    *
    * @return poold id
    */
-  static native String daosCreatePool(String serverGroup, int mode, long scmSize, long nvmeSize)throws IOException;
+  static native String daosCreatePool(String serverGroup, int poolSvcReplics, int mode, long scmSize,
+                                      long nvmeSize)throws IOException;
 
   /**
    * create DAOS container in DAOS pool specified by <code>poolPtr</code>
@@ -618,18 +621,19 @@ public final class DaosFsClient {
    * makes sure single instance of {@link DaosFsClient} per pool and container.
    *
    * Please note that new pool and new container will be created if their ids (poolId and containerId) are {@code null}.
-   *
+   * //TODO: set default value
    */
   public static class DaosFsClientBuilder{
     private String poolId;
     private String contId;
     private String svc;
     private String serverGroup;
+    private int poolSvcReplics = 1;
     private int poolMode;
     private int poolFlags;
     private long poolScmSize;
     private long poolNvmeSize;
-    private int defFileChunkSize; //TODO: set default value
+    private int defFileChunkSize;
     private int defFileAccessFlag;
     private int defFileMode;
     private DaosObjectType defFileObjType = DaosObjectType.OC_SX;
@@ -656,6 +660,16 @@ public final class DaosFsClient {
       return this;
     }
 
+    public DaosFsClientBuilder poolSvcReplics(int poolSvcReplics){
+      this.poolSvcReplics = poolSvcReplics;
+      return this;
+    }
+
+    /**
+     * set pool mode if you want to create new pool.
+     * @param poolMode, should be octal number, like 0775
+     * @return
+     */
     public DaosFsClientBuilder poolMode(int poolMode){
       this.poolMode = poolMode;
       return this;

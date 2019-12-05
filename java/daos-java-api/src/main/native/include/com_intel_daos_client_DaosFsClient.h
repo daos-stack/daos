@@ -26,10 +26,10 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_mkdir
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    createNewFile
- * Signature: (JLjava/lang/String;Ljava/lang/String;III)J
+ * Signature: (JLjava/lang/String;Ljava/lang/String;IIII)J
  */
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
-  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jint);
+  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jint, jint);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -42,10 +42,10 @@ JNIEXPORT jboolean JNICALL Java_com_intel_daos_client_DaosFsClient_delete
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    daosCreatePool
- * Signature: (Ljava/lang/String;IJJ)Ljava/lang/String;
+ * Signature: (Ljava/lang/String;IIJJ)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
-  (JNIEnv *, jclass, jstring, jint, jlong, jlong);
+  (JNIEnv *, jclass, jstring, jint, jint, jlong, jlong);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -58,10 +58,10 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreateCont
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    daosOpenPool
- * Signature: (Ljava/lang/String;Ljava/lang/String;IJ)J
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)J
  */
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_daosOpenPool
-  (JNIEnv *, jclass, jstring, jstring, jint, jlong);
+  (JNIEnv *, jclass, jstring, jstring, jstring, jint);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient

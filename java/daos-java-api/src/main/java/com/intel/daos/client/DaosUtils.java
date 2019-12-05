@@ -23,10 +23,15 @@
 
 package com.intel.daos.client;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Utility class
  */
 public final class DaosUtils {
+
+  public static final Pattern PAT_PATH = Pattern.compile("^(/|(/[a-zA-Z0-9_-]+)|[a-zA-Z0-9_-]+)+$");
 
   private DaosUtils(){}
 
@@ -39,7 +44,14 @@ public final class DaosUtils {
     if(path == null || (path=path.trim()).length() == 0){
       return "";
     }
-    //TODO: normalize
+    path = path.replaceAll("\\\\{1,}", "/");
+    Matcher m = PAT_PATH.matcher(path);
+    if(!m.matches()){
+      throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - are valid");
+    }
+    if(path.length() > 1 && path.endsWith("/")){
+      path = path.substring(0, path.length()-1);
+    }
     return path;
   }
 
@@ -50,7 +62,7 @@ public final class DaosUtils {
    */
   public static String[] parsePath(String path) {
     int slash = path.lastIndexOf('/');
-    if(slash >= 0){
+    if(slash >= 0 && path.length()>1){
       return new String[] {path.substring(0, slash), path.substring(slash+1)};
     }
     return new String[] {path};
