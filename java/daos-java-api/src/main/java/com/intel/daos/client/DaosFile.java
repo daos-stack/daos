@@ -58,6 +58,8 @@ public class DaosFile {
 
   private DaosObjectType objectType;
 
+  private int chunkSize;
+
   private DaosFile parent;
 
   private Cleaner cleaner;
@@ -113,16 +115,16 @@ public class DaosFile {
   }
 
   public void createNewFile() throws IOException {
-    createNewFile(objectType);
+    createNewFile(mode, objectType, chunkSize);
   }
 
-  public void createNewFile(DaosObjectType objectType) throws IOException {
+  public void createNewFile(int mode, DaosObjectType objectType, int chunkSize) throws IOException {
     if(objId != 0){
       throw new IOException("file existed already");
     }
     //parse path to get parent and name.
     //dfs lookup parent and then dfs open
-    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.getValue());
+    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.getValue(), chunkSize);
     createCleaner();
   }
 
@@ -223,12 +225,19 @@ public class DaosFile {
     client.dfsWrite(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
-
   public void mkdir() throws IOException {
+    mkdir(mode);
+  }
+
+  public void mkdir(int mode) throws IOException {
     client.mkdir(path, mode,false);
   }
 
   public void mkdirs() throws IOException {
+    mkdirs(mode);
+  }
+
+  public void mkdirs(int mode) throws IOException {
     client.mkdir(path, mode, true);
   }
 
@@ -256,11 +265,17 @@ public class DaosFile {
     return client.dfsIsDirectory(getMode());
   }
 
-  public int getAccessFlags() {
-    return accessFlags;
+  /**
+   * release DAOS FS object actively
+   */
+  public void release(){
+    if(cleaner != null){
+      cleaner.clean();
+      cleaned = true;
+    }
   }
 
-  protected void setAccessFlags(int accessFlags) {
+  void setAccessFlags(int accessFlags) {
     this.accessFlags = accessFlags;
   }
 
@@ -276,12 +291,16 @@ public class DaosFile {
     return new StatAttributes(buffer);
   }
 
-  protected void setMode(int mode) {
-    this.mode = mode;
+  void setObjectType(DaosObjectType objectType) {
+    this.objectType = objectType;
   }
 
-  public void setObjectType(DaosObjectType objectType) {
-    this.objectType = objectType;
+  void setChunkSize(int chunkSize) {
+    this.chunkSize = chunkSize;
+  }
+
+  void setMode(int mode){
+    this.mode = mode;
   }
 
   public DaosFile getParent() {
