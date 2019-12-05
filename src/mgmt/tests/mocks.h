@@ -83,7 +83,7 @@ void mock_ds_mgmt_pool_delete_acl_teardown(void);
  * Mock ds_mgmt_list_pools
  */
 extern int				ds_mgmt_list_pools_return;
-extern char				ds_mgmt_list_pools_group[DAOS_SYS_NAME_MAX];
+extern char				ds_mgmt_list_pools_group[];
 extern void				*ds_mgmt_list_pools_npools_ptr;
 extern uint64_t				ds_mgmt_list_pools_npools;
 extern void				*ds_mgmt_list_pools_poolsp_ptr;
