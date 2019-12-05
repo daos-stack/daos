@@ -106,13 +106,6 @@ if [ -d "/mnt/daos" ]; then
         echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
     fi
     run_test src/control/run_go_tests.sh
-    # Environment variables specific to the rdb tests
-    export PATH="${SL_PREFIX}/bin:${PATH}"
-    export CRT_PHY_ADDR_STR=ofi+sockets
-    export OFI_INTERFACE=lo
-    LD_LIBRARY_PATH="${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
-    export LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
