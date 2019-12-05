@@ -133,6 +133,22 @@ vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 void
 vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 
+/** Aggregate (or discard) the incarnation log in the specified range
+ *
+ * \param	coh[IN]		container handle
+ * \param	ilog[IN]	Incarnation log
+ * \param	epr[IN]		Aggregation range
+ * \param	info[IN]	Incarnation log info
+ * \param	discard[IN]	Discard all entries in range
+ *
+ * \return	0	Success
+ *		error	Failure
+ */
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr, struct vos_ilog_info *info,
+		   bool discard);
+
 #ifdef ILOG_TRACE
 #undef vos_ilog_fetch
 #undef vos_ilog_update

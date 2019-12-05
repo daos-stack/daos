@@ -359,6 +359,23 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
 }
 
 int
+vos_iter_aggregate(daos_handle_t ih, bool discard)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	int rc;
+
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
+
+	D_ASSERT(iter->it_ops != NULL);
+	if (iter->it_ops->iop_aggregate == NULL)
+		return -DER_NOSYS;
+
+	return iter->it_ops->iop_aggregate(iter, discard);
+}
+
+int
 vos_iter_delete(daos_handle_t ih, void *args)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);

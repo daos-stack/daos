@@ -878,6 +878,8 @@ struct vos_iter_ops {
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter,
 			      void *args);
+	/** Aggregate the current entry */
+	int	(*iop_aggregate)(struct vos_iterator *iter, bool discard);
 	/**
 	 * Optional, the iterator has no element.
 	 *

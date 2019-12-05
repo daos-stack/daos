@@ -793,6 +793,20 @@ int
 vos_iter_delete(daos_handle_t ih, void *args);
 
 /**
+ * Aggregate the incarnation log for the iterator entry. Only applicable
+ * to VOS_ITER_OBJ, VOS_ITER_DKEY, and VOS_ITER_AKEY
+ *
+ * \param ih		[IN]	Iterator handle
+ * \param discard	[IN]	Discard all entries
+ *
+ * \return		Zero on Success
+ *			-DER_NONEXIST if cursor does
+ *			not exist. negative value if error
+ */
+int
+vos_iter_aggregate(daos_handle_t ih, bool discard);
+
+/**
  * If the iterator has any element. The condition provided to vos_iter_prepare
  * will not be taken into account, so even if there is no element can match
  * the iterator condition, but the function still returns false if there is

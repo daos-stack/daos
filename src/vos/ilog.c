@@ -1069,9 +1069,19 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id)
 }
 
 int
-ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr)
+ilog_aggregate(struct umem_instance *umm, umem_off_t root_off,
+	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
+	       bool discard)
 {
-	struct ilog_context	*lctx;
+	struct ilog_context	lctx_stack = {
+		.ic_root = umem_off2ptr(umm, root_off),
+		.ic_root_off = root_off,
+		.ic_umm = *umm,
+		.ic_ref = 1,
+		.ic_cbs = *cbs,
+		.ic_in_txn = 0,
+	};
+	struct ilog_context	*lctx = &lctx_stack;
 	struct ilog_root	*root;
 	struct ilog_root	 tmp = {0};
 	struct ilog_id		 old_id = {0};
@@ -1089,21 +1099,15 @@ ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr)
 	d_iov_t			 val_iov;
 	struct umem_attr	 uma;
 
+	root = lctx->ic_root;
+
+	ILOG_ASSERT_VALID(root);
+
 	if (epr == NULL)
 		return -DER_INVAL;
 
-	lctx = ilog_hdl2lctx(loh);
-	if (lctx == NULL) {
-		D_ERROR("Invalid log handle\n");
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_IO, "aggregate incarnation log: epr: "DF_U64"-"DF_U64"\n",
-		epr->epr_lo, epr->epr_hi);
-
-	D_ASSERT(!lctx->ic_in_txn);
-
-	root = lctx->ic_root;
+	D_DEBUG(DB_IO, "%s incarnation log: epr: "DF_U64"-"DF_U64"\n",
+		discard ? "discard" : "aggregate", epr->epr_lo, epr->epr_hi);
 
 	if (ilog_empty(root))
 		return 1; /* indicate empty tree */
@@ -1112,7 +1116,7 @@ ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr)
 		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
 					     DAOS_INTENT_PURGE);
 		if (visibility == ILOG_COMMITTED) {
-			if (!root->lr_punch)
+			if (!root->lr_punch && !discard)
 				return 0;
 			epoch = root->lr_id.id_epoch;
 			if (epoch < epr->epr_lo || epoch > epr->epr_hi)
@@ -1191,6 +1195,10 @@ reprobe:
 		}
 
 		id.id_epoch = keyp->id_epoch - 1;
+
+		rc = ilog_tx_begin(lctx);
+		if (rc != 0)
+			goto done;
 
 		rc = dbtree_iter_delete(ih, lctx);
 		if (rc != 0)

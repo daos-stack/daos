@@ -583,7 +583,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 
 	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_obj_punch = oiter->oit_ilog_info.ii_next_punch;
+	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
 	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->oit_ilog_info.ii_create == 0) {
@@ -616,6 +616,30 @@ exit:
 	return rc;
 }
 
+static int
+oi_iter_aggregate(struct vos_iterator *iter, bool discard)
+{
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	d_iov_t			 rec_iov;
+	int			 rc;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+
+	return vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont),
+				  &obj->vo_ilog, &oiter->oit_epr,
+				  &oiter->oit_ilog_info, discard);
+}
+
 struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_prepare		= oi_iter_prep,
 	.iop_nested_tree_fetch	= oi_iter_nested_tree_fetch,
@@ -624,6 +648,7 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_next		= oi_iter_next,
 	.iop_fetch		= oi_iter_fetch,
 	.iop_delete		= oi_iter_delete,
+	.iop_aggregate		= oi_iter_aggregate,
 };
 
 /**

@@ -788,6 +788,7 @@ ilog_test_aggregate(void **state)
 	struct vos_pool		*pool;
 	struct umem_instance	*umm;
 	struct ilog_df		*ilog;
+	umem_off_t		 ilog_off;
 	struct entries		*entries = args->custom;
 	struct ilog_id		 id;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -800,6 +801,7 @@ ilog_test_aggregate(void **state)
 	umm = vos_pool2umm(pool);
 
 	ilog = ilog_alloc_root(umm);
+	ilog_off = umem_ptr2off(umm, ilog);
 
 	rc = ilog_create(umm, ilog);
 	if (rc != 0) {
@@ -847,7 +849,7 @@ ilog_test_aggregate(void **state)
 
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(loh, &epr);
+	rc = ilog_aggregate(umm, ilog_off, &ilog_callbacks, &epr, false);
 	if (rc != 0) {
 		print_message("Failed to aggregate log entry: "DF_RC"\n",
 			      DP_RC(rc));
@@ -875,7 +877,7 @@ ilog_test_aggregate(void **state)
 
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(loh, &epr);
+	rc = ilog_aggregate(umm, ilog_off, &ilog_callbacks, &epr, false);
 	if (rc != 0) {
 		print_message("Failed to aggregate log entry: "DF_RC"\n",
 			      DP_RC(rc));
@@ -894,7 +896,7 @@ ilog_test_aggregate(void **state)
 	}
 
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(loh, &epr);
+	rc = ilog_aggregate(umm, ilog_off, &ilog_callbacks, &epr, false);
 	if (rc != 1) { /* 1 means empty */
 		print_message("Failed to aggregate log entry: "DF_RC"\n",
 			      DP_RC(rc));

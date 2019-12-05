@@ -112,12 +112,12 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		break;
 	case VOS_ITER_DKEY:
 		counts->num_dkeys++;
-		if (entry->ie_key_punch)
+		if (entry->ie_punch)
 			counts->num_punched_dkeys++;
 		break;
 	case VOS_ITER_AKEY:
 		counts->num_akeys++;
-		if (entry->ie_key_punch)
+		if (entry->ie_punch)
 			counts->num_punched_akeys++;
 		break;
 	case VOS_ITER_RECX:
@@ -127,7 +127,7 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		break;
 	case VOS_ITER_OBJ:
 		counts->num_objs++;
-		if (entry->ie_obj_punch)
+		if (entry->ie_punch)
 			counts->num_punched_objs++;
 		break;
 	}

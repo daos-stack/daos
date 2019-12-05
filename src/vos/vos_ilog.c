@@ -318,6 +318,29 @@ update:
 	return rc;
 }
 
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr,
+		   struct vos_ilog_info *info, bool discard)
+{
+#if 0
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm = vos_cont2umm(cont);
+	struct ilog_desc_cbs	 cbs;
+	int			 rc;
+
+	vos_ilog_desc_cbs_init(&cbs, coh);
+	rc = ilog_aggregate(umm, ilog_off, &cbs, epr, discard);
+
+	if (rc == 1) /* Ignore empty ilog for now. */
+		return 0;
+
+	return rc;
+#else
+	return 0;
+#endif
+}
+
 void
 vos_ilog_fetch_init(struct vos_ilog_info *info)
 {

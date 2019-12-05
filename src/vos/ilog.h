@@ -165,16 +165,24 @@ int
 ilog_abort(daos_handle_t loh, const struct ilog_id *id);
 
 /**
- * Remove entries in the epoch range leaving only the latest update
+ * Cleanup the incarnation log
  *
- *  \param	loh[in]		Open log handle
- *  \param	epr[in]		Epoch range to scan
+ *  \param	umm[in]		The umem instance
+ *  \param	root_off[in]	Offset to ilog root
+ *  \param	cbs[in]		Incarnation log transaction log callbacks
+ *  \param	epr[in]		Epoch range for cleanup
+ *  \param	discard[in]	Normally, aggregate will only remove entries
+ *				that are provably not needed.  If discard is
+ *				set, it will remove everything in the epoch
+ *				range.
  *
  *  \return 0 on success, error code on failure, 1 if the log is empty after
  *  completion.
  */
 int
-ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr);
+ilog_aggregate(struct umem_instance *umm, umem_off_t root_off,
+	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
+	       bool discard);
 
 /** Incarnation log entry description */
 struct ilog_entry {

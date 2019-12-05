@@ -356,7 +356,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		return rc;
 
 	ent->ie_epoch = epr.epr_hi;
-	ent->ie_key_punch = oiter->it_ilog_info.ii_next_punch;
+	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */
@@ -1418,6 +1418,34 @@ exit:
 }
 
 static int
+vos_obj_iter_aggregate(struct vos_iterator *iter, bool discard)
+{
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	struct vos_krec_df	*krec;
+	struct vos_object	*obj;
+	daos_key_t		 key;
+	struct vos_rec_bundle	 rbund;
+	int			 rc;
+
+	D_ASSERTF(iter->it_type != VOS_ITER_SINGLE &&
+		  iter->it_type != VOS_ITER_RECX,
+		  "Aggregation not supported on array or sv iterators\n");
+
+	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Iterator should probe before aggregation\n");
+	if (rc != 0)
+		return rc;
+
+	obj = oiter->it_obj;
+	krec = rbund.rb_krec;
+
+	return vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont),
+				  &krec->kr_ilog, &oiter->it_epr,
+				  &oiter->it_ilog_info, discard);
+}
+
+static int
 vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
@@ -1468,6 +1496,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
 	.iop_delete		= vos_obj_iter_delete,
+	.iop_aggregate		= vos_obj_iter_aggregate,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**
