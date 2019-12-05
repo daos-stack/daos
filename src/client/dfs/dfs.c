@@ -1273,6 +1273,82 @@ dfs_umount(dfs_t *dfs)
 	return 0;
 }
 
+/* Structure of global buffer for dfs */
+struct dfs_glob {
+	uint32_t		magic;
+	uint32_t		flags;
+	uuid_t			cont_uuid;
+	uuid_t			coh_uuid;
+	daos_size_t		chunk_size;
+	daos_oclass_id_t	oclass;
+	daos_size_t		prefix_len;
+	char			*prefix;
+};
+
+static inline daos_size_t
+dfs_glob_buf_size()
+{
+	return sizeof(struct dfs_glob);
+}
+
+int
+dfs_local2global(dfs_t *dfs, d_iov_t *glob)
+{
+	int rc = 0;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_buf_len < glob->iov_len)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dc_array_l2g(oh, glob);
+
+out:
+	return rc;
+}
+
+int
+dfs_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
+		 dfs_t **dfs)
+{
+	struct dc_array_glob	*array_glob;
+	int			 rc = 0;
+
+	if (dfs == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
+	    glob.iov_len != dc_array_glob_buf_size()) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	dfs_glob = (struct dc_dfs_glob *)glob.iov_buf;
+	if (dfs_glob->magic == D_SWAP32(DC_DFS_GLOB_MAGIC)) {
+		swap_dfs_glob(dfs_glob);
+		D_ASSERT(dfs_glob->magic == DC_DFS_GLOB_MAGIC);
+
+	} else if (dfs_glob->magic != DC_DFS_GLOB_MAGIC) {
+		D_ERROR("Bad magic value: 0x%x.\n", dfs_glob->magic);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+
+
+out:
+	return rc;
+}
+
 int
 dfs_set_prefix(dfs_t *dfs, const char *prefix)
 {
