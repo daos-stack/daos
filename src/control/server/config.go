@@ -65,6 +65,7 @@ type Configuration struct {
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
 	UserName            string                    `yaml:"user_name"`
 	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
@@ -74,7 +75,6 @@ type Configuration struct {
 	SocketDir  string                `yaml:"socket_dir"`
 	Fabric     ioserver.FabricConfig `yaml:",inline"`
 	Modules    string
-	Attach     string
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -159,16 +159,6 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 	return c
 }
 
-// WithAttach sets attachment info path.
-func (c *Configuration) WithAttachInfo(aip string) *Configuration {
-	c.Attach = aip
-	// TODO: Should all instances share this? Thinking probably not...
-	for _, srv := range c.Servers {
-		srv.WithAttachInfoPath(aip)
-	}
-	return c
-}
-
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	c.Fabric.Provider = provider
@@ -188,7 +178,6 @@ func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 	srvCfg.WithShmID(c.NvmeShmID)
 	srvCfg.SocketDir = c.SocketDir
 	srvCfg.Modules = c.Modules
-	srvCfg.AttachInfoPath = c.Attach // TODO: Is this correct?
 }
 
 // WithServers sets the list of IOServer configurations.
@@ -281,6 +270,12 @@ func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
 // WithControlLogJSON enables or disables JSON output.
 func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 	c.ControlLogJSON = enabled
+	return c
+}
+
+// WithHelperLogFile sets the path to the daos_admin logfile.
+func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
+	c.HelperLogFile = filePath
 	return c
 }
 

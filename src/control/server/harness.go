@@ -25,14 +25,11 @@ package server
 
 import (
 	"context"
-	"os"
-	"strconv"
 	"sync"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 // IOServerHarness is responsible for managing IOServer instances
@@ -214,11 +211,9 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 				return err
 			}
 		case ready := <-instance.AwaitReady():
-			if pmixless() {
-				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
-				if err := instance.SetRank(ctx, ready); err != nil {
-					return err
-				}
+			h.log.Debugf("instance ready: %v", ready)
+			if err := instance.SetRank(ctx, ready); err != nil {
+				return err
 			}
 		}
 	}
@@ -258,31 +253,6 @@ func (h *IOServerHarness) StartManagementService(ctx context.Context) error {
 	return nil
 }
 
-// pmixless returns if we are in PMIx-less or PMIx mode.
-func pmixless() bool {
-	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
-		return true
-	}
-	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
-		return true
-	}
-	return false
-}
-
-// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
-// value, it returns an error.
-func pmixRank() (ioserver.Rank, error) {
-	s, ok := os.LookupEnv("PMIX_RANK")
-	if !ok {
-		return ioserver.NilRank, errors.New("not in PMIx mode")
-	}
-	r, err := strconv.ParseUint(s, 0, 32)
-	if err != nil {
-		return ioserver.NilRank, errors.Wrap(err, "PMIX_RANK="+s)
-	}
-	return ioserver.Rank(r), nil
-}
-
 type mgmtInfo struct {
 	isReplica       bool
 	shouldBootstrap bool
@@ -298,18 +268,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-	// A temporary workaround to create and start MS before we fully
-	// migrate to PMIx-less mode.
-	if !pmixless() {
-		rank, err := pmixRank()
-		if err != nil {
-			return nil, err
-		}
-		if rank == 0 {
-			mi.isReplica = true
-			mi.shouldBootstrap = true
-		}
 	}
 
 	return mi, nil

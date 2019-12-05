@@ -2078,14 +2078,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (obj_retry_error(task->dt_result)) {
 		/* If the RPC sponsor set the @spec_shard, then means it wants
 		 * to fetch data from the specified shard. If such shard isn't
-		 * ready for read, we should let the caller know that, instead
-		 * of re-direct the fetch RPC to other replica. But there are
-		 * some other cases we need to retry the RPC with current shard,
-		 * such as -DER_TIMEDOUT or daos_crt_network_error().
+		 * ready for read, we should let the caller know that, But there
+		 * are some other cases we need to retry the RPC with current
+		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
 		if (!obj_auxi->spec_shard ||
-		    (task->dt_result != -DER_STALE &&
-		     task->dt_result != -DER_INPROGRESS))
+		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
 
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
@@ -2225,6 +2223,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 
 	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
 	if (is_ec) {
+		ec_split_recxs(task, oca);
 		ec_get_tgt_set(args->iods, args->nr, oca, false, &tgt_set);
 		D_ASSERT(tgt_set != 0);
 	}

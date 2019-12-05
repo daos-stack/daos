@@ -639,13 +639,13 @@ out:
 
 
 static int
-obj_ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
-			    crt_bulk_t *remote_bulks, daos_handle_t ioh,
-			    struct ec_bulk_spec **skip_list, int sgl_nr)
+ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
+		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
+		 struct ec_bulk_spec **skip_list,
+		 int sgl_nr)
 {
 	struct obj_bulk_args	arg = { 0 };
 	crt_bulk_opid_t		bulk_opid;
-	crt_bulk_op_t		bulk_op = CRT_BULK_GET;
 	crt_bulk_perm_t		bulk_perm = CRT_BULK_RW;
 	int			i, rc, *status, ret;
 
@@ -840,6 +840,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	int			i, err, rc = 0;
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
@@ -956,10 +957,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		if (oca->ca_resil == DAOS_RES_EC) {
-			rc = obj_ec_update_bulk_transfer(rpc, bulk_bind,
-						     orw->orw_bulks.ca_arrays,
-						     ioh, skip_list,
-						     orw->orw_nr);
+			rc = ec_bulk_transfer(rpc, bulk_op, bulk_bind,
+					      orw->orw_bulks.ca_arrays, ioh,
+					      skip_list, orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++)
 				D_FREE(skip_list[i]);
 			D_FREE(skip_list);
@@ -1125,13 +1125,12 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		/* Abort it firstly if exist but with different epoch,
 		 * then re-execute with new epoch.
 		 */
-		if (rc == -DER_MISMATCH) {
+		if (rc == -DER_MISMATCH)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
 			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
-					   &orw->orw_dti, 1, true);
-		}
+					   &orw->orw_dti, 1);
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -1243,7 +1242,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
-		orw->orw_epoch = crt_hlc_get();
+		if (daos_is_zero_dti(&orw->orw_dti) ||
+		    orw->orw_flags & ORF_RESEND)
+			orw->orw_epoch = crt_hlc_get();
+		else
+			orw->orw_epoch = orw->orw_dti.dti_hlc;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
@@ -1444,6 +1447,7 @@ obj_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 		param.ip_epr.epr_lo = 0;
 		recursive = true;
 		enum_arg->chk_key2big = true;
+		enum_arg->need_punch = true;
 	}
 
 	/*
@@ -1745,7 +1749,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			 * that it can be aborted.
 			 */
 			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
-					   &opi->opi_dti, 1, true);
+					   &opi->opi_dti, 1);
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -1833,7 +1837,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
-		opi->opi_epoch = crt_hlc_get();
+		if (daos_is_zero_dti(&opi->opi_dti) ||
+		    opi->opi_flags & ORF_RESEND)
+			opi->opi_epoch = crt_hlc_get();
+		else
+			opi->opi_epoch = opi->opi_dti.dti_hlc;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
@@ -2069,7 +2077,7 @@ ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 	return pool;
 }
 
-static bool
+static int
 cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;
