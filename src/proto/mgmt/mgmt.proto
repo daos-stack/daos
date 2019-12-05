@@ -61,4 +61,6 @@ service MgmtSvc {
 	rpc KillRank(KillRankReq) returns (DaosResp) {};
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {};
+	// List all containers in a pool
+	rpc ListContainers(ListContReq) returns (ListContResp) {};
 }

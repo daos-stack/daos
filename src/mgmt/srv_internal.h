@@ -104,6 +104,9 @@ int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
 			    struct daos_acl **result);
 int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 			    struct daos_acl **result);
+int ds_mgmt_pool_list_cont(uuid_t uuid,
+			   struct daos_pool_cont_info **containers,
+			   uint64_t *ncontainers);
 
 /** srv_query.c */
 

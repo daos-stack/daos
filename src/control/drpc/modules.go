@@ -82,6 +82,8 @@ const (
 	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	// MethodListCont is a ModuleMgmt method
+	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 )
 
 const (

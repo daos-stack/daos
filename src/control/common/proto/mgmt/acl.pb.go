@@ -3,9 +3,11 @@
 
 package mgmt
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // Response to ACL-related requests includes the command status and current ACL
 type ACLResp struct {
@@ -31,16 +33,17 @@ func (m *ACLResp) Reset()         { *m = ACLResp{} }
 func (m *ACLResp) String() string { return proto.CompactTextString(m) }
 func (*ACLResp) ProtoMessage()    {}
 func (*ACLResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_5b84caf77c919565, []int{0}
+	return fileDescriptor_a452f070aeef01eb, []int{0}
 }
+
 func (m *ACLResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ACLResp.Unmarshal(m, b)
 }
 func (m *ACLResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ACLResp.Marshal(b, m, deterministic)
 }
-func (dst *ACLResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ACLResp.Merge(dst, src)
+func (m *ACLResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ACLResp.Merge(m, src)
 }
 func (m *ACLResp) XXX_Size() int {
 	return xxx_messageInfo_ACLResp.Size(m)
@@ -77,16 +80,17 @@ func (m *GetACLReq) Reset()         { *m = GetACLReq{} }
 func (m *GetACLReq) String() string { return proto.CompactTextString(m) }
 func (*GetACLReq) ProtoMessage()    {}
 func (*GetACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_5b84caf77c919565, []int{1}
+	return fileDescriptor_a452f070aeef01eb, []int{1}
 }
+
 func (m *GetACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetACLReq.Unmarshal(m, b)
 }
 func (m *GetACLReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetACLReq.Marshal(b, m, deterministic)
 }
-func (dst *GetACLReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetACLReq.Merge(dst, src)
+func (m *GetACLReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetACLReq.Merge(m, src)
 }
 func (m *GetACLReq) XXX_Size() int {
 	return xxx_messageInfo_GetACLReq.Size(m)
@@ -118,16 +122,17 @@ func (m *ModifyACLReq) Reset()         { *m = ModifyACLReq{} }
 func (m *ModifyACLReq) String() string { return proto.CompactTextString(m) }
 func (*ModifyACLReq) ProtoMessage()    {}
 func (*ModifyACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_5b84caf77c919565, []int{2}
+	return fileDescriptor_a452f070aeef01eb, []int{2}
 }
+
 func (m *ModifyACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ModifyACLReq.Unmarshal(m, b)
 }
 func (m *ModifyACLReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ModifyACLReq.Marshal(b, m, deterministic)
 }
-func (dst *ModifyACLReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ModifyACLReq.Merge(dst, src)
+func (m *ModifyACLReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ModifyACLReq.Merge(m, src)
 }
 func (m *ModifyACLReq) XXX_Size() int {
 	return xxx_messageInfo_ModifyACLReq.Size(m)
@@ -165,16 +170,17 @@ func (m *DeleteACLReq) Reset()         { *m = DeleteACLReq{} }
 func (m *DeleteACLReq) String() string { return proto.CompactTextString(m) }
 func (*DeleteACLReq) ProtoMessage()    {}
 func (*DeleteACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_5b84caf77c919565, []int{3}
+	return fileDescriptor_a452f070aeef01eb, []int{3}
 }
+
 func (m *DeleteACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeleteACLReq.Unmarshal(m, b)
 }
 func (m *DeleteACLReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DeleteACLReq.Marshal(b, m, deterministic)
 }
-func (dst *DeleteACLReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DeleteACLReq.Merge(dst, src)
+func (m *DeleteACLReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeleteACLReq.Merge(m, src)
 }
 func (m *DeleteACLReq) XXX_Size() int {
 	return xxx_messageInfo_DeleteACLReq.Size(m)
@@ -206,9 +212,9 @@ func init() {
 	proto.RegisterType((*DeleteACLReq)(nil), "mgmt.DeleteACLReq")
 }
 
-func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_5b84caf77c919565) }
+func init() { proto.RegisterFile("acl.proto", fileDescriptor_a452f070aeef01eb) }
 
-var fileDescriptor_acl_5b84caf77c919565 = []byte{
+var fileDescriptor_a452f070aeef01eb = []byte{
 	// 159 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4c, 0x4c, 0xce, 0xd1,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0x32, 0xe6, 0x62, 0x77,
