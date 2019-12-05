@@ -169,6 +169,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:  log,
+		sys:  config.SystemName,
 		ap:   config.AccessPoints[0],
 		tcfg: config.TransportConfig,
 	})

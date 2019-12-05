@@ -254,6 +254,9 @@ typedef int (*ds_iv_value_alloc_t)(struct ds_iv_entry *ent,
 typedef bool (*ds_iv_ent_valid_t)(struct ds_iv_entry *ent,
 				 struct ds_iv_key *key);
 
+typedef int (*ds_iv_pre_sync_t)(struct ds_iv_entry *entry,
+				struct ds_iv_key *key, d_sg_list_t *value);
+
 struct ds_iv_class_ops {
 	ds_iv_key_pack_t	ivc_key_pack;
 	ds_iv_key_unpack_t	ivc_key_unpack;
@@ -267,6 +270,7 @@ struct ds_iv_class_ops {
 	ds_iv_ent_refresh_t	ivc_ent_refresh;
 	ds_iv_value_alloc_t	ivc_value_alloc;
 	ds_iv_ent_valid_t	ivc_ent_valid;
+	ds_iv_pre_sync_t	ivc_pre_sync;
 };
 
 extern struct crt_iv_ops iv_cache_ops;
@@ -299,9 +303,7 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
-int ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
-		    crt_group_t *grp, unsigned int iv_ns_id,
-		    struct ds_iv_ns **iv_ns);
+void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
 
 void ds_iv_ns_destroy(void *ns);
 

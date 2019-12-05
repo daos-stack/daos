@@ -593,15 +593,18 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_tgt_uuids.ca_count = 1;
 
 	D_ALLOC_PTR(rank);
-	if (rank == NULL) {
-		D_FREE(tmp_tgt_uuid);
+	if (rank == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
-	}
 
 	rc = crt_group_rank(NULL, rank);
 	D_ASSERT(rc == 0);
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count = 1;
+
+	rc = ds_pool_start(tc_in->tc_pool_uuid);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to start pool: %d\n",
+			DP_UUID(tc_in->tc_pool_uuid), rc);
 
 free:
 	D_FREE(path);
@@ -680,6 +683,8 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	/** reply buffer */
 	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
+
+	ds_pool_stop(td_in->td_pool_uuid);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
