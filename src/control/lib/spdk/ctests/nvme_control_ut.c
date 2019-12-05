@@ -128,7 +128,7 @@ mock_spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
  */
 
 static void
-test_discover_null_g_controllers(void **state)
+test_discover_null_controllers(void **state)
 {
 	(void)state; /*unused*/
 
@@ -140,7 +140,7 @@ test_discover_null_g_controllers(void **state)
 }
 
 static void
-test_discover_set_g_controllers(void **state)
+test_discover_set_controllers(void **state)
 {
 	(void)state; /*unused*/
 
@@ -260,9 +260,12 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test_setup_teardown(test_discover_null_g_controllers, setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_set_g_controllers, setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_discover_null_controllers,
+						setup, teardown),
+		cmocka_unit_test_setup_teardown(test_discover_set_controllers,
+						setup, teardown),
+		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup,
+						teardown),
 		cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
 	};
 

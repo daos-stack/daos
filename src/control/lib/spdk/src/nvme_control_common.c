@@ -128,7 +128,7 @@ clean_ret(struct ret_t *ret)
 	struct ctrlr_t	*cnext;
 	struct ns_t	*nnext;
 
-	while(ret->ctrlrs) {
+	while (ret->ctrlrs) {
 		while (ret->ctrlrs->nss) {
 			nnext = ret->ctrlrs->nss->next;
 			free(ret->ctrlrs->nss);
@@ -256,7 +256,7 @@ copy_ctrlr_data(struct ctrlr_t *cdst, struct ret_t *ret,
 {
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	int					 written;
-	int 					 rc;
+	int					 rc;
 
 	cdata = spdk_nvme_ctrlr_get_data(csrc->ctrlr);
 

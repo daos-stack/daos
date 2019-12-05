@@ -100,7 +100,7 @@ nvme_format(char *ctrlr_pci_addr)
 		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
 		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
 	} else {
-		ns_id = 1; // just format first ns
+		ns_id = 1; /* just format first ns */
 		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
 	}
 
@@ -123,17 +123,10 @@ nvme_format(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
-	if (!pci_dev) {
-		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-		return ret;
-	}
-
-	// print address of device updated for verification purposes
-	pci_addr = spdk_pci_device_get_addr(pci_dev);
-	printf("Formatted NVMe Controller:       %04x:%02x:%02x.%02x\n",
-	       pci_addr.domain, pci_addr.bus, pci_addr.dev, pci_addr.func);
+	/* print address of device updated for verification purposes */
+	printf("Formatted NVMe Controller at %04x:%02x:%02x.%x\n",
+	       ctrlr_entry->pci_addr.domain, ctrlr_entry->pci_addr.bus,
+	       ctrlr_entry->pci_addr.dev, ctrlr_entry->pci_addr.func);
 
 	collect(ret);
 

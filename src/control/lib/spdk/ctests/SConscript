@@ -23,8 +23,7 @@ def scons():
                                         'cmocka', 'pthread', 'dl'])
         unit_env.Install("$PREFIX/bin", testbin)
     else:
-        print("SPDK nvme_internal.h missing, skipping nvme_control_ut build",
-              spdk_src)
+        print("SPDK nvme_internal.h missing, skipping nvme_control_ut build")
 
     config.Finish()
 
