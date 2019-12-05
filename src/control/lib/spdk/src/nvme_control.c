@@ -65,75 +65,79 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 }
 
 struct ret_t *
-_nvme_discover(prober probe, detacher detach, health_getter get_health)
+nvme_discover(void)
 {
-	int			 rc;
-	struct ret_t		*ret;
-	struct ctrlr_entry	*ctrlr_entry;
-	struct dev_health_entry	*health_entry;
+	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
+}
+
+struct ret_t *
+nvme_format(char *ctrlr_pci_addr)
+{
+	int					ns_id;
+	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_nvme_ns			*ns;
+	struct spdk_nvme_format			format = {};
+	struct ctrlr_entry			*ctrlr_entry;
+	struct spdk_pci_device			*pci_dev;
+	struct spdk_pci_addr			pci_addr;
+	struct ret_t				*ret;
 
 	ret = init_ret();
 
-	/*
-	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
-	 *  for each NVMe controller found, giving our application a choice on
-	 *  whether to attach to each controller.  attach_cb will then be
-	 *  called for each controller after the SPDK NVMe driver has completed
-	 *  initializing the controller we chose to attach.
-	 */
-	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-	if (rc != 0) {
-		sprintf(ret->err, "spdk_nvme_probe() failed");
-		ret->rc = rc;
-		_cleanup(detach);
+	ctrlr_entry = get_controller(ctrlr_pci_addr, ret);
+	if (ret->rc != 0)
+		return ret;
+
+	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
+	if (!cdata->oacs.format) {
+		snprintf(ret->err, sizeof(ret->err),
+			"Controller does not support Format NVM command\n");
+		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
 		return ret;
 	}
 
-	if (!g_controllers || !g_controllers->ctrlr) {
-		sprintf(ret->err, "no nvme controllers found");
-		_cleanup(detach);
+	if (cdata->fna.format_all_ns) {
+		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
+	} else {
+		ns_id = 1; // just format first ns
+		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
+	}
+
+	if (ns == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"Namespace ID %d not found", ns_id);
+		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
 		return ret;
 	}
 
-	/*
-	 * Collect NVMe SSD health stats for each probed controller.
-	 * TODO: move to attach_cb?
-	 */
-	ctrlr_entry = g_controllers;
+	format.lbaf	= 0; /* LBA format defaulted to 0 */
+	format.ms	= 0; /* metadata xfer as part of separate buffer */
+	format.pi	= 0; /* protection information is not enabled */
+	format.pil	= 0; /* protection information location N/A */
+	format.ses	= 1; /* secure erase operation set user data erase */
 
-	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
-		if (health_entry == NULL) {
-			sprintf(ret->err, "health_entry malloc failed");
-			ret->rc = -ENOMEM;
-			_cleanup(detach);
-			return ret;
-		}
-
-		rc = get_health(ctrlr_entry->ctrlr, health_entry);
-		if (rc != 0) {
-			sprintf(ret->err,
-				"unable to get SPDK ctrlr health logs");
-			ret->rc = rc;
-			free(health_entry);
-			_cleanup(detach);
-			return ret;
-		}
-
-		ctrlr_entry->dev_health = health_entry;
-		ctrlr_entry = ctrlr_entry->next;
+	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
+	if (ret->rc != 0) {
+		snprintf(ret->err, sizeof(ret->err), "format failed");
+		return ret;
 	}
+
+	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
+	if (!pci_dev) {
+		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+		return ret;
+	}
+
+	// print address of device updated for verification purposes
+	pci_addr = spdk_pci_device_get_addr(pci_dev);
+	printf("Formatted NVMe Controller:       %04x:%02x:%02x.%02x\n",
+	       pci_addr.domain, pci_addr.bus, pci_addr.dev, pci_addr.func);
 
 	collect(ret);
 
 	return ret;
-}
-
-struct ret_t *
-nvme_discover(void)
-{
-	return _nvme_discover(&spdk_nvme_probe, &spdk_nvme_detach,
-			      &get_dev_health_logs);
 }
 
 struct ret_t *
@@ -213,108 +217,8 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	return ret;
 }
 
-struct ret_t *
-nvme_format(char *ctrlr_pci_addr)
-{
-	int					ns_id;
-	const struct spdk_nvme_ctrlr_data	*cdata;
-	struct spdk_nvme_ns			*ns;
-	struct spdk_nvme_format			format = {};
-	struct ctrlr_entry			*ctrlr_entry;
-	struct spdk_pci_device			*pci_dev;
-	struct spdk_pci_addr			pci_addr;
-	struct ret_t				*ret;
-
-	ret = init_ret();
-
-	ctrlr_entry = get_controller(ctrlr_pci_addr, ret);
-	if (ret->rc != 0)
-		return ret;
-
-	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
-	if (!cdata->oacs.format) {
-		snprintf(ret->err, sizeof(ret->err),
-			"Controller does not support Format NVM command\n");
-		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
-		return ret;
-	}
-
-	if (cdata->fna.format_all_ns) {
-		ns_id = SPDK_NVME_GLOBAL_NS_TAG;
-		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, 1);
-	} else {
-		ns_id = 1; // just format first ns
-		ns = spdk_nvme_ctrlr_get_ns(ctrlr_entry->ctrlr, ns_id);
-	}
-
-	if (ns == NULL) {
-		snprintf(ret->err, sizeof(ret->err),
-			"Namespace ID %d not found", ns_id);
-		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
-		return ret;
-	}
-
-	format.lbaf	= 0; /* LBA format defaulted to 0 */
-	format.ms	= 0; /* metadata xfer as part of separate buffer */
-	format.pi	= 0; /* protection information is not enabled */
-	format.pil	= 0; /* protection information location N/A */
-	format.ses	= 1; /* secure erase operation set user data erase */
-
-	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
-	if (ret->rc != 0) {
-		snprintf(ret->err, sizeof(ret->err), "format failed");
-		return ret;
-	}
-
-	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
-	if (!pci_dev) {
-		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-		return ret;
-	}
-
-	// print address of device updated for verification purposes
-	pci_addr = spdk_pci_device_get_addr(pci_dev);
-	printf("Formatted NVMe Controller:       %04x:%02x:%02x.%02x\n",
-	       pci_addr.domain, pci_addr.bus, pci_addr.dev, pci_addr.func);
-
-	collect(ret);
-
-	return ret;
-}
-
-void
-_cleanup(detacher detach)
-{
-	struct ns_entry		*nentry;
-	struct ctrlr_entry	*centry;
-
-	centry = g_controllers;
-
-	printf("Cleanup NVMe");
-
-	while (centry) {
-		struct ctrlr_entry *cnext = centry->next;
-
-		if (centry->dev_health)
-			free(centry->dev_health);
-		if (centry->ctrlr)
-			detach(centry->ctrlr);
-		while (centry->nss) {
-			nentry = centry->nss->next;
-			free(centry->nss);
-			centry->nss = nentry;
-		}
-
-		free(ctrlr_entry);
-		ctrlr_entry = next;
-	}
-
-	g_controllers = NULL;
-}
-
 void
 nvme_cleanup(void)
 {
-	_cleanup(&spdk_nvme_detach);
+	cleanup(true);
 }

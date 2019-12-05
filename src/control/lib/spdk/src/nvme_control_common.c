@@ -25,22 +25,54 @@
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 
-#include "nvme_control.h"
 #include "nvme_control_common.h"
 
-bool
+static bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	 struct spdk_nvme_ctrlr_opts *opts)
 {
 	return true;
 }
 
-void
+static void
+register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
+{
+	struct ns_entry				*nentry;
+	const struct spdk_nvme_ctrlr_data	*cdata;
+
+	/*
+	 * spdk_nvme_ctrlr is the logical abstraction in SPDK for an NVMe
+	 *  controller.  During initialization, the IDENTIFY data for the
+	 *  controller is read using an NVMe admin command, and that data
+	 *  can be retrieved using spdk_nvme_ctrlr_get_data() to get
+	 *  detailed information on the controller.  Refer to the NVMe
+	 *  specification for more details on IDENTIFY for NVMe controllers.
+	 */
+	cdata = spdk_nvme_ctrlr_get_data(centry->ctrlr);
+
+	if (!spdk_nvme_ns_is_active(ns)) {
+		printf("Controller %-20.20s (%-20.20s): Skip inactive NS %u\n",
+			cdata->mn, cdata->sn, spdk_nvme_ns_get_id(ns));
+		return;
+	}
+
+	nentry = malloc(sizeof(struct ns_entry));
+	if (nentry == NULL) {
+		perror("ns_entry malloc");
+		exit(1);
+	}
+
+	nentry->ns = ns;
+	nentry->next = centry->nss;
+	centry->nss = nentry;
+}
+
+static void
 attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts)
 {
-	int			nsid, num_ns;
+	int			 nsid, num_ns;
 	struct ctrlr_entry	*entry;
 	struct spdk_nvme_ns	*ns;
 
@@ -77,39 +109,6 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	}
 }
 
-static void
-register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
-{
-	struct ns_entry				*nentry;
-	const struct spdk_nvme_ctrlr_data	*cdata;
-
-	/*
-	 * spdk_nvme_ctrlr is the logical abstraction in SPDK for an NVMe
-	 *  controller.  During initialization, the IDENTIFY data for the
-	 *  controller is read using an NVMe admin command, and that data
-	 *  can be retrieved using spdk_nvme_ctrlr_get_data() to get
-	 *  detailed information on the controller.  Refer to the NVMe
-	 *  specification for more details on IDENTIFY for NVMe controllers.
-	 */
-	cdata = spdk_nvme_ctrlr_get_data(centry->ctrlr);
-
-	if (!spdk_nvme_ns_is_active(ns)) {
-		printf("Controller %-20.20s (%-20.20s): Skip inactive NS %u\n",
-			cdata->mn, cdata->sn, spdk_nvme_ns_get_id(ns));
-		return;
-	}
-
-	nentry = malloc(sizeof(struct ns_entry));
-	if (nentry == NULL) {
-		perror("ns_entry malloc");
-		exit(1);
-	}
-
-	nentry->ns = ns;
-	nentry->next = centry->nss;
-	centry->nss = nentry;
-}
-
 struct ret_t *
 init_ret(void)
 {
@@ -121,6 +120,27 @@ init_ret(void)
 	snprintf(ret->err, sizeof(ret->err), "none");
 
 	return ret;
+}
+
+static void
+clean_ret(struct ret_t *ret)
+{
+	struct ctrlr_t	*cnext;
+	struct ns_t	*nnext;
+
+	while(ret->ctrlrs) {
+		while (ret->ctrlrs->nss) {
+			nnext = ret->ctrlrs->nss->next;
+			free(ret->ctrlrs->nss);
+			ret->ctrlrs->nss = nnext;
+		}
+		if (ret->ctrlrs->dev_health)
+			free(ret->ctrlrs->dev_health);
+
+		cnext = ret->ctrlrs->next;
+		free(ret->ctrlrs);
+		ret->ctrlrs = cnext;
+	}
 }
 
 int
@@ -164,103 +184,100 @@ get_controller(char *addr, struct ret_t *ret)
 	return entry;
 }
 
-void
-_collect(struct ret_t *ret, data_getter get_data, pci_getter get_pci,
-	 socket_id_getter get_socket_id)
+struct ret_t *
+_discover(prober probe, bool detach, health_getter get_health)
 {
-	struct ctrlr_entry		       *ctrlr_entry = g_controllers;
-	const struct spdk_nvme_ctrlr_data      *cdata;
-	struct spdk_pci_device		       *pci_dev;
-	struct spdk_pci_addr			pci_addr;
-	struct ctrlr_t			       *ctrlr_tmp;
-	int					written;
-	int					rc;
+	int			 rc;
+	struct ret_t		*ret;
+	struct ctrlr_entry	*ctrlr_entry;
+	struct dev_health_entry	*health_entry;
+
+	ret = init_ret();
+
+	/*
+	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
+	 *  for each NVMe controller found, giving our application a choice on
+	 *  whether to attach to each controller.  attach_cb will then be
+	 *  called for each controller after the SPDK NVMe driver has completed
+	 *  initializing the controller we chose to attach.
+	 */
+	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	if (rc != 0) {
+		sprintf(ret->err, "spdk_nvme_probe() failed");
+		ret->rc = rc;
+		return ret;
+	}
+
+	if (!g_controllers || !g_controllers->ctrlr) {
+		sprintf(ret->err, "no nvme controllers found");
+		return ret;
+	}
+
+	/*
+	 * Collect NVMe SSD health stats for each probed controller.
+	 * TODO: move to attach_cb?
+	 */
+	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
-
-		if (ctrlr_tmp == NULL) {
-			perror("ctrlr_t malloc");
+		health_entry = malloc(sizeof(struct dev_health_entry));
+		if (health_entry == NULL) {
+			sprintf(ret->err, "health_entry malloc failed");
 			ret->rc = -ENOMEM;
-			return;
+			goto fail;
 		}
 
-		ctrlr_tmp->next = NULL;
-
-		cdata = get_data(ctrlr_entry->ctrlr);
-
-		written = snprintf(ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
-				   "%-20.20s", cdata->mn);
-		if (check_size(written, sizeof(ctrlr_tmp->model),
-			       "model truncated", ret) != 0) {
-			free(ctrlr_tmp);
-			return;
-		}
-
-		written = snprintf(ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
-				   "%-20.20s", cdata->sn);
-		if (check_size(written, sizeof(ctrlr_tmp->serial),
-			       "serial truncated", ret) != 0) {
-			free(ctrlr_tmp);
-			return;
-		}
-
-		written = snprintf(ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
-				   "%s", cdata->fr);
-		if (check_size(written, sizeof(ctrlr_tmp->fw_rev),
-			       "firmware revision truncated", ret) != 0) {
-			free(ctrlr_tmp);
-			return;
-		}
-
-		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
-				       sizeof(ctrlr_tmp->pci_addr),
-				       &ctrlr_entry->pci_addr);
+		rc = get_health(ctrlr_entry->ctrlr, health_entry);
 		if (rc != 0) {
-			snprintf(ret->err, sizeof(ret->err),
-				 "spdk_pci_addr_fmt: rc %d", rc);
-			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
-			free(ctrlr_tmp);
-			return;
+			sprintf(ret->err,
+				"unable to get SPDK ctrlr health logs");
+			ret->rc = rc;
+			free(health_entry);
+			goto fail;
 		}
 
-		pci_dev = get_pci(ctrlr_entry->ctrlr);
-		if (!pci_dev) {
-			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-			free(ctrlr_tmp);
-			return;
-		}
-
-		/* populate numa socket id */
-		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
-		free(pci_dev);
-
-		/* Alloc linked list of namespaces per controller */
-		if (ctrlr_entry->nss != NULL)
-			ret->rc = collect_namespaces(ctrlr_entry->nss,
-						     ctrlr_tmp);
-
-		/* Alloc device health stats per controller */
-		if (ctrlr_entry->dev_health != NULL)
-			ret->rc = collect_health_stats(ctrlr_entry->dev_health,
-						       ctrlr_tmp);
-
-		ctrlr_tmp->next = ret->ctrlrs;
-		ret->ctrlrs = ctrlr_tmp;
-
+		ctrlr_entry->dev_health = health_entry;
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	ret->rc = 0;
+	collect(ret);
+
+	return ret;
+fail:
+	clean_ret(ret);
+	cleanup(detach);
+
+	return ret;
 }
 
-void
-collect(struct ret_t *ret)
+static int
+copy_ctrlr_data(struct ctrlr_t *cdst, struct ret_t *ret,
+		struct ctrlr_entry *csrc)
 {
-	_collect(ret, &spdk_nvme_ctrlr_get_data,
-		 &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id);
+	const struct spdk_nvme_ctrlr_data	*cdata;
+	int					 written;
+	int 					 rc;
+
+	cdata = spdk_nvme_ctrlr_get_data(csrc->ctrlr);
+
+	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
+			   cdata->mn);
+	rc = check_size(written, sizeof(cdst->model), "model truncated", ret);
+	if (rc != 0)
+		return rc;
+
+	written = snprintf(cdst->serial, sizeof(cdst->serial), "%-20.20s",
+			   cdata->sn);
+	rc = check_size(written, sizeof(cdst->serial), "serial truncated", ret);
+	if (rc != 0)
+		return rc;
+
+	written = snprintf(cdst->fw_rev, sizeof(cdst->fw_rev), "%s", cdata->fr);
+	rc = check_size(written, sizeof(cdst->fw_rev), "fw_rev truncated", ret);
+	if (rc != 0)
+		return rc;
+
+	return 0;
 }
 
 static int
@@ -271,13 +288,14 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	while (ns_entry) {
 		ns_tmp = malloc(sizeof(struct ns_t));
 		if (ns_tmp == NULL) {
-			return = -ENOMEM;
+			perror("ns_t malloc");
+			return -ENOMEM;
 		}
 
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
 		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns);
-		ns_tmp->next = ctrlr_tmp->nss;
-		ctrlr_tmp->nss = ns_tmp;
+		ns_tmp->next = ctrlr->nss;
+		ctrlr->nss = ns_tmp;
 
 		ns_entry = ns_entry->next;
 	}
@@ -321,5 +339,124 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 	ctrlr->dev_health = h_tmp;
 
 	return 0;
+}
+
+void
+_collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
+	 socket_id_getter get_socket_id)
+{
+	struct ctrlr_entry		       *ctrlr_entry;
+	struct spdk_pci_device		       *pci_dev;
+	struct spdk_pci_addr			pci_addr;
+	struct ctrlr_t			       *ctrlr_tmp;
+	int					rc;
+
+	ctrlr_entry = g_controllers;
+
+	while (ctrlr_entry) {
+		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
+		if (!ctrlr_tmp) {
+			perror("ctrlr_t malloc");
+			rc = -ENOMEM;
+			goto fail;
+		}
+
+		ctrlr_tmp->nss = NULL;
+		ctrlr_tmp->dev_health = NULL;
+		ctrlr_tmp->next = NULL;
+
+		rc = copy_data(ctrlr_tmp, ret, ctrlr_entry)
+		if (rc != 0) {
+			goto fail;
+		}
+
+		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
+				       sizeof(ctrlr_tmp->pci_addr),
+				       &ctrlr_entry->pci_addr);
+		if (rc != 0) {
+			snprintf(ret->err, sizeof(ret->err),
+				 "spdk_pci_addr_fmt: rc %d", rc);
+			rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			goto fail;
+		}
+
+		pci_dev = get_pci(ctrlr_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+			rc = -NVMEC_ERR_GET_PCI_DEV;
+			goto fail;
+		}
+
+		/* populate numa socket id */
+		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
+		free(pci_dev);
+
+		/* Alloc linked list of namespaces per controller */
+		if (ctrlr_entry->nss != NULL) {
+			rc = collect_namespaces(ctrlr_entry->nss, ctrlr_tmp);
+			goto fail;
+		}
+
+		/* Alloc device health stats per controller */
+		if (ctrlr_entry->dev_health != NULL) {
+			rc = collect_health_stats(ctrlr_entry->dev_health,
+						  ctrlr_tmp);
+			goto fail;
+		}
+
+		ctrlr_tmp->next = ret->ctrlrs;
+		ret->ctrlrs = ctrlr_tmp;
+
+		ctrlr_entry = ctrlr_entry->next;
+	}
+
+	ret->rc = 0;
+
+	return;
+fail:
+	ret->rc = rc;
+	if (ret->rc == 0)
+		ret->rc = -1;
+	if (ctrlr_tmp)
+		free(ctrlr_tmp);
+	clean_ret(ret);
+}
+
+void
+collect(struct ret_t *ret)
+{
+	_collect(ret, &copy_ctrlr_data,
+		 &spdk_nvme_ctrlr_get_pci_device,
+		 &spdk_pci_device_get_socket_id);
+}
+
+void
+cleanup(bool detach)
+{
+	struct ns_entry		*nentry;
+	struct ctrlr_entry	*centry;
+	struct ctrlr_entry	*cnext;
+
+	printf("Cleanup NVMe");
+
+	centry = g_controllers;
+
+	while (centry) {
+		if (centry->ctrlr && detach)
+			spdk_nvme_detach(centry->ctrlr);
+		while (centry->nss) {
+			nentry = centry->nss->next;
+			free(centry->nss);
+			centry->nss = nentry;
+		}
+		if (centry->dev_health)
+			free(centry->dev_health);
+
+		cnext = centry->next;
+		free(centry);
+		centry = cnext;
+	}
+
+	g_controllers = NULL;
 }
 

@@ -25,98 +25,6 @@
 #define NVMECONTROL_H
 
 /**
- * \brief NVMe controller details
- */
-struct ctrlr_t {
-	char		     model[1024];
-	char		     serial[1024];
-	char		     pci_addr[1024];
-	char		     fw_rev[1024];
-	int		     socket_id;
-	struct ns_t	    *nss;
-	struct dev_health_t *dev_health;
-	struct ctrlr_t	    *next;
-};
-
-/**
- * \brief NVMe namespace details
- */
-struct ns_t {
-	int		id;
-	int		size;
-	struct ns_t    *next;
-};
-
-/*
- * \brief Raw SPDK device health statistics.
- */
-struct dev_health_t {
-	uint16_t	 temperature; /* in Kelvin */
-	uint32_t	 warn_temp_time;
-	uint32_t	 crit_temp_time;
-	uint64_t	 ctrl_busy_time;
-	uint64_t	 power_cycles;
-	uint64_t	 power_on_hours;
-	uint64_t	 unsafe_shutdowns;
-	uint64_t	 media_errors;
-	uint64_t	 error_log_entries;
-	/* Critical warnings */
-	bool		 temp_warning;
-	bool		 avail_spare_warning;
-	bool		 dev_reliabilty_warning;
-	bool		 read_only_warning;
-	bool		 volatile_mem_warning;
-};
-
-/**
- * \brief Return containing return code, controllers, namespaces and error
- * message
- */
-struct ret_t {
-	int		rc;
-	struct ctrlr_t *ctrlrs;
-	char		err[1024];
-};
-
-struct ctrlr_entry {
-	struct spdk_nvme_ctrlr	*ctrlr;
-	struct spdk_pci_addr	 pci_addr;
-	struct ns_entry		*nss;
-	struct dev_health_entry	*dev_health;
-	int			 socket_id;
-	struct ctrlr_entry	*next;
-};
-
-struct ns_entry {
-	struct spdk_nvme_ns	*ns;
-	struct ns_entry		*next;
-};
-
-struct dev_health_entry {
-	struct spdk_nvme_health_information_page health_page;
-	struct spdk_nvme_error_information_entry error_page[256];
-	int					 inflight;
-};
-
-struct ctrlr_entry	*g_controllers;
-
-/**
- * Provide ability to pass function pointers to nvme_discover for mocking
- * in unit tests.
- */
-typedef int (*prober)(const struct spdk_nvme_transport_id *, void *,
-		      spdk_nvme_probe_cb,
-		      spdk_nvme_attach_cb,
-		      spdk_nvme_remove_cb);
-typedef int (*detacher)(struct spdk_nvme_ctrlr *);
-typedef int (*health_getter)(struct spdk_nvme_ctrlr *,
-			     struct dev_health_entry *);
-struct ret_t *
-_nvme_discover(prober, detacher, health_getter);
-void
-_cleanup(detacher);
-
-/**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
  *
@@ -124,6 +32,16 @@ _cleanup(detacher);
  */
 struct ret_t *
 nvme_discover(void);
+
+/**
+ * Format NVMe controller namespace.
+ *
+ * \param ctrlr_pci_addr PCI address of NVMe controller.
+ *
+ * \return a pointer to a return struct (ret_t).
+ */
+struct ret_t *
+nvme_format(char *ctrlr_pci_addr);
 
 /**
  * Update NVMe controller firmware.
@@ -136,16 +54,6 @@ nvme_discover(void);
  */
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
-
-/**
- * Format NVMe controller namespace.
- *
- * \param ctrlr_pci_addr PCI address of NVMe controller.
- *
- * \return a pointer to a return struct (ret_t).
- */
-struct ret_t *
-nvme_format(char *ctrlr_pci_addr);
 
 /**
  * Cleanup structs held in memory.

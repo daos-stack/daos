@@ -26,10 +26,8 @@
 
 #include <stdbool.h>
 
-#define NVMECONTROL_GBYTE_BYTES 1000000000
-
 /**
- * @brief NVMECONTROL return codes
+ * \brief NVMECONTROL return codes
  */
 enum NvmeControlStatusCode {
 	NVMEC_SUCCESS			= 0,
@@ -45,35 +43,82 @@ enum NvmeControlStatusCode {
 };
 
 /**
- * Probe call back function.
- *
- * \param cb_ctx
- * \param trid pointer to spdk_nvme_transport_id struct
- * \param opts pointer to spdk_nvme_ctrlr_opts struct
- *
- * \returns a bool: True
- *
+ * \brief NVMe controller details
  */
-bool
-probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
-	 struct spdk_nvme_ctrlr_opts *opts);
+struct ctrlr_t {
+	char		     model[1024];
+	char		     serial[1024];
+	char		     pci_addr[1024];
+	char		     fw_rev[1024];
+	int		     socket_id;
+	struct ns_t	    *nss;
+	struct dev_health_t *dev_health;
+	struct ctrlr_t	    *next;
+};
 
 /**
- * Attach call back function to report a device that has been
- * attached to the userspace NVMe driver.
- *
- * \param cb_ctx Opaque value passed to spdk_nvme_attach_cb()
- * \param trid NVMe transport identifier
- * \param ctrlr opaque handle to NVMe controller
- * \param opts NVMe controller init options that were actually used.
- *
+ * \brief NVMe namespace details
  */
-void
-attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
-	  struct spdk_nvme_ctrlr *ctrlr,
-	  const struct spdk_nvme_ctrlr_opts *opts);
+struct ns_t {
+	int		id;
+	int		size;
+	struct ns_t    *next;
+};
+
+/*
+ * \brief Raw SPDK device health statistics.
+ */
+struct dev_health_t {
+	uint16_t	 temperature; /* in Kelvin */
+	uint32_t	 warn_temp_time;
+	uint32_t	 crit_temp_time;
+	uint64_t	 ctrl_busy_time;
+	uint64_t	 power_cycles;
+	uint64_t	 power_on_hours;
+	uint64_t	 unsafe_shutdowns;
+	uint64_t	 media_errors;
+	uint64_t	 error_log_entries;
+	/* Critical warnings */
+	bool		 temp_warning;
+	bool		 avail_spare_warning;
+	bool		 dev_reliabilty_warning;
+	bool		 read_only_warning;
+	bool		 volatile_mem_warning;
+};
 
 /**
+ * \brief Return containing return code, controllers, namespaces and error
+ * message
+ */
+struct ret_t {
+	int		rc;
+	struct ctrlr_t *ctrlrs;
+	char		err[1024];
+};
+
+struct ctrlr_entry {
+	struct spdk_nvme_ctrlr	*ctrlr;
+	struct spdk_pci_addr	 pci_addr;
+	struct ns_entry		*nss;
+	struct dev_health_entry	*dev_health;
+	int			 socket_id;
+	struct ctrlr_entry	*next;
+};
+
+struct ns_entry {
+	struct spdk_nvme_ns	*ns;
+	struct ns_entry		*next;
+};
+
+struct dev_health_entry {
+	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_error_information_entry error_page[256];
+	int					 inflight;
+};
+
+struct ctrlr_entry	*g_controllers;
+
+/*
  * Initialize the ret_t struct by allocating memory and setting attributes
  * to NULL
  *
@@ -99,11 +144,11 @@ struct ctrlr_entry *
 get_controller(char *addr, struct ret_t *ret);
 
 /**
- * Provide ability to pass function pointers to collect for mocking
+ * Provide ability to pass function pointers to _collect for mocking
  * in unit tests.
  */
-typedef const struct spdk_nvme_ctrlr_data *
-(*data_getter)(struct spdk_nvme_ctrlr *);
+typedef int
+(*data_copier)(struct ctrlr_t *, struct ret_t *, struct ctrlr_entry *);
 
 typedef struct spdk_pci_device *
 (*pci_getter)(struct spdk_nvme_ctrlr *);
@@ -112,12 +157,29 @@ typedef int
 (*socket_id_getter)(struct spdk_pci_device *);
 
 void
-_collect(struct ret_t *ret, data_getter, pci_getter, socket_id_getter);
+_collect(struct ret_t *ret, data_copier, pci_getter, socket_id_getter);
+
+/**
+ * Provide ability to pass function pointers to _discover for mocking
+ * in unit tests.
+ */
+typedef int
+(*prober)(const struct spdk_nvme_transport_id *, void *, spdk_nvme_probe_cb,
+	  spdk_nvme_attach_cb, spdk_nvme_remove_cb);
+
+typedef int
+(*health_getter)(struct spdk_nvme_ctrlr *, struct dev_health_entry *);
+
+struct ret_t *
+_discover(prober, bool, health_getter);
 
 /**
  * Collect controller and namespace information of the NVMe devices.
  */
 void
 collect(struct ret_t *ret);
+
+void
+cleanup(bool detach);
 
 #endif
