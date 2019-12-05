@@ -143,8 +143,6 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp->status = rc;
 	}
 
-	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
-
 	mgmt__set_rank_req__free_unpacked(req, NULL);
 	pack_daos_response(resp, drpc_resp);
 	D_FREE(resp);
@@ -874,6 +872,46 @@ out:
 
 	pack_acl_resp(&resp, drpc_resp);
 	free_resp_acl(&resp);
+}
+
+void
+ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DeleteACLReq	*req;
+	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
+	int			rc = 0;
+	uuid_t			pool_uuid;
+	struct daos_acl		*result = NULL;
+
+	req = mgmt__delete_aclreq__unpack(NULL, drpc_req->body.len,
+					  drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack DeleteACLReq\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		return;
+	}
+
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		D_ERROR("Couldn't parse UUID\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_pool_delete_acl(pool_uuid, req->principal, &result);
+	if (rc != 0) {
+		D_ERROR("Couldn't delete entry from pool ACL, rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = add_acl_to_response(result, &resp);
+	daos_acl_free(result);
+
+out:
+	resp.status = rc;
+
+	pack_acl_resp(&resp, drpc_resp);
+	free_resp_acl(&resp);
+
+	mgmt__delete_aclreq__free_unpacked(req, NULL);
 }
 
 /* Convert d_rank_list_t values to a string of comma-separated ranks.

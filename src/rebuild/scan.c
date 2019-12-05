@@ -244,7 +244,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 			break;
 
 		/* If it is failed, but no need retry, let's just fail */
-		if ((rc != 0 && rc != -DER_TIMEDOUT &&
+		if ((rc != 0 && rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		     !daos_crt_network_error(rc)) ||
 		    (rebuild_out->roo_status != 0 &&
 		     rebuild_out->roo_status != -DER_AGAIN)) {
@@ -799,12 +799,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* re-report the #rebuilt cnt next time */
 			rpt->rt_re_report = 1;
 			/* Update master rank */
-			rc = ds_pool_iv_ns_update(rpt->rt_pool,
-						  rsi->rsi_master_rank,
-						  &rsi->rsi_ns_iov,
-						  rsi->rsi_ns_id);
-			if (rc)
-				D_GOTO(out, rc);
+			ds_pool_iv_ns_update(rpt->rt_pool,
+					     rsi->rsi_master_rank);
 
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.

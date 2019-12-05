@@ -49,13 +49,15 @@ def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
+def ior_repos = "mpich@PR-20 ior-hpc@PR-48"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
                       fi
                       nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
+                                    jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
                                     jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
@@ -70,10 +72,13 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo chown \\\$me:\\\$me /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
+                            sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i --recreate-superblocks
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -84,7 +89,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             daos_agent -o /usr/etc/daos_agent.yml -i &
                             AGENT_PID=\\\$!
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
-                            orterun -np 1 -x OFI_INTERFACE=eth0 -x CRT_ATTACH_INFO_PATH=/tmp -x DAOS_SINGLETON_CLI=1 daos_test -m'''
+                            orterun -np 1 -x OFI_INTERFACE=eth0 daos_test -m'''
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -121,8 +126,6 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        // How can we have different timeouts for weekly and master and PRs?
-        timeout(time: 24, unit: 'HOURS')
     }
 
     stages {

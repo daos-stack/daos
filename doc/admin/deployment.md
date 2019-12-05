@@ -395,33 +395,31 @@ for latest information and examples.
 
 ## Server Startup
 
-DAOS currently relies on PMIx for server wire-up and application to
-server connection. As a result, the DAOS servers can only be started via
-orterun (part of OpenMPI). A new bootstrap procedure is under
-implementation and will be available for DAOS v1.0. This will remove the
-dependency on PMIx and will allow the DAOS servers to be started
+DAOS is currently switching from the PMIx-based server wire-up to a
+self-contained bootstrap procedure. The new bootstrap procedure will be
+available for DAOS v1.0 and will allow the DAOS servers to be started
 individually (e.g. independently on each storage node via systemd) or
-collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
+collectively (e.g. pdsh, mpirun or as a Kubernetes Pod). Meanwhile, servers
+no longer have to be started by orterun, with a temporary limitation that if
+one of them is restarted, the others must also be restarted.
 
 ### Parallel Launcher
 
-As stated above, only orterun(1) is currently supported.
+As stated above, orterun(1) is no longer required, provided the temporary
+limitation is accommodated. The section still uses orterun as an example.
 
 The list of storage nodes can be specified on the command line via the -H
-option. The DAOS server and the application can be started
-separately but must share a URI directory (referred to as shared_dir) to
-connect. Also, the DAOS server must be started with the --enable-recovery option
+option. The DAOS server and the application can be started separately.
+Also, the DAOS server must be started with the --enable-recovery option
 to support server failure. See the orterun(1) man page for additional options.
 
 To start the DAOS server, run:
 ```
 orterun --map-by node --mca btl tcp,self --mca oob tcp -np <num_servers>
--H <server_list> --enable-recovery daos_server start -a <shared_dir> -o <config_file>
+-H <server_list> --enable-recovery daos_server start -o <config_file>
 ```
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
-
-The shared directory should be accessible by all nodes.
 
 The --allow-run-as-root option can be added to the command line to
 allow the daos_server to run with root privileges on each storage
@@ -430,13 +428,6 @@ to storage format).
 
 The content of the configuration file is documented in the next section
 and a few examples are [available](/src/utils/config/examples).
-
-Client processes (i.e. utilities, applications, ...) should have the
-following environment variables set to connect to the DAOS servers:
-```
-export DAOS_SINGLETON_CLI=1
-export CRT_ATTACH_INFO_PATH=/path/to/shared_dir
-```
 
 ### Systemd Integration
 
@@ -593,7 +584,7 @@ Typically an administrator will perform the following tasks:
     - just specify NVMe PCI addresses with `bdev_list` for now
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --enable-recovery daos_server start -a shared_dir -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --enable-recovery daos_server start -o <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#parallel-launcher)
 
 5. Provision Storage
@@ -604,6 +595,8 @@ Typically an administrator will perform the following tasks:
 requires a subsequent restart of `daos_server`)
     - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#server-configuration)
+    - pick one server in the system and set `access_points` to this server's
+      host and port
     - populate the `scm_*` and `bdev_*` parameters as used in format (below)
 
 7. Format Storage (from any node)

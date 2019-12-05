@@ -142,7 +142,7 @@ type PoolGetACLResp struct {
 }
 
 // PoolGetACL gets the Access Control List for the pool.
-func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
+func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ type PoolOverwriteACLResp struct {
 // PoolOverwriteACL sends a request to replace the pool's old Access Control List
 // with a new one. If it succeeds, it returns the updated ACL. If not, it returns
 // an error.
-func (c *connList) PoolOverwriteACL(req *PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
+func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ type PoolUpdateACLResp struct {
 // PoolUpdateACL sends a request to add new entries and update existing entries
 // in a pool's Access Control List. If it succeeds, it returns the updated ACL.
 // If not, it returns an error.
-func (c *connList) PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
+func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -255,6 +255,51 @@ func (c *connList) PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, err
 	}
 
 	return &PoolUpdateACLResp{
+		ACL: &AccessControlList{Entries: pbResp.ACL},
+	}, nil
+}
+
+// PoolDeleteACLReq contains the input parameters for PoolDeleteACL.
+type PoolDeleteACLReq struct {
+	UUID      string // UUID of the pool
+	Principal string // Principal whose entry will be removed
+}
+
+// PoolDeleteACLResp returns the updated ACL for the pool.
+type PoolDeleteACLResp struct {
+	ACL *AccessControlList // actual ACL of the pool
+}
+
+// PoolDeleteACL sends a request to delete an entry in a pool's Access Control
+// List. If it succeeds, it returns the updated ACL. If it fails, it returns an
+// error.
+func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, error) {
+	if req.Principal == "" {
+		return nil, errors.New("no principal provided")
+	}
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.DeleteACLReq{Uuid: req.UUID, Principal: req.Principal}
+
+	c.log.Debugf("Delete DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolDeleteACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Delete DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolDeleteACLResp{
 		ACL: &AccessControlList{Entries: pbResp.ACL},
 	}, nil
 }

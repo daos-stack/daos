@@ -768,8 +768,9 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 
 	if (biod->bd_update && media == DAOS_MEDIA_SCM) {
-		pmemobj_memcpy_persist(umem->umm_pool, media_addr,
-				       addr, n);
+		/* NB: pmemobj_tx_commit will drain HW buffer */
+		pmemobj_memcpy(umem->umm_pool, media_addr, addr, n,
+			       PMEMOBJ_F_MEM_NODRAIN);
 	} else {
 		if (biod->bd_update)
 			memcpy(media_addr, addr, n);

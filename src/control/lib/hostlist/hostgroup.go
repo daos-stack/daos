@@ -16,36 +16,55 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. B609815.
+// provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package hostlist
 
-syntax = "proto3";
-package mgmt;
+import (
+	"bytes"
+	"fmt"
+	"sort"
+)
 
-// Access Control List related protobuf structures
+type HostGroups map[string]*HostSet
 
-// Response to ACL-related requests includes the command status and current ACL
-message ACLResp {
-	int32 status = 1; // DAOS error code
-	repeated string ACL = 2; // List of ACEs in short string format
+func (hg HostGroups) Keys() []string {
+	keys := make([]string, 0, len(hg))
+
+	for key := range hg {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+	return keys
 }
 
-// Request to fetch an ACL
-message GetACLReq {
-	string uuid = 1; // Target UUID
+func (hg HostGroups) AddHost(key, host string) error {
+	if _, exists := hg[key]; !exists {
+		hg[key] = new(HostSet)
+	}
+
+	_, err := hg[key].Insert(host)
+	return err
 }
 
-// Request to modify an ACL
-// Results depend on the specific modification command.
-message ModifyACLReq {
-	string uuid = 1; // Target UUID
-	repeated string ACL = 2; // List of ACEs to overwrite ACL with
-}
+func (hg HostGroups) String() string {
+	var buf bytes.Buffer
 
-// Delete a principal's entry from the ACL
-message DeleteACLReq {
-	string uuid = 1; // Target UUID
-	string principal = 2; // Principal whose entry is to be deleted
+	padding := 0
+	keys := hg.Keys()
+	for _, key := range keys {
+		valStr := hg[key].String()
+		if len(valStr) > padding {
+			padding = len(valStr)
+		}
+	}
+
+	for _, key := range hg.Keys() {
+		fmt.Fprintf(&buf, "%*s: %s\n", padding, hg[key], key)
+	}
+
+	return buf.String()
 }

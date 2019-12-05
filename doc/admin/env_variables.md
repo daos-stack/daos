@@ -55,7 +55,7 @@ Environment variables in this section only apply to the client-side.
 
 |Variable|Description|
 |----|----| 
-|DAOS\_SINGLETON\_CLI |Determines whether to run in the singleton mode, in which the client does not need to be launched by orterun. BOOL. Default to false.|
+|N/A |N/A|
 
 ## Debug System (Client & Server)
 |Variable |Description|

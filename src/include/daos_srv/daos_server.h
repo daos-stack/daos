@@ -462,9 +462,6 @@ dss_abterr2der(int abt_errno)
 }
 
 int dss_rpc_send(crt_rpc_t *rpc);
-int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
-		     crt_group_t **group);
-int dss_group_destroy(crt_group_t *group);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
@@ -532,6 +529,7 @@ int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
+	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;
@@ -607,13 +605,10 @@ unsigned int dss_ctx_nr_get(void);
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
-	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
 void dss_init_state_set(enum dss_init_state state);
-
-bool dss_pmixless(void);
 
 /* default credits */
 #define	DSS_GC_CREDS	256

@@ -733,61 +733,6 @@ out:
 	return 0;
 }
 
-static int
-rebuild_pool_group_prepare(struct ds_pool *pool)
-{
-	struct pool_target	*tgts = NULL;
-	unsigned int		tgt_cnt;
-	char			id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t		rank_list;
-	d_rank_t		*ranks = NULL;
-	crt_group_t		*grp;
-	int			i;
-	int			rc;
-
-	if (pool->sp_group != NULL)
-		return 0;
-
-	/* During pool leader changing, the cart group might still
-	 * exists even if sp_group is NULL.
-	 */
-	uuid_unparse_lower(pool->sp_uuid, id);
-	grp = crt_group_lookup(id);
-	if (grp != NULL) {
-		pool->sp_group = grp;
-		return 0;
-	}
-
-	rc = pool_map_find_upin_tgts(pool->sp_map, &tgts, &tgt_cnt);
-	if (rc)
-		return rc;
-
-	D_ALLOC_ARRAY(ranks, tgt_cnt);
-	if (ranks == NULL)
-		D_GOTO(out, rc);
-
-	for (i = 0; i < tgt_cnt; i++) {
-		ranks[i] = tgts[i].ta_comp.co_rank;
-		D_DEBUG(DB_REBUILD, "i %d rank %d\n", i, ranks[i]);
-	}
-
-	rank_list.rl_nr = tgt_cnt;
-	rank_list.rl_ranks = ranks;
-
-	rc = dss_group_create(id, &rank_list, &grp);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	pool->sp_group = grp;
-out:
-	if (ranks != NULL)
-		D_FREE(ranks);
-	if (tgt_cnt > 0 && tgts != NULL)
-		D_FREE(tgts);
-
-	return rc;
-}
-
 /* To notify all targets to prepare the rebuild */
 static int
 rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
@@ -801,15 +746,9 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" create rebuild iv\n",
 		DP_UUID(pool->sp_uuid));
 
-	rc = rebuild_pool_group_prepare(pool);
-	if (rc)
-		return rc;
-
-	/* Create pool iv ns for the pool */
+	/* Update pool iv ns for the pool */
 	crt_group_rank(pool->sp_group, &master_rank);
-	rc = ds_pool_iv_ns_update(pool, master_rank, NULL, -1);
-	if (rc)
-		return rc;
+	ds_pool_iv_ns_update(pool, master_rank);
 
 	rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rgt);
 	if (rc)
@@ -911,7 +850,6 @@ retry:
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
 	uuid_copy(rsi->rsi_pool_hdl_uuid, rgt->rgt_poh_uuid);
 	uuid_copy(rsi->rsi_cont_hdl_uuid, rgt->rgt_coh_uuid);
-	ds_iv_global_ns_get(pool->sp_iv_ns, &rsi->rsi_ns_iov);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_pool_map_ver = map_ver;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
@@ -921,11 +859,11 @@ retry:
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0) {
-		/* If it is network failure or timedout, let's refresh
-		 * failure list and retry
+		/* If it is network failure, timedout, or group version
+		 * mismatch, let's refresh failure list and retry
 		 */
-		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
-		    !rebuild_gst.rg_abort) {
+		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc) ||
+		     rc == -DER_GRPVER) && !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
 			D_GOTO(retry, rc);
 		}
@@ -1176,17 +1114,15 @@ static void
 rebuild_task_ult(void *arg)
 {
 	struct rebuild_task			*task = arg;
-	struct ds_pool_create_arg		 pc_arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	struct rebuild_iv			 iv;
 	int					 rc;
 
-	memset(&pc_arg, 0, sizeof(pc_arg));
-	pc_arg.pca_map_version = task->dst_map_ver;
-	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
-	if (rc) {
-		D_ERROR("pool lookup and create failed: rc %d\n", rc);
+	pool = ds_pool_lookup(task->dst_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to look up pool\n",
+			DP_UUID(task->dst_pool_uuid));
 		return;
 	}
 
@@ -1910,7 +1846,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
 	struct ds_pool			*pool;
-	struct ds_pool_create_arg	pc_arg = { 0 };
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	d_iov_t			iov = { 0 };
@@ -1927,16 +1862,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
 		rsi->rsi_rebuild_ver);
 
-	/* Note: if ds_pool already exists, for example the pool
-	 * is opened, then pca_need_group, pca_map will have zero
-	 * effects, i.e. sp_map & sp_group might be NULL in this
-	 * case. So let's do extra checking in the following.
-	 */
-	pc_arg.pca_map_version = rsi->rsi_pool_map_ver;
-	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pc_arg, &pool);
-	if (rc != 0) {
+	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
+	if (pool == NULL) {
 		D_ERROR("Can not find pool.\n");
-		return rc;
+		return -DER_NONEXIST;
 	}
 
 	/* update the pool map */
@@ -1976,10 +1905,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	rc = ds_pool_iv_ns_update(pool, rsi->rsi_master_rank,
-				  &rsi->rsi_ns_iov, rsi->rsi_ns_id);
-	if (rc)
-		D_GOTO(out, rc);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
 					   rpt->rt_coh_uuid,
