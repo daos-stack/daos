@@ -20,7 +20,17 @@ expected:
       pinned_numa_node: "0"
 
     -
+      fabric_iface: ib1
+      provider: ofi+sockets
+      pinned_numa_node: "0"
+
+    -
       fabric_iface: eth0
+      provider: ofi+sockets
+      pinned_numa_node: "0"
+
+    -
+      fabric_iface: eth1
       provider: ofi+sockets
       pinned_numa_node: "0"
 
