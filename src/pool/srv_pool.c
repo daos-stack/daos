@@ -748,10 +748,8 @@ out:
 int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
-	char		id[DAOS_UUID_STR_SIZE];
 	d_iov_t		psid;
 	d_rank_list_t	excluded = { 0 };
-	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
@@ -763,26 +761,11 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
 			       &excluded, true /* destroy */);
 	map_ranks_fini(&excluded);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);
-		return rc;
-	}
 
-	uuid_unparse_lower(pool_uuid, id);
-	group = crt_group_lookup(id);
-	if (group != NULL) {
-		D_DEBUG(DB_MD, DF_UUID": destroying pool group\n",
-			DP_UUID(pool_uuid));
-		rc = dss_group_destroy(group);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
-				DP_UUID(pool_uuid), rc);
-			return rc;
-		}
-	}
-
-	return 0;
+	return rc;
 }
 
 static int
@@ -1607,8 +1590,7 @@ out:
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas,
-		   d_iov_t *global_ns, struct daos_pool_space *ps,
-		   crt_bulk_t map_buf_bulk)
+		   struct daos_pool_space *ps, crt_bulk_t map_buf_bulk)
 {
 	struct pool_tgt_connect_in     *in;
 	struct pool_tgt_connect_out    *out;
@@ -1632,14 +1614,13 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tci_capas = capas;
 	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
-	in->tci_iv_ctxt.iov_buf = global_ns->iov_buf;
-	in->tci_iv_ctxt.iov_buf_len = global_ns->iov_buf_len;
-	in->tci_iv_ctxt.iov_len = global_ns->iov_len;
 	in->tci_master_rank = rank;
 	if (ps != NULL)
 		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1773,7 +1754,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	d_iov_t				key;
 	d_iov_t				value;
 	struct pool_hdl			hdl;
-	d_iov_t				iv_iov;
 	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
@@ -1799,12 +1779,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D_ASSERT(svc->ps_pool != NULL);
 	if (svc->ps_pool->sp_iv_ns == NULL) {
 		rc = ds_iv_ns_create(rpc->cr_ctx, svc->ps_pool->sp_uuid,
-				     NULL, &iv_ns_id, &iv_iov,
+				     svc->ps_pool->sp_group, &iv_ns_id,
 				     &svc->ps_pool->sp_iv_ns);
-		if (rc)
-			D_GOTO(out_svc, rc);
-	} else {
-		rc = ds_iv_global_ns_get(svc->ps_pool->sp_iv_ns, &iv_iov);
 		if (rc)
 			D_GOTO(out_svc, rc);
 	}
@@ -1881,7 +1857,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
-	 * when the tranfer fails. The client has already been authenticated
+	 * when the transfer fails. The client has already been authenticated
 	 * and authorized at this point. If an error occurs after the transfer
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
@@ -1928,10 +1904,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-		in->pci_capas, &iv_iov,
-		(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
-		&out->pco_space : NULL,
-		CRT_BULK_NULL);
+				in->pci_capas,
+				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
+				&out->pco_space : NULL, CRT_BULK_NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -2005,6 +1980,8 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tdi_hdls.ca_arrays = pool_hdls;
 	in->tdi_hdls.ca_count = n_pool_hdls;
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -2151,6 +2128,8 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
 	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		goto out_rpc;
 
@@ -2170,6 +2149,174 @@ out_rpc:
 out:
 	D_DEBUG(DB_MD, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
+}
+
+/*
+ * Transfer list of containers to "remote_bulk". If the remote bulk buffer
+ * is too small, then return -DER_TRUNC. RPC response will contain the number
+ * of containers in the pool that the client can use to resize its buffer
+ * for another RPC request.
+ */
+static int
+transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
+		  struct pool_svc *svc, crt_rpc_t *rpc, crt_bulk_t remote_bulk)
+{
+	size_t				 cont_buf_size;
+	daos_size_t			 remote_bulk_size;
+	d_iov_t				 cont_iov;
+	d_sg_list_t			 cont_sgl;
+	crt_bulk_t			 bulk = CRT_BULK_NULL;
+	struct crt_bulk_desc		 bulk_desc;
+	crt_bulk_opid_t			 bulk_opid;
+	ABT_eventual			 eventual;
+	int				*status;
+	int				 rc;
+
+	D_ASSERT(ncont > 0);
+	cont_buf_size = ncont * sizeof(struct daos_pool_cont_info);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (remote_bulk_size < cont_buf_size) {
+		D_ERROR(DF_UUID": remote container buffer("DF_U64")"
+			" < required (%lu)\n", DP_UUID(svc->ps_uuid),
+			remote_bulk_size, cont_buf_size);
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	d_iov_set(&cont_iov, cont_buf, cont_buf_size);
+	cont_sgl.sg_nr = 1;
+	cont_sgl.sg_nr_out = 0;
+	cont_sgl.sg_iovs = &cont_iov;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &cont_sgl, CRT_BULK_RO, &bulk);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Prepare for crt_bulk_transfer(). */
+	bulk_desc.bd_rpc = rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+	bulk_desc.bd_remote_hdl = remote_bulk;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = bulk;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = cont_iov.iov_len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, &bulk_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out_bulk:
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+out:
+	return rc;
+}
+
+/* CaRT RPC handler for pool container listing
+ * Requires a pool handle (except for rebuild).
+ */
+void
+ds_pool_list_cont_handler(crt_rpc_t *rpc)
+{
+	struct pool_list_cont_in	*in = crt_req_get(rpc);
+	struct pool_list_cont_out	*out = crt_reply_get(rpc);
+	struct daos_pool_cont_info	*cont_buf = NULL;
+	uint64_t			 ncont = 0;
+	struct pool_svc			*svc;
+	struct rdb_tx			 tx;
+	d_iov_t				 key;
+	d_iov_t				 value;
+	struct pool_hdl			 hdl;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->plci_op.pi_uuid), rpc, DP_UUID(in->plci_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->plci_op.pi_uuid, &svc,
+				    &out->plco_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* Verify the pool handle. Note: since rebuild will not
+	 * connect the pool, so we only verify the non-rebuild
+	 * pool.
+	 */
+	if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
+		d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_HDL;
+			/* defer goto out_svc until unlock/tx_end */
+	}
+
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	/* Call container service to get the list */
+	rc = ds_cont_list(in->plci_op.pi_uuid, &cont_buf, &ncont);
+	if (rc != 0) {
+		D_GOTO(out_svc, rc);
+	} else if ((in->plci_ncont > 0) && (ncont > in->plci_ncont)) {
+		/* Got a list, but client buffer not supplied or too small */
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers (more than client: %"PRIu64")\n",
+				 DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl),
+				 ncont, in->plci_ncont);
+		D_GOTO(out_free_cont_buf, rc = -DER_TRUNC);
+	} else {
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers\n", DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl), ncont);
+
+		/* Send any results only if client provided a handle */
+		if (cont_buf && (in->plci_ncont > 0) &&
+		    (in->plci_cont_bulk != CRT_BULK_NULL)) {
+			rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
+					       in->plci_cont_bulk);
+		}
+	}
+
+out_free_cont_buf:
+	if (cont_buf) {
+		D_FREE(cont_buf);
+		cont_buf = NULL;
+	}
+
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->plco_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->plco_op.po_rc = rc;
+	out->plco_ncont = ncont;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->plci_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
 }
 
 void
@@ -2559,6 +2706,332 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&client);
 out:
+	return rc;
+}
+
+/*
+ * Adds the contents of new_acl to the original ACL. If an entry is added for
+ * a principal already in the ACL, the old entry will be replaced.
+ * *acl may be reallocated in the process.
+ */
+static int
+merge_acl(struct daos_acl **acl, struct daos_acl *new_acl)
+{
+	struct daos_ace	*new_ace;
+	int		rc = 0;
+
+	new_ace = daos_acl_get_next_ace(new_acl, NULL);
+	while (new_ace != NULL) {
+		rc = daos_acl_add_ace(acl, new_ace);
+		if (rc != 0)
+			break;
+		new_ace = daos_acl_get_next_ace(new_acl, new_ace);
+	}
+
+	return rc;
+}
+
+/**
+ * Update entries in a pool's ACL without having a handle for the pool
+ */
+void
+ds_pool_acl_update_handler(crt_rpc_t *rpc)
+{
+	struct pool_acl_update_in	*in = crt_req_get(rpc);
+	struct pool_acl_update_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry = NULL;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pui_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->pui_op.pi_uuid, &svc,
+				    &out->puo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	/*
+	 * We need to read the old ACL, modify, and rewrite it
+	 */
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL) {
+		D_ERROR(DF_UUID": No ACL prop entry for pool\n",
+			DP_UUID(in->pui_op.pi_uuid));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = merge_acl((struct daos_acl **)&entry->dpe_val_ptr, in->pui_acl);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Unable to update pool with new ACL, rc=%d\n",
+			DP_UUID(in->pui_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
+			DP_UUID(in->pui_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+
+out_prop:
+	daos_prop_free(prop);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->puo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->puo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pui_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc to update the pool ACL by adding and
+ * updating entries.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	acl		ACL to merge with the current pool ACL
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+		       struct daos_acl *acl)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_acl_update_in	*in;
+	struct pool_acl_update_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Updating pool ACL\n", DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_UPDATE, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool update ACL rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pui_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pui_op.pi_hdl);
+	in->pui_acl = acl;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->puo_op.po_rc,
+				      &out->puo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->puo_op.po_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to update ACL for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
+/**
+ * Delete entries in a pool's ACL without having a handle for the pool
+ */
+void
+ds_pool_acl_delete_handler(crt_rpc_t *rpc)
+{
+	struct pool_acl_delete_in	*in = crt_req_get(rpc);
+	struct pool_acl_delete_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pdi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->pdi_op.pi_uuid, &svc,
+				    &out->pdo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	/*
+	 * We need to read the old ACL, modify, and rewrite it
+	 */
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL) {
+		D_ERROR(DF_UUID": No ACL prop entry for pool\n",
+			DP_UUID(in->pdi_op.pi_uuid));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = daos_acl_remove_ace((struct daos_acl **)&entry->dpe_val_ptr,
+				 in->pdi_type, in->pdi_principal);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to remove requested principal, "
+			"rc=%d\n", DP_UUID(in->pdi_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
+			DP_UUID(in->pdi_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+
+out_prop:
+	daos_prop_free(prop);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pdo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pdo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pdi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc to remove an entry by principal from the
+ * pool's ACL.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	principal_type	Type of the principal to be removed
+ * \param[in]	principal_name	Name of the principal to be removed
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+		       enum daos_acl_principal_type principal_type,
+		       const char *principal_name)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_acl_delete_in	*in;
+	struct pool_acl_delete_out	*out;
+	char				*name_buf = NULL;
+	size_t				name_buf_len;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Deleting entry from pool ACL\n",
+			DP_UUID(pool_uuid));
+
+	if (principal_name != NULL) {
+		/* Need to sanitize the incoming string */
+		name_buf_len = DAOS_ACL_MAX_PRINCIPAL_BUF_LEN;
+		D_ALLOC_ARRAY(name_buf, name_buf_len);
+		if (name_buf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		/* force null terminator in copy */
+		strncpy(name_buf, principal_name, name_buf_len - 1);
+	}
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_DELETE, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool delete ACL rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pdi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pdi_op.pi_hdl);
+	in->pdi_type = (uint8_t)principal_type;
+	in->pdi_principal = name_buf;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pdo_op.po_rc,
+				      &out->pdo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pdo_op.po_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to delete ACL entry for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	D_FREE(name_buf);
 	return rc;
 }
 
@@ -3070,10 +3543,10 @@ out:
 /* Try to create iv namespace for the pool */
 int
 ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-		     d_iov_t *iv_iov, unsigned int iv_ns_id)
+		     unsigned int iv_ns_id)
 {
 	return ds_iv_ns_update(pool->sp_uuid, master_rank, pool->sp_group,
-			       iv_iov, iv_ns_id, &pool->sp_iv_ns);
+			       iv_ns_id, &pool->sp_iv_ns);
 }
 
 int
@@ -3302,7 +3775,10 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 	if (rc != 1)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	crt_group_rank(pool->sp_group, &myrank);
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc < 0)
+		goto out;
+
 	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
 	} else {

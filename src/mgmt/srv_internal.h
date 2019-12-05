@@ -100,6 +100,10 @@ void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
 			       struct daos_acl **result);
+int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			    struct daos_acl **result);
+int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			    struct daos_acl **result);
 
 /** srv_query.c */
 
@@ -127,5 +131,9 @@ void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
+
+/** srv_util.c */
+int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
+			 int nservers, uint32_t version);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

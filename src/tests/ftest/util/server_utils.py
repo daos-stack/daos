@@ -590,7 +590,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
-        if hasattr(test, "server_log"):
+        if hasattr(test, "server_log") and test.server_log is not None:
             server_config.update_log_file(test.server_log)
         server_config.create_yaml(server_yaml)
 
