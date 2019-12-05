@@ -46,7 +46,7 @@ class DmgNetworkScanTest(TestWithServers):
         JIRA ID: DAOS-2516
         Test Description: Test basic dmg functionality to scan the network
         devices on the system.
-        :avocado: tags=all,control,tiny,hw,dmg,network_scan,basic
+        :avocado: tags=all,tiny,hw,dmg,network_scan,basic
         """
         # Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
