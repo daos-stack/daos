@@ -7,8 +7,8 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.6.0
-Release:       15%{?relval}%{?dist}
+Version:       0.7.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -331,6 +331,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu Dec 05 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.7.0-1
+- Version bump up to 0.7.0
+
 * Tue Nov 19 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.0-15
 - Temporarily unconstrain max. version of spdk
 
