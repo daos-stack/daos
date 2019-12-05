@@ -67,7 +67,7 @@ register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
 	centry->nss = nentry;
 }
 
-static void
+void
 attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	  struct spdk_nvme_ctrlr *ctrlr,
 	  const struct spdk_nvme_ctrlr_opts *opts)
@@ -122,7 +122,7 @@ init_ret(void)
 	return ret;
 }
 
-static void
+void
 clean_ret(struct ret_t *ret)
 {
 	struct ctrlr_t	*cnext;
@@ -293,7 +293,8 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 		}
 
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns);
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
+				NVMECONTROL_GBYTE_BYTES;
 		ns_tmp->next = ctrlr->nss;
 		ctrlr->nss = ns_tmp;
 
@@ -347,7 +348,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 {
 	struct ctrlr_entry		       *ctrlr_entry;
 	struct spdk_pci_device		       *pci_dev;
-	struct spdk_pci_addr			pci_addr;
 	struct ctrlr_t			       *ctrlr_tmp;
 	int					rc;
 
@@ -365,10 +365,9 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		ctrlr_tmp->dev_health = NULL;
 		ctrlr_tmp->next = NULL;
 
-		rc = copy_data(ctrlr_tmp, ret, ctrlr_entry)
-		if (rc != 0) {
+		rc = copy_data(ctrlr_tmp, ret, ctrlr_entry);
+		if (rc != 0)
 			goto fail;
-		}
 
 		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
 				       sizeof(ctrlr_tmp->pci_addr),
@@ -392,16 +391,18 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		free(pci_dev);
 
 		/* Alloc linked list of namespaces per controller */
-		if (ctrlr_entry->nss != NULL) {
+		if (ctrlr_entry->nss) {
 			rc = collect_namespaces(ctrlr_entry->nss, ctrlr_tmp);
-			goto fail;
+			if (rc != 0)
+				goto fail;
 		}
 
 		/* Alloc device health stats per controller */
-		if (ctrlr_entry->dev_health != NULL) {
+		if (ctrlr_entry->dev_health) {
 			rc = collect_health_stats(ctrlr_entry->dev_health,
 						  ctrlr_tmp);
-			goto fail;
+			if (rc != 0)
+				goto fail;
 		}
 
 		ctrlr_tmp->next = ret->ctrlrs;
@@ -409,8 +410,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		ctrlr_entry = ctrlr_entry->next;
 	}
-
-	ret->rc = 0;
 
 	return;
 fail:
@@ -434,23 +433,22 @@ void
 cleanup(bool detach)
 {
 	struct ns_entry		*nentry;
-	struct ctrlr_entry	*centry;
-	struct ctrlr_entry	*cnext;
-
-	printf("Cleanup NVMe");
+	struct ctrlr_entry	*centry, *cnext;
 
 	centry = g_controllers;
 
 	while (centry) {
-		if (centry->ctrlr && detach)
+		if ((centry->ctrlr) && (detach)) {
 			spdk_nvme_detach(centry->ctrlr);
+		}
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
 			centry->nss = nentry;
 		}
-		if (centry->dev_health)
+		if (centry->dev_health) {
 			free(centry->dev_health);
+		}
 
 		cnext = centry->next;
 		free(centry);

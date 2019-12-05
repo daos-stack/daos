@@ -30,12 +30,15 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include "nvme_internal.h"
 
 #include "../include/nvme_control_common.h"
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
+
+static struct ret_t	*test_ret;
 
 /**
  * ==============================
@@ -64,8 +67,7 @@ mock_get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 
 static int
 mock_spdk_nvme_probe_ok(const struct spdk_nvme_transport_id *trid,
-			void *cb_ctx,
-			spdk_nvme_probe_cb pcb,
+			void *cb_ctx, spdk_nvme_probe_cb pcb,
 			spdk_nvme_attach_cb acb,
 			spdk_nvme_remove_cb rcb)
 {
@@ -79,10 +81,9 @@ mock_spdk_nvme_probe_ok(const struct spdk_nvme_transport_id *trid,
 
 static int
 mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
-			void *cb_ctx,
-			spdk_nvme_probe_cb pcb,
-			spdk_nvme_attach_cb acb,
-			spdk_nvme_remove_cb rcb)
+			  void *cb_ctx, spdk_nvme_probe_cb pcb,
+			  spdk_nvme_attach_cb acb,
+			  spdk_nvme_remove_cb rcb)
 {
 	(void)trid;
 	(void)cb_ctx;
@@ -94,7 +95,7 @@ mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
 
 static int
 mock_copy_ctrlr_data(struct ctrlr_t *cdst, struct ret_t *ret,
-		struct ctrlr_entry *csrc)
+		     struct ctrlr_entry *csrc)
 {
 	(void)cdst;
 	(void)ret;
@@ -129,69 +130,54 @@ mock_spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
 static void
 test_discover_null_g_controllers(void **state)
 {
-	struct ret_t *ret;
-
 	(void)state; /*unused*/
 
-	assert_null(g_controllers);
-
-	ret = _discover(&mock_spdk_nvme_probe_ok, false,
+	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
 			&mock_get_dev_health_logs);
-	assert_int_equal(ret->rc, 0);
+	assert_int_equal(test_ret->rc, 0);
 
-	assert_null(ret->ctrlrs);
-
-	free(ret);
+	assert_null(test_ret->ctrlrs);
 }
 
 static void
 test_discover_set_g_controllers(void **state)
 {
-	struct ret_t *ret;
-
 	(void)state; /*unused*/
 
-	assert_null(g_controllers);
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
+	g_controllers->nss = NULL;
 	g_controllers->dev_health = NULL;
 	g_controllers->next = NULL;
 
-	ret = _discover(&mock_spdk_nvme_probe_ok, false,
+	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
 			&mock_get_dev_health_logs);
-	assert_int_equal(ret->rc, 0);
+	assert_int_equal(test_ret->rc, 0);
 
-	assert_null(ret->ctrlrs);
-
-	free(ret);
+	assert_null(test_ret->ctrlrs);
 }
 
 static void
 test_discover_probe_fail(void **state)
 {
-	struct ret_t *ret;
-
 	(void)state; /*unused*/
 
-	assert_null(g_controllers);
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
+	g_controllers->nss = NULL;
 	g_controllers->dev_health = NULL;
 	g_controllers->next = NULL;
 
-	ret = _discover(&mock_spdk_nvme_probe_ok, false,
+	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
 			&mock_get_dev_health_logs);
-	assert_int_equal(ret->rc, -1);
+	assert_int_equal(test_ret->rc, -1);
 
-	assert_null(ret->ctrlrs);
-
-	free(ret);
+	assert_null(test_ret->ctrlrs);
 }
 
 static void
 test_collect(void **state)
 {
-	struct ret_t		       *ret;
 	struct spdk_nvme_ctrlr_opts	opts = {};
 	struct spdk_nvme_transport_id	trid1 = {};
 	struct spdk_nvme_transport_id	trid2 = {};
@@ -201,8 +187,6 @@ test_collect(void **state)
 	struct ctrlr_entry	       *entry2;
 
 	(void)state;
-
-	ret = init_ret();
 
 	memset(&ctrlr1, 0, sizeof(struct spdk_nvme_ctrlr));
 	snprintf(ctrlr1.trid.traddr, sizeof(ctrlr1.trid.traddr),
@@ -234,27 +218,28 @@ test_collect(void **state)
 	entry2 = g_controllers;
 	assert_ptr_not_equal(entry1, entry2);
 
-	assert_null(ret->ctrlrs);
-	_collect(ret, &mock_copy_ctrlr_data,
+	test_ret = init_ret();
+
+	assert_null(test_ret->ctrlrs);
+	_collect(test_ret, &mock_copy_ctrlr_data,
 		 &mock_spdk_nvme_ctrlr_get_pci_device,
 		 &mock_spdk_pci_device_get_socket_id);
 
-	if (ret->rc != 0)
-		fprintf(stderr, "collect err: %s\n", ret->err);
-	assert_return_code(ret->rc, 0);
-	assert_non_null(ret->ctrlrs);
-	assert_string_equal(ret->ctrlrs->pci_addr, "0000:01:00.0");
-	assert_non_null(ret->ctrlrs->next);
-	assert_string_equal(ret->ctrlrs->next->pci_addr, "0000:02:00.0");
-	assert_null(ret->ctrlrs->next->next);
-
-	free(ret);
+	if (test_ret->rc != 0)
+		fprintf(stderr, "collect err: %s\n", test_ret->err);
+	assert_return_code(test_ret->rc, 0);
+	assert_non_null(test_ret->ctrlrs);
+	assert_string_equal(test_ret->ctrlrs->pci_addr, "0000:01:00.0");
+	assert_non_null(test_ret->ctrlrs->next);
+	assert_string_equal(test_ret->ctrlrs->next->pci_addr, "0000:02:00.0");
+	assert_null(test_ret->ctrlrs->next->next);
 }
 
 static int
 setup(void **state)
 {
-	g_controllers = NULL;
+	assert_null(test_ret);
+	assert_null(g_controllers);
 
 	return 0;
 }
@@ -263,6 +248,9 @@ setup(void **state)
 static int
 teardown(void **state)
 {
+	clean_ret(test_ret);
+	free(test_ret);
+	test_ret = NULL;
 	cleanup(false);
 
 	return 0;
@@ -272,11 +260,11 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_discover_null_g_controllers),
-		cmocka_unit_test(test_discover_set_g_controllers),
-		cmocka_unit_test(test_discover_probe_fail),
-		cmocka_unit_test(test_collect),
+		cmocka_unit_test_setup_teardown(test_discover_null_g_controllers, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_discover_set_g_controllers, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
 	};
 
-	return cmocka_run_group_tests(tests, setup, teardown);
+	return cmocka_run_group_tests(tests, NULL, NULL);
 }
