@@ -148,7 +148,6 @@ the DAOS service:
 
 ```
 $ docker run -it -d --privileged --name server \
-        -v /tmp/uri:/tmp/uri \
         -v /dev/hugepages:/dev/hugepages \
         daos
 ```
@@ -171,7 +170,6 @@ Then create a container that can access the local DAOS source tree:
 ```
 $ docker run -it -d --privileged --name server \
         -v ${daospath}:/home/daos/daos:Z \
-        -v /tmp/uri:/tmp/uri \
         -v /dev/hugepages:/dev/hugepages \
         daos
 ```
@@ -218,7 +216,6 @@ The DAOS service can then be started as follows:
 $ docker exec server mkdir /var/run/daos_server
 $ docker exec server orterun -allow-run-as-root -H localhost -np 1 \
         daos_server start \
-        -a /tmp/uri \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
 

@@ -113,7 +113,7 @@ func TestScanDisplay(t *testing.T) {
 	}{
 		"typical scan": {
 			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
-			expOut: "1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
+			expOut: "\n 1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
 				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\t" +
 				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n",
 		},
@@ -125,7 +125,7 @@ func TestScanDisplay(t *testing.T) {
 		},
 		"scm scan with pmem namespaces": {
 			scanResp: MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers),
-			expOut: "1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
+			expOut: "\n 1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
 				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n",
 		},
 		"summary scm scan with pmem namespaces": {
@@ -136,7 +136,7 @@ func TestScanDisplay(t *testing.T) {
 		},
 		"scm scan without pmem namespaces": {
 			scanResp: MockScanResp(nil, MockScmModules, nil, MockServers),
-			expOut: "1.2.3.[4-5]\n\tSCM Modules:\n\t\tPhysicalID:12345 " +
+			expOut: "\n 1.2.3.[4-5]\n\tSCM Modules:\n\t\tPhysicalID:12345 " +
 				"Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n" +
 				"\tNVMe controllers and namespaces:\n\t\tnone\n",
 		},
@@ -148,7 +148,7 @@ func TestScanDisplay(t *testing.T) {
 		},
 		"nvme scan": {
 			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
-			expOut: "1.2.3.[4-5]\n\tSCM Modules:\n\t\tnone\n\t" +
+			expOut: "\n 1.2.3.[4-5]\n\tSCM Modules:\n\t\tnone\n\t" +
 				"NVMe controllers and namespaces:\n\t\t" +
 				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n",
 		},
