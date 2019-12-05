@@ -557,7 +557,7 @@ cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	uuid_copy(civ_key->cont_uuid, cont_uuid);
 	key.class_id = IV_CONT_SNAP;
-	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0);
+	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0, false);
 	if (rc)
 		D_ERROR("iv invalidate failed %d\n", rc);
 
@@ -578,7 +578,7 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 		return -DER_NOMEM;
 
 	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry,
-			   iv_entry_size);
+			   iv_entry_size, false);
 	if (rc)
 		D_GOTO(free, rc);
 
