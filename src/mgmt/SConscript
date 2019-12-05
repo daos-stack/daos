@@ -19,7 +19,7 @@ def scons():
                                   [common, 'srv.c', 'srv_layout.c',
                                    'srv_pool.c', 'srv_system.c',
                                    'srv_target.c', 'srv_query.c',
-                                   'srv_drpc.c'])
+                                   'srv_drpc.c', 'srv_util.c'])
     denv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     # Management client library

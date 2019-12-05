@@ -60,10 +60,10 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	/* The time for the latest DTX resync operation. */
-	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_reindex:1,
+				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,
@@ -140,8 +140,9 @@ cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int
 cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			 uint64_t *snapshots, int snap_count);
-
-
+int
+cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
+			int *snap_count);
 /**
  * Query container properties.
  *
@@ -169,5 +170,9 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 int
 cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		   uuid_t cont_uuid, struct ds_cont_hdl **cont_hdl);
+
+int
+cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
+			    unsigned int sync_mode);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

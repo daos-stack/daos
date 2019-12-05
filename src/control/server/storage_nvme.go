@@ -341,8 +341,8 @@ func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeN
 			_nss = append(
 				_nss,
 				&ctlpb.NvmeController_Namespace{
-					Id:       ns.ID,
-					Capacity: ns.Size,
+					Id:   ns.ID,
+					Size: ns.Size,
 				})
 		}
 	}
@@ -356,19 +356,19 @@ func loadHealthStats(ctrlrPciAddr string, hss []spdk.DeviceHealth) *ctlpb.NvmeCo
 		if hs.CtrlrPciAddr == ctrlrPciAddr {
 			return &ctlpb.NvmeController_Health{
 				Temp:            hs.Temp,
-				Tempwarn:        hs.TempWarnTime,
-				Tempcrit:        hs.TempCritTime,
-				Ctrlbusy:        hs.CtrlBusyTime,
+				Tempwarntime:    hs.TempWarnTime,
+				Tempcrittime:    hs.TempCritTime,
+				Ctrlbusytime:    hs.CtrlBusyTime,
 				Powercycles:     hs.PowerCycles,
 				Poweronhours:    hs.PowerOnHours,
 				Unsafeshutdowns: hs.UnsafeShutdowns,
 				Mediaerrors:     hs.MediaErrors,
-				Errorlogs:       hs.ErrorLogEntries,
-				Tempwarning:     hs.TempWarn,
-				Availspare:      hs.AvailSpareWarn,
-				Reliability:     hs.ReliabilityWarn,
-				Readonly:        hs.ReadOnlyWarn,
-				Volatilemem:     hs.VolatileWarn,
+				Errorlogentries: hs.ErrorLogEntries,
+				Tempwarn:        hs.TempWarn,
+				Availsparewarn:  hs.AvailSpareWarn,
+				Reliabilitywarn: hs.ReliabilityWarn,
+				Readonlywarn:    hs.ReadOnlyWarn,
+				Volatilewarn:    hs.VolatileWarn,
 			}
 		}
 	}
