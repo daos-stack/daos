@@ -99,7 +99,7 @@ type cliOptions struct {
 // appSetup processes cli overrides and connects clients.
 func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect, config *client.Configuration) error {
 	if opts.HostList != "" {
-    hostlist, err := flattenHostAddrs(opts.HostList, config.Port)
+		hostlist, err := flattenHostAddrs(opts.HostList, config.Port)
 		if err != nil {
 			return err
 		}
