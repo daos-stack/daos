@@ -411,26 +411,6 @@ out:
 	return ranks;
 }
 
-/* Find the first unset bit. */
-int
-daos_first_unset_bit(uint32_t *bits, unsigned int size)
-{
-	unsigned int idx = 0;
-	unsigned int off;
-
-	while (*bits == (uint32_t)(-1) && ++idx < size)
-		bits++;
-
-	if (idx == size)
-		return -1;
-
-	for (off = 0; off < 32; off++)
-		if (isclr(bits, off))
-			break;
-
-	return idx * 32 + off;
-}
-
 bool
 daos_file_is_dax(const char *pathname)
 {
