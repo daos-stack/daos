@@ -995,8 +995,8 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 		goto out;
 
 	for (i = 0; i < bsgl->bs_nr; i++) {
-		D_ASSERT(bio_iov2raw_buf(&bsgl_in->bs_iovs[i]) == NULL);
-		D_ASSERT(bio_iov2raw_len(&bsgl_in->bs_iovs[i]) != 0);
+		D_ASSERT(bio_iov2buf(&bsgl_in->bs_iovs[i]) == NULL);
+		D_ASSERT(bio_iov2len(&bsgl_in->bs_iovs[i]) != 0);
 		bsgl->bs_iovs[i] = bsgl_in->bs_iovs[i];
 	}
 	bsgl->bs_nr_out = bsgl->bs_nr;
