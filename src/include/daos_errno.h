@@ -78,7 +78,13 @@ extern "C" {
 	/** Not a service replica */					\
 	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20))	\
 	/** Checksum error */						\
-	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))
+	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))	\
+	/** Unsupported durable format */				\
+	ACTION(DER_DF_INVAL,		(DER_ERR_DAOS_BASE + 22))	\
+	/** Incompatible durable format version */			\
+	ACTION(DER_DF_INCOMPT,		(DER_ERR_DAOS_BASE + 23))	\
+	/** Record size error */					\
+	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))
 
 /** Define the DAOS error numbers */
 D_DEFINE_RANGE_ERRNO(DAOS, 2000)
