@@ -789,7 +789,7 @@ out:
 #define OCLASS_NAMES_LIST_SIZE 512
 
 static void
-print_oclass_names_list()
+print_oclass_names_list(FILE *stream)
 {
 	char *str;
 	size_t size = OCLASS_NAMES_LIST_SIZE, len;
@@ -807,7 +807,6 @@ again:
 		size = len + 1;
 		goto again;
 	}
-	return;
 }
 
 static int
@@ -894,7 +893,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	--oclass=OCLSSTR   container object class\n"
 "			   (");
 	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
-	print_oclass_names_list();
+	print_oclass_names_list(stream);
 	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
