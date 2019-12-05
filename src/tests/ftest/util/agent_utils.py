@@ -72,7 +72,7 @@ class DaosAgentConfig(ObjectWithParameters):
         #   hostlist: ['host1', 'host2']
         #   runtime_dir: /var/run/daos_agent
         #   log_file: /tmp/daos_agent.log
-        self.name = BasicParameter(None, "daos")
+        self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)
         self.port = BasicParameter(None, 10001)
         self.hostlist = BasicParameter(None)
@@ -187,7 +187,7 @@ def run_agent(test, server_list, client_list=None):
     for client in client_list:
         sessions[client] = subprocess.Popen(
             ["ssh", client, "-o ConnectTimeout=10",
-             "{} -i".format(daos_agent_bin)],
+             "{} -i".format(daos_agent_cmd)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
         )
