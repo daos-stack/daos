@@ -527,33 +527,24 @@ class ServerManager(ExecutableCommand):
 
     def clean_files(self):
         """Clean the tmpfs on the servers."""
+        scm_mount = self.runner.job.yaml_params.server_params[-1].scm_mount
+        scm_list = self.runner.job.yaml_params.server_params[-1].scm_list.value
         clean_cmds = [
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
         ]
         if self.runner.job.yaml_params.is_nvme():
             clean_cmds.append("sudo rm -rf {0};  \
-                               sudo umount {0}".format(self.runner.job.
-                                                       yaml_params.
-                                                       server_params[-1].
-                                                       scm_mount))
+                               sudo umount {0}".format(scm_mount))
         # scm_mount can be /mnt/daos0 or /mnt/daos1 for two daos_server
         # instances. Presently, not supported in DAOS. The for loop needs
         # to be updated in future to handle it. Single instance pmem
         # device should work now.
         if self.runner.job.yaml_params.is_scm():
-            scm_mount_count = len(self.runner.job.yaml_params.
-                                  server_params[-1].scm_list.value)
-            for count in range(0, scm_mount_count):
+            for value in scm_list:
                 clean_cmds.append("sudo umount {}; \
-                                   sudo wipefs -a /dev/pmem{}"
-                                  .format(self.runner.job.
-                                          yaml_params.
-                                          server_params[-1].scm_mount,
-                                          count))
-        self.log.info("Cleanup of %s directory.", str(self.runner.job.
-                                                      yaml_params.
-                                                      server_params[-1].
-                                                      scm_mount))
+                                   sudo wipefs -a {}"
+                                  .format(scm_mount, value))
+        self.log.info("Cleanup of %s directory.", str(scm_mount))
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
