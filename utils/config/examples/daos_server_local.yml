@@ -1,5 +1,7 @@
-# access_points: ['localhost:10001']
+# For a single-server system
+
 name: daos_server
+access_points: ['localhost:10001']
 port: 10001
 provider: ofi+sockets
 nr_hugepages: 4096

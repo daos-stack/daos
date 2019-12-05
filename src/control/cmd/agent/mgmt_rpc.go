@@ -40,6 +40,7 @@ import (
 // to MS.
 type mgmtModule struct {
 	log logging.Logger
+	sys string
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
@@ -65,6 +66,10 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	}
 
 	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+
+	if req.Sys != mod.sys {
+		return nil, errors.Errorf("unknown system name %s", req.Sys)
+	}
 
 	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
 	if err != nil {
