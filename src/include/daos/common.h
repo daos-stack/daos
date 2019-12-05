@@ -259,10 +259,6 @@ bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 
 #define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
-/* The DAOS BITS is composed by uint32_t[x] */
-#define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
-int daos_first_unset_bit(uint32_t *bits, unsigned int size);
-
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
