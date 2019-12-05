@@ -392,7 +392,8 @@ daos_oclass_names_list(size_t size, char *str)
 			strcat(str, oc->oc_name);
 			strcat(str, ", ");
 		}
-		len += strlen(oc_name) + 2;
+		len += strlen(oc->oc_name) + 2;
+oc_name) + 2;
 	}
 	return len;
 }
