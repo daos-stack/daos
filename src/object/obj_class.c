@@ -388,12 +388,11 @@ daos_oclass_names_list(size_t size, char *str)
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_name == NULL)
 			break;
-		if (len + strlen(oc->oc_name) + 2 < size) {
+		len += strlen(oc->oc_name) + 2;
+		if (len < size) {
 			strcat(str, oc->oc_name);
 			strcat(str, ", ");
 		}
-		len += strlen(oc->oc_name) + 2;
-oc_name) + 2;
 	}
 	return len;
 }
