@@ -140,7 +140,6 @@ type Config struct {
 	ServiceThreadCore int           `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
 	SystemName        string        `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
 	SocketDir         string        `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
-	AttachInfoPath    string        `yaml:"-" cmdLongFlag:"--attach_info" cmdShortFlag:"-a"`
 	LogMask           string        `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string        `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
 	Storage           StorageConfig `yaml:",inline"`
@@ -287,12 +286,6 @@ func (c *Config) WithBdevFileSize(size int) *Config {
 // WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
 func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
 	c.Storage.Bdev.ConfigPath = cfgPath
-	return c
-}
-
-// WithAttachInfoPath sets the path to PMIx-less attachment info.
-func (c *Config) WithAttachInfoPath(aip string) *Config {
-	c.AttachInfoPath = aip
 	return c
 }
 

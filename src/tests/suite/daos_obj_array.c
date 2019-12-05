@@ -822,6 +822,120 @@ array_recx_punch_enumerate(void **state)
 	print_message("all good\n");
 }
 
+static void
+array_recx_read_incomplete(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t		 sg_iov[SM_BUF_LEN];
+	daos_iod_t	 iod;
+	daos_recx_t	 recx[SM_BUF_LEN];
+	char		 wbuf[SM_BUF_LEN];
+	char		 rbuf[SM_BUF_LEN];
+	char		 rbuf_orig[SM_BUF_LEN];
+	int		 i;
+	int		 rc;
+
+	dts_buf_render(wbuf, SM_BUF_LEN);
+	dts_buf_render(rbuf_orig, SM_BUF_LEN);
+
+	/** open object */
+	oid = dts_oid_gen(OC_SX, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov[0], wbuf, 1);
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= sg_iov;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	dcb_set_null(&iod.iod_kcsum);
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx[0].rx_nr	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** insert 1 extent at location 2 */
+	recx[0].rx_idx = 2;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** fetch all records */
+	print_message("Fetching all records...\n");
+	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
+	d_iov_set(&sg_iov[0], rbuf, sizeof(rbuf));
+	dcb_set_null(&iod.iod_kcsum);
+	recx[0].rx_idx = 0;
+	recx[0].rx_nr	= 10;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("DONE record fetch --------\n");
+	for (i = 0; i < SM_BUF_LEN; i++) {
+		if (i == 2)
+			assert_int_equal((int)rbuf[i], (int)wbuf[0]);
+		else
+			assert_int_equal((int)rbuf[i], (int)rbuf_orig[i]);
+	}
+
+	/** fetch every other record to contiguous buffer */
+	print_message("Fetching every other record to contiguous buffer...\n");
+	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
+	d_iov_set(&sg_iov[0], rbuf, SM_BUF_LEN/2);
+	dcb_set_null(&iod.iod_kcsum);
+	iod.iod_nr = SM_BUF_LEN/2;
+	for (i = 0; i < SM_BUF_LEN/2; i++) {
+		recx[i].rx_idx = i * 2;
+		recx[i].rx_nr	= 1;
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+	NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("DONE record fetch --------\n");
+	for (i = 0; i < SM_BUF_LEN/2; i++) {
+		if (i == 1)
+			assert_int_equal((int)rbuf[i], (int)wbuf[0]);
+		else
+			assert_int_equal((int)rbuf[i], (int)rbuf_orig[i]);
+	}
+
+	/** fetch every other record to noncontiguous buffer */
+	print_message("Fetching every other record to noncontiguous buffer\n");
+	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
+	sgl.sg_nr = SM_BUF_LEN/2;
+	dcb_set_null(&iod.iod_kcsum);
+	for (i = 0; i < SM_BUF_LEN/2; i++) {
+		/* set so it matches the original index */
+		d_iov_set(&sg_iov[i], &rbuf[i * 2], 1);
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+	NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("DONE record fetch --------\n");
+	for (i = 0; i < SM_BUF_LEN/2; i++) {
+		if (i == 2)
+			assert_int_equal((int)rbuf[i], (int)wbuf[0]);
+		else
+			assert_int_equal((int)rbuf[i], (int)rbuf_orig[i]);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY1: byte array with buffer on stack",
 	  byte_array_simple_stack, NULL, test_case_teardown},
@@ -849,6 +963,8 @@ static const struct CMUnitTest array_tests[] = {
 	  array_akey_punch_enumerate, NULL, test_case_teardown},
 	{ "ARRAY13: Array RECX punch/enumerate",
 	  array_recx_punch_enumerate, NULL, test_case_teardown},
+	{ "ARRAY14: Reading from incomplete array",
+	  array_recx_read_incomplete, NULL, test_case_teardown},
 };
 
 static int
