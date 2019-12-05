@@ -29,14 +29,14 @@ pool:
 ior:
     client_processes:
         np_16:
-            np: 16 
+            np: 16
     test_file: daos:testFile
     repetitions: 2
 # Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-F -e -v -D 120 -w -r" 
+          flags: "-F -e -v -D 120 -w -r"
           ior_api:
             posix:
               api: POSIX
