@@ -3,8 +3,6 @@ hosts:
     - boro-A
 server_config:
   name: daos_server
-  servers:
-    targets: 1
 pool:
   createmode: !mux
     mode_all:
