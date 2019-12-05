@@ -445,7 +445,6 @@ class ServerManager(ExecutableCommand):
                 self.log.info("Creating log file")
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
-                
         if storage_prep_flag != "ram":
             storage_prepare(self._hosts, "root", storage_prep_flag)
             self.runner.mca.value = {"plm_rsh_args": "-l root"}
