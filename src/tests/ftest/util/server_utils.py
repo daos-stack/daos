@@ -426,21 +426,34 @@ class ServerManager(ExecutableCommand):
 
     def start(self, yamlfile):
         """Start the server through the runner."""
+        storage_prep_flag = ""
         self.runner.job.set_config(yamlfile)
         self.server_clean()
+        # Prepare SCM storage in servers
+        if self.runner.job.yaml_params.is_scm():
+            storage_prep_flag = "dcpm"
+            self.log.info("Performing SCM storage prepare in <format> mode")
+        else:
+            storage_prep_flag = "ram"
 
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
-            self.log.info("Performing nvme storage prepare in <format> mode")
-            storage_prepare(self._hosts, "root")
-            self.runner.mca.value = {"plm_rsh_args": "-l root"}
-
+            if storage_prep_flag == "dcpm":
+                storage_prep_flag = "dcpm_nvme"
+            elif storage_prep_flag == "ram":
+                storage_prep_flag = "ram_nvme"
+            else:
+                storage_prep_flag = "nvme"
+            self.log.info("Performing NVMe storage prepare in <format> mode")
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
             if lfile is not None:
                 self.log.info("Creating log file")
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
+        if storage_prep_flag != "ram":
+            storage_prepare(self._hosts, "root", storage_prep_flag)
+            self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
             self.run()
@@ -510,31 +523,55 @@ class ServerManager(ExecutableCommand):
 
     def clean_files(self):
         """Clean the tmpfs on the servers."""
+        scm_mount = self.runner.job.yaml_params.server_params[-1].scm_mount
+        scm_list = self.runner.job.yaml_params.server_params[-1].scm_list.value
         clean_cmds = [
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
         ]
-
-        if self.runner.job.yaml_params.is_nvme() or \
-           self.runner.job.yaml_params.is_scm():
-            clean_cmds.append("sudo rm -rf /mnt/daos; sudo umount /mnt/daos")
-
-        self.log.info("Cleanup of /mnt/daos directory.")
+        if self.runner.job.yaml_params.is_nvme():
+            clean_cmds.append("sudo rm -rf {0};  \
+                               sudo umount {0}".format(scm_mount))
+        # scm_mount can be /mnt/daos0 or /mnt/daos1 for two daos_server
+        # instances. Presently, not supported in DAOS. The for loop needs
+        # to be updated in future to handle it. Single instance pmem
+        # device should work now.
+        if self.runner.job.yaml_params.is_scm():
+            for value in scm_list:
+                clean_cmds.append("sudo umount {}; \
+                                   sudo wipefs -a {}"
+                                  .format(scm_mount, value))
+        self.log.info("Cleanup of %s directory.", str(scm_mount))
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
-def storage_prepare(hosts, user):
+def storage_prepare(hosts, user, device_type):
     """Prepare storage on servers using the DAOS server's yaml settings file.
 
     Args:
         hosts (str): a string of comma-separated host names
-
+        user (str): username for file permissions
+        device_type (str): storage type - scm or nvme
+    
     Raises:
         ServerFailed: if server failed to prepare storage
 
     """
+    # Get the daos_server from the install path. Useful for testing
+    # with daos built binaries.
+    dev_param = ""
+    device_args = ""
     daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = ("sudo {} storage prepare -n -u \"{}\" --hugepages=4096 -f"
-           .format(daos_srv_bin[0], user))
+    if device_type == "dcpm":
+        dev_param = "-s"
+    elif device_type == "dcpm_nvme":
+        device_args = " --hugepages=4096"
+    elif device_type == "ram_nvme" or device_type == "nvme":
+        dev_param = "-n"
+        device_args = " --hugepages=4096"
+    else:
+        raise ServerFailed("Invalid device type")
+    cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
+           .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
@@ -542,6 +579,9 @@ def storage_prepare(hosts, user):
 
 def storage_reset(hosts):
     """Reset the Storage on servers using the DAOS server's yaml settings file.
+
+    NOTE: Don't enhance this method to reset SCM. SCM will not be in a useful
+    state for running next tests.
 
     Args:
         hosts (str): a string of comma-separated host names
