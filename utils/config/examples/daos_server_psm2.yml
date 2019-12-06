@@ -1,6 +1,7 @@
 # Example configuration file for OPA
 
 name: daos_server   # map to -g daos_server
+access_points: ['example:10001']
 port: 10001         # mgmt port
 provider: ofi+psm2  # map to CRT_PHY_ADDR_STR=ofi+psm2
 socket_dir: /tmp/daos_psm2

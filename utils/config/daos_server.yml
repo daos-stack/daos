@@ -14,6 +14,7 @@
 ## Access points
 #
 ## To operate, DAOS will need a quorum of access point nodes to be available.
+## Must have the same value for all agents and servers in a system.
 ## Immutable after reformat.
 ## Hosts can be specified with or without port, default port below
 ## assumed if not specified.
