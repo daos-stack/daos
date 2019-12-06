@@ -86,7 +86,6 @@ class DaosServer(DaosCommand):
 
     def get_action_command(self):
         """Set the action command object based on the yaml provided value."""
-        # pylint: disable=redefined-variable-type
         if self.action.value == "start":
             self.action_command = self.ServerStartSubCommand()
         else:
@@ -551,7 +550,7 @@ def storage_prepare(hosts, user, device_type):
         hosts (str): a string of comma-separated host names
         user (str): username for file permissions
         device_type (str): storage type - scm or nvme
-    
+
     Raises:
         ServerFailed: if server failed to prepare storage
 

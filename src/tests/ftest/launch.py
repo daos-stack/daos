@@ -133,6 +133,7 @@ def set_test_environment():
     #   - Exclude the loopback device
     #   - Only include the first active interface for each interface type (name)
     #   - Use sorting to prioritize ib<n> over eth<n>
+    print("ifconfig output: {}".format(get_output("ifconfig")))
     output = get_output(
         r"ifconfig 2>&1 | sed -En '/LOOPBACK/! s/^([a-z0-9]+):.*/\1/p'")
     interfaces_by_type = {
@@ -142,7 +143,7 @@ def set_test_environment():
     try:
         interface = available_interfaces[-1]
     except IndexError:
-        print("Error obtaining a default interface from: {}".format(output))
+        print("Error obtaining a default interface from: '{}'".format(output))
         exit(1)
     print(
         "Using {} as the default interface from: {}".format(
