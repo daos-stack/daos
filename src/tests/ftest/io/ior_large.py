@@ -62,3 +62,19 @@ class IorLarge(IorTestBase):
         ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
         self.ior_cmd.flags.update(ior_flags)
         self.run_ior_with_pool()
+
+    def test_fpp(self):
+        """Jira ID: DAOS-2491.
+
+        Test Description:
+            Run IOR with 1,64 and 128 clients config file-per-process.
+
+        Use Cases:
+            Different combinations of 1/64/128 Clients and
+            1K/4K/32K/128K/512K/1M transfersize.
+
+        :avocado: tags=all,daosio,iorlarge_sequential
+        """
+        ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()

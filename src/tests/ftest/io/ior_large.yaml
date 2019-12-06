@@ -59,6 +59,8 @@ ior:
       F: "-v -W -w -r -R"
     random:
       F: "-v -z -W -w -r -R"
+    fpp:
+      F: "-v -W -w -r -R -F"
   ior_api: !mux
     daos:
       api: DAOS
