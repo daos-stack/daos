@@ -129,24 +129,26 @@ def set_test_environment():
     path = os.environ.get("PATH")
 
     # Get the default interface to use if OFI_INTERFACE is not set
-    #   - Only include interfaces that are active/up (operstate)
-    #   - Exclude the loopback device (lo)
-    #   - Only include the first active interface for each interface type
-    #   - Sorting the ARP protocol HW identifiers (type) to select ib over eth
     print("Detecting network devices")
     available_interfaces = {}
+    # Find all the /sys/class/net interfaces on the launch node (excluding lo)
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
     for device in sorted([dev for dev in os.listdir(net_path) if dev != "lo"]):
+        # Get the interface state - only include active (up) interfaces
         with open(os.path.join(net_path, device, "operstate"), "r") as buffer:
             state = buffer.read().strip()
-        with open(os.path.join(net_path, device, "type"), "r") as buffer:
-            dtype = int(buffer.read().strip())
+        # Get the interface speed - used to select the fastest available
+        with open(os.path.join(net_path, device, "speed"), "r") as buffer:
+            speed = int(buffer.read().strip())
         print(
-            "  - {0:<5} (type: {1:<2} state: {2})".format(
-                device, dtype, state))
-        if state.lower() == "up" and dtype not in available_interfaces:
-            available_interfaces[dtype] = device
+            "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                device, speed, state))
+        # Only include the first active interface for each speed - first is
+        # determined by an alphabetic sort: ib0 will be checked before ib1
+        if state.lower() == "up" and speed not in available_interfaces:
+            available_interfaces[speed] = device
     try:
+        # Select the fastest active interface available by sorting the speeds
         interface = available_interfaces[sorted(available_interfaces)[-1]]
     except IndexError:
         print(
