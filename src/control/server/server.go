@@ -55,6 +55,8 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
+// add a new comment
+
 // define supported maximum number of I/O servers
 const maxIoServers = 2
 
