@@ -3,9 +3,6 @@ package com.intel.daos.client;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.IOException;
-
 public class DaosUtilsTest {
 
   @Test
@@ -13,8 +10,8 @@ public class DaosUtilsTest {
     String path = "\\abc\\de\\f\\";
     Assert.assertEquals("/abc/de/f", DaosUtils.normalize(path));
 
-    path = "\\abc\\de\\f\\ghi\\\\jkl\\\\";
-    Assert.assertEquals("/abc/de/f/ghi/jkl", DaosUtils.normalize(path));
+    path = "\\abc\\de\\f\\gh.i\\\\jkl\\\\";
+    Assert.assertEquals("/abc/de/f/gh.i/jkl", DaosUtils.normalize(path));
   }
 
   @Test
@@ -33,8 +30,8 @@ public class DaosUtilsTest {
     Assert.assertEquals("/", DaosUtils.normalize(path));
     path = "a0Ab1B_-";
     Assert.assertEquals("a0Ab1B_-", DaosUtils.normalize(path));
-    path = "/a0Ab1B_-/1234567890/XYZ/_-/";
-    Assert.assertEquals("/a0Ab1B_-/1234567890/XYZ/_-", DaosUtils.normalize(path));
+    path = "/a0Ab1B_-/123456.7890/XYZ/_-/";
+    Assert.assertEquals("/a0Ab1B_-/123456.7890/XYZ/_-", DaosUtils.normalize(path));
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -72,10 +69,10 @@ public class DaosUtilsTest {
     Assert.assertEquals("abc", pc[0]);
     Assert.assertEquals("XYZ", pc[1]);
 
-    path = "/abc/XYZ/5TU-/ABC_";
+    path = "/abc/XYZ/5.TU-/ABC_";
     pc = DaosUtils.parsePath(DaosUtils.normalize(path));
     Assert.assertEquals(2, pc.length);
-    Assert.assertEquals("/abc/XYZ/5TU-", pc[0]);
+    Assert.assertEquals("/abc/XYZ/5.TU-", pc[0]);
     Assert.assertEquals("ABC_", pc[1]);
   }
 

@@ -49,14 +49,6 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
- * Method:    daosCreateContainer
- * Signature: (JLjava/lang/String;)Ljava/lang/String;
- */
-JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreateContainer
-  (JNIEnv *, jclass, jlong, jstring);
-
-/*
- * Class:     com_intel_daos_client_DaosFsClient
  * Method:    daosOpenPool
  * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)J
  */
@@ -222,6 +214,22 @@ JNIEXPORT jboolean JNICALL Java_com_intel_daos_client_DaosFsClient_dfsIsDirector
  */
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsMountFs
   (JNIEnv *, jclass, jlong, jlong, jboolean);
+
+/*
+ * Class:     com_intel_daos_client_DaosFsClient
+ * Method:    dfsMountFsOnRoot
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsMountFsOnRoot
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     com_intel_daos_client_DaosFsClient
+ * Method:    dfsUnmountFsOnRoot
+ * Signature: (J)J
+ */
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsUnmountFsOnRoot
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient

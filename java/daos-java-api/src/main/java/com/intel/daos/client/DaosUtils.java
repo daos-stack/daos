@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  */
 public final class DaosUtils {
 
-  public static final Pattern PAT_PATH = Pattern.compile("^(/|(/[a-zA-Z0-9_-]+)|[a-zA-Z0-9_-]+)+$");
+  public static final Pattern PAT_PATH = Pattern.compile("^(/|(/[a-zA-Z0-9_\\.-]+)|[a-zA-Z0-9_\\.-]+)+$");
 
   private DaosUtils(){}
 
@@ -48,7 +48,7 @@ public final class DaosUtils {
     path = path.replaceAll("\\\\{1,}", "/");
     Matcher m = PAT_PATH.matcher(path);
     if(!m.matches()){
-      throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - are valid");
+      throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - . are valid");
     }
     if(path.length() > 1 && path.endsWith("/")){
       path = path.substring(0, path.length()-1);
