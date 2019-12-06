@@ -456,9 +456,6 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
-	if (!dss_pmixless())
-		return 0;
-
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
 	if (rc != 0)
 		return rc;
