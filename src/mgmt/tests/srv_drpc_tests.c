@@ -32,6 +32,7 @@
 
 #include <daos/drpc.h>
 #include <daos_security.h>
+#include <uuid/uuid.h>
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
 #include "../drpc_internal.h"
@@ -720,7 +721,7 @@ expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
 	assert_int_equal(pool_resp->n_pools, pools_len);
 
 	for (i = 0; i < pools_len; i++) {
-		char		exp_uuid[UUID_STR_LEN];
+		char	exp_uuid[UUID_STR_LEN];
 
 		uuid_unparse(pools[i].lp_puuid, exp_uuid);
 		assert_string_equal(pool_resp->pools[i]->uuid, exp_uuid);
