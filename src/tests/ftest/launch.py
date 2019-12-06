@@ -127,14 +127,16 @@ def set_test_environment():
     # Get the default interface to use if OFI_INTERFACE is not set
     #   - Only include interfaces that are active/up (default ifconfig listing)
     #   - Exclude the loopback device
-    #   - Select the last active interface: e.g. selecte ib<n> over eth<n>
+    #   - Only include the first active interface for each interface type (name)
+    #   - Use sorting to prioritize ib<n> over eth<n>
     output = get_output(
-        "ifconfig | sed -En '/LOOPBACK/! s/^([a-z0-9]+):.*/\1/p'")
+        r"ifconfig 2>&1 | sed -En '/LOOPBACK/! s/^([a-z0-9]+):.*/\1/p'")
+    interfaces_by_type = {
+        re.sub(r"[0-9]+", "", item): item for item in reversed(output.split())}
     available_interfaces = [
-        link.split("-")[0] for link in output.split() if "UP" in link
-    ]
+        interfaces_by_type[key] for key in sorted(interfaces_by_type)]
     try:
-        interface = sorted(available_interfaces)[-1]
+        interface = available_interfaces[-1]
     except IndexError:
         print("Error obtaining a default interface from: {}".format(output))
         exit(1)
