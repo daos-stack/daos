@@ -101,6 +101,7 @@ struct counts {
 	int num_punched_recx;
 };
 
+/** JUST TESTING IF VOS OWNERS IS WORKING */
 static int
 count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
