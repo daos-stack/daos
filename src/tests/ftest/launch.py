@@ -133,20 +133,27 @@ def set_test_environment():
     #   - Exclude the loopback device
     #   - Only include the first active interface for each interface type (name)
     #   - Use sorting to prioritize ib<n> over eth<n>
-    print("ifconfig output: {}".format(get_output("ifconfig")))
-    output = get_output(
-        r"ifconfig 2>&1 | sed -En '/LOOPBACK/! s/^([a-z0-9]+):.*/\1/p'")
-    interfaces_by_type = {
-        re.sub(r"[0-9]+", "", item): item for item in reversed(output.split())}
-    available_interfaces = [
-        interfaces_by_type[key] for key in sorted(interfaces_by_type)]
+    print("Detecting network devices")
+    available_interfaces = []
+    net_path = os.path.join(os.path.sep, "sys", "class", "net")
+    for device in sorted([dev for dev in os.listdir(net_path) if dev != "lo"]):
+        dev_type = re.sub(r"[0-9]+", "", device)
+        with open(os.path.join(net_path, device, "operstate"), "r") as buffer:
+            state = buffer.read().strip()
+        print(
+            "  device: {0:<5}, type: {1:<4}, state: {2}".format(
+                device, dev_type, state))
+        if state.lower() == "up":
+            available_interfaces.append(device)
     try:
-        interface = available_interfaces[-1]
+        interface = sorted(available_interfaces)[-1]
     except IndexError:
-        print("Error obtaining a default interface from: '{}'".format(output))
+        print(
+            "Error obtaining a default interface from: {}".format(
+                os.listdir(net_path)))
         exit(1)
     print(
-        "Using {} as the default interface from: {}".format(
+        "Using {} as the default interface from {}".format(
             interface, available_interfaces))
 
     # Update env definitions
