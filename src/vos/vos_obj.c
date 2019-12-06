@@ -519,6 +519,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	return rc;
 }
 
+/** TEST code owners */
 static int
 key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
