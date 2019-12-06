@@ -447,7 +447,7 @@ crt_get_info_string(char **string)
 	} else if (crt_na_ofi_conf.noc_port == -1) {
 		/* OFI_PORT not speicified */
 
-		D_ASPRINTF(*string, "%s+%s://%s", plugin_str,
+		D_ASPRINTF(*string, "%s://%s/%s", plugin_str,
 			crt_na_ofi_conf.noc_domain,
 			crt_na_ofi_conf.noc_ip_str);
 	} else {
@@ -455,10 +455,11 @@ crt_get_info_string(char **string)
 		port = crt_na_ofi_conf.noc_port;
 		crt_na_ofi_conf.noc_port = -1;
 
-		D_ASPRINTF(*string, "%s+%s://%s:%d", plugin_str,
+		D_ASPRINTF(*string, "%s://%s/%s:%d", plugin_str,
 			crt_na_ofi_conf.noc_domain,
 			crt_na_ofi_conf.noc_ip_str, port);
 	}
+
 	if (*string == NULL)
 		return -DER_NOMEM;
 
