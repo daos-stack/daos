@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,9 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * This file is part of the DAOS server. It implements the startup/shutdown
  * routines for the daos_server.
  */
+
 #define D_LOGFAC	DD_FAC(server)
 
 #include <signal.h>
@@ -70,10 +73,6 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** IO server instance index */
 unsigned int		dss_instance_idx;
-
-/** attach_info path to support singleton client */
-static bool	        save_attach_info;
-const char	       *attach_info_path;
 
 /** HW topology */
 hwloc_topology_t	dss_topo;
@@ -438,25 +437,11 @@ abt_fini(void)
 	ABT_finalize();
 }
 
-bool
-dss_pmixless(void)
-{
-	bool pmixless = false;
-
-	if (getenv("PMIX_RANK") == NULL)
-		return true;
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	return pmixless;
-}
-
 static int
 server_init(int argc, char *argv[])
 {
-	int		rc;
-	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
-	d_rank_t	rank = -1;
-	uint32_t	size = -1;
-	char		hostname[256] = { 0 };
+	int	rc;
+	char	hostname[256] = { 0 };
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -483,9 +468,9 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	if (dss_pmixless())
-		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	rc = crt_init_opt(daos_sysname, flags,
+	rc = crt_init_opt(daos_sysname,
+			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE |
+			  CRT_FLAG_BIT_PMIX_DISABLE,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
@@ -500,7 +485,7 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
-	/* start up service */
+	/* initialize service */
 	rc = dss_srv_init();
 	if (rc) {
 		D_ERROR("DAOS cannot be initialized using the configured "
@@ -509,7 +494,7 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-	D_INFO("Service is now running\n");
+	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
@@ -546,31 +531,6 @@ server_init(int argc, char *argv[])
 		goto exit_init_state;
 	}
 
-	if (dss_pmixless())
-		server_init_state_wait(DSS_INIT_STATE_RANK_SET);
-
-	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = crt_group_size(NULL, &size);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-
-	/* rank 0 save attach info for singleton client if needed */
-	if (save_attach_info && rank == 0) {
-		if (attach_info_path != NULL) {
-			rc = crt_group_config_path_set(attach_info_path);
-			if (rc != 0) {
-				D_ERROR("crt_group_config_path_set(path %s) "
-					"failed, rc: %d.\n", attach_info_path,
-					rc);
-				goto exit_drpc_fini;
-			}
-		}
-		rc = crt_group_config_save(NULL, true);
-		if (rc)
-			goto exit_drpc_fini;
-		D_INFO("server group attach info saved\n");
-	}
-
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
 	rc = dss_module_setup_all();
@@ -578,12 +538,15 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	dss_xstreams_open_barrier();
+	D_INFO("Service fully up\n");
+
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target, %d helper XS per target, "
-		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
-		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
-		hostname);
+		"with %u target, %d helper XS per target, "
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(),
+		dss_self_rank(), dss_tgt_nr, dss_tgt_offload_xs_nr,
+		dss_core_offset, hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
@@ -666,8 +629,6 @@ Options:\n\
       NVMe config file (default \"%s\")\n\
   --shm_id=shm_id, -i shm_id\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
-  --attach_info=path, -apath\n\
-      Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
   --instance_idx=idx, -I idx\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
@@ -682,7 +643,6 @@ static int
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
-		{ "attach_info",	required_argument,	NULL,	'a' },
 		{ "cores",		required_argument,	NULL,	'c' },
 		{ "socket_dir",		required_argument,	NULL,	'd' },
 		{ "firstcore",		required_argument,	NULL,	'f' },
@@ -703,7 +663,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
 				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
@@ -777,10 +737,6 @@ parse(int argc, char **argv)
 			break;
 		case 'h':
 			usage(argv[0], stdout);
-			break;
-		case 'a':
-			save_attach_info = true;
-			attach_info_path = optarg;
 			break;
 		case 'I':
 			dss_instance_idx = atoi(optarg);

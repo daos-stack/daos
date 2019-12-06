@@ -42,7 +42,7 @@ pool2:
 pool_reserved:
     mode: 511
     name: daos_server
-    scm_size: 3000000000
+    scm_size: 1000000000
 container_reserved:
     akey_size: 5
     dkey_size: 5

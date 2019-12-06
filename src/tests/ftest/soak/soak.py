@@ -77,18 +77,18 @@ class Soak(TestWithServers):
         """
         pool_obj_list = []
         for pool_name in pools:
-            path = "/run/" + pool_name + "/*"
             # Create a pool
             pool_obj_list.append(TestPool(self.context, self.log))
-            pool_obj_list[-1].namespace = path
+            pool_obj_list[-1].namespace = "/".join(["/run", pool_name, "*"])
             pool_obj_list[-1].get_params(self)
             pool_obj_list[-1].create()
             self.log.info("Valid Pool UUID is %s", pool_obj_list[-1].uuid)
 
-            # Check that the pool was created
-            self.assertTrue(
-                pool_obj_list[-1].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+            # Commented out due to DAOS-3836.
+            ## Check that the pool was created
+            #self.assertTrue(
+            #    pool_obj_list[-1].check_files(self.hostlist_servers),
+            #    "Pool data not detected on servers")
         return pool_obj_list
 
     def destroy_pool(self, pool):
@@ -598,7 +598,7 @@ class Soak(TestWithServers):
             test_param (str): test_params from yaml file
 
         """
-        pool_list = self.params.get("poollist", test_param + "*")
+        pool_list = self.params.get("poollist", "".join([test_param, "*"]))
         self.test_timeout = self.params.get("test_timeout", test_param)
         self.job_timeout = self.params.get("job_timeout", test_param)
         self.job_manager = self.params.get("jobmanager", test_param)

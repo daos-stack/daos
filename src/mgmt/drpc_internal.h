@@ -63,6 +63,12 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req,
 				Drpc__Response *drpc_resp);
 
 void
+ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void

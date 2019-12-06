@@ -170,7 +170,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		modules        = "foo,bar,baz"
 		systemName     = "test-system"
 		socketDir      = "/var/run/foo"
-		attachInfo     = "/tmp/attach"
 		logMask        = "LOG_MASK_VALUE"
 		logFile        = "/path/to/log"
 		cfgPath        = "/path/to/nvme.conf"
@@ -193,7 +192,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithPinnedNumaNode(&pinnedNumaNode).
 		WithModules(modules).
 		WithSocketDir(socketDir).
-		WithAttachInfoPath(attachInfo).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithShmID(shmId).
@@ -209,7 +207,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-m", modules,
 		"-f", strconv.Itoa(serviceCore),
 		"-g", systemName,
-		"-a", attachInfo,
 		"-d", socketDir,
 		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,

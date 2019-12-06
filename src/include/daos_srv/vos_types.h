@@ -30,6 +30,11 @@
 #include <daos/object.h>
 #include <daos/dtx.h>
 
+enum dtx_cos_flags {
+	DCF_FOR_PUNCH	= (1 << 0),
+	DCF_HAS_ILOG	= (1 << 1),
+};
+
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),
@@ -223,12 +228,6 @@ enum {
 typedef struct {
 	/** Returned epoch. It is ignored for container iteration. */
 	daos_epoch_t				ie_epoch;
-	union {
-		/** Returned earliest update epoch for a key */
-		daos_epoch_t			ie_earliest;
-		/** Return the DTX handled time for DTX iteration. */
-		uint64_t			ie_dtx_time;
-	};
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;

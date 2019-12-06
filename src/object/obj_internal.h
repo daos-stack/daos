@@ -318,7 +318,8 @@ static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || daos_crt_network_error(err);
+	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
+	       daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -371,7 +372,7 @@ void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
-			   struct obj_ec_parity *parity, int p_idx);
+			   struct obj_ec_parity *parity, uint32_t p_idx);
 bool
 ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
 
@@ -391,6 +392,9 @@ ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
 void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	       bool parify_include, uint64_t *tgt_set);
+
+int
+ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca);
 
 void
 ec_free_iods(daos_iod_t *iods, int nr);

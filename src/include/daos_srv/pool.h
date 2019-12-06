@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_security.h>
 
 /*
  * Pool object
@@ -45,21 +46,15 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;
+	bool			sp_stopping;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
-	struct ds_iv_ns		*sp_iv_ns;
+	struct ds_iv_ns	       *sp_iv_ns;
 };
 
-struct ds_pool_create_arg {
-	uint32_t		pca_map_version;
-	bool			pca_need_group;
-};
-
-int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
-			  struct ds_pool **pool);
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
 void ds_pool_put(struct ds_pool *pool);
 
@@ -134,6 +129,8 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
+int ds_pool_start(uuid_t uuid);
+void ds_pool_stop(uuid_t uuid);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
@@ -146,6 +143,11 @@ int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			     daos_prop_t **prop);
 int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
+int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+			   struct daos_acl *acl);
+int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+			   enum daos_acl_principal_type principal_type,
+			   const char *principal_name);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -171,8 +173,7 @@ struct rsvc_hint;
 int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
-int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-			 d_iov_t *iv_iov, unsigned int iv_ns_id);
+void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 

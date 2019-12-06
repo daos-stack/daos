@@ -72,6 +72,8 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
 
 	rc = dss_rpc_send(td_req);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DESTROY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -187,7 +189,7 @@ pool_create_prepare(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t *tgts_in,
 	if (rc == 0) {
 		D_DEBUG(DB_MGMT, "found "DF_UUID" state=%u\n", DP_UUID(uuid),
 			rec->pr_state);
-		if (rec->pr_state & POOL_CREATING)
+		if (rec->pr_state == POOL_CREATING)
 			rc = -DER_AGAIN;
 		else
 			rc = -DER_ALREADY;
@@ -360,6 +362,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	tc_in->tc_scm_size = scm_size;
 	tc_in->tc_nvme_size = nvme_size;
 	rc = dss_rpc_send(tc_req);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		crt_req_decref(tc_req);
 		goto out_preparation;
@@ -487,8 +491,10 @@ pool_destroy_prepare(struct mgmt_svc *svc, uuid_t uuid)
 
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc == 0) {
-		if (!(rec->pr_state & POOL_READY)) {
+		if (rec->pr_state == POOL_CREATING) {
 			rc = -DER_AGAIN;
+			goto out_lock;
+		} else if (rec->pr_state == POOL_DESTROYING) {
 			goto out_lock;
 		}
 	} else if (rc == -DER_NONEXIST) {
@@ -638,13 +644,10 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	/* Realloc pools[] if needed (double each time starting with 1) */
 	if (ap->pools_index == ap->pools_len) {
 		void	*ptr;
-		size_t	realloc_bytes;
 		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
 					ap->pools_len * 2;
 
-		realloc_bytes = (realloc_elems *
-				sizeof(struct mgmt_list_pools_one));
-		D_REALLOC(ptr, ap->pools, realloc_bytes);
+		D_REALLOC_ARRAY(ptr, ap->pools, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->pools = ptr;
@@ -670,6 +673,9 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 	struct rdb_tx			 tx;
 	struct list_pools_iter_args	 iter_args;
 	int				 rc;
+
+	*poolsp = NULL;
+	*pools_len = 0;
 
 	/* TODO: attach to DAOS system based on group argument */
 
@@ -697,10 +703,18 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	if (rc != 0)
+	*npools = iter_args.npools;
+	/* poolsp, pools_len initialized to NULL,0 - update if successful */
+
+	if (rc != 0) {
+		/* Error in iteration */
 		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
-	else {
-		*npools = iter_args.npools;
+	} else if ((iter_args.avail_npools > 0) &&
+		   (iter_args.npools > iter_args.avail_npools)) {
+		/* Got a list, but client buffer not supplied or too small */
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
+		rc = -DER_TRUNC;
+	} else {
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
 	}
@@ -734,7 +748,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	pc_out->lp_pools.ca_arrays = pools;
 	pc_out->lp_pools.ca_count = pools_len;
 
-	/* TODO: something different for larger RPC replies? */
+	/* TODO: bulk transfer for large responses */
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
@@ -761,7 +775,7 @@ pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc != 0) {
 		D_GOTO(out_lock, rc);
-	} else if (!(rec->pr_state & POOL_READY)) {
+	} else if (rec->pr_state != POOL_READY) {
 		D_ERROR("Pool not ready\n");
 		D_GOTO(out_lock, rc = -DER_AGAIN);
 	}
@@ -876,6 +890,84 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
 
 out_prop:
 	daos_prop_free(prop);
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			struct daos_acl **result)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+
+	D_DEBUG(DB_MGMT, "Updating ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_update_acl(pool_uuid, ranks, acl);
+	if (rc != 0)
+		goto out_ranks;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_ranks;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			struct daos_acl **result)
+{
+	int				rc;
+	struct mgmt_svc			*svc;
+	d_rank_list_t			*ranks;
+	enum daos_acl_principal_type	type;
+	char				*name = NULL;
+
+	D_DEBUG(DB_MGMT, "Deleting ACL entry for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = daos_acl_principal_from_str(principal, &type, &name);
+	if (rc != 0)
+		goto out_ranks;
+
+	rc = ds_pool_svc_delete_acl(pool_uuid, ranks, type, name);
+	if (rc != 0)
+		goto out_name;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_name;
+
+out_name:
+	D_FREE(name);
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
