@@ -941,8 +941,8 @@ sgl_test(void **state)
 	recx[0].rx_nr = SM_BUF_LEN;
 
 	/* Fetch whole buffer */
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, &iod,
-			   &sgl);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, NULL,
+			   &iod, &sgl);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.iod_size, 1);
 	for (i = 0; i < SM_BUF_LEN; i++) {
@@ -961,8 +961,8 @@ sgl_test(void **state)
 		recx[i].rx_idx = i * 2;
 		recx[i].rx_nr = 1;
 	}
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, &iod,
-			   &sgl);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, NULL,
+			   &iod, &sgl);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.iod_size, 1);
 	for (i = 0; i < SM_BUF_LEN; i++) {
@@ -980,8 +980,8 @@ sgl_test(void **state)
 	}
 	sgl.sg_nr = SM_BUF_LEN;
 	iod.iod_size = 0;
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, &iod,
-			   &sgl);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1, NULL,
+			   &iod, &sgl);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.iod_size, 1);
 	for (i = 0; i < SM_BUF_LEN; i++) {
