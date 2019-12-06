@@ -201,18 +201,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 
-	// TODO: Move any ownership changes into the privileged binary as necessary.
-	if needsRespawn {
-		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(cfg); err != nil {
-			return errors.WithMessage(err, "changing file ownership")
-		}
+	harnessErr := make(chan error)
+	go func() {
+		harnessErr <- harness.Start(ctx, membership)
+	}()
 
-		log.Infof("formatting complete and file ownership changed,"+
-			"please rerun %s as user %s\n", os.Args[0], cfg.UserName)
-
-		return nil
-	}
-
-	return errors.Wrap(harness.Start(ctx, membership), "DAOS I/O Server exited with error")
+	return errors.Wrap(<-harnessErr, "DAOS harness exited with error")
 }

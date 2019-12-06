@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
@@ -86,26 +87,25 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	}
 	cmd.log.Debug("System-Stop command succeeded\n")
 
-	idTitle := "Member ID"
-	operationTitle := "Operation"
-	resultTitle := "Result"
-
-	formatter := NewTableFormatter([]string{idTitle, operationTitle, resultTitle})
-	var table []TableRow
+	groups := make(hostlist.HostGroups)
 
 	for _, r := range results {
-		row := TableRow{idTitle: r.ID}
-		row[operationTitle] = r.Action
 		msg := "OK"
 		if r.Err != nil {
 			msg = r.Err.Error()
 		}
-		row[resultTitle] = msg
-
-		table = append(table, row)
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if err = groups.AddHost(resStr, fmt.Sprintf("rank%d", r.Rank)); err != nil {
+			return errors.Wrap(err, "adding rank result to group")
+		}
 	}
 
-	cmd.log.Info(formatter.Format(table))
+	out, err := groupSummaryTable("Ranks", "Operation", "Result", groups)
+	if err != nil {
+		return errors.Wrap(err, "printing result table")
+	}
+
+	cmd.log.Info(out)
 
 	return nil
 }
@@ -129,8 +129,8 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		return nil
 	}
 
-	rankTitle := "Member Rank"
-	uuidTitle := "Member UUID"
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
 	addrTitle := "Control Address"
 	stateTitle := "State"
 
