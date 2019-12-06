@@ -40,6 +40,9 @@
 
 #define TEST_UUID	"12345678-1234-1234-1234-123456789abc"
 #define TEST_ACES_NR	(3)
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN	37
+#endif
 
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
