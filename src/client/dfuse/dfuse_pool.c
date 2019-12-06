@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <daos/common.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
 #include "daos_fs.h"
@@ -78,6 +80,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		return;
 	}
 
+	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
+
 	rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
 			       dfuse_info->di_svcl, DAOS_PC_RW,
 			       &dfs->dfs_poh, &dfs->dfs_pool_info,
@@ -97,6 +101,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	D_ALLOC_PTR(ie);
 	if (!ie)
 		D_GOTO(close, rc = ENOMEM);
+
+	DFUSE_TRA_UP(ie, parent, "inode");
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);

@@ -62,6 +62,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
+	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
+
 	if (create) {
 		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
@@ -114,6 +116,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!ie) {
 		D_GOTO(close, rc = ENOMEM);
 	}
+
+	DFUSE_TRA_UP(ie, parent, "inode");
 
 	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
