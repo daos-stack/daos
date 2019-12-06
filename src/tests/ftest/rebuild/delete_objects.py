@@ -33,6 +33,7 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
@@ -60,8 +61,12 @@ class RebuildDeleteObjects(RebuildTestBase):
                 self.punched_indices)
             # self.punched_qty /= self.container.object_qty.value
 
-    def verify_container_data(self):
-        """Verify the container data."""
+    def verify_container_data(self, txn=0):
+        """Verify the container data.
+
+        Args:
+            txn (int, optional): transaction timestamp to read. Defaults to 0.
+        """
         # Verify the expected number of objects/records were punched
         if self.punch_type == "object":
             expected_qty = len(self.punched_indices)
@@ -76,7 +81,7 @@ class RebuildDeleteObjects(RebuildTestBase):
                 self.punch_type, self.punched_qty, expected_qty))
 
         # Read objects from the last transaction
-        super(RebuildDeleteObjects, self).verify_container_data(0)
+        super(RebuildDeleteObjects, self).verify_container_data(txn)
 
     # @skipForTicket("DAOS-2922")
     def test_rebuild_delete_objects(self):

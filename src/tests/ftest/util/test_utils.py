@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 from logging import getLogger
 import os
 from time import sleep, time
@@ -862,6 +863,7 @@ class TestContainerData(object):
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
                 "data_size": len(data[0].split()),
+                "txn": txn,
             }
             try:
                 if isinstance(data, list):
@@ -1130,15 +1132,13 @@ class TestContainer(TestDaosApiBase):
             status &= data.read_object(self, txn)
         return status
 
-    def execute_io(self, duration, rank=None, obj_class=None, debug=False):
+    def execute_io(self, duration, rank=None, obj_class=None):
         """Execute writes and reads for the specified time period.
 
         Args:
             duration (int): how long, in seconds, to write and read data
             rank (int, optional): server rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
-            debug (bool, optional): log the record write/read method calls.
-                Defaults to False.
 
         Returns:
             int: number of bytes written to the container
