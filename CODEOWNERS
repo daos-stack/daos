@@ -1,3 +1,0 @@
-# have release-engineering added as a reviewer to any PR that updates
-# a component sha1
-utils/build.config @release-engineering
