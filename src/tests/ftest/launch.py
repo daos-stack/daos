@@ -124,11 +124,31 @@ def set_test_environment():
     sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
 
+    # Get the default interface to use if OFI_INTERFACE is not set
+    #   - Only include interfaces that are active (UP state)
+    #   - Select the last active interface: e.g. selecte ib<n> over eth<n>
+    commands = [
+        "ip link show",
+        r"sed -En 's/^[0-9]+:\s+([a-z0-9]+):.*\s+state\s+(\w+)\s+.*/\1-\2/p'"
+    ]
+    output = get_output(" | ".join(commands))
+    available_interfaces = [
+        link.split("-")[0] for link in output.split() if "UP" in link
+    ]
+    try:
+        interface = sorted(available_interfaces)[-1]
+    except IndexError as err:
+        print("Error obtaining a default interface from: {}".format(output))
+        exit(1)
+    print(
+        "Using {} as the default interface from: {}".format(
+            interface, available_interfaces))
+
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
+    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
