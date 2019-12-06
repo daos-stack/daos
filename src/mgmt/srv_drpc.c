@@ -143,8 +143,6 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp->status = rc;
 	}
 
-	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
-
 	mgmt__set_rank_req__free_unpacked(req, NULL);
 	pack_daos_response(resp, drpc_resp);
 	D_FREE(resp);
