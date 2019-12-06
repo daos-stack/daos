@@ -22,8 +22,8 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 60000000000
-        nvme_size: 128000000000
+        scm_size: 9000000000
+        nvme_size: 16000000000
     createsvc:
         svcn: 1
 ior:
@@ -36,13 +36,13 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-F -e -v -D 120 -w -r"
+          flags: "-F -e -v -D 120 -w -r -W -R"
           ior_api:
             posix:
               api: POSIX
           transfersize_blocksize:
             1M:
-              transfer_size: '4K'
+              transfer_size: '1M'
               block_size: '256M'
 
           objectclass:

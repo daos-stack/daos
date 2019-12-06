@@ -54,7 +54,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,hw,iorintercept
+        :avocado: tags=all,daosio,pr,hw,iorintercept
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
