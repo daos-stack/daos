@@ -38,7 +38,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct fuse_bufvec		fb = {};
 	daos_size_t			size;
 	void				*buff;
-	void				*ahead_buff;
+	void				*ahead_buff = NULL;
 	int				rc;
 
 	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
