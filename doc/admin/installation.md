@@ -204,7 +204,7 @@ $ ls /sys/bus/pci/drivers/uio_pci_generic
 SCM and NVMe storage can then be configured by running the follow command:
 
 ```
-$ docker exec server daos_server storage prepare -n -f
+$ docker exec server daos_server storage prepare
 ```
 
 Note that this command reports that /dev/hugepages is not accessible on
@@ -214,8 +214,7 @@ The DAOS service can then be started as follows:
 
 ```
 $ docker exec server mkdir /var/run/daos_server
-$ docker exec server orterun -allow-run-as-root -H localhost -np 1 \
-        daos_server start \
+$ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
 
@@ -228,7 +227,7 @@ Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
 
 ```
-$ docker exec server dmg -i storage format -f
+$ docker exec server dmg -i storage format
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
@@ -262,8 +261,8 @@ configuration from before. For automated environment setup, source
 scons_local/utils/setup_local.sh.
 
 ```
-ARGOBOTS=${daos_prefix_path}/opt/argobots                          
-CART=${daos_prefix_path}/opt/cart        
+ARGOBOTS=${daos_prefix_path}/opt/argobots
+CART=${daos_prefix_path}/opt/cart
 FIO=${daos_prefix_path}/opt/fio
 FUSE=${daos_prefix_path}/opt/fuse
 HWLOC=${daos_prefix_path}/opt/hwloc
