@@ -24,6 +24,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#define READAHEAD_SIZE (1024*1024)
+
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
@@ -31,15 +33,19 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx		*fc = fuse_req_ctx(req);
-	d_iov_t				iov = {};
+	d_iov_t				iov[2] = {};
 	d_sg_list_t			sgl = {};
 	struct fuse_bufvec		fb = {};
 	daos_size_t			size;
 	void				*buff;
+	void				*ahead_buff;
 	int				rc;
 
-	DFUSE_TRA_INFO(oh, "%#zx-%#zx pid=%d",
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
+
+	DFUSE_TRA_DEBUG(oh, "Will try readahead file size %zi",
+			oh->doh_ie->ie_stat.st_size);
 
 	D_ALLOC(buff, len);
 	if (!buff) {
@@ -48,51 +54,47 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
+	d_iov_set(&iov[0], (void *)buff, len);
+	sgl.sg_iovs = iov;
+
+	/* Only do readahead if the requested size is less than 1Mb and the file
+	 * size is > 1Mb
+	 */
+	if (len < (1024 * 1024) && oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+
+		D_ALLOC(ahead_buff, READAHEAD_SIZE);
+		if (ahead_buff != NULL) {
+			d_iov_set(&iov[1], (void *)ahead_buff, READAHEAD_SIZE);
+			sgl.sg_nr = 2;
+		}
+	}
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
-	if (rc == 0)
-		DFUSE_REPLY_BUF(oh, req, buff, size);
-	else
+	if (rc != -DER_SUCCESS) {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(buff);
-
-	if (fc->pid != 0)
+		D_FREE(buff);
+		D_FREE(ahead_buff);
 		return;
+	}
 
-	position += len;
-	len = 1024 * 128;
-
-	/* Note that from this line onwards there is a race condition
-	 * against close, now that this callback has replied the
-	 * kernel is at liberty to close the file, and oh might be
-	 * released by another thread as this readahead code is
-	 * being executed.
-	 */
-	if (len + position - 1 > oh->doh_ie->ie_stat.st_size)
+	if (size <= len) {
+		DFUSE_REPLY_BUF(oh, req, buff, size);
+		D_FREE(buff);
+		D_FREE(ahead_buff);
 		return;
-
-	DFUSE_TRA_INFO(oh, "Will try readahead");
-
-	D_ALLOC(buff, len);
-	if (!buff)
-		return;
+	}
 
 	fb.count = 1;
-	fb.buf[0].mem = buff;
-	fb.buf[0].size = len;
+	fb.buf[0].mem = ahead_buff;
+	fb.buf[0].size = size - len;
 
-	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
-
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
-	if (rc != 0 || size != len)
-		return;
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
+		       position + len, position + size - 1);
 
 	rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
-					position, &fb, 0);
+					position + len, &fb, 0);
 	DFUSE_TRA_INFO(oh, "notfiy_store returned %d", rc);
+
+	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
 }
