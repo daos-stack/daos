@@ -8,7 +8,7 @@ hosts:
         - boro-A
         - boro-B
         - boro-C
-        - boro-D 
+        - boro-D
     8_servers:
       test_servers:
         - boro-A
@@ -43,7 +43,7 @@ pool:
     setname: daos_server
   createsize:
     scm_size: 20000000000   # large scm_size for 1K transfersize
-    nvme_size: 40000000000 
+    nvme_size: 40000000000
   createsvc:
     svcn: 1
 ior:
