@@ -125,19 +125,17 @@ def set_test_environment():
     path = os.environ.get("PATH")
 
     # Get the default interface to use if OFI_INTERFACE is not set
-    #   - Only include interfaces that are active (UP state)
+    #   - Only include interfaces that are active/up (default ifconfig listing)
+    #   - Exclude the loopback device
     #   - Select the last active interface: e.g. selecte ib<n> over eth<n>
-    commands = [
-        "ip link show",
-        r"sed -En 's/^[0-9]+:\s+([a-z0-9]+):.*\s+state\s+(\w+)\s+.*/\1-\2/p'"
-    ]
-    output = get_output(" | ".join(commands))
+    output = get_output(
+        "ifconfig | sed -En '/LOOPBACK/! s/^([a-z0-9]+):.*/\1/p'")
     available_interfaces = [
         link.split("-")[0] for link in output.split() if "UP" in link
     ]
     try:
         interface = sorted(available_interfaces)[-1]
-    except IndexError as err:
+    except IndexError:
         print("Error obtaining a default interface from: {}".format(output))
         exit(1)
     print(
