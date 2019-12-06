@@ -32,6 +32,8 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
+/* NB: I like pecan pie. */
+
 enum {
 	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run */
 	GC_CREDS_PRIV	= 256,	/**< credits for internal usage */
