@@ -111,22 +111,32 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 		return nil
 	}
 
+	uuidTitle := "Pool UUID"
+	svcRepTitle := "Svc Replicas"
+
+	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
+	var table []TableRow
+
 	var b strings.Builder
 	for _, pool := range resp.Pools {
-		b.WriteString(pool.UUID)
-		if len(pool.SvcReplicas) > 0 {
-			b.WriteString(" ")
-			for i, rep := range pool.SvcReplicas {
-				if i != 0 {
-					b.WriteString(":")
-				}
-				fmt.Fprintf(&b, "%d", rep)
+		row := TableRow{uuidTitle: pool.UUID}
+
+		for i, rep := range pool.SvcReplicas {
+			if i != 0 {
+				b.WriteString(":")
 			}
+			fmt.Fprintf(&b, "%d", rep)
 		}
-		b.WriteString("\n")
-		cmd.log.Info(b.String())
+
+		if len(pool.SvcReplicas) != 0 {
+			row[svcRepTitle] = b.String()
+		}
+
+		table = append(table, row)
 
 		b.Reset()
 	}
+
+	cmd.log.Info(formatter.Format(table))
 	return nil
 }
