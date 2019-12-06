@@ -262,15 +262,19 @@ static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
 }
 
 static void
-reset_caches(void)
+reset_caches(bool lock_held)
 {
 	struct cache_entry	*ce;
 	int			 i;
 
+	if (!lock_held)
+		clog_lock();
 	d_list_for_each_entry(ce, &d_log_caches, ce_link) {
 		for (i = 0; i < ce->ce_nr; i++)
 			ce->ce_cache[i] = DLOG_UNINIT;
 	}
+	if (!lock_held)
+		clog_unlock();
 }
 
 void
@@ -332,7 +336,7 @@ static void dlog_cleanout(void)
 		d_log_xst.fac_cnt = mst.fac_alloc = 0;
 	}
 
-	reset_caches(); /* Since the log is going away, reset cached masks */
+	reset_caches(true); /* Log is going away, reset cached masks */
 	while ((ce = d_list_pop_entry(&d_log_caches,
 				      struct cache_entry, ce_link)))
 		free(ce);
@@ -840,6 +844,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 	facno = 0;		/* make sure it gets init'd */
 	rv = 0;
 	tmp = 0;
+	reset_caches(false);
 	while (m) {
 		/* note current chunk, and advance m to the next one */
 		current = m;
@@ -906,7 +911,6 @@ int d_log_setmasks(char *mstr, int mlen0)
 					break;
 				}
 			}
-			reset_caches();
 			clog_unlock();
 			if (facno >= d_log_xst.fac_cnt) {
 				/* Sometimes a user wants to allocate a facility
