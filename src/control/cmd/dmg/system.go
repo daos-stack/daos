@@ -123,7 +123,7 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 
 		for i, rep := range pool.SvcReplicas {
 			if i != 0 {
-				b.WriteString(":")
+				b.WriteString(",")
 			}
 			fmt.Fprintf(&b, "%d", rep)
 		}
