@@ -160,6 +160,41 @@ func TestHostSet_Intersects(t *testing.T) {
 	}
 }
 
+func TestHostSet_ZeroValue(t *testing.T) {
+	zVal := &hostlist.HostSet{}
+
+	_, err := zVal.Insert("host[1-8]")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotCount := zVal.Count()
+	if gotCount != 8 {
+		t.Fatalf("expected count to be 8, got %d", gotCount)
+	}
+}
+
+func TestHostSet_MergeSet(t *testing.T) {
+	a, err := hostlist.CreateSet("host[1-8]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := hostlist.CreateSet("host[8-15]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expCount := a.Count() + b.Count() - 1
+
+	if err := a.MergeSet(b); err != nil {
+		t.Fatal(err)
+	}
+
+	gotCount := a.Count()
+	if gotCount != expCount {
+		t.Fatalf("expected count to be %d, got %d", expCount, gotCount)
+	}
+}
+
 func TestHostSet_FuzzCrashers(t *testing.T) {
 	// Test against problematic inputs found by go-fuzz testing
 
