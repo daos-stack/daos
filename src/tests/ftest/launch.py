@@ -140,9 +140,9 @@ def set_test_environment():
         with open(os.path.join(net_path, device, "operstate"), "r") as buffer:
             state = buffer.read().strip()
         with open(os.path.join(net_path, device, "type"), "r") as buffer:
-            dtype = buffer.read().strip()
+            dtype = int(buffer.read().strip())
         print(
-            "  device: {0:<5}, type: {1:<4}, state: {2}".format(
+            "  - {0:<5} (type: {1:<2} state: {2})".format(
                 device, dtype, state))
         if state.lower() == "up" and dtype not in available_interfaces:
             available_interfaces[dtype] = device
