@@ -221,16 +221,16 @@ public class DaosFile {
     client.dfsSetExtAttr(dfsPtr, objId, name, value, 0);
   }
 
-  public void read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException{
+  public long read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException{
     open(true);
     //no asynchronous for now
-    client.dfsRead(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
+    return client.dfsRead(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
-  public void write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException {
+  public long write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException {
     open(true);
     //no asynchronous for now
-    client.dfsWrite(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
+    return client.dfsWrite(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
   public void mkdir() throws IOException {

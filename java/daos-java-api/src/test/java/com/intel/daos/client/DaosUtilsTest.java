@@ -3,6 +3,9 @@ package com.intel.daos.client;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+
 public class DaosUtilsTest {
 
   @Test
@@ -74,6 +77,12 @@ public class DaosUtilsTest {
     Assert.assertEquals(2, pc.length);
     Assert.assertEquals("/abc/XYZ/5TU-", pc[0]);
     Assert.assertEquals("ABC_", pc[1]);
+  }
+
+  @Test
+  public void testUuidLength(){
+    String id = DaosUtils.randomUUID();
+    Assert.assertEquals(16, id.length());
   }
 }
 

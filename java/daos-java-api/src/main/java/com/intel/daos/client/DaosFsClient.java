@@ -157,7 +157,7 @@ public final class DaosFsClient {
     this(null, null, builder);
   }
 
-  private void init() throws IOException{
+  private synchronized void init() throws IOException{
     if(inited){
       return;
     }
@@ -170,7 +170,7 @@ public final class DaosFsClient {
             builder.poolFlags);
 
     if (contId == null) {
-      contId = createContainer(poolPtr);
+      contId = createContainer(poolPtr, DaosUtils.randomUUID());
     }
     contPtr = daosOpenCont(poolPtr, contId, builder.poolMode);
     dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
@@ -192,15 +192,17 @@ public final class DaosFsClient {
   }
 
   public static String createPool(DaosFsClientBuilder builder)throws IOException {
-    return daosCreatePool(builder.serverGroup,
+    String poolInfo = daosCreatePool(builder.serverGroup,
                           builder.poolSvcReplics,
                           builder.poolMode,
                           builder.poolScmSize,
                           builder.poolNvmeSize);
+    //TODO: parse poolInfo to set poolId and svc , poolId svc1:svc2...
+    return poolInfo;
   }
 
-  public static String createContainer(long poolPtr)throws IOException {
-    return daosCreateContainer(poolPtr);
+  public static String createContainer(long poolPtr, String uuid)throws IOException {
+    return daosCreateContainer(poolPtr, uuid);
   }
 
   public static synchronized long mountFileSystem(long poolPtr, long contPtr, boolean readOnly) throws IOException{
@@ -226,39 +228,39 @@ public final class DaosFsClient {
   }
 
   public DaosFile getFile(String path) {
-    return getFile(path, builder.defFileAccessFlag, builder.defFileMode);
+    return getFile(path, builder.defFileAccessFlag);
   }
 
-  public DaosFile getFile(String path, int accessFlags, int mode) {
+  public DaosFile getFile(String path, int accessFlags) {
     DaosFile daosFile = new DaosFile(path, this);
     daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(mode);
+    daosFile.setMode(builder.defFileMode);
     daosFile.setObjectType(builder.defFileObjType);
     daosFile.setChunkSize(builder.defFileChunkSize);
     return daosFile;
   }
 
   public DaosFile getFile(String parent, String path){
-    return getFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
+    return getFile(parent, path, builder.defFileAccessFlag);
   }
 
-  public DaosFile getFile(String parent, String path, int accessFlags, int mode) {
+  public DaosFile getFile(String parent, String path, int accessFlags) {
     DaosFile daosFile = new DaosFile(parent, path, this);
     daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(mode);
+    daosFile.setMode(builder.defFileMode);
     daosFile.setObjectType(builder.defFileObjType);
     daosFile.setChunkSize(builder.defFileChunkSize);
     return daosFile;
   }
 
   public DaosFile getFile(DaosFile parent, String path){
-    return getFile(parent, path, builder.defFileAccessFlag, builder.defFileMode);
+    return getFile(parent, path, builder.defFileAccessFlag);
   }
 
-  public DaosFile getFile(DaosFile parent, String path, int accessFlags, int mode) {
+  public DaosFile getFile(DaosFile parent, String path, int accessFlags) {
     DaosFile daosFile = new DaosFile(parent, path, this);
     daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(mode);
+    daosFile.setMode(builder.defFileMode);
     daosFile.setObjectType(builder.defFileObjType);
     daosFile.setChunkSize(builder.defFileChunkSize);
     return daosFile;
@@ -356,24 +358,25 @@ public final class DaosFsClient {
    * create DAOS container in DAOS pool specified by <code>poolPtr</code>
    *
    * @param poolPtr
+   * @param uuid
    * @throws IOException
    *
    * @return
    */
-  static native String daosCreateContainer(long poolPtr)throws IOException;
+  static native String daosCreateContainer(long poolPtr, String uuid)throws IOException;
 
   /**
    * open pool
    *
    * @param poolId
    * @param serverGroup
-   * @param svcList
+   * @param svcReplics
    * @param flags
    * @throws IOException
    *
    * @return pool pointer or pool handle
    */
-  static native long daosOpenPool(String poolId, String serverGroup, String svcList, int flags)throws IOException;
+  static native long daosOpenPool(String poolId, String serverGroup, String svcReplics, int flags)throws IOException;
 
   /**
    * open container

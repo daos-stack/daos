@@ -23,6 +23,7 @@
 
 package com.intel.daos.client;
 
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -66,5 +67,10 @@ public final class DaosUtils {
       return new String[] {path.substring(0, slash), path.substring(slash+1)};
     }
     return new String[] {path};
+  }
+
+  public static String randomUUID() {
+    String id = UUID.randomUUID().toString();
+    return id.substring(0, 16);
   }
 }

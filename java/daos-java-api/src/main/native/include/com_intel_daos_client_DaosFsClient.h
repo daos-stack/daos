@@ -50,10 +50,10 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    daosCreateContainer
- * Signature: (J)Ljava/lang/String;
+ * Signature: (JLjava/lang/String;)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreateContainer
-  (JNIEnv *, jclass, jlong);
+  (JNIEnv *, jclass, jlong, jstring);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
