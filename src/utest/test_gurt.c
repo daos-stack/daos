@@ -768,17 +768,14 @@ test_log(void **state)
 	setenv("DD_MASK", "test1", 1);
 	d_log_sync_mask();
 
-	D_INFO("V2: This message should appear\n");
-	D_DEBUG_V2(DB_TEST1, "V2: This message should appear\n");
-	D_DEBUG_V1(DB_TEST1, "V1: This message should appear\n");
-	D_DEBUG_V2(DB_TEST2, "V2: This message should NOT appear\n");
-	D_DEBUG_V1(DB_TEST2, "V1: This message should NOT appear\n");
+	D_INFO("This message should appear\n");
+	D_DEBUG(DB_TEST1, "This message should appear\n");
+	D_DEBUG(DB_TEST2, "This message should NOT appear\n");
 	assert_int_not_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 #undef D_LOGFAC
 #define D_LOGFAC	DD_FAC(foo)
-	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");
-	D_DEBUG_V1(DB_TEST1, "V1: This message should NOT appear\n");
+	D_DEBUG(DB_TEST1, "This message should NOT appear\n");
 	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	d_log_sync_mask();
@@ -787,14 +784,12 @@ test_log(void **state)
 	d_log_sync_mask();
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	assert_int_not_equal(D_LOG_ENABLED(DB_TEST2), 0);
-	D_DEBUG_V2(DB_TEST2, "V2: This message should appear\n");
-	D_DEBUG_V1(DB_TEST2, "V1: This message should appear\n");
-	D_DEBUG_V2(DB_TEST1, "V2: This message should NOT appear\n");
-	D_DEBUG_V1(DB_TEST1, "V1: This message should NOT appear\n");
-	D_CDEBUG(0, DB_TEST1, DB_TEST2, "V2: This message should appear\n");
-	D_CDEBUG(1, DB_TEST1, DB_TEST2, "V2: This message should NOT appear\n");
-	D_CDEBUG(0, DB_TEST2, DB_TEST1, "V2: This message should NOT appear\n");
-	D_CDEBUG(1, DB_TEST2, DB_TEST1, "V2: This message should appear\n");
+	D_DEBUG(DB_TEST2, "This message should appear\n");
+	D_DEBUG(DB_TEST1, "This message should NOT appear\n");
+	D_CDEBUG(0, DB_TEST1, DB_TEST2, "This message should appear\n");
+	D_CDEBUG(1, DB_TEST1, DB_TEST2, "This message should NOT appear\n");
+	D_CDEBUG(0, DB_TEST2, DB_TEST1, "This message should NOT appear\n");
+	D_CDEBUG(1, DB_TEST2, DB_TEST1, "This message should appear\n");
 	D_TRACE_INFO(&DB_TEST2, "This message should appear\n");
 	D_TRACE_DEBUG(DB_TEST1, &DB_TEST1, "This message should NOT appear\n");
 	D_TRACE_DEBUG(DB_TEST2, &DB_TEST1, "This message should appear\n");

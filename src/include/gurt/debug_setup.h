@@ -44,9 +44,6 @@
  * \file
  * Debug setup macros
  */
-#if defined(D_LOG_V2) && !defined(D_LOG_V1_TEST)
-#define D_LOG_USE_V2
-#endif
 
 /** @addtogroup GURT_DEBUG
  * @{
@@ -214,7 +211,6 @@
  * to required but unused arguments
  */
 
-#ifdef D_LOG_USE_V2 /* Macros for D_DEBUG version 2 */
 /** Internal macro to declare a facility cache.  Used by DD_DECLARE_FAC */
 #define _D_LOG_DECLARE_CACHE(s_name, user_dbg_bits)			\
 	enum {								\
@@ -240,11 +236,6 @@
 #define _D_ADD_CACHE(s_name)					\
 	d_log_add_cache(DD_CACHE(DD_FAC(s_name)),		\
 			ARRAY_SIZE(DD_CACHE(DD_FAC(s_name))));
-#else /* !D_LOG_USE_V2 */
-#define _D_ADD_CACHE(s_name) (void)0
-#define _D_LOG_INSTANTIATE_CACHE(s_name, user_dbg_bits)
-#define _D_LOG_DECLARE_CACHE(s_name, user_dbg_bits)
-#endif /* D_LOG_USE_V2 */
 
 /** Declare an extern to global facility variable
  *

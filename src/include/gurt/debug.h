@@ -119,38 +119,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);	\
 	} while (0)
 
-/* Log a message conditionally upon resolving the mask
- *
- * The mask is combined with D_LOGFAC which the user should define before
- * including debug headers
- *
- * \param mask	The debug bits or priority mask
- * \param fmt	The format string to print
- *
- *  User should define D_LOGFAC for the file
- */
-#define D_DEBUG_V1(mask, fmt, ...)	\
-	_D_LOG(_D_LOG_NOCHECK, (mask) | D_LOGFAC, fmt, ## __VA_ARGS__)
-
-/* Log a pointer value and message conditionally upon resolving the mask
- *
- * The mask is combined with D_LOGFAC which the user should define before
- * including debug headers
- *
- * \param mask	The debug bits or priority mask
- * \param ptr	A pointer value that is put into the message
- * \param fmt	The format string to print
- *
- *  User should define D_LOGFAC for the file
- */
-#define D_TRACE_DEBUG_V1(mask, ptr, fmt, ...) \
-	_D_LOG(_D_TRACE_NOCHECK, (mask) | D_LOGFAC, ptr, fmt, ## __VA_ARGS__)
-
-#ifdef D_LOG_USE_V2
-#define D_DEBUG D_DEBUG_V2
-#define D_TRACE_DEBUG D_TRACE_DEBUG_V2
-
-#define _D_DEBUG_V2(func, flag, ...)					   \
+#define _D_DEBUG(func, flag, ...)					   \
 	do {								   \
 		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {	   \
 			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) { \
@@ -166,36 +135,36 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 #define D_LOG_ENABLED(flag)					\
 	({							\
-		_D_DEBUG_V2(D_NOOP, flag);			\
+		_D_DEBUG(D_NOOP, flag);				\
 		__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0);	\
 	})
-/**
- * New version of D_DEBUG which utilizes the facility cache to optimize
- * both negative and postive debug lookups
- */
-#define D_DEBUG_V2(flag, fmt, ...)				\
-	_D_DEBUG_V2(_D_LOG_NOCHECK, flag, fmt, ##__VA_ARGS__)
 
-/**
- * New version of D_DEBUG which utilizes the facility cache to optimize
- * both negative and postive debug lookups
+/* Log a message conditionally upon resolving the mask
+ *
+ * The mask is combined with D_LOGFAC which the user should define before
+ * including debug headers
+ *
+ * \param mask	The debug bits or priority mask
+ * \param fmt	The format string to print
+ *
+ *  User should define D_LOGFAC for the file
  */
-#define D_TRACE_DEBUG_V2(flag, ptr, fmt, ...)				\
-	_D_DEBUG_V2(_D_TRACE_NOCHECK, flag, ptr, fmt, ##__VA_ARGS__)
+#define D_DEBUG(flag, fmt, ...)				\
+	_D_DEBUG(_D_LOG_NOCHECK, flag, fmt, ##__VA_ARGS__)
 
-#else /* !D_LOG_USE_V2 */
-#define D_DEBUG D_DEBUG_V1
-#define D_TRACE_DEBUG D_TRACE_DEBUG_V1
-#define D_LOG_ENABLED(flag)			\
-	d_log_check((flag) | D_LOGFAC)
-#ifdef D_LOG_V1_TEST
-/** Define the new macro to a sane value so tests still work.  Otherwise, leave
- * it undefined as users shouldn't be using it without defining D_LOG_V2
+/* Log a pointer value and message conditionally upon resolving the mask
+ *
+ * The mask is combined with D_LOGFAC which the user should define before
+ * including debug headers
+ *
+ * \param mask	The debug bits or priority mask
+ * \param ptr	A pointer value that is put into the message
+ * \param fmt	The format string to print
+ *
+ *  User should define D_LOGFAC for the file
  */
-#define D_DEBUG_V2 D_DEBUG_V1
-#define D_TRACE_DEBUG_V2 D_TRACE_DEBUG_V1
-#endif /* D_LOG_TEST_V1 */
-#endif /* D_LOG_USE_V2 */
+#define D_TRACE_DEBUG(flag, ptr, fmt, ...)				\
+	_D_DEBUG(_D_TRACE_NOCHECK, flag, ptr, fmt, ##__VA_ARGS__)
 
 /** Special conditional debug so we can pass different flags to base routine
  *  based on a condition.   With V2, things like cond ? flag1 : flag2 don't

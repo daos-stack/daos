@@ -38,7 +38,7 @@
 
 import os
 
-TEST_SRC = ['test_gurt_v1.c', 'test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c']
+TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c']
 WRAPPERS = {'test_linkage.cpp':['PMIx_Init', 'PMIx_Get',
                                 'PMIx_Publish', 'PMIx_Lookup',
                                 'PMIx_Fence', 'PMIx_Unpublish',
