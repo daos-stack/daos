@@ -4,3 +4,6 @@ utils/build.config @daos-stack/release-engineering
 
 # any PR that touches Go files should get a review from go-owners
 *.go @daos-stack/go-owners
+
+# any PR that touches VOS files should get a review from VOS
+src/vos/* src/common/btree*.* @daos-stack/VOS
