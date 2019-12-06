@@ -107,10 +107,15 @@ flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
 	pen = buffer;
 	for (i = 0; i < num_aces; i++) {
 		ssize_t ace_size = daos_ace_get_size(aces[i]);
+		/*
+		 * Should have checked the ACE size validity during allocation
+		 * of the input buffer.
+		 */
+		D_ASSERTF(ace_size > 0, "ACE size became invalid");
 
 		/* Internal error if we walk outside the buffer */
 		D_ASSERTF((pen + ace_size) <= (buffer + buf_len),
-				"ACEs too long for buffer size %u", buf_len);
+			  "ACEs too long for buffer size %u", buf_len);
 
 		memcpy(pen, aces[i], ace_size);
 		pen += ace_size;
