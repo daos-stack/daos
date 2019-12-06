@@ -67,8 +67,8 @@ replicas. For example:
 ```
 $ dmg system list-pools
 localhost:10001: connected
-Pool UUID					Svc Replicas
----------					------------
+Pool UUID				Svc Replicas
+---------				------------
 2a8ec3b2-729b-4617-bf51-77f37f764194	0,1
 a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 85141a07-e3ba-42a6-81c2-3f18253c5e47	0
