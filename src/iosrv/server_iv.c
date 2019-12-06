@@ -597,6 +597,37 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	return 0;
 }
 
+static int
+ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+	     d_sg_list_t *iv_value, void *arg)
+{
+	struct ds_iv_ns		*ns;
+	struct ds_iv_entry	*entry;
+	struct ds_iv_key	key;
+	struct iv_priv_entry	*priv_entry = arg;
+	struct ds_iv_class	*class;
+	int			rc = 0;
+
+	ns = iv_ns_lookup_by_ivns(ivns);
+	D_ASSERT(ns != NULL);
+
+	iv_key_unpack(&key, iv_key);
+	if (priv_entry == NULL || priv_entry->entry == NULL) {
+		/* find and prepare entry */
+		rc = iv_entry_lookup_or_create(ns, &key, &entry);
+		if (rc < 0)
+			return rc;
+	} else {
+		entry = priv_entry->entry;
+	}
+
+	class = entry->iv_class;
+	if (class->iv_class_ops && class->iv_class_ops->ivc_pre_sync)
+		rc = class->iv_class_ops->ivc_pre_sync(entry, &key, iv_value);
+
+	return rc;
+}
+
 struct crt_iv_ops iv_cache_ops = {
 	.ivo_pre_fetch		= ivc_pre_cb,
 	.ivo_on_fetch		= ivc_on_fetch,
@@ -607,6 +638,7 @@ struct crt_iv_ops iv_cache_ops = {
 	.ivo_on_hash		= ivc_on_hash,
 	.ivo_on_get		= ivc_on_get,
 	.ivo_on_put		= ivc_on_put,
+	.ivo_pre_sync		= ivc_pre_sync
 };
 
 static void
@@ -634,13 +666,12 @@ iv_ns_destroy_internal(struct ds_iv_ns *ns)
 }
 
 static struct ds_iv_ns *
-ds_iv_ns_lookup(unsigned int ns_id, d_rank_t master_rank)
+ds_iv_ns_lookup(unsigned int ns_id)
 {
 	struct ds_iv_ns *ns;
 
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns_id == ns_id &&
-		    ns->iv_master_rank == master_rank)
+		if (ns->iv_ns_id == ns_id)
 			return ns;
 	}
 
@@ -653,7 +684,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 {
 	struct ds_iv_ns	*ns;
 
-	ns = ds_iv_ns_lookup(ns_id, master_rank);
+	ns = ds_iv_ns_lookup(ns_id);
 	if (ns)
 		return -DER_EXIST;
 
@@ -685,10 +716,7 @@ ds_iv_ns_destroy(void *ns)
 	iv_ns_destroy_internal(iv_ns);
 }
 
-/**
- * Create namespace for server IV, which will only
- * be called on master node
- */
+/** Create namespace for server IV. */
 int
 ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
 		crt_group_t *grp, unsigned int *ns_id,
@@ -697,9 +725,8 @@ ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
 	struct ds_iv_ns		*ns = NULL;
 	int			rc;
 
-	/* Create namespace on master */
-	rc = iv_ns_create_internal(ds_iv_ns_id++, pool_uuid, dss_self_rank(),
-				   &ns);
+	rc = iv_ns_create_internal(ds_iv_ns_id++, pool_uuid,
+				   -1 /* master_rank */, &ns);
 	if (rc)
 		return rc;
 
@@ -717,87 +744,14 @@ free:
 	return rc;
 }
 
-int
-ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
-		unsigned int ns_id, unsigned int master_rank,
-		struct ds_iv_ns **p_iv_ns)
-{
-	struct ds_iv_ns	*ns = NULL;
-	d_rank_t	myrank = dss_self_rank();
-	int		rc;
-
-	/* the ns for master will be created in ds_iv_ns_create() */
-	if (master_rank == myrank)
-		return 0;
-
-	ns = ds_iv_ns_lookup(ns_id, master_rank);
-	if (ns) {
-		D_DEBUG(DB_TRACE, "lookup iv_ns %d master rank %d"
-			" myrank %d ns %p\n", ns_id, master_rank,
-			myrank, ns);
-		*p_iv_ns = ns;
-		return 0;
-	}
-
-	rc = iv_ns_create_internal(ns_id, pool_uuid, master_rank, &ns);
-	if (rc)
-		return rc;
-
-	rc = crt_iv_namespace_create(ctx, grp, ds_iv_ns_tree_topo, crt_iv_class,
-				     crt_iv_class_nr, 0, &ns->iv_ns);
-	if (rc)
-		D_GOTO(free, rc);
-
-	D_DEBUG(DB_TRACE, "create iv_ns %d master rank %d myrank %d ns %p\n",
-		ns_id, master_rank, myrank, ns);
-	*p_iv_ns = ns;
-
-free:
-	if (rc)
-		ds_iv_ns_destroy(ns);
-
-	return rc;
-}
-
 /* Update iv namespace */
-int
-ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank, crt_group_t *grp,
-		unsigned int iv_ns_id, struct ds_iv_ns **iv_ns)
+void
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
 {
-	struct ds_iv_ns	*ns;
-	int		rc;
-
-	D_ASSERT(iv_ns != NULL);
-	if (*iv_ns != NULL &&
-	    (*iv_ns)->iv_master_rank != master_rank) {
-		/* If root has been changed, let's destroy the
-		 * previous IV ns
-		 */
-		ds_iv_ns_destroy(*iv_ns);
-		*iv_ns = NULL;
-	}
-
-	if (*iv_ns != NULL)
-		return 0;
-
-	/* Create new iv_ns */
-	if (iv_ns_id == -1) {
-		/* master node */
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, pool_uuid,
-				     grp, &iv_ns_id, &ns);
-	} else {
-		/* other node */
-		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx, pool_uuid,
-				     grp, iv_ns_id, master_rank, &ns);
-	}
-
-	if (rc) {
-		D_ERROR("pool iv ns create failed %d\n", rc);
-		return rc;
-	}
-
-	*iv_ns = ns;
-	return rc;
+	D_DEBUG(DB_TRACE, "update iv_ns %u master rank %u new master rank %u "
+		"myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+		master_rank, dss_self_rank(), ns);
+	ns->iv_master_rank = master_rank;
 }
 
 unsigned int
