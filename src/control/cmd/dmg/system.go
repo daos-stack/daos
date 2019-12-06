@@ -102,19 +102,17 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	req := client.ListPoolsReq{SysName: cmd.config.SystemName}
 	resp, err := cmd.conns.ListPools(req)
 	if err != nil {
-		cmd.log.Infof("List-Pools command failed: %s\n", err.Error())
-		return err
+		return errors.Wrap(err, "List-Pools command failed")
 	}
 
-	cmd.log.Info("List-Pools command succeeded\n")
+	cmd.log.Debug("List-Pools command succeeded\n")
 	if len(resp.Pools) == 0 {
 		cmd.log.Info("No pools in system\n")
 		return nil
 	}
 
+	var b strings.Builder
 	for _, pool := range resp.Pools {
-		var b strings.Builder
-
 		b.WriteString(pool.UUID)
 		if len(pool.SvcReplicas) > 0 {
 			b.WriteString(" ")
@@ -127,6 +125,8 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 		}
 		b.WriteString("\n")
 		cmd.log.Info(b.String())
+
+		b.Reset()
 	}
 	return nil
 }
