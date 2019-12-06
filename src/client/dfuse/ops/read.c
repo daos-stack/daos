@@ -93,7 +93,10 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
 					position + len, &fb, 0);
-	DFUSE_TRA_INFO(oh, "notfiy_store returned %d", rc);
+	if (rc == 0)
+		DFUSE_TRA_DEBUG(oh, "notfiy_store returned %d", rc);
+	else
+		DFUSE_TRA_INFO(oh, "notfiy_store returned %d", rc);
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
