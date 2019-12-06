@@ -190,12 +190,7 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 
 	ds_mgmt_list_pools_poolsp_ptr = (void *)poolsp;
 	if (poolsp != NULL && ds_mgmt_list_pools_poolsp_out != NULL) {
-		size_t	pool_array_size;
-
-		pool_array_size = ds_mgmt_list_pools_len_out *
-				  sizeof(struct mgmt_list_pools_one);
-
-		D_ALLOC(*poolsp, pool_array_size);
+		D_ALLOC_ARRAY(*poolsp, ds_mgmt_list_pools_len_out);
 		for (i = 0; i < ds_mgmt_list_pools_len_out; i++) {
 			uuid_copy((*poolsp)[i].lp_puuid,
 				  ds_mgmt_list_pools_poolsp_out[i].lp_puuid);
