@@ -34,17 +34,17 @@ fio:
     verify: 'crc64'
     iodepth: 32
     bs: !mux
-#      bs_256B:
-#        blocksize: '256B'
-#        size: '16M'
+      bs_256B:
+        blocksize: '256B'
+        size: '16M'
       bs_1M:
         blocksize: '1M'
         size: '1G'
     read_write: !mux
       sequential:
         rw: 'rw'
-#      random:
-#        rw: 'randrw'
+      random:
+        rw: 'randrw'
   test:
     name: 'test'
     numjobs: 1

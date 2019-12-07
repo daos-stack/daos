@@ -44,6 +44,4 @@ class FioSmall(FioBase):
             depth of hierarchical directory structure: 0|5
         :avocado: tags=all,pr,hw,fio,fiosmall
         """
-#        fio_flags = self.params.get("flags", "/run/fio/*")
-#        self.fio_cmd.flags.update(fio_flags)
         self.execute_fio()
