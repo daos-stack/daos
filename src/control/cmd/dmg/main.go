@@ -66,6 +66,21 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
 }
 
+// cmdConfigSetter is an interface for setting the client config on a command
+type cmdConfigSetter interface {
+	setConfig(*client.Configuration)
+}
+
+// cfgCmd is a structure that can be used by commands that need the client
+// config.
+type cfgCmd struct {
+	config *client.Configuration
+}
+
+func (c *cfgCmd) setConfig(cfg *client.Configuration) {
+	c.config = cfg
+}
+
 type cliOptions struct {
 	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	HostList   string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
@@ -81,18 +96,14 @@ type cliOptions struct {
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
-// appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error {
-	config, err := client.GetConfig(log, opts.ConfigPath)
-	if err != nil {
-		return errors.WithMessage(err, "processing config file")
-	}
-
+// appSetup processes cli overrides and connects clients.
+func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect, config *client.Configuration) error {
 	if opts.HostList != "" {
-		config.HostList, err = flattenHostAddrs(opts.HostList)
+		hostlist, err := flattenHostAddrs(opts.HostList)
 		if err != nil {
 			return err
 		}
+		config.HostList = hostlist
 	}
 
 	if opts.HostFile != "" {
@@ -103,7 +114,7 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 		config.TransportConfig.AllowInsecure = true
 	}
 
-	err = config.TransportConfig.PreLoadCertData()
+	err := config.TransportConfig.PreLoadCertData()
 	if err != nil {
 		return errors.Wrap(err, "Unable to load Cerificate Data")
 	}
@@ -152,7 +163,16 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			logCmd.setLog(log)
 		}
 
-		if err := appSetup(log, opts, conns); err != nil {
+		config, err := client.GetConfig(log, opts.ConfigPath)
+		if err != nil {
+			return errors.WithMessage(err, "processing config file")
+		}
+
+		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
+			cfgCmd.setConfig(config)
+		}
+
+		if err := appSetup(log, opts, conns, config); err != nil {
 			return err
 		}
 		if wantsConn, ok := cmd.(connector); ok {
