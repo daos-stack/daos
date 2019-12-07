@@ -29,8 +29,8 @@ import ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 // multiple packages.
 func MockNamespacePB() *ctlpb.NvmeController_Namespace {
 	return &ctlpb.NvmeController_Namespace{
-		Id:       int32(12345),
-		Capacity: int32(99999),
+		Id:   int32(12345),
+		Size: int32(99999),
 	}
 }
 
@@ -39,19 +39,19 @@ func MockNamespacePB() *ctlpb.NvmeController_Namespace {
 func MockDeviceHealthPB() *ctlpb.NvmeController_Health {
 	return &ctlpb.NvmeController_Health{
 		Temp:            uint32(300),
-		Tempwarn:        uint32(0),
-		Tempcrit:        uint32(0),
-		Ctrlbusy:        uint64(0),
+		Tempwarntime:    uint32(0),
+		Tempcrittime:    uint32(0),
+		Ctrlbusytime:    uint64(0),
 		Powercycles:     uint64(99),
 		Poweronhours:    uint64(9999),
 		Unsafeshutdowns: uint64(1),
 		Mediaerrors:     uint64(0),
-		Errorlogs:       uint64(0),
-		Tempwarning:     false,
-		Availspare:      false,
-		Reliability:     false,
-		Readonly:        false,
-		Volatilemem:     false,
+		Errorlogentries: uint64(0),
+		Tempwarn:        false,
+		Availsparewarn:  false,
+		Reliabilitywarn: false,
+		Readonlywarn:    false,
+		Volatilewarn:    false,
 	}
 }
 
