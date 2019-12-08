@@ -150,7 +150,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	return nil
 }
 
-func formatCmdDisplay(result *client.StorageScanResp) (string, error) {
+func formatCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
 	var out bytes.Buffer
 	groups := make(hostlist.HostGroups)
 
