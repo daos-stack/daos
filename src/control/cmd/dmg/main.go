@@ -143,10 +143,11 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 		}
 
 		if opts.HostList != "" {
-			config.HostList, err = flattenHostAddrs(opts.HostList)
+			hostlist, err := flattenHostAddrs(opts.HostList, config.Port)
 			if err != nil {
 				return err
 			}
+			config.HostList = hostlist
 		}
 
 		if opts.HostFile != "" {
