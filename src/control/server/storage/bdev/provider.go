@@ -165,7 +165,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 			res.DeviceResponses[dev].Error = errors.Wrap(FaultFormatUnknownClass, req.Class.String())
 		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
 			res.DeviceResponses[dev].Formatted = true
-			p.log.Infof("%s format successful (%s)", req.Class, dev)
+			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
 		case storage.BdevClassNvme:
 			p.log.Infof("%s format starting (%s)", req.Class, dev)
 			c, err := p.backend.Format(dev)

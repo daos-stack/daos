@@ -96,7 +96,8 @@ func ExpectError(t *testing.T, actualErr error, expectedMessage string, desc int
 	}
 }
 
-// CmpErrBool returns a boolean value indicating equivalancy between the supplied errors.
+// CmpErrBool compares two errors and returns a boolean value indicating equality
+// or at least close similarity between their messages.
 func CmpErrBool(want, got error) bool {
 	if want == got {
 		return true
