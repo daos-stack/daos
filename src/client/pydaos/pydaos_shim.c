@@ -31,6 +31,7 @@
 
 #include <Python.h>
 
+#include <daos_errno.h>
 #include <gurt/debug.h>
 #include <gurt/list.h>
 
