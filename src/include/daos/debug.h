@@ -25,6 +25,7 @@
 #define __DAOS_DEBUG_H__
 
 #include <stdio.h>
+#include <daos_errno.h>
 
 #define DD_FAC(name)	daos_##name##_logfac
 #ifndef D_LOGFAC
