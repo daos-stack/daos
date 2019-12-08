@@ -41,9 +41,6 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 	switch len(hp) {
 	case 1:
-		if defaultPort == 0 {
-			defaultPort = 10000
-		}
 		// no port specified, use default
 		port = strconv.Itoa(defaultPort)
 	case 2:
@@ -59,9 +56,6 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 		return "", "", errors.Errorf("cannot parse %q", addrPattern)
 	}
 
-	if port == "0" {
-		return "", "", errors.Errorf("invalid port %q", port)
-	}
 	if hp[0] == "" {
 		return "", "", errors.Errorf("invalid host %q", hp[0])
 	}
