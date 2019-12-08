@@ -138,28 +138,36 @@ enum vos_gc_type {
 	GC_MAX,
 };
 
+#define POOL_DF_MAGIC				0x5ca1ab1e
+
+#define POOL_DF_VER_1				1
+#define POOL_DF_VERSION				POOL_DF_VER_1
+
 /**
- * VOS Pool root object
+ * Durable format for VOS pool
  */
 struct vos_pool_df {
-	/* Structs stored in LE or BE representation */
+	/** Structs stored in LE or BE representation */
 	uint32_t				pd_magic;
-	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t					pd_id;
-	/* Flags for compatibility features */
+	/** durable-format version */
+	uint32_t				pd_version;
+	/** reserved: flags for compatibility features */
 	uint64_t				pd_compat_flags;
-	/* Flags for incompatibility features */
+	/** reserved: flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
-	/* Total space in bytes on SCM */
+	/** Unique PoolID for each VOS pool assigned on creation */
+	uuid_t					pd_id;
+	/** Total space in bytes on SCM */
 	uint64_t				pd_scm_sz;
-	/* Total space in bytes on NVMe */
+	/** Total space in bytes on NVMe */
 	uint64_t				pd_nvme_sz;
-	/* # of containers in this pool */
+	/** # of containers in this pool */
 	uint64_t				pd_cont_nr;
-	/* Typed PMEMoid pointer for the container index table */
+	/** Typed PMEMoid pointer for the container index table */
 	struct btr_root				pd_cont_root;
-	/* Free space tracking for NVMe device */
+	/** Free space tracking for NVMe device */
 	struct vea_space_df			pd_vea_df;
+	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
 };
 
