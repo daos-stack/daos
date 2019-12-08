@@ -159,9 +159,7 @@ func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
 
 	sort.Strings(servers)
 
-	return &StorageScanResp{
-		summary: p.Summary, Servers: servers, Nvme: cNvmeScan, Scm: cScmScan,
-	}
+	return &StorageScanResp{Servers: servers, Nvme: cNvmeScan, Scm: cScmScan}
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a

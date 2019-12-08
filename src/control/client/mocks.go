@@ -392,7 +392,7 @@ func defaultMockConnect(log logging.Logger) Connect {
 
 // MockScanResp mocks scan results from scm and nvme for multiple servers.
 // Each result indicates success or failure through presence of Err.
-func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses, summary bool) *StorageScanResp {
+func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses) *StorageScanResp {
 	nvmeResults := make(NvmeScanResults)
 	scmResults := make(ScmScanResults)
 
@@ -407,9 +407,7 @@ func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Ad
 
 	sort.Strings(addrs)
 
-	return &StorageScanResp{
-		summary: summary, Servers: addrs, Nvme: nvmeResults, Scm: scmResults,
-	}
+	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
 }
 
 // NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller

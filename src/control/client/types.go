@@ -319,13 +319,13 @@ func (result *ScmScanResult) String() string {
 func (result *ScmScanResult) Summary() (out string) {
 	switch {
 	case result.Err != nil:
-		return fmt.Sprintf("SCM Error: %s", result.Err)
+		return fmt.Sprintf("Error: %s", result.Err)
 	case len(result.Namespaces) > 0:
 		out = result.Namespaces.Summary()
 	default:
 		out = result.Modules.Summary()
 	}
-	return fmt.Sprintf("SCM: %s", out)
+	return fmt.Sprintf("%s", out)
 }
 
 // ScmScanMap maps ScmModuleScanResult structs to the addresses
@@ -355,9 +355,9 @@ func (result *NvmeScanResult) StringHealthStats() string {
 
 func (result *NvmeScanResult) Summary() (out string) {
 	if result.Err != nil {
-		return fmt.Sprintf("NVMe Error: %s", result.Err)
+		return fmt.Sprintf("Error: %s", result.Err)
 	}
-	return fmt.Sprintf("NVMe: %s", result.Ctrlrs.Summary())
+	return fmt.Sprintf("%s", result.Ctrlrs.Summary())
 }
 
 // NvmeScanResults maps NvmeScanResult structs to the addresses
@@ -394,32 +394,13 @@ func scmNamespacesFromPB(pbNss proto.ScmNamespaces) (nss []storage.ScmNamespace)
 }
 
 // StorageScanReq encapsulated subsystem scan parameters.
-type StorageScanReq struct {
-	Summary bool
-}
+type StorageScanReq struct{}
 
 // StorageScanResp encapsulated subsystem results.
 type StorageScanResp struct {
-	summary bool
 	Servers []string
 	Nvme    NvmeScanResults
 	Scm     ScmScanResults
-}
-
-func (ssr *StorageScanResp) String() string {
-	var buf bytes.Buffer
-
-	for _, srv := range ssr.Servers {
-		fmt.Fprintf(&buf, "%s\n", srv)
-		if !ssr.summary {
-			fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
-			fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
-		}
-		fmt.Fprintf(&buf, "\tSummary:\n\t\t%s\n\t\t%s\n",
-			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
-	}
-
-	return buf.String()
 }
 
 func (ssr *StorageScanResp) StringHealthStats() string {

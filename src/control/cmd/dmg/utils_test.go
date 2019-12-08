@@ -38,7 +38,7 @@ func TestFlattenAddrs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrPatterns string
 		expAddrs     string
-		expErr       error
+		expErrMsg    string
 	}{
 		"single addr": {
 			addrPatterns: "abc:10000",
@@ -52,10 +52,20 @@ func TestFlattenAddrs(t *testing.T) {
 			addrPatterns: "10.0.0.[1-5]:10000,10.0.0.[6-10]:10001,192.168.0.[1-3]:10000",
 			expAddrs:     "10.0.0.1:10000,10.0.0.2:10000,10.0.0.3:10000,10.0.0.4:10000,10.0.0.5:10000,192.168.0.1:10000,192.168.0.2:10000,192.168.0.3:10000,10.0.0.6:10001,10.0.0.7:10001,10.0.0.8:10001,10.0.0.9:10001,10.0.0.10:10001",
 		},
+		"missing port": {
+			addrPatterns: "localhost:10001,abc-[1-3]",
+			expAddrs:     "localhost:10001,abc-1:9999,abc-2:9999,abc-3:9999",
+		},
+		"too many colons":     {"bad:addr:here,:100", "", "cannot parse \"bad:addr:here\""},
+		"no host":             {"valid:10001,:100", "", "invalid host \"\""},
+		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
+		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
+		"bad port empty":      {"foo:", "", "invalid port \"\""},
+		"bad port zero":       {"foo:0", "", "invalid port \"0\""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			outAddrs, err := flattenHostAddrs(tc.addrPatterns)
-			CmpErr(t, tc.expErr, err)
+			outAddrs, err := flattenHostAddrs(tc.addrPatterns, 9999)
+			ExpectError(t, err, tc.expErrMsg, name)
 			if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
@@ -144,33 +154,22 @@ func TestCheckConns(t *testing.T) {
 		m   string
 		out string
 	}{
-		"nvme scan summary without health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 0.00B total capacity over 0 modules (unprepared)\n\t\tNVMe: 97.66TB total capacity over 1 controller\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 0.00B total capacity over 0 modules (unprepared)\n\t\tNVMe: 97.66TB total capacity over 1 controller\n",
-		},
-		"nvme scan without health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Modules:\n\t\tnone\n\tNVMe controllers and namespaces:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\tSummary:\n\t\tSCM: 0.00B total capacity over 0 modules (unprepared)\n\t\tNVMe: 97.66TB total capacity over 1 controller\n1.2.3.5:10001\n\tSCM Modules:\n\t\tnone\n\tNVMe controllers and namespaces:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\tSummary:\n\t\tSCM: 0.00B total capacity over 0 modules (unprepared)\n\t\tNVMe: 97.66TB total capacity over 1 controller\n",
-		},
 		"nvme scan with health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, false).StringHealthStats()),
-			"1.2.3.4:10000\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n1.2.3.5:10001\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n",
-		},
-		"scm scan summary with pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 2.90TB total capacity over 1 namespace\n\t\tNVMe: 0.00B total capacity over 0 controllers\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 2.90TB total capacity over 1 namespace\n\t\tNVMe: 0.00B total capacity over 0 controllers\n",
-		},
-		"scm scan with pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 2.90TB total capacity over 1 namespace\n\t\tNVMe: 0.00B total capacity over 0 controllers\n1.2.3.5:10001\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 2.90TB total capacity over 1 namespace\n\t\tNVMe: 0.00B total capacity over 0 controllers\n",
-		},
-		"scm scan summary without pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, nil, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 12.06KB total capacity over 1 module (unprepared)\n\t\tNVMe: 0.00B total capacity over 0 controllers\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 12.06KB total capacity over 1 module (unprepared)\n\t\tNVMe: 0.00B total capacity over 0 controllers\n",
-		},
-		"scm scan without pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, nil, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Modules:\n\t\tPhysicalID:12345 Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 12.06KB total capacity over 1 module (unprepared)\n\t\tNVMe: 0.00B total capacity over 0 controllers\n1.2.3.5:10001\n\tSCM Modules:\n\t\tPhysicalID:12345 Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 12.06KB total capacity over 1 module (unprepared)\n\t\tNVMe: 0.00B total capacity over 0 controllers\n",
+			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers).StringHealthStats()),
+			"1.2.3.4:10000\n\tNVMe controllers and namespaces detail with health statistics:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n\t\t" +
+				"Health Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\t" +
+				"Power Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\t" +
+				"Media Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\t" +
+				"Temperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\t" +
+				"Read Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n" +
+				"1.2.3.5:10001\n\tNVMe controllers and namespaces detail with health statistics:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n\t\t" +
+				"Health Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\t" +
+				"Power Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\t" +
+				"Media Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\t" +
+				"Temperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\t" +
+				"Read Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n",
 		},
 		"scm mount scan": {
 			NewClientScmMount(MockMounts, MockServers).String(),
