@@ -18,10 +18,11 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wframe-larger-than=4096']
 
 # Added for SDL Task CT158
-DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
+                      '-fwrapv'])
 
 # Added for SDL Task T217
-DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection', '-D_FORTIFY_SOURCE=2'])
+DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
@@ -85,6 +86,7 @@ def set_defaults(env):
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
+    env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
