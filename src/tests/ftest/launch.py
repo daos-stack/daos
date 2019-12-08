@@ -122,10 +122,14 @@ def set_test_environment():
     base_dir = get_build_environment()["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
+    # /usr/sbin is not setup on non-root user for CI nodes.
+    # SCM formatting tool mkfs.ext4 is located under
+    # /usr/sbin directory.
+    usr_sbin = os.path.join("/usr/", "sbin")
     path = os.environ.get("PATH")
 
     # Update env definitions
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
+    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
