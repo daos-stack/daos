@@ -144,7 +144,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
 			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_coh.cookie = 0;
+				ie->ie_dfs->dfs_coh = DAOS_HDL_INVAL;
 			} else {
 				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_cont_close() failed: (%d)",
@@ -154,7 +154,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
 			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
 			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_poh.cookie = 0;
+				ie->ie_dfs->dfs_poh = DAOS_HDL_INVAL;
 			} else {
 				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_pool_disconnect() failed: (%d)",
