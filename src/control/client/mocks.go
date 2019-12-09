@@ -176,6 +176,10 @@ func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemSto
 	return &ctlpb.SystemStopResp{}, nil
 }
 
+func (m *mockMgmtCtlClient) SystemRestart(ctx context.Context, req *ctlpb.SystemRestartReq, o ...grpc.CallOption) (*ctlpb.SystemRestartResp, error) {
+	return &ctlpb.SystemRestartResp{}, nil
+}
+
 type mockACLResult struct {
 	acl    []string
 	status int32

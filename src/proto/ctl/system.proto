@@ -54,6 +54,13 @@ message SystemStopResp {
 	repeated Result results = 1;
 }
 
+// SystemRestartReq supplies system restart parameters.
+message SystemRestartReq {}
+
+// SystemRestartResp returns status of restart attempt and results
+// of attempts to start system members.
+message SystemRestartResp {}
+
 // SystemMemberQueryReq supplies system query parameters.
 message SystemMemberQueryReq {}
 

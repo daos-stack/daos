@@ -38,6 +38,7 @@ type SystemCmd struct {
 	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd       `command:"start" alias:"s" description:"Perform restart of stopped DAOS system"`
 	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
@@ -60,7 +61,48 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemStopCmd is the struct representing the command to shutdown system.
+// systemMemberQueryCmd is the struct representing the command to shutdown system.
+type systemMemberQueryCmd struct {
+	logCmd
+	connectedCmd
+}
+
+// Execute is run when systemMemberQueryCmd activates
+func (cmd *systemMemberQueryCmd) Execute(args []string) error {
+	members, err := cmd.conns.SystemMemberQuery()
+	if err != nil {
+		return errors.Wrap(err, "System-Member-Query command failed")
+	}
+
+	cmd.log.Debug("System-Member-Query command succeeded\n")
+	if len(members) == 0 {
+		cmd.log.Info("No members in system\n")
+		return nil
+	}
+
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := NewTableFormatter([]string{rankTitle, uuidTitle, addrTitle, stateTitle})
+	var table []TableRow
+
+	for _, m := range members {
+		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
+
+	return nil
+}
+
+// systemStopCmd is the struct representing the command to restart system.
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
@@ -110,47 +152,27 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to shutdown system.
-type systemMemberQueryCmd struct {
+// systemStartCmd is the struct representing the command to restart system.
+type systemStartCmd struct {
 	logCmd
 	connectedCmd
 }
 
-// Execute is run when systemMemberQueryCmd activates
-func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	members, err := cmd.conns.SystemMemberQuery()
+// Execute is run when systemStartCmd activates
+func (cmd *systemStartCmd) Execute(args []string) error {
+	msg := "SUCCEEDED: "
+
+	err := cmd.conns.SystemRestart()
 	if err != nil {
-		return errors.Wrap(err, "System-Member-Query command failed")
+		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 
-	cmd.log.Debug("System-Member-Query command succeeded\n")
-	if len(members) == 0 {
-		cmd.log.Info("No members in system\n")
-		return nil
-	}
-
-	rankTitle := "Rank"
-	uuidTitle := "UUID"
-	addrTitle := "Control Address"
-	stateTitle := "State"
-
-	formatter := NewTableFormatter([]string{rankTitle, uuidTitle, addrTitle, stateTitle})
-	var table []TableRow
-
-	for _, m := range members {
-		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
-		row[addrTitle] = m.Addr.String()
-		row[stateTitle] = m.State().String()
-
-		table = append(table, row)
-	}
-
-	cmd.log.Info(formatter.Format(table))
+	cmd.log.Infof("System-start command %s\n", msg)
 
 	return nil
 }
 
+// Execute is run when systemMemberQueryCmd activates
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
 type systemListPoolsCmd struct {
 	logCmd
