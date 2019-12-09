@@ -206,7 +206,6 @@ class TestWithServers(TestWithoutServers):
         # Determine which hosts to use as servers and optionally clients.
         # Support the use of a host type count to test with subsets of the
         # specified hosts lists
-        test_machines = self.params.get("test_machines", "/run/hosts/*")
         test_servers = self.params.get("test_servers", "/run/hosts/*")
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
@@ -219,12 +218,9 @@ class TestWithServers(TestWithoutServers):
             "client_partition", test_clients)
 
         # Supported combinations of yaml hosts arguments:
-        #   - test_machines [+ server_count]
         #   - test_servers [+ server_count]
         #   - test_servers [+ server_count] + test_clients [+ client_count]
-        if test_machines:
-            self.hostlist_servers = test_machines[:server_count]
-        elif test_servers and test_clients:
+        if test_servers and test_clients:
             self.hostlist_servers = test_servers[:server_count]
             self.hostlist_clients = test_clients[:client_count]
         elif test_servers:
