@@ -123,17 +123,19 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob);
  * Create a dfs mount from global representation data. This has to be closed
  * with dfs_umount().
  *
- * \param[in]	coh	Container open handle for dfs mount.
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS handle.
  * \param[in]	glob	Global (shared) representation of a collective handle
  *			to be extracted
- * \param[in]	flags	mount flags (O_RDONLY or O_RDWR).
  * \param[out]	dfs	Returned dfs mount
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
-		 dfs_t *dfs);
+dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
+		 dfs_t **dfs);
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
