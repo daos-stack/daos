@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,12 +152,7 @@ bcast:
 
 	while (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-		if (rc == -DER_BUSY) {
-			print_message("Container is busy, wait\n");
-			sleep(1);
-			continue;
-		}
-		break;
+		assert_int_equal(rc, 0);
 	}
 
 	if (arg->multi_rank)
