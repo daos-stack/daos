@@ -372,6 +372,45 @@ racer_test_idx(struct racer_sub_tests *tests)
 	return idx;
 }
 
+static bool
+racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
+{
+	daos_oclass_id_t	ocid;
+	int			required_node;
+	int			required_tgt;
+
+	ocid = daos_obj_id2class(oid);
+	switch (ocid) {
+	case OC_RP_XSF:
+		/* Skip single replicated objects. */
+		return false;
+	case OC_RP_2G1:
+		required_node = 2;
+		required_tgt = 2;
+		break;
+	case OC_RP_2G2:
+		required_node = 2;
+		required_tgt = 4;
+		break;
+	case OC_RP_3G1:
+		required_node = 3;
+		required_tgt = 3;
+		break;
+	case OC_RP_3G2:
+		required_node = 3;
+		required_tgt = 6;
+		break;
+	default:
+		return false;
+	}
+
+	if (required_node > pinfo->pi_nnodes ||
+	    required_tgt > pinfo->pi_ntargets - pinfo->pi_ndisabled)
+		return false;
+
+	return true;
+}
+
 static struct option ts_ops[] = {
 	{ "pool_uuid",	required_argument,	NULL,	'p' },
 	{ "cont_uuid",	required_argument,	NULL,	'c' },
@@ -461,16 +500,25 @@ main(int argc, char **argv)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
-		int	count;
+		daos_pool_info_t	pinfo = { 0 };
+		int			count;
 
 		count = obj_cnt_per_class * min(OBJ_CNT, ts_ctx.tsc_mpi_size);
 		fprintf(stdout, "Verifying consistency after racer...\n");
 
-		/* Skip single replicated objects. */
-		for (idx = obj_cnt_per_class; idx < count; idx++) {
+		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "Failed to query pool info: %d\n", rc);
+			goto fini;
+		}
+
+		for (idx = 0; idx < count; idx++) {
 			daos_obj_id_t	oid;
 
 			oid = racer_oid_gen(idx);
+			if (!racer_valid_oid(oid, &pinfo))
+				continue;
+
 			rc = daos_obj_verify(ts_ctx.tsc_coh, oid,
 					     DAOS_EPOCH_MAX);
 			if (rc == -DER_NONEXIST) {
@@ -495,6 +543,7 @@ main(int argc, char **argv)
 		fprintf(stdout, "Verified consistency after racer.\n");
 	}
 
+fini:
 	dts_ctx_fini(&ts_ctx);
 out:
 	MPI_Finalize();
