@@ -250,7 +250,6 @@ int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t nvme_sz)
 {
-	struct vea_space_df	*vea_md = NULL;
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
@@ -323,9 +322,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	dbtree_close(hdl);
 
 	uuid_copy(pool_df->pd_id, uuid);
-	pool_df->pd_scm_sz = scm_sz;
-	pool_df->pd_nvme_sz = nvme_sz;
-	vea_md = &pool_df->pd_vea_df;
+	pool_df->pd_scm_sz	= scm_sz;
+	pool_df->pd_nvme_sz	= nvme_sz;
+	pool_df->pd_magic	= POOL_DF_MAGIC;
+	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
+		pool_df->pd_version = 0;
+	else
+		pool_df->pd_version = POOL_DF_VERSION;
 
 	gc_init_pool(&umem, pool_df);
 end:
@@ -364,8 +367,7 @@ end:
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
 	/* Format SPDK blob*/
-	D_ASSERT(vea_md != NULL);
-	rc = vea_format(&umem, vos_txd_get(), vea_md, VOS_BLK_SZ,
+	rc = vea_format(&umem, vos_txd_get(), &pool_df->pd_vea_df, VOS_BLK_SZ,
 			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
@@ -559,6 +561,17 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	pool_df = vos_pool_pop2df(uma->uma_pool);
+	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
+		D_GOTO(failed, rc = -DER_DF_INVAL);
+	}
+
+	if (pool_df->pd_version > POOL_DF_VERSION ||
+	    pool_df->pd_version < POOL_DF_VER_1) {
+		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		D_GOTO(failed, rc = -DER_DF_INCOMPT);
+	}
+
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
