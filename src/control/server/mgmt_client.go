@@ -59,6 +59,14 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 	}
 }
 
+// delayRetry delays next retry.
+func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
+	select {
+	case <-ctx.Done(): // break early if the parent context is canceled
+	case <-time.After(retryDelay): // otherwise, block until after the delay duration
+	}
+}
+
 func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
@@ -90,6 +98,26 @@ func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
 	return msc.cfg.AccessPoints[0], nil
 }
 
+func (msc *mgmtSvcClient) retryOnErr(err error, ctx context.Context, prefix string) bool {
+	if err != nil {
+		msc.log.Debugf("%s: %v", prefix, err)
+		msc.delayRetry(ctx)
+		return true
+	}
+
+	return false
+}
+
+func (msc *mgmtSvcClient) retryOnStatus(status int32, ctx context.Context, prefix string) bool {
+	if status != 0 {
+		msc.log.Debugf("%s: %d", prefix, status)
+		msc.delayRetry(ctx)
+		return true
+	}
+
+	return false
+}
+
 func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb.JoinResp, joinErr error) {
 	ap, err := msc.LeaderAddress()
 	if err != nil {
@@ -107,38 +135,35 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 			defer msc.log.Debugf(prefix + " end")
 
 			for {
+				var err error
+
 				select {
 				case <-ctx.Done():
 					return errors.Wrap(ctx.Err(), prefix)
 				default:
 				}
 
-				resp, err := pbClient.Join(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
-				} else {
-					// TODO: Stop retrying upon certain errors (e.g., "not
-					// MS", "rank unavailable", and "excluded").
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
+				resp, err = pbClient.Join(ctx, req)
+				if msc.retryOnErr(err, ctx, prefix) {
+					continue
+				}
+				if resp == nil {
+					return errors.New("unexpected nil response status")
+				}
+				// TODO: Stop retrying upon certain errors (e.g., "not
+				// MS", "rank unavailable", and "excluded").
+				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+					continue
 				}
 
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
+				return nil
 			}
 		})
 
 	return
 }
 
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.DaosRank) (resp *mgmtpb.DaosResp, stopErr error) {
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
@@ -147,30 +172,27 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 			defer msc.log.Debugf(prefix + " end")
 
 			for {
+				var err error
+
 				select {
 				case <-ctx.Done():
 					return errors.Wrap(ctx.Err(), prefix)
 				default:
 				}
 
-				resp, err := pbClient.KillRank(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
-				} else {
-					// TODO: Stop retrying upon certain errors
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
+				resp, err = pbClient.KillRank(ctx, req)
+				if msc.retryOnErr(err, ctx, prefix) {
+					continue
+				}
+				if resp == nil {
+					return errors.New("unexpected nil response status")
+				}
+				// TODO: Stop retrying upon certain errors.
+				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+					continue
 				}
 
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
+				return nil
 			}
 		})
 

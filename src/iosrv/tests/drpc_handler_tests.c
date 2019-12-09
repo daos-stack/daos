@@ -59,7 +59,8 @@ dummy_drpc_handler4(Drpc__Call *request, Drpc__Response *response)
 {
 }
 
-static drpc_handler_t handler_funcs[] = {
+#define NUM_TEST_HANDLERS	4
+static drpc_handler_t handler_funcs[NUM_TEST_HANDLERS] = {
 		dummy_drpc_handler1,
 		dummy_drpc_handler2,
 		dummy_drpc_handler3,
@@ -76,7 +77,7 @@ create_handler_list(int num_items)
 	struct dss_drpc_handler	*list;
 	int			i;
 
-	D_ASSERT(num_items <= (sizeof(handler_funcs) / sizeof(drpc_handler_t)));
+	D_ASSERT(num_items <= NUM_TEST_HANDLERS);
 
 	D_ALLOC_ARRAY(list, num_items + 1);
 
@@ -186,7 +187,7 @@ drpc_hdlr_register_multiple(void **state)
 {
 	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_TEST,
 			dummy_drpc_handler1), DER_SUCCESS);
-	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_SECURITY_AGENT,
+	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_SEC_AGENT,
 			dummy_drpc_handler2), DER_SUCCESS);
 	assert_int_equal(drpc_hdlr_register(DRPC_MODULE_MGMT,
 			dummy_drpc_handler3), DER_SUCCESS);
@@ -195,7 +196,7 @@ drpc_hdlr_register_multiple(void **state)
 
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_TEST),
 			dummy_drpc_handler1);
-	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_SECURITY_AGENT),
+	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_SEC_AGENT),
 			dummy_drpc_handler2);
 	assert_ptr_equal(drpc_hdlr_get_handler(DRPC_MODULE_MGMT),
 			dummy_drpc_handler3);
@@ -212,7 +213,7 @@ drpc_hdlr_unregister_id_not_found(void **state)
 	 * It is already unregistered - We did nothing but the caller is
 	 * satisfied.
 	 */
-	assert_int_equal(drpc_hdlr_unregister(DRPC_MODULE_SECURITY_AGENT),
+	assert_int_equal(drpc_hdlr_unregister(DRPC_MODULE_SEC_AGENT),
 			DER_SUCCESS);
 
 	/* Ensure nothing was deleted */
@@ -230,14 +231,14 @@ static void
 drpc_hdlr_unregister_success(void **state)
 {
 	drpc_hdlr_register(DRPC_MODULE_TEST, dummy_drpc_handler1);
-	drpc_hdlr_register(DRPC_MODULE_SECURITY_AGENT, dummy_drpc_handler2);
+	drpc_hdlr_register(DRPC_MODULE_SEC_AGENT, dummy_drpc_handler2);
 
 	assert_int_equal(drpc_hdlr_unregister(DRPC_MODULE_TEST),
 			DER_SUCCESS);
 
 	/* Ensure only the correct item was deleted */
 	assert_null(drpc_hdlr_get_handler(DRPC_MODULE_TEST));
-	assert_non_null(drpc_hdlr_get_handler(DRPC_MODULE_SECURITY_AGENT));
+	assert_non_null(drpc_hdlr_get_handler(DRPC_MODULE_SEC_AGENT));
 }
 
 static void
@@ -272,7 +273,7 @@ drpc_hdlr_register_all_with_one_item(void **state)
 static void
 drpc_hdlr_register_all_with_multiple_items(void **state)
 {
-	int			num_items = NUM_DRPC_MODULES;
+	int			num_items = NUM_TEST_HANDLERS;
 	int			i;
 	struct dss_drpc_handler	*handlers = create_handler_list(num_items);
 
@@ -289,7 +290,7 @@ drpc_hdlr_register_all_with_multiple_items(void **state)
 static void
 drpc_hdlr_register_all_with_duplicate(void **state)
 {
-	int			num_items = NUM_DRPC_MODULES;
+	int			num_items = NUM_TEST_HANDLERS;
 	int			dup_idx = num_items - 1;
 	int			i;
 	struct dss_drpc_handler	*dup_list = create_handler_list(num_items);
@@ -345,7 +346,7 @@ drpc_hdlr_unregister_all_with_one_item(void **state)
 static void
 drpc_hdlr_unregister_all_with_multiple_items(void **state)
 {
-	int			num_items = NUM_DRPC_MODULES;
+	int			num_items = NUM_TEST_HANDLERS;
 	int			i;
 	struct dss_drpc_handler	*handlers = create_handler_list(num_items);
 

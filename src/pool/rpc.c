@@ -112,7 +112,7 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &drs->rs_pad_32);
+	rc = crt_proc_uint32_t(proc, &drs->rs_seconds);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -121,6 +121,14 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 		return -DER_HG;
 
 	rc = crt_proc_int32_t(proc, &drs->rs_done);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_int32_t(proc, &drs->rs_padding32);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_int32_t(proc, &drs->rs_fail_rank);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -133,6 +141,10 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &drs->rs_rec_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &drs->rs_size);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -168,6 +180,14 @@ CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
+CRT_RPC_DEFINE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
+CRT_RPC_DEFINE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
+CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
+		DAOS_OSEQ_POOL_ACL_UPDATE)
+CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
+		DAOS_OSEQ_POOL_ACL_DELETE)
+CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
+		DAOS_OSEQ_POOL_LIST_CONT)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition

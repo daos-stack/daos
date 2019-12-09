@@ -53,6 +53,8 @@ func TestMain(m *testing.M) {
 	case "":
 		os.Exit(m.Run())
 	case "RunnerNormalExit":
+		// remove this once we're running so that it doesn't pollute test results
+		os.Unsetenv("LD_LIBRARY_PATH")
 		os.Unsetenv(testModeVar)
 		fmt.Printf("%s%s%s\n", testEnvStr, testSep, strings.Join(os.Environ(), " "))
 		fmt.Printf("%s%s%s\n", testArgsStr, testSep, strings.Join(os.Args[1:], " "))
@@ -89,6 +91,11 @@ func createFakeBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// capture this and set on exit to accommodate the addition of
+	// netdetect dependencies
+	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
+	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
+
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
 }
@@ -100,7 +107,7 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig()
 
@@ -129,7 +136,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	os.Setenv("OFI_INTERFACE", "bob0")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig().
 		WithTargetCount(42).

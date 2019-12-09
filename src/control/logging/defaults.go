@@ -29,7 +29,7 @@ import (
 
 const (
 	DefaultLogLevel = LogLevelInfo
-	logOutputDepth  = 4
+	logOutputDepth  = 3
 	emptyLogFlags   = 0
 )
 

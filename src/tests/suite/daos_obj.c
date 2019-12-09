@@ -1669,6 +1669,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		D_FREE(dkeys[i]);
+	}
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -1868,7 +1871,7 @@ basic_byte_array(void **state)
 	d_sg_list_t	 sgl;
 	d_iov_t	 sg_iov[2];
 	daos_iod_t	 iod;
-	daos_recx_t	 recx[4];
+	daos_recx_t	 recx[5];
 	char		 stack_buf_out[STACK_BUF_LEN];
 	char		 stack_buf[STACK_BUF_LEN];
 	char		 *bulk_buf = NULL;
@@ -1954,17 +1957,39 @@ next_step:
 	assert_int_equal(rc, 0);
 	assert_int_equal(sgl.sg_nr_out, 0);
 
-	print_message("reading data back ...\n");
+	print_message("reading all data back ...\n");
 	memset(buf_out, 0, buf_len);
 	sgl.sg_nr_out	= 0;
 	iod.iod_nr	= 3;
 	iod.iod_recxs	= recx;
+	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
-	print_message("validating data ... sg_nr_out %d.\n", sgl.sg_nr_out);
+	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
+		      sgl.sg_nr_out, (int)iod.iod_size);
 	assert_int_equal(sgl.sg_nr_out, 2);
 	assert_memory_equal(buf, buf_out, sizeof(buf));
+
+	print_message("short read should get iov_len with tail hole trimmed\n");
+	memset(buf_out, 0, buf_len);
+	tmp_len = buf_len / 3;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_nr = 1;
+	d_iov_set(&sg_iov[0], buf_out, tmp_len + 99);
+	recx[4].rx_idx	= 0;
+	recx[4].rx_nr	= tmp_len + 44;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx[4];
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** Verify data consistency */
+	print_message("validating data ... sg_nr_out %d, iov_len %d.\n",
+		      sgl.sg_nr_out, (int)sgl.sg_iovs[0].iov_len);
+	assert_int_equal(sgl.sg_nr_out, 1);
+	assert_int_equal(sgl.sg_iovs[0].iov_len, tmp_len);
+	assert_memory_equal(buf, buf_out, tmp_len);
 
 	if (step++ == 1)
 		goto next_step;
@@ -3281,7 +3306,7 @@ punch_then_lookup(void **state)
 			    NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(sgl.sg_nr_out, 10);
-	for (i = 0; i < 9; i++) {
+	for (i = 0; i < 10; i++) {
 		if (i == 2)
 			assert_memory_equal(&fetch_buf[i], "b", 1);
 		else
@@ -3373,6 +3398,9 @@ split_sgl_internal(void **state, int size)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+	D_FREE(sbuf1);
+	D_FREE(sbuf2);
 }
 
 static void

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,6 +175,8 @@ int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 
+int pool_map_comp_cnt(struct pool_map *map);
+
 int  pool_map_create(struct pool_buf *buf, uint32_t version,
 		     struct pool_map **mapp);
 void pool_map_addref(struct pool_map *map);
@@ -240,10 +242,16 @@ pool_map_node_nr(struct pool_map *map)
 }
 
 static inline bool
+pool_component_unavail(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWN ||
+	       comp->co_status == PO_COMP_ST_DOWNOUT;
+}
+
+static inline bool
 pool_target_unavail(struct pool_target *tgt)
 {
-	return tgt->ta_comp.co_status == PO_COMP_ST_DOWN ||
-	       tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT;
+	return pool_component_unavail(&tgt->ta_comp);
 }
 
 pool_comp_state_t pool_comp_str2state(const char *name);

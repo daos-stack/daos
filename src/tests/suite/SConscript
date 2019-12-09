@@ -5,9 +5,10 @@ def scons():
     """Execute build"""
     Import('denv', 'prereqs')
 
-    libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'mpi']
-    libraries += ['cmocka']
+    libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart']
+    libraries += ['uuid', 'mpi', 'dfs', 'cmocka', 'pthread']
+
+    denv.AppendUnique(LIBPATH=["$PREFIX/lib64/"])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
     Export('daos_test_tgt')

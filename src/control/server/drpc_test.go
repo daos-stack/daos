@@ -24,22 +24,18 @@
 package server
 
 import (
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
-
-func createTestDir(t *testing.T) string {
-	tmpDir, err := ioutil.TempDir("", t.Name())
-	if err != nil {
-		t.Fatalf("Couldn't create temporary directory: %v", err)
-	}
-
-	return tmpDir
-}
 
 func createTestSocket(t *testing.T, sockPath string) *net.UnixListener {
 	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
@@ -79,8 +75,8 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	err := os.Mkdir(path, 0755)
@@ -97,8 +93,8 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	f, err := os.Create(path)
@@ -116,8 +112,8 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	sock := createTestSocket(t, path)
@@ -162,8 +158,8 @@ func TestDrpcCleanup_BadSocketDir(t *testing.T) {
 }
 
 func TestDrpcCleanup_EmptyDir(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	err := drpcCleanup(tmpDir)
 
@@ -180,8 +176,8 @@ func expectDoesNotExist(t *testing.T, path string) {
 }
 
 func TestDrpcCleanup_Single(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"daos_server.sock",
@@ -204,8 +200,8 @@ func TestDrpcCleanup_Single(t *testing.T) {
 }
 
 func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"someone_else.sock",
@@ -232,8 +228,8 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 }
 
 func TestDrpcCleanup_Multiple(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	sockNames := []string{
 		"daos_server.sock",
@@ -263,5 +259,48 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 
 	for _, path := range sockPaths {
 		expectDoesNotExist(t, path)
+	}
+}
+
+func TestDrpc_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notReady     bool
+		connectError error
+		sendError    error
+		resp         *drpc.Response
+		expErr       error
+	}{
+		"connect fails": {
+			connectError: errors.New("connect"),
+			expErr:       errors.New("connect"),
+		},
+		"send msg fails": {
+			sendError: errors.New("send"),
+			expErr:    errors.New("send"),
+		},
+		"nil resp": {
+			expErr: errors.New("no response"),
+		},
+		"failed status": {
+			resp: &drpc.Response{
+				Status: drpc.Status_FAILURE,
+			},
+			expErr: errors.New("status: FAILURE"),
+		},
+		"success": {
+			resp: &drpc.Response{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &mockDrpcClientConfig{
+				SendMsgError:    tc.sendError,
+				SendMsgResponse: tc.resp,
+				ConnectError:    tc.connectError,
+			}
+			mc := newMockDrpcClient(cfg)
+
+			_, err := makeDrpcCall(mc, drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
+		})
 	}
 }

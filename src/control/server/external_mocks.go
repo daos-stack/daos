@@ -67,13 +67,6 @@ func (m *mockExt) appendHistory(update string) {
 	m.history = append(m.history, update)
 }
 
-func (m *mockExt) getFiles() []string {
-	m.RLock()
-	defer m.RUnlock()
-
-	return m.files
-}
-
 func (m *mockExt) appendFiles(update string) {
 	m.Lock()
 	defer m.Unlock()

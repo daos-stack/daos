@@ -1,7 +1,7 @@
 # DAOS Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
-on CentOS 7, OpenSUSE 42.2 and Ubuntu 18.04 distributions.
+on CentOS 7, OpenSUSE 42.2, and Ubuntu 18.04 distributions.
 
 ## Software Dependencies
 
@@ -11,7 +11,7 @@ Moreover, the DAOS stack leverages the following open source projects:
 -   [*CaRT*](https://github.com/daos-stack/cart) for high-performance
     communication leveraging advanced network capabilities.
 
--   [*gRPC*](https://grpc.io/) provides an secured out-of-band channel for
+-   [*gRPC*](https://grpc.io/) provides a secured out-of-band channel for
     DAOS administration.
 
 -   [*PMDK*](https://github.com/pmem/pmdk.git) for persistent memory
@@ -52,7 +52,7 @@ on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
 packages usually available on all the Linux distributions. Moreover, a Go
 version of at least 1.10 is required.
 
-A exhaustive list of packages for each supported Linux distribution is
+An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files:
 
 -    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
@@ -60,7 +60,7 @@ maintained in the Docker files:
 -    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
 
 The command lines to install the required packages can be extracted from
-the Docker files by removing the "RUN" command which is specific to Docker.
+the Docker files by removing the "RUN" command, which is specific to Docker.
 Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
@@ -143,12 +143,11 @@ builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.18.04 and the appropriate version of interest.
 
-Once the image created, one can start start a container that will eventually run
+Once the image created, one can start a container that will eventually run
 the DAOS service:
 
 ```
 $ docker run -it -d --privileged --name server \
-        -v /tmp/uri:/tmp/uri \
         -v /dev/hugepages:/dev/hugepages \
         daos
 ```
@@ -171,7 +170,6 @@ Then create a container that can access the local DAOS source tree:
 ```
 $ docker run -it -d --privileged --name server \
         -v ${daospath}:/home/daos/daos:Z \
-        -v /tmp/uri:/tmp/uri \
         -v /dev/hugepages:/dev/hugepages \
         daos
 ```
@@ -206,7 +204,7 @@ $ ls /sys/bus/pci/drivers/uio_pci_generic
 SCM and NVMe storage can then be configured by running the follow command:
 
 ```
-$ docker exec server daos_server storage prepare -n -f
+$ docker exec server daos_server storage prepare
 ```
 
 Note that this command reports that /dev/hugepages is not accessible on
@@ -216,22 +214,20 @@ The DAOS service can then be started as follows:
 
 ```
 $ docker exec server mkdir /var/run/daos_server
-$ docker exec server orterun -allow-run-as-root -H localhost -np 1 \
-        daos_server start \
-        -a /tmp/uri \
+$ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
 
 The daos_server_local.yml configuration file sets up a simple local DAOS system
 with a single server instance running in the container. By default, it uses 4GB
 of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp.
-The storage size can be changed in the yaml file if necessariy.
+The storage size can be changed in the yaml file if necessary.
 
 Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
 
 ```
-$ docker exec server daos_shell -i storage format -f
+$ docker exec server dmg -i storage format
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
@@ -267,16 +263,23 @@ scons_local/utils/setup_local.sh.
 ```
 ARGOBOTS=${daos_prefix_path}/opt/argobots
 CART=${daos_prefix_path}/opt/cart
-HWLOC=${daos_prefix_path}/opt/hwloc
-MERCURY=${daos_prefix_path}/opt/mercury
-PMDK=${daos_prefix_path}/opt/pmdk
-OMPI=${daos_prefix_path}/opt/ompi
-OPA=${daos_prefix_path}/opt/openpa
-PMIX=${daos_prefix_path}/opt/pmix
 FIO=${daos_prefix_path}/opt/fio
+FUSE=${daos_prefix_path}/opt/fuse
+HWLOC=${daos_prefix_path}/opt/hwloc
+ISAL=${daos_prefix_path}/opt/isal
+MERCURY=${daos_prefix_path}/opt/mercury
+OFI=${daos_prefix_path}/opt/ofi
+OMPI=${daos_prefix_path}/opt/ompi
+OPENPA=${daos_prefix_path}/opt/openpa
+PMDK=${daos_prefix_path}/opt/pmdk
+PMIX=${daos_prefix_path}/opt/pmix
+PROTOBUFC=${daos_prefix_path}/opt/protobufc
 SPDK=${daos_prefix_path}/opt/spdk
 
-PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
+
+LD_LIBRARY_PATH=${daos_prefix_path}/opt/spdk/lib:${daos_prefix_path}/opt/protobufc/lib:${daos_prefix_path}/opt/pmix/lib:${daos_prefix_path}/opt/pmdk/lib:${daos_prefix_path}/opt/openpa/lib:${daos_prefix_path}/opt/ompi/lib:${daos_prefix_path}/opt/ofi/lib:${daos_prefix_path}/opt/mercury/lib:${daos_prefix_path}/opt/isal/lib:${daos_prefix_path}/opt/hwloc/lib:${daos_prefix_path}/opt/fuse/lib64:${daos_prefix_path}/opt/cart/lib:${daos_prefix_path}/opt/argobots/lib
+PATH=${daos_prefix_path}/opt/spdk/bin:${daos_prefix_path}/opt/pmdk/bin:${daos_prefix_path}/opt/ompi/bin:${daos_prefix_path}/opt/ofi/bin:${daos_prefix_path}/opt/isal/bin:${daos_prefix_path}/opt/hwloc/bin:${daos_prefix_path}/opt/fio/bin:${daos_prefix_path}/opt/cart/bin
+
 ```
 
 With this approach, DAOS would get built using the prebuilt dependencies in
@@ -349,7 +352,7 @@ compiler.
 
 The recommended installation method is to clone the git repositories, check out
 the tagged releases noted below, and install from source. Later versions may
-work, but are not guaranteed.
+work but are not guaranteed.
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.5.1.
   [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).

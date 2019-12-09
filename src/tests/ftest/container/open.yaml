@@ -1,45 +1,25 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-hosts: !mux
-    test_machines1:
-      test_machines:
-        - boro-A
+hosts:
+  test_servers:
+    - server-A
 server_config:
   name: daos_server
-createtests:
-  createmode:
-    mode: 511
-  createuid1:
-    uid: 11374638
-  creategid1:
-    gid: 11374638
-  createuid2:
-     uid: 11374639
-  creategid2:
-     gid: 11374639
-  createset:
-    setname: daos_server
-  createsize:
-    size: 1073741824
-  uuids: !mux
-    gooduuid:
-      uuid:
-        - POOL1
-        - PASS
-    baduuid:
-      uuid:
-        - POOL2
-        - FAIL
-    nulluuid:
-      uuid:
-        - NULL
-        - FAIL
-  handles: !mux
-    goodpoh:
-      poh:
-        - POOL1
-        - PASS
-    badpoh:
-      poh:
-        - POOL2
-        - FAIL
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 1073741824
+container_uuid_states: !mux
+  gooduuid:
+    uuid:
+      - PASS
+  baduuid:
+    uuid:
+      - FAIL
+handle_states: !mux
+  goodpoh:
+    poh:
+      - PASS
+  badpoh:
+    poh:
+      - FAIL

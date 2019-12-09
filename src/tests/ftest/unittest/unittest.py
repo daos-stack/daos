@@ -40,7 +40,7 @@ def unittest_runner(self, unit_testname):
     """
     name = self.params.get("testname", '/run/UnitTest/{0}/'
                            .format(unit_testname))
-    server = self.params.get("test_machines", "/run/hosts/*")
+    server = self.params.get("test_servers", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
 
     cmd = ("ssh {} {}".format(server[0], bin_path[0]))
@@ -80,13 +80,21 @@ class UnitTestWithoutServers(Test):
         """
         unittest_runner(self, "vea_ut")
 
-    def test_pl_map(self):
+    def test_ring_pl_map(self):
         """
-        Test Description: Test pl_map unittest.
-        Use Case: This tests placement map
-        :avocado: tags=all,unittest,tiny,regression,vm,pl_map
+        Test Description: Test ring_pl_map unittest.
+        Use Case: This tests the ring placement map
+        :avocado: tags=all,unittest,tiny,regression,vm,ring_pl_map
         """
-        unittest_runner(self, "pl_map")
+        unittest_runner(self, "ring_pl_map")
+
+    def test_jump_pl_map(self):
+        """
+        Test Description: Test jump_pl_map unittest.
+        Use Case: This tests the jump placement map
+        :avocado: tags=all,unittest,tiny,regression,vm,jump_pl_map
+        """
+        unittest_runner(self, "jump_pl_map")
 
     @skipForTicket("DAOS-1763")
     def test_eq_tests(self):

@@ -99,6 +99,12 @@ struct ds_rsvc_class {
 	 * down but before sc_step_down. See rsvc_step_down_cb.
 	 */
 	void (*sc_drain)(struct ds_rsvc *svc);
+
+	/**
+	 * Distribute the system/pool map in the system/pool. This callback is
+	 * optional.
+	 */
+	int (*sc_map_dist)(struct ds_rsvc *svc);
 };
 
 void ds_rsvc_class_register(enum ds_rsvc_class_id id,
@@ -117,7 +123,7 @@ enum ds_rsvc_state {
 struct ds_rsvc {
 	d_list_t		s_entry;	/* in rsvc_hash */
 	enum ds_rsvc_class_id	s_class;
-	d_iov_t		s_id;		/**< for lookups */
+	d_iov_t			s_id;		/**< for lookups */
 	char		       *s_name;		/**< for printing */
 	struct rdb	       *s_db;		/**< DB handle */
 	char		       *s_db_path;
@@ -130,6 +136,10 @@ struct ds_rsvc {
 	ABT_cond		s_state_cv;
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
+	bool			s_map_dist;	/* has a map dist request? */
+	ABT_cond		s_map_dist_cv;
+	ABT_thread		s_map_distd;
+	bool			s_map_distd_stop;
 };
 
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
@@ -169,5 +179,7 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		      crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t *size);
 
 size_t ds_rsvc_get_md_cap(void);
+
+void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

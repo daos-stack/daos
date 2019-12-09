@@ -69,11 +69,13 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 	msg := "SUCCEEDED: "
 
 	members, err := cmd.conns.SystemMemberQuery()
-	if err != nil {
+	switch {
+	case err != nil:
 		msg = errors.WithMessagef(err, "FAILED").Error()
-	}
-	if len(members) > 0 {
-		msg += fmt.Sprintf(": %s", members)
+	case len(members) > 0:
+		msg += members.String()
+	default:
+		msg += "no joined members"
 	}
 
 	cmd.log.Infof("System-member-query command %s\n", msg)

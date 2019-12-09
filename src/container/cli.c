@@ -819,6 +819,7 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
+	arg->cqa_info->ci_hae = out->cqo_hae;
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
@@ -988,8 +989,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || daos_crt_network_error(rc) ||
-	    rc == -DER_STALE) {
+	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
@@ -1762,6 +1762,24 @@ struct epoch_op_arg {
 	daos_epoch_t		*eoa_epoch;
 };
 
+static int
+cont_epoch_op_req_complete(tse_task_t *task, void *data)
+{
+	struct epoch_op_arg *arg = data;
+	struct cont_epoch_op_out *op_out;
+	int rc;
+
+	rc = cont_req_complete(task, &arg->eoa_req);
+	if (rc)
+		return rc;
+
+	op_out = crt_reply_get(arg->eoa_req.cra_rpc);
+
+	*arg->eoa_epoch = op_out->ceo_epoch;
+
+	return 0;
+}
+
 int
 dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	    tse_task_t *task)
@@ -1790,7 +1808,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 
 	arg.eoa_epoch = epoch;
 
-	rc = tse_task_register_comp_cb(task, cont_req_complete,
+	rc = tse_task_register_comp_cb(task, cont_epoch_op_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_ALL, &arg.eoa_req);

@@ -41,14 +41,14 @@ type MgmtCtlClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
-	// Update nonvolatile storage device firmware
-	StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error)
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error)
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error)
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error)
+	// Query DAOS system membership (joined data-plane instances)
+	SystemMemberQuery(ctx context.Context, in *SystemMemberQueryReq, opts ...grpc.CallOption) (*SystemMemberQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
+	// Retrieve a list of supported fabric providers
+	NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error)
+	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
+	NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error)
 }
 
 type mgmtCtlClient struct {
@@ -109,12 +109,39 @@ func (x *mgmtCtlStorageFormatClient) Recv() (*StorageFormatResp, error) {
 	return m, nil
 }
 
-func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/StorageUpdate", opts...)
+func (c *mgmtCtlClient) SystemMemberQuery(ctx context.Context, in *SystemMemberQueryReq, opts ...grpc.CallOption) (*SystemMemberQueryResp, error) {
+	out := new(SystemMemberQueryResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemMemberQuery", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlStorageUpdateClient{stream}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error) {
+	out := new(SystemStopResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemStop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error) {
+	out := new(ProviderListReply)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/NetworkListProviders", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/NetworkScanDevices", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtCtlNetworkScanDevicesClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -124,113 +151,17 @@ func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq,
 	return x, nil
 }
 
-type MgmtCtl_StorageUpdateClient interface {
-	Recv() (*StorageUpdateResp, error)
+type MgmtCtl_NetworkScanDevicesClient interface {
+	Recv() (*DeviceScanReply, error)
 	grpc.ClientStream
 }
 
-type mgmtCtlStorageUpdateClient struct {
+type mgmtCtlNetworkScanDevicesClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtCtlStorageUpdateClient) Recv() (*StorageUpdateResp, error) {
-	m := new(StorageUpdateResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[2], "/ctl.MgmtCtl/StorageBurnIn", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlStorageBurnInClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_StorageBurnInClient interface {
-	Recv() (*StorageBurnInResp, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlStorageBurnInClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlStorageBurnInClient) Recv() (*StorageBurnInResp, error) {
-	m := new(StorageBurnInResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[3], "/ctl.MgmtCtl/FetchFioConfigPaths", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlFetchFioConfigPathsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_FetchFioConfigPathsClient interface {
-	Recv() (*FilePath, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlFetchFioConfigPathsClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsClient) Recv() (*FilePath, error) {
-	m := new(FilePath)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[4], "/ctl.MgmtCtl/ListFeatures", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlListFeaturesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_ListFeaturesClient interface {
-	Recv() (*Feature, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlListFeaturesClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlListFeaturesClient) Recv() (*Feature, error) {
-	m := new(Feature)
+func (x *mgmtCtlNetworkScanDevicesClient) Recv() (*DeviceScanReply, error) {
+	m := new(DeviceScanReply)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -245,14 +176,14 @@ type MgmtCtlServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
-	// Update nonvolatile storage device firmware
-	StorageUpdate(*StorageUpdateReq, MgmtCtl_StorageUpdateServer) error
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(*StorageBurnInReq, MgmtCtl_StorageBurnInServer) error
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(*EmptyReq, MgmtCtl_FetchFioConfigPathsServer) error
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(*EmptyReq, MgmtCtl_ListFeaturesServer) error
+	// Query DAOS system membership (joined data-plane instances)
+	SystemMemberQuery(context.Context, *SystemMemberQueryReq) (*SystemMemberQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
+	// Retrieve a list of supported fabric providers
+	NetworkListProviders(context.Context, *ProviderListRequest) (*ProviderListReply, error)
+	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
+	NetworkScanDevices(*DeviceScanRequest, MgmtCtl_NetworkScanDevicesServer) error
 }
 
 func RegisterMgmtCtlServer(s *grpc.Server, srv MgmtCtlServer) {
@@ -316,87 +247,78 @@ func (x *mgmtCtlStorageFormatServer) Send(m *StorageFormatResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtCtl_StorageUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageUpdateReq)
+func _MgmtCtl_SystemMemberQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemMemberQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemMemberQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemMemberQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemMemberQuery(ctx, req.(*SystemMemberQueryReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_SystemStop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemStopReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemStop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemStop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemStop(ctx, req.(*SystemStopReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_NetworkListProviders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProviderListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).NetworkListProviders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/NetworkListProviders",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).NetworkListProviders(ctx, req.(*ProviderListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_NetworkScanDevices_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DeviceScanRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtCtlServer).StorageUpdate(m, &mgmtCtlStorageUpdateServer{stream})
+	return srv.(MgmtCtlServer).NetworkScanDevices(m, &mgmtCtlNetworkScanDevicesServer{stream})
 }
 
-type MgmtCtl_StorageUpdateServer interface {
-	Send(*StorageUpdateResp) error
+type MgmtCtl_NetworkScanDevicesServer interface {
+	Send(*DeviceScanReply) error
 	grpc.ServerStream
 }
 
-type mgmtCtlStorageUpdateServer struct {
+type mgmtCtlNetworkScanDevicesServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtCtlStorageUpdateServer) Send(m *StorageUpdateResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_StorageBurnIn_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageBurnInReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).StorageBurnIn(m, &mgmtCtlStorageBurnInServer{stream})
-}
-
-type MgmtCtl_StorageBurnInServer interface {
-	Send(*StorageBurnInResp) error
-	grpc.ServerStream
-}
-
-type mgmtCtlStorageBurnInServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlStorageBurnInServer) Send(m *StorageBurnInResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_FetchFioConfigPaths_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).FetchFioConfigPaths(m, &mgmtCtlFetchFioConfigPathsServer{stream})
-}
-
-type MgmtCtl_FetchFioConfigPathsServer interface {
-	Send(*FilePath) error
-	grpc.ServerStream
-}
-
-type mgmtCtlFetchFioConfigPathsServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsServer) Send(m *FilePath) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).ListFeatures(m, &mgmtCtlListFeaturesServer{stream})
-}
-
-type MgmtCtl_ListFeaturesServer interface {
-	Send(*Feature) error
-	grpc.ServerStream
-}
-
-type mgmtCtlListFeaturesServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlListFeaturesServer) Send(m *Feature) error {
+func (x *mgmtCtlNetworkScanDevicesServer) Send(m *DeviceScanReply) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -412,6 +334,18 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			MethodName: "StorageScan",
 			Handler:    _MgmtCtl_StorageScan_Handler,
 		},
+		{
+			MethodName: "SystemMemberQuery",
+			Handler:    _MgmtCtl_SystemMemberQuery_Handler,
+		},
+		{
+			MethodName: "SystemStop",
+			Handler:    _MgmtCtl_SystemStop_Handler,
+		},
+		{
+			MethodName: "NetworkListProviders",
+			Handler:    _MgmtCtl_NetworkListProviders_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -420,48 +354,34 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "StorageUpdate",
-			Handler:       _MgmtCtl_StorageUpdate_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StorageBurnIn",
-			Handler:       _MgmtCtl_StorageBurnIn_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "FetchFioConfigPaths",
-			Handler:       _MgmtCtl_FetchFioConfigPaths_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ListFeatures",
-			Handler:       _MgmtCtl_ListFeatures_Handler,
+			StreamName:    "NetworkScanDevices",
+			Handler:       _MgmtCtl_NetworkScanDevices_Handler,
 			ServerStreams: true,
 		},
 	},
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_d9568fdaa36d56d8) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_6bea9c4deded268b) }
 
-var fileDescriptor_control_d9568fdaa36d56d8 = []byte{
-	// 258 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xc1, 0x4a, 0x03, 0x31,
-	0x10, 0x40, 0x95, 0x82, 0x42, 0xdc, 0xed, 0x21, 0xd5, 0x0a, 0x7b, 0xf4, 0x03, 0x56, 0xd1, 0x83,
-	0xe0, 0xb1, 0x8b, 0x01, 0x41, 0xa1, 0x58, 0xfc, 0x80, 0x18, 0xd3, 0xed, 0x42, 0x92, 0x89, 0xc9,
-	0xf4, 0xe0, 0xdf, 0xf9, 0x69, 0x92, 0x9d, 0x14, 0x76, 0xdd, 0x1e, 0xe7, 0xcd, 0xbc, 0x77, 0x19,
-	0x56, 0x2a, 0x70, 0x18, 0xc0, 0xd4, 0x3e, 0x00, 0x02, 0x9f, 0x29, 0x34, 0x55, 0xa1, 0xc0, 0x5a,
-	0x70, 0x84, 0xaa, 0x32, 0x22, 0x04, 0xd9, 0xea, 0x3c, 0xce, 0xb7, 0x5a, 0xe2, 0x3e, 0xe8, 0x48,
-	0xf3, 0xfd, 0xef, 0x8c, 0x9d, 0xbf, 0xb5, 0x16, 0x1b, 0x34, 0xbc, 0x61, 0xf3, 0x0d, 0x1d, 0xaf,
-	0x83, 0xf6, 0x32, 0x68, 0xbe, 0xac, 0x15, 0x9a, 0x7a, 0x0c, 0xdf, 0xf5, 0x77, 0x75, 0x7d, 0x94,
-	0x47, 0x7f, 0x73, 0xc2, 0x9f, 0xd8, 0x45, 0xe6, 0x1b, 0x25, 0x1d, 0x5f, 0x0c, 0x2f, 0x13, 0x49,
-	0xfa, 0xe5, 0x14, 0xf6, 0xee, 0x8a, 0x95, 0x19, 0x0a, 0x08, 0x56, 0x22, 0xbf, 0x1a, 0x1e, 0x12,
-	0x4b, 0xfe, 0xf2, 0x18, 0x4e, 0x85, 0xbb, 0xd3, 0x41, 0xe3, 0xc3, 0x7f, 0x49, 0xd4, 0xe3, 0x06,
-	0xb1, 0x49, 0xe3, 0x80, 0x27, 0x8d, 0xd5, 0x3e, 0xb8, 0x17, 0x37, 0x6e, 0x10, 0x9b, 0x34, 0x0e,
-	0x38, 0x37, 0x1e, 0xd9, 0x42, 0x68, 0x54, 0x3b, 0xd1, 0x41, 0x03, 0x6e, 0xdb, 0xb5, 0x6b, 0x89,
-	0xbb, 0xc8, 0xcb, 0x5e, 0x79, 0xb6, 0x1e, 0x7f, 0x52, 0x81, 0x46, 0xd1, 0x19, 0x9d, 0xd6, 0xbd,
-	0x78, 0xcb, 0x8a, 0xd7, 0x2e, 0xa2, 0xc8, 0x7f, 0xfa, 0x6f, 0x14, 0x64, 0xd0, 0x36, 0x09, 0x9f,
-	0x67, 0xfd, 0x27, 0x1f, 0xfe, 0x02, 0x00, 0x00, 0xff, 0xff, 0x2c, 0xf3, 0xee, 0xc6, 0x0c, 0x02,
-	0x00, 0x00,
+var fileDescriptor_control_6bea9c4deded268b = []byte{
+	// 288 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcd, 0x4a, 0xc3, 0x40,
+	0x10, 0xc7, 0x5b, 0x0a, 0x0a, 0xab, 0x11, 0x9c, 0xc6, 0xaa, 0x39, 0xf6, 0x01, 0x42, 0xd1, 0x83,
+	0xe0, 0xd1, 0x4a, 0x0f, 0xd2, 0x4a, 0x6d, 0x1e, 0x40, 0xd2, 0x75, 0x28, 0xc1, 0x24, 0xbb, 0x9d,
+	0x9d, 0x56, 0xf2, 0xc8, 0xbe, 0x85, 0xec, 0x87, 0x90, 0x9a, 0x7a, 0x9c, 0xdf, 0xff, 0x83, 0xdd,
+	0x19, 0x11, 0x49, 0x55, 0x33, 0xa9, 0x32, 0xd5, 0xa4, 0x58, 0xc1, 0x40, 0x72, 0x99, 0x44, 0x86,
+	0x15, 0xe5, 0x1b, 0xf4, 0x2c, 0x81, 0x1a, 0xf9, 0x4b, 0xd1, 0xe7, 0xbb, 0x91, 0x79, 0x1d, 0xd8,
+	0xb9, 0x69, 0x0c, 0x63, 0xe5, 0xa7, 0xbb, 0xef, 0x81, 0x38, 0x5d, 0x6c, 0x2a, 0x9e, 0x72, 0x09,
+	0x53, 0x71, 0x91, 0xf9, 0xf8, 0x92, 0x50, 0xe7, 0x84, 0x30, 0x4a, 0x25, 0x97, 0xe9, 0x21, 0x5c,
+	0xe1, 0x36, 0xb9, 0x3e, 0xca, 0x8d, 0x1e, 0xf7, 0xe0, 0x51, 0x9c, 0x05, 0x9e, 0xc9, 0xbc, 0x86,
+	0x61, 0xdb, 0x69, 0x89, 0x8d, 0xc7, 0x5d, 0xe8, 0xb2, 0x4f, 0x22, 0x0a, 0x70, 0xa6, 0xa8, 0xca,
+	0x19, 0xae, 0xda, 0x46, 0xcf, 0x6c, 0x7e, 0x74, 0x0c, 0xdb, 0x86, 0x49, 0x1f, 0xe6, 0xe2, 0x32,
+	0x73, 0x1f, 0x5c, 0x60, 0xb5, 0x46, 0x7a, 0xdb, 0x21, 0x35, 0x70, 0xeb, 0x03, 0x7f, 0xb9, 0xed,
+	0x4a, 0xfe, 0x93, 0xdc, 0x8b, 0x1e, 0x84, 0xf0, 0x52, 0xc6, 0x4a, 0x03, 0xb4, 0xbc, 0x16, 0xd8,
+	0xfc, 0xb0, 0xc3, 0x5c, 0xf0, 0x45, 0xc4, 0xaf, 0x7e, 0xf7, 0xf3, 0xc2, 0xf0, 0x92, 0xd4, 0xbe,
+	0xf8, 0x40, 0x32, 0x70, 0xe3, 0xec, 0xbf, 0xb3, 0xd5, 0x56, 0xb8, 0xdd, 0xa1, 0xe1, 0xf0, 0xa9,
+	0x43, 0x45, 0x97, 0xcd, 0xb8, 0x07, 0x33, 0x01, 0xa1, 0xcb, 0xee, 0xea, 0x19, 0xf7, 0x85, 0x44,
+	0x13, 0x6e, 0xe3, 0xa7, 0xb0, 0x58, 0xd7, 0x13, 0x77, 0xb8, 0x6b, 0x99, 0xf4, 0xd7, 0x27, 0xee,
+	0xe4, 0xf7, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x4d, 0x93, 0x6e, 0xc9, 0x39, 0x02, 0x00, 0x00,
 }

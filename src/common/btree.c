@@ -1302,7 +1302,6 @@ btr_probe_valid(dbtree_probe_opc_t opc)
 	    opc == BTR_PROBE_EQ)
 		return true;
 
-	opc &= ~BTR_PROBE_MATCHED;
 	return (opc == BTR_PROBE_GT || opc == BTR_PROBE_LT ||
 		opc == BTR_PROBE_GE || opc == BTR_PROBE_LE);
 }
@@ -1432,7 +1431,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	alb.intent = intent;
 
 again:
-	switch (probe_opc & ~BTR_PROBE_MATCHED) {
+	switch (probe_opc) {
 	default:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
@@ -1493,12 +1492,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1547,12 +1540,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1582,24 +1569,8 @@ again:
 	}
 
 	D_ASSERT(cmp != BTR_CMP_EQ);
-	if (cmp & BTR_CMP_MATCHED) {
-		rc = PROBE_RC_OK;
-	} else {
-		if (probe_opc & BTR_PROBE_MATCHED) {
-			rc = PROBE_RC_NONE;
-			/* restore the probe trace for follow-on insert. */
-			if (trace) {
-				D_ASSERT(saved != -1);
-
-				memcpy(tcx->tc_trace, trace,
-				       tcx->tc_depth * sizeof(*trace));
-				btr_trace_set(tcx, level, nd_off, saved);
-			}
-		} else {
-			/* GT/GE/LT/LE without MATCHED */
-			rc = PROBE_RC_OK;
-		}
-	}
+	/* GT/GE/LT/LE */
+	rc = PROBE_RC_OK;
  out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
@@ -3304,7 +3275,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 		/* use the iterator embedded in btr_context */
 		if (tcx->tc_ref != 1) { /* don't screw up others */
 			D_DEBUG(DB_TRACE,
-				"The embedded iterator is in using\n");
+				"The embedded iterator is in use\n");
 			return -DER_BUSY;
 		}
 

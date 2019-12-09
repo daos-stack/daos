@@ -226,6 +226,16 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool,
 	return gc_drain_btr(gc, pool, &cont->cd_obj_root, credits, empty);
 }
 
+static int
+gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
+{
+	vos_dtx_table_destroy(&pool->vp_umm,
+			      umem_off2ptr(&pool->vp_umm, item->it_addr));
+	umem_free(&pool->vp_umm, item->it_addr);
+
+	return 0;
+}
+
 static struct vos_gc	gc_table[] = {
 	{
 		.gc_name		= "akey",
@@ -254,7 +264,7 @@ static struct vos_gc	gc_table[] = {
 		.gc_type		= GC_CONT,
 		.gc_drain_creds		= 1,
 		.gc_drain		= gc_drain_cont,
-		.gc_free		= NULL,
+		.gc_free		= gc_free_cont,
 	},
 	{
 		.gc_name		= "unknown",
@@ -816,38 +826,34 @@ gc_wait(void)
 #endif
 }
 
-/**
- * Function for VOS standalone mode, it reclaims all the delete items for @pool
- */
-void
-gc_wait_pool(struct vos_pool *pool)
+/** public API to reclaim space for a opened pool */
+int
+vos_gc_pool(daos_handle_t poh, int *credits)
 {
-#if VOS_STANDALONE
-	int total = 0;
+	struct vos_pool *pool = vos_hdl2pool(poh);
+	bool		 empty;
+	int		 total;
+	int		 rc;
 
-	while (1) {
-		int	creds = GC_CREDS_PRIV;
-		int	rc;
-		bool	empty;
+	if (!credits || *credits <= 0)
+		return -DER_INVAL;
 
-		if (d_list_empty(&pool->vp_gc_link)) {
-			D_DEBUG(DB_IO, "Nothing to reclaim for this pool\n");
-			return;
-		}
+	if (!pool)
+		return -DER_NO_HDL;
 
-		total += creds;
-		rc = gc_reclaim_pool(pool, &creds, &empty);
-		if (rc) {
-			D_CRIT("GC failed %s\n", d_errstr(rc));
-			return;
-		}
+	if (d_list_empty(&pool->vp_gc_link))
+		return 0; /* nothing to reclaim for this pool */
 
-		if (creds != 0) {
-			D_ASSERT(empty);
-			D_DEBUG(DB_IO, "Consumed %d credits\n", total - creds);
-			gc_log_pool(pool);
-			return;
-		}
+	total = *credits;
+	rc = gc_reclaim_pool(pool, credits, &empty);
+	if (rc) {
+		D_CRIT("GC failed %s\n", d_errstr(rc));
+		return 0; /* caller can't do anything for it */
 	}
-#endif
+	total -= *credits; /* substract the remained credits */
+
+	if (empty && total != 0) /* did something */
+		gc_log_pool(pool);
+
+	return 0;
 }

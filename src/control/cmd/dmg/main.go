@@ -26,12 +26,12 @@ package main
 import (
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -66,11 +66,27 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
 }
 
+// cmdConfigSetter is an interface for setting the client config on a command
+type cmdConfigSetter interface {
+	setConfig(*client.Configuration)
+}
+
+// cfgCmd is a structure that can be used by commands that need the client
+// config.
+type cfgCmd struct {
+	config *client.Configuration
+}
+
+func (c *cfgCmd) setConfig(cfg *client.Configuration) {
+	c.config = cfg
+}
+
 type cliOptions struct {
-	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
-	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
-	Debug    bool   `short:"d" long:"debug" description:"enable debug output"`
-	JSON     bool   `short:"j" long:"json" description:"Enable JSON output"`
+	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList   string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
+	Insecure   bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
+	Debug      bool   `short:"d" long:"debug" description:"enable debug output"`
+	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	// TODO: implement host file parsing
 	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
@@ -80,37 +96,40 @@ type cliOptions struct {
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
-// appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error {
-	config, err := client.GetConfig(log, opts.ConfigPath)
-	if err != nil {
-		return errors.WithMessage(err, "processing config file")
-	}
-
+// appSetup processes cli overrides and connects clients.
+func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect, config *client.Configuration) error {
 	if opts.HostList != "" {
-		config.HostList = strings.Split(opts.HostList, ",")
+		hostlist, err := flattenHostAddrs(opts.HostList, config.Port)
+		if err != nil {
+			return err
+		}
+		config.HostList = hostlist
 	}
 
 	if opts.HostFile != "" {
 		return errors.New("hostfile option not implemented")
 	}
 
-	if opts.Insecure == true {
+	if opts.Insecure {
 		config.TransportConfig.AllowInsecure = true
 	}
 
-	err = config.TransportConfig.PreLoadCertData()
+	err := config.TransportConfig.PreLoadCertData()
 	if err != nil {
 		return errors.Wrap(err, "Unable to load Cerificate Data")
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	ok, out := hasConns(conns.ConnectClients(config.HostList))
-	if !ok {
-		return errors.New(out) // no active connections
+	connStates, err := checkConns(conns.ConnectClients(config.HostList))
+	if err != nil {
+		return err
+	}
+	if _, exists := connStates["connected"]; !exists {
+		log.Error(connStates.String())
+		return errors.New("no active connections")
 	}
 
-	log.Info(out)
+	log.Info(connStates.String())
 
 	return nil
 }
@@ -128,6 +147,10 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			return nil
 		}
 
+		if !opts.AllowProxy {
+			common.ScrubProxyVariables()
+		}
+
 		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("debug output enabled")
@@ -140,7 +163,16 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			logCmd.setLog(log)
 		}
 
-		if err := appSetup(log, opts, conns); err != nil {
+		config, err := client.GetConfig(log, opts.ConfigPath)
+		if err != nil {
+			return errors.WithMessage(err, "processing config file")
+		}
+
+		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
+			cfgCmd.setConfig(config)
+		}
+
+		if err := appSetup(log, opts, conns, config); err != nil {
 			return err
 		}
 		if wantsConn, ok := cmd.(connector); ok {

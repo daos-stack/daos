@@ -38,6 +38,17 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Refresh the DTX resync generation.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return		Zero on success.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_update_resync_gen(daos_handle_t coh);
+
+/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -45,9 +56,8 @@
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
- * \param punch		[IN]	For punch DTX or not.
- * \param check		[IN]	Check whether the DTX need restart because
- *				of sync epoch or not.
+ * \param gen		[IN]	The DTX generation.
+ * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
  * \return		-DER_INPROGRESS	retry with newer epoch.
@@ -55,7 +65,8 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		uint32_t flags);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -174,28 +185,22 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
- * \param force [IN]	Force abort even if some replica(s) have not
- *			'prepared' related DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count, bool force);
+	      int count);
 
 /**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param max	[IN]	The max count of DTXs to be aggregated.
- * \param age	[IN]	Not aggregate the DTX which age is newer than that.
  *
- * \return	Positive value if no more DTXs can be aggregated.
- * \return	Zero if the requested (@max) DTXs have been aggregated.
- * \return	Negative value if error.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
+vos_dtx_aggregate(daos_handle_t coh);
 
 /**
  * Query the container's DTXs information.
@@ -217,6 +222,20 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
  */
 int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
+
+/**
+ * Establish the indexed committed DTX table in DRAM.
+ *
+ * \param coh	[IN]		Container open handle.
+ * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
+ *				contains committed DTX entries to be handled.
+ *
+ * \return	Zero on success, need further re-index.
+ *		Positive, re-index is completed.
+ *		Negative value if error.
+ */
+int
+vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
  * Initialize the environment for a VOS instance
@@ -814,56 +833,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
 
 /**
- * VOS object index set attributes
- * Add a new object ID entry in the object index table
- * Creates an empty tree for the object
- *
- * \param coh   [IN]    Container handle
- * \param oid   [IN]    DAOS object ID
- * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
- *
- * \return              0 on success and negative on
- *                      failure
- */
-int
-vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t attr);
-
-/**
- * VOS object index clear attributes
- * Add a new object ID entry in the object index table
- * Creates an empty tree for the object
- *
- * \param coh   [IN]    Container handle
- * \param oid   [IN]    DAOS object ID
- * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
- *
- * \return              0 on success and negative on
- *                      failure
- */
-int
-vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		  uint64_t attr);
-
-/**
- * VOS object index get attributes
- *
- * \param coh   [IN]		Container handle
- * \param oid   [IN]		DAOS object ID
- * \param epoch [IN]		Epoch to get
- * \param dth	[IN]		Pointer to the DTX handle.
- * \param attr	[IN, OUT]	Attributes bitmask
- *
- * \return			0 on success and negative on
- *				failure
- */
-int
-vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		struct dtx_handle *dth, uint64_t *attr);
-
-/**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
@@ -953,10 +922,10 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
 vos_gc_run(int *credits);
+int
+vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** reset HAE (Highest Aggregated Epoch) **/
-	VOS_CO_CTL_RESET_HAE,
 	/** abort VOS aggregation **/
 	VOS_CO_CTL_ABORT_AGG,
 };

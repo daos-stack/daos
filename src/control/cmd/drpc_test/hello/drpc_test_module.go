@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ import (
 type HelloModule struct{}
 
 //HandleCall is the handler for calls to the hello module
-func (m *HelloModule) HandleCall(client *drpc.Client, function int32, body []byte) ([]byte, error) {
+func (m *HelloModule) HandleCall(session *drpc.Session, function int32, body []byte) ([]byte, error) {
 	if function != int32(Function_GREETING) {
 		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
@@ -55,9 +55,6 @@ func (m *HelloModule) HandleCall(client *drpc.Client, function int32, body []byt
 	}
 	return responseBytes, nil
 }
-
-//InitModule is empty for this module
-func (m *HelloModule) InitModule(state drpc.ModuleState) {}
 
 //ID will return Module_HELLO in int32 form
 func (m *HelloModule) ID() int32 {

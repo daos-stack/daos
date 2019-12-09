@@ -96,15 +96,6 @@ enum {
 				 */
 };
 
-/** Internal classes for testing & debugging */
-enum {
-	OC_INTERNAL		= OC_RESERVED + 1,
-	OC_RP_4G1,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4GX,
-};
-
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
 {
@@ -335,8 +326,6 @@ daos_iod_csum(daos_iod_t *iod, int csum_index)
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
-
-#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
 int dc_obj_init(void);
 void dc_obj_fini(void);

@@ -1409,7 +1409,7 @@ static void
 test_ace_is_valid_valid_types(void **state)
 {
 	expect_ace_valid(DAOS_ACL_OWNER, NULL);
-	expect_ace_valid(DAOS_ACL_USER, "myuser");
+	expect_ace_valid(DAOS_ACL_USER, "myuser@");
 	expect_ace_valid(DAOS_ACL_OWNER_GROUP, NULL);
 	expect_ace_valid(DAOS_ACL_GROUP, "group@domain.tld");
 	expect_ace_valid(DAOS_ACL_EVERYONE, NULL);
@@ -1754,6 +1754,32 @@ test_ace_is_valid_audit_without_flags(void **state)
 	ace->dae_access_flags &= ~(DAOS_ACL_FLAG_ACCESS_FAIL |
 					DAOS_ACL_FLAG_ACCESS_SUCCESS);
 	ace->dae_access_types = DAOS_ACL_ACCESS_AUDIT;
+
+	assert_false(daos_ace_is_valid(ace));
+
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_is_valid_bad_principal(void **state)
+{
+	struct	daos_ace *ace;
+	char	bad_username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN + 1];
+	size_t	i;
+
+	memset(bad_username, 0, sizeof(bad_username));
+
+	/* create a long principal string > principal max by 1 */
+	for (i = 0; i < DAOS_ACL_MAX_PRINCIPAL_LEN; i++) {
+		bad_username[i] = 'u';
+	}
+	bad_username[i] = '@'; /*properly formatted, just too long */
+
+	ace = daos_ace_create(DAOS_ACL_USER, bad_username);
+
+	/* set up with valid perms */
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 
 	assert_false(daos_ace_is_valid(ace));
 
@@ -2140,6 +2166,7 @@ main(void)
 		cmocka_unit_test(test_ace_is_valid_perms_for_unset_type),
 		cmocka_unit_test(test_ace_is_valid_audit_flags_with_only_allow),
 		cmocka_unit_test(test_ace_is_valid_audit_without_flags),
+		cmocka_unit_test(test_ace_is_valid_bad_principal),
 		cmocka_unit_test(test_acl_is_valid_null),
 		cmocka_unit_test(test_acl_is_valid_empty),
 		cmocka_unit_test(test_acl_is_valid_bad_version),

@@ -220,14 +220,20 @@ struct daos_pool_space {
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
-	/** padding bytes */
-	uint32_t		rs_pad_32;
+	/** Time (Seconds) for the rebuild */
+	uint32_t		rs_seconds;
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
 	 * rebuild is done or not, it is valid only if @rs_version is non-zero
 	 */
 	int32_t			rs_done;
+
+	/* padding of rebuild status */
+	int32_t			rs_padding32;
+
+	/* Failure on which rank */
+	int32_t			rs_fail_rank;
 	/** # total to-be-rebuilt objects, it's non-zero and increase when
 	 * rebuilding in progress, when rs_done is 1 it will not change anymore
 	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
@@ -238,6 +244,9 @@ struct daos_rebuild_status {
 	uint64_t		rs_obj_nr;
 	/** # rebuilt records, it's non-zero only if rs_done is 1 */
 	uint64_t		rs_rec_nr;
+
+	/** rebuild space cost */
+	uint64_t		rs_size;
 };
 
 /**
@@ -278,6 +287,26 @@ typedef struct {
 	/** rebuild status */
 	struct daos_rebuild_status	pi_rebuild_st;
 } daos_pool_info_t;
+
+/*
+ * DAOS management pool information
+ */
+typedef struct {
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
+	uuid_t				 mgpi_uuid;
+	/** List of current pool service replica ranks */
+	d_rank_list_t			*mgpi_svc;
+} daos_mgmt_pool_info_t;
+
+/* DAOS pool container information
+ *
+ */
+struct daos_pool_cont_info {
+	uuid_t		pci_uuid;
+};
 
 /**
  * DAOS_PC_RO connects to the pool for reading only.
@@ -341,6 +370,8 @@ typedef struct {
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
+	/** The minimal "Highest aggregated epoch" among all targets */
+	daos_epoch_t		ci_hae;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -381,7 +412,10 @@ typedef enum {
 	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
 
-/* rank/target list for target */
+/**
+ * Pool target list, each target is identified by rank & target
+ * index within the rank
+ */
 struct d_tgt_list {
 	d_rank_t	*tl_ranks;
 	int32_t		*tl_tgts;

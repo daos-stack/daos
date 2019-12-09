@@ -176,8 +176,8 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct bio_xs_context	*dmi_nvme_ctxt;
-	struct dss_xstream	*dmi_xstream;
+	struct bio_xs_context  *dmi_nvme_ctxt;
+	struct dss_xstream     *dmi_xstream;
 	/* the xstream id */
 	int			dmi_xs_id;
 	/* the VOS target id */
@@ -357,6 +357,17 @@ int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
 			   int ult_type, int tgt_id, size_t stack_size);
 
+struct dss_sleep_ult {
+	ABT_thread	dsu_thread;
+	uint64_t	dsu_expire_time;
+	d_list_t	dsu_list;
+};
+
+struct dss_sleep_ult *dss_sleep_ult_create(void);
+void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
+void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
+void dss_ult_wakeup(struct dss_sleep_ult *dsu);
+
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
 	/** return value */
@@ -416,7 +427,7 @@ struct dss_coll_args {
 	void				*ca_func_args;
 	void				*ca_aggregator;
 	int				*ca_exclude_tgts;
-	int				ca_exclude_tgts_cnt;
+	unsigned int			ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -451,9 +462,6 @@ dss_abterr2der(int abt_errno)
 }
 
 int dss_rpc_send(crt_rpc_t *rpc);
-int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
-		     crt_group_t **group);
-int dss_group_destroy(crt_group_t *group);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
@@ -521,6 +529,7 @@ int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
+	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;
@@ -576,7 +585,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	int			 ui_iods_cap;
-	int			 ui_iods_size;
+	int			 ui_iods_top;
 	int			*ui_recxs_caps;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
@@ -596,18 +605,18 @@ unsigned int dss_ctx_nr_get(void);
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
-	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
 void dss_init_state_set(enum dss_init_state state);
 
-bool dss_pmixless(void);
-
 /* default credits */
 #define	DSS_GC_CREDS	256
 
-void dss_gc_run(int credits);
+/**
+ * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
+ */
+void dss_gc_run(daos_handle_t poh, int credits);
 
 bool dss_aggregation_disabled(void);
 

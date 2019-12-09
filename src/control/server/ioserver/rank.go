@@ -45,8 +45,15 @@ func NewRankPtr(in uint32) *Rank {
 	return &r
 }
 
-func (r Rank) String() string {
-	return strconv.FormatUint(uint64(r), 10)
+func (r *Rank) String() string {
+	switch {
+	case r == nil:
+		return "nil"
+	case *r == NilRank:
+		return "NilRank"
+	default:
+		return strconv.FormatUint(uint64(*r), 10)
+	}
 }
 
 func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -59,6 +66,15 @@ func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	*r = Rank(i)
 	return nil
+}
+
+// Equals compares this rank to the given rank. If either value is
+// nil, the comparison is always false.
+func (r *Rank) Equals(other *Rank) bool {
+	if r == nil || other == nil {
+		return false
+	}
+	return *r == *other
 }
 
 func checkRank(r Rank) error {

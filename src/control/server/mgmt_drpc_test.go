@@ -24,7 +24,6 @@
 package server
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,7 +62,7 @@ func addIOServerInstances(mod *srvModule, numInstances int, log logging.Logger) 
 
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	expectedErr := "unmarshal NotifyReady request"
 	mod := &srvModule{}
@@ -89,7 +88,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	expectedErr := "check NotifyReady request socket path"
 	mod := &srvModule{}
@@ -111,14 +110,14 @@ func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)
@@ -137,7 +136,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := &srvModule{}
 	numInstances := 5
@@ -146,8 +145,8 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)
@@ -173,7 +172,7 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 
 func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	expectedError := "out of range"
 	mod := &srvModule{}
@@ -182,8 +181,8 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)

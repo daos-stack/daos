@@ -30,8 +30,7 @@ import avocado
 from apricot import Test, skipForTicket
 
 
-from daos_api import DaosPool, DaosContainer, IORequest
-from daos_api import DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
 
 class CreateManyDkeys(Test):
     """

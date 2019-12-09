@@ -32,13 +32,22 @@ type Code int
 const (
 	// general fault codes
 	Unknown Code = iota
+	MissingSoftwareDependency
 
-	// storage fault codes
+	// generic storage fault codes
 	StorageUnknown Code = iota + 100
 	StorageAlreadyFormatted
-	StorageFilesystemMounted
-	StorageFormatCheckFailed
+	StorageFilesystemAlreadyMounted
+	StorageDeviceAlreadyMounted
+
+	// SCM fault codes
+	ScmUnknown Code = iota + 200
+	ScmFormatBadParam
+
+	// Bdev fault codes
+	BdevUnknown Code = iota + 300
+	BdevFormatBadParam
 
 	// security fault codes
-	SecurityUnknown Code = iota + 200
+	SecurityUnknown Code = iota + 900
 )

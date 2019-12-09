@@ -34,6 +34,7 @@ struct dss_xstream {
 	ABT_pool	dx_pools[DSS_POOL_CNT];
 	ABT_sched	dx_sched;
 	ABT_thread	dx_progress;
+	d_list_t	dx_sleep_ult_list;
 	tse_sched_t	dx_sched_dsc;
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
 	int		dx_xs_id;
@@ -82,6 +83,7 @@ int dss_module_cleanup_all(void);
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_dump_ABT_state(void);
+void dss_xstreams_open_barrier(void);
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
@@ -174,9 +176,9 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
 	case DSS_ULT_DRPC_HANDLER:
+	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_REBUILD;
 	default:
 		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);

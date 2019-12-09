@@ -24,10 +24,10 @@
 package client
 
 import (
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -35,29 +35,24 @@ import (
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop() (common.SystemMembers, error) {
+func (c *connList) SystemStop() (common.SystemMemberResults, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemStopReq{}
+	rpcReq := &ctlpb.SystemStopReq{}
 
 	c.log.Debugf("DAOS system shutdown request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemStop(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
 	c.log.Debugf("DAOS system shutdown response: %s\n", rpcResp)
 
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
-
-	return common.MembersFromPB(c.log, rpcResp.Members), nil
+	return common.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
 
 // SystemMemberQuery will return the list of members joined to DAOS system.
@@ -69,21 +64,16 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemMemberQueryReq{}
+	rpcReq := &ctlpb.SystemMemberQueryReq{}
 
 	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemMemberQuery(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemMemberQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
 	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
-
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
 
 	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }
@@ -93,7 +83,7 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 //
 // Currently this is not exposed by control/cmd/dmg as a user command.
 // TODO: consider usage model.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+func (c *connList) KillRank(rank uint32) ResultMap {
 	var resp *mgmtpb.DaosResp
 	var addr string
 	results := make(ResultMap)
@@ -101,7 +91,7 @@ func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err == nil {
 		resp, err = mc.getSvcClient().KillRank(context.Background(),
-			&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
+			&mgmtpb.KillRankReq{Rank: rank})
 		addr = mc.getAddress()
 	}
 

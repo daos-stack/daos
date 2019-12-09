@@ -39,10 +39,6 @@ Control the DAOS IO mode: server dispatches modification RPCs to replicas or cli
 
 Environment variables in this section only apply to the server side.
 
-### `VOS_CHECKSUM`
-
-Checksum algorithm used by VOS. `STRING`. Default to disabling checksums.
-
 These checksum algorithms are currently supported: `crc64` and `crc32`.
 
 ### `VOS_MEM_CLASS`
@@ -93,17 +89,9 @@ Whether to start existing pool services when starting a `daos_server`. `BOOL`. D
 
 Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 
-### `DAOS_PMIXLESS`
-
-Whether to disable PMIx. `BOOL`. Default to false.
-
 ## Client
 
 Environment variables in this section only apply to the client side.
-
-### `DAOS_SINGLETON_CLI`
-
-Whether to run in the singleton mode, in which the client does not need to be launched by orterun. `BOOL`. Default to false.
 
 ### `DAOS_IO_SRV_DISPATCH`
 

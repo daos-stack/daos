@@ -593,15 +593,18 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_tgt_uuids.ca_count = 1;
 
 	D_ALLOC_PTR(rank);
-	if (rank == NULL) {
-		D_FREE(tmp_tgt_uuid);
+	if (rank == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
-	}
 
 	rc = crt_group_rank(NULL, rank);
 	D_ASSERT(rc == 0);
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count = 1;
+
+	rc = ds_pool_start(tc_in->tc_pool_uuid);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to start pool: %d\n",
+			DP_UUID(tc_in->tc_pool_uuid), rc);
 
 free:
 	D_FREE(path);
@@ -680,6 +683,8 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	/** reply buffer */
 	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
+
+	ds_pool_stop(td_in->td_pool_uuid);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
@@ -795,73 +800,45 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
-/* State of the local system map (i.e., the CaRT PG membership) */
-static uint32_t sys_map_version;
+/**
+ * Do Mark on a single target.
+ */
+void
+ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_mark_in	*in;
+	struct mgmt_mark_out	*out;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_TRACE, "Mark trace %s.\n", in->m_mark);
+
+	out = crt_reply_get(rpc);
+	out->m_rc = 0;
+	crt_reply_send(rpc);
+}
 
 int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
 	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
-	struct server_entry	       *servers = in->tm_servers.ca_arrays;
-	crt_group_t		       *group = crt_group_lookup(NULL);
-	d_rank_t			self_rank;
-	d_rank_list_t		       *ranks;
-	int				i;
+	uint32_t			version;
 	int				rc;
 
-	if (in->tm_map_version <= sys_map_version)
+	rc = crt_group_version(NULL /* grp */, &version);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_DEBUG(DB_MGMT, "in=%u current=%u\n", in->tm_map_version, version);
+	if (in->tm_map_version <= version)
 		return 0;
 
-	rc = crt_group_rank(group, &self_rank);
-	if (rc != 0) {
-		D_DEBUG(DB_MGMT, "self rank unknown: %d\n", rc);
+	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE,
+				  in->tm_servers.ca_arrays,
+				  in->tm_servers.ca_count, in->tm_map_version);
+	if (rc != 0)
 		return rc;
-	}
 
-	rc = crt_group_ranks_get(group, &ranks);
-	if (rc != 0) {
-		D_ERROR("failed to get existing ranks: %d\n", rc);
-		return rc;
-	}
-
-	for (i = 0; i < in->tm_servers.ca_count; i++) {
-		bool existing = d_rank_list_find(ranks, servers[i].se_rank,
-						 NULL /* idx */);
-
-		if (servers[i].se_flags & SERVER_IN) {
-			if (existing)
-				continue;
-			D_DEBUG(DB_MGMT, "add rank=%u uri=%s nctxs=%u\n",
-				servers[i].se_rank, servers[i].se_uri,
-				servers[i].se_nctxs);
-			rc = crt_group_primary_rank_add(rpc->cr_ctx, group,
-							servers[i].se_rank,
-							servers[i].se_uri);
-			if (rc != 0)
-				D_ERROR("failed to add rank=%u uri=%s: %d\n",
-					servers[i].se_rank, servers[i].se_uri,
-					rc);
-		} else {
-			if (!existing)
-				continue;
-			D_DEBUG(DB_MGMT, "remove rank=%u uri=%s nctxs=%u\n",
-				servers[i].se_rank, servers[i].se_uri,
-				servers[i].se_nctxs);
-			rc = crt_group_rank_remove(group, servers[i].se_rank);
-			if (rc != 0)
-				D_ERROR("failed to remove rank=%u: %d\n",
-					servers[i].se_rank, rc);
-		}
-		/*
-		 * Commit suicide upon errors, so that others can detect and
-		 * choose to proceed without me.
-		 */
-		D_ASSERTF(rc == 0, "update system map (version %u): %d\n",
-			  in->tm_map_version, rc);
-	}
-	sys_map_version = in->tm_map_version;
-
-	d_rank_list_free(ranks);
+	D_INFO("updated group: %u -> %u\n", version, in->tm_map_version);
 	return 0;
 }
 
@@ -870,8 +847,16 @@ ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc)
 {
 	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
 	struct mgmt_tgt_map_update_out *out = crt_reply_get(rpc);
+	uint32_t			version;
+	int				rc;
 
-	if (in->tm_map_version != sys_map_version)
+	/*
+	 * If ds_mgmt_tgt_map_update_pre_forward succeeded, in->tm_map_version
+	 * should be <= the system group version.
+	 */
+	rc = crt_group_version(NULL /* grp */, &version);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (in->tm_map_version > version)
 		out->tm_rc = 1;
 
 	crt_reply_send(rpc);

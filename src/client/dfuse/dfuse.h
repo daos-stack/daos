@@ -35,7 +35,9 @@
 #include "daos_fs.h"
 
 #include "dfuse_common.h"
-#include "dfuse.h"
+
+#define DFUSE_UNS_POOL_ATTR "user.uns.pool"
+#define DFUSE_UNS_CONTAINER_ATTR "user.uns.container"
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
@@ -110,15 +112,15 @@ struct dfuse_obj_hdl {
 };
 
 struct dfuse_inode_ops {
-	bool (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
 		       struct fuse_file_info *fi);
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
-	bool (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	bool (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
@@ -353,17 +355,19 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, arg)				\
+#define DFUSE_REPLY_IOCTL_SIZE(handle, req, arg, size)			\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(arg),			\
-					sizeof(arg));			\
+		__rc = fuse_reply_ioctl(req, 0, arg, size);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
+
+#define DFUSE_REPLY_IOCTL(handle, req, arg)			\
+	DFUSE_REPLY_IOCTL_SIZE(handle, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.
@@ -451,7 +455,7 @@ ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 
 /* ops/...c */
 
-bool
+void
 dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
@@ -466,7 +470,7 @@ dfuse_cb_getattr(fuse_req_t, struct dfuse_inode_entry *);
 void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
-bool
+void
 dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
@@ -478,7 +482,7 @@ void
 dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 		    struct fuse_file_info *fi);
 
-bool
+void
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
 
@@ -544,16 +548,16 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
-bool
+void
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
-bool
+void
 dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */
-bool
+void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 

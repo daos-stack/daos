@@ -31,34 +31,42 @@
 #include <daos_security.h>
 #include <cart/api.h>
 
-static int
-crt_proc_prop_daos_acl(crt_proc_t proc, struct daos_prop_entry *entry)
+int
+crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data)
 {
 	int		rc;
-	struct daos_acl	*acl;
 	d_iov_t		iov;
 	crt_proc_op_t	proc_op;
+
+	if (proc == NULL || data == NULL)
+		return -DER_INVAL;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return rc;
 
-	if (entry->dpe_val_ptr == NULL) {
-		memset(&iov, 0, sizeof(iov));
-	} else {
-		acl = (struct daos_acl *)entry->dpe_val_ptr;
-		d_iov_set(&iov, entry->dpe_val_ptr,
-			daos_acl_get_size(acl));
+	memset(&iov, 0, sizeof(iov));
+
+	switch (proc_op) {
+	case CRT_PROC_ENCODE:
+		if (*data != NULL)
+			d_iov_set(&iov, (void *)*data,
+				  daos_acl_get_size(*data));
+		rc = crt_proc_d_iov_t(proc, &iov);
+		break;
+	case CRT_PROC_DECODE:
+		rc = crt_proc_d_iov_t(proc, &iov);
+		if (rc != 0)
+			return rc;
+		*data = (struct daos_acl *)iov.iov_buf;
+		break;
+	case CRT_PROC_FREE:
+		daos_acl_free(*data);
+		break;
+	default:
+		D_ERROR("bad proc_op %d.\n", proc_op);
+		return -DER_INVAL;
 	}
-
-	rc = crt_proc_d_iov_t(proc, &iov);
-	if (rc != 0)
-		return rc;
-
-	if (proc_op == CRT_PROC_DECODE)
-		entry->dpe_val_ptr = iov.iov_buf;
-	else if (proc_op == CRT_PROC_FREE)
-		entry->dpe_val_ptr = NULL;
 
 	return rc;
 }
@@ -85,7 +93,9 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
 		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
 			 entry->dpe_type == DAOS_PROP_CO_ACL)
-			rc = crt_proc_prop_daos_acl(proc, entry);
+			rc = crt_proc_struct_daos_acl(proc,
+						      (struct daos_acl **)
+						      &entry->dpe_val_ptr);
 		else
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
 		if (rc)

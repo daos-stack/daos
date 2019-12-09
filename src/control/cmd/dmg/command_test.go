@@ -102,28 +102,18 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap, client.ClientPmemMap) {
-	tc.appendInvocation("StorageScan")
-	return nil, nil, nil
+func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
+	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
+	return &client.StorageScanResp{}
 }
 
-func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
-	tc.appendInvocation("StorageFormat")
+func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
 	return nil, nil
 }
 
-func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
-	return nil, nil
-}
-
-func (tc *testConn) ListFeatures() client.ClientFeatureMap {
-	tc.appendInvocation("ListFeatures")
-	return nil
-}
-
-func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-uuid %s, rank %d", uuid, rank))
+func (tc *testConn) KillRank(rank uint32) client.ResultMap {
+	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
 	return nil
 }
 
@@ -135,6 +125,26 @@ func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateRes
 func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
 	return nil
+}
+
+func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
+	return &client.PoolGetACLResp{}, nil
+}
+
+func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
+	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
+	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
+	return &client.PoolDeleteACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
@@ -157,13 +167,23 @@ func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 	return make(common.SystemMembers, 0), nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMembers, error) {
+func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	tc.appendInvocation("SystemStop")
-	return make(common.SystemMembers, 0), nil
+	return make(common.SystemMemberResults, 0), nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
+}
+
+func (tc *testConn) NetworkListProviders() client.ResultMap {
+	tc.appendInvocation("NetworkListProviders")
+	return nil
+}
+
+func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
+	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
+	return nil
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -182,7 +202,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 		t.Run(st.name, func(t *testing.T) {
 			t.Helper()
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			var opts cliOptions
 			conn := newTestConn(t)
@@ -207,7 +227,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 func TestBadCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)
@@ -217,7 +237,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestNoCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)

@@ -22,10 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import skipForTicket
-from rebuild_test_base import RebuldTestBase
+from rebuild_test_base import RebuildTestBase
 
 
-class ReadArrayTest(RebuldTestBase):
+class ReadArrayTest(RebuildTestBase):
     """Run rebuild tests with DAOS servers and clients.
 
     :avocado: recursive

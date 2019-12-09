@@ -52,17 +52,18 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(tenv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.test(tenv, 'common_test_runner',
-                    ['common_test_runner.c', 'daos_checksum_tests.c',
+    daos_build.test(tenv, 'common_test',
+                    ['common_test.c', 'checksum_tests.c',
                      'misc_tests.c'],
-                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
+                    LIBS=['daos_common', 'daos_tests', 'gurt', 'cart',
+                          'cmocka'])
     daos_build.test(tenv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(tenv, 'sched', 'sched.c',
                     LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
     daos_build.test(tenv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
-    daos_build.test(tenv, 'acl_util_real', 'acl_util_real_tests.c',
+    daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv, prereqs)
 
@@ -81,6 +82,9 @@ def scons():
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_util_tests',
                     source=['acl_util_tests.c', '../acl_util.c'],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'acl_principal_tests',
+                    source=['acl_principal_tests.c', '../acl_principal.c'],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":

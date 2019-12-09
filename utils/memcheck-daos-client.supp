@@ -6,13 +6,6 @@
    fun:dc_pool_connect
 }
 {
-   dfuse-htable-not-closed
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:calloc
-   fun:dfuse_lookup_inode
-}
-{
    crt_progress_leak
    Memcheck:Leak
    match-leak-kinds: possible
@@ -35,21 +28,10 @@
    access-0
    Memcheck:Param
    socketcall.sendto(msg)
+   ...
    fun:send
    fun:sock_comm_send_socket.isra.3
-   fun:sock_pe_progress_tx_entry
-   fun:sock_pe_progress_tx_ctx
-   fun:sock_pe_progress_thread
-   fun:start_thread
-   fun:clone
-}
-{
-   access-2
-   Memcheck:Param
-   socketcall.sendto(msg)
-   fun:send
-   fun:sock_comm_send_socket.isra.3
-   fun:sock_comm_flush
+   ...
    fun:sock_pe_progress_tx_entry
    fun:sock_pe_progress_tx_ctx
    fun:sock_pe_progress_thread
@@ -59,7 +41,6 @@
 {
    dfuse-cont-dfs-leak
    Memcheck:Leak
-   match-leak-kinds: indirect
    fun:calloc
    fun:dfuse_cont_open*
 }
@@ -78,7 +59,6 @@
 {
    dfuse-dfs-leak
    Memcheck:Leak
-   match-leak-kinds: indirect
    fun:calloc
    fun:dfuse_pool_lookup
    fun:df_ll_lookup

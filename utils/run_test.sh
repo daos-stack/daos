@@ -72,6 +72,7 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
         SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
     fi
+
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
@@ -93,14 +94,16 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
+	run_test build/src/bio/smd/tests/smd_ut
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
     # Satisfy CGO requirements for go-spdk binding and internal daos imports
-    LD_LIBRARY_PATH="${SL_PREFIX}/lib:${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
-    export LD_LIBRARY_PATH
-    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
+    LD_LIBRARY_PATH="${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
+
+    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib64"
     export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
@@ -108,15 +111,16 @@ if [ -d "/mnt/daos" ]; then
     # Satisfy requirement for starting daos_server w/o config file
     export CRT_PHY_ADDR_STR=ofi+sockets
     export OFI_INTERFACE=lo
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
     run_test build/src/common/tests/acl_util_tests
-    run_test build/src/common/tests/acl_util_real
+    run_test build/src/common/tests/acl_principal_tests
+    run_test build/src/common/tests/acl_real_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests
+    run_test build/src/mgmt/tests/srv_drpc_tests
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"

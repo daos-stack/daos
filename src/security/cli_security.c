@@ -78,8 +78,8 @@ request_credentials_via_drpc(Drpc__Response **response)
 	}
 
 	request = drpc_call_create(agent_socket,
-			DRPC_MODULE_SECURITY_AGENT,
-			DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS);
+			DRPC_MODULE_SEC_AGENT,
+			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
 	if (request == NULL) {
 		D_ERROR("Couldn't allocate dRPC call\n");
 		drpc_close(agent_socket);

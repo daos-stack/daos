@@ -118,11 +118,9 @@ struct bio_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
-	struct spdk_ring	*bxc_msg_ring;
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
-	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
 	struct spdk_bdev_desc	*bxc_desc; /* for io stat only, read-only */
@@ -137,6 +135,7 @@ struct bio_io_context {
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
+	uint32_t		 bic_io_unit;
 	unsigned int		 bic_opening:1,
 				 bic_closing:1;
 };
@@ -172,17 +171,10 @@ struct bio_rsrvd_dma {
 /* I/O descriptor */
 struct bio_desc {
 	struct bio_io_context	*bd_ctxt;
-	/* SG lists involved in this io descriptor */
-	unsigned int		 bd_sgl_cnt;
-	struct bio_sglist	*bd_sgls;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
-	/*
-	 * SPDK blob io completion could run on different xstream
-	 * when the NVMe device is shared by multiple xstreams.
-	 */
-	ABT_mutex		 bd_mutex;
-	ABT_cond		 bd_dma_done;
+	/* Report blob i/o completion */
+	ABT_eventual		 bd_dma_done;
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
@@ -191,6 +183,9 @@ struct bio_desc {
 				 bd_update:1,
 				 bd_dma_issued:1,
 				 bd_retry:1;
+	/* SG lists involved in this io descriptor */
+	unsigned int		 bd_sgl_cnt;
+	struct bio_sglist	 bd_sgls[0];
 };
 
 static inline struct spdk_thread *
@@ -203,6 +198,12 @@ static inline bool
 is_blob_valid(struct bio_io_context *ctxt)
 {
 	return ctxt->bic_blob != NULL && !ctxt->bic_closing;
+}
+
+static inline uint64_t
+page2io_unit(struct bio_io_context *ctxt, uint64_t page)
+{
+	return page * (BIO_DMA_PAGE_SZ / ctxt->bic_io_unit);
 }
 
 enum {
@@ -244,7 +245,7 @@ void bio_media_error(void *msg_arg);
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
 
 /* bio_recovery.c */
-extern struct bio_reaction_ops *ract_ops;
 int bio_bs_state_transit(struct bio_blobstore *bbs);
+int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 #endif /* __BIO_INTERNAL_H__ */
