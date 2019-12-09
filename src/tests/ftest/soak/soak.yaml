@@ -1,10 +1,10 @@
 hosts:
-    test_servers:
-        - boro-A
-        - boro-B
-        - boro-C
-        - boro-D
-    client_partition: daos_client
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  client_partition: daos_client
 # This timeout must be longer than the test_timeout param (+30minutes)
 timeout: 5400
 logdir: /tmp/soak
