@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from daos_io_conf import IoConfTestBase
-
+from apricot import skipForTicket
 
 class DaosRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf.
