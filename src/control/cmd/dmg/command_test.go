@@ -172,6 +172,11 @@ func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	return make(common.SystemMemberResults, 0), nil
 }
 
+func (tc *testConn) LeaderQuery(system string) (l string, r []string, e error) {
+	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", system))
+	return
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }

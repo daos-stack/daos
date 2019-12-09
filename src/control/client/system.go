@@ -24,6 +24,7 @@
 package client
 
 import (
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -99,4 +100,20 @@ func (c *connList) KillRank(rank uint32) ResultMap {
 	results[result.Address] = result
 
 	return results
+}
+
+func (c *connList) LeaderQuery(system string) (leader string, replicas []string, err error) {
+	if len(c.controllers) == 0 {
+		err = errors.New("no controllers defined")
+		return
+	}
+
+	client := c.controllers[0].getSvcClient()
+	var resp *mgmtpb.LeaderQueryResp
+	resp, err = client.LeaderQuery(context.TODO(), &mgmtpb.LeaderQueryReq{System: system})
+	if err != nil {
+		return
+	}
+
+	return resp.CurrentLeader, resp.Replicas, nil
 }

@@ -25,14 +25,32 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
 // systemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
+	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+}
+
+type leaderQueryCmd struct {
+	logCmd
+	cfgCmd
+	connectedCmd
+}
+
+func (cmd *leaderQueryCmd) Execute(_ []string) error {
+	leader, replicas, err := cmd.conns.LeaderQuery(cmd.config.SystemName)
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
+	}
+
+	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", leader, strings.Join(replicas, ", "))
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.
