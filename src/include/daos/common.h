@@ -41,6 +41,7 @@
 #include <pthread.h>
 #include <byteswap.h>
 
+#include <daos_errno.h>
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
@@ -48,11 +49,6 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-
-#ifndef DF_RC
-#define DF_RC "%s(%d)"
-#define DP_RC(rc) d_errstr(rc), rc
-#endif /* DF_RC */
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -540,6 +536,10 @@ enum {
 #define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+
+/** interoperability failure inject */
+#define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
+#define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
