@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define READAHEAD_SIZE (1024*1024)
+#define READAHEAD_SIZE (1024 * 1024)
 
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
@@ -76,19 +76,22 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
 		    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-		     (position >= oh->doh_ie->ie_end_off ||
-		      pos_ra <= oh->doh_ie->ie_start_off))) {
-		    D_ALLOC(ahead_buff, READAHEAD_SIZE);
+		    (position >= oh->doh_ie->ie_end_off ||
+		    pos_ra <= oh->doh_ie->ie_start_off))) {
+			D_ALLOC(ahead_buff, READAHEAD_SIZE);
 
-		    if (ahead_buff) {
-			fb.count = 1;
-			fb.buf[0].mem = ahead_buff;
-			fb.buf[0].size = READAHEAD_SIZE;
+			if (ahead_buff) {
+				fb.count = 1;
+				fb.buf[0].mem = ahead_buff;
+				fb.buf[0].size = READAHEAD_SIZE;
 
-			rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
-				position + len, &fb, 0);
-			D_FREE(ahead_buff);
-		    }
+				rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
+								ino,
+								position + len,
+								&fb,
+								0);
+				D_FREE(ahead_buff);
+			}
 		}
 
 		DFUSE_REPLY_BUF(oh, req, buff, len);
@@ -103,9 +106,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	/* Only do readahead if the requested size is less than 1Mb and the file
 	 * size is > 1Mb
 	 */
-	if ((oh->doh_ie->ie_dfs->dfs_attr_timeout > 0) &&
-		len < (1024 * 1024) &&
-		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+	if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
+	    len < (1024 * 1024) &&
+	    oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 
 		D_ALLOC(ahead_buff, READAHEAD_SIZE);
 		if (ahead_buff != NULL) {
