@@ -1,8 +1,8 @@
 server_config:
    name: scott_server
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 timeout: 650
 evicttests:
    svrlist: !mux
