@@ -59,7 +59,7 @@ class CartSelfTest(TestWithoutServers):
         super(CartSelfTest, self).setUp()
         self.agent_sessions = None
 
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
