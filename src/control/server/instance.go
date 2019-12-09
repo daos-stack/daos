@@ -442,6 +442,6 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 
 func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
-	srv.log.Debugf("I/O server instance %d (target %d) has detected blob I/O error! %v",
+	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)
 }
