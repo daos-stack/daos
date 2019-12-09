@@ -234,10 +234,7 @@ func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Errorf("Expected error to contain %q, got %q",
-			expectedErr, err.Error())
-	}
+	common.CmpErr(t, expectedErr, err.Error())
 }
 
 func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
@@ -257,10 +254,7 @@ func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Errorf("Expected error to contain %q, got %q",
-			expectedErr, err.Error())
-	}
+	common.CmpErr(t, expectedErr, err.Error())
 }
 
 func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
@@ -343,8 +337,5 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("Expected error to contain %q, got %q",
-			expectedError, err.Error())
-	}
+	common.CmpErr(t, expectedError, err.Error())
 }
