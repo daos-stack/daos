@@ -7,8 +7,8 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.6.0
-Release:       15%{?relval}%{?dist}
+Version:       0.7.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -120,6 +120,7 @@ Requires(postun): /sbin/ldconfig
 %if %{defined cart_sha1}
 Requires: cart-%{cart_sha1}
 %endif
+Requires: libfabric >= 1.8.0
 
 %description server
 This is the package needed to run a DAOS server
@@ -131,6 +132,7 @@ Requires: %{name} = %{version}-%{release}
 %if %{defined cart_sha1}
 Requires: cart-%{cart_sha1}
 %endif
+Requires: libfabric >= 1.8.0
 
 %description client
 This is the package needed to run a DAOS client
@@ -331,6 +333,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu Dec 05 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.7.0-1
+- Version bump up to 0.7.0
+
 * Tue Nov 19 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.0-15
 - Temporarily unconstrain max. version of spdk
 

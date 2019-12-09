@@ -214,7 +214,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
-		return -DER_SHUTDOWN; /* TODO: use a more targeted errno */
+		return -DER_SHUTDOWN;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -274,11 +274,11 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
-		goto out;
 	}
-	obj->obj_sync_epoch = obj->obj_df->vo_sync;
+
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
+	    intent == DAOS_INTENT_COS)
 		goto out;
 
 	if (no_create) {
@@ -310,7 +310,11 @@ check_object:
 			DP_RC(rc));
 		goto failed;
 	}
+
 out:
+	if (obj->obj_df != NULL)
+		obj->obj_sync_epoch = obj->obj_df->vo_sync;
+
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
 	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
 	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {

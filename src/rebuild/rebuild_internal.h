@@ -143,13 +143,13 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_rebuild_ver;
 
 	/* bits to track scan status for all targets */
-	uint32_t	*rgt_scan_bits;
+	uint8_t		*rgt_scan_bits;
 
 	/* bits to track pull status for all targets */
-	uint32_t	*rgt_pull_bits;
+	uint8_t		*rgt_pull_bits;
 
-	/* The size of rt_global_scan_bits and
-	 * rt_global_pull_bits in bit
+	/* The size of rgt_scan_bits and
+	 * rgt_pull_bits in bit
 	 */
 	uint32_t	rgt_bits_size;
 
@@ -157,9 +157,7 @@ struct rebuild_global_pool_tracker {
 	uint64_t	rgt_leader_term;
 
 	uint64_t	rgt_time_start;
-	unsigned int	rgt_scan_done:1,
-			rgt_done:1,
-			rgt_abort:1;
+	unsigned int	rgt_abort:1;
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -305,6 +303,27 @@ int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
+
+static inline bool
+is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return isset_range(rgt->rgt_pull_bits, 0, rgt->rgt_bits_size - 1);
+}
+
+static inline bool
+is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return isset_range(rgt->rgt_scan_bits, 0, rgt->rgt_bits_size - 1);
+}
+
+static inline bool
+is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return is_rebuild_global_scan_done(rgt) &&
+	       is_rebuild_global_pull_done(rgt);
+
+}
+
 int rebuild_iv_init(void);
 int rebuild_iv_fini(void);
 
