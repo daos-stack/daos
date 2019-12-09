@@ -2295,8 +2295,10 @@ dfs_read_int(tse_task_t *task)
 		D_GOTO(err_rtask, rc);
 
 	rc = tse_task_schedule(read_task, false);
-	if (rc != 0)
-		D_GOTO(err_rtask, rc);
+	if (rc != 0) {
+		tse_task_complete(read_task, rc);
+		return rc;
+	}
 	tse_sched_progress(tse_task2sched(task));
 	return rc;
 

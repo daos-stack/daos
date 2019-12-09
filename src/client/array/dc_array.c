@@ -968,26 +968,12 @@ io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size)
 
 	rgs_len = 0;
 
-	D_DEBUG(DB_IO, "USER ARRAY RANGE -----------------------\n");
-	D_DEBUG(DB_IO, "Array IOD nr = %zu\n", iod->arr_nr);
-
-	for (u = 0 ; u < iod->arr_nr ; u++) {
+	for (u = 0 ; u < iod->arr_nr ; u++)
 		rgs_len += iod->arr_rgs[u].rg_len;
-		D_DEBUG(DB_IO, "%zu: length %zu, index %d\n",
-			u, iod->arr_rgs[u].rg_len,
-			(int)iod->arr_rgs[u].rg_idx);
-	}
-
-	D_DEBUG(DB_IO, "------------------------------------\n");
-	D_DEBUG(DB_IO, "USER SGL -----------------------\n");
-	D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
 
 	sgl_len = 0;
-	for (u = 0 ; u < sgl->sg_nr; u++) {
+	for (u = 0 ; u < sgl->sg_nr; u++)
 		sgl_len += sgl->sg_iovs[u].iov_len;
-		D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n", u,
-			sgl->sg_iovs[u].iov_len, sgl->sg_iovs[u].iov_buf);
-	}
 
 	return (rgs_len * cell_size == sgl_len);
 }
@@ -1250,9 +1236,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			D_GOTO(err_task, rc);
 		}
 
-		D_DEBUG(DB_IO, "DKEY IOD "DF_U64" ---------------\n", dkey_val);
-		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
-			(int)array_idx, num_records, (int)record_i);
+		D_DEBUG(DB_IO, "DKEY IOD "DF_U64": idx = %d\t num_records = %zu"
+			"\t record_i = %d\n",
+			dkey_val, (int)array_idx, num_records, (int)record_i);
 
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
