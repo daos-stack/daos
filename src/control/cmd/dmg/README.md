@@ -195,7 +195,7 @@ boro-45:10001: []
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ dmg storage format -f
+[tanabarr@ssh-1 ~]$ dmg storage format
 2019/06/19 15:51:44 config.go:122: debug: DAOS Client config read from /home/tanabarr/projects/daos_m/install/etc/daos.yml
 Active connections: [boro-45:10001]
 

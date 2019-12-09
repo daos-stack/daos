@@ -439,22 +439,12 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 }
 
 static int
-attach_group(const char *name, bool pmixless, int npsrs,
-	     struct dc_mgmt_psr *psrs, crt_group_t **groupp)
+attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
+	     crt_group_t **groupp)
 {
 	crt_group_t    *group;
 	int		i;
 	int		rc;
-
-	if (!pmixless) {
-		rc = crt_group_attach((char *)name, &group);
-		if (rc != 0) {
-			D_ERROR("failed to attach to group %s: "DF_RC"\n", name,
-				DP_RC(rc));
-			goto err;
-		}
-		goto out;
-	}
 
 	rc = crt_group_view_create((char *)name, &group);
 	if (rc != 0) {
@@ -480,7 +470,6 @@ attach_group(const char *name, bool pmixless, int npsrs,
 		}
 	}
 
-out:
 	*groupp = group;
 	return 0;
 
@@ -491,16 +480,12 @@ err:
 }
 
 static void
-detach_group(bool server, bool pmixless, crt_group_t *group)
+detach_group(bool server, crt_group_t *group)
 {
 	int rc = 0;
 
-	if (!server) {
-		if (!pmixless)
-			rc = crt_group_detach(group);
-		else
-			rc = crt_group_view_destroy(group);
-	}
+	if (!server)
+		rc = crt_group_view_destroy(group);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
@@ -510,7 +495,6 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 {
 	struct dc_mgmt_sys     *sys;
 	crt_group_t	       *group;
-	bool			pmixless = false;
 	int			rc;
 
 	D_DEBUG(DB_MGMT, "attaching to system '%s'\n", name);
@@ -538,25 +522,19 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto out;
 	}
 
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	if (pmixless) {
-		if (psrbs == NULL)
-			rc = get_attach_info(name, &sys->sy_npsrs,
-					     &sys->sy_psrs);
-		else
-			rc = get_attach_info_from_buf(npsrbs, psrbs,
-						      &sys->sy_npsrs,
-						      &sys->sy_psrs);
-		if (rc != 0)
-			goto err_sys;
-		if (sys->sy_npsrs < 1) {
-			D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
-			goto err_psrs;
-		}
+	if (psrbs == NULL)
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+	else
+		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
+					      &sys->sy_psrs);
+	if (rc != 0)
+		goto err_sys;
+	if (sys->sy_npsrs < 1) {
+		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		goto err_psrs;
 	}
 
-	rc = attach_group(name, pmixless, sys->sy_npsrs, sys->sy_psrs,
-			  &sys->sy_group);
+	rc = attach_group(name, sys->sy_npsrs, sys->sy_psrs, &sys->sy_group);
 	if (rc != 0)
 		goto err_psrs;
 
@@ -565,8 +543,7 @@ out:
 	return 0;
 
 err_psrs:
-	if (pmixless)
-		put_attach_info(sys->sy_npsrs, sys->sy_psrs);
+	put_attach_info(sys->sy_npsrs, sys->sy_psrs);
 err_sys:
 	D_FREE(sys);
 err:
@@ -576,14 +553,11 @@ err:
 static void
 detach(struct dc_mgmt_sys *sys)
 {
-	bool pmixless = false;
-
 	D_DEBUG(DB_MGMT, "detaching from system '%s'\n", sys->sy_name);
 	D_ASSERT(d_list_empty(&sys->sy_link));
 	D_ASSERTF(sys->sy_ref == 0, "%d\n", sys->sy_ref);
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	detach_group(sys->sy_server, pmixless, sys->sy_group);
-	if (!sys->sy_server && pmixless)
+	detach_group(sys->sy_server, sys->sy_group);
+	if (!sys->sy_server)
 		put_attach_info(sys->sy_npsrs, sys->sy_psrs);
 	D_FREE(sys);
 }

@@ -407,6 +407,9 @@ type2anchor(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	case VOS_ITER_SINGLE:
 		D_ASSERT(anchors->ia_reprobe_sv == 0);
 		return &anchors->ia_sv;
+	case VOS_ITER_COUUID:
+		D_ASSERT(anchors->ia_reprobe_co == 0);
+		return &anchors->ia_co;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
 		return NULL;
@@ -481,6 +484,10 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 	case VOS_ITER_OBJ:
 		if (yield || (delete && (type == VOS_ITER_OBJ)))
 			anchors->ia_reprobe_obj = 1;
+		/* fallthrough */
+	case VOS_ITER_COUUID:
+		if (yield || (delete && (type == VOS_ITER_COUUID)))
+			anchors->ia_reprobe_co = 1;
 		break;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
@@ -514,6 +521,10 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 		reprobe = anchors->ia_reprobe_sv;
 		anchors->ia_reprobe_sv = 0;
 		break;
+	case VOS_ITER_COUUID:
+		reprobe = anchors->ia_reprobe_co;
+		anchors->ia_reprobe_co = 0;
+		break;
 	default:
 		D_ASSERTF(false, "invalid iter type %d\n", type);
 		reprobe = false;
@@ -537,7 +548,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	bool			skipped;
 	int			rc;
 
-	D_ASSERT(type >= VOS_ITER_OBJ && type <= VOS_ITER_RECX);
+	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
 
 	anchor = type2anchor(type, anchors);

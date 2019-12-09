@@ -171,56 +171,6 @@ free:
 }
 
 int
-ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
-		     crt_group_t **group)
-{
-	char		id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t	ranks;
-	int		rc;
-
-	uuid_unparse_lower(pool_uuid, id);
-
-	D_DEBUG(DF_DSMS, DF_UUID": creating pool group %s\n",
-		DP_UUID(pool_uuid), id);
-
-	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (ranks.rl_nr == 0) {
-		D_ERROR(DF_UUID": failed to find any up targets\n",
-			DP_UUID(pool_uuid));
-		D_GOTO(out_ranks, rc = -DER_IO);
-	}
-
-	rc = dss_group_create(id, &ranks, group);
-	if (rc != 0)
-		D_GOTO(out_ranks, rc);
-
-out_ranks:
-	map_ranks_fini(&ranks);
-out:
-	return rc;
-}
-
-int
-ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
-{
-	int rc;
-
-	D_DEBUG(DF_DSMS, DF_UUID": destroying pool group %s\n",
-		DP_UUID(pool_uuid), group->cg_grpid);
-	rc = dss_group_destroy(group);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool group %s: %d\n",
-			DP_UUID(pool_uuid), group->cg_grpid, rc);
-	return rc;
-}
-
-int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
 		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
@@ -470,7 +420,12 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	 * might be timeout. XXX
 	 */
 	ABT_rwlock_rdlock(pool->sp_lock);
+	if (pool->sp_map == NULL) {
+		rc = 0;
+		goto out_lock;
+	}
 	rc = map_ranks_init(pool->sp_map, status, ranks);
+out_lock:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",

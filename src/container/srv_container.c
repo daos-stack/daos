@@ -1564,17 +1564,13 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_COMMIT:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    false);
 	case CONT_EPOCH_AGGREGATE:
 		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    true);
-	 case CONT_SNAP_DESTROY:
+		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);

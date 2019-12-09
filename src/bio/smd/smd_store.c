@@ -104,7 +104,6 @@ smd_store_check(char *fname, bool *existing)
 }
 
 #define SMD_FILE_SIZE	(128UL << 20)	/* 128MB */
-#define SMD_MAGIC	(0xdcab0918)
 #define SMD_TREE_ODR	32
 
 static int
@@ -173,7 +172,11 @@ smd_store_create(char *fname)
 		goto tx_end;
 
 	memset(smd_df, 0, sizeof(*smd_df));
-	smd_df->smd_magic = SMD_MAGIC;
+	smd_df->smd_magic = SMD_DF_MAGIC;
+	if (DAOS_FAIL_CHECK(FLC_SMD_DF_VER))
+		smd_df->smd_version = 0;
+	else
+		smd_df->smd_version = SMD_DF_VERSION;
 
 	/* Create device table */
 	rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, SMD_TREE_ODR, &uma,
@@ -262,6 +265,19 @@ smd_store_open(char *fname)
 	}
 
 	smd_df = smd_pop2df(ph);
+	if (smd_df->smd_magic != SMD_DF_MAGIC) {
+		D_CRIT("Unknown DF magic %x\n", smd_df->smd_magic);
+		rc = -DER_DF_INVAL;
+		goto error;
+	}
+
+	if (smd_df->smd_version > SMD_DF_VERSION ||
+	    smd_df->smd_version < SMD_DF_VER_1) {
+		D_ERROR("Unsupported DF version %d\n", smd_df->smd_version);
+		rc = -DER_DF_INCOMPT;
+		goto error;
+	}
+
 	/* Open device table */
 	rc = dbtree_open_inplace(&smd_df->smd_dev_tab, &uma,
 				 &smd_store.ss_dev_hdl);

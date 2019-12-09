@@ -2,26 +2,26 @@ hosts:
     servers: !mux
       1_server:
         test_servers:
-          - boro-A
+          - server-A
       8_servers:
         test_servers:
-          - boro-A
-          - boro-B
-          - boro-C
-          - boro-D
-          - boro-E
-          - boro-F
-          - boro-G
-          - boro-H
+          - server-A
+          - server-B
+          - server-C
+          - server-D
+          - server-E
+          - server-F
+          - server-G
+          - server-H
     test_clients:
-        - boro-I
-        - boro-J
-        - boro-K
-        - boro-L
-        - boro-M
-        - boro-N
-        - boro-O
-        - boro-P
+        - client-I
+        - client-J
+        - client-K
+        - client-L
+        - client-M
+        - client-N
+        - client-O
+        - client-P
 timeout: 2000
 server_config:
     name: daos_server
