@@ -8,8 +8,6 @@ Control plane server (`daos_server`) instances will open a gRPC channel to liste
 
 ## Running
 
-`daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
-
 For instructions on building and running DAOS see the [Quickstart guide](../../../doc/quickstart.md).
 
 <details>
