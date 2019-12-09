@@ -31,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -64,7 +65,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedErr := "unmarshal NotifyReady request"
+	expectedErr := drpc.NewFailure(drpc.Status_INVALID_PAYLOAD)
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 
@@ -80,7 +81,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), expectedErr) {
+	if !strings.Contains(err.Error(), expectedErr.Error()) {
 		t.Errorf("Expected error to contain %q, got %q",
 			expectedErr, err.Error())
 	}

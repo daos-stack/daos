@@ -112,7 +112,7 @@ test_drpc_pool_get_acl_bad_request(void **state)
 
 	ds_mgmt_drpc_pool_get_acl(call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__INVALID_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 
@@ -279,7 +279,7 @@ test_drpc_pool_overwrite_acl_bad_request(void **state)
 
 	ds_mgmt_drpc_pool_overwrite_acl(call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__INVALID_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 
@@ -405,7 +405,7 @@ test_drpc_pool_update_acl_bad_request(void **state)
 
 	ds_mgmt_drpc_pool_update_acl(call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__INVALID_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 
@@ -501,7 +501,7 @@ test_drpc_pool_delete_acl_bad_request(void **state)
 
 	ds_mgmt_drpc_pool_delete_acl(call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__INVALID_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 
@@ -627,7 +627,7 @@ test_drpc_list_pools_bad_request(void **state)
 
 	ds_mgmt_drpc_list_pools(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__INVALID_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 }

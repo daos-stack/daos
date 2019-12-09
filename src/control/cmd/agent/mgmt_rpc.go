@@ -51,7 +51,7 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byt
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req)
 	default:
-		return nil, errors.Errorf("unknown dRPC %d", method)
+		return nil, drpc.UnknownMethodFailure()
 	}
 }
 
@@ -62,7 +62,7 @@ func (mod *mgmtModule) ID() int32 {
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
+		return nil, drpc.InvalidPayloadFailure()
 	}
 
 	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
@@ -92,7 +92,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	resmgmtpb, err := proto.Marshal(resp)
 	if err != nil {
-		return nil, errors.Wrap(err, "marshal GetAttachInfo response")
+		return nil, drpc.MarshalingFailure()
 	}
 
 	return resmgmtpb, nil

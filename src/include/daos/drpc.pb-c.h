@@ -26,11 +26,38 @@ typedef struct _Drpc__Response Drpc__Response;
  * Status represents the valid values for a response status.
  */
 typedef enum _Drpc__Status {
+  /*
+   * The method executed and provided a response payload, if needed. Otherwise, the method simply succeeded.
+   */
   DRPC__STATUS__SUCCESS = 0,
+  /*
+   * The method has been queued for asynchronous execution.
+   */
   DRPC__STATUS__SUBMITTED = 1,
+  /*
+   * The method has failed and did not provide a response payload.
+   */
   DRPC__STATUS__FAILURE = 2,
+  /*
+   * The requested module does not exist.
+   */
   DRPC__STATUS__UNKNOWN_MODULE = 3,
-  DRPC__STATUS__UNKNOWN_METHOD = 4
+  /*
+   * The requested method does not exist.
+   */
+  DRPC__STATUS__UNKNOWN_METHOD = 4,
+  /*
+   * Could not unmarshal the incoming call.
+   */
+  DRPC__STATUS__INVALID_MESSAGE = 5,
+  /*
+   * Could not unmarshal the method-specific payload of the incoming call.
+   */
+  DRPC__STATUS__INVALID_PAYLOAD = 6,
+  /*
+   * Generated a response payload, but couldn't marshal it into the response.
+   */
+  DRPC__STATUS__FAILED_MARSHAL = 7
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(DRPC__STATUS)
 } Drpc__Status;
 
@@ -38,19 +65,26 @@ typedef enum _Drpc__Status {
 
 /*
  **
- * Call is a structure outlining a function call to be executed
- * over a drpc channel.
- * module is the numerical identifier for the drpc module to process the call
- * method is the specific method within the module
- * sequence is the internal sequence counter for matching calls to responses
- * body is the opaque data of the function call arguments
+ * Call describes a function call to be executed over the dRPC channel.
  */
 struct  _Drpc__Call
 {
   ProtobufCMessage base;
+  /*
+   * ID of the module to process the call.
+   */
   int32_t module;
+  /*
+   * ID of the method to be executed.
+   */
   int32_t method;
+  /*
+   * Sequence number for matching a response to this call.
+   */
   int64_t sequence;
+  /*
+   * Input payload to be used by the method.
+   */
   ProtobufCBinaryData body;
 };
 #define DRPC__CALL__INIT \
@@ -60,16 +94,22 @@ struct  _Drpc__Call
 
 /*
  **
- * Response is the data to the Call with a given sequence number.
- * sequence is the sequence number of the drpc call for the response.
- * status represents the return/faulure value of the call
- * body represents the returned data if a call returns more than just a status.
+ * Response describes the result of a dRPC call.
  */
 struct  _Drpc__Response
 {
   ProtobufCMessage base;
+  /*
+   * Sequence number of the Call that triggered this response.
+   */
   int64_t sequence;
+  /*
+   * High-level status of the RPC. If SUCCESS, method-specific status may be included in the body.
+   */
   Drpc__Status status;
+  /*
+   * Output payload produced by the method.
+   */
   ProtobufCBinaryData body;
 };
 #define DRPC__RESPONSE__INIT \

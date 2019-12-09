@@ -55,7 +55,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
-		return nil, err
+		return nil, drpc.InvalidPayloadFailure()
 	}
 
 	if m.config.AllowInsecure {
@@ -78,7 +78,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 	responseBytes, err := proto.Marshal(credential.Token)
 	if err != nil {
-		return nil, err
+		return nil, drpc.MarshalingFailure()
 	}
 	return responseBytes, nil
 }
@@ -86,7 +86,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	if method != drpc.MethodValidateCredentials {
-		return nil, errors.Errorf("Attempt to call unregistered function")
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	responseBytes, err := m.processValidateCredentials(body)

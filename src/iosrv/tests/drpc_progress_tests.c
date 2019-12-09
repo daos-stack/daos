@@ -394,6 +394,50 @@ test_drpc_progress_listener_accept_failed(void **state)
 }
 
 static void
+test_drpc_progress_single_session_bad_call(void **state)
+{
+	struct drpc_progress_context	ctx;
+	struct drpc_progress_context	original_ctx;
+	int				listener_fd = 13;
+	int				session_fd = 12;
+	size_t				i;
+	size_t				bad_msg_size = 120;
+	Drpc__Response			*resp = NULL;
+
+	init_drpc_progress_context(&ctx, new_drpc_with_fd(listener_fd));
+	add_new_drpc_node_to_list(&ctx.session_ctx_list,
+				  new_drpc_with_fd(session_fd));
+	memcpy(&original_ctx, &ctx, sizeof(struct drpc_progress_context));
+
+	/* Get some arbitrary junk via recvmsg */
+	recvmsg_return = bad_msg_size;
+	for (i = 0; i < bad_msg_size; i++) {
+		recvmsg_msg_content[i] = i;
+	}
+
+	/* sessions end up listed before listener in poll list */
+	poll_revents_return[0] = POLLIN;
+
+	assert_int_equal(drpc_progress(&ctx, 0), DER_SUCCESS);
+
+	/* Session receives the garbage message */
+	assert_int_equal(recvmsg_call_count, 1);
+	assert_int_equal(recvmsg_sockfd, session_fd);
+
+	/* Sent response indicating bad message */
+	assert_int_equal(sendmsg_call_count, 1);
+	assert_int_equal(sendmsg_sockfd, session_fd);
+
+	resp = drpc__response__unpack(NULL, sendmsg_msg_iov_len,
+				      sendmsg_msg_content);
+	assert_non_null(resp);
+	assert_int_equal(resp->status, DRPC__STATUS__INVALID_MESSAGE);
+
+	drpc_response_free(resp);
+	cleanup_drpc_progress_context(&ctx);
+}
+
+static void
 test_drpc_progress_single_session_success(void **state)
 {
 	struct drpc_progress_context	ctx;
@@ -795,6 +839,7 @@ main(void)
 		DRPC_UTEST(test_drpc_progress_poll_timed_out),
 		DRPC_UTEST(test_drpc_progress_poll_failed),
 		DRPC_UTEST(test_drpc_progress_listener_accept_failed),
+		DRPC_UTEST(test_drpc_progress_single_session_bad_call),
 		DRPC_UTEST(test_drpc_progress_single_session_success),
 		DRPC_UTEST(test_drpc_progress_session_cleanup_if_recv_fails),
 		DRPC_UTEST(test_drpc_progress_session_fails_if_no_data),
