@@ -25,6 +25,7 @@ package storage
 import (
 	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/daos-stack/daos/src/control/common"
 	bytesize "github.com/inhies/go-bytesize"
@@ -90,6 +91,8 @@ func (ms ScmModules) String() string {
 		return "\t\tnone\n"
 	}
 
+	sort.Slice(ms, func(i, j int) bool { return ms[i].PhysicalID < ms[j].PhysicalID })
+
 	for _, m := range ms {
 		fmt.Fprintf(&buf, "\t\t%s\n", &m)
 	}
@@ -104,7 +107,7 @@ func (ms ScmModules) Summary() string {
 		tCap += bytesize.New(float64(m.Capacity))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s (unprepared)",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ms), common.Pluralise("module", len(ms)))
 }
 
@@ -120,6 +123,8 @@ func (ns ScmNamespaces) String() string {
 		return "\t\tnone\n"
 	}
 
+	sort.Slice(ns, func(i, j int) bool { return ns[i].BlockDevice < ns[j].BlockDevice })
+
 	for _, n := range ns {
 		fmt.Fprintf(&buf, "\t\t%s\n", &n)
 	}
@@ -134,6 +139,6 @@ func (ns ScmNamespaces) Summary() string {
 		tCap += bytesize.New(float64(n.Size))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ns), common.Pluralise("namespace", len(ns)))
 }

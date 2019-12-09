@@ -171,7 +171,7 @@ func TestStorageScan(t *testing.T) {
 
 	clientResp := cc.StorageScan(&StorageScanReq{})
 
-	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
+	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers), clientResp, "")
 }
 
 func TestStorageFormat(t *testing.T) {
