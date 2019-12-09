@@ -96,6 +96,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
+	ie->ie_truncated = false;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);

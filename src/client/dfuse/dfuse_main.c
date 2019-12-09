@@ -123,7 +123,6 @@ main(int argc, char **argv)
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
-	bool			enable_caching = false;
 
 	/* The 'daos' command uses -m as an alias for --scv however
 	 * dfuse uses -m for --mountpoint so this is inconsistent
@@ -170,7 +169,7 @@ main(int argc, char **argv)
 			dfuse_info->di_group = optarg;
 			break;
 		case 'A':
-			enable_caching = true;
+			dfuse_info->di_caching = true;
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
@@ -235,7 +234,7 @@ main(int argc, char **argv)
 		D_GOTO(out_svcl, 0);
 	}
 
-	if (enable_caching)
+	if (dfuse_info->di_caching)
 		dfs->dfs_attr_timeout = 5;
 
 	if (dfuse_info->di_pool) {

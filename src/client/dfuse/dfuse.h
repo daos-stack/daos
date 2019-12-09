@@ -49,6 +49,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	bool				di_caching;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -414,6 +415,13 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
+
+	/** written region for truncated files (i.e. ie_truncated set) */
+	size_t			ie_start_off;
+	size_t			ie_end_off;
+
+	/** file was truncated from 0 to a certain size */
+	bool			ie_truncated;
 };
 
 /**

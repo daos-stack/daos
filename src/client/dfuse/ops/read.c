@@ -53,6 +53,49 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		return;
 	}
 
+	/* TODO:
+	 *
+	 * fuse_lowlevel_notify_store() does not call free() on the buffer
+	 * after use so a single buffer rather than two would work well here.
+	 * We could combine the truncated and readahead logic by just having
+	 * the trunctated check set a "skip-dfs_read" flag and just have one
+	 * flow through this function rather than two.
+	 * For the ie_truncated code a lot of zeroed data is being passed to
+	 * the kernel so it would be possible to have a "zero-buffer" allcocated
+	 * once and reuse it rather than a malloc + memset every time.
+	 */
+
+	if (oh->doh_ie->ie_truncated &&
+	    position + len < oh->doh_ie->ie_stat.st_size &&
+	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
+	     position >= oh->doh_ie->ie_end_off ||
+	     position + len <= oh->doh_ie->ie_start_off)) {
+		off_t pos_ra = position + len + READAHEAD_SIZE;
+
+		DFUSE_TRA_DEBUG(oh, "Returning zeros");
+
+		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
+		    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
+		     (position >= oh->doh_ie->ie_end_off ||
+		      pos_ra <= oh->doh_ie->ie_start_off))) {
+		    D_ALLOC(ahead_buff, READAHEAD_SIZE);
+
+		    if (ahead_buff) {
+			fb.count = 1;
+			fb.buf[0].mem = ahead_buff;
+			fb.buf[0].size = READAHEAD_SIZE;
+
+			rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
+				position + len, &fb, 0);
+			D_FREE(ahead_buff);
+		    }
+		}
+
+		DFUSE_REPLY_BUF(oh, req, buff, len);
+		D_FREE(buff);
+		return;
+	}
+
 	sgl.sg_nr = 1;
 	d_iov_set(&iov[0], (void *)buff, len);
 	sgl.sg_iovs = iov;
@@ -102,4 +145,5 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
+	D_FREE(ahead_buff);
 }

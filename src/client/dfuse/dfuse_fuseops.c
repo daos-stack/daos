@@ -81,6 +81,13 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->max_read = fs_handle->dpi_max_read;
 	conn->max_write = fs_handle->dpi_max_read;
 
+	if (fs_handle->dpi_info->di_caching) {
+		conn->max_readahead = (1024 * 1024);
+		conn->max_background = 16;
+		conn->congestion_threshold = 12;
+		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+	}
+
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
