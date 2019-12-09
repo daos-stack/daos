@@ -64,9 +64,7 @@ except ImportError:
 TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
 SERVER_KEYS = (
-    "test_machines",
     "test_servers",
-    "daos_servers",
     )
 CLIENT_KEYS = (
     "test_clients",

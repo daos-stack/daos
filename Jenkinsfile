@@ -49,7 +49,7 @@ def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos-adio_rpm ior-hpc@PR-48"
+def ior_repos = "mpich@daos_adio-rpm ior-hpc@PR-48"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
