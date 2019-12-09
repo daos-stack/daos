@@ -26,6 +26,7 @@ package server
 import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -40,12 +41,15 @@ type ControlService struct {
 
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialised with sensible defaults and provided components.
-func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration, m *common.Membership) (*ControlService, error) {
+func NewControlService(l logging.Logger, h *IOServerHarness,
+	bp *bdev.Provider, sp *scm.Provider,
+	cfg *Configuration, m *common.Membership) (*ControlService, error) {
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
 	}
 	scs.scm = sp
+	scs.bdev = bp
 
 	return &ControlService{
 		StorageControlService: *scs,
