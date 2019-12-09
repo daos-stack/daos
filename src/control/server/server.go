@@ -91,6 +91,14 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.New("NVMe support only available with single server in this release")
 	}
 
+	bdevProvider := bdev.DefaultProvider(log)
+	// temporary scaffolding -- remove when bdev forwarding to pbin works
+	if os.Geteuid() == 0 {
+		if err := bdevProvider.Init(bdev.InitRequest{SPDKShmID: cfg.NvmeShmID}); err != nil {
+			return errors.Wrap(err, "failed to init SPDK")
+		}
+	}
+
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
 	membership := common.NewMembership(log)
@@ -124,14 +132,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, scmProvider, cfg, membership)
+	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
-	defer controlService.Teardown()
 
 	// Create and start listener on management network.
 	lis, err := net.Listen("tcp4", controlAddr.String())
@@ -162,7 +169,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("DAOS control server listening on %s", controlAddr)
+	log.Infof("DAOS control server (pid %d) listening on %s", os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)

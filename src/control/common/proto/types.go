@@ -20,28 +20,94 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package common_storage
+package proto
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	bytesize "github.com/inhies/go-bytesize"
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+func convertTypes(in interface{}, out interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, out)
+}
+
+type NvmeDeviceHealth ctlpb.NvmeController_Health
+
+func (pb *NvmeDeviceHealth) FromNative(native *storage.NvmeDeviceHealth) error {
+	return convertTypes(native, pb)
+}
+
+func (pb *NvmeDeviceHealth) ToNative() (*storage.NvmeDeviceHealth, error) {
+	native := new(storage.NvmeDeviceHealth)
+	return native, convertTypes(pb, native)
+}
+
+func (pb *NvmeDeviceHealth) AsProto() *ctlpb.NvmeController_Health {
+	return (*ctlpb.NvmeController_Health)(pb)
+}
+
+type NvmeNamespace ctlpb.NvmeController_Namespace
+
+func (pb *NvmeNamespace) FromNative(native *storage.NvmeNamespace) error {
+	return convertTypes(native, pb)
+}
+
+func (pb *NvmeNamespace) ToNative() (*storage.NvmeNamespace, error) {
+	native := new(storage.NvmeNamespace)
+	return native, convertTypes(pb, native)
+}
+
+func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
+	return (*ctlpb.NvmeController_Namespace)(pb)
+}
 
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
+type NvmeController ctlpb.NvmeController
+
+func (pb *NvmeController) FromNative(native *storage.NvmeController) error {
+	return convertTypes(native, pb)
+}
+
+func (pb *NvmeController) ToNative() (*storage.NvmeController, error) {
+	native := new(storage.NvmeController)
+	return native, convertTypes(pb, native)
+}
+
+func (pb *NvmeController) AsProto() *ctlpb.NvmeController {
+	return (*ctlpb.NvmeController)(pb)
+}
+
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
 
-func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
+	return convertTypes(native, pb)
+}
+
+func (pb NvmeControllers) ToNative() (storage.NvmeControllers, error) {
+	native := make(storage.NvmeControllers, 0, len(pb))
+	return native, convertTypes(pb, native)
+}
+
+func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
 	stat := c.Healthstats
 
 	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
@@ -97,14 +163,14 @@ func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeControll
 
 // ctrlrDetail provides custom string representation for Controller type
 // defined outside this package.
-func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	fmt.Fprintf(buf, "\t\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
-		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
-
-	for _, ns := range c.Namespaces {
-		fmt.Fprintf(buf, "\t\t\tNamespace: id:%d capacity:%s\n", ns.Id,
-			bytesize.GB*bytesize.New(float64(ns.Size)))
+func ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+	tCap := bytesize.New(0)
+	for _, n := range c.Namespaces {
+		tCap += bytesize.GB * bytesize.New(float64(n.Size))
 	}
+
+	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		c.Pciaddr, c.Model, c.Fwrev, c.Socketid, tCap)
 }
 
 func (ncs NvmeControllers) String() string {
@@ -115,8 +181,10 @@ func (ncs NvmeControllers) String() string {
 		return buf.String()
 	}
 
+	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
+
 	for _, ctrlr := range ncs {
-		ncs.ctrlrDetail(buf, ctrlr)
+		ctrlrDetail(buf, ctrlr)
 	}
 
 	return buf.String()
@@ -134,8 +202,8 @@ func (ncs NvmeControllers) StringHealthStats() string {
 	}
 
 	for _, ctrlr := range ncs {
-		ncs.ctrlrDetail(buf, ctrlr)
-		ncs.healthDetail(buf, ctrlr)
+		ctrlrDetail(buf, ctrlr)
+		healthDetail(buf, ctrlr)
 	}
 
 	return buf.String()
@@ -150,7 +218,7 @@ func (ncs NvmeControllers) Summary() string {
 		}
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
