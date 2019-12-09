@@ -27,16 +27,16 @@ gen_io_conf:
       targets:
     remove_single_target:
       targets: "8"
-  no_of_dkeys: !mux
+  no_of_dkeys:
     large_no_dkeys:
       dkeys: "5"
-  no_of_akeys: !mux
+  no_of_akeys:
     large_no_akeys:
       akeys: "5"
-  record: !mux
+  record:
     large_record_no:
       record_size: "50"
-  no_of_objects: !mux
+  no_of_objects:
     large_no_objects:
       obj_num: "10"
   object_class: !mux
