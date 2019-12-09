@@ -102,7 +102,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	sgl.sg_iovs = &iov;
 
 	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
 
 	while (size < file_size) {
@@ -154,7 +154,6 @@ dfs_test_read_thread(void *arg)
 	daos_size_t			buf_size;
 	daos_size_t			read_size, got_size;
 	daos_size_t			off = 0;
-	int				count = 0;
 	int				rc;
 
 	print_message("dfs_test_read_thread %d\n", targ->thread_idx);
@@ -179,13 +178,10 @@ dfs_test_read_thread(void *arg)
 		read_size = min(targ->total_size - off, targ->stride);
 		sgl.sg_iovs[0].iov_len = read_size;
 
-		if (count % 10 == 0)
-		print_message("thread %d try to read off %d, size %d......\n",
-			      targ->thread_idx, (int)off, (int)read_size);
 		rc = dfs_read(dfs, obj, &sgl, off, &got_size, NULL);
-		if (count++ % 10 == 0)
-		print_message("thread %d read done rc %d, got_size %d.\n",
-			      targ->thread_idx, rc, (int)got_size);
+		if (rc || read_size != got_size)
+			print_message("thread %d: rc %d, got_size %d.\n",
+				      targ->thread_idx, rc, (int)got_size);
 		assert_int_equal(rc, 0);
 		assert_int_equal(read_size, got_size);
 		off += targ->stride * dfs_test_thread_nr;

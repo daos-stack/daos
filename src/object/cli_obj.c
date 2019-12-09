@@ -1785,7 +1785,7 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, uint64_t epoch)
 	 * the IO involved shards' targets not changed. No any shard task
 	 * re-scheduled for this case, can complete the obj IO task.
 	 */
-	if (obj_auxi->shard_task_scheded == 0)
+	if (obj_auxi->shard_task_scheded == 0 && obj_auxi->obj_task)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
