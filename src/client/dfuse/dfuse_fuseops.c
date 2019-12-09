@@ -160,7 +160,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
-		DFUSE_REPLY_ATTR(req, &inode->ie_stat);
+		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);

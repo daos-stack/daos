@@ -53,6 +53,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!dfs)
 		D_GOTO(err, rc = ENOMEM);
 
+	dfs->dfs_attr_timeout = parent->ie_dfs->dfs_attr_timeout;
+
 	/*
 	 * Dentry names with invalid uuids cannot possibly be added. In this
 	 * case, return the negative dentry with a timeout to prevent future

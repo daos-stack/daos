@@ -60,7 +60,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	/* Only do readahead if the requested size is less than 1Mb and the file
 	 * size is > 1Mb
 	 */
-	if (len < (1024 * 1024) && oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+	if ((oh->doh_ie->ie_dfs->dfs_attr_timeout > 0) &&
+		len < (1024 * 1024) &&
+		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 
 		D_ALLOC(ahead_buff, READAHEAD_SIZE);
 		if (ahead_buff != NULL) {

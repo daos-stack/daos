@@ -162,6 +162,7 @@ struct dfuse_dfs {
 	daos_pool_info_t	dfs_pool_info;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	double			dfs_attr_timeout;
 };
 
 /* dfuse_core.c */
@@ -271,15 +272,15 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(req, attr)					\
+#define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
-		__rc = fuse_reply_attr(req, attr, 0);			\
+		__rc = fuse_reply_attr(req, attr, (ie)->ie_dfs->dfs_attr_timeout); \
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)

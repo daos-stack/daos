@@ -38,6 +38,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
 		if (rc)
@@ -164,6 +167,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+	dfs->dfs_attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	/* Connect to DAOS pool */
 	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
