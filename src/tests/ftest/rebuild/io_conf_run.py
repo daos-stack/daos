@@ -29,6 +29,8 @@ class DaosRunIoConf(IoConfTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
+
     @skipForTicket("DAOS-3866")
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-3150.
