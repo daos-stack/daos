@@ -1,6 +1,6 @@
 hosts:
   test_servers:
-    - boro-A
+    - server-A
 server_config:
   name: daos_server
   servers:
