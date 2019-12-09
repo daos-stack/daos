@@ -20,9 +20,26 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package common
+package bdev
 
-// MockCheckMountOk mocks CheckMount and always returns nil error.
-func MockCheckMountOk(path string) error {
-	return nil
+import (
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
+)
+
+var (
+	FaultUnknown = bdevFault(code.BdevUnknown, "unknown bdev error", "")
+
+	FaultFormatUnknownClass = bdevFault(
+		code.BdevFormatBadParam, "format request contains unhandled block device class", "",
+	)
+)
+
+func bdevFault(code code.Code, desc, res string) *fault.Fault {
+	return &fault.Fault{
+		Domain:      "bdev",
+		Code:        code,
+		Description: desc,
+		Resolution:  res,
+	}
 }

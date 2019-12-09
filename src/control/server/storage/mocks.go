@@ -20,9 +20,49 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package common
+package storage
 
-// MockCheckMountOk mocks CheckMount and always returns nil error.
-func MockCheckMountOk(path string) error {
-	return nil
+import "fmt"
+
+func concat(base string, idx int32) string {
+	return fmt.Sprintf("%s-%d", base, idx)
+}
+
+func getIndex(varIdx ...int32) int32 {
+	if len(varIdx) == 0 {
+		varIdx = append(varIdx, 1)
+	}
+
+	return varIdx[0]
+}
+
+func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
+	idx := getIndex(varIdx...)
+
+	return &NvmeDeviceHealth{
+		CtrlrPciAddr: concat("pciAddr", idx),
+	}
+}
+
+func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
+	idx := getIndex(varIdx...)
+	return &NvmeNamespace{
+		ID:           idx,
+		Size:         idx,
+		CtrlrPciAddr: concat("pciAddr", idx),
+	}
+}
+
+func MockNvmeController(varIdx ...int32) *NvmeController {
+	idx := getIndex(varIdx...)
+
+	return &NvmeController{
+		Model:       concat("model", idx),
+		Serial:      concat("serial", idx),
+		PciAddr:     concat("pciAddr", idx),
+		FwRev:       concat("fwRev", idx),
+		SocketID:    idx,
+		HealthStats: MockNvmeDeviceHealth(idx),
+		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
+	}
 }
