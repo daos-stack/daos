@@ -43,10 +43,18 @@ POBJ_LAYOUT_END(smd_md_layout);
 /* Maximum target(VOS xstream) count */
 #define SMD_MAX_TGT_CNT		64
 
+#define SMD_DF_MAGIC		0x5eaf00d
+
+#define SMD_DF_VER_1		1
+/* The current SMD DF version */
+#define SMD_DF_VERSION		SMD_DF_VER_1
+
 /* SMD root durable format */
 struct smd_df {
+	/** magic number to idenfity durable formatn */
 	uint32_t	smd_magic;
-	uint32_t	smd_compat;
+	/** the current version of durable format */
+	uint32_t	smd_version;
 	struct btr_root	smd_dev_tab;	/* device table */
 	struct btr_root	smd_pool_tab;	/* pool table */
 	struct btr_root	smd_tgt_tab;	/* target table */
