@@ -29,7 +29,7 @@ class DaosRunIoConf(IoConfTestBase):
 
     :avocado: recursive
     """
-
+    @skipForTicket("DAOS-3866")
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-3150.
 
@@ -45,6 +45,6 @@ class DaosRunIoConf(IoConfTestBase):
         Use Cases:
             Verify rebuild with data verification.
 
-        :avocado: tags=all,medium,pr,hw,rebuild,iorebuild
+        :avocado: tags=all,medium,hw,rebuild,iorebuild
         """
         self.execute_io_conf_run_test()
