@@ -64,9 +64,7 @@ except ImportError:
 TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
 SERVER_KEYS = (
-    "test_machines",
     "test_servers",
-    "daos_servers",
     )
 CLIENT_KEYS = (
     "test_clients",
@@ -125,7 +123,7 @@ def set_test_environment():
     # /usr/sbin is not setup on non-root user for CI nodes.
     # SCM formatting tool mkfs.ext4 is located under
     # /usr/sbin directory.
-    usr_sbin = os.path.join("/usr/", "sbin")
+    usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
     # Update env definitions
