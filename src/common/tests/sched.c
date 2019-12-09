@@ -118,10 +118,12 @@ sched_test_1()
 	}
 
 	print_message("CANCEL non empty scheduler\n");
+	tse_sched_addref(&sched);
 	tse_sched_complete(&sched, 0, true);
 
 	print_message("Check scheduler is empty\n");
 	flag = tse_sched_check_complete(&sched);
+	tse_sched_decref(&sched);
 	if (!flag) {
 		print_error("Scheduler should not have in-flight tasks\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -318,10 +320,12 @@ sched_test_2()
 	tse_task_complete(task, 0);
 
 	print_message("COMPLETE Scheduler\n");
+	tse_sched_addref(&sched);
 	tse_sched_complete(&sched, 0, false);
 
 	print_message("Check scheduler is empty\n");
 	flag = tse_sched_check_complete(&sched);
+	tse_sched_decref(&sched);
 	if (!flag) {
 		print_error("Scheduler should not have in-flight tasks\n");
 		D_GOTO(out, rc = -DER_INVAL);

@@ -31,7 +31,7 @@ import (
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/storage"
+	. "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
