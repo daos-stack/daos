@@ -36,6 +36,9 @@ import java.nio.ByteBuffer;
  * {@link #delete()}, {@link #createNewFile()}, {@link #exists()}, {@link #length()}. The creation of this object
  * doesn't involve any remote operation which is delayed and invoked on-demand.
  *
+ * For each instance of {@link DaosFile}, its parent path, file name and path (parent path + / + file name) are
+ * generated for later DAOS access convenience.
+ *
  * @see DaosFsClient
  * @see Cleaner
  */
@@ -149,15 +152,15 @@ public class DaosFile {
     if(objId != 0){
       return;
     }
-
     try {
-      if (parentPath == null) {
-        objId = client.dfsLookup(dfsPtr, parent == null ? -1 : parent.getObjId(), name, accessFlags, -1);
+      //TODO: accessFlags READONLY OR RDWR
+      if (parent != null && parent.isOpen()) {
+        objId = client.dfsLookup(dfsPtr, parent.getObjId(), name, accessFlags, -1);
       } else {
-        objId = client.dfsLookup(dfsPtr, parentPath, name, accessFlags, -1);
+        objId = client.dfsLookup(dfsPtr, path, accessFlags, -1);
       }
     }catch (Exception e){
-      if(throwException){
+      if(throwException){//TODO: append path info
         throw new DaosIOException(e);
       }else{//TODO: verify error code to determine existence, if it's other error code, throw it anyway.
         lastException = e;
@@ -168,11 +171,15 @@ public class DaosFile {
     createCleaner();
   }
 
+  public boolean isOpen(){
+    return objId != 0;
+  }
+
   /**
-   * create cleaner for each opened {@link DaosFile} object. Cleaner calls {@link DaosFsClient#dfsRelease(long, long)}
+   * create cleaner for each opened {@link DaosFile} object. Cleaner calls {@link DaosFsClient#dfsRelease(long)}
    * to release opened FS object.
    *
-   * If object is deleted in advance, no {@link DaosFsClient#dfsRelease(long, long)} will be called.
+   * If object is deleted in advance, no {@link DaosFsClient#dfsRelease(long)} will be called.
    */
   private void createCleaner() {
     if(cleaner != null){
@@ -183,9 +190,9 @@ public class DaosFile {
     cleaner = Cleaner.create(this, () -> {
       if(!cleaned) {
         try {
-          client.dfsRelease(dfsPtr, objId);
+          client.dfsRelease(objId);
         }catch (IOException e){
-          log.error("failed to release fs object "+objId, e);
+          log.error("failed to release fs object with "+path, e);
         }
       }
     });
@@ -212,24 +219,57 @@ public class DaosFile {
   public String[] listChildren() throws IOException{
     open(true);
     //no limit to max returned entries for now
-    String[] children = client.dfsReadDir(dfsPtr, objId, -1);
-    return children;
+    String children = client.dfsReadDir(dfsPtr, objId, -1);
+    return children.split(",");
   }
 
-  public void setExtAttribute(String name, String value)throws IOException{
+  /**
+   * set extended attribute
+   * @param name
+   * @param value
+   * @param flags, should be one of below value
+   * {@link Constants#SET_XATTRIBUTE_NO_CHECK} : no attribute name check
+   * {@link Constants#SET_XATTRIBUTE_CREATE}   : create or fail if attribute exits
+   * {@link Constants#SET_XATTRIBUTE_REPLACE}  : replace or fail if attribute doesn't exist
+   * @throws IOException
+   */
+  public void setExtAttribute(String name, String value, int flags)throws IOException{
     open(true);
-    client.dfsSetExtAttr(dfsPtr, objId, name, value, 0);
+    client.dfsSetExtAttr(dfsPtr, objId, name, value, flags);
+  }
+
+  public String getExtAttribute(String name, int expectedValueLen)throws IOException{
+    open(true);
+    return client.dfsGetExtAttr(dfsPtr, objId, name, expectedValueLen);
+  }
+
+  public void remoteExtAttribute(String name) throws IOException{
+    open(true);
+    client.dfsRemoveExtAttr(dfsPtr, objId, name);
+  }
+
+  public void getChunkSize()throws IOException{
+    open(true);
+    client.dfsGetChunkSize(objId);
   }
 
   public long read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException{
     open(true);
     //no asynchronous for now
+    if (len > buffer.capacity() - bufferOffset){
+      throw new IOException(String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
+              buffer.capacity(), bufferOffset, len));
+    }
     return client.dfsRead(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
   public long write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len)throws IOException {
     open(true);
     //no asynchronous for now
+    if (len > buffer.capacity() - bufferOffset){
+      throw new IOException(String.format("buffer (%d) has no enough data start at %d for write %d bytes to file",
+              buffer.capacity(), bufferOffset, len));
+    }
     return client.dfsWrite(dfsPtr, objId, ((DirectBuffer)buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 

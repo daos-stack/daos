@@ -114,6 +114,7 @@
                 <exec dir="${native.build.path}"
                       failonerror="true"
                       executable="gcc">
+                  <arg value="-I/usr/include/x86_64-linux-gnu/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
                   <arg value="-I${daos.install.path}/include/"/>

@@ -147,7 +147,9 @@ public final class DaosFsClient {
     }
   }
 
-  private static void loadErrorCode(){}
+  private static void loadErrorCode(){
+
+  }
 
   private DaosFsClient(String poolId, String contId, DaosFsClientBuilder builder) {
     this.poolId = poolId;
@@ -437,8 +439,7 @@ public final class DaosFsClient {
    * Same as {@link #dfsLookup(long, long, String, int, long)} except parent file is not opened.
    *
    * @param dfsPtr
-   * @param parentPath
-   * @param name
+   * @param path
    * @param flags
    * @param bufferAddress address of direct {@link java.nio.ByteBuffer} for holding all information of
    *                      {@link StatAttributes}
@@ -446,7 +447,7 @@ public final class DaosFsClient {
    *
    * @return DAOS FS object id
    */
-  native long dfsLookup(long dfsPtr, String parentPath, String name, int flags, long bufferAddress)throws IOException;
+  native long dfsLookup(long dfsPtr, String path, int flags, long bufferAddress)throws IOException;
 
   /**
    * get file length for opened FS object
@@ -474,13 +475,10 @@ public final class DaosFsClient {
   /**
    * release opened FS object
    *
-   * @param dfsPtr
    * @param objId
    * @throws IOException
-   *
-   * @return
    */
-  native long dfsRelease(long dfsPtr, long objId)throws IOException;
+  native void dfsRelease(long objId)throws IOException;
 
   /**
    * read data from file to buffer
@@ -519,13 +517,23 @@ public final class DaosFsClient {
    * @param dfsPtr
    * @param objId
    * @param maxEntries, -1 for no limit
-   * @return string array of file name
+   * @return file names separated by ','
    */
-  native String[] dfsReadDir(long dfsPtr, long objId, int maxEntries)throws IOException;
+  native String dfsReadDir(long dfsPtr, long objId, int maxEntries)throws IOException;
 
   /**
    * get FS object status attribute into direct {@link java.nio.ByteBuffer}
-   *
+   * Order of fields to be read.
+   *     objId = buffer.getLong();
+   *     mode = buffer.getInt();
+   *     uid = buffer.getLong();
+   *     gid = buffer.getLong();
+   *     blockCnt = buffer.getLong();
+   *     length = buffer.getLong();
+   *     accessTime = buffer.getLong();
+   *     modifyTime = buffer.getLong();
+   *     createTime = buffer.getLong();
+   *     file = buffer.get() > 0;
    * @param dfsPtr
    * @param objId
    * @param bufferAddress
@@ -551,10 +559,11 @@ public final class DaosFsClient {
    * @param dfsPtr
    * @param objId
    * @param name
+   * @param expectedValueLen
    * @return
    * @throws IOException
    */
-  native String dfsGetExtAttr(long dfsPtr, long objId, String name)throws IOException;
+  native String dfsGetExtAttr(long dfsPtr, long objId, String name, int expectedValueLen)throws IOException;
 
   /**
    * remove extended attribute
@@ -562,10 +571,10 @@ public final class DaosFsClient {
    * @param dfsPtr
    * @param objId
    * @param name
-   * @return
+   *
    * @throws IOException
    */
-  native String dfsRemoveExtAttr(long dfsPtr, long objId, String name)throws IOException;
+  native void dfsRemoveExtAttr(long dfsPtr, long objId, String name)throws IOException;
 
   /**
    * get chunk size
@@ -583,7 +592,7 @@ public final class DaosFsClient {
    * @return
    * @throws IOException
    */
-  static native int dfsGetMode(long objId)throws IOException;
+   static native int dfsGetMode(long objId)throws IOException;
 
   /**
    * check if it's directory by providing mode

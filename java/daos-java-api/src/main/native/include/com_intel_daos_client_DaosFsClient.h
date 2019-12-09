@@ -98,10 +98,10 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsLookup__JJLja
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsLookup
- * Signature: (JLjava/lang/String;Ljava/lang/String;IJ)J
+ * Signature: (JLjava/lang/String;IJ)J
  */
-JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsLookup__JLjava_lang_String_2Ljava_lang_String_2IJ
-  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jlong);
+JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ
+  (JNIEnv *, jobject, jlong, jstring, jint, jlong);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -122,10 +122,10 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsDup
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsRelease
- * Signature: (JJ)J
+ * Signature: (J)V
  */
-JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsRelease
-  (JNIEnv *, jobject, jlong, jlong);
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsRelease
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -146,9 +146,9 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsWrite
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsReadDir
- * Signature: (JJI)[Ljava/lang/String;
+ * Signature: (JJI)Ljava/lang/String;
  */
-JNIEXPORT jobjectArray JNICALL Java_com_intel_daos_client_DaosFsClient_dfsReadDir
+JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsReadDir
   (JNIEnv *, jobject, jlong, jlong, jint);
 
 /*
@@ -170,17 +170,17 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsSetExtAttr
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsGetExtAttr
- * Signature: (JJLjava/lang/String;)Ljava/lang/String;
+ * Signature: (JJLjava/lang/String;I)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr
-  (JNIEnv *, jobject, jlong, jlong, jstring);
+  (JNIEnv *, jobject, jlong, jlong, jstring, jint);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsRemoveExtAttr
- * Signature: (JJLjava/lang/String;)Ljava/lang/String;
+ * Signature: (JJLjava/lang/String;)V
  */
-JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsRemoveExtAttr
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsRemoveExtAttr
   (JNIEnv *, jobject, jlong, jlong, jstring);
 
 /*
@@ -226,7 +226,7 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsMountFsOnRoot
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    dfsUnmountFsOnRoot
- * Signature: (J)J
+ * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsUnmountFsOnRoot
   (JNIEnv *, jclass, jlong);
