@@ -26,7 +26,6 @@ package main
 import (
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -49,8 +48,7 @@ type nvmeHealthQueryCmd struct {
 // Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
 // storage scan including health query on all connected servers.
 func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
-	req := client.StorageScanReq{Summary: false}
-	cmd.log.Info(cmd.conns.StorageScan(&req).StringHealthStats())
+	cmd.log.Info(cmd.conns.StorageScan(nil).StringHealthStats())
 
 	return nil
 }
