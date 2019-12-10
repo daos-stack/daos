@@ -186,7 +186,7 @@ def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
 
-    e.g. boro-[26-27] becomes a list with entries boro-26, boro-27
+    e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
     all slurmfinds acceptable so it might not parse everything possible.

@@ -289,6 +289,8 @@ enum {
  * Anchors for whole iteration, one for each entry type
  */
 struct vos_iter_anchors {
+	/** Anchor for container */
+	daos_anchor_t	ia_co;
 	/** Anchor for obj */
 	daos_anchor_t	ia_obj;
 	/** Anchor for dkey */
@@ -300,7 +302,8 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_obj:1,
+	unsigned int	ia_reprobe_co:1,
+			ia_reprobe_obj:1,
 			ia_reprobe_dkey:1,
 			ia_reprobe_akey:1,
 			ia_reprobe_sv:1,
