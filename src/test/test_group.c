@@ -343,8 +343,6 @@ test_init(void)
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 	flag = test_g.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
-	if (test_g.t_shut_only)
-		flag |= CRT_FLAG_BIT_SINGLETON;
 	rc = crt_init(test_g.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 

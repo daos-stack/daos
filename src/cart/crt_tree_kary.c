@@ -72,8 +72,6 @@ crt_kary_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio,
 	uint32_t	tree_self;
 
 	D_ASSERT(grp_size > 0);
-	if (CRT_PMIX_ENABLED())
-		D_ASSERT(grp_root < grp_size && grp_self < grp_size);
 	D_ASSERT(nchildren != NULL);
 	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
@@ -94,8 +92,6 @@ crt_kary_get_children(uint32_t grp_size, uint32_t tree_ratio,
 	uint32_t	i;
 
 	D_ASSERT(grp_size > 0);
-	if (CRT_PMIX_ENABLED())
-		D_ASSERT(grp_root < grp_size && grp_self < grp_size);
 	D_ASSERT(children != NULL);
 	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
@@ -119,8 +115,6 @@ crt_kary_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
 	uint32_t	tree_self, tree_parent;
 
 	D_ASSERT(grp_size > 0);
-	if (CRT_PMIX_ENABLED())
-		D_ASSERT(grp_root < grp_size && grp_self < grp_size);
 	D_ASSERT(parent != NULL);
 	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);

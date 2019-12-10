@@ -34,17 +34,17 @@ tests: !mux
     cli_arg: "--name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
     cli_env: ""
     cli_ppn: "1"
-  echo:
-    name: echo_basic
-    logparse: Yes
-    srv_bin: tests/crt_echo_srv
-    srv_arg: ""
-    srv_env: ""
-    srv_ppn: "1"
-    cli_bin: tests/crt_echo_cli
-    cli_arg: ""
-    cli_env: ""
-    cli_ppn: "1"
+#  echo:
+#    name: echo_basic
+#    logparse: Yes
+#    srv_bin: tests/crt_echo_srv
+#    srv_arg: ""
+#    srv_env: ""
+#    srv_ppn: "1"
+#    cli_bin: tests/crt_echo_cli
+#    cli_arg: ""
+#    cli_env: ""
+#    cli_ppn: "1"
   test_group:
     name: test_group_basic
     srv_bin: ../bin/crt_launch
@@ -125,23 +125,23 @@ tests: !mux
     cli_arg: " --name client_group --attach_to timeout_srv_grp --cfg_path=."
     cli_env: "-x CRT_TIMEOUT=10"
     cli_ppn: "1"
-  threaded:
-    name: threaded_basic
-    srv_bin: tests/threaded_server
-    srv_arg: ""
-    srv_env: ""
-    srv_ppn: "1"
-    cli_bin: tests/threaded_client
-    cli_arg: ""
-    cli_env: ""
-    cli_ppn: "1"
-  rpc_error:
-    name: rpc_error_basic
-    srv_bin: tests/test_rpc_error
-    srv_arg: "--name service_group --is_service"
-    srv_env: ""
-    srv_ppn: "1"
-    cli_bin: tests/test_rpc_error
-    cli_arg: "--name client_group --attach_to service_group"
-    cli_env: ""
-    cli_ppn: "1"
+#  threaded:
+#    name: threaded_basic
+#    srv_bin: tests/threaded_server
+#    srv_arg: ""
+#    srv_env: ""
+#    srv_ppn: "1"
+#    cli_bin: tests/threaded_client
+#    cli_arg: ""
+#    cli_env: ""
+#    cli_ppn: "1"
+#  rpc_error:
+#    name: rpc_error_basic
+#    srv_bin: tests/test_rpc_error
+#    srv_arg: "--name service_group --is_service"
+#    srv_env: ""
+#    srv_ppn: "1"
+#    cli_bin: tests/test_rpc_error
+#    cli_arg: "--name client_group --attach_to service_group"
+#    cli_env: ""
+#    cli_ppn: "1"

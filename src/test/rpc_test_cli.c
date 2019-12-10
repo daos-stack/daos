@@ -532,7 +532,7 @@ cli_rpc_init(void)
 
 	dbg("---%s--->", __func__);
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
+	rc = crt_init(NULL, 0);
 	D_ASSERTF(rc == 0, "crt_init failed %d\n", rc);
 
 	crt_context_create(&rpc_cli.crt_ctx);
@@ -557,7 +557,7 @@ cli_rpc_init(void)
 	/* try until success to avoid failures until server isn't ready . */
 	do {
 		sleep(1);
-		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID,
+		rc = crt_group_attach(CRT_DEFAULT_GRPID,
 			&rpc_cli.target_group[rpc_cli.target_grp_size]);
 		dbg("Attaching to default server grp\n");
 

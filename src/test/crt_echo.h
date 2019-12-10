@@ -201,8 +201,6 @@ echo_init(int server, bool tier2)
 	rc = sem_init(&gecho.token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
-	if (server == 0 && gecho.singleton_test)
-		flags |= CRT_FLAG_BIT_SINGLETON;
 
 	if (server != 0 && tier2 == true)
 		rc = crt_init(ECHO_2ND_TIER_GRPID, flags);

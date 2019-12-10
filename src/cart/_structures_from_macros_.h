@@ -113,30 +113,6 @@ struct crt_ctl_get_uri_cache_out {
 	int32_t cguc_rc;
 };
 
-struct crt_grp_create_in {
-	crt_group_id_t gc_grp_id;
-	uint64_t gc_int_grpid;
-	d_rank_list_t *gc_membs;
-	d_rank_t gc_initiate_rank;
-};
-
-struct crt_grp_create_out {
-	d_rank_list_t *gc_failed_ranks;
-	d_rank_t gc_rank;
-	int32_t gc_rc;
-};
-
-struct crt_grp_destroy_in {
-	crt_group_id_t gd_grp_id;
-	d_rank_t gd_initiate_rank;
-};
-
-struct crt_grp_destroy_out {
-	d_rank_list_t *gd_failed_ranks;
-	d_rank_t gd_rank;
-	int32_t gd_rc;
-};
-
 struct crt_iv_fetch_in {
 	uint32_t ifi_ivns_id;
 	uint32_t pad1;
@@ -179,26 +155,6 @@ struct crt_iv_update_in {
 
 struct crt_iv_update_out {
 	uint64_t rc;
-};
-
-struct crt_lm_evict_in {
-	d_rank_t clei_rank;
-	uint32_t clei_ver;
-};
-
-struct crt_lm_evict_out {
-	int32_t cleo_succeeded;
-	int32_t cleo_rc;
-};
-
-struct crt_lm_memb_sample_in {
-	uint32_t msi_ver;
-};
-
-struct crt_lm_memb_sample_out {
-	d_iov_t mso_delta;
-	uint32_t mso_ver;
-	int32_t mso_rc;
 };
 
 struct crt_proto_query_in {

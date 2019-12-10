@@ -55,7 +55,6 @@
 
 extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
-extern struct crt_corpc_ops crt_rank_evict_co_ops;
 extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
 /* RPC flags, these are sent over the wire as part of the protocol so can
@@ -217,12 +216,6 @@ struct crt_rpc_priv {
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 #define CRT_INTERNAL_RPCS_LIST						\
-	X(CRT_OPC_GRP_CREATE,						\
-		0, &CQF_crt_grp_create,					\
-		crt_hdlr_grp_create, &crt_grp_create_co_ops),		\
-	X(CRT_OPC_GRP_DESTROY,						\
-		0, &CQF_crt_grp_destroy,				\
-		crt_hdlr_grp_destroy, &crt_grp_destroy_co_ops),		\
 	X(CRT_OPC_URI_LOOKUP,						\
 		0, &CQF_crt_uri_lookup,					\
 		crt_hdlr_uri_lookup, NULL),				\
@@ -274,12 +267,6 @@ struct crt_rpc_priv {
 	X(CRT_OPC_BARRIER_EXIT,						\
 		0, &CQF_crt_barrier,					\
 		crt_hdlr_barrier_exit, &crt_barrier_corpc_ops),		\
-	X(CRT_OPC_RANK_EVICT,						\
-		0, &CQF_crt_lm_evict,					\
-		crt_hdlr_rank_evict, &crt_rank_evict_co_ops),		\
-	X(CRT_OPC_MEMB_SAMPLE,						\
-		0, &CQF_crt_lm_memb_sample,				\
-		crt_hdlr_memb_sample, NULL),				\
 	X(CRT_OPC_CTL_GET_URI_CACHE,					\
 		0, &CQF_crt_ctl_get_uri_cache,				\
 		crt_hdlr_ctl_get_uri_cache, NULL),			\
@@ -319,41 +306,6 @@ enum {
 	((d_string_t)		(gc_uri)		CRT_VAR)
 
 CRT_GEN_STRUCT(crt_grp_cache, CRT_SEQ_GRP_CACHE)
-
-/* CRT internal RPC definitions */
-#define CRT_ISEQ_GRP_CREATE	/* input fields */		 \
-	/* user visible grp id (group name) */			 \
-	((crt_group_id_t)	(gc_grp_id)		CRT_VAR) \
-	/* internal subgrp id */				 \
-	((uint64_t)		(gc_int_grpid)		CRT_VAR) \
-	((d_rank_list_t)	(gc_membs)		CRT_PTR) \
-	/* the rank initiated the group create */		 \
-	((d_rank_t)		(gc_initiate_rank)	CRT_VAR)
-
-#define CRT_OSEQ_GRP_CREATE	/* output fields */		 \
-	/* failed rank list, can be used to aggregate the reply from child */ \
-	((d_rank_list_t)	(gc_failed_ranks)	CRT_PTR) \
-	/* the rank sent out the reply */			 \
-	((d_rank_t)		(gc_rank)		CRT_VAR) \
-	/* return code, if failed the gc_rank should be in gc_failed_ranks */ \
-	((int32_t)		(gc_rc)			CRT_VAR)
-
-CRT_RPC_DECLARE(crt_grp_create, CRT_ISEQ_GRP_CREATE, CRT_OSEQ_GRP_CREATE)
-
-#define CRT_ISEQ_GRP_DESTROY	/* input fields */		 \
-	((crt_group_id_t)	(gd_grp_id)		CRT_VAR) \
-	/* the rank initiated the group destroy */		 \
-	((d_rank_t)		(gd_initiate_rank)	CRT_VAR)
-
-#define CRT_OSEQ_GRP_DESTROY	/* output fields */		 \
-	/* failed rank list, can be used to aggregate the reply from child */ \
-	((d_rank_list_t)	(gd_failed_ranks)	CRT_PTR) \
-	/* the rank sent out the reply */			 \
-	((d_rank_t)		(gd_rank)		CRT_VAR) \
-	/* return code, if failed the gc_rank should be in gc_failed_ranks */ \
-	((int32_t)		(gd_rc)			CRT_VAR)
-
-CRT_RPC_DECLARE(crt_grp_destroy, CRT_ISEQ_GRP_DESTROY, CRT_OSEQ_GRP_DESTROY)
 
 #define CRT_ISEQ_URI_LOOKUP	/* input fields */		 \
 	((crt_group_id_t)	(ul_grp_id)		CRT_VAR) \
@@ -519,19 +471,6 @@ CRT_RPC_DECLARE(crt_barrier, CRT_ISEQ_BARRIER, CRT_OSEQ_BARRIER)
 #define CRT_OSEQ_LM_EVICT	/* output fields */		 \
 	((int32_t)		(cleo_succeeded)	CRT_VAR) \
 	((int32_t)		(cleo_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(crt_lm_evict, CRT_ISEQ_LM_EVICT, CRT_OSEQ_LM_EVICT)
-
-#define CRT_ISEQ_LM_MEMB_SAMPLE	/* input fields */		 \
-	((uint32_t)		(msi_ver)		CRT_VAR)
-
-#define CRT_OSEQ_LM_MEMB_SAMPLE	/* output fields */		 \
-	((d_iov_t)		(mso_delta)		CRT_VAR) \
-	((uint32_t)		(mso_ver)		CRT_VAR) \
-	((int32_t)		(mso_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(crt_lm_memb_sample,
-		CRT_ISEQ_LM_MEMB_SAMPLE, CRT_OSEQ_LM_MEMB_SAMPLE)
 
 #define CRT_ISEQ_CTL		/* input fields */		 \
 	((crt_group_id_t)	(cel_grp_id)		CRT_VAR) \

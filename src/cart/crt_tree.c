@@ -52,24 +52,12 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			       bool *allocated)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
-	d_rank_list_t		*live_ranks;
 	d_rank_list_t		*membs;
 	int			 rc = 0;
 
-	if (CRT_PMIX_ENABLED()) {
-		live_ranks = grp_priv_get_live_ranks(grp_priv);
-		membs = grp_priv_get_membs(grp_priv);
+	membs = grp_priv_get_membs(grp_priv);
 
-		/* Note: In PMIX case liver_ranks/membs contain primary ranks */
-		root = crt_grp_priv_get_primary_rank(grp_priv, root);
-		self = crt_grp_priv_get_primary_rank(grp_priv, self);
-	} else {
-		membs = grp_priv_get_membs(grp_priv);
-		live_ranks = membs;
-	}
-
-	rc = d_rank_list_dup_sort_uniq(&grp_rank_list, live_ranks);
-
+	rc = d_rank_list_dup_sort_uniq(&grp_rank_list, membs);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -130,9 +118,6 @@ out:
 	do {								\
 									\
 		D_ASSERT(crt_tree_topo_valid(tree_topo));		\
-		if (CRT_PMIX_ENABLED())					\
-			D_ASSERT(root < grp_priv->gp_size &&		\
-				self < grp_priv->gp_size);		\
 		tree_type = crt_tree_type(tree_topo);			\
 		tree_ratio = crt_tree_ratio(tree_topo);			\
 		D_ASSERT(tree_type >= CRT_TREE_MIN &&			\
@@ -145,7 +130,7 @@ out:
 /*
  * query number of children.
  *
- * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and exclude_ranks
+ * rank number of grp_priv->gp_membs and exclude_ranks
  * are primary rank.  grp_root and grp_self are logical rank number within the
  * group.
  */
@@ -209,7 +194,7 @@ out:
 /*
  * query children rank list (rank number in primary group).
  *
- * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and filter_ranks
+ * rank number of grp_priv->gp_membs, and filter_ranks
  * are primary rank.  grp_root and grp_self are logical rank number within the
  * group.
  */

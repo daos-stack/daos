@@ -154,8 +154,7 @@ get_self_uri(struct host *h)
 	int		len;
 	int		rc;
 
-	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_PMIX_DISABLE |
-			CRT_FLAG_BIT_LM_DISABLE);
+	rc = crt_init(0, CRT_FLAG_BIT_SERVER);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		D_GOTO(out, rc);

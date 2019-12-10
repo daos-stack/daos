@@ -50,7 +50,7 @@
 #include <gurt/list.h>
 #include <cart/api.h>
 #include <cart/types.h>
-#include "utest_cmocka.h"
+#include "wrap_cmocka.h"
 
 using namespace std;
 
@@ -98,14 +98,7 @@ test_crt_api_linkage(void **state)
 
 	setenv("OFI_INTERFACE", "lo", 1);
 
-	expect_pmix_get(PMIX_UINT32, 1); /* group size */
-	expect_pmix_get(PMIX_UINT32, 1); /* universe size */
-
-	/* Lookup group name */
-	expect_pmix_lookup(PMIX_STRING,
-		   cast_ptr_to_largest_integral_type("bogus_cli_group"));
-
-	rc = crt_init(bogus_client_group, 0);
+	rc = crt_init(bogus_client_group, 0x0);
 	assert_int_equal(rc, 0);
 
 	/* test RPC register */

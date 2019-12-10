@@ -66,7 +66,7 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 {
 	int rc;
 
-	D_DEBUG(DB_TEST, "Handler called\n");
+	DBG_PRINT("Handler called\n");
 
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
@@ -120,17 +120,48 @@ static struct crt_proto_format my_proto_fmt_basic_corpc = {
 
 void crt_swim_disable_all(void);
 
+static void *
+progress_function(void *data)
+{
+	int i;
+	crt_context_t *p_ctx = (crt_context_t *)data;
+
+	while (g_do_shutdown == 0)
+		crt_progress(*p_ctx, 1000, NULL, NULL);
+
+	crt_swim_disable_all();
+
+	/* Progress contexts for a while after shutdown to send response */
+	for (i = 0; i < 1000; i++)
+		crt_progress(*p_ctx, 1000, NULL, NULL);
+
+	crt_context_destroy(*p_ctx, 1);
+
+	return NULL;
+}
+
 int main(void)
 {
 	int		rc;
 	crt_context_t	g_main_ctx;
+	d_rank_list_t	*rank_list;
 	d_rank_list_t	membs;
 	d_rank_t	memb_ranks[] = {1, 2, 4};
 	crt_rpc_t	*rpc;
 	uint32_t	grp_size;
+	crt_group_t	*grp;
+	char		*env_self_rank;
+	char		*grp_cfg_file;
+	pthread_t	progress_thread;
 
 	membs.rl_nr = 3;
 	membs.rl_ranks = memb_ranks;
+
+	env_self_rank = getenv("CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -138,10 +169,43 @@ int main(void)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
 
-	rc = crt_group_config_save(NULL, true);
+	rc = crt_proto_register(&my_proto_fmt_basic_corpc);
 	assert(rc == 0);
 
-	rc = crt_group_size(NULL, &grp_size);
+	rc = crt_context_create(&g_main_ctx);
+	assert(rc == 0);
+
+	rc = pthread_create(&progress_thread, 0,
+			progress_function, &g_main_ctx);
+	if (rc != 0) {
+		D_ERROR("pthread_create() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+
+	rc = crt_rank_self_set(my_rank);
+	if (rc != 0) {
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
+			my_rank, rc);
+		assert(0);
+	}
+
+	grp = crt_group_lookup(NULL);
+	if (!grp) {
+		D_ERROR("Failed to lookup group\n");
+		assert(0);
+	}
+
+	/* load group info from a config file and delete file upon return */
+	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+					true);
+	if (rc != 0) {
+		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	rc = crt_group_size(grp, &grp_size);
 	assert(rc == 0);
 
 	if (grp_size != 5) {
@@ -149,16 +213,25 @@ int main(void)
 		assert(0);
 	}
 
-	rc = crt_proto_register(&my_proto_fmt_basic_corpc);
-	assert(rc == 0);
+	rc = crt_group_ranks_get(grp, &rank_list);
+	if (rc != 0) {
+		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		assert(0);
+	}
 
-	rc = crt_context_create(&g_main_ctx);
-	assert(rc == 0);
+	sleep(2);
+	rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0,
+			1, 10, 100.0);
+	if (rc != 0) {
+		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		assert(0);
+	}
 
-	rc =  crt_group_rank(NULL, &my_rank);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (my_rank == 0) {
-		D_DEBUG(DB_TEST, "Rank 0 sending CORPC call\n");
+		DBG_PRINT("Rank 0 sending CORPC call\n");
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &membs,
 			CRT_PROTO_OPC(TEST_CORPC_PREFWD_BASE,
 				TEST_CORPC_PREFWD_VER, 0), NULL, 0,
@@ -175,20 +248,11 @@ int main(void)
 		g_do_shutdown = 1;
 
 	while (!g_do_shutdown)
-		crt_progress(g_main_ctx, 1000, NULL, NULL);
+		sleep(1);
 
-	D_DEBUG(DB_TEST, "Shutting down\n");
-	crt_swim_disable_all();
+	DBG_PRINT("All tests done\n");
 
-	tc_drain_queue(g_main_ctx);
-
-	rc = crt_context_destroy(g_main_ctx, true);
-	assert(rc == 0);
-
-	if (my_rank == 0) {
-		rc = crt_group_config_remove(NULL);
-		assert(rc == 0);
-	}
+	pthread_join(progress_thread, NULL);
 
 	rc = crt_finalize();
 	assert(rc == 0);

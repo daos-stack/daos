@@ -308,10 +308,11 @@ static void run_client(void)
 	/* try until success to avoid intermittent failures under valgrind. */
 	do {
 		sleep(1);
-		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
+		rc = crt_group_attach(CRT_DEFAULT_GRPID, &grp_tier1);
 	} while (rc != 0);
+
 	D_ASSERT(grp_tier1 != NULL);
-	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
+	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_GRPID);
 	D_ASSERT(pri_srv_grp != NULL);
 
 	rc = crt_group_rank(pri_srv_grp, &myrank);

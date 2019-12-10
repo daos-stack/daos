@@ -58,7 +58,7 @@ static int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
 			"or is too long\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
 	if (!crt_grp_id_identical(in_args->cel_grp_id,
 				  grp_priv->gp_pub.cg_grpid)) {
@@ -146,7 +146,7 @@ crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
 	out_args = crt_reply_get(rpc_req);
 
-	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 

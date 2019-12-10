@@ -53,11 +53,19 @@ class CartGroupTiersThreeNodeTest(Test):
         """ Test tear down """
         print("Run TearDown\n")
 
-    def test_group_tier(self):
+    def test_basic_stuff(self):
+        """
+        Placeholder
+
+        :avocado: tags=all,multi_tier,group_tiers,three_node
+        """
+        print("Nothing to run\n")
+
+    def dont_run_test_group_tier(self):
         """
         Test CaRT group_tier
 
-        :avocado: tags=all,multi_tier,group_tiers,three_node
+        #:avocado: tags=all,multi_tier,group_tiers,three_node
         """
         urifile1 = self.utils.create_uri_file()
 

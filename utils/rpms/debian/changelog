@@ -1,3 +1,11 @@
+cart (4.0.0-1) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 4.0.0-1 version of CaRT
+  * PMIX support removed along with all associated code
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 9 Dec 2019 19:27:01 +0000
+
 cart (3.2.0-3) unstable; urgency=medium
 
   [ Alexander Oganezov ]

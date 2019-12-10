@@ -48,7 +48,6 @@
 #include <gurt/common.h>
 #include <gurt/fault_inject.h>
 #include <cart/api.h>
-#include "crt_fake_events.h"
 #include "test_group_rpc.h"
 
 #define TEST_CTX_MAX_NUM	 (72)
@@ -341,9 +340,6 @@ test_init(void)
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 	flag = test_g.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
-	if (test_g.t_shut_only)
-		flag |= CRT_FLAG_BIT_SINGLETON;
-	flag |= CRT_FLAG_BIT_LM_DISABLE;
 	rc = crt_init(test_g.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 

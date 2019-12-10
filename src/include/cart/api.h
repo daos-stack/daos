@@ -74,19 +74,14 @@ extern "C" {
  * multiple times. Each call must be paired with a corresponding crt_finalize().
  *
  * \param[in] grpid            primary group ID, user can provide a NULL value
- *                             in that case will use the default group ID,
- *                             CRT_DEFAULT_CLI_GRPID for client and
- *                             CRT_DEFAULT_SRV_GRPID for server.
+ *                             in that case will use the default group ID
+ *                             CRT_DEFAULT_GRPID.
  * \param[in] flags            bit flags, see \ref crt_init_flag_bits.
  * \param[in] opt              additional init time options. If a NULL value
  *                             is provided, this call becomes identical to
  *                             crt_init().
  *
  * \return                     DER_SUCCESS on success, negative value if error
- *
- * \note crt_init_opt() is a collective call which means every caller process
- *       should make the call collectively, as now it will internally call
- *       PMIx_Fence.
  */
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt);
@@ -97,16 +92,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt);
  * multiple times. Each call must be paired with a corresponding crt_finalize().
  *
  * \param[in] grpid            primary group ID, user can provide a NULL value
- *                             in that case will use the default group ID,
- *                             CRT_DEFAULT_CLI_GRPID for client and
- *                             CRT_DEFAULT_SRV_GRPID for server.
+ *                             in that case will use the default group ID
+ *                             CRT_DEFAULT_GRPID.
  * \param[in] flags            bit flags, see \ref crt_init_flag_bits.
  *
  * \return                     DER_SUCCESS on success, negative value if error
- *
- * \note crt_init() is a collective call which means every caller process
- *       should make the call collectively, as now it will internally call
- *       PMIx_Fence.
  */
 static inline int
 crt_init(crt_group_id_t grpid, uint32_t flags)
@@ -223,9 +213,6 @@ crt_context_num(int *ctx_num);
  *
  * \return                     DER_SUCCESS on success, negative value if error
  *
- * \note crt_finalize() is a collective call which means every caller process
- *       should make the call collectively, as now it will internally call
- *       PMIx_Fence.
  */
 int
 crt_finalize(void);
@@ -1034,19 +1021,6 @@ struct crt_corpc_ops {
 	int (*co_post_reply)(crt_rpc_t *rpc, void *arg);
 };
 
-/**
- * Group create completion callback
- *
- * \param[in] grp              group handle, valid only when the group has been
- *                             created successfully.
- * \param[in] priv             A private pointer associated with the group
- *                             (passed in for crt_group_create).
- * \param[in] status           status code that indicates whether the group has
- *                             been created successfully or not.
- *                             zero for success, negative value otherwise.
- */
-typedef int (*crt_grp_create_cb_t)(crt_group_t *grp, void *priv, int status);
-
 /*
  * Group destroy completion callback
  *
@@ -1059,46 +1033,13 @@ typedef int (*crt_grp_create_cb_t)(crt_group_t *grp, void *priv, int status);
  */
 typedef int (*crt_grp_destroy_cb_t)(void *arg, int status);
 
-/*
- * Create CRT sub-group (a subset of the primary group). Can only be called on
- * the server side.
- *
- * \param[in] grp_id           unique group ID.
- * \param[in] member_ranks     rank list of members for the group.
- *                             Can-only create the group on the node which is
- *                             one member of the group, otherwise -DER_OOG will
- *                             be returned.
- * \param[in] populate_now     True if the group should be populated now;
- *                             otherwise, group population will be later
- *                             piggybacked on the first broadcast over the
- *                             group.
- * \param[in] grp_create_cb    Callback function to notify completion of the
- *                             group creation process,
- *                             See \ref crt_grp_create_cb_t.
- * \param[in] arg              A private pointer associated with the group.
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
-		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
-		 void *arg);
-
 /**
  * Lookup the group handle of one group ID (sub-group or primary group).
  *
- * For sub-group, its creation is initiated by one node, after the group being
- * populated (internally performed inside crt_group_create) user can query the
- * group handle (crt_group_t *) on other nodes.
- *
  * The primary group can be queried using the group ID passed to crt_init.
  * Some special cases:
- * 1) If (grp_id == NULL), it means the default local primary group ID, i.e.
- *    the CRT_DEFAULT_CLI_GRPID for client and CRT_DEFAULT_SRV_GRPID for server.
- * 2) To query attached remote service primary group, can pass in its group ID.
- *    For the client-side, if it passed in NULL as crt_init's srv_grpid
- *    parameter, then can use CRT_DEFAULT_SRV_GRPID to lookup the attached
- *    service primary group handle.
+ * 1) If (grp_id == NULL), it means the default primary group ID
+ *     CRT_DEFAULT_GRPID.
  *
  * \note user can cache the returned group handle to avoid the overhead of
  *          frequent lookup.
@@ -1111,9 +1052,7 @@ crt_group_t *
 crt_group_lookup(crt_group_id_t grp_id);
 
 /**
- * Destroy a CRT group. Can either call this function or pass a special flag -
- * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the subgroup. Can only
- * be called on the server side.
+ * Destroy a CRT group.
  *
  * \param[in] grp              group handle to be destroyed.
  * \param[in] grp_destroy_cb   optional completion callback.
@@ -1586,17 +1525,6 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data);
 int
 crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *data);
 
-/**
- * Local operation. Evict rank from the local membership list of grp.
- * \param[in] grp              Must be a primary service group. Can be local or
- *                             remote.  NULL means the local primary group.
- * \param[in] rank             the rank within the \a grp to evict.
- *
- * \return                     DER_SUCCESS success, negative on error
- */
-int
-crt_rank_evict(crt_group_t *grp, d_rank_t rank);
-
 typedef void
 (*crt_progress_cb) (crt_context_t ctx, void *arg);
 
@@ -1622,16 +1550,8 @@ crt_register_timeout_cb(crt_timeout_cb cb, void *arg);
 typedef void
 (*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *arg);
 
-/**
- * Register a callback function which will be upon the completion of
- * crt_rank_evict().
- */
-int
-crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
-
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
-	CRT_EVS_PMIX,
 	CRT_EVS_SWIM,
 };
 
@@ -1676,43 +1596,6 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
-/**
- * Retrieve the PSR candidate list for \a tgt_grp.  There is guaranteed to be
- * at least one PSR returned in the \a psr_cand list.
- *
- * \param[in] tgt_grp          The remote group
- * \param[out] psr_cand        The PSR candidate list for \a tgt_grp. The first
- *                             entry of psr_cand is the current PSR. The rest
- *                             of the list are backup PSRs. User should call
- *                             crt_rank_list_free() to free the memory after
- *                             using it.
- * \retval                     DER_SUCCESS on success
- * \retval                     -DER_NONEXIST No active PSRs.
- */
-int
-crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
-
-/**
- * Initialize a lm_grp_priv struct for the remote group tgt_grp then append the
- * struct to a global list. This function sends RPCs to the default PSR to
- * lookup the URIs of the backup PSRs. This function also enables the resample
- * on timeout feature. This is a non-blocking function. completion_cb will be
- * called when crt_lm_attach() finishes. User needs to call crt_progress() to
- * make progress.
- *
- * \param[in] tgt_grp          the remote group
- * \param[in] completion_cb    callback which will be called when
- *                             crt_lm_attach completes.
- * \param[in] arg              user data pointer which is available in
- *                             completion_cb. See the definition of
- *                             struct crt_lm_attach_cb_info.
- *
- * \return                     DER_SUCCESS on success, negative value on
- *                             failure.
- */
-int
-crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
-	      void *arg);
 
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
@@ -1826,8 +1709,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 
 /**
- * Set self rank. This API is only available when PMIX is disabled. See \a
- * CRT_FLAG_BIT_PMIX_DISABLE for more details.
+ * Set self rank.
  *
  * \param[in] rank              Rank to set on self.
  *
@@ -1874,8 +1756,8 @@ crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
  * \param[in] group             Group identifier
  * \param[in] rank              Rank to remove
  *
- * \note This API is only available when PMIX is disabled. See
- * CRT_FLAG_BIT_PMIX_DISABLE for more details.
+ * \return                      DER_SUCCESS on success, negative value on
+ *                              failure.
  */
 int
 crt_group_rank_remove(crt_group_t *group, d_rank_t rank);

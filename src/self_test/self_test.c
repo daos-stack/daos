@@ -88,10 +88,6 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
 
-static int is_singleton;
-
-static int is_nopmix;
-
 static void *progress_fn(void *arg)
 {
 	int		 ret;
@@ -125,11 +121,6 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(0, attach_retries, false, false);
 
-	if (is_nopmix)
-		init_flags |= CRT_FLAG_BIT_PMIX_DISABLE |
-			      CRT_FLAG_BIT_LM_DISABLE;
-	if (is_singleton)
-		init_flags |= CRT_FLAG_BIT_SINGLETON;
 	if (listen)
 		init_flags |= CRT_FLAG_BIT_SERVER;
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
@@ -156,12 +147,15 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			break;
 		sleep(1);
 	}
+
 	if (ret != 0) {
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
 	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
+
+	DBG_PRINT("Attached %s\n", dest_name);
 
 	g_shutdown_flag = 0;
 
@@ -172,33 +166,31 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		return -DER_MISC;
 	}
 
-	if (is_nopmix) {
-		ret = crt_group_size(*srv_grp, &grp_size);
-		D_ASSERTF(ret == 0, "crt_group_size() failed; rc=%d\n", ret);
+	ret = crt_group_size(*srv_grp, &grp_size);
+	D_ASSERTF(ret == 0, "crt_group_size() failed; rc=%d\n", ret);
 
-		ret = crt_group_ranks_get(*srv_grp, &rank_list);
-		D_ASSERTF(ret == 0,
-			  "crt_group_ranks_get() failed; rc=%d\n", ret);
+	ret = crt_group_ranks_get(*srv_grp, &rank_list);
+	D_ASSERTF(ret == 0,
+		  "crt_group_ranks_get() failed; rc=%d\n", ret);
 
-		D_ASSERTF(rank_list != NULL, "Rank list is NULL\n");
+	D_ASSERTF(rank_list != NULL, "Rank list is NULL\n");
 
-		D_ASSERTF(rank_list->rl_nr == grp_size,
-			  "rank_list differs in size. expected %d got %d\n",
-			  grp_size, rank_list->rl_nr);
+	D_ASSERTF(rank_list->rl_nr == grp_size,
+		  "rank_list differs in size. expected %d got %d\n",
+		  grp_size, rank_list->rl_nr);
 
-		ret = crt_group_psr_set(*srv_grp, rank_list->rl_ranks[0]);
-		D_ASSERTF(ret == 0, "crt_group_psr_set() failed; rc=%d\n", ret);
+	ret = crt_group_psr_set(*srv_grp, rank_list->rl_ranks[0]);
+	D_ASSERTF(ret == 0, "crt_group_psr_set() failed; rc=%d\n", ret);
 
-		/* waiting to sync with the following parameters
-		 * 0 - tag 0
-		 * 1 - total ctx
-		 * 5 - ping timeout
-		 * 150 - total timeout
-		 */
-		ret = tc_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
-					0, 1, 5, 150);
-		D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
-	}
+	/* waiting to sync with the following parameters
+	 * 0 - tag 0
+	 * 1 - total ctx
+	 * 5 - ping timeout
+	 * 150 - total timeout
+	 */
+	ret = tc_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
+				0, 1, 5, 150);
+	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
 
 	return 0;
 }
@@ -1727,14 +1719,11 @@ int main(int argc, char *argv[])
 			output_megabits = 1;
 			break;
 		case 't':
-			is_singleton = 1;
 			break;
 		case 'p':
-			is_singleton = 1;
 			attach_info_path = optarg;
 			break;
 		case 'n':
-			is_nopmix = 1;
 			break;
 		case '?':
 		default:

@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 20, false, true);
+	tc_test_init(0, 40, false, true);
 
 	test_run();
 

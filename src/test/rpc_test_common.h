@@ -174,8 +174,6 @@ struct rpc_test_srv {
 	uint32_t		target_group_size;
 };
 
-void crt_lm_fake_event_notify_fn(d_rank_t pmix_rank, bool *dead);
-
 #define DBG(fmt, ...)				\
 	printf("%s[%d]\t[%d]"fmt"\n",	\
 	(strrchr(__FILE__, '/')+1), __LINE__, getpid(), ##__VA_ARGS__)

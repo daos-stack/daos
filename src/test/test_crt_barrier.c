@@ -79,6 +79,7 @@ int main(int argc, char **argv)
 	crt_context_t		 crt_ctx;
 	d_rank_t		 my_rank;
 	char			*env_self_rank;
+	d_rank_list_t		*rank_list;
 	int			 i;
 	pthread_t		 tid;
 	crt_group_t		*grp = NULL;
@@ -91,8 +92,24 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(my_rank, 20, true, true);
 
-	tc_srv_start_basic("server_grp", &crt_ctx, &tid, grp, &grp_size, NULL);
+	tc_srv_start_basic("server_grp", &crt_ctx, &tid, &grp, &grp_size, NULL);
 
+	rc = crt_group_ranks_get(grp, &rank_list);
+	if (rc != 0) {
+		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	sleep(2);
+	rc = tc_wait_for_ranks(crt_ctx, grp, rank_list, 0,
+			1, 10, 100.0);
+	if (rc != 0) {
+		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 	info = (struct proc_info *)malloc(sizeof(struct proc_info) *
 					  NUM_BARRIERS);
 	D_ASSERTF(info != NULL,

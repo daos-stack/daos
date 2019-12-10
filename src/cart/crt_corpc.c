@@ -134,7 +134,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 
 	co_hdr = &rpc_priv->crp_coreq_hdr;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_PRIMARY_GRP) {
-		grp_priv = grp_gdata->gg_srv_pri_grp;
+		grp_priv = grp_gdata->gg_primary_grp;
 		D_ASSERT(grp_priv != NULL);
 	} else {
 		grp_priv = crt_grp_lookup_grpid(co_hdr->coh_grpid);
@@ -385,15 +385,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
-	if (grp == NULL) {
-		grp_priv = grp_gdata->gg_srv_pri_grp;
-	} else {
-		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
-		if (grp_priv->gp_primary && !grp_priv->gp_local) {
-			D_ERROR("cannot create corpc for attached group.\n");
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
+
+	grp_priv = crt_grp_pub2priv(grp);
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
 	if (rc != 0) {
@@ -652,13 +645,6 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	D_ASSERT(opc_info != NULL);
 
 	D_SPIN_LOCK(&parent_rpc_priv->crp_lock);
-	if (parent_rpc_priv == child_rpc_priv &&
-	    child_req->cr_opc == CRT_OPC_RANK_EVICT &&
-	    co_info->co_local_done != 1) {
-		D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
-		D_GOTO(out, rc);
-	}
-
 
 	wait_num = co_info->co_child_num;
 	/* the extra +1 is for local RPC handler */
@@ -780,7 +766,6 @@ aggregate_done:
 		RPC_DECREF(parent_rpc_priv);
 	}
 
-out:
 	if (parent_rpc_priv != child_rpc_priv) {
 		/* Corresponding ADDREF done before crt_req_send() */
 		RPC_DECREF(parent_rpc_priv);
@@ -807,18 +792,6 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	/* corresponds to decref in crt_corpc_complete */
 	RPC_ADDREF(rpc_priv);
-
-	if (co_info->co_root_excluded == 0 &&
-	    rpc_priv->crp_pub.cr_opc == CRT_OPC_RANK_EVICT) {
-		rc = crt_rpc_common_hdlr(rpc_priv);
-		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_rpc_common_hdlr failed, rc: %d\n",
-				  rc);
-			crt_corpc_fail_parent_rpc(rpc_priv, rc);
-			D_GOTO(forward_done, rc);
-		}
-	};
 
 	opc_info = rpc_priv->crp_opc_info;
 	co_ops = opc_info->coi_co_ops;
@@ -874,33 +847,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_t	*child_rpc;
 		crt_endpoint_t	 tgt_ep = {0};
 
-		/*
-		 * This is a temporary workaround for PMIX case. For secondary
-		 * groups returned 'children_rank_list' contains primary ranks.
-		 * Convert here to secondary ranks.
-		 */
-		if (CRT_PMIX_ENABLED() && !co_info->co_grp_priv->gp_primary) {
-			uint32_t	idx;
-			d_rank_list_t	*membs;
-
-			membs = grp_priv_get_membs(co_info->co_grp_priv);
-
-			rc = d_idx_in_rank_list(membs,
-				children_rank_list->rl_ranks[i], &idx);
-
-			if (rc != 0) {
-				RPC_ERROR(rpc_priv, "rank %d not found\n",
-					children_rank_list->rl_ranks[i]);
-				crt_corpc_fail_child_rpc(rpc_priv,
-						co_info->co_child_num - i, rc);
-				D_GOTO(forward_done, rc);
-			}
-
-			tgt_ep.ep_rank = idx;
-		} else {
-			tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
-		}
-
+		tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
 		tgt_ep.ep_grp = &co_info->co_grp_priv->gp_pub;
 
 		rc = crt_req_create_internal(rpc_priv->crp_pub.cr_ctx, &tgt_ep,
@@ -958,37 +905,24 @@ forward_done:
 		D_GOTO(out, rc);
 
 	/* invoke RPC handler on local node */
-	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_RANK_EVICT) {
-		struct crt_cb_info cb_info = {};
+	rc = crt_rpc_common_hdlr(rpc_priv);
+	if (rc != 0) {
+		RPC_ERROR(rpc_priv,
+			  "crt_rpc_common_hdlr failed, rc: %d\n", rc);
+		crt_corpc_fail_child_rpc(rpc_priv, 1, rc);
 
 		D_SPIN_LOCK(&rpc_priv->crp_lock);
 		co_info->co_local_done = 1;
+		rpc_priv->crp_reply_pending = 0;
 		D_SPIN_UNLOCK(&rpc_priv->crp_lock);
 
-		cb_info.cci_rpc = &rpc_priv->crp_pub;
-		cb_info.cci_arg = rpc_priv;
+		/* Handle ref count difference between call on root vs
+		 * call on intermediate nodes
+		 */
+		if (co_info->co_root != co_info->co_grp_priv->gp_self)
+			RPC_DECREF(rpc_priv);
 
-		crt_corpc_reply_hdlr(&cb_info);
-	} else {
-		rc = crt_rpc_common_hdlr(rpc_priv);
-		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_rpc_common_hdlr failed, rc: %d\n", rc);
-			crt_corpc_fail_child_rpc(rpc_priv, 1, rc);
-
-			D_SPIN_LOCK(&rpc_priv->crp_lock);
-			co_info->co_local_done = 1;
-			rpc_priv->crp_reply_pending = 0;
-			D_SPIN_UNLOCK(&rpc_priv->crp_lock);
-
-			/* Handle ref count difference between call on root vs
-			 * call on intermediate nodes
-			 */
-			if (co_info->co_root != co_info->co_grp_priv->gp_self)
-				RPC_DECREF(rpc_priv);
-
-			rc = 0;
-		}
+		rc = 0;
 	}
 
 

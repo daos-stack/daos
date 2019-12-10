@@ -70,6 +70,7 @@ int crt_context_req_track(struct crt_rpc_priv *rpc_priv);
 bool crt_context_empty(int locked);
 void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
 crt_context_t crt_context_lookup(int ctx_idx);
+crt_context_t crt_context_lookup_locked(int ctx_idx);
 void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
@@ -81,12 +82,6 @@ static inline bool
 crt_is_service()
 {
 	return crt_gdata.cg_server;
-}
-
-static inline bool
-crt_is_singleton()
-{
-	return crt_gdata.cg_singleton;
 }
 
 static inline void

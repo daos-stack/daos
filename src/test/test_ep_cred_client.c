@@ -44,15 +44,22 @@ static int resp_count;
 static int sent_count;
 
 static void
+rpc_handle_shutdown_reply(const struct crt_cb_info *info)
+{
+	DBG_PRINT("Shutdown response handler called\n");
+	sem_post(&test.tg_token_to_proceed);
+}
+
+static void
 rpc_handle_reply(const struct crt_cb_info *info)
 {
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
 		  info->cci_rc);
 	resp_count++;
-	D_DEBUG(DB_TRACE, "Response count=%d\n", resp_count);
+	DBG_PRINT("Response count=%d\n", resp_count);
 
 	if (resp_count == sent_count) {
-		D_DEBUG(DB_ALL, "received all expected replies\n");
+		DBG_PRINT("received all expected replies\n");
 		sem_post(&test.tg_token_to_proceed);
 	}
 }
@@ -60,7 +67,7 @@ rpc_handle_reply(const struct crt_cb_info *info)
 static void
 rpc_handle_ping_front_q(const struct crt_cb_info *info)
 {
-	D_DEBUG(DB_TRACE, "Response from front queued rpc\n");
+	DBG_PRINT("Response from front queued rpc\n");
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
 		  info->cci_rc);
 	sem_post(&test.tg_queue_front_token);
@@ -167,8 +174,9 @@ test_run()
 		rc = crt_req_create(test.tg_crt_ctx, &ep, OPC_SHUTDOWN, &rpc);
 		D_ASSERTF(rc == 0, "crt_req_create() failed; rc=%d\n", rc);
 
-		rc = crt_req_send(rpc, NULL, NULL);
+		rc = crt_req_send(rpc, rpc_handle_shutdown_reply, NULL);
 		D_ASSERTF(rc == 0, "crt_req_send() failed; rc=%d\n", rc);
+		tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
 	D_FREE(rank_list->rl_ranks);
@@ -183,7 +191,7 @@ test_run()
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "joined progress thread.\n");
+	DBG_PRINT("joined progress thread.\n");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");

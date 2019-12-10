@@ -119,6 +119,8 @@ shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
+	crt_reply_send(rpc_req);
+
 	g_shutdown = 1;
 	DBG_PRINT("server set shutdown flag.\n");
 }
@@ -135,7 +137,7 @@ struct crt_proto_rpc_format my_proto_rpc_fmt_0[] = {
 		.prf_hdlr	= ping_hdlr_1,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_flags	= 0,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= shutdown_handler,
 		.prf_co_ops	= NULL,

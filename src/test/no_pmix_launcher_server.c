@@ -87,8 +87,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
-		CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);

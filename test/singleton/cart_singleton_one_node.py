@@ -41,7 +41,7 @@ class CartSingletonOneNodeTest(Test):
     """
     Runs basic CaRT singleton tests
 
-    :avocado: tags=all,singleton,one_node
+    #:avocado: tags=all,singleton,one_node
     """
     def setUp(self):
         """ Test setup """
@@ -59,7 +59,7 @@ class CartSingletonOneNodeTest(Test):
         """
         Test CaRT Singleton
 
-        :avocado: tags=all,singleton,one_node
+        #:avocado: tags=all,singleton,one_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "srv")

@@ -23,20 +23,14 @@ hosts: !mux
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd
-    srv_bin: tests/test_corpc_prefwd
-    srv_arg: "--name service_group --is_service"
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_corpc_prefwd"
     srv_env: ""
     srv_ppn: "5"
-  #corpc_version:
-    #name: corpc_version
-    #srv_bin: tests/test_corpc_version
-    #srv_arg: "--name service_group --is_service"
-    #srv_env: ""
-    #srv_ppn: "5"
   corpc_exclusive:
     name: corpc_exclusive
-    srv_bin: tests/test_corpc_exclusive
-    srv_arg: "--name service_group --is_service"
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_corpc_exclusive"
     srv_env: ""
     srv_ppn: "5"
   corpc_errors:

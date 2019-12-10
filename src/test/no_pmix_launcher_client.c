@@ -110,8 +110,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON | CRT_FLAG_BIT_PMIX_DISABLE |
-			CRT_FLAG_BIT_LM_DISABLE);
+	rc = crt_init(NULL, 0);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);

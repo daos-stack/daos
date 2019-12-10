@@ -1,8 +1,8 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       3.2.0
-Release:       3%{?relval}%{?dist}
+Version:       4.0.0
+Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -138,6 +138,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Dec 9 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.0.0-1
+- Libcart version 4.0.0-1
+- PMIX support removed along with all associated code
+
 * Thu Dec 5 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 3.2.0-3
 - Libcart version 3.2.0-3
 - Restrict mercury to be version = 1.0.1-21

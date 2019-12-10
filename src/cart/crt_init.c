@@ -175,22 +175,10 @@ crt_plugin_init(void)
 	if (rc != 0)
 		D_GOTO(out_destroy_timeout, rc);
 
-	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
-	rc = D_RWLOCK_INIT(&crt_plugin_gdata.cpg_eviction_rwlock, NULL);
-	if (rc != 0)
-		D_GOTO(out_destroy_event, rc);
 
 	crt_plugin_gdata.cpg_inited = 1;
-	if (CRT_PMIX_ENABLED() && crt_is_service() && !crt_is_singleton()) {
-		rc = crt_plugin_pmix_init();
-		if (rc != 0)
-			D_GOTO(out_destroy_eviction, rc);
-	}
 	D_GOTO(out, rc = 0);
 
-out_destroy_eviction:
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_eviction_rwlock);
-out_destroy_event:
 	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
 out_destroy_timeout:
 	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
@@ -237,18 +225,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				"or is too long\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
-		if (!server) {
-			if (strcmp(grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
-				D_ERROR("invalid client grpid (same as "
-					"CRT_DEFAULT_SRV_GRPID).\n");
-				D_GOTO(out, rc = -DER_INVAL);
-			}
-		} else {
-			if (strcmp(grpid, CRT_DEFAULT_CLI_GRPID) == 0) {
-				D_ERROR("invalid server grpid (same as "
-					"CRT_DEFAULT_CLI_GRPID).\n");
-				D_GOTO(out, rc = -DER_INVAL);
-			}
+
+		if (strcmp(grpid, CRT_DEFAULT_GRPID) == 0) {
+			D_ERROR("invalid client grpid (same as "
+				"CRT_DEFAULT_GRPID).\n");
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
@@ -262,16 +243,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	}
 	D_ASSERT(gdata_init_flag == 1);
 
-	if ((flags & CRT_FLAG_BIT_PMIX_DISABLE) != 0) {
-		crt_gdata.cg_pmix_disabled = 1;
-
-		/* Liveness map only valid with PMIX enabled */
-		if (!(flags & CRT_FLAG_BIT_LM_DISABLE)) {
-			D_WARN("PMIX disabled. Disabling LM automatically\n");
-			flags |= CRT_FLAG_BIT_LM_DISABLE;
-		}
-	}
-
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
 		/* feed a seed for pseudo-random number generator */
@@ -282,9 +253,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_server = server;
 
 		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
-
-		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
-			crt_gdata.cg_singleton = true;
 
 		path = getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
@@ -374,17 +342,11 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
-		if ((flags & CRT_FLAG_BIT_LM_DISABLE) == 0) {
-			rc = crt_lm_init();
-			if (rc)
-				D_GOTO(cleanup, rc);
-		}
 
 		if (crt_is_service()) {
 			rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
 			if (rc) {
 				D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
-				crt_lm_finalize();
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -437,13 +399,9 @@ crt_plugin_fini(void)
 	struct crt_prog_cb_priv		*prog_cb_priv;
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
-	struct crt_plugin_cb_priv	*cb_priv;
 	int				 i;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
-
-	if (CRT_PMIX_ENABLED())
-		crt_plugin_pmix_fini();
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		while ((prog_cb_priv = d_list_pop_entry(
@@ -464,17 +422,11 @@ crt_plugin_fini(void)
 						 cecp_link))) {
 		D_FREE(event_cb_priv);
 	}
-	while ((cb_priv = d_list_pop_entry(&crt_plugin_gdata.cpg_eviction_cbs,
-					   struct crt_plugin_cb_priv,
-					   cp_link))) {
-		D_FREE(cb_priv);
-	}
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_prog_rwlock[i]);
 	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_timeout_rwlock);
 	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_event_rwlock);
-	D_RWLOCK_DESTROY(&crt_plugin_gdata.cpg_eviction_rwlock);
 }
 
 int
@@ -490,7 +442,6 @@ crt_finalize(void)
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(direct_out, rc = -DER_UNINIT);
 	}
-	crt_lm_finalize();
 
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {

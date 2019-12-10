@@ -45,7 +45,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include "utest_cmocka.h"
+#include "wrap_cmocka.h"
 #include "gurt/common.h"
 #include "gurt/list.h"
 #include "gurt/heap.h"

@@ -41,7 +41,7 @@ class CartSingletonTwoNodeTest(Test):
     """
     Runs basic CaRT singleton tests
 
-    :avocado: tags=all,singleton,two_node
+    #:avocado: tags=all,singleton,two_node
     """
     def setUp(self):
         """ Test setup """
@@ -67,7 +67,7 @@ class CartSingletonTwoNodeTest(Test):
         """
         Test CaRT Singleton
 
-        :avocado: tags=all,singleton,two_node
+        #:avocado: tags=all,singleton,two_node
         """
         urifile = self.utils.create_uri_file()
 
@@ -106,7 +106,7 @@ class CartSingletonTwoNodeTest(Test):
         """
         Test CaRT Multi_tier singleton attach test on two nodes
 
-        :avocado: tags=all,singleton,multi_tier,two_node
+        #:avocado: tags=all,singleton,multi_tier,two_node
         """
         urifile = self.utils.create_uri_file()
 
@@ -156,7 +156,7 @@ class CartSingletonTwoNodeTest(Test):
         """
         Test CaRT Multi_tier without singleton attach test on two nodes
 
-        :avocado: tags=all,singleton,multi_tier,two_node
+        #:avocado: tags=all,singleton,multi_tier,two_node
         """
         urifile = self.utils.create_uri_file()
 

@@ -39,10 +39,6 @@
 import os
 
 TEST_SRC = ['test_linkage.cpp', 'test_gurt.c', 'utest_hlc.c']
-WRAPPERS = {'test_linkage.cpp':['PMIx_Init', 'PMIx_Get',
-                                'PMIx_Publish', 'PMIx_Lookup',
-                                'PMIx_Fence', 'PMIx_Unpublish',
-                                'PMIx_Register_event_handler']}
 LIBPATH = [Dir('../cart'), Dir('../gurt')]
 
 def scons():
@@ -76,18 +72,12 @@ def scons():
     test_env.AppendUnique(RPATH=LIBPATH)
     tests = []
 
-    wrap_obj = test_env.Object('utest_cmocka.c')
-
     for test in TEST_SRC:
         flags = []
-        if test in WRAPPERS:
-            for function in WRAPPERS[test]:
-                flags.append("-Wl,--wrap=%s" % function)
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.Program(target=testname,
                                     source=testobj + \
-                                    wrap_obj + \
                                     cart_targets + \
                                     swim_targets + \
                                     gurt_targets,

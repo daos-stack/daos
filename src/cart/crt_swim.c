@@ -103,7 +103,7 @@ static struct crt_proto_format crt_swim_proto_fmt = {
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc_req)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct swim_context	*ctx = csm->csm_ctx;
 	struct crt_rpc_swim_in	*rpc_swim_input = crt_req_get(rpc_req);
@@ -379,7 +379,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 
 static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct swim_context	*ctx = csm->csm_ctx;
 	swim_id_t		 self_id = swim_self_get(ctx);
@@ -398,7 +398,7 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 
 void crt_swim_fini(void)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 
 	crt_swim_rank_del_all(grp_priv);
@@ -424,7 +424,7 @@ static struct swim_ops crt_swim_ops = {
 
 int crt_swim_init(int crt_ctx_idx)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	d_rank_t		 self = grp_priv->gp_self;
 	int			 i, rc;
@@ -543,7 +543,7 @@ out:
 
 void crt_swim_disable_all(void)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	int			 rc;
 
