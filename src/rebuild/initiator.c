@@ -901,7 +901,6 @@ rebuild_obj_callback(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	return rc;
 }
 
-#define DEFAULT_YIELD_FREQ			128
 static int
 puller_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		   d_iov_t *val_iov, void *data)

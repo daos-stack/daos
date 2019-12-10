@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,14 @@
 
 #if defined(__cplusplus)
 extern "C" {
+#endif
+
+#ifdef __GURT_ERRNO_H__
+#ifdef DAOS_VERSION
+#error "daos_errno.h included after gurt/errno.h"
+#endif
+/* Detects when a 3rd party user includes gurt/errno.h first */
+#define DAOS_USE_GURT_ERRNO
 #endif
 
 #define D_ERRNO_V2
@@ -86,8 +94,22 @@ extern "C" {
 	/** Record size error */					\
 	ACTION(DER_REC_SIZE,		(DER_ERR_DAOS_BASE + 24))
 
+#ifdef DAOS_USE_GURT_ERRNO
+	/* When new errno's added above, we need to define them here
+	 * as well numerically.   For instance, if we add a new one named
+	 * DER_FOO, we would put this here:
+	 *
+	 * #define DER_FOO (DER_ERR_DAOS_BASE + 25)
+	 *
+	 * This isn't strictly necessary as it's only needed for external
+	 * support if they reference an errno directly by name.  If they
+	 * use d_errstr(errno), they will get the correct string in such
+	 * cases.
+	 */
+#else
 /** Define the DAOS error numbers */
 D_DEFINE_RANGE_ERRNO(DAOS, 2000)
+#endif
 
 /** Register the DAOS error codes with gurt */
 int
