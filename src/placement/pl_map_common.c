@@ -92,41 +92,24 @@ alloc_f_shard(struct failed_shard **f_new,  unsigned int shard_idx,
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt)
+		struct pool_target *tgt, bool is_reint)
 {
 	struct failed_shard *f_new;
 	int rc;
 
 	rc = alloc_f_shard(&f_new, shard_idx, tgt);
-	if (rc == 0) {
+
+	if (rc == 0 && is_reint == false) {
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
-	}
+	} else if (rc == 0 && is_reint == true) {
+                f_new->fs_tgt_id = tgt->ta_comp.co_id;
+                d_list_add(&f_new->fs_list, remap_list);
+        }
+
 	return rc;
 }
 
-/**
-   * Allocate a new failed shard then add it into remap list
-   *
-   * \param[in] remap_list        List for the failed shard to be added onto.
-   * \param[in] shard_idx         The shard number of the failed shard.
-   * \paramp[in] tgt              The failed target that will be added to the
-   *                              remap list.
-   */
-int
-reint_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt)
-{
-	struct failed_shard *f_new;
-	int rc;
-
-	rc = alloc_f_shard(&f_new, shard_idx, tgt);
-	if (rc == 0) {
-		f_new->fs_tgt_id = tgt->ta_comp.co_id;
-		d_list_add(&f_new->fs_list, remap_list);
-	}
-	return rc;
-}
 /**
  * Free all elements in the remap list
  *

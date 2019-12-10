@@ -96,10 +96,7 @@ reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt);
-int
-reint_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt);
+		struct pool_target *tgt, bool is_reint);
 
 void
 remap_list_free_all(d_list_t *remap_list);

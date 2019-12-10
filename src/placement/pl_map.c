@@ -210,15 +210,20 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 }
 
 int
-pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
+pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
+		struct pl_obj_layout **layout_pp)
 {
 	struct pl_obj_layout *layout;
+	unsigned int shard_nr = grp_size * grp_nr;
 
 	D_ALLOC_PTR(layout);
 	if (layout == NULL)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
+	layout->ol_grp_nr = grp_nr;
+	layout->ol_grp_size = grp_size;
+
 	D_ALLOC_ARRAY(layout->ol_shards, layout->ol_nr);
 	if (layout->ol_shards == NULL)
 		goto failed;

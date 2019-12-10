@@ -199,7 +199,7 @@ jump_map_remap_next_spare(struct pl_jump_map *jmap,
  *              object placement, rebuild, and reintegration
  */
 static inline struct pl_jump_map *
-pl_map2mplmap(struct pl_map *map)
+pl_map2jmap(struct pl_map *map)
 {
 	return container_of(map, struct pl_jump_map, jmp_map);
 }
@@ -552,7 +552,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		setbit(tgts_used, target->ta_comp.co_id);
 
 		if (pool_target_unavail(target, for_reint)) {
-			rc = remap_alloc_one(remap_list, 0, target);
+			rc = remap_alloc_one(remap_list, 0, target, for_reint);
 			if (rc)
 				D_GOTO(out, rc);
 
@@ -596,7 +596,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			/** If target is failed queue it for remap*/
 			if (pool_target_unavail(target, for_reint))  {
 
-				rc = remap_alloc_one(remap_list, k, target);
+				rc = remap_alloc_one(remap_list, k, target, false);
 				if (rc)
 					D_GOTO(out, rc);
 			}
@@ -631,7 +631,7 @@ jump_map_destroy(struct pl_map *map)
 {
 	struct pl_jump_map   *jmap;
 
-	jmap = pl_map2mplmap(map);
+	jmap = pl_map2jmap(map);
 
 	if (jmap->jmp_map.pl_poolmap)
 		pool_map_decref(jmap->jmp_map.pl_poolmap);
@@ -730,7 +730,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	daos_obj_id_t                   oid;
 	int                             rc;
 
-	jmap = pl_map2mplmap(map);
+	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
@@ -740,14 +740,12 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jmop.jmop_grp_nr * jmop.jmop_grp_size,
+	rc = pl_obj_layout_alloc(jmop.jmop_grp_nr, jmop.jmop_grp_size,
 				 &layout);
 	if (rc != 0) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
-	layout->ol_grp_nr = jmop.jmop_grp_nr;
-	layout->ol_grp_size = jmop.jmop_grp_size;
 
 	/* Get root node of pool map */
 	D_INIT_LIST_HEAD(&remap_list);
@@ -815,7 +813,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	jmap = pl_map2mplmap(map);
+	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
@@ -831,14 +829,12 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jmop.jmop_grp_size * jmop.jmop_grp_nr,
+	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
 	if (rc) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
-	layout->ol_grp_nr = jmop.jmop_grp_nr;
-	layout->ol_grp_size = jmop.jmop_grp_size;
 
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list, false, md);
@@ -886,7 +882,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	jmap = pl_map2mplmap(map);
+	jmap = pl_map2jmap(map);
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jop);
 	if (rc) {
@@ -901,19 +897,15 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size * jop.jmop_grp_nr, &layout);
+	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
+			&layout);
 	if (rc)
-		return rc;
+		return 0;
 
-	rc = pl_obj_layout_alloc(jop.jmop_grp_size * jop.jmop_grp_nr,
+	rc = pl_obj_layout_alloc(jop.jmop_grp_size, jop.jmop_grp_nr,
 			&reint_layout);
 	if (rc)
-		return rc;
-	reint_layout->ol_grp_nr = jop.jmop_grp_nr;
-	reint_layout->ol_grp_size = jop.jmop_grp_size;
-	layout->ol_grp_nr = jop.jmop_grp_nr;
-	layout->ol_grp_size = jop.jmop_grp_size;
-
+		goto out;
 
 	D_INIT_LIST_HEAD(&remap_list);
 	D_INIT_LIST_HEAD(&reint_list);
@@ -940,7 +932,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		if (reint_tgt != original_target) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);
-			reint_alloc_one(&reint_list, index, temp_tgt);
+			remap_alloc_one(&reint_list, index, temp_tgt, true);
 		}
 	}
 
@@ -950,7 +942,12 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 out:
 	remap_list_free_all(&reint_list);
 	remap_list_free_all(&remap_list);
-	pl_obj_layout_free(layout);
+
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
+	if (reint_layout != NULL)
+		pl_obj_layout_free(reint_layout);
+
 	return rc < 0 ? rc : idx;
 }
 
