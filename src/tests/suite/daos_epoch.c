@@ -251,7 +251,7 @@ test_snapshots(void **argp)
 	daos_anchor_is_eof(&anchor);
 	assert_int_equal(snap_count_out, snap_count);
 	for (i = 0; i < snap_split_index; i++)
-		assert_int_not_equal(snaps_out[i], snaps[i]);
+		assert_int_equal(snaps_out[i], snaps[i]);
 	for (i = snap_split_index; i < snap_count; i++)
 		assert_int_equal(snaps_out[i], garbage);
 
