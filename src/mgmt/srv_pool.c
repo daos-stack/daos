@@ -679,7 +679,11 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 
 	/* TODO: attach to DAOS system based on group argument */
 
-	iter_args.avail_npools = *npools;
+	if (npools == NULL)
+		iter_args.avail_npools = UINT64_MAX; /* get all the pools */
+	else
+		iter_args.avail_npools = *npools;
+
 	iter_args.npools = 0;
 	iter_args.pools_index = 0;		/* num pools in pools[] */
 	iter_args.pools_len = 0;		/* alloc length of pools[] */
@@ -703,7 +707,8 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	*npools = iter_args.npools;
+	if (npools != NULL)
+		*npools = iter_args.npools;
 	/* poolsp, pools_len initialized to NULL,0 - update if successful */
 
 	if (rc != 0) {
