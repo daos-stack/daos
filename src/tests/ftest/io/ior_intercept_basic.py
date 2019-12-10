@@ -29,7 +29,7 @@ from ior_utils import IorCommand, IorMetrics
 class IorIntercept(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with and without interception
-       library on a multi server and multi client settings with
+       library on a single server and single client setting with
        basic parameters.
 
     :avocado: recursive
@@ -47,14 +47,14 @@ class IorIntercept(IorTestBase):
             library make significant performance improvement.
 
         Use case:
-            Run ior with read, write, CheckWrite, CheckRead, fsync
-                in fpp mode for 5 minutes
-            Run ior with read, write, CheckWrite, CheckRead, fsync
-                in fpp mode for 5 minutes with interception library
+            Run ior with read, write, CheckWrite, CheckRead
+                for 5 minutes
+            Run ior with read, write, CheckWrite, CheckRead
+                for 5 minutes with interception library
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,pr,hw,iorinterceptbasic
+        :avocado: tags=all,daosio,hw,full_regression,iorinterceptbasic
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
