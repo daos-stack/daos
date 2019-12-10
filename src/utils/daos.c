@@ -802,6 +802,7 @@ help_hdlr(struct cmd_args_s *ap)
 "resources:\n"
 "	  pool             pool\n"
 "	  container (cont) container\n"
+"	  version          print command version\n"
 "	  help             print this message and exit\n");
 
 	fprintf(stream, "\n"
@@ -909,9 +910,13 @@ main(int argc, char *argv[])
 	command_hdlr_t		hdlr = NULL;
 	struct cmd_args_s	dargs = {0};
 
-	/* argv[1] is RESOURCE or "help";
+	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
+	if (argc <= 2 || strcmp(argv[1], "version") == 0) {
+		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		return 0;
+	}
 	if (argc <= 2 || strcmp(argv[1], "help") == 0)
 		hdlr = help_hdlr;
 	else if ((strcmp(argv[1], "container") == 0) ||
