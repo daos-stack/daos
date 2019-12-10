@@ -333,6 +333,7 @@ dfs_teardown(void **state)
 		printf("Destroyed DFS Container "DF_UUIDF"\n",
 		       DP_UUID(co_uuid));
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	return test_teardown(state);
 }
