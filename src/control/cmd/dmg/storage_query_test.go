@@ -25,10 +25,7 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-
-	"github.com/daos-stack/daos/src/control/client"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
@@ -36,10 +33,7 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"NVMe health query",
 			"storage query nvme-health",
-			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{}),
-			}, " "),
+			"ConnectClients StorageScan-<nil>",
 			nil,
 		},
 		{

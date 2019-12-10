@@ -60,10 +60,10 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	/* The time for the latest DTX resync operation. */
-	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_reindex:1,
+				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,
@@ -131,10 +131,10 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
+typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int
-ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
+ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	     void *arg, uint32_t type);
-
 int
 cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int

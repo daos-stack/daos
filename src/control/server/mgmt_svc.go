@@ -548,7 +548,8 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	return resp, nil
 }
 
-// ListPools implements the method defined for the Management Service.
+// ListPools forwards a gRPC request to the DAOS IO server to fetch a list of
+// all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 

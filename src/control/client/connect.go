@@ -80,6 +80,7 @@ type Connect interface {
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
