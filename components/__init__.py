@@ -206,9 +206,6 @@ def define_pmix(reqs):
                           './configure --with-platform=optimized '
                           '--enable-orterun-prefix-by-default '
                           '--prefix=$OMPI_PREFIX ' +
-                          '--with-pmix=' +
-                          check(reqs, 'pmix', '$PMIX_PREFIX', 'external') +
-                          ' ' +
                           '--with-psm2' +
                           check(reqs, 'psm2', "=$PSM2_PREFIX", '') +
                           ' ' +
@@ -221,7 +218,7 @@ def define_pmix(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['open-rte'],
                 required_progs=['g++', 'flex'],
-                requires=['pmix', 'hwloc', 'event', 'psm2'],
+                requires=['hwloc', 'event', 'psm2'],
                 package='ompi-devel' if inst(reqs, 'ompi') else None)
 
 
