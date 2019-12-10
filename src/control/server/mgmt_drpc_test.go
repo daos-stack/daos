@@ -218,7 +218,7 @@ func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedErr := "unmarshal BioError request"
+	expectedErr := errors.New("unmarshal BioError request")
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 
@@ -234,14 +234,14 @@ func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedErr, err.Error())
+	common.CmpErr(t, expectedErr, err)
 }
 
 func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedErr := "check BioErr request socket path"
+	expectedErr := errors.New("check BioErr request socket path")
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 
@@ -254,7 +254,7 @@ func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedErr, err.Error())
+	common.CmpErr(t, expectedErr, err)
 }
 
 func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
@@ -314,7 +314,7 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedError := "out of range"
+	expectedError := errors.New("out of range")
 	mod := &srvModule{}
 	numInstances := 5
 
@@ -337,5 +337,5 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	common.CmpErr(t, expectedError, err.Error())
+	common.CmpErr(t, expectedError, err)
 }

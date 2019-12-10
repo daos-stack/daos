@@ -100,9 +100,11 @@ func TestIOServerInstance_BioError(t *testing.T) {
 	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
 
 	instance.BioErrorNotify(req)
+	t.Debug(buf)
 	expectedOut := "detected blob I/O error"
-	common.CmpErr(t, expectedOut, buf)
-	t.Fatal(buf)
+	if !strings.Contains(buf, expectedOut) {
+		t.Fatal("No I/O error notification detected")
+	}
 }
 
 func TestIOServerInstance_CallDrpc(t *testing.T) {
