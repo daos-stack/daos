@@ -177,6 +177,11 @@ func (tc *testConn) LeaderQuery(system string) (l string, r []string, e error) {
 	return
 }
 
+func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
+	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
+	return &client.ListPoolsResp{}, nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }

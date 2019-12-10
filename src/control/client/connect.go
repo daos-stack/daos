@@ -79,6 +79,7 @@ type Connect interface {
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 	LeaderQuery(string) (string, []string, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers

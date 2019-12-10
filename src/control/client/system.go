@@ -102,6 +102,8 @@ func (c *connList) KillRank(rank uint32) ResultMap {
 	return results
 }
 
+// LeaderQuery requests the current Management Service leader and the set of
+// MS replicas.
 func (c *connList) LeaderQuery(system string) (leader string, replicas []string, err error) {
 	if len(c.controllers) == 0 {
 		err = errors.New("no controllers defined")
@@ -116,4 +118,45 @@ func (c *connList) LeaderQuery(system string) (leader string, replicas []string,
 	}
 
 	return resp.CurrentLeader, resp.Replicas, nil
+}
+
+// ListPoolsReq contains the inputs for the list pools command.
+type ListPoolsReq struct {
+	SysName string
+}
+
+// ListPoolsResp contains the status of the request and, if successful, the list
+// of pools in the system.
+type ListPoolsResp struct {
+	Status int32
+	Pools  []*PoolDiscovery
+}
+
+// ListPools fetches the list of all pools and their service replicas from the
+// system.
+func (c *connList) ListPools(req ListPoolsReq) (*ListPoolsResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.ListPoolsReq{Sys: req.SysName}
+
+	c.log.Debugf("List DAOS pools request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().ListPools(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("List DAOS pools response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &ListPoolsResp{
+		Pools: poolDiscoveriesFromPB(pbResp.Pools),
+	}, nil
 }
