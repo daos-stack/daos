@@ -23,7 +23,14 @@
 
 package com.intel.daos.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Exception class for remote DAOS operations. The <code>errorCode</code> is passed and defined by DAOS system.
@@ -33,6 +40,38 @@ public class DaosIOException extends IOException {
 
   private int errorCode = Integer.MIN_VALUE;
 
+  private String daosMsg;
+
+  private String parsedMsg;
+
+  protected static final Map<Integer, String> errorMap;
+
+  private static final Logger log = LoggerFactory.getLogger(DaosIOException.class);
+
+  static{
+    errorMap = Collections.unmodifiableMap(loadErrorCode());
+  }
+
+  private static final Map<Integer, String> loadErrorCode(){
+    Map<Integer, String> map = new HashMap<>();
+    Field[] fields = Constants.class.getDeclaredFields();
+    try {
+      for (Field f : fields) {
+        if (f.getName().startsWith(Constants.ERROR_NAME_PREFIX)) {
+          Object o = f.get(null);
+          if(o instanceof ErrorCode) {
+            ErrorCode ec = (ErrorCode) o;
+            map.put(ec.getCode(), ec.getMsg());
+          }
+        }
+      }
+    }catch (Exception e){
+      log.error("failed to load error code", e);
+      return null;
+    }
+    return map;
+  }
+
   public DaosIOException(String msg){
     super(msg);
   }
@@ -41,9 +80,10 @@ public class DaosIOException extends IOException {
     super(cause);
   }
 
-  public DaosIOException(String msg, int errorCode){
+  public DaosIOException(String msg, int errorCode, String daosMsg){
     super(msg);
     this.errorCode = errorCode;
+    this.daosMsg = daosMsg;
   }
 
   public DaosIOException(String msg, int errorCode, Throwable cause){
@@ -55,8 +95,33 @@ public class DaosIOException extends IOException {
     return errorCode;
   }
 
+  @Override
+  public String getMessage(){
+    return toString();
+  }
+
+  @Override
+  public String getLocalizedMessage(){
+    return toString();
+  }
+
+
   public String toString(){
-    //TODO: parse error code if errorcode is set
-    return null;
+    if(parsedMsg != null){
+      return parsedMsg;
+    }
+    StringBuilder sb = new StringBuilder(super.getMessage());
+    sb.append(" error code: ");
+    if (errorCode == Integer.MIN_VALUE){
+      sb.append("unknown.");
+    } else {
+      sb.append(errorCode);
+      if (errorCode < Constants.CUSTOM_ERROR_BASE) {
+        daosMsg = errorMap.get(errorCode);
+      }
+    }
+    sb.append(" error msg: ").append(daosMsg);
+    parsedMsg = sb.toString();
+    return parsedMsg;
   }
 }

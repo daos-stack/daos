@@ -94,7 +94,6 @@ public final class DaosFsClient {
 
   static {
     loadLib();
-    loadErrorCode();
     ShutdownHookManager.addHook(() -> {
       try{
         daosFinalize();
@@ -147,10 +146,6 @@ public final class DaosFsClient {
     }
   }
 
-  private static void loadErrorCode(){
-
-  }
-
   private DaosFsClient(String poolId, String contId, DaosFsClientBuilder builder) {
     this.poolId = poolId;
     this.contId = contId;
@@ -174,11 +169,11 @@ public final class DaosFsClient {
     }
 
     poolPtr = daosOpenPool(poolId, builder.serverGroup,
-            builder.svc,
+            builder.ranks,
             builder.poolFlags);
 
     if (contId != null) {
-      contPtr = daosOpenCont(poolPtr, contId, builder.poolMode);
+      contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
       dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
     }else{
       contId = ROOT_CONT_UUID;
@@ -204,9 +199,10 @@ public final class DaosFsClient {
   }
 
   public static String createPool(DaosFsClientBuilder builder)throws IOException {
+    int poolMode = builder.poolFlags;
     String poolInfo = daosCreatePool(builder.serverGroup,
                           builder.poolSvcReplics,
-                          builder.poolMode,
+                          poolMode,
                           builder.poolScmSize,
                           builder.poolNvmeSize);
     //TODO: parse poolInfo to set poolId and svc , poolId svc1:svc2...
@@ -651,18 +647,19 @@ public final class DaosFsClient {
   public static class DaosFsClientBuilder{
     private String poolId;
     private String contId;
-    private String svc;
-    private String serverGroup;
+    private String ranks;
+    private String serverGroup = "daos_server";
     private int poolSvcReplics = 1;
-    private int poolMode;
-    private int poolFlags;
+    private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
+    private int poolFlags = Constants.ACCESS_FLAG_POOL_GROUP_READWRITE | Constants.ACCESS_FLAG_POOL_OTHER_READWRITE
+            | Constants.ACCESS_FLAG_POOL_USER_READWRITE;
     private long poolScmSize;
     private long poolNvmeSize;
-    private int defaultFileChunkSize;
-    private int defaultFileAccessFlag;
-    private int defaultFileMode;
+    private int defaultFileChunkSize = 8192; //8k
+    private int defaultFileAccessFlag = Constants.ACCESS_FLAG_FILE_READWRITE;
+    private int defaultFileMode = 0755;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
-    private boolean readOnlyFs;
+    private boolean readOnlyFs = false;
     private boolean shareFsClient = true;
 
     public DaosFsClientBuilder poolId(String poolId){
@@ -675,31 +672,73 @@ public final class DaosFsClient {
       return this;
     }
 
-    public DaosFsClientBuilder svc(String svc){
-      this.svc = svc;
+    /**
+     * one or more ranks separated by ":"
+     * @param ranks
+     * @return
+     */
+    public DaosFsClientBuilder ranks(String ranks){
+      this.ranks = ranks;
       return this;
     }
 
+    /**
+     * set group name of server.
+     * @param serverGroup, default is 'daos_server'
+     * @return
+     */
     public DaosFsClientBuilder serverGroup(String serverGroup){
       this.serverGroup = serverGroup;
       return this;
     }
 
+    /**
+     * number of service replics when create pool
+     * @param poolSvcReplics, default is 1
+     * @return
+     */
     public DaosFsClientBuilder poolSvcReplics(int poolSvcReplics){
       this.poolSvcReplics = poolSvcReplics;
       return this;
     }
 
     /**
-     * set pool mode if you want to create new pool.
-     * @param poolMode, should be octal number, like 0775
+     * set container mode when open container.
+     * @param containerFlags, should be one of {@link Constants#ACCESS_FLAG_CONTAINER_READONLY},
+     *                        {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE} and
+     *                        {@link Constants#ACCESS_FLAG_CONTAINER_NOSLIP}
+     *        Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
      * @return
      */
-    public DaosFsClientBuilder poolMode(int poolMode){
-      this.poolMode = poolMode;
+    public DaosFsClientBuilder containerFlags(int containerFlags){
+      this.containerFlags = containerFlags;
       return this;
     }
 
+    /**
+     * set pool flags for creating and opening pool
+     * @param poolFlags, should be one or combination of below three groups.
+     *        <li>
+     *                   user:
+     *                   {@link Constants#ACCESS_FLAG_POOL_USER_READONLY}
+     *                   {@link Constants#ACCESS_FLAG_POOL_USER_READWRITE}
+     *                   {@link Constants#ACCESS_FLAG_POOL_USER_EXECUTE}
+     *        </li>
+     *        <li>
+     *                   group:
+     *                   {@link Constants#ACCESS_FLAG_POOL_GROUP_READONLY}
+     *                   {@link Constants#ACCESS_FLAG_POOL_GROUP_READWRITE}
+     *                   {@link Constants#ACCESS_FLAG_POOL_GROUP_EXECUTE}
+     *        </li>
+     *        <li>
+     *                   other:
+     *                   {@link Constants#ACCESS_FLAG_POOL_OTHER_READONLY}
+     *                   {@link Constants#ACCESS_FLAG_POOL_OTHER_READWRITE}
+     *                   {@link Constants#ACCESS_FLAG_POOL_OTHER_EXECUTE}
+     *        </li>
+     *
+     * @return
+     */
     public DaosFsClientBuilder poolFlags(int poolFlags){
       this.poolFlags = poolFlags;
       return this;
@@ -715,31 +754,64 @@ public final class DaosFsClient {
       return this;
     }
 
+    /**
+     * set default file access flag.
+     * @param defaultFileAccessFlag, default is {@link Constants#ACCESS_FLAG_FILE_READWRITE}
+     * @return
+     */
     public DaosFsClientBuilder defaultFileAccessFlag(int defaultFileAccessFlag){
       this.defaultFileAccessFlag = defaultFileAccessFlag;
       return this;
     }
 
+    /**
+     * set default file mode. You can override this value when create new file by
+     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int)}
+     * @param defaultFileMode, should be octal value. Default is 0755
+     * @return
+     */
     public DaosFsClientBuilder defaultFileMode(int defaultFileMode){
       this.defaultFileMode = defaultFileMode;
       return this;
     }
 
+    /**
+     * set default file type. You can override this value when create new file by
+     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int)}
+     * @param defaultFileObjType, default is {@link DaosObjectType#OC_SX}
+     * @return
+     */
     public DaosFsClientBuilder defaultFileType(DaosObjectType defaultFileObjType){
       this.defaultFileObjType = defaultFileObjType;
       return this;
     }
 
+    /**
+     * set default file chunk size. You can override this value when create new file by
+     * calling {@link DaosFile#createNewFile(int, DaosObjectType, int)}
+     * @param defaultFileChunkSize, default is 8k
+     * @return
+     */
     public DaosFsClientBuilder defaultFileChunkSize(int defaultFileChunkSize){
       this.defaultFileChunkSize = defaultFileChunkSize;
       return this;
     }
 
+    /**
+     * set FS readonly
+     * @param readOnlyFs, default is false
+     * @return
+     */
     public DaosFsClientBuilder readOnlyFs(boolean readOnlyFs){
       this.readOnlyFs = readOnlyFs;
       return this;
     }
 
+    /**
+     * share {@link DaosFsClient} instance or not
+     * @param shareFsClient, default is true
+     * @return
+     */
     public DaosFsClientBuilder shareFsClient(boolean shareFsClient){
       this.shareFsClient = shareFsClient;
       return this;
@@ -750,6 +822,11 @@ public final class DaosFsClient {
       return (DaosFsClientBuilder)ObjectUtils.clone(this);
     }
 
+    /**
+     * Either return existing {@link DaosFsClient} instance or create new instance.
+     * @return
+     * @throws IOException
+     */
     public DaosFsClient build()throws IOException{
       DaosFsClientBuilder copied = this.clone();
       DaosFsClient client;
