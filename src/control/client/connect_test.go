@@ -31,7 +31,7 @@ import (
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/storage"
+	. "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -171,7 +171,7 @@ func TestStorageScan(t *testing.T) {
 
 	clientResp := cc.StorageScan(&StorageScanReq{})
 
-	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
+	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers), clientResp, "")
 }
 
 func TestStorageFormat(t *testing.T) {

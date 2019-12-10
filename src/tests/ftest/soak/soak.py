@@ -84,10 +84,11 @@ class Soak(TestWithServers):
             pool_obj_list[-1].create()
             self.log.info("Valid Pool UUID is %s", pool_obj_list[-1].uuid)
 
-            # Check that the pool was created
-            self.assertTrue(
-                pool_obj_list[-1].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+            # Commented out due to DAOS-3836.
+            ## Check that the pool was created
+            #self.assertTrue(
+            #    pool_obj_list[-1].check_files(self.hostlist_servers),
+            #    "Pool data not detected on servers")
         return pool_obj_list
 
     def destroy_pool(self, pool):
@@ -476,10 +477,11 @@ class Soak(TestWithServers):
             # Break out of loop if smoke
             if "smoke" in self.test_name:
                 break
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                self.pool[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+        # Commented out due to DAOS-3836.
+        ## Check that the reserve pool is still allocated
+        #self.assertTrue(
+        #        self.pool[0].check_files(self.hostlist_servers),
+        #        "Pool data not detected on servers")
         # Verify the data after soak is done
         self.assertTrue(
                 self.container.read_objects(),
