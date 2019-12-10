@@ -1,14 +1,8 @@
 hosts:
     test_servers:
         - server-A
-        - server-B
-        - server-C
-        - server-D
     test_clients:
-        - client-E
-        - client-F
-        - client-G
-        - client-H
+        - client-A
 timeout: 2400
 server_config:
     name: daos_server
@@ -24,9 +18,9 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 128 G
-        scm_size: 128000000000
-        nvme_size: 128000000000
+        # 512 G
+        scm_size: 512000000000
+        nvme_size: 512000000000
     createsvc:
         svcn: 1
 ior:
@@ -39,14 +33,14 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-F -e -v -D 120 -w -r -W -R"
+          flags: "-v -D 300 -w -r -W -R"
           ior_api:
             posix:
               api: POSIX
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '2G'
+              block_size: '8G'
           objectclass:
             oclass_SX:
               daos_oclass: "SX"

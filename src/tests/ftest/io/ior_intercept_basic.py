@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,pr,hw,iorintercept
+        :avocado: tags=all,daosio,pr,hw,iorinterceptbasic
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
