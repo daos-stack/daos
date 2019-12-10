@@ -26,7 +26,10 @@ package client
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func TestAccessControlList_String(t *testing.T) {
@@ -99,6 +102,81 @@ func TestAccessControlList_Empty(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.AssertEqual(t, tc.acl.Empty(), tc.expResult, "result didn't match")
+		})
+	}
+}
+
+func TestPoolDiscoveriesFromPB(t *testing.T) {
+	testUUIDs := []string{
+		"12345678-1234-1234-1234-123456789abc",
+		"87654321-4321-4321-4321-cba987654321",
+	}
+
+	for name, tc := range map[string]struct {
+		pbPools   []*mgmtpb.ListPoolsResp_Pool
+		expResult []*PoolDiscovery
+	}{
+		"empty": {
+			pbPools:   []*mgmtpb.ListPoolsResp_Pool{},
+			expResult: []*PoolDiscovery{},
+		},
+		"single pool": {
+			pbPools: []*mgmtpb.ListPoolsResp_Pool{
+				{
+					Uuid:    testUUIDs[0],
+					Svcreps: []int32{1},
+				},
+			},
+			expResult: []*PoolDiscovery{
+				{
+					UUID:        testUUIDs[0],
+					SvcReplicas: []int{1},
+				},
+			},
+		},
+		"multiple pools": {
+			pbPools: []*mgmtpb.ListPoolsResp_Pool{
+				{
+					Uuid:    testUUIDs[0],
+					Svcreps: []int32{1},
+				},
+				{
+					Uuid:    testUUIDs[1],
+					Svcreps: []int32{2},
+				},
+			},
+			expResult: []*PoolDiscovery{
+				{
+					UUID:        testUUIDs[0],
+					SvcReplicas: []int{1},
+				},
+				{
+					UUID:        testUUIDs[1],
+					SvcReplicas: []int{2},
+				},
+			},
+		},
+		"multiple svc replica ranks": {
+			pbPools: []*mgmtpb.ListPoolsResp_Pool{
+				{
+					Uuid:    testUUIDs[0],
+					Svcreps: []int32{0, 1, 3, 5},
+				},
+			},
+			expResult: []*PoolDiscovery{
+				{
+					UUID:        testUUIDs[0],
+					SvcReplicas: []int{0, 1, 3, 5},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := poolDiscoveriesFromPB(tc.pbPools)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

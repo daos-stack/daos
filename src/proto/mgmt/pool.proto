@@ -58,17 +58,17 @@ message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
 
+// ListPoolsReq represents a request to list pools on a given DAOS system.
 message ListPoolsReq {
 	string sys = 1; // DAOS system identifier
-	uint64 numPools = 2; // Client response buffer capacity in number of pools
 }
 
+// ListPoolsResp returns the list of pools in the system.
 message ListPoolsResp {
 	message Pool {
 		string uuid = 1; // uuid of pool
-		string svcreps = 2; // pool service replicas, comma-separated integers
+		repeated int32 svcreps = 2; // pool service replica ranks
 	}
 	int32 status = 1; // DAOS error code
-	repeated Pool pools = 2; // pools list (max length ListPoolsReq.numPools)
-	uint64 numPools = 3; // number of pools in system
+	repeated Pool pools = 2; // pools list
 }
