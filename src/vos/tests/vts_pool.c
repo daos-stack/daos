@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ pool_set_param(enum vts_ops_type seq[], int cnt, bool flag, bool *cflag,
 }
 
 static int
-pool_ref_count_setup(void **state)
+pool_file_setup(void **state)
 {
 	struct vp_test_args	*arg = *state;
 	int			ret = 0;
@@ -73,6 +73,19 @@ pool_ref_count_setup(void **state)
 
 	ret = vts_alloc_gen_fname(&arg->fname[0]);
 	assert_int_equal(ret, 0);
+	return 0;
+}
+
+static int
+pool_file_destroy(void **state)
+{
+	struct vp_test_args	*arg = *state;
+
+	if (arg->fname[0]) {
+		remove(arg->fname[0]);
+		D_FREE(arg->fname[0]);
+	}
+	D_FREE(arg->fname);
 	return 0;
 }
 
@@ -103,19 +116,26 @@ pool_ref_count_test(void **state)
 	assert_int_equal(ret, 0);
 }
 
-static int
-pool_ref_count_destroy(void **state)
+static void
+pool_interop(void **state)
 {
 	struct vp_test_args	*arg = *state;
+	uuid_t			uuid;
+	daos_handle_t		poh;
+	int			ret;
 
-	if (arg->fname[0]) {
-		remove(arg->fname[0]);
-		D_FREE(arg->fname[0]);
-	}
-	D_FREE(arg->fname);
-	return 0;
+	uuid_generate(uuid);
+
+	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_open(arg->fname[0], uuid, &poh);
+	assert_int_equal(ret, -DER_DF_INCOMPT);
+
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_int_equal(ret, 0);
 }
-
 
 static void
 pool_ops_run(void **state)
@@ -383,10 +403,12 @@ static const struct CMUnitTest pool_tests[] = {
 		pool_ops_run, pool_create_empty, pool_unit_teardown},
 	{ "VOS3: Pool Destroy", pool_ops_run,
 		pool_destroy, pool_unit_teardown},
+	{ "VOS4: Pool DF interoperability", pool_interop,
+		 pool_file_setup, pool_file_destroy},
 	{ "VOS5: Pool Close after open", pool_ops_run,
 		pool_open_close, pool_unit_teardown},
 	{ "VOS6: Pool handle refcount", pool_ref_count_test,
-		 pool_ref_count_setup, pool_ref_count_destroy},
+		 pool_file_setup, pool_file_destroy},
 	{ "VOS7: Pool Query after open", pool_ops_run,
 		pool_query_after_open, pool_unit_teardown},
 	{ "VOS8: Pool all APIs empty file handle", pool_ops_run,

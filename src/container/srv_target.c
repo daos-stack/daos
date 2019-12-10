@@ -1756,7 +1756,7 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 /* iterate all of objects or uncommitted DTXs of the container. */
 int
-ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
+ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	     void *arg, uint32_t type)
 {
 	vos_iter_param_t param;
