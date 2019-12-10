@@ -36,6 +36,7 @@ type (
 	spdkWrapper struct {
 		spdk.Env
 		spdk.Nvme
+		controllers []spdk.Controller
 
 		initialized bool
 	}
@@ -61,6 +62,12 @@ func (w *spdkWrapper) init(initShmID ...int) error {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
+	cs, err := w.Discover()
+	if err != nil {
+		return errors.Wrap(err, "failed to discover NVMe")
+	}
+	w.controllers = cs
+
 	w.initialized = true
 	return nil
 }
@@ -75,14 +82,6 @@ func convert(in interface{}, out interface{}) error {
 }
 
 func convertController(in spdk.Controller, out *storage.NvmeController) error {
-	return convert(in, out)
-}
-
-func convertNamespace(in spdk.Namespace, out *storage.NvmeNamespace) error {
-	return convert(in, out)
-}
-
-func convertDeviceHealth(in spdk.DeviceHealth, out *storage.NvmeDeviceHealth) error {
 	return convert(in, out)
 }
 
@@ -126,12 +125,7 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 		return nil, err
 	}
 
-	bcs, err := b.binding.Discover()
-	if err != nil {
-		return nil, err
-	}
-
-	return convertControllers(bcs)
+	return convertControllers(b.binding.controllers)
 }
 
 func getFormattedController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
@@ -167,12 +161,12 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		return nil, errors.New("empty pciAddr string")
 	}
 
-	bcs, err := b.binding.Format(pciAddr)
+	err := b.binding.Format(pciAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	return getFormattedController(pciAddr, bcs)
+	return getFormattedController(pciAddr, b.binding.controllers)
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {

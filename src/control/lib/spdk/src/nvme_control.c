@@ -126,8 +126,6 @@ nvme_format(char *ctrlr_pci_addr)
 	       ctrlr_entry->pci_addr.domain, ctrlr_entry->pci_addr.bus,
 	       ctrlr_entry->pci_addr.dev, ctrlr_entry->pci_addr.func);
 
-	collect(ret);
-
 	return ret;
 }
 

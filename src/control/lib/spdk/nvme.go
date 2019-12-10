@@ -49,7 +49,7 @@ type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
 	Discover() ([]Controller, error)
 	// Format NVMe controller namespaces
-	Format(ctrlrPciAddr string) ([]Controller, error)
+	Format(ctrlrPciAddr string) error
 	// Cleanup NVMe object references
 	Cleanup()
 }
@@ -118,18 +118,23 @@ func (n *Nvme) Discover() ([]Controller, error) {
 }
 
 // Format device at given pci address, destructive operation!
-func (n *Nvme) Format(ctrlrPciAddr string) ([]Controller, error) {
+func (n *Nvme) Format(ctrlrPciAddr string) error {
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
 	failLocation := "NVMe Format(): C.nvme_format"
 
 	retPtr := C.nvme_format(csPci)
-	if retPtr != nil {
-		return processReturn(retPtr, failLocation)
+	if retPtr == nil {
+		return fmt.Errorf("%s unexpectedly returned NULL",
+			failLocation)
+	}
+	if retPtr.rc != 0 {
+		return fmt.Errorf("%s failed, rc: %d, %s",
+			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 
-	return nil, fmt.Errorf("%s unexpectedly returned NULL", failLocation)
+	return nil
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
