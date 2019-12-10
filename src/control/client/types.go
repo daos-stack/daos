@@ -450,3 +450,28 @@ func (acl *AccessControlList) Empty() bool {
 	}
 	return false
 }
+
+// PoolDiscovery represents the basic discovery information for a pool.
+type PoolDiscovery struct {
+	UUID        string // Unique identifier
+	SvcReplicas []int  // Ranks of pool service replicas
+}
+
+// poolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
+// PoolDiscovery structures.
+func poolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*PoolDiscovery {
+	pools := make([]*PoolDiscovery, 0, len(pbPools))
+	for _, pbPool := range pbPools {
+		svcReps := make([]int, 0, len(pbPool.Svcreps))
+		for _, rep := range pbPool.Svcreps {
+			svcReps = append(svcReps, int(rep))
+		}
+
+		pools = append(pools, &PoolDiscovery{
+			UUID:        pbPool.Uuid,
+			SvcReplicas: svcReps,
+		})
+	}
+
+	return pools
+}
