@@ -32,8 +32,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
 )
 
 const (
@@ -218,8 +218,8 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: res.Err}
-			cMountResults[res.Address] = types.MountResults{Err: res.Err}
+			cCtrlrResults[res.Address] = proto.CtrlrResults{Err: res.Err}
+			cMountResults[res.Address] = proto.MountResults{Err: res.Err}
 			continue
 		}
 
@@ -227,8 +227,8 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 		if !ok {
 			err := fmt.Errorf(msgBadType, StorageFormatResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: err}
-			cMountResults[res.Address] = types.MountResults{Err: err}
+			cCtrlrResults[res.Address] = proto.CtrlrResults{Err: err}
+			cMountResults[res.Address] = proto.MountResults{Err: err}
 			continue
 		}
 
