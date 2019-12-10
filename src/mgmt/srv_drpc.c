@@ -38,6 +38,9 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
@@ -464,6 +467,22 @@ err_out:
 	return rc;
 }
 
+static d_rank_list_t *
+uint32_array_to_rank_list(uint32_t *ints, size_t len)
+{
+	d_rank_list_t	*result;
+	size_t		i;
+
+	result = d_rank_list_alloc(len);
+	if (result == NULL)
+		return NULL;
+
+	for (i = 0; i < len; i++)
+		result->rl_ranks[i] = (d_rank_t)ints[i];
+
+	return result;
+}
+
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -473,10 +492,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*svc = NULL;
 	uuid_t			pool_uuid;
 	daos_prop_t		*prop = NULL;
-	int			buflen = 16;
-	int			index;
-	int			i;
-	char			*extra = NULL;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
@@ -504,15 +519,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init */
 	mgmt__pool_create_resp__init(resp);
 
-	/* Parse targets rank list. */
-	if (strlen(req->ranks) != 0) {
-		targets = daos_rank_list_parse(req->ranks, ",");
-		if (targets == NULL) {
-			D_ERROR("failed to parse target ranks\n");
-			rc = -DER_INVAL;
-			goto out;
-		}
-		D_DEBUG(DB_MGMT, "ranks in: %s\n", req->ranks);
+	if (req->n_ranks > 0) {
+		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+		if (targets == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = uuid_parse(req->uuid, pool_uuid);
@@ -539,42 +549,13 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	assert(svc->rl_nr > 0);
+	D_ASSERT(svc->rl_nr > 0);
 
-	D_ALLOC(resp->svcreps, buflen);
-	if (resp->svcreps == NULL) {
-		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out_svc;
-	}
+	rc = rank_list_to_uint32_array(svc, &resp->svcreps, &resp->n_svcreps);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
 
-	/* Populate the pool service replica ranks string. */
-	index = sprintf(resp->svcreps, "%u", svc->rl_ranks[0]);
-
-	for (i = 1; i < svc->rl_nr; i++) {
-		index += snprintf(&resp->svcreps[index], buflen-index,
-				  ",%u", svc->rl_ranks[i]);
-		if (index >= buflen) {
-			buflen *= 2;
-
-			D_ALLOC(extra, buflen);
-
-			if (extra == NULL) {
-				D_ERROR("failed to allocate buffer");
-				rc = -DER_NOMEM;
-				goto out_svc;
-			}
-
-			index = snprintf(extra, buflen, "%s,%u",
-					 resp->svcreps, svc->rl_ranks[i]);
-
-			D_FREE(resp->svcreps);
-			resp->svcreps = extra;
-		}
-	}
-
-	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc->rl_nr,
-		resp->svcreps);
+	D_DEBUG(DB_MGMT, "%d service replicas\n", svc->rl_nr);
 
 out_svc:
 	d_rank_list_free(svc);
@@ -596,7 +577,7 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp->svcreps && resp->svcreps[0] != '\0')
+	if (resp->svcreps)
 		D_FREE(resp->svcreps);
 	D_FREE(resp);
 }
@@ -915,18 +896,18 @@ out:
 }
 
 static int
-rank_list_to_pool_svcreps(d_rank_list_t *rl, Mgmt__ListPoolsResp__Pool *pool)
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 {
 	uint32_t i;
 
-	D_ALLOC_ARRAY(pool->svcreps, rl->rl_nr);
-	if (pool->svcreps == NULL)
+	D_ALLOC_ARRAY(*ints, rl->rl_nr);
+	if (*ints == NULL)
 		return -DER_NOMEM;
 
-	pool->n_svcreps = rl->rl_nr;
+	*len = rl->rl_nr;
 
 	for (i = 0; i < rl->rl_nr; i++)
-		pool->svcreps[i] = (uint32_t)rl->rl_ranks[i];
+		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
 	return 0;
 }
@@ -982,7 +963,8 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_GOTO(out, rc = -DER_NOMEM);
 			uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
 
-			rc = rank_list_to_pool_svcreps(svc, resp.pools[i]);
+			rc = rank_list_to_uint32_array(svc, &resp.pools[i]->svcreps,
+						  &resp.pools[i]->n_svcreps);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
