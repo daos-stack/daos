@@ -276,15 +276,8 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			target->ta_comp.co_fseq = 1;
 			version++;
 
-			if (!pool_map_node_status_match(dom,
-				~PO_COMP_ST_UPIN)) {
-				/* If any ranks are UPIN, the domain is UPIN */
-				D_DEBUG(DF_DSMS, "change rank %u to UPIN\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_UPIN;
-				dom->do_comp.co_fseq = 1;
-			} else if (!pool_map_node_status_match(dom,
-				~PO_COMP_ST_UP)) {
+			if (pool_map_node_status_match(dom, ~PO_COMP_ST_UPIN) &&
+			    !pool_map_node_status_match(dom, ~PO_COMP_ST_UP)) {
 				/*
 				 * If no ranks are UPIN but any rank is UP,
 				 * the domain is UP

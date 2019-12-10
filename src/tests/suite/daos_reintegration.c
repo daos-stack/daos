@@ -71,16 +71,16 @@ rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed)
-			daos_add_target_force(args[i]->pool.pool_uuid,
-					      args[i]->group,
-					      &args[i]->pool.svc,
-					      rank, tgt_idx);
+			daos_add_target(args[i]->pool.pool_uuid,
+					args[i]->group,
+					&args[i]->pool.svc,
+					rank, tgt_idx);
 	}
 }
 
 static void
-rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		int *failed_tgts, int rank_nr, bool kill)
+rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
+		int *tgts, int rank_nr, bool fail, bool kill)
 {
 	int	i;
 
@@ -89,12 +89,19 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 			args[i]->rebuild_pre_cb(args[i]);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	/** exclude the target from the pool */
+	/** include or exclude the target from the pool */
 	if (args[0]->myrank == 0) {
 		for (i = 0; i < rank_nr; i++) {
-			rebuild_exclude_tgt(args, args_cnt, failed_ranks[i],
-					    failed_tgts ? failed_tgts[i] : -1,
-					    kill);
+			if (fail) {
+				rebuild_exclude_tgt(args, args_cnt,
+				                    ranks[i],
+						    tgts ? tgts[i] : -1,
+						    kill);
+			} else {
+				rebuild_add_tgt(args, args_cnt, ranks[i],
+						tgts ? tgts[i] : -1);
+
+			}
 			/* Sleep 5 seconds to make sure the rebuild start */
 			sleep(5);
 		}
@@ -118,23 +125,7 @@ static void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			   int failed_tgt)
 {
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false);
-}
-
-static void
-rebuild_add_back_tgts(test_arg_t **args, int args_nr, d_rank_t *failed_ranks,
-		      int *failed_tgts, int nr)
-{
-	MPI_Barrier(MPI_COMM_WORLD);
-	/* Add back the target if it is not being killed */
-	if (args[0]->myrank == 0) {
-		int i;
-
-		for (i = 0; i < nr; i++)
-			rebuild_add_tgt(args, args_nr, failed_ranks[i],
-					failed_tgts ? failed_tgts[i] : -1);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, true, false);
 }
 
 static void
@@ -168,11 +159,11 @@ reintegrate_test(void **state)
 
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
 
-	rebuild_add_back_tgts(&arg, 1, ranks_to_kill, &tgt, 1);
+	rebuild_targets(&arg, 1, ranks_to_kill, &tgt, 1, false, false);
 }
 
 static const struct CMUnitTest reintegration_tests[] = {
-	{"REINTEGRATE 1: TODO",
+	{"REINTEGRATE 1: Fail, rebuild, reintegration, rebuild 1 target",
 	 reintegrate_test, NULL, test_case_teardown},
 };
 

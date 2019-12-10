@@ -43,6 +43,11 @@ typedef enum {
 	RB_OP_ADD,
 } daos_rebuild_opc_t;
 
+#define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "RB_OP_FAIL" : \
+			  (rb_op) == RB_OP_DRAIN ? "RB_OP_DRAIN" : \
+			  (rb_op) == RB_OP_ADD ? "RB_OP_ADD" : \
+			  "RB_OP_UNKNOWN")
+
 bool is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid);
 
