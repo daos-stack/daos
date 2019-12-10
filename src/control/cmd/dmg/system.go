@@ -25,14 +25,18 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/client"
 )
 
-// systemCmd is the struct representing the top-level system subcommand.
+// SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.
@@ -80,5 +84,59 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 
 	cmd.log.Infof("System-member-query command %s\n", msg)
 
+	return nil
+}
+
+// systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
+type systemListPoolsCmd struct {
+	logCmd
+	connectedCmd
+	cfgCmd
+}
+
+// Execute is run when systemListPoolsCmd activates
+func (cmd *systemListPoolsCmd) Execute(args []string) error {
+	if cmd.config == nil {
+		return errors.New("No configuration loaded")
+	}
+	req := client.ListPoolsReq{SysName: cmd.config.SystemName}
+	resp, err := cmd.conns.ListPools(req)
+	if err != nil {
+		return errors.Wrap(err, "List-Pools command failed")
+	}
+
+	cmd.log.Debug("List-Pools command succeeded\n")
+	if len(resp.Pools) == 0 {
+		cmd.log.Info("No pools in system\n")
+		return nil
+	}
+
+	uuidTitle := "Pool UUID"
+	svcRepTitle := "Svc Replicas"
+
+	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
+	var table []TableRow
+
+	var b strings.Builder
+	for _, pool := range resp.Pools {
+		row := TableRow{uuidTitle: pool.UUID}
+
+		for i, rep := range pool.SvcReplicas {
+			if i != 0 {
+				b.WriteString(",")
+			}
+			fmt.Fprintf(&b, "%d", rep)
+		}
+
+		if len(pool.SvcReplicas) != 0 {
+			row[svcRepTitle] = b.String()
+		}
+
+		table = append(table, row)
+
+		b.Reset()
+	}
+
+	cmd.log.Info(formatter.Format(table))
 	return nil
 }

@@ -174,9 +174,9 @@ int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			  struct cont *cont, struct container_hdl *hdl,
 			  crt_rpc_t *rpc);
-int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			 struct cont *cont, struct container_hdl *hdl,
-			 crt_rpc_t *rpc, bool snapshot);
+int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc);
 int ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			    struct cont *cont, struct container_hdl *hdl,
 			    crt_rpc_t *rpc);
