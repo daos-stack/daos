@@ -110,14 +110,17 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 }
 
 struct ret_t *
-init_ret(void)
+init_ret(int rc)
 {
-	struct ret_t *ret;
+	struct ret_t *ret = NULL;
 
 	ret = malloc(sizeof(struct ret_t));
-	ret->rc = 0;
+	if (ret == NULL) {
+		perror("ret malloc");
+		exit(1);
+	}
+	ret->rc = rc;
 	ret->ctrlrs = NULL;
-	snprintf(ret->err, sizeof(ret->err), "none");
 
 	return ret;
 }
@@ -128,7 +131,7 @@ clean_ret(struct ret_t *ret)
 	struct ctrlr_t	*cnext;
 	struct ns_t	*nnext;
 
-	while (ret->ctrlrs) {
+	while ((ret) && (ret->ctrlrs)) {
 		while (ret->ctrlrs->nss) {
 			nnext = ret->ctrlrs->nss->next;
 			free(ret->ctrlrs->nss);
@@ -144,55 +147,36 @@ clean_ret(struct ret_t *ret)
 }
 
 int
-check_size(int written, int max, char *msg, struct ret_t *ret)
+get_controller(struct ctrlr_entry **entry, char *addr)
 {
-	if (written >= max) {
-		snprintf(ret->err, sizeof(ret->err), "%s", msg);
-		ret->rc = -NVMEC_ERR_CHK_SIZE;
-		return ret->rc;
-	}
+	struct ctrlr_entry	*centry;
+	struct spdk_pci_addr	 pci_addr;
 
-	return NVMEC_SUCCESS;
-}
+	centry = g_controllers;
 
-struct ctrlr_entry *
-get_controller(char *addr, struct ret_t *ret)
-{
-	struct spdk_pci_addr	pci_addr;
-	struct ctrlr_entry     *entry = g_controllers;
+	if (spdk_pci_addr_parse(&pci_addr, addr) != 0)
+		return -NVMEC_ERR_PCI_ADDR_PARSE;
 
-	if (spdk_pci_addr_parse(&pci_addr, addr) != 0) {
-		snprintf(ret->err, sizeof(ret->err),
-			 "pci addr could not be parsed: %s", addr);
-		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
-		return entry;
-	}
-
-	while (entry) {
-		if (spdk_pci_addr_compare(&entry->pci_addr, &pci_addr) == 0)
+	while (centry) {
+		if (spdk_pci_addr_compare(&centry->pci_addr, &pci_addr) == 0)
 			break;
 
-		entry = entry->next;
+		centry = centry->next;
 	}
 
-	if (entry == NULL) {
-		snprintf(ret->err, sizeof(ret->err), "controller not found");
-		ret->rc = -NVMEC_ERR_CTRLR_NOT_FOUND;
-		return entry;
-	}
+	if (!centry)
+		return -NVMEC_ERR_CTRLR_NOT_FOUND;
+	*entry = centry;
 
-	return entry;
+	return 0;
 }
 
 struct ret_t *
 _discover(prober probe, bool detach, health_getter get_health)
 {
 	int			 rc;
-	struct ret_t		*ret;
 	struct ctrlr_entry	*ctrlr_entry;
 	struct dev_health_entry	*health_entry;
-
-	ret = init_ret();
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -202,16 +186,11 @@ _discover(prober probe, bool detach, health_getter get_health)
 	 *  initializing the controller we chose to attach.
 	 */
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-	if (rc != 0) {
-		sprintf(ret->err, "spdk_nvme_probe() failed");
-		ret->rc = rc;
-		return ret;
-	}
+	if (rc != 0)
+		goto fail;
 
-	if (!g_controllers || !g_controllers->ctrlr) {
-		sprintf(ret->err, "no nvme controllers found");
-		return ret;
-	}
+	if (!g_controllers || !g_controllers->ctrlr)
+		return init_ret(0); /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
@@ -222,16 +201,12 @@ _discover(prober probe, bool detach, health_getter get_health)
 	while (ctrlr_entry) {
 		health_entry = malloc(sizeof(struct dev_health_entry));
 		if (health_entry == NULL) {
-			sprintf(ret->err, "health_entry malloc failed");
-			ret->rc = -ENOMEM;
+			rc = -ENOMEM;
 			goto fail;
 		}
 
 		rc = get_health(ctrlr_entry->ctrlr, health_entry);
 		if (rc != 0) {
-			sprintf(ret->err,
-				"unable to get SPDK ctrlr health logs");
-			ret->rc = rc;
 			free(health_entry);
 			goto fail;
 		}
@@ -240,42 +215,33 @@ _discover(prober probe, bool detach, health_getter get_health)
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
-	collect(ret);
-
-	return ret;
+	return collect();
 fail:
-	clean_ret(ret);
 	cleanup(detach);
-
-	return ret;
+	return init_ret(rc);
 }
 
 static int
-copy_ctrlr_data(struct ctrlr_t *cdst, struct ret_t *ret,
-		struct ctrlr_entry *csrc)
+copy_ctrlr_data(struct ctrlr_t *cdst, struct ctrlr_entry *csrc)
 {
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	int					 written;
-	int					 rc;
 
 	cdata = spdk_nvme_ctrlr_get_data(csrc->ctrlr);
 
 	written = snprintf(cdst->model, sizeof(cdst->model), "%-20.20s",
 			   cdata->mn);
-	rc = check_size(written, sizeof(cdst->model), "model truncated", ret);
-	if (rc != 0)
-		return rc;
+	if (written >= sizeof(cdst->model))
+		return -NVMEC_ERR_CHK_SIZE;
 
 	written = snprintf(cdst->serial, sizeof(cdst->serial), "%-20.20s",
 			   cdata->sn);
-	rc = check_size(written, sizeof(cdst->serial), "serial truncated", ret);
-	if (rc != 0)
-		return rc;
+	if (written >= sizeof(cdst->serial))
+		return -NVMEC_ERR_CHK_SIZE;
 
 	written = snprintf(cdst->fw_rev, sizeof(cdst->fw_rev), "%s", cdata->fr);
-	rc = check_size(written, sizeof(cdst->fw_rev), "fw_rev truncated", ret);
-	if (rc != 0)
-		return rc;
+	if (written >= sizeof(cdst->fw_rev))
+		return -NVMEC_ERR_CHK_SIZE;
 
 	return 0;
 }
@@ -365,7 +331,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		ctrlr_tmp->dev_health = NULL;
 		ctrlr_tmp->next = NULL;
 
-		rc = copy_data(ctrlr_tmp, ret, ctrlr_entry);
+		rc = copy_data(ctrlr_tmp, ctrlr_entry);
 		if (rc != 0)
 			goto fail;
 
@@ -373,15 +339,12 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 				       sizeof(ctrlr_tmp->pci_addr),
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
-			snprintf(ret->err, sizeof(ret->err),
-				 "spdk_pci_addr_fmt: rc %d", rc);
 			rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			goto fail;
 		}
 
 		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
-			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
 			rc = -NVMEC_ERR_GET_PCI_DEV;
 			goto fail;
 		}
@@ -419,14 +382,19 @@ fail:
 	if (ctrlr_tmp)
 		free(ctrlr_tmp);
 	clean_ret(ret);
+	return;
 }
 
-void
-collect(struct ret_t *ret)
+struct ret_t *
+collect(void)
 {
-	_collect(ret, &copy_ctrlr_data,
-		 &spdk_nvme_ctrlr_get_pci_device,
+	struct ret_t *ret;
+
+	ret = init_ret(0);
+	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
 		 &spdk_pci_device_get_socket_id);
+
+	return ret;
 }
 
 void
