@@ -15,6 +15,8 @@ server_config:
     server:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -22,8 +24,9 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 9000000000
-        nvme_size: 16000000000
+        # 128 G
+        scm_size: 128000000000
+        nvme_size: 128000000000
     createsvc:
         svcn: 1
 ior:
@@ -31,7 +34,7 @@ ior:
         np_16:
             np: 16
     test_file: daos:testFile
-    repetitions: 2
+    repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
     iorflags:
@@ -43,8 +46,7 @@ ior:
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '256M'
-
+              block_size: '2G'
           objectclass:
             oclass_SX:
               daos_oclass: "SX"
