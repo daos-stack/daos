@@ -952,6 +952,8 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 		for (i = 0; i < pools_len; i++) {
 			d_rank_list_t	*svc = pools[i].lp_svc;
+			uint32_t	*svcreps;
+			size_t		svcreps_len;
 
 			D_ALLOC_PTR(resp.pools[i]);
 			if (resp.pools[i] == NULL)
@@ -963,10 +965,13 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_GOTO(out, rc = -DER_NOMEM);
 			uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
 
-			rc = rank_list_to_uint32_array(svc, &resp.pools[i]->svcreps,
-						  &resp.pools[i]->n_svcreps);
+			rc = rank_list_to_uint32_array(svc, &svcreps,
+						       &svcreps_len);
 			if (rc != 0)
 				D_GOTO(out, rc);
+
+			resp.pools[i]->svcreps = svcreps;
+			resp.pools[i]->n_svcreps = svcreps_len;
 		}
 	} else if (pools_len != 0) {
 		D_ERROR("Invalid results - pools=NULL, pools_len=%lu\n",
