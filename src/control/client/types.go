@@ -257,46 +257,6 @@ func (rm ResultSmdMap) String() string {
 	return buf.String()
 }
 
-// ClientCtrlrMap is an alias for query results of NVMe controllers (and
-// any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]proto.CtrlrResults
-
-func (ccm ClientCtrlrMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(ccm))
-
-	for server := range ccm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientMountMap is an alias for query results of SCM regions mounted
-// on connected servers keyed on address.
-type ClientMountMap map[string]proto.MountResults
-
-func (cmm ClientMountMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
 // ScmScanResult represents the result of scanning for SCM
 // modules installed on a storage node and SCM namespaces.
 type ScmScanResult struct {
@@ -422,6 +382,15 @@ type StorageFormatReq struct {
 // StorageFormatResults stores results of format operations on NVMe controllers
 // and SCM mountpoints.
 type StorageFormatResults map[string]StorageFormatResult
+
+func (sfr StorageFormatResults) Keys() (keys []string) {
+	for key, _ := range sfr {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return keys
+}
 
 type StorageFormatResult struct {
 	Nvme proto.NvmeControllerResults

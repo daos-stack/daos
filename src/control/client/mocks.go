@@ -423,34 +423,3 @@ func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Ad
 
 	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
 }
-
-// NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
-// operation responses
-func NewClientNvmeResults(results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
-	cMap := make(ClientCtrlrMap)
-	for _, addr := range addrs {
-		cMap[addr] = CtrlrResults{Responses: results}
-	}
-	return cMap
-}
-
-// NewClientScmMount provides a mock ClientMountMap populated with scm mount details
-func NewClientScmMount(mounts ScmMounts, addrs Addresses) ClientMountMap {
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Mounts: mounts}
-	}
-	return cMap
-}
-
-// NewClientScmMountResults provides a mock ClientMountMap populated with scm mount
-// operation responses
-func NewClientScmMountResults(
-	results []*ctlpb.ScmMountResult, addrs Addresses) ClientMountMap {
-
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Responses: results}
-	}
-	return cMap
-}
