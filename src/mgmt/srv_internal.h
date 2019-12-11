@@ -39,6 +39,7 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
 #include <daos_security.h>
+#include <daos_prop.h>
 
 #include "srv.pb-c.h"
 #include "storage_query.pb-c.h"
@@ -97,13 +98,13 @@ void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
 int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
 void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
-int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **acl_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			       struct daos_acl **result);
+			       daos_prop_t **result);
 int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
 int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
 
 /** srv_query.c */
 

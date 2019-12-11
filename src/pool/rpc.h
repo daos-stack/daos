@@ -109,9 +109,9 @@
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
 		&ds_pool_tgt_query_co_ops),				\
-	X(POOL_GET_ACL,							\
-		0, &CQF_pool_get_acl,					\
-		ds_pool_get_acl_handler,				\
+	X(POOL_PROP_GET,						\
+		0, &CQF_pool_prop_get,					\
+		ds_pool_prop_get_handler,				\
 		NULL),							\
 	X(POOL_PROP_SET,						\
 		0, &CQF_pool_prop_set,					\
@@ -358,14 +358,15 @@ CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 
-#define DAOS_ISEQ_POOL_GET_ACL	/* input fields */		 \
-	((struct pool_op_in)	(pgi_op)		CRT_VAR)
+#define DAOS_ISEQ_POOL_PROP_GET	/* input fields */		 \
+	((struct pool_op_in)	(pgi_op)		CRT_VAR) \
+	((uint64_t)		(pgi_query_bits)	CRT_VAR)
 
-#define DAOS_OSEQ_POOL_GET_ACL	/* output fields */		 \
+#define DAOS_OSEQ_POOL_PROP_GET	/* output fields */		 \
 	((struct pool_op_out)	(pgo_op)		CRT_VAR) \
 	((daos_prop_t)		(pgo_prop)		CRT_PTR)
 
-CRT_RPC_DECLARE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
+CRT_RPC_DECLARE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET, DAOS_OSEQ_POOL_PROP_GET)
 
 #define DAOS_ISEQ_POOL_PROP_SET	/* input fields */		 \
 	((struct pool_op_in)	(psi_op)		CRT_VAR) \
@@ -430,5 +431,8 @@ pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
 			     struct pool_target_addr *src);
 void
 pool_target_addr_list_free(struct pool_target_addr_list *list);
+
+uint64_t
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
 
 #endif /* __POOL_RPC_H__ */

@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -423,24 +422,9 @@ type StorageFormatResult struct {
 
 // AccessControlList is a structure for the access control list.
 type AccessControlList struct {
-	Entries []string // Access Control Entries in short string format
-}
-
-// String converts the AccessControlList to a human-readable string.
-func (acl *AccessControlList) String() string {
-	var builder strings.Builder
-
-	builder.WriteString("# Entries:\n")
-	if acl.Empty() {
-		builder.WriteString("#   None\n")
-		return builder.String()
-	}
-
-	for _, ace := range acl.Entries {
-		fmt.Fprintf(&builder, "%s\n", ace)
-	}
-
-	return builder.String()
+	Entries    []string // Access Control Entries in short string format
+	Owner      string   // User that owns the resource
+	OwnerGroup string   // Group that owns the resource
 }
 
 // Empty checks whether there are any entries in the AccessControlList
@@ -449,6 +433,51 @@ func (acl *AccessControlList) Empty() bool {
 		return true
 	}
 	return false
+}
+
+// HasOwner checks whether the AccessControlList has an owner user.
+func (acl *AccessControlList) HasOwner() bool {
+	if acl == nil {
+		return false
+	}
+
+	if acl.Owner != "" {
+		return true
+	}
+	return false
+}
+
+// HasOwnerGroup checks whether the AccessControlList has an owner group.
+func (acl *AccessControlList) HasOwnerGroup() bool {
+	if acl == nil {
+		return false
+	}
+
+	if acl.OwnerGroup != "" {
+		return true
+	}
+	return false
+}
+
+// String displays the AccessControlList in a basic string format.
+func (acl *AccessControlList) String() string {
+	if acl == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%+v", *acl)
+}
+
+// accessControlListFromPB converts from the protobuf ACLResp structure to an
+// AccessControlList structure.
+func accessControlListFromPB(pbACL *mgmtpb.ACLResp) *AccessControlList {
+	if pbACL == nil {
+		return &AccessControlList{}
+	}
+	return &AccessControlList{
+		Entries:    pbACL.ACL,
+		Owner:      pbACL.OwnerUser,
+		OwnerGroup: pbACL.OwnerGroup,
+	}
 }
 
 // PoolDiscovery represents the basic discovery information for a pool.

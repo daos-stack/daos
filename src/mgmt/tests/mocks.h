@@ -36,7 +36,7 @@
  * Mock ds_mgmt_pool_get_acl
  */
 extern int		ds_mgmt_pool_get_acl_return;
-extern struct daos_acl	*ds_mgmt_pool_get_acl_return_acl;
+extern daos_prop_t	*ds_mgmt_pool_get_acl_return_acl;
 extern uuid_t		ds_mgmt_pool_get_acl_uuid;
 extern void		*ds_mgmt_pool_get_acl_acl_ptr;
 
@@ -49,7 +49,7 @@ void mock_ds_mgmt_pool_get_acl_teardown(void);
 extern int		ds_mgmt_pool_overwrite_acl_return;
 extern uuid_t		ds_mgmt_pool_overwrite_acl_uuid;
 extern struct daos_acl	*ds_mgmt_pool_overwrite_acl_acl;
-extern struct daos_acl	*ds_mgmt_pool_overwrite_acl_result;
+extern daos_prop_t	*ds_mgmt_pool_overwrite_acl_result;
 extern void		*ds_mgmt_pool_overwrite_acl_result_ptr;
 
 void mock_ds_mgmt_pool_overwrite_acl_setup(void);
@@ -61,7 +61,7 @@ void mock_ds_mgmt_pool_overwrite_acl_teardown(void);
 extern int		ds_mgmt_pool_update_acl_return;
 extern uuid_t		ds_mgmt_pool_update_acl_uuid;
 extern struct daos_acl	*ds_mgmt_pool_update_acl_acl;
-extern struct daos_acl	*ds_mgmt_pool_update_acl_result;
+extern daos_prop_t	*ds_mgmt_pool_update_acl_result;
 extern void		*ds_mgmt_pool_update_acl_result_ptr;
 
 void mock_ds_mgmt_pool_update_acl_setup(void);
@@ -73,7 +73,7 @@ void mock_ds_mgmt_pool_update_acl_teardown(void);
 extern int		ds_mgmt_pool_delete_acl_return;
 extern uuid_t		ds_mgmt_pool_delete_acl_uuid;
 extern const char	*ds_mgmt_pool_delete_acl_principal;
-extern struct daos_acl	*ds_mgmt_pool_delete_acl_result;
+extern daos_prop_t	*ds_mgmt_pool_delete_acl_result;
 extern void		*ds_mgmt_pool_delete_acl_result_ptr;
 
 void mock_ds_mgmt_pool_delete_acl_setup(void);
