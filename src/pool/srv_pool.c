@@ -3126,6 +3126,10 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	if (map_version == map_version_before)
 		D_GOTO(out_replicas, rc = 0);
 
+	rc = pool_map_update_failed_cnt(map);
+	if (rc != 0)
+		D_GOTO(out_replicas, rc);
+
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
 	if (rc != 0)

@@ -45,6 +45,85 @@ static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	       daos_prop_t **prop_out);
 
+/** Container Property knowledge */
+
+/** Get the redundancy factor from a containers properites. */
+uint32_t
+daos_cont_prop2redunfac(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
+
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RF1 : (uint32_t)prop->dpe_val;
+}
+
+/** Get the redundancy level from a containers properites. */
+uint32_t
+daos_cont_prop2redunlvl(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
+
+	return prop == NULL ? DAOS_PROP_CO_REDUN_NODE : (uint32_t)prop->dpe_val;
+}
+
+/**
+ * This function verifies that the container meets it's redundancy requirements
+ * based on the current pool map. The redundancy requirement is measured
+ * checking a domain level and counting how many downstream failures it has.
+ * if there are more failures for that domain type then allowed restrict
+ * container opening.
+ *
+ * \param pmap  [in]    The pool map referenced by the container.
+ * \param props [in]    The container properties, used to get redundancy factor
+ *                      and level.
+ *
+ * \return	0 if the container meets the requirements, negative error code
+ *		if it does not.
+ */
+static int
+con_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
+{
+	int num_failed;
+	int rc = 0;
+	int redun_fac = daos_cont_prop2redunfac(props);
+	int redun_lvl = daos_cont_prop2redunlvl(props);
+
+	switch (redun_lvl) {
+	case DAOS_PROP_CO_REDUN_RACK:
+		rc = pool_map_get_failed_cnt(pmap,
+					     PO_COMP_TP_RACK);
+		break;
+	case DAOS_PROP_CO_REDUN_NODE:
+		rc = pool_map_get_failed_cnt(pmap,
+					     PO_COMP_TP_NODE);
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	if (rc < 0)
+		return rc;
+
+	num_failed = rc;
+	switch (redun_fac) {
+	case DAOS_PROP_CO_REDUN_RF0:
+		if (num_failed > 0)
+			rc = DER_INVAL;
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		rc = 0;
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+		rc = DER_NOSYS;
+		break;
+	default:
+		rc = DER_INVAL;
+	}
+
+	return rc;
+}
+
 static int
 cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	      struct ds_rsvc *rsvc)
@@ -684,6 +763,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
 	struct cont_query_out  *out = crt_reply_get(rpc);
+	struct pool_map		*pmap;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
@@ -711,12 +791,28 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	/* query the container properties from RDB and update to IV */
+	/* Determine pool meets container redundancy factor requirments*/
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+
+	if (!(in->coi_capas & DAOS_COO_FORCE)) {
+		pmap = pool_hdl->sph_pool->sp_map;
+		rc = con_verify_redun_req(pmap, prop);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": Container does not meet redundancy "
+					"requirments, set DAOS_COO_FORCE to "
+					"force container open rc: %d.\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			daos_prop_free(prop);
+			D_GOTO(out, rc);
+		}
+	}
+
+	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
 				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
 				 prop);
@@ -1613,7 +1709,7 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 					DP_UUID(in->ci_hdl));
 				rc = -DER_NO_HDL;
 			} else {
-				D_ERROR(DF_CONT": failed to look up container"
+				D_ERROR(DF_CONT": failed to look up container "
 					"handle "DF_UUID": %d\n",
 					DP_CONT(cont->c_svc->cs_pool_uuid,
 						cont->c_uuid),
