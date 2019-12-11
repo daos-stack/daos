@@ -6,7 +6,7 @@ hosts:
 timeout: 2400
 server_config:
     name: daos_server
-    server:
+    servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
         scm_class: dcpm
