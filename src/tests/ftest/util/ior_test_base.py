@@ -176,7 +176,7 @@ class IorTestBase(TestWithServers):
             self.fail("Unsupported IOR API")
 
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
-        return Mpirun(self.ior_cmd, mpirun_path)
+        return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
 
     def run_ior(self, manager, processes):
         """Run the IOR command.

@@ -24,6 +24,7 @@
 
 from avocado.utils import process
 from apricot import TestWithServers
+from env_modules import load_mpi
 
 
 class DaosCoreBase(TestWithServers):
@@ -69,6 +70,7 @@ class DaosCoreBase(TestWithServers):
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
 
+        load_mpi("openmpi")
         try:
             process.run(cmd, env=env)
         except process.CmdError as result:

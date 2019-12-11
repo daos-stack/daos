@@ -9,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc', 'isal')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
@@ -29,7 +29,8 @@ def scons():
     senv.ncc = senv.Object("src/nvme_control_common.c")
     denv.nvmecontrol = senv.StaticLibrary("nvme_control", [senv.nc, senv.ncc],
                                           CC=compiler, LIBS=['spdk', 'numa',
-                                                             'spdk_env_dpdk'])
+                                                             'spdk_env_dpdk',
+                                                             'isal'])
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 

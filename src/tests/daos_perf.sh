@@ -34,7 +34,7 @@ if (( $# >= 4 )); then	# -s $RSIZE
 	RSIZE=$4	#    value size
 fi
 
-ORTERUN="${OMPI_PATH}/bin/orterun"
+ORTERUN=$(which orterun)
 
 set -x
 $ORTERUN 				\
