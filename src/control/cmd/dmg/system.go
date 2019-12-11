@@ -47,12 +47,15 @@ type leaderQueryCmd struct {
 }
 
 func (cmd *leaderQueryCmd) Execute(_ []string) error {
-	leader, replicas, err := cmd.conns.LeaderQuery(cmd.config.SystemName)
+	resp, err := cmd.conns.LeaderQuery(client.LeaderQueryReq{
+		System: cmd.config.SystemName,
+	})
 	if err != nil {
 		return errors.Wrap(err, "leader query failed")
 	}
 
-	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", leader, strings.Join(replicas, ", "))
+	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
+		strings.Join(resp.Replicas, ", "))
 	return nil
 }
 

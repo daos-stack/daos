@@ -172,9 +172,9 @@ func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	return make(common.SystemMemberResults, 0), nil
 }
 
-func (tc *testConn) LeaderQuery(system string) (l string, r []string, e error) {
-	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", system))
-	return
+func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", req.System))
+	return &client.LeaderQueryResp{}, nil
 }
 
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {

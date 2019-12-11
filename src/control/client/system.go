@@ -102,22 +102,35 @@ func (c *connList) KillRank(rank uint32) ResultMap {
 	return results
 }
 
+// LeaderQueryReq contains the inputs for the list pools command.
+type LeaderQueryReq struct {
+	System string
+}
+
+// LeaderQueryResp contains the status of the request and, if successful, the list
+// of pools in the system.
+type LeaderQueryResp struct {
+	Leader   string
+	Replicas []string
+}
+
 // LeaderQuery requests the current Management Service leader and the set of
 // MS replicas.
-func (c *connList) LeaderQuery(system string) (leader string, replicas []string, err error) {
+func (c *connList) LeaderQuery(req LeaderQueryReq) (*LeaderQueryResp, error) {
 	if len(c.controllers) == 0 {
-		err = errors.New("no controllers defined")
-		return
+		return nil, errors.New("no controllers defined")
 	}
 
 	client := c.controllers[0].getSvcClient()
-	var resp *mgmtpb.LeaderQueryResp
-	resp, err = client.LeaderQuery(context.TODO(), &mgmtpb.LeaderQueryReq{System: system})
+	resp, err := client.LeaderQuery(context.TODO(), &mgmtpb.LeaderQueryReq{System: req.System})
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	return resp.CurrentLeader, resp.Replicas, nil
+	return &LeaderQueryResp{
+		Leader:   resp.CurrentLeader,
+		Replicas: resp.Replicas,
+	}, nil
 }
 
 // ListPoolsReq contains the inputs for the list pools command.
