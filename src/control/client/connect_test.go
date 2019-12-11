@@ -31,7 +31,7 @@ import (
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/storage"
+	. "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -40,12 +40,12 @@ func connectSetupServers(
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
 	scanRet error, formatRet error, killRet error, connectRet error,
-	ACLRet *mockACLResult) Connect {
+	ACLRet *mockACLResult, listPoolsRet *mockListPoolsResult) Connect {
 
 	connect := newMockConnect(
 		log, state, ctrlrs, ctrlrResults, modules,
 		moduleResults, pmems, mountResults, scanRet, formatRet,
-		killRet, connectRet, ACLRet)
+		killRet, connectRet, ACLRet, listPoolsRet)
 
 	_ = connect.ConnectClients(servers)
 
@@ -57,11 +57,12 @@ func connectSetup(
 	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
 	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
 	mountResults ScmMountResults, scanRet error, formatRet error,
-	killRet error, connectRet error, ACLRet *mockACLResult) Connect {
+	killRet error, connectRet error, ACLRet *mockACLResult,
+	listPoolsRet *mockListPoolsResult) Connect {
 
 	return connectSetupServers(MockServers, log, state, ctrlrs,
 		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
-		formatRet, killRet, connectRet, ACLRet)
+		formatRet, killRet, connectRet, ACLRet, listPoolsRet)
 }
 
 func defaultClientSetup(log logging.Logger) Connect {
@@ -108,7 +109,7 @@ func TestConnectClients(t *testing.T) {
 		cc := newMockConnect(
 			log, tt.state, MockCtrlrs, MockCtrlrResults, MockScmModules,
 			MockModuleResults, MockScmNamespaces, MockMountResults,
-			nil, nil, nil, tt.connRet, nil)
+			nil, nil, nil, tt.connRet, nil, nil)
 
 		results := cc.ConnectClients(tt.addrsIn)
 
@@ -171,7 +172,7 @@ func TestStorageScan(t *testing.T) {
 
 	clientResp := cc.StorageScan(&StorageScanReq{})
 
-	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
+	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers), clientResp, "")
 }
 
 func TestStorageFormat(t *testing.T) {
@@ -191,7 +192,7 @@ func TestStorageFormat(t *testing.T) {
 			cc := connectSetup(
 				log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
-				nil, tt.formatRet, nil, nil, MockACL)
+				nil, tt.formatRet, nil, nil, MockACL, nil)
 
 			cNvmeMap, cMountMap := cc.StorageFormat(tt.reformat)
 
@@ -235,7 +236,7 @@ func TestKillRank(t *testing.T) {
 	for _, tt := range tests {
 		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
-			nil, tt.killRet, nil, MockACL)
+			nil, tt.killRet, nil, MockACL, nil)
 
 		resultMap := cc.KillRank(0)
 
@@ -291,9 +292,9 @@ func TestPoolGetACL(t *testing.T) {
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
-				nil, nil, nil, nil, aclResult)
+				nil, nil, nil, nil, aclResult, nil)
 
-			req := &PoolGetACLReq{
+			req := PoolGetACLReq{
 				UUID: "TestUUID",
 			}
 
@@ -376,9 +377,9 @@ func TestPoolOverwriteACL(t *testing.T) {
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
-				nil, nil, nil, nil, aclResult)
+				nil, nil, nil, nil, aclResult, nil)
 
-			req := &PoolOverwriteACLReq{
+			req := PoolOverwriteACLReq{
 				UUID: "TestUUID",
 				ACL:  tt.inputACL,
 			}
@@ -467,9 +468,9 @@ func TestPoolUpdateACL(t *testing.T) {
 			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
-				nil, nil, nil, nil, aclResult)
+				nil, nil, nil, nil, aclResult, nil)
 
-			req := &PoolUpdateACLReq{
+			req := PoolUpdateACLReq{
 				UUID: "TestUUID",
 				ACL:  tt.inputACL,
 			}
@@ -484,6 +485,146 @@ func TestPoolUpdateACL(t *testing.T) {
 
 			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
 				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolDeleteACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	for name, tt := range map[string]struct {
+		addr                Addresses
+		inputPrincipal      string
+		deleteACLRespStatus int32
+		deleteACLErr        error
+		expectedResp        *PoolDeleteACLResp
+		expectedErr         string
+	}{
+		"no service leader": {
+			addr:           nil,
+			inputPrincipal: "OWNER@",
+			expectedResp:   nil,
+			expectedErr:    "no active connections",
+		},
+		"empty principal": {
+			addr:         MockServers,
+			expectedResp: nil,
+			expectedErr:  "no principal provided",
+		},
+		"gRPC call failed": {
+			addr:           MockServers,
+			inputPrincipal: "OWNER@",
+			deleteACLErr:   MockErr,
+			expectedResp:   nil,
+			expectedErr:    MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                MockServers,
+			inputPrincipal:      "OWNER@",
+			deleteACLRespStatus: -5000,
+			expectedResp:        nil,
+			expectedErr:         "DAOS returned error code: -5000",
+		},
+		"success": {
+			addr:           MockServers,
+			inputPrincipal: "OWNER@",
+			expectedResp:   &PoolDeleteACLResp{ACL: &AccessControlList{}},
+			expectedErr:    "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.deleteACLRespStatus,
+				err:    tt.deleteACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult, nil)
+
+			req := PoolDeleteACLReq{
+				UUID:      "TestUUID",
+				Principal: tt.inputPrincipal,
+			}
+
+			resp, err := cc.PoolDeleteACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestListPools(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	for name, tt := range map[string]struct {
+		addr                Addresses
+		listPoolsRespStatus int32
+		listPoolsErr        error
+		expectedResp        *ListPoolsResp
+		expectedErr         string
+	}{
+		"no service leader": {
+			addr:         nil,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
+		},
+		"gRPC call failed": {
+			addr:         MockServers,
+			listPoolsErr: MockErr,
+			expectedResp: nil,
+			expectedErr:  MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                MockServers,
+			listPoolsRespStatus: -1000,
+			expectedResp:        nil,
+			expectedErr:         "DAOS returned error code: -1000",
+		},
+		"success": {
+			addr:                MockServers,
+			listPoolsRespStatus: 0,
+			expectedResp:        &ListPoolsResp{Pools: poolDiscoveriesFromPB(MockPoolList)},
+			expectedErr:         "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, MockACL,
+				&mockListPoolsResult{
+					err:    tt.listPoolsErr,
+					status: tt.listPoolsRespStatus,
+				})
+
+			resp, err := cc.ListPools(ListPoolsReq{})
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * /file
+ * \file
  *
  * ds_cont: Container Operations
  *
@@ -517,6 +517,8 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tdi_uuid, cont_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -789,6 +791,8 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -966,6 +970,8 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	out->tqo_hae = DAOS_EPOCH_MAX;
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1557,17 +1563,13 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_COMMIT:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    false);
 	case CONT_EPOCH_AGGREGATE:
 		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    true);
-	 case CONT_SNAP_DESTROY:
+		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);

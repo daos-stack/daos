@@ -61,13 +61,10 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-
-TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
+TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
 SERVER_KEYS = (
-    "test_machines",
     "test_servers",
-    "daos_servers",
     )
 CLIENT_KEYS = (
     "test_clients",
@@ -88,6 +85,31 @@ def get_build_environment():
         return json.load(vars_file)
 
 
+def get_temporary_directory(base_dir=None):
+    """Get the temporary directory used by functional tests.
+
+    Args:
+        base_dir (str, optional): base installation directory. Defaults to None.
+
+    Returns:
+        str: the full path of the temporary directory
+
+    """
+    if base_dir is None:
+        base_dir = get_build_environment()["PREFIX"]
+    if base_dir == "/usr":
+        tmp_dir = os.getenv(
+            "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+
+    # Make sure the temporary directory exists to prevent pydaos import errors
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+
+    return tmp_dir
+
+
 def set_test_environment():
     """Set up the test environment.
 
@@ -98,21 +120,18 @@ def set_test_environment():
     base_dir = get_build_environment()["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
+    # /usr/sbin is not setup on non-root user for CI nodes.
+    # SCM formatting tool mkfs.ext4 is located under
+    # /usr/sbin directory.
+    usr_sbin = os.path.sep + os.path.join("usr", "sbin")
     path = os.environ.get("PATH")
 
-    if base_dir == "/usr":
-        tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
-                            os.path.expanduser('~/daos_test'))
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-    else:
-        tmp_dir = os.path.join(base_dir, "tmp")
-
     # Update env definitions
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
+    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = tmp_dir
+    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
+    os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -221,6 +240,11 @@ def spawn_commands(host_list, command, timeout=120):
                 if len(lines) > 1:
                     output = "\n      {}".format("\n      ".join(lines))
                 print("    {}: rc={}, output: {}".format(n_set, code, output))
+
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        print("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
 
     return status
 
@@ -495,6 +519,8 @@ def get_log_files(config_yaml, daos_files=None):
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
+            "admin_log_file": "/tmp/daos_admin.log",
+            "server_log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
@@ -576,7 +602,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo -n rm -fr {}".format(" ".join(log_files.values()))
+    command = "sudo rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -594,7 +620,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
     """
     this_host = socket.gethostname().split(".")[0]
-    log_files = get_log_files(TEST_LOG_FILE_YAML)
+    log_files = get_log_files(
+        os.path.join(get_temporary_directory(), TEST_DAOS_SERVER_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
     doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
@@ -608,20 +635,31 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Log any executed scp commands.
-    # command = "set -Eeu; {}".format(
-    #   "for file in {}; do if [ -e $file ]; then set -x; "
-    #   "scp $file {}:{}/${{file##*/}}-$(hostname -s) && sudo -n rm -fr $file; "
-    #   "set +x; fi; done".format(
-    #       " ".join(non_dir_files), this_host, doas_logs_dir))
-    # For debug
-    command = "set -Eeu; {}".format(
-        "err=0; for file in {}; do if [ -e $file ]; then set -x; ls -al $file; "
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s); then "
-        "if ! sudo -n rm -fr $file; then ((err++)); fi; else ((err++)); fi; "
-        "fi; set +x; done; exit $err".format(
-            " ".join(non_dir_files), this_host, doas_logs_dir))
-    spawn_commands(host_list, command)
+    # test host if the copy is successful.  Attempt all of the commands and
+    # report status at the end of the loop.  Include a listing of the file
+    # related to any failed command.
+    commands = [
+        "set -eu",
+        "rc=0",
+        "copied=()",
+        "for file in {}".format(" ".join(non_dir_files)),
+        "do if [ -e $file ]",
+        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, doas_logs_dir),
+        "then copied+=($file)",
+        "if ! sudo rm -fr $file",
+        "then ((rc++))",
+        "ls -al $file",
+        "fi",
+        "else ((rc++))",
+        "ls -al $file",
+        "fi",
+        "fi",
+        "done",
+        "echo Copied ${copied[@]:-no files}",
+        "exit $rc",
+    ]
+    spawn_commands(host_list, "; ".join(commands))
 
 
 def rename_logs(avocado_logs_dir, test_file):

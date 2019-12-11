@@ -25,43 +25,109 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
-func hasConns(results client.ResultMap) (bool, string) {
-	out := sprintConns(results)
-	for _, res := range results {
-		if res.Err == nil {
-			return true, out
+// splitPort separates port from compressed host string
+func splitPort(addrPattern string, defaultPort int) (string, string, error) {
+	var port string
+	hp := strings.Split(addrPattern, ":")
+
+	switch len(hp) {
+	case 1:
+		if defaultPort == 0 {
+			defaultPort = 10000
 		}
+		// no port specified, use default
+		port = strconv.Itoa(defaultPort)
+	case 2:
+		port = hp[1]
+		if port == "" {
+			return "", "", errors.Errorf("invalid port %q", port)
+		}
+		if _, err := strconv.Atoi(port); err != nil {
+			return "", "", errors.WithMessagef(err, "cannot parse %q",
+				addrPattern)
+		}
+	default:
+		return "", "", errors.Errorf("cannot parse %q", addrPattern)
 	}
 
-	// notify if there have been no successful connections
-	return false, fmt.Sprintf("%sNo active connections!", out)
+	if port == "0" {
+		return "", "", errors.Errorf("invalid port %q", port)
+	}
+	if hp[0] == "" {
+		return "", "", errors.Errorf("invalid host %q", hp[0])
+	}
+
+	return hp[0], port, nil
 }
 
-func sprintConns(results client.ResultMap) (out string) {
-	// map keys always processed in order
-	var addrs []string
-	for addr := range results {
-		addrs = append(addrs, addr)
-	}
-	sort.Strings(addrs)
+// hostsByPort takes slice of address patterns and returns a HostGroups mapping
+// of ports to HostSets.
+func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroups, error) {
+	portHosts := make(hostlist.HostGroups)
 
-	i := 0
-	for _, addr := range addrs {
-		if results[addr].Err != nil {
-			out = fmt.Sprintf(
-				"%sfailed to connect to %s (%s)\n",
-				out, addr, results[addr].Err)
+	for _, ptn := range addrPatterns {
+		hostSet, port, err := splitPort(ptn, defaultPort)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := portHosts.AddHost(port, hostSet); err != nil {
+			return nil, err
+		}
+	}
+
+	return portHosts, nil
+}
+
+// flattenHostAddrs takes nodeset:port patterns and returns individual addresses
+// after expanding nodesets and mapping to ports.
+func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err error) {
+	var portHosts hostlist.HostGroups
+
+	// expand any compressed nodesets for specific ports, should fail if no
+	// port in pattern.
+	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), defaultPort)
+	if err != nil {
+		return
+	}
+
+	// reconstruct slice of all "host:port" addresses from map
+	for _, port := range portHosts.Keys() {
+		hosts := strings.Split(portHosts[port].DerangedString(), ",")
+		for _, host := range hosts {
+			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
+		}
+	}
+
+	return
+}
+
+// checkConns analyses connection results and returns summary compressed active
+// and inactive hostlists (but disregards connection port).
+func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
+	connStates = make(hostlist.HostGroups)
+
+	for addr := range results {
+		resultErr := results[addr].Err
+		if resultErr != nil {
+			if err = connStates.AddHost(resultErr.Error(), addr); err != nil {
+				return
+			}
 			continue
 		}
-		addrs[i] = addr
-		i++
+		if err = connStates.AddHost("connected", addr); err != nil {
+			return
+		}
 	}
-	addrs = addrs[:i]
 
-	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
+	return
 }

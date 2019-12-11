@@ -66,9 +66,10 @@ type Connect interface {
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
-	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
-	PoolOverwriteACL(*PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
-	PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
 	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
@@ -77,6 +78,7 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers

@@ -29,7 +29,6 @@ from __future__ import print_function
 import os
 import json
 import re
-import stat
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail
@@ -207,7 +206,6 @@ class TestWithServers(TestWithoutServers):
         # Determine which hosts to use as servers and optionally clients.
         # Support the use of a host type count to test with subsets of the
         # specified hosts lists
-        test_machines = self.params.get("test_machines", "/run/hosts/*")
         test_servers = self.params.get("test_servers", "/run/hosts/*")
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
@@ -220,12 +218,9 @@ class TestWithServers(TestWithoutServers):
             "client_partition", test_clients)
 
         # Supported combinations of yaml hosts arguments:
-        #   - test_machines [+ server_count]
         #   - test_servers [+ server_count]
         #   - test_servers [+ server_count] + test_clients [+ client_count]
-        if test_machines:
-            self.hostlist_servers = test_machines[:server_count]
-        elif test_servers and test_clients:
+        if test_servers and test_clients:
             self.hostlist_servers = test_servers[:server_count]
             self.hostlist_clients = test_clients[:client_count]
         elif test_servers:
@@ -263,7 +258,7 @@ class TestWithServers(TestWithoutServers):
         # Start the clients (agents)
         if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
-                self.basepath, self.hostlist_servers, self.hostlist_clients)
+                self, self.hostlist_servers, self.hostlist_clients)
 
         # Start the servers
         if self.setup_start_servers:
@@ -411,7 +406,8 @@ class TestWithServers(TestWithoutServers):
             server_groups (dict, optional): [description]. Defaults to None.
         """
         if server_groups is None:
-            server_groups = {"daos_server": self.hostlist_servers}
+            server_groups = {self.server_group: self.hostlist_servers}
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
@@ -420,7 +416,7 @@ class TestWithServers(TestWithoutServers):
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 self.server_managers.append(ServerManager(
                     self.bin,
-                    os.path.join(self.ompi_prefix, "bin"), attach=self.tmp))
+                    os.path.join(self.ompi_prefix, "bin")))
                 self.server_managers[-1].get_params(self)
                 self.server_managers[-1].runner.job.yaml_params.name = group
                 self.server_managers[-1].hosts = (

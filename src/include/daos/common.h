@@ -41,6 +41,7 @@
 #include <pthread.h>
 #include <byteswap.h>
 
+#include <daos_errno.h>
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
@@ -48,11 +49,6 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-
-#ifndef DF_RC
-#define DF_RC "%s(%d)"
-#define DP_RC(rc) d_errstr(rc), rc
-#endif /* DF_RC */
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -216,6 +212,69 @@ daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
 
+/** Move to next iov, it's caller's responsibility to ensure the idx boundary */
+#define daos_sgl_next_iov(iov_idx, iov_off)				\
+	do {								\
+		(iov_idx)++;						\
+		(iov_off) = 0;						\
+	} while (0)
+/** Get the leftover space in an iov of sgl */
+#define daos_iov_left(sgl, iov_idx, iov_off)				\
+	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/**
+ * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
+ * caller's responsibility to check the boundary.
+ */
+#define daos_sgl_move(sgl, iov_idx, iov_off, move_dist)			       \
+	do {								       \
+		uint64_t moved = 0, step, iov_left;			       \
+		if ((move_dist) <= 0)					       \
+			break;						       \
+		while (moved < (move_dist)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (move_dist) - moved);	       \
+			(iov_off) += step;				       \
+			moved += step;					       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		D_ASSERT(moved == (move_dist));				       \
+	} while (0)
+
+/**
+ * Consume buffer of length\a size for \a sgl with \a iov_idx and \a iov_off.
+ * The consumed buffer location will be returned by \a iovs and \a iov_nr.
+ */
+#define daos_sgl_consume(sgl, iov_idx, iov_off, size, iovs, iov_nr)	       \
+	do {								       \
+		uint64_t consumed = 0, step, iov_left;			       \
+		uint32_t consume_idx = 0;				       \
+		if ((size) <= 0)					       \
+			break;						       \
+		while (consumed < (size)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (size) - consumed);	       \
+			iovs[consume_idx].iov_buf =			       \
+				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
+			iovs[consume_idx].iov_len = step;		       \
+			iovs[consume_idx].iov_buf_len = step;		       \
+			consume_idx++;					       \
+			(iov_off) += step;				       \
+			consumed += step;				       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		(iov_nr) = consume_idx;					       \
+		D_ASSERT(consumed == (size));				       \
+	} while (0)
+
+#ifndef roundup
+#define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
+#endif
+#ifndef rounddown
+#define rounddown(x, y)		(((x) / (y)) * (y))
+#endif
+
 /**
  * Request a buffer of length \a bytes_needed from the sgl starting at
  * index \a idx. The length of the resulting buffer will be the number
@@ -262,10 +321,6 @@ void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 
 #define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
-
-/* The DAOS BITS is composed by uint32_t[x] */
-#define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
-int daos_first_unset_bit(uint32_t *bits, unsigned int size);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
@@ -535,6 +590,19 @@ enum {
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+
+#define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
+#define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
+#define DAOS_POOL_CONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x62)
+#define DAOS_POOL_DISCONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x63)
+#define DAOS_POOL_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x64)
+#define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
+#define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
+#define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+
+/** interoperability failure inject */
+#define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
+#define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

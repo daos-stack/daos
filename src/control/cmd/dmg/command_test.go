@@ -127,19 +127,24 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
-func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
 }
 
-func (tc *testConn) PoolOverwriteACL(req *client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
 	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
 }
 
-func (tc *testConn) PoolUpdateACL(req *client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
+func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
 	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
+	return &client.PoolDeleteACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
@@ -165,6 +170,11 @@ func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	tc.appendInvocation("SystemStop")
 	return make(common.SystemMemberResults, 0), nil
+}
+
+func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
+	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
+	return &client.ListPoolsResp{}, nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

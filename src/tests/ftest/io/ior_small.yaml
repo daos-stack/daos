@@ -1,23 +1,24 @@
 server_manager:
     srv_timeout: 500
 hosts:
-   test_machines:
-        test_servers:
-            - boro-A
-            - boro-B
-            - boro-C
-            - boro-D
-        test_clients:
-            - boro-E
-            - boro-F
-            - boro-G
-            - boro-H
-timeout: 1200
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 1800
 server_config:
     name: daos_server
     servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -26,6 +27,7 @@ pool:
         group: daos_server
     createsize:
         scm_size: 3000000000
+        nvme_size: 9000000000
     createsvc:
         svcn: 1
 ior:
