@@ -61,6 +61,5 @@ mdtest:
       branching_factor: 1
       num_of_files_dirs: 1000
       depth: 20
-
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
