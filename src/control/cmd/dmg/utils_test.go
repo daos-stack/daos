@@ -61,7 +61,6 @@ func TestFlattenAddrs(t *testing.T) {
 		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
 		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
 		"bad port empty":      {"foo:", "", "invalid port \"\""},
-		"bad port zero":       {"foo:0", "", "invalid port \"0\""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			outAddrs, err := flattenHostAddrs(tc.addrPatterns, 9999)

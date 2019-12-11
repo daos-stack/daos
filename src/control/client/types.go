@@ -419,13 +419,14 @@ type StorageFormatReq struct {
 	Reformat bool
 }
 
-// StorageFormatResp stores results of format operations on NVMe controllers
+// StorageFormatResults stores results of format operations on NVMe controllers
 // and SCM mountpoints.
-type StorageFormatResp map[string]StorageFormatResult
+type StorageFormatResults map[string]StorageFormatResult
 
 type StorageFormatResult struct {
 	Nvme proto.NvmeControllerResults
 	Scm  proto.ScmMountResults
+	Err  error
 }
 
 // AccessControlList is a structure for the access control list.

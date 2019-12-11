@@ -32,7 +32,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
@@ -210,16 +209,14 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 
 // StorageFormat prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap) {
+func (c *connList) StorageFormat(reformat bool) StorageFormatResults {
 	req := &ctlpb.StorageFormatReq{Reformat: reformat}
 	cResults := c.makeRequests(req, StorageFormatRequest)
-	cCtrlrResults := make(ClientCtrlrMap) // srv address:NVMe SSDs
-	cMountResults := make(ClientMountMap) // srv address:SCM mounts
+	formatResults := make(StorageFormatResults)
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = proto.CtrlrResults{Err: res.Err}
-			cMountResults[res.Address] = proto.MountResults{Err: res.Err}
+			formatResults[res.Address] = StorageFormatResult{Err: res.Err}
 			continue
 		}
 
@@ -227,15 +224,12 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 		if !ok {
 			err := fmt.Errorf(msgBadType, StorageFormatResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = proto.CtrlrResults{Err: err}
-			cMountResults[res.Address] = proto.MountResults{Err: err}
+			formatResults[res.Address] = StorageFormatResult{Err: err}
 			continue
 		}
 
-		cCtrlrResults[res.Address] = storageRes.nvmeCtrlr
-		cMountResults[res.Address] = storageRes.scmMount
-		// storageRes.scmModule ignored for update
+		formatResults[res.Address] = storageRes
 	}
 
-	return cCtrlrResults, cMountResults
+	return formatResults
 }
