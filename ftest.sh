@@ -91,6 +91,11 @@ cleanup() {
                 while [ \$x -lt 30 ] &&
                       grep $DAOS_BASE /proc/mounts &&
                       ! sudo umount $DAOS_BASE; do
+                    for culprit in \$(/usr/sbin/lsof -Fp +D $DAOS_BASE \
+                                      | cut -c 2-); do
+                        ps -fp \$culprit
+                        sudo kill \$culprit
+                    done
                     sleep 1
                     let x+=1
                 done
