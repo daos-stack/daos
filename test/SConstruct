@@ -33,6 +33,10 @@ OPTS = Variables('sl.conf')
 PREREQS = PreReqComponent(ENV, OPTS)
 PREREQS.load_definitions()
 
+# Test ompi package
+NEW_ENV = ENV.Clone()
+PREREQS.require(NEW_ENV, "ompi")
+
 # Not needed but to add test to this capability
 MAKE_PROG = ProgramBinary('make', ['badprogame', 'anotherbadprogname', 'make'])
 
@@ -71,16 +75,6 @@ PREREQS.define("sl_project4",
                headers=['sl_project4.h'],
                libs=['sl_project4'],
                requires=['sl_project2', 'sl_project1'])
-
-# pylint: disable=line-too-long
-URL = 'https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.5.tar.gz'
-# pylint: enable=line-too-long
-WEB_RETRIEVER = WebRetriever(URL, "8f5fe6a9be2eb478409ad5e640b2d3ba")
-PREREQS.define('hwloc2', retriever=WEB_RETRIEVER,
-               commands=['./configure --prefix=$HWLOC2_PREFIX', 'make',
-                         'make install'],
-               headers=['hwloc.h'],
-               libs=['hwloc'])
 
 PREREQS.define('openpa2',
                retriever=GitRepoRetriever( \

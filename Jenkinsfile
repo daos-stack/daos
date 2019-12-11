@@ -33,7 +33,6 @@ long get_timestamp() {
 String get_deps_build_vars() {
     def deps = [
         'MERCURY'  : '1.0.1-2',
-        'OMPI'     : '3.0.0rc4-3',
         'LIBFABRIC': '1.7.1rc1-1',
         'OPENPA'   : '1.0.4-2'
     ]
@@ -113,10 +112,8 @@ pipeline {
     GIT_PREVIOUS_SUCCESSFUL_COMMIT = "${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT ? env.GIT_PREVIOUS_SUCCESSFUL_COMMIT : params.PGIT_PREVIOUS_SUCCESSFUL_COMMIT}"
 
     FUSE_COMMIT = '7bf25b6987d84c816aebd5325b95cfa0d311b1e6'
-    HWLOC_COMMIT = 'refs/tags/hwloc-1.11.5'
     MERCURY_COMMIT = '674e7f2bd17b5d8b85606cd152dd1bc189899b0e'
     OFI_COMMIT = '8c33f9d63d536cc3781017dd25b7bb480ac96cb5'
-    OMPI_COMMIT = '373098d8ae0053af85cc1d49a58dbe933a31a50a'
     OPENPA_COMMIT = '8e1e74feb22d2e733f34a96e6c7834fed3073c52'
   }
 
@@ -211,33 +208,6 @@ pipeline {
                   includes: 'testbin/openpa/**'
           } // steps
         } // stage ('openpa prebuild')
-        stage ('hwloc prebuild') {
-          agent {
-            dockerfile {
-              filename "${params.PDOCKERFILE ? params.PDOCKERFILE : 'Dockerfile.centos.7'}"
-              dir 'scons_local/docker'
-              label 'docker_runner'
-              additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                  '$BUILDARGS'
-            }
-          } // agent
-          steps {
-            sh 'rm -rf testbin/ && mkdir -p testbin'
-            sconsBuild target: 'hwloc',
-                       directory: 'scons_local',
-                       scm: [url: 'https://github.com/open-mpi/hwloc.git',
-                             branch: "${env.HWLOC_COMMIT}",
-                             cleanAfterCheckout: true],
-                       no_install: true,  // No separate install step
-                       TARGET_PREFIX: '/testbin',
-                       target_work: 'testbin',
-                       prebuild: 'pushd ${WORKSPACE}/hwloc;' +
-                                 ' ./autogen.sh; popd'
-            echo "hwloc build succeeded"
-            stash name: "${env.MY_DOCKERFILE}-hwloc",
-                  includes: 'testbin/hwloc/**'
-          } // steps
-        } // stage ('hwloc prebuild')
       } // parallel
     } // stage ('phase 1')
     stage('Phase 2') {
@@ -343,25 +313,18 @@ pipeline {
                         branch: "${env.OFI_COMMIT}",
                         checkoutDir: 'ofi',
                         cleanAfterCheckout: true
-            checkoutScm url: 'https://github.com/open-mpi/ompi.git',
-                        branch: "${env.OMPI_COMMIT}",
-                        checkoutDir: 'ompi',
-                        cleanAfterCheckout: true
             sh('''find /testbin -maxdepth 1 -type l -print0 | xargs -r0 rm
                   rm -rf testbin
-                  for new_dir in openpa hwloc; do
+                  for new_dir in openpa; do
                     mkdir -p testbin/${new_dir}
                     ln -s ${PWD}/testbin/${new_dir} /testbin/${new_dir}
                   done''')
-            runTest stashes: ["${env.MY_DOCKERFILE}-hwloc",
-                               "${env.MY_DOCKERFILE}-openpa"],
+            runTest stashes: [ "${env.MY_DOCKERFILE}-openpa"],
               script: '''#!/bin/bash
                          set -e
                          export WORKSPACE=""
-                         export prebuilt1="PREBUILT_PREFIX=/testbin/hwloc"
-                                prebuilt1+=":/testbin/openpa"
-                         export prebuilt2="HWLOC_PREBUILT=/testbin/hwloc"
-                                prebuilt2+=" OPENPA_PREBUILT=/testbin/openpa"
+                         export prebuilt1="/testbin/openpa"
+                         export prebuilt2="OPENPA_PREBUILT=/testbin/openpa"
                          export SRC_PREFIX="${PWD}"
                                SRC_PREFIX+=":${PWD}/scons_local/test/prereq"
                          pushd scons_local

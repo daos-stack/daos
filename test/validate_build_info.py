@@ -42,22 +42,6 @@ if SCRIPT_DIR not in PREFIX:
     os.unlink(FILENAME)
     sys.exit(-1)
 
-if not os.path.exists(INFO.get("HWLOC_PREFIX")):
-    print("No hwloc directory")
-    os.unlink(FILENAME)
-    sys.exit(-1)
-
-PREFIX = INFO.get("HWLOC2_PREFIX")
-if not os.path.exists(PREFIX):
-    print("HWLOC2_PREFIX doesn't exist")
-    os.unlink(FILENAME)
-    sys.exit(-1)
-
-if SCRIPT_DIR not in PREFIX:
-    print("HWLOC2_PREFIX not at expected location")
-    os.unlink(FILENAME)
-    sys.exit(-1)
-
 SH_SCRIPT = os.path.join(SCRIPT_DIR, "sl_test.sh")
 INFO.gen_script(SH_SCRIPT)
 os.system("source %s" % SH_SCRIPT)

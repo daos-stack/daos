@@ -157,39 +157,10 @@ def define_common(reqs):
 
 def define_ompi(reqs):
     """OMPI and related components"""
-    url = 'https://www.open-mpi.org/software/hwloc/v1.11' \
-        '/downloads/hwloc-1.11.5.tar.gz'
-    web_retriever = \
-        WebRetriever(url, "8f5fe6a9be2eb478409ad5e640b2d3ba")
-    reqs.define('hwloc', retriever=web_retriever,
-                commands=['./configure --prefix=$HWLOC_PREFIX',
-                          'make $JOBS_OPT', 'make install'],
-                headers=['hwloc.h'],
-                libs=['hwloc'],
-                package='hwloc-devel' if inst(reqs, 'hwloc') else None)
-
-    retriever = GitRepoRetriever('https://github.com/open-mpi/ompi',
-                                 True)
-    reqs.define('ompi',
-                retriever=retriever,
-                commands=['./autogen.pl --no-oshmem',
-                          './configure --with-platform=optimized '
-                          '--enable-orterun-prefix-by-default '
-                          '--prefix=$OMPI_PREFIX ' +
-                          '--with-psm2' +
-                          check(reqs, 'psm2', "=$PSM2_PREFIX", '') +
-                          ' ' +
-                          '--disable-mpi-fortran '
-                          '--enable-contrib-no-build=vt '
-                          '--with-libevent=external ' +
-                          '--with-hwloc=' +
-                          check(reqs, 'hwloc', '$HWLOC_PREFIX',
-                                'external'),
-                          'make $JOBS_OPT', 'make install'],
-                libs=['open-rte'],
-                required_progs=['g++', 'flex'],
-                requires=['hwloc', 'event', 'psm2'],
-                package='ompi-devel' if inst(reqs, 'ompi') else None)
+    reqs.define('hwloc', headers=['hwloc.h'], libs=['hwloc'],
+                package='hwloc-devel')
+    reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
+    reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
 
 def define_components(reqs):

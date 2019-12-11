@@ -28,9 +28,8 @@ if [ "$1" != "utest" ]; then
   prebuilt2=()
   if [ -n "$PREBUILT_PREFIX" ]; then
     prebuilt1=( "PREBUILT_PREFIX=$PREBUILT_PREFIX" )
-    hwloc="${PREBUILT_PREFIX}/hwloc"
     openpa="${PREBUILT_PREFIX}/openpa"
-    prebuilt2=( "HWLOC_PREBUILT=$hwloc" "OPENPA_PREBUILT=$openpa" )
+    prebuilt2=( "OPENPA_PREBUILT=$openpa" )
   fi
 
   if [ -n "$SRC_PREFIX" ]; then

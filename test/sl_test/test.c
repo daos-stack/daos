@@ -46,13 +46,6 @@
 #define call_sl4() (void)0
 #endif
 
-#if defined(HWLOC) || defined(HWLOC2)
-#include <hwloc.h>
-#define call_hwloc() hwloc_get_api_version()
-#else
-#define call_hwloc() (void)0
-#endif
-
 #if defined(OPENPA) || defined(OPENPA2)
 #include <opa_queue.h>
 void call_openpa(void)
@@ -71,7 +64,6 @@ int main(void)
 	call_sl2();
 	call_sl3();
 	call_sl4();
-	call_hwloc();
 	call_openpa();
 	return 0;
 }

@@ -683,7 +683,8 @@ class PreReqComponent():
         real_env = self.__env['ENV']
 
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
-                    "http_proxy", "https_proxy"]:
+                    "http_proxy", "https_proxy",
+                    "PKG_CONFIG_PATH"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -1041,6 +1042,7 @@ class PreReqComponent():
         libs -- A list of libraries to add to dependent components
         libs_cc -- Optional CC command to test libs with.
         headers -- A list of expected headers
+        pkgconfig -- name of pkgconfig to load for installation check
         requires -- A list of names of required component definitions
         required_libs -- A list of system libraries to be checked for
         defines -- Defines needed to use the component
@@ -1341,6 +1343,7 @@ class _Component():
         self.requires = kw.get("requires", [])
         self.patch = kw.get("patch", None)
         self.prereqs = prereqs
+        self.pkgconfig = kw.get("pkgconfig", None)
         self.name = name
         self.build_commands = kw.get("commands", [])
         self.retriever = kw.get("retriever", None)
@@ -1513,6 +1516,9 @@ class _Component():
             print("Would check for missing build targets")
             return True
 
+        if self.pkgconfig:
+            env.ParseConfig("pkg-config --libs %s" % self.pkgconfig)
+
         config = Configure(env)
         for prog in self.progs:
             if not config.CheckProg(prog):
@@ -1606,9 +1612,14 @@ class _Component():
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])
 
+        if self.pkgconfig:
+            env.ParseConfig("pkg-config --cflags %s" % self.pkgconfig)
+
         if needed_libs is None:
             return
 
+        if self.pkgconfig:
+            env.ParseConfig("pkg-config --libs %s" % self.pkgconfig)
         for path in lib_paths:
             env.AppendUnique(LIBPATH=[path])
         for lib in needed_libs:
