@@ -62,8 +62,8 @@ CONFIG
            depends=<name>[:<min_build>][:<parent_name>]
 
        Only dependences that have corresponding <name>-update-scratch jobs
-       are specified.   For example, ompi-update-scratch also builds pmix
-       and hwloc but only ompi should be specified as a dependence.
+       are specified.   For example, ompi-update-scratch also builds
+       hwloc but only ompi should be specified as a dependence.
        The <min_build> specifies a Jenkins build number that is required.
        This is only used when the component update-scratch job is failing
        due to a breaking change in a dependence.  The <parent_name> defines

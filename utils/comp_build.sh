@@ -56,8 +56,8 @@ CONFIG
            depends=<name>:<build_no>
 
        Only dependences that have corresponding <name>-update-scratch jobs
-       are specified.   For example, ompi-update-scratch also builds pmix
-       and hwloc but only ompi should be specified as a dependence.
+       are specified.   For example, ompi-update-scratch also builds
+       hwloc but only ompi should be specified as a dependence.
        The <build_no> specifies a Jenkins build number to use for the
        component.   This build will be used for the component.  If it isn't
        specified, the tool will use the latest successful build to determine

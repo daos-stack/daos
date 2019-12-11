@@ -71,7 +71,7 @@ ARG JENKINS_URL=""
 
 RUN if ! $USE_RPMS; then exit 0; fi;                                                                                                         \
 yum -y install hwloc-devel;                                                                                                                  \
-for ext in openpa libfabric mercury pmix ompi; do                                                                                            \
+for ext in openpa libfabric mercury ompi; do                                                                                            \
     yum-config-manager --add-repo=${JENKINS_URL}job/daos-stack/job/${ext}/job/master/lastSuccessfulBuild/artifact/artifacts/centos7/;        \
     echo "gpgcheck = False" >> $(ls /etc/yum.repos.d/*_job_daos-stack_job_${ext}_job_master_lastSuccessfulBuild_artifact_artifacts_centos7_.repo); \
 done
@@ -87,16 +87,14 @@ RUN yum -y install librdmacm-devel valgrind valgrind-devel libibverbs-devel \
 ARG OPENPA=unknown
 ARG LIBFABRIC=unknown
 ARG MERCURY=unknown
-ARG PMIX=unknown
 ARG OMPI=unknown
 
 RUN if ! $USE_RPMS; then exit 0; fi;                                            \
 OPENPA=${OPENPA}                                                                \
 LIBFABRIC=${LIBFABRIC}                                                          \
 MERCURY=${MERCURY}                                                              \
-PMIX=${PMIX}                                                                    \
 OMPI=${OMPI}                                                                    \
-yum -y install openpa-devel libfabric-devel mercury-devel pmix-devel ompi-devel
+yum -y install openpa-devel libfabric-devel mercury-devel ompi-devel
 
 ENV USER daos
 ENV PASSWD daos

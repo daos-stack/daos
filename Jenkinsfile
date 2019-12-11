@@ -34,7 +34,6 @@ String get_deps_build_vars() {
     def deps = [
         'MERCURY'  : '1.0.1-2',
         'OMPI'     : '3.0.0rc4-3',
-        'PMIX'     : '2.1.1-2',
         'LIBFABRIC': '1.7.1rc1-1',
         'OPENPA'   : '1.0.4-2'
     ]
@@ -119,7 +118,6 @@ pipeline {
     OFI_COMMIT = '8c33f9d63d536cc3781017dd25b7bb480ac96cb5'
     OMPI_COMMIT = '373098d8ae0053af85cc1d49a58dbe933a31a50a'
     OPENPA_COMMIT = '8e1e74feb22d2e733f34a96e6c7834fed3073c52'
-    PMIX_COMMIT = '8c2ffe7e6837a2fb76b882e4c5765032b2b84fa9'
   }
 
   options {
@@ -344,10 +342,6 @@ pipeline {
             checkoutScm url: 'https://github.com/ofiwg/libfabric.git',
                         branch: "${env.OFI_COMMIT}",
                         checkoutDir: 'ofi',
-                        cleanAfterCheckout: true
-            checkoutScm url: 'https://github.com/pmix/master.git',
-                        branch: "${env.PMIX_COMMIT}",
-                        checkoutDir: 'pmix',
                         cleanAfterCheckout: true
             checkoutScm url: 'https://github.com/open-mpi/ompi.git',
                         branch: "${env.OMPI_COMMIT}",

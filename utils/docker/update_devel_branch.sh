@@ -93,7 +93,6 @@ public_repo_name=(\
   'ofi' \
   'ompi' \
   'openpa' \
-  'pmix' \
   'isal' \
   'spdk')
 
@@ -105,7 +104,6 @@ public_repo_dir=(\
   'coral/libfabric' \
   'coral/ompi' \
   'daos/openpa' \
-  'coral/pmix' \
   'daos/isal' \
   'daos/spdk')
 

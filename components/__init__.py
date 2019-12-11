@@ -155,8 +155,8 @@ def define_common(reqs):
         reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
                     package='libuuid-devel')
 
-def define_pmix(reqs):
-    """PMIX and related components"""
+def define_ompi(reqs):
+    """OMPI and related components"""
     url = 'https://www.open-mpi.org/software/hwloc/v1.11' \
         '/downloads/hwloc-1.11.5.tar.gz'
     web_retriever = \
@@ -167,36 +167,6 @@ def define_pmix(reqs):
                 headers=['hwloc.h'],
                 libs=['hwloc'],
                 package='hwloc-devel' if inst(reqs, 'hwloc') else None)
-
-    retriever = GitRepoRetriever('https://github.com/pmix/master')
-    reqs.define('pmix',
-                retriever=retriever,
-                commands=['./autogen.pl',
-                          './configure --with-platform=optimized '
-                          '--prefix=$PMIX_PREFIX',
-                          'make $JOBS_OPT', 'make install'],
-                libs=['pmix'],
-                required_progs=['autoreconf', 'aclocal', 'libtool'],
-                headers=['pmix.h'],
-                requires=['hwloc', 'event'],
-                package='pmix-devel' if inst(reqs, 'pmix') else None)
-
-
-    retriever = GitRepoRetriever('https://github.com/pmix/prrte')
-    reqs.define('prrte',
-                retriever=retriever,
-                commands=['./autogen.pl',
-                          './configure --with-platform=optimized '
-                          '--prefix=$PRRTE_PREFIX '
-                          '--enable-orterun-prefix-by-default ' +
-                          check(reqs, 'pmix', '--with-pmix=$PMIX_PREFIX') +
-                          ' ' +
-                          check(reqs, 'hwloc', '--with-hwloc=$HWLOC_PREFIX'),
-                          'make $JOBS_OPT', 'make install'],
-                required_progs=['g++', 'flex'],
-                progs=['prun', 'prte', 'prted'],
-                requires=['pmix', 'hwloc', 'event'])
-
 
     retriever = GitRepoRetriever('https://github.com/open-mpi/ompi',
                                  True)
@@ -226,7 +196,7 @@ def define_components(reqs):
     """Define all of the components"""
     define_common(reqs)
     define_mercury(reqs)
-    define_pmix(reqs)
+    define_ompi(reqs)
 
     isal_build = ['./autogen.sh ',
                   './configure --prefix=$ISAL_PREFIX --libdir=$ISAL_PREFIX/lib',
@@ -320,14 +290,13 @@ def define_components(reqs):
                 commands=["scons --config=force $JOBS_OPT "
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
-                          "PMIX_PREBUILT=$PMIX_PREFIX "
                           "PREFIX=$CART_PREFIX "
                           "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
                           "install"],
                 headers=["cart/api.h", "gurt/list.h"],
                 libs=["cart", "gurt"],
                 requires=['mercury', 'uuid', 'crypto', 'ompi',
-                          'pmix', 'boost', 'yaml'],
+                          'boost', 'yaml'],
                 package='cart-devel' if inst(reqs, 'cart') else None)
 
     reqs.define('fio',
