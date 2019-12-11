@@ -40,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const summarySep = " "
+const summarySep = "/"
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
@@ -319,15 +319,7 @@ type storageFormatCmd struct {
 // Execute is run when storageFormatCmd activates
 // run NVMe and SCM storage format on all connected servers
 func (cmd *storageFormatCmd) Execute(args []string) error {
-	//	out, err := formatCmdDisplay(cmd.conns.StorageFormat(s.Reformat))
-	//	if err != nil {
-	//		return err
-	//	}
-	//	//	cmd.log.Info(out)
-	//
 	cmd.log.Infof("Format Results: %v", cmd.conns.StorageFormat(cmd.Reformat))
-	//	forcCtrlrResults, cMountResults :=
-	//		s.log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
-	//	s.log.Infof("SCM storage format results:\n%s", cMountResults)
+
 	return nil
 }
