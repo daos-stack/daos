@@ -284,7 +284,6 @@
   </reporting>
 
   <modules>
-    <module>jni</module>
     <module>daos-java-api</module>
     <module>hadoop-daos</module>
   </modules>
