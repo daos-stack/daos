@@ -42,8 +42,8 @@ enum Status {
 	FAILURE = 2; // The method has failed and did not provide a response payload.
 	UNKNOWN_MODULE = 3; // The requested module does not exist.
 	UNKNOWN_METHOD = 4; // The requested method does not exist.
-	INVALID_MESSAGE = 5; // Could not unmarshal the incoming call.
-	INVALID_PAYLOAD = 6; // Could not unmarshal the method-specific payload of the incoming call.
+	FAILED_UNMARSHAL_CALL = 5; // Could not unmarshal the incoming call.
+	FAILED_UNMARSHAL_PAYLOAD = 6; // Could not unmarshal the method-specific payload of the incoming call.
 	FAILED_MARSHAL = 7; // Generated a response payload, but couldn't marshal it into the response.
 }
 

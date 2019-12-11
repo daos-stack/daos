@@ -245,8 +245,8 @@ static const ProtobufCEnumValue drpc__status__enum_values_by_number[8] =
   { "FAILURE", "DRPC__STATUS__FAILURE", 2 },
   { "UNKNOWN_MODULE", "DRPC__STATUS__UNKNOWN_MODULE", 3 },
   { "UNKNOWN_METHOD", "DRPC__STATUS__UNKNOWN_METHOD", 4 },
-  { "INVALID_MESSAGE", "DRPC__STATUS__INVALID_MESSAGE", 5 },
-  { "INVALID_PAYLOAD", "DRPC__STATUS__INVALID_PAYLOAD", 6 },
+  { "FAILED_UNMARSHAL_CALL", "DRPC__STATUS__FAILED_UNMARSHAL_CALL", 5 },
+  { "FAILED_UNMARSHAL_PAYLOAD", "DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD", 6 },
   { "FAILED_MARSHAL", "DRPC__STATUS__FAILED_MARSHAL", 7 },
 };
 static const ProtobufCIntRange drpc__status__value_ranges[] = {
@@ -255,9 +255,9 @@ static const ProtobufCIntRange drpc__status__value_ranges[] = {
 static const ProtobufCEnumValueIndex drpc__status__enum_values_by_name[8] =
 {
   { "FAILED_MARSHAL", 7 },
+  { "FAILED_UNMARSHAL_CALL", 5 },
+  { "FAILED_UNMARSHAL_PAYLOAD", 6 },
   { "FAILURE", 2 },
-  { "INVALID_MESSAGE", 5 },
-  { "INVALID_PAYLOAD", 6 },
   { "SUBMITTED", 1 },
   { "SUCCESS", 0 },
   { "UNKNOWN_METHOD", 4 },

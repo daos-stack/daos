@@ -53,10 +53,10 @@ func statusToString(status Status) string {
 		return "unrecognized module ID"
 	case Status_UNKNOWN_METHOD:
 		return "unrecognized method ID"
-	case Status_INVALID_MESSAGE:
-		return "invalid incoming message"
-	case Status_INVALID_PAYLOAD:
-		return "invalid method-specific payload"
+	case Status_FAILED_UNMARSHAL_CALL:
+		return "failed to unmarshal incoming call"
+	case Status_FAILED_UNMARSHAL_PAYLOAD:
+		return "failed to unmarshal method-specific payload"
 	case Status_FAILED_MARSHAL:
 		return "failed to marshal response payload"
 	case Status_SUCCESS:
@@ -78,14 +78,14 @@ func UnknownMethodFailure() Failure {
 	return NewFailure(Status_UNKNOWN_METHOD)
 }
 
-// InvalidMessageFailure creates a Failure for an invalid call message.
-func InvalidMessageFailure() Failure {
-	return NewFailure(Status_INVALID_MESSAGE)
+// UnmarshalingCallFailure creates a Failure for a failed attempt to unmarshal an incoming call.
+func UnmarshalingCallFailure() Failure {
+	return NewFailure(Status_FAILED_UNMARSHAL_CALL)
 }
 
-// InvalidPayloadFailure creates a Failure for an invalid call payload.
-func InvalidPayloadFailure() Failure {
-	return NewFailure(Status_INVALID_PAYLOAD)
+// UnmarshalingPayloadFailure creates a Failure for a failed attempt to unmarshal a call payload.
+func UnmarshalingPayloadFailure() Failure {
+	return NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD)
 }
 
 // MarshalingFailure creates a Failure for a failed attempt at marshaling a response.

@@ -68,7 +68,7 @@ func (mod *srvModule) ID() int32 {
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	req := &srvpb.NotifyReadyReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return drpc.InvalidPayloadFailure()
+		return drpc.UnmarshalingPayloadFailure()
 	}
 
 	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {

@@ -350,7 +350,7 @@ handle_incoming_call(struct drpc *session_ctx)
 
 	/* Incoming message was garbage */
 	if (rc == -DER_PROTO) {
-		resp->status = DRPC__STATUS__INVALID_MESSAGE;
+		resp->status = DRPC__STATUS__FAILED_UNMARSHAL_CALL;
 		drpc_send_response(session_ctx, resp);
 		drpc_response_free(resp);
 		return rc;

@@ -178,7 +178,7 @@ func TestService_ProcessMessage(t *testing.T) {
 	}{
 		"garbage input bytes": {
 			callBytes:    getGarbageBytes(),
-			expectedResp: getResponse(-1, Status_INVALID_MESSAGE, nil),
+			expectedResp: getResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil),
 		},
 		"module doesn't exist": {
 			callBytes:    getCallBytes(t, testSequenceNum, 256),
@@ -191,8 +191,8 @@ func TestService_ProcessMessage(t *testing.T) {
 		},
 		"HandleCall fails with drpc.Failure": {
 			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
-			handleCallErr: NewFailure(Status_INVALID_PAYLOAD),
-			expectedResp:  getResponse(testSequenceNum, Status_INVALID_PAYLOAD, nil),
+			handleCallErr: NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD),
+			expectedResp:  getResponse(testSequenceNum, Status_FAILED_UNMARSHAL_PAYLOAD, nil),
 		},
 		"HandleCall succeeds": {
 			callBytes:      getCallBytes(t, testSequenceNum, defaultTestModID),

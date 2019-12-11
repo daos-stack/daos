@@ -112,7 +112,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 
 	err := proto.Unmarshal(msgBytes, msg)
 	if err != nil {
-		return marshalResponse(-1, Status_INVALID_MESSAGE, nil)
+		return marshalResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil)
 	}
 	module, ok := r.GetModule(msg.GetModule())
 	if !ok {

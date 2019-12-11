@@ -431,7 +431,7 @@ test_drpc_progress_single_session_bad_call(void **state)
 	resp = drpc__response__unpack(NULL, sendmsg_msg_iov_len,
 				      sendmsg_msg_content);
 	assert_non_null(resp);
-	assert_int_equal(resp->status, DRPC__STATUS__INVALID_MESSAGE);
+	assert_int_equal(resp->status, DRPC__STATUS__FAILED_UNMARSHAL_CALL);
 
 	drpc_response_free(resp);
 	cleanup_drpc_progress_context(&ctx);

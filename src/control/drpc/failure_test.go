@@ -47,13 +47,13 @@ func TestNewFailure(t *testing.T) {
 			expectedMessage: "unrecognized method ID",
 			status:          Status_UNKNOWN_METHOD,
 		},
-		"invalid message": {
-			expectedMessage: "invalid incoming message",
-			status:          Status_INVALID_MESSAGE,
+		"failed to unmarshal call": {
+			expectedMessage: "failed to unmarshal incoming call",
+			status:          Status_FAILED_UNMARSHAL_CALL,
 		},
-		"invalid payload": {
-			expectedMessage: "invalid method-specific payload",
-			status:          Status_INVALID_PAYLOAD,
+		"failed to unmarshal payload": {
+			expectedMessage: "failed to unmarshal method-specific payload",
+			status:          Status_FAILED_UNMARSHAL_PAYLOAD,
 		},
 		"failed to marshal": {
 			expectedMessage: "failed to marshal response payload",
@@ -114,13 +114,13 @@ func TestErrorToStatus(t *testing.T) {
 			err:            NewFailure(Status_UNKNOWN_METHOD),
 			expectedStatus: Status_UNKNOWN_METHOD,
 		},
-		"invalid message failure": {
-			err:            NewFailure(Status_INVALID_MESSAGE),
-			expectedStatus: Status_INVALID_MESSAGE,
+		"failed to unmarshal call": {
+			err:            NewFailure(Status_FAILED_UNMARSHAL_CALL),
+			expectedStatus: Status_FAILED_UNMARSHAL_CALL,
 		},
-		"invalid payload failure": {
-			err:            NewFailure(Status_INVALID_PAYLOAD),
-			expectedStatus: Status_INVALID_PAYLOAD,
+		"failed to unmarshal payload": {
+			err:            NewFailure(Status_FAILED_UNMARSHAL_PAYLOAD),
+			expectedStatus: Status_FAILED_UNMARSHAL_PAYLOAD,
 		},
 		"failed to marshal": {
 			err:            NewFailure(Status_FAILED_MARSHAL),
@@ -156,13 +156,13 @@ func TestFailureCreationMethods(t *testing.T) {
 			function:       UnknownMethodFailure,
 			expectedStatus: Status_UNKNOWN_METHOD,
 		},
-		"InvalidMessageFailure": {
-			function:       InvalidMessageFailure,
-			expectedStatus: Status_INVALID_MESSAGE,
+		"UnmarshalingCallFailure": {
+			function:       UnmarshalingCallFailure,
+			expectedStatus: Status_FAILED_UNMARSHAL_CALL,
 		},
-		"InvalidPayloadFailure": {
-			function:       InvalidPayloadFailure,
-			expectedStatus: Status_INVALID_PAYLOAD,
+		"UnmarshalingPayloadFailure": {
+			function:       UnmarshalingPayloadFailure,
+			expectedStatus: Status_FAILED_UNMARSHAL_PAYLOAD,
 		},
 		"MarshalingFailure": {
 			function:       MarshalingFailure,

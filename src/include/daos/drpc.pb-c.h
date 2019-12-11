@@ -49,11 +49,11 @@ typedef enum _Drpc__Status {
   /*
    * Could not unmarshal the incoming call.
    */
-  DRPC__STATUS__INVALID_MESSAGE = 5,
+  DRPC__STATUS__FAILED_UNMARSHAL_CALL = 5,
   /*
    * Could not unmarshal the method-specific payload of the incoming call.
    */
-  DRPC__STATUS__INVALID_PAYLOAD = 6,
+  DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD = 6,
   /*
    * Generated a response payload, but couldn't marshal it into the response.
    */

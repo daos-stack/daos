@@ -65,7 +65,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedErr := drpc.NewFailure(drpc.Status_INVALID_PAYLOAD)
+	expectedErr := drpc.UnmarshalingPayloadFailure()
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 

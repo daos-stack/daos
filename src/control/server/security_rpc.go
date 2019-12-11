@@ -55,7 +55,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
-		return nil, drpc.InvalidPayloadFailure()
+		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
 	if m.config.AllowInsecure {

@@ -62,7 +62,7 @@ func (mod *mgmtModule) ID() int32 {
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return nil, drpc.InvalidPayloadFailure()
+		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
 	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
