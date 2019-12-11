@@ -18,9 +18,9 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 512 G
-        scm_size: 512000000000
-        nvme_size: 512000000000
+        # 300 G
+        scm_size: 300
+        nvme_size: 300000000000
     createsvc:
         svcn: 1
 ior:
@@ -33,7 +33,7 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-v -D 300 -w -r -W -R"
+          flags: "-v -D 300 -w -r"
           ior_api:
             posix:
               api: POSIX

@@ -54,7 +54,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,hw,full_regression,iorinterceptbasic
+        :avocado: tags=all,daosio,medium,hw,full_regression,iorinterceptbasic
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
@@ -64,20 +64,21 @@ class IorIntercept(IorTestBase):
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
         mean_mib = int(IorMetrics.Mean_MiB)
-        x_improvement = 1
+        write_x_improvement = 3
+        read_x_improvement = 2
 
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
-                        x_improvement * float(without_intercept[0][max_mib]))
+                        write_x_improvement * float(without_intercept[0][max_mib]))
         self.assertTrue(float(with_intercept[0][min_mib]) >
-                        x_improvement * float(without_intercept[0][min_mib]))
+                        write_x_improvement * float(without_intercept[0][min_mib]))
         self.assertTrue(float(with_intercept[0][mean_mib]) >
-                        x_improvement * float(without_intercept[0][mean_mib]))
+                        write_x_improvement * float(without_intercept[0][mean_mib]))
 
         # Verifying read performance
         self.assertTrue(float(with_intercept[1][max_mib]) >
-                        x_improvement * float(without_intercept[1][max_mib]))
+                        read_x_improvement * float(without_intercept[1][max_mib]))
         self.assertTrue(float(with_intercept[1][min_mib]) >
-                        x_improvement * float(without_intercept[1][min_mib]))
+                        read_x_improvement * float(without_intercept[1][min_mib]))
         self.assertTrue(float(with_intercept[1][mean_mib]) >
-                        x_improvement * float(without_intercept[1][mean_mib]))
+                        read_x_improvement * float(without_intercept[1][mean_mib]))
