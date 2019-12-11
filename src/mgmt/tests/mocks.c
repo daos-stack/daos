@@ -169,7 +169,7 @@ mock_ds_mgmt_pool_delete_acl_teardown(void)
 }
 
 int				ds_mgmt_list_pools_return;
-char				ds_mgmt_list_pools_group[DAOS_SYS_NAME_MAX];
+char				ds_mgmt_list_pools_group[DAOS_SYS_NAME_MAX + 1];
 void				*ds_mgmt_list_pools_npools_ptr;
 uint64_t			ds_mgmt_list_pools_npools;
 void				*ds_mgmt_list_pools_poolsp_ptr;
@@ -212,7 +212,7 @@ mock_ds_mgmt_list_pools_setup(void)
 {
 	ds_mgmt_list_pools_return = 0;
 
-	memset(ds_mgmt_list_pools_group, 0, DAOS_SYS_NAME_MAX);
+	memset(ds_mgmt_list_pools_group, 0, sizeof(ds_mgmt_list_pools_group));
 
 	ds_mgmt_list_pools_npools_ptr = NULL;
 	ds_mgmt_list_pools_npools = 0;
