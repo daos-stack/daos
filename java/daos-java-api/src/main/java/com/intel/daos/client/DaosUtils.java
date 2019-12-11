@@ -46,6 +46,7 @@ public final class DaosUtils {
       return "";
     }
     path = path.replaceAll("\\\\{1,}", "/");
+    path = path.replaceAll("/{2,}", "/");
     Matcher m = PAT_PATH.matcher(path);
     if(!m.matches()){
       throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - . are valid");

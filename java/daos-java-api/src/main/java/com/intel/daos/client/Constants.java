@@ -23,19 +23,25 @@ public final class Constants {
   public static final int ACCESS_FLAG_FILE_CREATE = 0100;
   public static final int ACCESS_FLAG_FILE_EXCL = 0200;
 
-  public static final int ACCESS_FLAG_POOL_OTHER_READONLY = 0001;
-  public static final int ACCESS_FLAG_POOL_OTHER_READWRITE = 0002;
-  public static final int ACCESS_FLAG_POOL_OTHER_EXECUTE = 0004;
+  public static final int MODE_POOL_OTHER_READONLY = 0001;
+  public static final int MODE_POOL_OTHER_READWRITE = 0002;
+  public static final int MODE_POOL_OTHER_EXECUTE = 0004;
 
-  public static final int ACCESS_FLAG_POOL_GROUP_READONLY = 0010;
-  public static final int ACCESS_FLAG_POOL_GROUP_READWRITE = 0020;
-  public static final int ACCESS_FLAG_POOL_GROUP_EXECUTE = 0040;
+  public static final int MODE_POOL_GROUP_READONLY = 0010;
+  public static final int MODE_POOL_GROUP_READWRITE = 0020;
+  public static final int MODE_POOL_GROUP_EXECUTE = 0040;
 
-  public static final int ACCESS_FLAG_POOL_USER_READONLY = 0100;
-  public static final int ACCESS_FLAG_POOL_USER_READWRITE = 0200;
-  public static final int ACCESS_FLAG_POOL_USER_EXECUTE = 0400;
+  public static final int MODE_POOL_USER_READONLY = 0100;
+  public static final int MODE_POOL_USER_READWRITE = 0200;
+  public static final int MODE_POOL_USER_EXECUTE = 0400;
+
+  public static final int ACCESS_FLAG_POOL_READONLY = 1;
+  public static final int ACCESS_FLAG_POOL_READWRITE = 2;
+  public static final int ACCESS_FLAG_POOL_EXECUTE = 4;
 
   public static final int ACCESS_FLAG_CONTAINER_READONLY = 1;
   public static final int ACCESS_FLAG_CONTAINER_READWRITE = 2;
   public static final int ACCESS_FLAG_CONTAINER_NOSLIP = 4;
+
+
 }

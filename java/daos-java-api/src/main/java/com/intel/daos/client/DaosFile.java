@@ -77,35 +77,33 @@ public class DaosFile {
 
   protected DaosFile(String parentPath, String path, DaosFsClient daosFsClient) {
     String pnor = DaosUtils.normalize(parentPath);
-    String nor = DaosUtils.normalize(path);
+    String nor = DaosUtils.normalize(pnor.length()==0 ? path:pnor+"/"+path);
     if(nor == null || nor.length() == 0){
-      throw new IllegalArgumentException("invalid path");
+      throw new IllegalArgumentException("invalid path after normalizing "+nor);
     }
-
+    this.path = nor;
     int slash = nor.lastIndexOf('/');
-    boolean hasParent = pnor.length() > 0;
-    StringBuilder sb = new StringBuilder();
     if(slash > 0){
-      if(hasParent){
-        sb.append(pnor).append('/');
-      }
-      this.parentPath = sb.append(nor.substring(0, slash)).toString();
-      sb.setLength(0);
-      this.name = nor.substring(slash+1);
-      if(hasParent){
-        sb.append(pnor).append('/');
-      }
-      this.path = sb.append(nor).toString();
-    }else{
-      this.parentPath = pnor;
+      this.parentPath = nor.substring(0, slash);
+      this.name = nor.substring(slash + 1);
+    }else if(slash < 0){
+      this.parentPath = "";
       this.name = nor;
-      if(hasParent){
-        sb.append(pnor).append('/');
+    }else{
+      if(nor.length() == 1){
+        this.parentPath = "";
+        this.name = "/";
+      }else {
+        this.parentPath = "/";
+        this.name = nor.substring(1);
       }
-      this.path = sb.append(name).toString();
     }
     this.client = daosFsClient;
-    this.dfsPtr = daosFsClient.getDfsPtr();
+    if(this.client != null) {
+      this.dfsPtr = daosFsClient.getDfsPtr();
+    }else{
+      this.dfsPtr = -1;
+    }
   }
 
   protected DaosFile(DaosFile parent, String path, DaosFsClient daosFsClient) {
@@ -191,6 +189,9 @@ public class DaosFile {
       if(!cleaned) {
         try {
           client.dfsRelease(objId);
+          if(log.isDebugEnabled()){
+            log.debug("file {} released", path);
+          }
         }catch (IOException e){
           log.error("failed to release fs object with "+path, e);
         }
@@ -203,7 +204,17 @@ public class DaosFile {
    * @throws IOException
    */
   public boolean delete() throws IOException{
-    boolean deleted = client.delete(dfsPtr, parentPath, path);
+    return delete(false);
+  }
+
+  /**
+   * for internal use
+   * @param force
+   * @return
+   * @throws IOException
+   */
+  boolean delete(boolean force) throws IOException{
+    boolean deleted = client.delete(dfsPtr, parentPath, name, force);
     if(cleaner != null) {
       cleaned = true;
     }

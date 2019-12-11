@@ -34,10 +34,10 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    delete
- * Signature: (JLjava/lang/String;Ljava/lang/String;)Z
+ * Signature: (JLjava/lang/String;Ljava/lang/String;Z)Z
  */
 JNIEXPORT jboolean JNICALL Java_com_intel_daos_client_DaosFsClient_delete
-  (JNIEnv *, jobject, jlong, jstring, jstring);
+  (JNIEnv *, jobject, jlong, jstring, jstring, jboolean);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient

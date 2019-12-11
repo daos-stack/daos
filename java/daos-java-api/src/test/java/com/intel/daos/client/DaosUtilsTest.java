@@ -15,6 +15,15 @@ public class DaosUtilsTest {
   }
 
   @Test
+  public void testReplaceMultipleSlash(){
+    String path = "//abc//de/f//";
+    Assert.assertEquals("/abc/de/f", DaosUtils.normalize(path));
+
+    path = "/abc/de////f/gh.i//jkl/";
+    Assert.assertEquals("/abc/de/f/gh.i/jkl", DaosUtils.normalize(path));
+  }
+
+  @Test
   public void testEmptyPath(){
     String path = null;
     Assert.assertEquals("", DaosUtils.normalize(path));
