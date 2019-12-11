@@ -74,7 +74,7 @@ RUN yum -y install \
            python36-numpy python36-jira python3-pip;           \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
-    yum -y install libipmctl-devel
+    yum -y install libipmctl-devel openmpi3-devel hwloc-devel
 
 # DAOS python 3 packages required for pylint
 #  - excluding mpi4py as it depends on CORCI-635
@@ -93,7 +93,7 @@ RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
 # Dependencies
-# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are
+# Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
 ARG JENKINS_URL=""
 ARG QUICKBUILD=1
@@ -127,7 +127,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
               spdk spdk-devel                                                    \
               fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-19.el7            \
               openpa-devel libfabric-devel                                       \
-              ompi-devel pmix-devel hwloc-devel dpdk-devel";                     \
+              dpdk-devel";                     \
         echo "Installing: $pkgs";                                                \
         yum -y install $pkgs;                                                    \
     fi

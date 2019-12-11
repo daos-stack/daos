@@ -429,7 +429,7 @@ pipeline {
                             */
                         }
                         unsuccessful {
-                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
+                            sh 'ls install/include/spdk/ || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
@@ -838,7 +838,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
+                                       inst_rpms: "openmpi3 hwloc-devel argobots cart-${env.CART_COMMIT} fuse3-libs libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1027,7 +1027,7 @@ pipeline {
                                        node_count: 9,
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   'ior-hpc mpich-autoload ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
@@ -1103,14 +1103,14 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   'ior-hpc mpich-autoload ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   'ior-hpc mpich-autoload ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
