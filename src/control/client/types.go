@@ -29,8 +29,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -259,7 +259,7 @@ func (rm ResultSmdMap) String() string {
 
 // ClientCtrlrMap is an alias for query results of NVMe controllers (and
 // any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]pb_types.CtrlrResults
+type ClientCtrlrMap map[string]proto.CtrlrResults
 
 func (ccm ClientCtrlrMap) String() string {
 	var buf bytes.Buffer
@@ -279,7 +279,7 @@ func (ccm ClientCtrlrMap) String() string {
 
 // ClientMountMap is an alias for query results of SCM regions mounted
 // on connected servers keyed on address.
-type ClientMountMap map[string]pb_types.MountResults
+type ClientMountMap map[string]proto.MountResults
 
 func (cmm ClientMountMap) String() string {
 	var buf bytes.Buffer
@@ -335,7 +335,7 @@ type ScmScanResults map[string]*ScmScanResult
 // NvmeScanResult represents the result of scanning for SCM
 // modules installed on a storage node.
 type NvmeScanResult struct {
-	Ctrlrs pb_types.NvmeControllers
+	Ctrlrs proto.NvmeControllers
 	Err    error
 }
 
@@ -364,7 +364,7 @@ func (result *NvmeScanResult) Summary() (out string) {
 // of remote servers identified by an address string.
 type NvmeScanResults map[string]*NvmeScanResult
 
-func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
+func scmModulesFromPB(pbMms proto.ScmModules) (mms []storage.ScmModule) {
 	for _, c := range pbMms {
 		mms = append(mms,
 			storage.ScmModule{
@@ -379,7 +379,7 @@ func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
 	return
 }
 
-func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespace) {
+func scmNamespacesFromPB(pbNss proto.ScmNamespaces) (nss []storage.ScmNamespace) {
 	for _, ns := range pbNss {
 		nss = append(nss,
 			storage.ScmNamespace{
@@ -424,8 +424,8 @@ type StorageFormatReq struct {
 type StorageFormatResp map[string]StorageFormatResult
 
 type StorageFormatResult struct {
-	Nvme pb_types.NvmeControllerResults
-	Scm  pb_types.ScmMountResults
+	Nvme proto.NvmeControllerResults
+	Scm  proto.ScmMountResults
 }
 
 // AccessControlList is a structure for the access control list.
@@ -456,4 +456,29 @@ func (acl *AccessControlList) Empty() bool {
 		return true
 	}
 	return false
+}
+
+// PoolDiscovery represents the basic discovery information for a pool.
+type PoolDiscovery struct {
+	UUID        string // Unique identifier
+	SvcReplicas []int  // Ranks of pool service replicas
+}
+
+// poolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
+// PoolDiscovery structures.
+func poolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*PoolDiscovery {
+	pools := make([]*PoolDiscovery, 0, len(pbPools))
+	for _, pbPool := range pbPools {
+		svcReps := make([]int, 0, len(pbPool.Svcreps))
+		for _, rep := range pbPool.Svcreps {
+			svcReps = append(svcReps, int(rep))
+		}
+
+		pools = append(pools, &PoolDiscovery{
+			UUID:        pbPool.Uuid,
+			SvcReplicas: svcReps,
+		})
+	}
+
+	return pools
 }
