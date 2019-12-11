@@ -78,7 +78,6 @@ struct obj_auxi_args {
 	uint32_t			 map_ver_reply;
 	uint32_t			 io_retry:1,
 					 args_initialized:1,
-					 shard_task_scheded:1,
 					 to_leader:1,
 					 spec_shard:1,
 					 req_reasbed:1;
@@ -1717,13 +1716,18 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 	shard_arg->map_ver = map_ver;
 }
 
+struct shard_task_sched_args {
+	uint64_t	tsa_epoch;
+	bool		tsa_scheded;
+};
+
 static int
 shard_task_sched(tse_task_t *task, void *arg)
 {
 	tse_task_t			*obj_task;
 	struct obj_auxi_args		*obj_auxi;
 	struct shard_auxi_args		*shard_auxi;
-	uint64_t			*epoch = arg;
+	struct shard_task_sched_args	*sched_arg = arg;
 	uint32_t			 target;
 	unsigned int			 map_ver;
 	int				 rc = 0;
@@ -1742,7 +1746,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 		target = obj_shard2tgtid(shard_auxi->obj, shard_auxi->shard);
 		if (obj_auxi->req_tgts.ort_srv_disp ||
 		    obj_retry_error(task->dt_result) ||
-		    *epoch != shard_auxi->epoch ||
+		    sched_arg->tsa_epoch != shard_auxi->epoch ||
 		    target != shard_auxi->target) {
 			D_DEBUG(DB_IO, "shard %d, dt_result %d, target %d @ "
 				"map_ver %d, target %d @ last_map_ver %d, "
@@ -1760,12 +1764,13 @@ shard_task_sched(tse_task_t *task, void *arg)
 
 			if (!obj_auxi->req_tgts.ort_srv_disp)
 				shard_auxi_set_param(shard_auxi, map_ver,
-					shard_auxi->shard, target, *epoch);
-			obj_auxi->shard_task_scheded	= 1;
+					shard_auxi->shard, target,
+					sched_arg->tsa_epoch);
+			sched_arg->tsa_scheded = true;
 		}
 	} else {
 		tse_task_schedule(task, true);
-		obj_auxi->shard_task_scheded = 1;
+		sched_arg->tsa_scheded = true;
 	}
 
 out:
@@ -1777,15 +1782,18 @@ out:
 static void
 obj_shard_task_sched(struct obj_auxi_args *obj_auxi, uint64_t epoch)
 {
+	struct shard_task_sched_args	sched_arg;
+
 	D_ASSERT(!d_list_empty(&obj_auxi->shard_task_head));
-	obj_auxi->shard_task_scheded = 0;
+	sched_arg.tsa_scheded = false;
+	sched_arg.tsa_epoch = epoch;
 	tse_task_list_traverse(&obj_auxi->shard_task_head, shard_task_sched,
-			       &epoch);
+			       &sched_arg);
 	/* It is possible that the IO retried by stale pm version found, but
 	 * the IO involved shards' targets not changed. No any shard task
 	 * re-scheduled for this case, can complete the obj IO task.
 	 */
-	if (obj_auxi->shard_task_scheded == 0)
+	if (sched_arg.tsa_scheded == false)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
 
