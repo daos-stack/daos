@@ -913,13 +913,12 @@ main(int argc, char *argv[])
 	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc <= 2 || strcmp(argv[1], "version") == 0) {
+	if (argc < 2 || strcmp(argv[1], "help") == 0)
+		hdlr = help_hdlr;
+	else if (strcmp(argv[1], "version") == 0) {
 		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
 		return 0;
-	}
-	if (argc <= 2 || strcmp(argv[1], "help") == 0)
-		hdlr = help_hdlr;
-	else if ((strcmp(argv[1], "container") == 0) ||
+	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "pool") == 0)
