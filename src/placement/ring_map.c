@@ -1085,7 +1085,8 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			layout->ol_shards[k].po_fseq   = tgt->ta_comp.co_fseq;
 
 			if (pool_target_unavail(tgt, for_reint)) {
-				rc = remap_alloc_one(remap_list, k, tgt, for_reint);
+				rc = remap_alloc_one(remap_list, k, tgt,
+						for_reint);
 				if (rc)
 					D_GOTO(out, rc);
 			}

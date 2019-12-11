@@ -596,7 +596,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			/** If target is failed queue it for remap*/
 			if (pool_target_unavail(target, for_reint))  {
 
-				rc = remap_alloc_one(remap_list, k, target, false);
+				rc = remap_alloc_one(remap_list, k, target,
+						false);
 				if (rc)
 					D_GOTO(out, rc);
 			}

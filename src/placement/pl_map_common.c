@@ -103,9 +103,9 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
 	} else if (rc == 0 && is_reint == true) {
-                f_new->fs_tgt_id = tgt->ta_comp.co_id;
-                d_list_add(&f_new->fs_list, remap_list);
-        }
+		f_new->fs_tgt_id = tgt->ta_comp.co_id;
+		d_list_add(&f_new->fs_list, remap_list);
+	}
 
 	return rc;
 }
