@@ -11,11 +11,17 @@ def scons():
 
     denv = env.Clone()
 
+    mpi = daos_build.configure_mpi(prereqs, denv)
+    if mpi is None:
+        print("\nSkipping compilation for tests that need MPI")
+        print("Install and load mpich or openmpi\n")
+        return
+
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    prereqs.require(denv, 'ompi', 'argobots', 'hwloc', 'protobufc')
+    prereqs.require(denv, mpi, 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
