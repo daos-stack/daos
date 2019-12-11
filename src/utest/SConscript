@@ -64,7 +64,7 @@ def scons():
         return
 
     test_env = env.Clone()
-    prereqs.require(test_env, "pmix", "mercury", "uuid", "cmocka")
+    prereqs.require(test_env, "mercury", "uuid", "cmocka")
     test_env.AppendUnique(LIBS=['pthread'])
     test_env.AppendUnique(CPPPATH=['../include'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])

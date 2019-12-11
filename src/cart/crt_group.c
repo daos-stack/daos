@@ -2184,7 +2184,6 @@ done:
 		rc = d_errno2der(errno);
 	}
 out:
-	/* For pmix disabled case. Lock taken above before loop start */
 	if (grp_priv && locked)
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 

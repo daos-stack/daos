@@ -48,7 +48,7 @@ def scons():
     tenv = env.Clone()
     tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/test'])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
-    prereqs.require(tenv, 'pmix', 'mercury')
+    prereqs.require(tenv, 'mercury')
     tenv.AppendUnique(RPATH="$PREFIX/lib")
 
     ctl = tenv.Program(SRC)

@@ -94,7 +94,7 @@ def scons():
 
     denv.AppendUnique(CPPPATH=['#/src/cart'])
     denv.AppendUnique(LIBS=['gurt'])
-    prereqs.require(denv, 'mercury', 'pmix')
+    prereqs.require(denv, 'mercury')
     denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
     cart_targets = denv.SharedObject(SRC)
@@ -103,7 +103,7 @@ def scons():
     if compiler != 'covc':
         pp_env = Environment(TOOLS=['default', 'extra'])
         pp_env.AppendUnique(CPPPATH=['src/include', 'src/cart'])
-        prereqs.require(pp_env, 'mercury', 'pmix', headers_only=True)
+        prereqs.require(pp_env, 'mercury', headers_only=True)
 
         # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)

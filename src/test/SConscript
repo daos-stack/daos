@@ -69,7 +69,7 @@ def scons():
     tenv.AppendUnique(CPPPATH=['#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
-    prereqs.require(tenv, 'crypto', 'pmix', 'mercury')
+    prereqs.require(tenv, 'crypto', 'mercury')
 
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:

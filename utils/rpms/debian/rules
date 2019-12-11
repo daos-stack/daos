@@ -21,7 +21,6 @@ carthome := $(exec_prefix)/lib/$(DEB_BUILD_MULTIARCH)/$(name)
 
 SCONS = scons
 DEB_SCONS_OPTIONS := --config=force USE_INSTALLED=all \
-	PMIX_PREBUILT=/usr/lib/$(DEB_BUILD_MULTIARCH)/pmix \
         OMPI_PREBUILT=/usr/lib/$(DEB_BUILD_MULTIARCH)/openmpi \
 	PREFIX=$(buildroot)$(prefix)
 

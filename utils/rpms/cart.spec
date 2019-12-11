@@ -12,7 +12,6 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
-BuildRequires: pmix-devel
 BuildRequires: openpa-devel
 BuildRequires: mercury-devel = 1.0.1-21%{?dist}
 BuildRequires: ompi-devel
@@ -58,7 +57,6 @@ Requires: libfabric-devel
 # can't do this until we can land ompi@PR-10 and
 # scons_local@bmurrell/ompi-env-module
 #Requires: ompi-devel
-Requires: pmix-devel
 Requires: hwloc-devel
 %if %{defined sha1}
 Provides: %{name}-devel-%{sha1}

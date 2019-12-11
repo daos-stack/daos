@@ -1,48 +1,9 @@
 {
-    Memory leak in PMIx_Init()
-    Memcheck:Leak
-    fun:*alloc
-    ...
-    fun:PMIx_Init
-}
-{
-    Memory leak in PMIx progress thread
-    Memcheck:Leak
-    fun:*alloc
-    ...
-    fun:event_base_loop
-    fun:progress_engine
-}
-{
-    Memory leak in PMIx_Lookup
-    Memcheck:Leak
-    fun:*alloc
-    ...
-    fun:pmix_argv*
-    ...
-    fun:PMIx_Lookup
-}
-{
-    Leak from PMIx event handler registration.
-    Memcheck:Leak
-    fun:*alloc
-    ...
-    fun:PMIx_Register_event_handler
-}
-{
     dlopen leaks
     Memcheck:Leak
     match-leak-kinds: reachable
     ...
     fun:_dl_open
-}
-{
-   pmix shutdown leak
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:pmix_class_initialize
-   fun:PMIx_Deregister_event_handler
 }
 {
    FI leak 0

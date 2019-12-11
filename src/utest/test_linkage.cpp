@@ -43,7 +43,6 @@
 #include <iostream>
 
 #include <stdlib.h>
-#include <pmix.h>
 #include <gurt/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
