@@ -1,12 +1,13 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  client_partition: daos_client
+    test_servers:
+      - server-A
+      - server-B
+      - server-C
+      - server-D
+    client_partition: daos_client
 orterun:
     allow_run_as_root: True
+
 # This timeout must be longer than the test_timeout param (+30minutes)
 timeout: 45000
 logdir: /tmp/soak

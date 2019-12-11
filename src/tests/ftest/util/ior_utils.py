@@ -231,7 +231,7 @@ class IorCommand(ExecutableCommand):
         if log_file:
             env["D_LOG_FILE"] = log_file
 
-        if "mpirun" in manager_cmd or "srun" in manager_cmd:
+        if "mpirun" in manager_cmd or self.api.value == "MPIIO":
             env["DAOS_POOL"] = self.daos_pool.value
             env["DAOS_SVCL"] = self.daos_svcl.value
             env["FI_PSM2_DISCONNECT"] = 1
