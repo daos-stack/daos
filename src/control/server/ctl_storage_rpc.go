@@ -249,7 +249,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	}
 
 	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
-		i.Index, reformat)
+		i.Index(), reformat)
 
 	scmConfig := i.scmConfig()
 

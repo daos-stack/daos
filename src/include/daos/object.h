@@ -272,6 +272,8 @@ daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 	return oid;
 }
 
+#define DAOS_OC_IS_EC(oca)	((oca)->ca_resil == DAOS_RES_EC)
+
 /* check if an oid is EC obj class, and return its daos_oclass_attr */
 static inline bool
 daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
@@ -284,7 +286,7 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 	if (oca == NULL)
 		return false;
 
-	return (oca->ca_resil == DAOS_RES_EC);
+	return DAOS_OC_IS_EC(oca);
 }
 
 static inline bool
