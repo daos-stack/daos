@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -195,9 +196,11 @@ func (c *connList) makeRequests(req interface{},
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
+	conns := c.controllers
 
-	addrs := []string{}
-	for _, mc := range c.controllers {
+	addrs := make([]string, 0, len(conns))
+	sort.Slice(conns, func(i, j int) bool { return conns[i].getAddress() < conns[j].getAddress() })
+	for _, mc := range conns {
 		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, req, ch)
 	}
