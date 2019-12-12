@@ -2,9 +2,9 @@
 # required quantity is indicated by the placeholders
 
 hosts:
-  test_machines:
-    - boro-A
-    - boro-B
+  test_servers:
+    - server-A
+    - server-B
 #JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:

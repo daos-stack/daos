@@ -35,12 +35,19 @@ typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
 struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
+  /*
+   * SCM size in bytes
+   */
   uint64_t scmbytes;
+  /*
+   * NVMe size in bytes
+   */
   uint64_t nvmebytes;
   /*
-   * comma separated integers
+   * target ranks
    */
-  char *ranks;
+  size_t n_ranks;
+  uint32_t *ranks;
   /*
    * desired number of pool service replicas
    */
@@ -69,7 +76,7 @@ struct  _Mgmt__PoolCreateReq
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -83,13 +90,14 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * comma separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, 0,NULL }
 
 
 /*
@@ -132,6 +140,9 @@ struct  _Mgmt__PoolDestroyResp
     , 0 }
 
 
+/*
+ * ListPoolsReq represents a request to list pools on a given DAOS system.
+ */
 struct  _Mgmt__ListPoolsReq
 {
   ProtobufCMessage base;
@@ -139,14 +150,10 @@ struct  _Mgmt__ListPoolsReq
    * DAOS system identifier
    */
   char *sys;
-  /*
-   * Client response buffer capacity in number of pools
-   */
-  uint64_t numpools;
 };
 #define MGMT__LIST_POOLS_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__ListPoolsResp__Pool
@@ -157,15 +164,19 @@ struct  _Mgmt__ListPoolsResp__Pool
    */
   char *uuid;
   /*
-   * pool service replicas, comma-separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
+/*
+ * ListPoolsResp returns the list of pools in the system.
+ */
 struct  _Mgmt__ListPoolsResp
 {
   ProtobufCMessage base;
@@ -174,18 +185,14 @@ struct  _Mgmt__ListPoolsResp
    */
   int32_t status;
   /*
-   * pools list (max length ListPoolsReq.numPools)
+   * pools list
    */
   size_t n_pools;
   Mgmt__ListPoolsResp__Pool **pools;
-  /*
-   * number of pools in system
-   */
-  uint64_t numpools;
 };
 #define MGMT__LIST_POOLS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL }
 
 
 /* Mgmt__PoolCreateReq methods */
