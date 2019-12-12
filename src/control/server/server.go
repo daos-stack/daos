@@ -147,12 +147,27 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
+	var opts []grpc.ServerOption
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
+	opts = append(opts, tcOpt)
 
-	grpcServer := grpc.NewServer(tcOpt)
+	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return nil
+	} else if uintOpt != nil {
+		opts = append(opts, uintOpt)
+	}
+	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return nil
+	} else if sintOpt != nil {
+		opts = append(opts, sintOpt)
+	}
+
+	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
 	// If running as root and user name specified in config file, respawn proc.
