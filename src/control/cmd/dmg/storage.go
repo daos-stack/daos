@@ -356,7 +356,7 @@ func scmFormatTable(smr proto.ScmMountResults) string {
 		return buf.String()
 	}
 
-	mntTitle := "NVMe PCI"
+	mntTitle := "SCM Mount"
 	resultTitle := "Format Result"
 
 	formatter := NewTableFormatter([]string{mntTitle, resultTitle})
@@ -384,6 +384,8 @@ func scmFormatTable(smr proto.ScmMountResults) string {
 
 	return buf.String()
 }
+
+// scmFormatSummaryTable with columns for scm/nvme overall result, use HasErrors TODO
 
 func groupFormatResults(results client.StorageFormatResults) (hostlist.HostGroups, error) {
 	groups := make(hostlist.HostGroups)
