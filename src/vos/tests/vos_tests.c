@@ -160,8 +160,14 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-			cmocka_set_test_filter(optarg);
-				printf("Test filter: %s\n", optarg);
+			{
+				/** Add wildcards for easier filtering */
+				char filter[sizeof(optarg) + 2];
+
+				sprintf(filter, "*%s*", optarg);
+				cmocka_set_test_filter(filter);
+				printf("Test filter: %s\n", filter);
+			}
 #else
 			D_PRINT("filter not enabled");
 #endif

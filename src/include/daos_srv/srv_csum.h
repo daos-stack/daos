@@ -21,10 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_VOS_IO_CHECKSUM_H__
-#define __DAOS_VOS_IO_CHECKSUM_H__
+#ifndef __DAOS_IOSRV_CHECKSUM_H__
+#define __DAOS_IOSRV_CHECKSUM_H__
 
-#include "evt_priv.h"
+#include <daos_srv/bio.h>
 
 /**
  * Determine if the saved checksum for a chunk can be used, or if a
@@ -41,7 +41,7 @@
  * @return
  */
 bool
-vic_needs_new_csum(struct daos_csum_range *raw_ext,
+ext_needs_new_csum(struct daos_csum_range *raw_ext,
 		   struct daos_csum_range *req_ext,
 		   struct daos_csum_range *chunk,
 		   bool csum_started,
@@ -53,17 +53,8 @@ vic_needs_new_csum(struct daos_csum_range *raw_ext,
  * have checksums appropriate for the extents and data they represent
  */
 int
-vic_fetch_iod(daos_iod_t *iod, struct daos_csummer *csummer,
-	      struct bio_sglist *bsgl, daos_csum_buf_t *biov_dcbs,
-	      size_t *biov_dcbs_used);
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
+		struct bio_sglist *bsgl, daos_csum_buf_t *biov_dcbs,
+		size_t *biov_dcbs_used);
 
-/**
- * If checksums are enabled, then more data might be required than the request
- * so that appropriate chunk aligned data is verified when necessary.
- */
-void
-vic_update_biov(struct bio_iov *biov, struct evt_entry *ent,
-		daos_size_t rsize, daos_csum_buf_t *dcbs,
-		uint32_t *dcb_count);
-
-#endif /* __DAOS_VOS_IO_CHECKSUM_H__ */
+#endif

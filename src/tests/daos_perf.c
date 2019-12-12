@@ -102,7 +102,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-					   &cred->tc_dkey, 1, NULL,
+					   &cred->tc_dkey, 1,
 					   &cred->tc_iod,
 					   &cred->tc_sgl);
 	} else { /* zero-copy */

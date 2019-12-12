@@ -232,7 +232,7 @@ fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
-			     &array->va_dkey, 1, NULL, &array->va_iod, sgls);
+			     &array->va_dkey, 1, &array->va_iod, sgls);
 }
 
 static int
@@ -272,7 +272,7 @@ fetch_meta(struct vts_array *array, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Reading metadata at epoch "DF_U64"\n", epoch);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
-			     &array->va_dkey, 1, NULL, &array->va_sv_iod, &sgl);
+			     &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
 
 

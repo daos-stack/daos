@@ -39,8 +39,8 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos.h>
 #include <daos/checksum.h>
+#include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -827,6 +827,32 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 }
 
 static int
+csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
+	      struct daos_csummer *csummer)
+{
+	int			 rc = 0;
+	uint32_t		 biov_dcbs_idx = 0;
+	size_t			 biov_dcbs_used = 0;
+	int			 i;
+
+	struct bio_desc *biod = vos_ioh2desc(ioh);
+	daos_csum_buf_t *dcbs = vos_ioh2dcbs(ioh);
+
+	for (i = 0; i < iods_nr; i++) {
+		rc = ds_csum_add2iod(
+			&iods[i], csummer,
+			bio_iod_sgl(biod, i),
+			&dcbs[biov_dcbs_idx],
+			&biov_dcbs_used);
+		if (rc != 0)
+			return rc;
+		biov_dcbs_idx += biov_dcbs_used;
+	}
+
+	return rc;
+}
+
+static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
 	     uint64_t *split_offs, struct dtx_handle *dth)
@@ -923,13 +949,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
 		obj_fetch_csum_init(cont_hdl, orw, orwo);
-
 		obj_fetch_csums_link(orw, orwo);
-
-		rc = vos_fetch_csum(ioh,
-				    orw->orw_iod_array.oia_iods,
-				    orw->orw_iod_array.oia_iod_nr,
-				    cont_hdl->sch_csummer);
+		rc = csum_add2iods(ioh,
+				   orw->orw_iod_array.oia_iods,
+				   orw->orw_iod_array.oia_iod_nr,
+				   cont_hdl->sch_csummer);
 		obj_fetch_csums_unlink(orw);
 
 		if (rc) {

@@ -95,7 +95,7 @@ ctl_fetch(struct dts_io_credit *cred)
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
 		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				   &cred->tc_dkey, 1, NULL, &cred->tc_iod,
+				   &cred->tc_dkey, 1, &cred->tc_iod,
 				   &cred->tc_sgl);
 	}
 	return rc;

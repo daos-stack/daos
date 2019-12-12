@@ -304,8 +304,7 @@ rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rdb_vos_set_sgls(RDB_VOS_QUERY, 1 /* n */, value, &sgl);
-	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
-			   NULL, &iod, &sgl);
+	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */, &iod, &sgl);
 	if (rc != 0)
 		return rc;
 

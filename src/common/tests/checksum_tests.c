@@ -487,16 +487,16 @@ simple_test_compare_checksums(void **state)
 
 	setup_buf_for_test(one, csum_buf);
 	setup_buf_for_test(two, csum_buf_same);
-	assert_true(daos_csummer_dcb_compare(csummer, &one, &two));
+	assert_true(daos_csummer_compare_dcb(csummer, &one, &two));
 
 	setup_buf_for_test(two, csum_buf_dif);
-	assert_false(daos_csummer_dcb_compare(csummer, &one, &two));
+	assert_false(daos_csummer_compare_dcb(csummer, &one, &two));
 
 	setup_buf_for_test(two, csum_buf_dif_len);
-	assert_false(daos_csummer_dcb_compare(csummer, &one, &two));
+	assert_false(daos_csummer_compare_dcb(csummer, &one, &two));
 
 	setup_buf_for_test(two, csum_buf_dif_len2);
-	assert_false(daos_csummer_dcb_compare(csummer, &one, &two));
+	assert_false(daos_csummer_compare_dcb(csummer, &one, &two));
 
 	daos_csummer_destroy(&csummer);
 }
@@ -534,7 +534,7 @@ test_compare_checksums(void **state)
 	rc = daos_csummer_calc(csummer, &sgl, &iod, &two);
 	assert_int_equal(0, rc);
 
-	assert_true(daos_csummer_dcb_compare(csummer, one, two));
+	assert_true(daos_csummer_compare_dcb(csummer, one, two));
 
 	daos_sgl_fini(&sgl, true);
 	daos_csummer_free_dcbs(csummer, &one);

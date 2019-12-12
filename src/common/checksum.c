@@ -57,18 +57,16 @@ trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
 	C_TRACE("%s\n", char_buf);
 }
 
-
-
 /** helper function to trace chars */
 static void
 trace_chars(const uint8_t *buf, const size_t buf_len, const uint32_t max)
 {
-	int i;
+	int	i;
+	size_t	len = max == 0 ? buf_len : min(buf_len, max);
+	char	str[len + 1];
 
 	if (buf == NULL)
 		return;
-	size_t len = max == 0 ? buf_len : min(buf_len, max);
-	char str[len + 1];
 
 	for (i = 0; i <  len ; i++)
 		str[i] = buf[i] == '\0' ? '_' : buf[i];
@@ -127,7 +125,6 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 		return false;
 	return true;
 }
-
 
 enum DAOS_CSUM_TYPE
 daos_contprop2csumtype(int contprop_csum_val)
@@ -357,7 +354,7 @@ daos_csummer_finish(struct daos_csummer *obj)
 }
 
 bool
-daos_csummer_dcb_compare(struct daos_csummer *obj, daos_csum_buf_t *a,
+daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
 			 daos_csum_buf_t *b)
 {
 	uint32_t	a_len = a->cs_len * a->cs_nr;
@@ -620,7 +617,7 @@ daos_csummer_verify(struct daos_csummer *obj,
 		return rc;
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		match = daos_csummer_dcb_compare(obj, &csum_bufs[i],
+		match = daos_csummer_compare_dcb(obj, &csum_bufs[i],
 						 &iod->iod_csums[i]);
 		if (!match) {
 			D_ERROR("Data corruption found\n");

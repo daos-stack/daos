@@ -184,7 +184,7 @@ int
 daos_csummer_finish(struct daos_csummer *obj);
 
 bool
-daos_csummer_dcb_compare(struct daos_csummer *obj, daos_csum_buf_t *a,
+daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
 			 daos_csum_buf_t *b);
 
 bool
