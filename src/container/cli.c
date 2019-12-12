@@ -2105,10 +2105,15 @@ struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {
 	struct dc_cont	*dc;
+	struct daos_csummer *csum;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return NULL;
 
-	return dc->dc_csummer;
+	csum = dc->dc_csummer;
+	dc_cont_put(dc);
+
+	return csum;
+
 }
