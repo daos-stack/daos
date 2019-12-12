@@ -29,23 +29,20 @@
 #include <daos_prop.h>
 
 /** fault injection helpers */
-static uint64_t g_prev_fi_loc;
 static void
 set_update_csum_fi()
 {
-	g_prev_fi_loc = daos_fail_value_get();
 	daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
 }
 static void
 set_fetch_csum_fi()
 {
-	g_prev_fi_loc = daos_fail_value_get();
 	daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
 }
 static void
 unset_csum_fi()
 {
-	daos_fail_loc_set(g_prev_fi_loc); /** turn off fault injection */
+	daos_fail_loc_set(0); /** turn off fault injection */
 }
 
 /** daos checksum test context */

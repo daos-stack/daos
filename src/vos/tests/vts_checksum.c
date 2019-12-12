@@ -420,18 +420,16 @@ update_fetch_csum_for_array_10(void **state)
  * Fault Injection
  * ------------------------------------------------
  */
-static uint64_t g_prev_fi_loc;
 static void
 set_csum_fi(int flag)
 {
-	g_prev_fi_loc = daos_fail_value_get();
 	daos_fail_loc_set(flag | DAOS_FAIL_ALWAYS);
 }
 
 static void
 unset_csum_fi()
 {
-	daos_fail_loc_set(g_prev_fi_loc); /** revert any fi */
+	daos_fail_loc_set(0); /** revert any fi */
 }
 
 void
