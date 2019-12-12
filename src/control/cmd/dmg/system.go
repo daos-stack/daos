@@ -94,6 +94,18 @@ type systemListPoolsCmd struct {
 	cfgCmd
 }
 
+func formatPoolSvcReps(svcReps []uint32) string {
+	var b strings.Builder
+	for i, rep := range svcReps {
+		if i != 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, "%d", rep)
+	}
+
+	return b.String()
+}
+
 // Execute is run when systemListPoolsCmd activates
 func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	if cmd.config == nil {
@@ -117,24 +129,14 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
 	var table []TableRow
 
-	var b strings.Builder
 	for _, pool := range resp.Pools {
 		row := TableRow{uuidTitle: pool.UUID}
 
-		for i, rep := range pool.SvcReplicas {
-			if i != 0 {
-				b.WriteString(",")
-			}
-			fmt.Fprintf(&b, "%d", rep)
-		}
-
 		if len(pool.SvcReplicas) != 0 {
-			row[svcRepTitle] = b.String()
+			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
 		}
 
 		table = append(table, row)
-
-		b.Reset()
 	}
 
 	cmd.log.Info(formatter.Format(table))
