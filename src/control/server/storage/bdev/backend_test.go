@@ -76,100 +76,14 @@ func mockSpdkDeviceHealth(varIdx ...int32) spdk.DeviceHealth {
 	return *s
 }
 
-func TestBdevBackendCoalesce(t *testing.T) {
-	type input struct {
-		spdkControllers  []spdk.Controller
-		spdkNamespaces   []spdk.Namespace
-		spdkDeviceHealth []spdk.DeviceHealth
-	}
-
-	scEmptyNamespaces := storage.MockNvmeController()
-	scEmptyNamespaces.Namespaces = nil
-	scEmptyNamespaces.HealthStats = nil
-	scEmptyDeviceHealth := storage.MockNvmeController()
-	scEmptyDeviceHealth.HealthStats = nil
-
-	for name, tc := range map[string]struct {
-		input  input
-		expScs []*storage.NvmeController
-		expErr error
-	}{
-		"empty input": {
-			input:  input{},
-			expScs: storage.NvmeControllers{},
-		},
-		"empty namespaces": {
-			input: input{
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expScs: storage.NvmeControllers{scEmptyNamespaces},
-		},
-		"empty deviceHealth": {
-			input: input{
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-				spdkNamespaces:  []spdk.Namespace{mockSpdkNamespace()},
-			},
-			expScs: storage.NvmeControllers{scEmptyDeviceHealth},
-		},
-		"single deviceHealth": {
-			input: input{
-				spdkControllers:  []spdk.Controller{mockSpdkController()},
-				spdkNamespaces:   []spdk.Namespace{mockSpdkNamespace()},
-				spdkDeviceHealth: []spdk.DeviceHealth{mockSpdkDeviceHealth()},
-			},
-			expScs: storage.NvmeControllers{storage.MockNvmeController()},
-		},
-		"extra namespace/deviceHealth": {
-			input: input{
-				spdkControllers:  []spdk.Controller{mockSpdkController()},
-				spdkNamespaces:   []spdk.Namespace{mockSpdkNamespace(), mockSpdkNamespace(2)},
-				spdkDeviceHealth: []spdk.DeviceHealth{mockSpdkDeviceHealth(), mockSpdkDeviceHealth(2)},
-			},
-			expScs: storage.NvmeControllers{storage.MockNvmeController()},
-		},
-		"two controllers": {
-			input: input{
-				spdkControllers:  []spdk.Controller{mockSpdkController(), mockSpdkController(2)},
-				spdkNamespaces:   []spdk.Namespace{mockSpdkNamespace(), mockSpdkNamespace(2)},
-				spdkDeviceHealth: []spdk.DeviceHealth{mockSpdkDeviceHealth(), mockSpdkDeviceHealth(2)},
-			},
-			expScs: storage.NvmeControllers{storage.MockNvmeController(), storage.MockNvmeController(2)},
-		},
-		"duplicate deviceHealth": {
-			input: input{
-				spdkControllers:  []spdk.Controller{mockSpdkController()},
-				spdkDeviceHealth: []spdk.DeviceHealth{mockSpdkDeviceHealth(), mockSpdkDeviceHealth()},
-			},
-			expErr: errors.New("duplicate"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotScs, gotErr := coalesceControllers(tc.input.spdkControllers,
-				tc.input.spdkNamespaces, tc.input.spdkDeviceHealth)
-
-			common.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-			if diff := cmp.Diff(tc.expScs, gotScs); diff != "" {
-				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestBdevBackendGetFormattedController(t *testing.T) {
 	type input struct {
 		pciAddr         string
 		spdkControllers []spdk.Controller
-		spdkNamespaces  []spdk.Namespace
 	}
 
 	// We don't get device health back after a format, so the expected
 	// controller results shouldn't include it.
-	scEmptyNamespaces := storage.MockNvmeController()
-	scEmptyNamespaces.Namespaces = nil
-	scEmptyNamespaces.HealthStats = nil
 	scNormalNoHealth := storage.MockNvmeController()
 	scNormalNoHealth.HealthStats = nil
 
@@ -186,37 +100,19 @@ func TestBdevBackendGetFormattedController(t *testing.T) {
 			input: input{
 				pciAddr:         "abc123",
 				spdkControllers: []spdk.Controller{mockSpdkController()},
-				spdkNamespaces:  []spdk.Namespace{mockSpdkNamespace()},
 			},
 			expErr: errors.New("unable to resolve"),
-		},
-		"empty namespaces": {
-			input: input{
-				pciAddr:         mockSpdkController().PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expSc: scEmptyNamespaces,
-		},
-		"extra namespace": {
-			input: input{
-				pciAddr:         mockSpdkController().PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-				spdkNamespaces:  []spdk.Namespace{mockSpdkNamespace(), mockSpdkNamespace(2)},
-			},
-			expSc: scNormalNoHealth,
 		},
 		"two controllers": {
 			input: input{
 				pciAddr:         mockSpdkController().PCIAddr,
 				spdkControllers: []spdk.Controller{mockSpdkController(), mockSpdkController(2)},
-				spdkNamespaces:  []spdk.Namespace{mockSpdkNamespace(), mockSpdkNamespace(2)},
 			},
 			expSc: scNormalNoHealth,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotSc, gotErr := getFormattedController(tc.input.pciAddr, tc.input.spdkControllers,
-				tc.input.spdkNamespaces)
+			gotSc, gotErr := getFormattedController(tc.input.pciAddr, tc.input.spdkControllers)
 
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
