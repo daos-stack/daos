@@ -224,6 +224,10 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 				return errors.Wrap(err, "failed to start management service")
 			}
 		}
+
+		if err := instance.LoadModules(); err != nil {
+			return errors.Wrap(err, "failed to load I/O server modules")
+		}
 	}
 
 	// now monitor them
