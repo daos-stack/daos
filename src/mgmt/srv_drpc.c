@@ -71,7 +71,6 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PrepShutdownReq	 *req = NULL;
 	Mgmt__DaosResp		 *resp = NULL;
-	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__prep_shutdown_req__unpack(
