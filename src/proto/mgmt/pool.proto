@@ -29,9 +29,9 @@ package mgmt;
 
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
-	uint64 scmbytes = 1;
-	uint64 nvmebytes = 2;
-	string ranks = 3; // comma separated integers
+	uint64 scmbytes = 1; // SCM size in bytes
+	uint64 nvmebytes = 2; // NVMe size in bytes
+	repeated uint32 ranks = 3; // target ranks
 	uint32 numsvcreps = 4; // desired number of pool service replicas
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
@@ -43,7 +43,7 @@ message PoolCreateReq {
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	string svcreps = 2; // comma separated integers
+	repeated uint32 svcreps = 2; // pool service replica ranks
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -58,17 +58,17 @@ message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
 
+// ListPoolsReq represents a request to list pools on a given DAOS system.
 message ListPoolsReq {
 	string sys = 1; // DAOS system identifier
-	uint64 numPools = 2; // Client response buffer capacity in number of pools
 }
 
+// ListPoolsResp returns the list of pools in the system.
 message ListPoolsResp {
 	message Pool {
 		string uuid = 1; // uuid of pool
-		string svcreps = 2; // pool service replicas, comma-separated integers
+		repeated uint32 svcreps = 2; // pool service replica ranks
 	}
 	int32 status = 1; // DAOS error code
-	repeated Pool pools = 2; // pools list (max length ListPoolsReq.numPools)
-	uint64 numPools = 3; // number of pools in system
+	repeated Pool pools = 2; // pools list
 }
