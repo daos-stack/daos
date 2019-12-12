@@ -258,9 +258,9 @@ pool_map_node_nr(struct pool_map *map)
 static inline bool
 pool_component_unavail(struct pool_component *comp, bool for_reint)
 {
-	return comp->co_status == PO_COMP_ST_DOWN ||
-	       comp->co_status == PO_COMP_ST_DOWNOUT ||
-	       (comp->co_status == PO_COMP_ST_UP && !for_reint);
+	return (comp->co_status == PO_COMP_ST_DOWN ||
+	       comp->co_status == PO_COMP_ST_DOWNOUT) &&
+	       !(comp->co_status == PO_COMP_ST_UP && for_reint);
 }
 
 static inline bool
