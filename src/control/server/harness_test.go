@@ -242,7 +242,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 		expStartCount int
 	}{
 		"normal startup/shutdown": {
-			expStartErr:   errors.New("context canceled"),
+			expStartErr:   context.Canceled,
 			expStartCount: maxIoServers,
 		},
 		"fails to start": {
@@ -335,6 +335,24 @@ func TestHarnessIOServerStart(t *testing.T) {
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
+			}
+
+			if tc.expStartErr != context.Canceled {
+				return
+			}
+
+			for _, srv := range harness.Instances() {
+				expCall := &drpc.Call{
+					Module: drpc.ModuleMgmt,
+					Method: drpc.MethodSetUp,
+				}
+				lastCall := srv._drpcClient.(*mockDrpcClient).SendMsgInputCall
+				if lastCall == nil ||
+					lastCall.Module != expCall.Module ||
+					lastCall.Method != expCall.Method {
+					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
+						srv.Index(), expCall, lastCall)
+				}
 			}
 		})
 	}
