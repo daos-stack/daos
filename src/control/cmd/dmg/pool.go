@@ -26,6 +26,7 @@ package main
 import (
 	"fmt"
 	"os/user"
+	"strconv"
 	"strings"
 
 	"github.com/inhies/go-bytesize"
@@ -339,9 +340,24 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
+	ranks := make([]uint32, 0)
+	if len(rankList) > 0 {
+		rankStr := strings.Split(rankList, ",")
+		for _, rank := range rankStr {
+			r, err := strconv.Atoi(rank)
+			if err != nil {
+				return errors.WithMessage(err, "parsing rank list")
+			}
+			if r < 0 {
+				return errors.Errorf("invalid rank: %d", r)
+			}
+			ranks = append(ranks, uint32(r))
+		}
+	}
+
 	req := &client.PoolCreateReq{
 		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
-		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
+		RankList: ranks, NumSvcReps: numSvcReps, Sys: sys,
 		Usr: usr, Grp: grp, ACL: acl,
 	}
 
@@ -350,7 +366,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
 		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.UUID, resp.SvcReps)
+			resp.UUID, formatPoolSvcReps(resp.SvcReps))
 	}
 
 	log.Infof("Pool-create command %s\n", msg)

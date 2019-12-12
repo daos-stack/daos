@@ -75,8 +75,8 @@ var (
 		},
 	}
 	MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
-		{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []int32{1, 2}},
-		{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []int32{0}},
+		{Uuid: "12345678-1234-1234-1234-123456789abc", Svcreps: []uint32{1, 2}},
+		{Uuid: "12345678-1234-1234-1234-cba987654321", Svcreps: []uint32{0}},
 	}
 	MockErr = errors.New("unknown failure")
 )

@@ -1,0 +1,31 @@
+"""Build go-spdk bindings C tests"""
+from __future__ import print_function
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('senv', 'prereqs')
+
+    unit_env = senv.Clone()
+    prereqs.require(unit_env, 'pmdk', 'spdk', 'hwloc', 'cmocka')
+
+    # spdk/lib/nvme to expose normally opaque types during tests
+    unit_env.AppendUnique(CPPPATH=["$SPDK_SRC/lib/nvme",
+                                   "$SPDK_SRC/include"])
+
+    config = Configure(unit_env)
+
+    if config.CheckHeader("nvme_internal.h"):
+        testbin = daos_build.test(unit_env, 'nvme_control_ctests',
+                                  ['nvme_control_ut.c', unit_env.ncc,
+                                   unit_env.nc],
+                                  LIBS=['spdk', 'spdk_env_dpdk', 'numa',
+                                        'cmocka', 'pthread', 'dl'])
+        unit_env.Install("$PREFIX/bin", testbin)
+    else:
+        print("SPDK nvme_internal.h missing, skipping nvme_control_ut build")
+
+    config.Finish()
+
+if __name__ == "SCons.Script":
+    scons()
