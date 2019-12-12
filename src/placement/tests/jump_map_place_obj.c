@@ -187,8 +187,8 @@ main(int argc, char **argv)
 	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
 
 	/* fail the to-be-spare target and select correct next spare */
-	failed_tgts[0] = lo_3->ol_shards[1].po_target;
-	failed_tgts[1] = lo_3->ol_shards[0].po_target;
+	failed_tgts[0] = lo_3->ol_shards[0].po_target;
+	failed_tgts[1] = lo_3->ol_shards[1].po_target;
 	failed_tgts[2] = spare_tgt_candidate[0];
 	D_PRINT("\nfailed targets %d[1] %d %d[0], expected spare %d[1]\n",
 		failed_tgts[0], failed_tgts[1], failed_tgts[2],
@@ -205,8 +205,8 @@ main(int argc, char **argv)
 	D_PRINT("\ntest pl_obj_find_reint to get correct reintregation "
 			"tagets ...\n");
 	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[2] = spare_tgt_candidate[0];
-	failed_tgts[3] = lo_3->ol_shards[1].po_target;
+	failed_tgts[1] = spare_tgt_candidate[0];
+	failed_tgts[2] = lo_3->ol_shards[1].po_target;
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	reint_tgts[1] = spare_tgt_candidate[0];
 	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 3, reint_tgts, 2,
@@ -214,8 +214,9 @@ main(int argc, char **argv)
 		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
 	D_PRINT("\n");
 	D_ASSERT(spare_cnt >= 1);
-	D_ASSERT(shard_ids[0] == 0);
-	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
+	D_ASSERT(shard_ids[spare_cnt - 1] == 0);
+	D_ASSERT(spare_tgt_ranks[spare_cnt - 1] ==
+			lo_3->ol_shards[0].po_target);
 
 	failed_tgts[0] = spare_tgt_candidate[0];
 	failed_tgts[1] = spare_tgt_candidate[1];

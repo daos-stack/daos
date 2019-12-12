@@ -210,8 +210,9 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 
 	pl_map_decref(pl_map);
 
-	for (i = 0; i < failed_cnt; i++)
-		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 	for (i = 0; i < reint_cnt; i++)
 		plt_add_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 }
