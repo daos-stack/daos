@@ -141,22 +141,22 @@ func (n *Nvme) Format(ctrlrPciAddr string) error {
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
 // Retrieves image from path and updates given firmware slot/register.
-//func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
-//	csPath := C.CString(path)
-//	defer C.free(unsafe.Pointer(csPath))
-//
-//	csPci := C.CString(ctrlrPciAddr)
-//	defer C.free(unsafe.Pointer(csPci))
-//
-//	failLocation := "NVMe Update(): C.nvme_fwupdate"
-//
-//	retPtr := C.nvme_fwupdate(csPci, csPath, C.uint(slot))
-//	if retPtr != nil {
-//		return processReturn(retPtr, failLocation)
-//	}
-//
-//	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
-//}
+func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
+	csPath := C.CString(path)
+	defer C.free(unsafe.Pointer(csPath))
+
+	csPci := C.CString(ctrlrPciAddr)
+	defer C.free(unsafe.Pointer(csPci))
+
+	failLocation := "NVMe Update(): C.nvme_fwupdate"
+
+	retPtr := C.nvme_fwupdate(csPci, csPath, C.uint(slot))
+	if retPtr != nil {
+		return processReturn(retPtr, failLocation)
+	}
+
+	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
+}
 
 // Cleanup unlinks and detaches any controllers or namespaces,
 // as well as cleans up optional device health information.
