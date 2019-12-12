@@ -181,7 +181,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.fabric_iface = BasicParameter(None, "eth0")
             self.fabric_iface_port = BasicParameter(None, 31416)
             self.log_mask = BasicParameter(
-                None, "IO=DEBUG,MD=DEBUG,MGMT=DEBUG,EPC=DEBUG,REBUILD=DEBUG")
+                None, "DEBUG,RPC=ERR,MEM=ERR")
             self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(
                 None,
