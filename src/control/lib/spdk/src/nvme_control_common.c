@@ -131,7 +131,7 @@ clean_ret(struct ret_t *ret)
 	struct ctrlr_t	*cnext;
 	struct ns_t	*nnext;
 
-	while ((ret) && (ret->ctrlrs)) {
+	while (ret && (ret->ctrlrs)) {
 		while (ret->ctrlrs->nss) {
 			nnext = ret->ctrlrs->nss->next;
 			free(ret->ctrlrs->nss);

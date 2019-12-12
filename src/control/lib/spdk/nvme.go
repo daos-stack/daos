@@ -248,22 +248,18 @@ func cleanReturn(retPtr *C.struct_ret_t) {
 		ns := ctrlr.nss
 		for ns != nil {
 			nsNext := ns.next
-			fmt.Printf("free n\n")
 			C.free(unsafe.Pointer(ns))
 			ns = nsNext
 		}
 
 		if ctrlr.dev_health != nil {
-			fmt.Printf("free h\n")
 			C.free(unsafe.Pointer(ctrlr.dev_health))
 		}
 
-		fmt.Printf("free c\n")
 		C.free(unsafe.Pointer(ctrlr))
 		ctrlr = ctrlrNext
 	}
 
-	fmt.Printf("free r\n")
 	C.free(unsafe.Pointer(retPtr))
 	retPtr = nil
 }
