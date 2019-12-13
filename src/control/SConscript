@@ -136,6 +136,10 @@ def scons():
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
     denv['ENV']['GOBIN'] = join(gopath, "bin")
 
+    prereqs.require(denv, 'cart')
+
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$CART_PREFIX/include"))
+
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
     install_go_bin(denv, gosrc, gopath, None, "daos_admin", "daos_admin")
@@ -167,9 +171,11 @@ def scons():
                        " -lspdk_sock -lspdk_log -lspdk_notify" + \
                        " -lspdk_blob_bdev -lnuma -ldl -lisal")
 
-    senv.AppendENVPath("CGO_CFLAGS", senv.subst("-I$SPDK_PREFIX/include "
-                                                "-I$HWLOC_PREFIX/include "
-                                                "-I$OFI_PREFIX/include"))
+    senv.AppendENVPath("CGO_CFLAGS",
+                       senv.subst("-I$SPDK_PREFIX/include "
+                                  "-I$HWLOC_PREFIX/include "
+                                  "-I$OFI_PREFIX/include"),
+                       sep=" ")
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.
     senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),

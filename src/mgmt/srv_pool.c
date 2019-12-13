@@ -1007,3 +1007,56 @@ out_svc:
 out:
 	return rc;
 }
+
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+		      daos_prop_t **result)
+{
+	int              rc;
+	d_rank_list_t   *ranks;
+	struct mgmt_svc	*svc;
+	size_t           i;
+	daos_prop_t	*res_prop;
+
+	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
+		D_ERROR("invalid property\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_DEBUG(DB_MGMT, "Setting property for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_set_prop(pool_uuid, ranks, prop);
+	if (rc != 0)
+		goto out_ranks;
+
+	res_prop = daos_prop_alloc(prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++)
+		res_prop->dpp_entries[i].dpe_type =
+			prop->dpp_entries[i].dpe_type;
+
+	rc = ds_pool_svc_get_prop(pool_uuid, ranks, res_prop);
+	if (rc != 0)
+		goto out_resprop;
+
+	*result = res_prop;
+	goto out_ranks;
+
+out_resprop:
+	daos_prop_free(res_prop);
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
