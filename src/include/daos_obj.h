@@ -109,24 +109,23 @@ enum {
 #define IO_FLAGS_COND_BITS	8
 
 enum {
-	/** Flag on Object */
-	DAOS_OP_OBJ		= (1 << 0),
-	/** Flag on dkey operation */
-	DAOS_OP_DKEY		= (1 << 1),
-	/** Flag on akey operation */
-	DAOS_OP_AKEY		= (1 << 2),
-	/** Flag on recx operation */
-	DAOS_OP_RECX		= (1 << 3),
+	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	DAOS_COND_DKEY_INSERT	= (1 << 0),
+	/* Conditional Op: Update dkey if it exists, fail otherwise */
+	DAOS_COND_DKEY_UPDATE	= (1 << 1),
+	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
+	DAOS_COND_DKEY_FETCH	= (1 << 2),
+	/* Conditional Op: Punch dkey if it exists, fail otherwise */
+	DAOS_COND_DKEY_PUNCH	= (1 << 3),
 
-	/** Conditional Insert if entity does not exist, fail otherwise. */
-	DAOS_COND_INSERT	= (1 << 4),
-	/** Conditional Update if entity exists, fail otherwise. */
-	DAOS_COND_UPDATE	= (1 << 5),
-	/** Conditional Fetch if entity exists, fail otherwise. */
-	DAOS_COND_FETCH		= (1 << 6),
-	/** Conditional Punch if entity exists, fail otherwise. */
-	DAOS_COND_PUNCH		= (1 << 7),
-
+	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	DAOS_COND_AKEY_INSERT	= (1 << 4),
+	/* Conditional Op: Update akey if it exists, fail otherwise */
+	DAOS_COND_AKEY_UPDATE	= (1 << 5),
+	/* Conditional Op: Fetch akey if it exists, fail otherwise */
+	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/* Conditional Op: Punch akey if it exists, fail otherwise */
+	DAOS_COND_AKEY_PUNCH	= (1 << 7),
 	/** Mask for convenience */
 	DAOS_OF_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
@@ -417,7 +416,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_event_t *ev);
 
 /**
@@ -444,7 +443,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint32_t flags,
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev);
 
 /**
@@ -472,7 +471,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint32_t flags,
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
 		     daos_event_t *ev);
 
@@ -565,7 +564,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
 
@@ -621,7 +620,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint32_t flags,
  *					aggregated. Update result is undefined.
  */
 int
-daos_obj_update(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev);
 
@@ -826,7 +825,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 

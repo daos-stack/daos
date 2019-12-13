@@ -80,12 +80,13 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 }
 
 int
-daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+	       daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_punch_task_create(oh, th, ev, NULL, &task);
+	rc = dc_obj_punch_task_create(oh, th, flags, ev, NULL, &task);
 	if (rc)
 		return rc;
 
@@ -93,25 +94,13 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
 }
 
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
-		     daos_key_t *dkeys, daos_event_t *ev)
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	if (dkeys == NULL) {
-		D_ERROR("NULL dkeys\n");
-		return -DER_INVAL;
-	} else if (nr != 1) {
-		/* TODO: create multiple tasks for punch of multiple dkeys */
-		D_ERROR("Can't punch multiple dkeys for now\n");
-		return -DER_INVAL;
-	} else if (dkeys[0].iov_buf == NULL || dkeys[0].iov_len == 0) {
-		D_ERROR("invalid dkey (NULL iov_buf or zero iov_len.\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_obj_punch_dkeys_task_create(oh, th, nr, dkeys, ev, NULL,
+	rc = dc_obj_punch_dkeys_task_create(oh, th, flags, nr, dkeys, ev, NULL,
 					    &task);
 	if (rc)
 		return rc;
@@ -120,18 +109,14 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
 }
 
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
+		     daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	if (dkey == NULL || dkey->iov_buf == NULL || dkey->iov_len == 0) {
-		D_ERROR("NULL or invalid dkey\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_obj_punch_akeys_task_create(oh, th, dkey, nr, akeys, ev,
+	rc = dc_obj_punch_akeys_task_create(oh, th, flags, dkey, nr, akeys, ev,
 					    NULL, &task);
 	if (rc)
 		return rc;
@@ -148,7 +133,7 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 }
 
 int
-daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev)
 {
@@ -164,14 +149,14 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 }
 
 int
-daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	       daos_iom_t *maps, daos_event_t *ev)
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, dkey, nr, iods, sgls,
+	rc = dc_obj_fetch_task_create(oh, th, flags, dkey, nr, iods, sgls,
 				      maps, ev, NULL, &task);
 	if (rc)
 		return rc;
@@ -180,14 +165,14 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 }
 
 int
-daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-		daos_event_t *ev)
+daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		d_sg_list_t *sgls, daos_event_t *ev)
 {
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_update_task_create(oh, th, dkey, nr, iods, sgls,
+	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, iods, sgls,
 				       ev, NULL, &task);
 	if (rc)
 		return rc;

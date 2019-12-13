@@ -2751,7 +2751,23 @@ dc_obj_punch_dkeys(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (args->dkeys == NULL) {
+		D_ERROR("NULL dkeys\n");
+		D_GOTO(err, rc =  -DER_INVAL);
+	} else if (args->nr != 1) {
+		/* TODO: create multiple tasks for punch of multiple dkeys */
+		D_ERROR("Can't punch multiple dkeys for now\n");
+		D_GOTO(err, rc =  -DER_INVAL);
+	} else if (args->dkeys[0].iov_buf == NULL ||
+		   args->dkeys[0].iov_len == 0) {
+		D_ERROR("invalid dkey (NULL iov_buf or zero iov_len.\n");
+		D_GOTO(err, rc =  -DER_INVAL);
+	}
+
 	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH_DKEYS, args);
+err:
+	tse_task_complete(task, rc);
+	return rc;
 }
 
 int
@@ -2762,7 +2778,16 @@ dc_obj_punch_akeys(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (args->dkey == NULL || args->dkey->iov_buf == NULL ||
+	    args->dkey->iov_len == 0) {
+		D_ERROR("NULL or invalid dkey\n");
+		D_GOTO(err, rc =  -DER_INVAL);
+	}
+
 	return obj_punch_internal(task, DAOS_OBJ_RPC_PUNCH_AKEYS, args);
+err:
+	tse_task_complete(task, rc);
+	return rc;
 }
 
 static int
