@@ -34,9 +34,29 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
+	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+}
+
+type leaderQueryCmd struct {
+	logCmd
+	cfgCmd
+	connectedCmd
+}
+
+func (cmd *leaderQueryCmd) Execute(_ []string) error {
+	resp, err := cmd.conns.LeaderQuery(client.LeaderQueryReq{
+		System: cmd.config.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
+	}
+
+	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
+		strings.Join(resp.Replicas, ", "))
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.
@@ -94,6 +114,18 @@ type systemListPoolsCmd struct {
 	cfgCmd
 }
 
+func formatPoolSvcReps(svcReps []uint32) string {
+	var b strings.Builder
+	for i, rep := range svcReps {
+		if i != 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, "%d", rep)
+	}
+
+	return b.String()
+}
+
 // Execute is run when systemListPoolsCmd activates
 func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	if cmd.config == nil {
@@ -117,24 +149,14 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
 	var table []TableRow
 
-	var b strings.Builder
 	for _, pool := range resp.Pools {
 		row := TableRow{uuidTitle: pool.UUID}
 
-		for i, rep := range pool.SvcReplicas {
-			if i != 0 {
-				b.WriteString(",")
-			}
-			fmt.Fprintf(&b, "%d", rep)
-		}
-
 		if len(pool.SvcReplicas) != 0 {
-			row[svcRepTitle] = b.String()
+			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
 		}
 
 		table = append(table, row)
-
-		b.Reset()
 	}
 
 	cmd.log.Info(formatter.Format(table))

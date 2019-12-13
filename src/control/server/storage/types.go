@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"sort"
 
-	bytesize "github.com/inhies/go-bytesize"
+	"github.com/inhies/go-bytesize"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -94,14 +94,12 @@ type (
 		ReliabilityWarn bool
 		ReadOnlyWarn    bool
 		VolatileWarn    bool
-		CtrlrPciAddr    string
 	}
 
 	// NvmeNamespace represents an individual NVMe namespace on a device.
 	NvmeNamespace struct {
-		ID           int32
-		Size         int32
-		CtrlrPciAddr string
+		ID   int32
+		Size int32
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
@@ -193,13 +191,13 @@ func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *NvmeController) {
 		return
 	}
 
-	fmt.Fprintf(buf, "\t\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
-		c.PciAddr, c.Serial, c.Model, c.FwRev, c.SocketID)
-
-	for _, ns := range c.Namespaces {
-		fmt.Fprintf(buf, "\t\t\tNamespace: id:%d capacity:%s\n", ns.ID,
-			bytesize.GB*bytesize.New(float64(ns.Size)))
+	tCap := bytesize.New(0)
+	for _, n := range c.Namespaces {
+		tCap += bytesize.GB * bytesize.New(float64(n.Size))
 	}
+
+	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		c.PciAddr, c.Model, c.FwRev, c.SocketID, tCap)
 }
 
 func (ncs NvmeControllers) String() string {
@@ -209,6 +207,8 @@ func (ncs NvmeControllers) String() string {
 		fmt.Fprint(buf, "\t\tnone\n")
 		return buf.String()
 	}
+
+	sort.Slice(ncs, func(i, j int) bool { return ncs[i].PciAddr < ncs[j].PciAddr })
 
 	for _, ctrlr := range ncs {
 		ncs.ctrlrDetail(buf, ctrlr)
