@@ -229,18 +229,6 @@ func TestStartOptions(t *testing.T) {
 				return cfg.WithSystemName("foo")
 			},
 		},
-		"Attach Info (short)": {
-			argList: []string{"-a", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
-		"Attach Info (long)": {
-			argList: []string{"--attach_info=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
 		"SocketDir (short)": {
 			argList: []string{"-d", "/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {

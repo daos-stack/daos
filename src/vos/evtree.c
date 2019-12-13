@@ -285,7 +285,6 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 */
 		size *= 3;
 		ent_array->ea_max = size;
-		ent_array->ea_inob = tcx->tc_inob;
 	}
 	if (ent_array->ea_ent_nr == ent_array->ea_size) {
 		/** We should never exceed the maximum number of entries. */
@@ -1920,6 +1919,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		return 0; /* empty tree */
 
 	evt_tcx_reset_trace(tcx);
+	ent_array->ea_inob = tcx->tc_inob;
 
 	level = at = 0;
 	nd_off = tcx->tc_root->tr_node;

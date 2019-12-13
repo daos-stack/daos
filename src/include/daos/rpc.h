@@ -213,7 +213,8 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 static inline bool
 daos_rpc_retryable_rc(int rc)
 {
-	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT;
+	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
+	       rc == -DER_GRPVER;
 }
 
 #endif /* __DRPC_API_H__ */

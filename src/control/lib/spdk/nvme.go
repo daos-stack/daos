@@ -35,6 +35,7 @@ package spdk
 #include "spdk/nvme.h"
 #include "spdk/env.h"
 #include "include/nvme_control.h"
+#include "include/nvme_control_common.h"
 */
 import "C"
 
@@ -46,9 +47,9 @@ import (
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover() ([]Controller, []Namespace, []DeviceHealth, error)
+	Discover() ([]Controller, error)
 	// Format NVMe controller namespaces
-	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
+	Format(ctrlrPciAddr string) error
 	// Cleanup NVMe object references
 	Cleanup()
 }
@@ -62,11 +63,13 @@ type Nvme struct{}
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ctrlr_t
 type Controller struct {
-	Model    string
-	Serial   string
-	PCIAddr  string
-	FWRev    string
-	SocketID int32
+	Model      string
+	Serial     string
+	PCIAddr    string
+	FWRev      string
+	SocketID   int32
+	Namespaces []*Namespace
+	Health     *DeviceHealth
 }
 
 // Namespace struct mirrors C.struct_ns_t and
@@ -75,9 +78,8 @@ type Controller struct {
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ns_t
 type Namespace struct {
-	ID           int32
-	Size         int32
-	CtrlrPciAddr string
+	ID   int32
+	Size int32
 }
 
 // DeviceHealth struct mirrors C.struct_dev_health_t
@@ -98,7 +100,6 @@ type DeviceHealth struct {
 	ReliabilityWarn bool
 	ReadOnlyWarn    bool
 	VolatileWarn    bool
-	CtrlrPciAddr    string
 }
 
 // Discover calls C.nvme_discover which returns
@@ -106,38 +107,39 @@ type DeviceHealth struct {
 // dev_health_t structs.
 // These are converted to slices of Controller, Namespace
 // and DeviceHealth structs.
-func (n *Nvme) Discover() ([]Controller, []Namespace, []DeviceHealth, error) {
+func (n *Nvme) Discover() ([]Controller, error) {
 	failLocation := "NVMe Discover(): C.nvme_discover"
 
 	if retPtr := C.nvme_discover(); retPtr != nil {
-		return processDiscoverReturn(retPtr, failLocation)
+		return processReturn(retPtr, failLocation)
 	}
 
-	return nil, nil, nil, fmt.Errorf(
-		"%s unexpectedly returned NULL", failLocation)
+	return nil, fmt.Errorf("%s unexpectedly returned NULL", failLocation)
 }
 
 // Format device at given pci address, destructive operation!
-func (n *Nvme) Format(ctrlrPciAddr string) ([]Controller, []Namespace, error) {
+func (n *Nvme) Format(ctrlrPciAddr string) error {
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
 	failLocation := "NVMe Format(): C.nvme_format"
 
 	retPtr := C.nvme_format(csPci)
-	if retPtr != nil {
-		return processReturn(retPtr, failLocation)
+	if retPtr == nil {
+		return fmt.Errorf("%s unexpectedly returned NULL",
+			failLocation)
+	}
+	if retPtr.rc != 0 {
+		return fmt.Errorf("%s failed, rc: %d, %s",
+			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 
-	return nil, nil, fmt.Errorf(
-		"%s unexpectedly returned NULL", failLocation)
+	return nil
 }
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
 // Retrieves image from path and updates given firmware slot/register.
-func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) (
-	[]Controller, []Namespace, error) {
-
+func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
@@ -151,8 +153,7 @@ func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) (
 		return processReturn(retPtr, failLocation)
 	}
 
-	return nil, nil, fmt.Errorf(
-		"%s unexpectedly returned NULL", failLocation)
+	return nil, fmt.Errorf("%s unexpectedly returned NULL", failLocation)
 }
 
 // Cleanup unlinks and detaches any controllers or namespaces,
@@ -172,8 +173,9 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
-func c2GoDeviceHealth(pciAddr string, health *C.struct_dev_health_t) DeviceHealth {
-	return DeviceHealth{
+// c2GoDeviceHealth is a private translation function
+func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
+	return &DeviceHealth{
 		Temp:            uint32(health.temperature),
 		TempWarnTime:    uint32(health.warn_temp_time),
 		TempCritTime:    uint32(health.crit_temp_time),
@@ -188,93 +190,46 @@ func c2GoDeviceHealth(pciAddr string, health *C.struct_dev_health_t) DeviceHealt
 		ReliabilityWarn: bool(health.dev_reliabilty_warning),
 		ReadOnlyWarn:    bool(health.read_only_warning),
 		VolatileWarn:    bool(health.volatile_mem_warning),
-		CtrlrPciAddr:    pciAddr,
 	}
 }
 
 // c2GoNamespace is a private translation function
-func c2GoNamespace(ns *C.struct_ns_t) Namespace {
-	return Namespace{
-		ID:           int32(ns.id),
-		Size:         int32(ns.size),
-		CtrlrPciAddr: C.GoString(&ns.ctrlr_pci_addr[0]),
+func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
+	return &Namespace{
+		ID:   int32(ns.id),
+		Size: int32(ns.size),
 	}
 }
 
 // processReturn parses return structs
-func processReturn(retPtr *C.struct_ret_t, failLocation string) (
-	[]Controller, []Namespace, error) {
-
-	var ctrlrs []Controller
-	var nss []Namespace
-
+func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Controller, err error) {
 	defer C.free(unsafe.Pointer(retPtr))
 
-	if retPtr.rc == 0 {
-		ctrlrPtr := retPtr.ctrlrs
-		for ctrlrPtr != nil {
-			defer C.free(unsafe.Pointer(ctrlrPtr))
-			ctrlrs = append(ctrlrs, c2GoController(ctrlrPtr))
-			ctrlrPtr = ctrlrPtr.next
-		}
-
-		nsPtr := retPtr.nss
-		for nsPtr != nil {
-			defer C.free(unsafe.Pointer(nsPtr))
-			nss = append(nss, c2GoNamespace(nsPtr))
-			nsPtr = nsPtr.next
-		}
-
-		return ctrlrs, nss, nil
+	if retPtr.rc != 0 {
+		return nil, fmt.Errorf("%s failed, rc: %d, %s",
+			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 
-	return nil, nil, fmt.Errorf(
-		"%s failed, rc: %d, %s",
-		failLocation,
-		retPtr.rc,
-		C.GoString(&retPtr.err[0]))
-}
+	ctrlrPtr := retPtr.ctrlrs
+	for ctrlrPtr != nil {
+		defer C.free(unsafe.Pointer(ctrlrPtr))
 
-// processDiscoverReturn parses return structs, including device health struct
-func processDiscoverReturn(retPtr *C.struct_ret_t, failLocation string) (
-	[]Controller, []Namespace, []DeviceHealth, error) {
-
-	var ctrlrs []Controller
-	var nss []Namespace
-	var devs []DeviceHealth
-
-	defer C.free(unsafe.Pointer(retPtr))
-
-	if retPtr.rc == 0 {
-		ctrlrPtr := retPtr.ctrlrs
-		for ctrlrPtr != nil {
-			defer C.free(unsafe.Pointer(ctrlrPtr))
-			ctrlr := c2GoController(ctrlrPtr)
-			ctrlrs = append(ctrlrs, ctrlr)
-			healthPtr := ctrlrPtr.dev_health
-			if healthPtr == nil {
-				ctrlrPtr = ctrlrPtr.next
-				continue
+		ctrlr := c2GoController(ctrlrPtr)
+		if nsPtr := ctrlrPtr.nss; nsPtr != nil {
+			for nsPtr != nil {
+				defer C.free(unsafe.Pointer(nsPtr))
+				ctrlr.Namespaces = append(ctrlr.Namespaces, c2GoNamespace(nsPtr))
+				nsPtr = nsPtr.next
 			}
-
+		}
+		if healthPtr := ctrlrPtr.dev_health; healthPtr != nil {
 			defer C.free(unsafe.Pointer(healthPtr))
-			devs = append(devs, c2GoDeviceHealth(ctrlr.PCIAddr, healthPtr))
-			ctrlrPtr = ctrlrPtr.next
+			ctrlr.Health = c2GoDeviceHealth(healthPtr)
 		}
+		ctrlrs = append(ctrlrs, ctrlr)
 
-		nsPtr := retPtr.nss
-		for nsPtr != nil {
-			defer C.free(unsafe.Pointer(nsPtr))
-			nss = append(nss, c2GoNamespace(nsPtr))
-			nsPtr = nsPtr.next
-		}
-
-		return ctrlrs, nss, devs, nil
+		ctrlrPtr = ctrlrPtr.next
 	}
 
-	return nil, nil, nil, fmt.Errorf(
-		"%s failed, rc: %d, %s",
-		failLocation,
-		retPtr.rc,
-		C.GoString(&retPtr.err[0]))
+	return ctrlrs, nil
 }
