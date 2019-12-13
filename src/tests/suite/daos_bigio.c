@@ -29,7 +29,7 @@
 #include <daos/checksum.h>
 #include "daos_test.h"
 
-#define	POOL_SIZE_50G	((1024 * 1024 * 1024) * 50)
+#define	POOL_SIZE_32G	(4ULL << 33)
 
 static void
 bigio_contig(void **state)
@@ -485,7 +485,7 @@ int
 bigio_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, false,
-		POOL_SIZE_50G, NULL);
+		POOL_SIZE_32G, NULL);
 }
 
 int

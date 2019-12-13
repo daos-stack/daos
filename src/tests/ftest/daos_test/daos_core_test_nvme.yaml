@@ -2,8 +2,8 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A 
-    - server-B 
+    - server-A
+    - server-B
 timeout: 600
 server_config:
   name: daos_server
@@ -16,9 +16,9 @@ daos_tests:
   num_clients:
     num_clients: 1
   num_replicas:
-    num_replicas: 1 
-  Tests: 
+    num_replicas: 1
+  Tests:
     test_B:
-      daos_test: B 
+      daos_test: B
       test_name: DAOS Big IO tests
       test_timeout: 600

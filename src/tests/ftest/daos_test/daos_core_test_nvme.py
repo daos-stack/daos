@@ -24,6 +24,7 @@
 
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestWithNVMe(DaosCoreBase):
     """
     Runs just the daos_test tests with NVME
