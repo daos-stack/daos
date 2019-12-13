@@ -313,6 +313,66 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// resolvePoolPropVal resolves string-based property names and values to their C equivalents.
+func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, error) {
+	newReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.Uuid,
+	}
+
+	propName := strings.TrimSpace(req.GetName())
+	switch strings.ToLower(propName) {
+	case "reclaim":
+		newReq.SetPropertyNumber(drpc.PoolPropertySpaceReclaim)
+
+		recType := strings.TrimSpace(req.GetStrval())
+		switch strings.ToLower(recType) {
+		case "disabled":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimDisabled)
+		case "lazy":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimLazy)
+		case "time":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimTime)
+		default:
+			return nil, errors.Errorf("unhandled reclaim type %q", recType)
+		}
+
+		return newReq, nil
+	default:
+		return nil, errors.Errorf("unhandled pool property %q", propName)
+	}
+}
+
+// PoolSetProp forwards a request to the I/O server to set a pool property.
+func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	newReq, err := resolvePoolPropVal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolSetProp, newReq)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolSetPropResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, resp:%+v", *resp)
+
+	return resp, nil
+}
+
 // PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", *req)

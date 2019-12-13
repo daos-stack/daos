@@ -568,6 +568,91 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
+void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolSetPropReq *req         = NULL;
+	Mgmt__PoolSetPropResp resp        = MGMT__POOL_SET_PROP_RESP__INIT;
+	daos_prop_t          *new_prop    = NULL;
+	char                 *out_str_val = NULL;
+	uuid_t                uuid;
+	uint8_t              *body;
+	size_t                len;
+	int                   rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_set_prop_req__unpack(NULL, drpc_req->body.len,
+					     drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool setprop)\n");
+		return;
+	}
+
+	D_INFO("Received request to set pool property on %s\n", req->uuid);
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	new_prop = daos_prop_alloc(1);
+	if (new_prop == NULL) {
+		D_ERROR("Failed to allocate daos property\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (req->property_case != MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER) {
+		D_ERROR("Pool property request must be numeric\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	new_prop->dpp_entries[0].dpe_type = req->number;
+
+	switch (req->value_case) {
+	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
+		D_ASPRINTF(out_str_val, "%s", req->strval);
+		if (out_str_val == NULL) {
+			D_ERROR("Failed to copy property string\n");
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		new_prop->dpp_entries[0].dpe_str = out_str_val;
+		break;
+	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
+		new_prop->dpp_entries[0].dpe_val = req->numval;
+		break;
+	default:
+		D_ERROR("Pool property request with no value (%d)\n",
+				req->value_case);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_pool_set_prop(uuid, new_prop);
+	if (rc != 0) {
+		D_ERROR("Failed to set pool property on %s: %d\n",
+				req->uuid, rc);
+		goto out;
+	}
+
+out:
+	daos_prop_free(new_prop);
+	D_FREE(out_str_val);
+
+	resp.status = rc;
+	len         = mgmt__pool_set_prop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_set_prop_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_set_prop_req__free_unpacked(req, NULL);
+}
+
 static void
 free_ace_list(char **list, size_t len)
 {

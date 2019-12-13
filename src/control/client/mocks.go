@@ -219,6 +219,10 @@ func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDes
 	return &mgmtpb.PoolDestroyResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq, _ ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
+	return &mgmtpb.PoolSetPropResp{}, nil
+}
+
 // returnACLResult returns the mock ACL results - either an error or an ACLResp
 func (m *mockMgmtSvcClient) returnACLResult() (*mgmtpb.ACLResp, error) {
 	if m.ACLRet.err != nil {

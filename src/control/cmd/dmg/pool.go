@@ -51,6 +51,7 @@ type PoolCmd struct {
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -86,6 +87,36 @@ type PoolDestroyCmd struct {
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (d *PoolDestroyCmd) Execute(args []string) error {
 	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
+}
+
+// PoolSetPropCmd represents the command to set a property on a pool.
+type PoolSetPropCmd struct {
+	logCmd
+	connectedCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
+	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
+}
+
+// Execute is run when PoolSetPropCmd subcommand is activated.
+func (c *PoolSetPropCmd) Execute(_ []string) error {
+	req := client.PoolSetPropReq{
+		UUID:     c.UUID,
+		Property: c.Property,
+	}
+
+	req.SetString(c.Value)
+	if numVal, err := strconv.ParseUint(c.Value, 10, 64); err == nil {
+		req.SetNumber(numVal)
+	}
+
+	if err := c.conns.PoolSetProp(req); err != nil {
+		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	// TODO: send the set value back in the resp to confirm?
+	c.log.Infof("pool set-prop succeeded (%s=%q)", req.Property, req.Value)
+	return nil
 }
 
 // PoolGetACLCmd represents the command to fetch an Access Control List of a

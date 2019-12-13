@@ -131,6 +131,57 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	return nil
 }
 
+type PoolSetPropReq struct {
+	UUID     string
+	Property string
+	Value    interface{}
+}
+
+func (pspr *PoolSetPropReq) SetString(strVal string) {
+	pspr.Value = strVal
+}
+
+func (pspr *PoolSetPropReq) SetNumber(numVal uint64) {
+	pspr.Value = numVal
+}
+
+func (c *connList) PoolSetProp(req PoolSetPropReq) error {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return err
+	}
+
+	rpcReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.UUID,
+	}
+	rpcReq.SetPropertyName(req.Property)
+
+	switch val := req.Value.(type) {
+	case string:
+		rpcReq.SetValueString(val)
+	case uint64:
+		rpcReq.SetValueNumber(val)
+	default:
+		return errors.Errorf("unhandled property value: %q", val)
+	}
+
+	c.log.Debugf("DAOS pool setprop request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolSetProp(context.Background(), rpcReq)
+	if err != nil {
+		return err
+	}
+
+	c.log.Debugf("DAOS pool setprop response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return nil
+}
+
 // PoolGetACLReq contains the input parameters for PoolGetACL
 type PoolGetACLReq struct {
 	UUID string // pool UUID

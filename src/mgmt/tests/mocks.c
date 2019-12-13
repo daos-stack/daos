@@ -263,6 +263,24 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 	}
 }
 
+int				ds_mgmt_set_prop_return;
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop)
+{
+	return ds_mgmt_set_prop_return;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_setup(void)
+{
+	ds_mgmt_set_prop_return = 0;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_teardown(void)
+{
+}
+
 /*
  * Mock ds_mgmt_pool_list_cont
  */

@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	. "github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
@@ -260,6 +261,38 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Set string pool property",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name reclaim --value lazy",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Property: "reclaim",
+					Value:    "lazy",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set numeric pool property",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name answer --value 42",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Property: "answer",
+					Value:    42,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool property missing value",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name whoops",
+			"",
+			errors.New("required flag"),
 		},
 		{
 			"Get pool ACL",

@@ -84,12 +84,14 @@ const (
 	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
-	// MethodListCont is a ModuleMgmt method
 	// MethodDevStateQuery is a ModuleMgmt method
 	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	// MethodListContainers is a ModuleMgmt method
 	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	// MethodPoolSetProp defines a method for setting a pool property
+	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 )
 
 const (

@@ -29,11 +29,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -727,6 +729,99 @@ func TestMgmtSvc_LeaderQuery(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PoolSetProp(t *testing.T) {
+	withName := func(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
+		r.SetPropertyName(n)
+		return r
+	}
+	withNumber := func(r *mgmtpb.PoolSetPropReq, n uint32) *mgmtpb.PoolSetPropReq {
+		r.SetPropertyNumber(n)
+		return r
+	}
+	withStrVal := func(r *mgmtpb.PoolSetPropReq, v string) *mgmtpb.PoolSetPropReq {
+		r.SetValueString(v)
+		return r
+	}
+	withNumVal := func(r *mgmtpb.PoolSetPropReq, v uint64) *mgmtpb.PoolSetPropReq {
+		r.SetValueNumber(v)
+		return r
+	}
+	lastCall := func(svc *mgmtSvc) *drpc.Call {
+		mi, _ := svc.harness.GetMSLeaderInstance()
+		if mi == nil || mi._drpcClient == nil {
+			return nil
+		}
+		return mi._drpcClient.(*mockDrpcClient).SendMsgInputCall
+	}
+
+	for name, tc := range map[string]struct {
+		req     *mgmtpb.PoolSetPropReq
+		expReq  *mgmtpb.PoolSetPropReq
+		expResp *mgmtpb.PoolSetPropResp
+		expErr  error
+	}{
+		"unhandled property": {
+			req:    withName(new(mgmtpb.PoolSetPropReq), "unknown"),
+			expErr: errors.New("unhandled pool property"),
+		},
+		"reclaim-unknown": {
+			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "unknown"),
+			expErr: errors.New("unhandled reclaim type"),
+		},
+		"reclaim-disabled": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimDisabled,
+			),
+			expResp: &mgmtpb.PoolSetPropResp{},
+		},
+		"reclaim-lazy": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "lazy"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimLazy,
+			),
+			expResp: &mgmtpb.PoolSetPropResp{},
+		},
+		"reclaim-time": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "time"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimTime,
+			),
+			expResp: &mgmtpb.PoolSetPropResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mgmtSvc := newTestMgmtSvc(log)
+			setupMockDrpcClient(mgmtSvc, tc.expResp, nil)
+
+			gotResp, gotErr := mgmtSvc.PoolSetProp(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			// Also verify that the string values are properly resolved to C identifiers.
+			gotReq := new(mgmtpb.PoolSetPropReq)
+			if err := proto.Unmarshal(lastCall(mgmtSvc).Body, gotReq); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expReq, gotReq); diff != "" {
+				t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
