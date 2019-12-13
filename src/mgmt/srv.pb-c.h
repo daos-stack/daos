@@ -18,6 +18,8 @@ PROTOBUF_C__BEGIN_DECLS
 typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
+typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
+typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
@@ -106,6 +108,31 @@ struct  _Mgmt__JoinResp
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
     , 0, 0, MGMT__JOIN_RESP__STATE__IN }
+
+
+struct  _Mgmt__LeaderQueryReq
+{
+  ProtobufCMessage base;
+  /*
+   * System name.
+   */
+  char *system;
+};
+#define MGMT__LEADER_QUERY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__LeaderQueryResp
+{
+  ProtobufCMessage base;
+  char *currentleader;
+  size_t n_replicas;
+  char **replicas;
+};
+#define MGMT__LEADER_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
 struct  _Mgmt__GetAttachInfoReq
@@ -258,6 +285,44 @@ Mgmt__JoinResp *
 void   mgmt__join_resp__free_unpacked
                      (Mgmt__JoinResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__LeaderQueryReq methods */
+void   mgmt__leader_query_req__init
+                     (Mgmt__LeaderQueryReq         *message);
+size_t mgmt__leader_query_req__get_packed_size
+                     (const Mgmt__LeaderQueryReq   *message);
+size_t mgmt__leader_query_req__pack
+                     (const Mgmt__LeaderQueryReq   *message,
+                      uint8_t             *out);
+size_t mgmt__leader_query_req__pack_to_buffer
+                     (const Mgmt__LeaderQueryReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__LeaderQueryReq *
+       mgmt__leader_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__leader_query_req__free_unpacked
+                     (Mgmt__LeaderQueryReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__LeaderQueryResp methods */
+void   mgmt__leader_query_resp__init
+                     (Mgmt__LeaderQueryResp         *message);
+size_t mgmt__leader_query_resp__get_packed_size
+                     (const Mgmt__LeaderQueryResp   *message);
+size_t mgmt__leader_query_resp__pack
+                     (const Mgmt__LeaderQueryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__leader_query_resp__pack_to_buffer
+                     (const Mgmt__LeaderQueryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__LeaderQueryResp *
+       mgmt__leader_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__leader_query_resp__free_unpacked
+                     (Mgmt__LeaderQueryResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoReq methods */
 void   mgmt__get_attach_info_req__init
                      (Mgmt__GetAttachInfoReq         *message);
@@ -367,6 +432,12 @@ typedef void (*Mgmt__JoinReq_Closure)
 typedef void (*Mgmt__JoinResp_Closure)
                  (const Mgmt__JoinResp *message,
                   void *closure_data);
+typedef void (*Mgmt__LeaderQueryReq_Closure)
+                 (const Mgmt__LeaderQueryReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__LeaderQueryResp_Closure)
+                 (const Mgmt__LeaderQueryResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoReq_Closure)
                  (const Mgmt__GetAttachInfoReq *message,
                   void *closure_data);
@@ -395,6 +466,8 @@ extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
