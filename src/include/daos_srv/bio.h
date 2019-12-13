@@ -216,7 +216,8 @@ void bio_register_ract_ops(struct bio_reaction_ops *ops);
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id, int mem_size);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+		  int mem_size);
 
 /**
  * Global NVMe finilization.

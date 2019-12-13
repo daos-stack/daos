@@ -90,7 +90,8 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id, int mem_size)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+	      int mem_size)
 {
 	char		*env;
 	int		rc, fd;
@@ -864,6 +865,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	char			 th_name[32];
 	int			 rc;
 
+
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (nvme_glb.bd_nvme_conf == NULL) {
 		*pctxt = NULL;
@@ -922,11 +924,11 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_SIZE_DEFAULT) {
 			opts.mem_size = nvme_glb.bd_mem_size;
-			D_PRINT("Requesting %d MB memory allocation and" \
+			D_PRINT("Requesting %d MB memory allocation and"
 				" expecting SPDK primary process mode\n",
 				opts.mem_size);
 		} else {
-			D_PRINT("Expecting SPDK auto-detection of secondary" \
+			D_PRINT("Expecting SPDK auto-detection of secondary"
 				" process mode\n");
 		}
 
