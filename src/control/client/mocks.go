@@ -303,6 +303,10 @@ func newMockMgmtSvcClient(getACLResult *mockACLResult, listPoolsResult *mockList
 	}
 }
 
+func (m *mockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq, _ ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
+	return &mgmtpb.LeaderQueryResp{}, nil
+}
+
 // implement mock/stub behaviour for Control
 type mockControl struct {
 	address    string
