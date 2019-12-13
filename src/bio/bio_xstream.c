@@ -863,7 +863,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc;
-	void			*spdk_env_context = NULL;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (nvme_glb.bd_nvme_conf == NULL) {
@@ -1015,7 +1014,6 @@ out:
 		bio_xsctxt_free(ctxt);
 
 	*pctxt = (rc != 0) ? NULL : ctxt;
-	free (spdk_env_context);
 	return rc;
 }
 
