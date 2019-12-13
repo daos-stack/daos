@@ -266,8 +266,7 @@ def define_components(reqs):
                           "install"],
                 headers=["cart/api.h", "gurt/list.h"],
                 libs=["cart", "gurt"],
-                requires=['mercury', 'uuid', 'crypto', 'ompi',
-                          'boost', 'yaml'],
+                requires=['mercury', 'uuid', 'crypto', 'boost', 'yaml'],
                 package='cart-devel' if inst(reqs, 'cart') else None)
 
     reqs.define('fio',
