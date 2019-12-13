@@ -3,8 +3,8 @@
 server_config:
    name: scott_server
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 querytests:
    handles: !mux
      goodhandle:

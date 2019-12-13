@@ -202,6 +202,10 @@ class ServerYamlParameters(YamlParameters):
             super(ServerYamlParameters.PerServerYamlParameters, self).__init__(
                 "/run/server_config/servers/*")
 
+            # Use environment variables to get default parameters
+            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_port = int(os.environ.get("OFI_PORT", 31416))
+
             # Parameters
             #   targets:                count of VOS targets
             #   first_core:             starting index for targets
@@ -220,9 +224,8 @@ class ServerYamlParameters(YamlParameters):
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 2)
-            self.fabric_iface = BasicParameter(
-                None, os.getenv("OFI_INTERFACE", "eth0"))
-            self.fabric_iface_port = BasicParameter(None, 31416)
+            self.fabric_iface = BasicParameter(None, default_interface)
+            self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
             self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(

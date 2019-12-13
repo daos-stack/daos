@@ -508,7 +508,8 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	return resp, nil
 }
 
-// ListPools implements the method defined for the Management Service.
+// ListPools forwards a gRPC request to the DAOS IO server to fetch a list of
+// all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 
@@ -530,4 +531,35 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	if len(svc.harness.Instances()) == 0 {
+		return nil, errors.New("no I/O servers configured; can't determine leader")
+	}
+
+	instance := svc.harness.Instances()[0]
+	sb := instance.getSuperblock()
+	if sb == nil {
+		return nil, errors.New("no I/O superblock found; can't determine leader")
+	}
+
+	if req.System != sb.System {
+		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
+			sb.System, req.System)
+	}
+
+	leaderAddr, err := instance.msClient.LeaderAddress()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to determine current leader address")
+	}
+
+	return &mgmtpb.LeaderQueryResp{
+		CurrentLeader: leaderAddr,
+		Replicas:      instance.msClient.cfg.AccessPoints,
+	}, nil
 }

@@ -104,7 +104,7 @@ class CartSelfTest(TestWithServers):
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,smoke,pr,unittest,tiny,cartselftest
+        :avocado: tags=all,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
         orterun = Orterun(SelfTest(self.cart_bin), self.ompi_bin)

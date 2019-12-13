@@ -51,8 +51,8 @@
  * Garbage collection bag
  */
 struct vos_cont_df;
-struct vos_dtx_table_df;
-struct vos_dtx_entry_df;
+struct vos_dtx_act_ent_df;
+struct vos_dtx_cmt_ent_df;
 struct vos_dtx_record_df;
 struct vos_obj_df;
 struct vos_krec_df;
@@ -75,8 +75,6 @@ POBJ_LAYOUT_BEGIN(vos_pool_layout);
 
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_table_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_entry_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_record_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
@@ -140,28 +138,36 @@ enum vos_gc_type {
 	GC_MAX,
 };
 
+#define POOL_DF_MAGIC				0x5ca1ab1e
+
+#define POOL_DF_VER_1				1
+#define POOL_DF_VERSION				POOL_DF_VER_1
+
 /**
- * VOS Pool root object
+ * Durable format for VOS pool
  */
 struct vos_pool_df {
-	/* Structs stored in LE or BE representation */
+	/** Structs stored in LE or BE representation */
 	uint32_t				pd_magic;
-	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t					pd_id;
-	/* Flags for compatibility features */
+	/** durable-format version */
+	uint32_t				pd_version;
+	/** reserved: flags for compatibility features */
 	uint64_t				pd_compat_flags;
-	/* Flags for incompatibility features */
+	/** reserved: flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
-	/* Total space in bytes on SCM */
+	/** Unique PoolID for each VOS pool assigned on creation */
+	uuid_t					pd_id;
+	/** Total space in bytes on SCM */
 	uint64_t				pd_scm_sz;
-	/* Total space in bytes on NVMe */
+	/** Total space in bytes on NVMe */
 	uint64_t				pd_nvme_sz;
-	/* # of containers in this pool */
+	/** # of containers in this pool */
 	uint64_t				pd_cont_nr;
-	/* Typed PMEMoid pointer for the container index table */
+	/** Typed PMEMoid pointer for the container index table */
 	struct btr_root				pd_cont_root;
-	/* Free space tracking for NVMe device */
+	/** Free space tracking for NVMe device */
 	struct vea_space_df			pd_vea_df;
+	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
 };
 
@@ -175,95 +181,95 @@ enum vos_dtx_record_types {
 	DTX_RT_EVT	= 3,
 };
 
-enum vos_dtx_record_flags {
-	/* We make some special handling for the punch of object/key.
-	 * The basic idea is that:
-	 *
-	 * Firstly, we insert a new record for the target (object/key)
-	 * to be punched with the given epoch.
-	 *
-	 * Then exchange the sub-tree(s) under the original record that
-	 * has DAOS_EPOCH_MAX for the target to be punched and the new
-	 * created record.
-	 *
-	 * And then remove the original record that has DAOS_EPOCH_MAX
-	 * for the target to be punched.
-	 */
-
-	/* The source of exchange the record that has the DAOS_EPOCH_MAX. */
-	DTX_RF_EXCHANGE_SRC	= 1,
-
-	/* The target of exchange the record that has the given epoch. */
-	DTX_RF_EXCHANGE_TGT	= 2,
+enum vos_dtx_entry_flags {
+	/* The DTX is the leader */
+	DTX_EF_LEADER			= (1 << 0),
+	/* The DTX entry is invalid. */
+	DTX_EF_INVALID			= (1 << 1),
 };
 
-/**
- * The agent of the record being modified via the DTX.
- */
+/** The agent of the record being modified via the DTX in both SCM and DRAM. */
 struct vos_dtx_record_df {
 	/** The DTX record type, see enum vos_dtx_record_types. */
-	uint32_t			tr_type;
-	/** The DTX record flags, see enum vos_dtx_record_flags. */
-	uint32_t			tr_flags;
-	/** The record in the related tree in SCM. */
-	umem_off_t			tr_record;
-	/** The next vos_dtx_record_df for the same DTX. */
-	umem_off_t			tr_next;
+	uint32_t			dr_type;
+	/** The 64-bits alignment. */
+	uint32_t			dr_padding;
+	/** The modified record in the related tree in SCM. */
+	umem_off_t			dr_record;
 };
 
-enum vos_dtx_entry_flags {
-	/* The DTX shares something with other DTX(s). */
-	DTX_EF_SHARES			= (1 << 0),
-	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 1),
-};
+#define DTX_INLINE_REC_CNT	4
+#define DTX_REC_CAP_DEFAULT	4
 
-/**
- * Persisted DTX entry, it is referenced by btr_record::rec_off
- * of btree VOS_BTR_DTX_TABLE.
- */
-struct vos_dtx_entry_df {
+
+/** Active DTX entry on-disk layout in both SCM and DRAM. */
+struct vos_dtx_act_ent_df {
 	/** The DTX identifier. */
-	struct dtx_id			te_xid;
+	struct dtx_id			dae_xid;
 	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t			te_oid;
+	daos_unit_oid_t			dae_oid;
 	/** The hashed dkey if applicable. */
-	uint64_t			te_dkey_hash;
+	uint64_t			dae_dkey_hash;
 	/** The epoch# for the DTX. */
-	daos_epoch_t			te_epoch;
-	/** Pool map version. */
-	uint32_t			te_ver;
-	/** DTX status, see enum dtx_status. */
-	uint32_t			te_state;
-	/** DTX flags, see enum vos_dtx_entry_flags. */
-	uint32_t			te_flags;
+	daos_epoch_t			dae_epoch;
+	/** The server generation when handles the DTX. */
+	uint64_t			dae_srv_gen;
+	/** The active DTX entry on-disk layout generation. */
+	uint64_t			dae_layout_gen;
 	/** The intent of related modification. */
-	uint32_t			te_intent;
-	/** The timestamp when handles the transaction. */
-	uint64_t			te_time;
-	/** The list of vos_dtx_record_df in SCM. */
-	umem_off_t			te_records;
-	/** The next committed DTX in global list. */
-	umem_off_t			te_next;
-	/** The prev committed DTX in global list. */
-	umem_off_t			te_prev;
+	uint32_t			dae_intent;
+	/** The index in the current vos_dtx_blob_df. */
+	uint32_t			dae_index;
+	/** The inlined dtx records. */
+	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
+	/** DTX flags, see enum vos_dtx_entry_flags. */
+	uint32_t			dae_flags;
+	/** The DTX records count, including inline case. */
+	uint32_t			dae_rec_cnt;
+	/** The offset for the list of vos_dtx_record_df if out of inline. */
+	umem_off_t			dae_rec_off;
 };
 
-/**
- * DAOS two-phase commit transaction table.
- */
-struct vos_dtx_table_df {
-	/** The count of committed DTXs in the table. */
-	uint64_t			tt_count;
-	/** The list head of committed DTXs. */
-	umem_off_t			tt_entry_head;
-	/** The list tail of committed DTXs. */
-	umem_off_t			tt_entry_tail;
-	/** The root of the B+ tree for committed DTXs. */
-	struct btr_root			tt_committed_btr;
-	/** The root of the B+ tree for active (prepared) DTXs. */
-	struct btr_root			tt_active_btr;
+/* Assume dae_rec_cnt is next to dae_flags. */
+D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) ==
+	  offsetof(struct vos_dtx_act_ent_df, dae_flags) +
+	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_flags));
+
+/* Assume dae_rec_off is next to dae_rec_cnt. */
+D_CASSERT(offsetof(struct vos_dtx_act_ent_df, dae_rec_off) ==
+	  offsetof(struct vos_dtx_act_ent_df, dae_rec_cnt) +
+	  sizeof(((struct vos_dtx_act_ent_df *)0)->dae_rec_cnt));
+
+/** Committed DTX entry on-disk layout in both SCM and DRAM. */
+struct vos_dtx_cmt_ent_df {
+	struct dtx_id			dce_xid;
+	daos_epoch_t			dce_epoch;
 };
+
+struct vos_dtx_blob_df {
+	/** Magic number, can be used to distinguish active or committed DTX. */
+	int					dbd_magic;
+	/** The total (filled + free) slots in the blob. */
+	int					dbd_cap;
+	/** Already filled slots count. */
+	int					dbd_count;
+	/** The next available slot for active DTX entry in the blob. */
+	int					dbd_index;
+	/** Prev dtx_scm_blob. */
+	umem_off_t				dbd_prev;
+	/** Next dtx_scm_blob. */
+	umem_off_t				dbd_next;
+	/** Append only DTX entries in the blob. */
+	union {
+		struct vos_dtx_act_ent_df	dbd_active_data[0];
+		struct vos_dtx_cmt_ent_df	dbd_commmitted_data[0];
+	};
+};
+
+/* Assume dbd_index is next to dbd_count. */
+D_CASSERT(offsetof(struct vos_dtx_blob_df, dbd_index) ==
+	  offsetof(struct vos_dtx_blob_df, dbd_count) +
+	  sizeof(((struct vos_dtx_blob_df *)0)->dbd_count));
 
 enum vos_io_stream {
 	/**
@@ -280,14 +286,31 @@ enum vos_io_stream {
 struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
+	uint64_t			cd_dtx_resync_gen;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
-	/** The DTXs table. */
-	struct vos_dtx_table_df		cd_dtx_table_df;
+	/** The active DTXs blob head. */
+	umem_off_t			cd_dtx_active_head;
+	/** The active DTXs blob tail. */
+	umem_off_t			cd_dtx_active_tail;
+	/** The committed DTXs blob head. */
+	umem_off_t			cd_dtx_committed_head;
+	/** The committed DTXs blob tail. */
+	umem_off_t			cd_dtx_committed_tail;
 	/** Allocation hints for block allocator. */
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 };
+
+/* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */
+D_CASSERT(offsetof(struct vos_cont_df, cd_dtx_active_tail) ==
+	  offsetof(struct vos_cont_df, cd_dtx_active_head) +
+	  sizeof(((struct vos_cont_df *)0)->cd_dtx_active_head));
+
+/* Assume cd_dtx_committed_tail is just after cd_dtx_committed_head. */
+D_CASSERT(offsetof(struct vos_cont_df, cd_dtx_committed_tail) ==
+	  offsetof(struct vos_cont_df, cd_dtx_committed_head) +
+	  sizeof(((struct vos_cont_df *)0)->cd_dtx_committed_head));
 
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
@@ -316,8 +339,6 @@ struct vos_krec_df {
 	uint32_t			kr_size;
 	/** Incarnation log for key */
 	struct ilog_df			kr_ilog;
-	/** The DTX entry in SCM. */
-	umem_off_t			kr_dtx;
 	union {
 		/** btree root under the key */
 		struct btr_root			kr_btr;
@@ -362,8 +383,6 @@ struct vos_obj_df {
 	uint64_t			vo_oi_attr;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
-	/** The DTX entry in SCM. */
-	umem_off_t			vo_dtx;
 	/** VOS dkey btree root */
 	struct btr_root			vo_tree;
 };

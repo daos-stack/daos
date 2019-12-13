@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,50 +176,6 @@ rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver)
 	return found;
 }
 
-enum {
-	SCAN_CHECK,
-	PULL_CHECK,
-};
-
-static bool
-is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt, int type)
-{
-	uint32_t	*bits;
-	int		idx;
-
-	if (type == SCAN_CHECK)
-		bits = rgt->rgt_scan_bits;
-	else
-		bits = rgt->rgt_pull_bits;
-
-	D_ASSERT(bits != NULL);
-
-	D_DEBUG(DB_REBUILD, "%s done check 0x%x [%d-%d]\n",
-		type == SCAN_CHECK ? "scan" : "pull", bits[0], 0,
-		rgt->rgt_bits_size - 1);
-
-	idx = daos_first_unset_bit(bits, roundup(rgt->rgt_bits_size,
-						 DAOS_BITS_SIZE) /
-						 DAOS_BITS_SIZE);
-
-	if (idx == -1 || idx >= rgt->rgt_bits_size)
-		return true;
-
-	return false;
-}
-
-static bool
-is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_done(rgt, PULL_CHECK);
-}
-
-static bool
-is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_done(rgt, SCAN_CHECK);
-}
-
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
@@ -230,14 +186,11 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	if (!iv->riv_scan_done)
 		return 0;
 
-	if (!rgt->rgt_scan_done) {
+	if (!is_rebuild_global_scan_done(rgt)) {
 		setbit(rgt->rgt_scan_bits, iv->riv_rank);
 		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d scan"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			iv->riv_rank, rgt->rgt_scan_bits[0]);
-		if (is_rebuild_global_scan_done(rgt))
-			rgt->rgt_scan_done = 1;
-
 		/* If global scan is not done, then you can not trust
 		 * pull status. But if the rebuild on that target is
 		 * failed(riv_status != 0), then the target will report
@@ -254,8 +207,6 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d pull"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			iv->riv_rank, rgt->rgt_pull_bits[0]);
-		if (is_rebuild_global_pull_done(rgt))
-			rgt->rgt_done = 1;
 	}
 
 	return 0;
@@ -570,12 +521,15 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			    struct rebuild_global_pool_tracker *rgt)
 {
 	double		last_print = 0;
-	double		last_query = 0;
 	unsigned int	total;
 	int		rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
+		return;
+
+	rgt->rgt_ult = dss_sleep_ult_create();
+	if (rgt->rgt_ult == NULL)
 		return;
 
 	while (1) {
@@ -585,15 +539,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		unsigned int			failed_tgts_cnt;
 		double				now;
 		char				*str;
-
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_BCAST_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 
 		rc = pool_map_find_failed_tgts(pool->sp_map, &targets,
 					       &failed_tgts_cnt);
@@ -614,16 +559,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 				D_ASSERT(dom != NULL);
 				D_DEBUG(DB_REBUILD, "target %d failed\n",
 					dom->do_comp.co_rank);
-				setbit(rgt->rgt_scan_bits,
-				       dom->do_comp.co_rank);
-				setbit(rgt->rgt_pull_bits,
-				       dom->do_comp.co_rank);
+				if (pool_component_unavail(&dom->do_comp)) {
+					setbit(rgt->rgt_scan_bits,
+					       dom->do_comp.co_rank);
+					setbit(rgt->rgt_pull_bits,
+					       dom->do_comp.co_rank);
+				}
 			}
-
 			D_FREE(targets);
 		}
 
-		if (!rgt->rgt_done && rgt->rgt_scan_done) {
+		if (!is_rebuild_global_pull_done(rgt) &&
+		    is_rebuild_global_scan_done(rgt)) {
 			struct rebuild_iv iv;
 
 			memset(&iv, 0, sizeof(iv));
@@ -645,7 +592,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		}
 
 		/* query the current rebuild status */
-		if (rgt->rgt_done)
+		if (is_rebuild_global_done(rgt))
 			rs->rs_done = 1;
 
 		if (rs->rs_done)
@@ -674,14 +621,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			break;
 		}
 
+		now = ABT_get_wtime();
 		/* print something at least for each 10 secons */
 		if (now - last_print > 10) {
 			last_print = now;
 			D_PRINT("%s", sbuf);
 		}
-
-		ABT_thread_yield();
+		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
 	}
+
+	dss_sleep_ult_destroy(rgt->rgt_ult);
+	rgt->rgt_ult = NULL;
 }
 
 static void
@@ -712,7 +662,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
 
 	node_nr = pool_map_node_nr(pool->sp_map);
-	array_size = roundup(node_nr, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
+	array_size = roundup(node_nr, NBBY) / NBBY;
 	rgt->rgt_bits_size = node_nr;
 
 	D_ALLOC_ARRAY(rgt->rgt_scan_bits, array_size);
@@ -733,61 +683,6 @@ out:
 	return 0;
 }
 
-static int
-rebuild_pool_group_prepare(struct ds_pool *pool)
-{
-	struct pool_target	*tgts = NULL;
-	unsigned int		tgt_cnt;
-	char			id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t		rank_list;
-	d_rank_t		*ranks = NULL;
-	crt_group_t		*grp;
-	int			i;
-	int			rc;
-
-	if (pool->sp_group != NULL)
-		return 0;
-
-	/* During pool leader changing, the cart group might still
-	 * exists even if sp_group is NULL.
-	 */
-	uuid_unparse_lower(pool->sp_uuid, id);
-	grp = crt_group_lookup(id);
-	if (grp != NULL) {
-		pool->sp_group = grp;
-		return 0;
-	}
-
-	rc = pool_map_find_upin_tgts(pool->sp_map, &tgts, &tgt_cnt);
-	if (rc)
-		return rc;
-
-	D_ALLOC_ARRAY(ranks, tgt_cnt);
-	if (ranks == NULL)
-		D_GOTO(out, rc);
-
-	for (i = 0; i < tgt_cnt; i++) {
-		ranks[i] = tgts[i].ta_comp.co_rank;
-		D_DEBUG(DB_REBUILD, "i %d rank %d\n", i, ranks[i]);
-	}
-
-	rank_list.rl_nr = tgt_cnt;
-	rank_list.rl_ranks = ranks;
-
-	rc = dss_group_create(id, &rank_list, &grp);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	pool->sp_group = grp;
-out:
-	if (ranks != NULL)
-		D_FREE(ranks);
-	if (tgt_cnt > 0 && tgts != NULL)
-		D_FREE(tgts);
-
-	return rc;
-}
-
 /* To notify all targets to prepare the rebuild */
 static int
 rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
@@ -801,15 +696,9 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" create rebuild iv\n",
 		DP_UUID(pool->sp_uuid));
 
-	rc = rebuild_pool_group_prepare(pool);
-	if (rc)
-		return rc;
-
-	/* Create pool iv ns for the pool */
+	/* Update pool iv ns for the pool */
 	crt_group_rank(pool->sp_group, &master_rank);
-	rc = ds_pool_iv_ns_update(pool, master_rank, -1);
-	if (rc)
-		return rc;
+	ds_pool_iv_ns_update(pool, master_rank);
 
 	rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rgt);
 	if (rc)
@@ -920,11 +809,11 @@ retry:
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0) {
-		/* If it is network failure or timedout, let's refresh
-		 * failure list and retry
+		/* If it is network failure, timedout, or group version
+		 * mismatch, let's refresh failure list and retry
 		 */
-		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
-		    !rebuild_gst.rg_abort) {
+		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc) ||
+		     rc == -DER_GRPVER) && !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
 			D_GOTO(retry, rc);
 		}
@@ -1175,17 +1064,15 @@ static void
 rebuild_task_ult(void *arg)
 {
 	struct rebuild_task			*task = arg;
-	struct ds_pool_create_arg		 pc_arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	struct rebuild_iv			 iv;
 	int					 rc;
 
-	memset(&pc_arg, 0, sizeof(pc_arg));
-	pc_arg.pca_map_version = task->dst_map_ver;
-	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
-	if (rc) {
-		D_ERROR("pool lookup and create failed: rc %d\n", rc);
+	pool = ds_pool_lookup(task->dst_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to look up pool\n",
+			DP_UUID(task->dst_pool_uuid));
 		return;
 	}
 
@@ -1220,7 +1107,7 @@ rebuild_task_ult(void *arg)
 	/* Wait until rebuild finished */
 	rebuild_leader_status_check(pool, task->dst_map_ver, rgt);
 done:
-	if (!rgt->rgt_done) {
+	if (!is_rebuild_global_done(rgt)) {
 		int ret;
 
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
@@ -1267,7 +1154,7 @@ iv_stop:
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
-	iv.riv_global_scan_done = rgt->rgt_scan_done;
+	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
 	iv.riv_global_done	= 1;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
@@ -1660,23 +1547,19 @@ void
 rebuild_tgt_status_check(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
-	double				last_query = 0;
-	double				now;
 
 	D_ASSERT(rpt != NULL);
+	rpt->rt_ult = dss_sleep_ult_create();
+	if (rpt->rt_ult == NULL) {
+		D_ERROR("Can not start rebuild status check\n");
+		return;
+	}
+
 	while (1) {
 		struct rebuild_iv		iv;
 		struct rebuild_tgt_query_info	status;
 		int				rc;
 
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_CHECK_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 		memset(&status, 0, sizeof(status));
 		ABT_mutex_create(&status.lock);
 		rc = rebuild_tgt_query(rpt, &status);
@@ -1779,7 +1662,12 @@ rebuild_tgt_status_check(void *arg)
 
 		if (rpt->rt_global_done)
 			break;
+
+		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
 	}
+
+	dss_sleep_ult_destroy(rpt->rt_ult);
+	rpt->rt_ult = NULL;
 
 	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
@@ -1909,7 +1797,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
 	struct ds_pool			*pool;
-	struct ds_pool_create_arg	pc_arg = { 0 };
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	d_iov_t			iov = { 0 };
@@ -1926,16 +1813,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
 		rsi->rsi_rebuild_ver);
 
-	/* Note: if ds_pool already exists, for example the pool
-	 * is opened, then pca_need_group, pca_map will have zero
-	 * effects, i.e. sp_map & sp_group might be NULL in this
-	 * case. So let's do extra checking in the following.
-	 */
-	pc_arg.pca_map_version = rsi->rsi_pool_map_ver;
-	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pc_arg, &pool);
-	if (rc != 0) {
+	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
+	if (pool == NULL) {
 		D_ERROR("Can not find pool.\n");
-		return rc;
+		return -DER_NONEXIST;
 	}
 
 	/* update the pool map */
@@ -1975,9 +1856,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	rc = ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_ns_id);
-	if (rc)
-		D_GOTO(out, rc);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
 					   rpt->rt_coh_uuid,

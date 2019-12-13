@@ -38,6 +38,9 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
@@ -142,8 +145,6 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("Failed to set self rank %u: %d\n", req->rank, rc);
 		resp->status = rc;
 	}
-
-	dss_init_state_set(DSS_INIT_STATE_RANK_SET);
 
 	mgmt__set_rank_req__free_unpacked(req, NULL);
 	pack_daos_response(resp, drpc_resp);
@@ -466,6 +467,22 @@ err_out:
 	return rc;
 }
 
+static d_rank_list_t *
+uint32_array_to_rank_list(uint32_t *ints, size_t len)
+{
+	d_rank_list_t	*result;
+	size_t		i;
+
+	result = d_rank_list_alloc(len);
+	if (result == NULL)
+		return NULL;
+
+	for (i = 0; i < len; i++)
+		result->rl_ranks[i] = (d_rank_t)ints[i];
+
+	return result;
+}
+
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -475,10 +492,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*svc = NULL;
 	uuid_t			pool_uuid;
 	daos_prop_t		*prop = NULL;
-	int			buflen = 16;
-	int			index;
-	int			i;
-	char			*extra = NULL;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
@@ -506,15 +519,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init */
 	mgmt__pool_create_resp__init(resp);
 
-	/* Parse targets rank list. */
-	if (strlen(req->ranks) != 0) {
-		targets = daos_rank_list_parse(req->ranks, ",");
-		if (targets == NULL) {
-			D_ERROR("failed to parse target ranks\n");
-			rc = -DER_INVAL;
-			goto out;
-		}
-		D_DEBUG(DB_MGMT, "ranks in: %s\n", req->ranks);
+	if (req->n_ranks > 0) {
+		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+		if (targets == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = uuid_parse(req->uuid, pool_uuid);
@@ -541,42 +549,13 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	assert(svc->rl_nr > 0);
+	D_ASSERT(svc->rl_nr > 0);
 
-	D_ALLOC(resp->svcreps, buflen);
-	if (resp->svcreps == NULL) {
-		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out_svc;
-	}
+	rc = rank_list_to_uint32_array(svc, &resp->svcreps, &resp->n_svcreps);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
 
-	/* Populate the pool service replica ranks string. */
-	index = sprintf(resp->svcreps, "%u", svc->rl_ranks[0]);
-
-	for (i = 1; i < svc->rl_nr; i++) {
-		index += snprintf(&resp->svcreps[index], buflen-index,
-				  ",%u", svc->rl_ranks[i]);
-		if (index >= buflen) {
-			buflen *= 2;
-
-			D_ALLOC(extra, buflen);
-
-			if (extra == NULL) {
-				D_ERROR("failed to allocate buffer");
-				rc = -DER_NOMEM;
-				goto out_svc;
-			}
-
-			index = snprintf(extra, buflen, "%s,%u",
-					 resp->svcreps, svc->rl_ranks[i]);
-
-			D_FREE(resp->svcreps);
-			resp->svcreps = extra;
-		}
-	}
-
-	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc->rl_nr,
-		resp->svcreps);
+	D_DEBUG(DB_MGMT, "%d service replicas\n", svc->rl_nr);
 
 out_svc:
 	d_rank_list_free(svc);
@@ -598,7 +577,7 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp->svcreps && resp->svcreps[0] != '\0')
+	if (resp->svcreps)
 		D_FREE(resp->svcreps);
 	D_FREE(resp);
 }
@@ -916,64 +895,38 @@ out:
 	mgmt__delete_aclreq__free_unpacked(req, NULL);
 }
 
-/* Convert d_rank_list_t values to a string of comma-separated ranks.
- * Allocates, fills and returns string (to be freed by caller).
- * If unsuccessful, returns NULL.
- */
-static char *
-rank_list_to_csvstr(d_rank_list_t *rl)
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 {
-	char	*buf = NULL;
-	int	 buflen = 16;	/* grow as needed */
-	int	 bufidx;
-	int	 i;
+	uint32_t i;
 
-	D_ALLOC(buf, buflen);
-	if (buf == NULL)
-		goto out;
+	D_ALLOC_ARRAY(*ints, rl->rl_nr);
+	if (*ints == NULL)
+		return -DER_NOMEM;
 
-	bufidx = sprintf(buf, "%u", rl->rl_ranks[0]);
-	for (i = 1; i < rl->rl_nr; i++) {
-		bufidx += snprintf(&buf[bufidx], buflen-bufidx,
-				      ",%u", rl->rl_ranks[i]);
-		if (bufidx >= buflen) {
-			char *extra = NULL;
+	*len = rl->rl_nr;
 
-			buflen *= 2;
-			D_ALLOC(extra, buflen);
-			if (extra == NULL) {
-				D_FREE(buf);
-				buf = NULL;
-				goto out;
-			}
-			bufidx = snprintf(extra, buflen, "%s,%u",
-				       buf, rl->rl_ranks[i]);
-			D_FREE(buf);
-			buf = extra;
-		}
-	}
+	for (i = 0; i < rl->rl_nr; i++)
+		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
-out:
-	return buf;
+	return 0;
 }
 
 void
 ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__ListPoolsReq		*req = NULL;
-	Mgmt__ListPoolsResp		resp = MGMT__LIST_POOLS_RESP__INIT;
+	Mgmt__ListPoolsResp		 resp = MGMT__LIST_POOLS_RESP__INIT;
 	uint8_t				*body;
 	size_t				 len;
 	struct mgmt_list_pools_one	*pools = NULL;
 	size_t				 pools_len = 0;
-	uint64_t			 npools;
 	int				 i;
 	int				 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__list_pools_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
-
+	req = mgmt__list_pools_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
 	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to unpack req (list pools)\n");
@@ -981,13 +934,10 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to list pools in DAOS system %s\n",
-		req->sys);
+	D_INFO("Received request to list pools in DAOS system %s\n", req->sys);
 
-	/* resp.pools, n_pols, and numpools are all NULL/0 to start */
-
-	npools = req->numpools;
-	rc = ds_mgmt_list_pools(req->sys, &npools, &pools, &pools_len);
+	/* Get all the pools - don't care how many */
+	rc = ds_mgmt_list_pools(req->sys, NULL, &pools, &pools_len);
 	if (rc != 0) {
 		D_ERROR("Failed to list pools in %s :%d\n", req->sys, rc);
 		D_GOTO(out, rc);
@@ -997,30 +947,40 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ALLOC_ARRAY(resp.pools, pools_len);
 		if (resp.pools == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	}
-	resp.numpools = npools;	/* in system, may exceed n_pools*/
-	resp.n_pools = pools_len;	/* in reply <= req->numpools */
 
-	for (i = 0; i < pools_len; i++) {
-		d_rank_list_t	*svc = pools[i].lp_svc;
+		resp.n_pools = pools_len;
 
-		D_ALLOC_PTR(resp.pools[i]);
-		if (resp.pools[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		for (i = 0; i < pools_len; i++) {
+			d_rank_list_t	*svc = pools[i].lp_svc;
+			uint32_t	*svcreps;
+			size_t		svcreps_len;
 
-		D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
-		if (resp.pools[i]->uuid == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
+			D_ALLOC_PTR(resp.pools[i]);
+			if (resp.pools[i] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			mgmt__list_pools_resp__pool__init(resp.pools[i]);
 
-		resp.pools[i]->svcreps = rank_list_to_csvstr(svc);
-		if (resp.pools[i]->svcreps == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
+			if (resp.pools[i]->uuid == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
+
+			rc = rank_list_to_uint32_array(svc, &svcreps,
+						       &svcreps_len);
+			if (rc != 0)
+				D_GOTO(out, rc);
+
+			resp.pools[i]->svcreps = svcreps;
+			resp.pools[i]->n_svcreps = svcreps_len;
+		}
+	} else if (pools_len != 0) {
+		D_ERROR("Invalid results - pools=NULL, pools_len=%lu\n",
+			pools_len);
+		D_GOTO(out, rc = -DER_UNKNOWN);
 	}
 
 out:
 	resp.status = rc;
-	resp.numpools = npools;	/* in system, may exceed n_pools */
 
 	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
