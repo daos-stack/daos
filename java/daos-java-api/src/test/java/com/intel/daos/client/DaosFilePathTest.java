@@ -7,7 +7,7 @@ public class DaosFilePathTest {
 
   @Test
   public void testTwoLevelPathFromRoot() {
-    DaosFile file = new DaosFile("/root", null);
+    DaosFile file = new DaosFile("/root", 0, null);
     Assert.assertEquals("/", file.getParentPath());
     Assert.assertEquals("root", file.getName());
     Assert.assertEquals("/root", file.getPath());
@@ -15,7 +15,7 @@ public class DaosFilePathTest {
 
   @Test
   public void testRoot(){
-    DaosFile file = new DaosFile("/", null);
+    DaosFile file = new DaosFile("/", 0, null);
     Assert.assertEquals("", file.getParentPath());
     Assert.assertEquals("/", file.getName());
     Assert.assertEquals("/", file.getPath());
@@ -23,7 +23,7 @@ public class DaosFilePathTest {
 
   @Test
   public void testOneLevelWithoutRoot(){
-    DaosFile file = new DaosFile("abc", null);
+    DaosFile file = new DaosFile("abc", 0, null);
     Assert.assertEquals("", file.getParentPath());
     Assert.assertEquals("abc", file.getName());
     Assert.assertEquals("abc", file.getPath());
@@ -31,12 +31,12 @@ public class DaosFilePathTest {
 
   @Test
   public void testMultiLevelWithoutRoot(){
-    DaosFile file = new DaosFile("abc/bcd", null);
+    DaosFile file = new DaosFile("abc/bcd", 0, null);
     Assert.assertEquals("abc", file.getParentPath());
     Assert.assertEquals("bcd", file.getName());
     Assert.assertEquals("abc/bcd", file.getPath());
 
-    file = new DaosFile("abc/bcd/def", null);
+    file = new DaosFile("abc/bcd/def", 0, null);
     Assert.assertEquals("abc/bcd", file.getParentPath());
     Assert.assertEquals("def", file.getName());
     Assert.assertEquals("abc/bcd/def", file.getPath());
@@ -44,12 +44,12 @@ public class DaosFilePathTest {
 
   @Test
   public void testMultiLevelWithRoot(){
-    DaosFile file = new DaosFile("/abc/bcd/", null);
+    DaosFile file = new DaosFile("/abc/bcd/", 0, null);
     Assert.assertEquals("/abc", file.getParentPath());
     Assert.assertEquals("bcd", file.getName());
     Assert.assertEquals("/abc/bcd", file.getPath());
 
-    file = new DaosFile("/abc/bcd/def", null);
+    file = new DaosFile("/abc/bcd/def", 0, null);
     Assert.assertEquals("/abc/bcd", file.getParentPath());
     Assert.assertEquals("def", file.getName());
     Assert.assertEquals("/abc/bcd/def", file.getPath());
@@ -57,12 +57,12 @@ public class DaosFilePathTest {
 
   @Test
   public void testWithParent(){
-    DaosFile file = new DaosFile("/abc", "bcd/", null);
+    DaosFile file = new DaosFile("/abc", "bcd/", 0, null);
     Assert.assertEquals("/abc", file.getParentPath());
     Assert.assertEquals("bcd", file.getName());
     Assert.assertEquals("/abc/bcd", file.getPath());
 
-    file = new DaosFile("/abc/", "/bcd/def", null);
+    file = new DaosFile("/abc/", "/bcd/def", 0, null);
     Assert.assertEquals("/abc/bcd", file.getParentPath());
     Assert.assertEquals("def", file.getName());
     Assert.assertEquals("/abc/bcd/def", file.getPath());

@@ -33,6 +33,23 @@ public class DaosFileBasicIT {
   public void testMkdirs()throws Exception{
     DaosFile daosFile = client.getFile("/d1/d2/d3");
     daosFile.mkdirs();
+    DaosFile parentFile = client.getFile("/d1/d2");
+    String[] children = parentFile.listChildren();
+    Assert.assertEquals(1, children.length);
+  }
+
+  @Test
+  public void testRename()throws Exception{
+    DaosFile dir1 = client.getFile("/src/dir");
+    dir1.mkdirs();
+    DaosFile srcFile = client.getFile(dir1, "data1");
+    srcFile.createNewFile();
+
+    DaosFile dir2 = client.getFile("/src/dir2");
+    dir2.mkdirs();
+    String destPath = dir2.getPath() + "/data2";
+    DaosFile destFile = srcFile.rename(destPath);
+    Assert.assertEquals(0, destFile.length());
   }
 
   @Test

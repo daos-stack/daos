@@ -73,7 +73,7 @@ public class DaosFile {
 
   private static final Logger log = LoggerFactory.getLogger(DaosFile.class);
 
-  protected DaosFile(String parentPath, String path, DaosFsClient daosFsClient) {
+  protected DaosFile(String parentPath, String path, int accessFlags, DaosFsClient daosFsClient) {
     String pnor = DaosUtils.normalize(parentPath);
     String nor = DaosUtils.normalize(pnor.length() == 0 ? path : pnor + "/" + path);
     if (nor == null || nor.length() == 0) {
@@ -96,21 +96,27 @@ public class DaosFile {
         this.name = nor.substring(1);
       }
     }
+
+    this.accessFlags = accessFlags;
+
     this.client = daosFsClient;
     if (this.client != null) {
       this.dfsPtr = daosFsClient.getDfsPtr();
-    } else {
+      this.mode = client.getDefaultFileMode();
+      this.objectType = client.getDefaultFileObjType();
+      this.chunkSize = client.getDefaultFileChunkSize();
+    } else { //no client, could be for test purpose
       this.dfsPtr = -1;
     }
   }
 
-  protected DaosFile(DaosFile parent, String path, DaosFsClient daosFsClient) {
-    this(parent.path, path, daosFsClient);
+  protected DaosFile(DaosFile parent, String path, int accessFlags, DaosFsClient daosFsClient) {
+    this(parent.path, path, accessFlags, daosFsClient);
     this.parent = parent;
   }
 
-  protected DaosFile(String path, DaosFsClient daosFsClient) {
-    this((String) null, path, daosFsClient);
+  protected DaosFile(String path, int accessFlags, DaosFsClient daosFsClient) {
+    this((String) null, path, accessFlags, daosFsClient);
   }
 
   public void createNewFile() throws IOException {
@@ -332,7 +338,7 @@ public class DaosFile {
       return this;
     }
     client.move(path, destPath);
-    return new DaosFile(destPath, client);
+    return new DaosFile(destPath, accessFlags, client);
   }
 
   public boolean isDirectory() throws IOException {
@@ -347,10 +353,6 @@ public class DaosFile {
       cleaner.clean();
       cleaned = true;
     }
-  }
-
-  void setAccessFlags(int accessFlags) {
-    this.accessFlags = accessFlags;
   }
 
   public int getMode() throws IOException {
@@ -370,18 +372,6 @@ public class DaosFile {
 
   public StatAttributes getStatAttributes() throws IOException {
     return getStatAttributes(true);
-  }
-
-  void setObjectType(DaosObjectType objectType) {
-    this.objectType = objectType;
-  }
-
-  void setChunkSize(int chunkSize) {
-    this.chunkSize = chunkSize;
-  }
-
-  void setMode(int mode) {
-    this.mode = mode;
   }
 
   public DaosFile getParent() {

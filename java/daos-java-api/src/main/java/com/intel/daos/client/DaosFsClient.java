@@ -250,43 +250,44 @@ public final class DaosFsClient {
     pcFsMap.remove(poolId+contId);
   }
 
+  int getDefaultFileAccessFlags(){
+    return builder.defaultFileAccessFlags;
+  }
+
+  int getDefaultFileMode(){
+    return builder.defaultFileMode;
+  }
+
+  DaosObjectType getDefaultFileObjType(){
+    return builder.defaultFileObjType;
+  }
+
+  int getDefaultFileChunkSize(){
+    return builder.defaultFileChunkSize;
+  }
+
   public DaosFile getFile(String path) {
-    return getFile(path, builder.defaultFileAccessFlag);
+    return getFile(path, builder.defaultFileAccessFlags);
   }
 
   public DaosFile getFile(String path, int accessFlags) {
-    DaosFile daosFile = new DaosFile(path, this);
-    daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(builder.defaultFileMode);
-    daosFile.setObjectType(builder.defaultFileObjType);
-    daosFile.setChunkSize(builder.defaultFileChunkSize);
-    return daosFile;
+    return new DaosFile(path, accessFlags, this);
   }
 
   public DaosFile getFile(String parent, String path){
-    return getFile(parent, path, builder.defaultFileAccessFlag);
+    return getFile(parent, path, builder.defaultFileAccessFlags);
   }
 
   public DaosFile getFile(String parent, String path, int accessFlags) {
-    DaosFile daosFile = new DaosFile(parent, path, this);
-    daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(builder.defaultFileMode);
-    daosFile.setObjectType(builder.defaultFileObjType);
-    daosFile.setChunkSize(builder.defaultFileChunkSize);
-    return daosFile;
+    return new DaosFile(parent, path, accessFlags, this);
   }
 
   public DaosFile getFile(DaosFile parent, String path){
-    return getFile(parent, path, builder.defaultFileAccessFlag);
+    return getFile(parent, path, builder.defaultFileAccessFlags);
   }
 
   public DaosFile getFile(DaosFile parent, String path, int accessFlags) {
-    DaosFile daosFile = new DaosFile(parent, path, this);
-    daosFile.setAccessFlags(accessFlags);
-    daosFile.setMode(builder.defaultFileMode);
-    daosFile.setObjectType(builder.defaultFileObjType);
-    daosFile.setChunkSize(builder.defaultFileChunkSize);
-    return daosFile;
+    return new DaosFile(parent, path, accessFlags, this);
   }
 
   //non-native methods
@@ -679,7 +680,7 @@ public final class DaosFsClient {
     private long poolScmSize;
     private long poolNvmeSize;
     private int defaultFileChunkSize = 8192; //8k
-    private int defaultFileAccessFlag = Constants.ACCESS_FLAG_FILE_READWRITE;
+    private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = 0755;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
     private boolean readOnlyFs = false;
@@ -800,7 +801,7 @@ public final class DaosFsClient {
 
     /**
      * set default file access flag.
-     * @param defaultFileAccessFlag
+     * @param defaultFileAccessFlags
      * should be one of
      * {@link Constants#ACCESS_FLAG_FILE_CREATE}
      * {@link Constants#ACCESS_FLAG_FILE_READONLY}
@@ -810,8 +811,8 @@ public final class DaosFsClient {
      * default is {@link Constants#ACCESS_FLAG_FILE_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileAccessFlag(int defaultFileAccessFlag){
-      this.defaultFileAccessFlag = defaultFileAccessFlag;
+    public DaosFsClientBuilder defaultFileAccessFlags(int defaultFileAccessFlags){
+      this.defaultFileAccessFlags = defaultFileAccessFlags;
       return this;
     }
 
