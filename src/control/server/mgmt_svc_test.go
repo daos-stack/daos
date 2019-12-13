@@ -557,3 +557,68 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }
+
+func TestMgmtSvc_LeaderQuery(t *testing.T) {
+	missingSB := newTestMgmtSvc(nil)
+	missingSB.harness.instances[0]._superblock = nil
+	missingAPs := newTestMgmtSvc(nil)
+	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
+
+	for name, tc := range map[string]struct {
+		mgmtSvc *mgmtSvc
+		req     *mgmtpb.LeaderQueryReq
+		expResp *mgmtpb.LeaderQueryResp
+		expErr  error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req: &mgmtpb.LeaderQueryReq{
+				System: "quack",
+			},
+			expErr: errors.New("wrong system"),
+		},
+		"no i/o servers": {
+			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil),
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("no I/O servers"),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("no I/O superblock"),
+		},
+		"fail to get current leader address": {
+			mgmtSvc: missingAPs,
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("current leader address"),
+		},
+		"successful query": {
+			req: &mgmtpb.LeaderQueryReq{},
+			expResp: &mgmtpb.LeaderQueryResp{
+				CurrentLeader: "localhost",
+				Replicas:      []string{"localhost"},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(log)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}

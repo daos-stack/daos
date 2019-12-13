@@ -142,6 +142,96 @@ void   mgmt__join_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__join_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__leader_query_req__init
+                     (Mgmt__LeaderQueryReq         *message)
+{
+  static const Mgmt__LeaderQueryReq init_value = MGMT__LEADER_QUERY_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__leader_query_req__get_packed_size
+                     (const Mgmt__LeaderQueryReq *message)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__leader_query_req__pack
+                     (const Mgmt__LeaderQueryReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__leader_query_req__pack_to_buffer
+                     (const Mgmt__LeaderQueryReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__LeaderQueryReq *
+       mgmt__leader_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__LeaderQueryReq *)
+     protobuf_c_message_unpack (&mgmt__leader_query_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__leader_query_req__free_unpacked
+                     (Mgmt__LeaderQueryReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__leader_query_resp__init
+                     (Mgmt__LeaderQueryResp         *message)
+{
+  static const Mgmt__LeaderQueryResp init_value = MGMT__LEADER_QUERY_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__leader_query_resp__get_packed_size
+                     (const Mgmt__LeaderQueryResp *message)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__leader_query_resp__pack
+                     (const Mgmt__LeaderQueryResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__leader_query_resp__pack_to_buffer
+                     (const Mgmt__LeaderQueryResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__LeaderQueryResp *
+       mgmt__leader_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__LeaderQueryResp *)
+     protobuf_c_message_unpack (&mgmt__leader_query_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__leader_query_resp__free_unpacked
+                     (Mgmt__LeaderQueryResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__get_attach_info_req__init
                      (Mgmt__GetAttachInfoReq         *message)
 {
@@ -636,6 +726,95 @@ const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
   mgmt__join_resp__field_indices_by_name,
   1,  mgmt__join_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__join_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__leader_query_req__field_descriptors[1] =
+{
+  {
+    "system",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__LeaderQueryReq, system),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__leader_query_req__field_indices_by_name[] = {
+  0,   /* field[0] = system */
+};
+static const ProtobufCIntRange mgmt__leader_query_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.LeaderQueryReq",
+  "LeaderQueryReq",
+  "Mgmt__LeaderQueryReq",
+  "mgmt",
+  sizeof(Mgmt__LeaderQueryReq),
+  1,
+  mgmt__leader_query_req__field_descriptors,
+  mgmt__leader_query_req__field_indices_by_name,
+  1,  mgmt__leader_query_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__leader_query_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors[2] =
+{
+  {
+    "currentLeader",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__LeaderQueryResp, currentleader),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__LeaderQueryResp, n_replicas),
+    offsetof(Mgmt__LeaderQueryResp, replicas),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__leader_query_resp__field_indices_by_name[] = {
+  0,   /* field[0] = currentLeader */
+  1,   /* field[1] = replicas */
+};
+static const ProtobufCIntRange mgmt__leader_query_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.LeaderQueryResp",
+  "LeaderQueryResp",
+  "Mgmt__LeaderQueryResp",
+  "mgmt",
+  sizeof(Mgmt__LeaderQueryResp),
+  2,
+  mgmt__leader_query_resp__field_descriptors,
+  mgmt__leader_query_resp__field_indices_by_name,
+  1,  mgmt__leader_query_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__leader_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[1] =
