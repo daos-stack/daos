@@ -93,7 +93,7 @@ struct bio_blob_hdr {
  */
 struct bio_dev_state {
 	uint64_t	 bds_timestamp;
-	uint64_t	*bds_media_errors; /* supports 128-bit values */
+	uint64_t	 bds_media_errors[2]; /* supports 128-bit values */
 	uint64_t	 bds_error_count; /* error log page */
 	/* I/O error counters */
 	uint32_t	 bds_bio_read_errs;
