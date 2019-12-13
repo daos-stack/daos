@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       0.7.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -333,6 +333,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Dec 13 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.7.0-2
+- Remove openmpi, pmix, and hwloc build requirement, use packages
+
 * Thu Dec 05 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.7.0-1
 - Version bump up to 0.7.0
 

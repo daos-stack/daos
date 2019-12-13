@@ -2,7 +2,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
 
