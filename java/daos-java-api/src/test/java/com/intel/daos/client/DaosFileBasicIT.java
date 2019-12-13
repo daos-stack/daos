@@ -39,7 +39,7 @@ public class DaosFileBasicIT {
   }
 
   @Test
-  public void testRename()throws Exception{
+  public void testRenameFile()throws Exception{
     DaosFile dir1 = client.getFile("/src/dir");
     dir1.mkdirs();
     DaosFile srcFile = client.getFile(dir1, "data1");
@@ -50,6 +50,63 @@ public class DaosFileBasicIT {
     String destPath = dir2.getPath() + "/data2";
     DaosFile destFile = srcFile.rename(destPath);
     Assert.assertEquals(0, destFile.length());
+  }
+
+  @Test
+  public void testRenameDir()throws Exception{
+    DaosFile dir1 = client.getFile("/src2/dir");
+    dir1.mkdirs();
+    DaosFile srcFile = client.getFile(dir1, "subdir");
+    srcFile.mkdir();
+
+    DaosFile dir2 = client.getFile("/src2/dir2");
+    dir2.mkdirs();
+    String destPath = dir2.getPath() + "/subdir";
+    DaosFile destFile = srcFile.rename(destPath);
+    Assert.assertTrue(destFile.isDirectory());
+  }
+
+  @Test
+  public void testVerifyEmptyDir()throws Exception{
+    DaosFile dir1 = client.getFile("/src3/");
+    dir1.mkdirs();
+    String[] children = dir1.listChildren();
+    Assert.assertEquals(0, children.length);
+  }
+
+  @Test
+  public void testVerifyMultipleChildren()throws Exception{
+    DaosFile dir1 = client.getFile("/src4/");
+    dir1.mkdirs();
+    DaosFile child1 = client.getFile(dir1, "c1");
+    child1.createNewFile();
+    DaosFile child2 = client.getFile(dir1, "c2");
+    child2.mkdir();
+    DaosFile child3 = client.getFile(dir1, "c3");
+    child3.createNewFile();
+    DaosFile child4 = client.getFile(dir1, "c4");
+    child4.createNewFile();
+    DaosFile child5 = client.getFile(dir1, "c5");
+    child5.mkdir();
+    String[] children = dir1.listChildren();
+    Assert.assertEquals(5, children.length);
+  }
+
+  @Test
+  public void testVerifyMultipleLongNameChildren()throws Exception{
+    DaosFile dir1 = client.getFile("/src5/");
+    dir1.mkdirs();
+    for(int i=0; i<20; i++) {
+      DaosFile child1 = client.getFile(dir1, i+"c10000000000000000000000000000000000c50000000000000000000000000000000000");
+      if(i%2 == 0){
+        child1.mkdir();
+      }else{
+        child1.createNewFile();
+      }
+    }
+
+    String[] children = dir1.listChildren();
+    Assert.assertEquals(20, children.length);
   }
 
   @Test
@@ -64,8 +121,9 @@ public class DaosFileBasicIT {
     }
     buffer.put(bytes);
 
-    daosFile.write(buffer, 0, 0, length);
+    long wl = daosFile.write(buffer, 0, 0, length);
     Assert.assertEquals(length, daosFile.length());
+    Assert.assertEquals(length, wl);
   }
 
   @Test

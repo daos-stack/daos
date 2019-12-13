@@ -592,7 +592,6 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsWrite
 		.sg_iovs = &sg_iov
 	};
 	d_iov_set(&sg_iov, buf, len);
-	daos_size_t size = 0;
 	int rc = dfs_write(dfs, file, &sgl, fileOffset, NULL);
 	if (rc) {
 		char *tmp = "Failed to write %ld bytes to file starting at %ld";
@@ -601,7 +600,7 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsWrite
 		throw_exception(env, msg, rc);
 		return 0;
 	}
-	return size;
+	return len;
 }
 
 //TODO: support max entries
@@ -659,7 +658,7 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsReadDir
 		}
 	}
 	jstring result;
-	if (!failed) {
+	if ((!failed) && buffer[0] != '\0' ) {
 		result = (*env)->NewStringUTF(env, buffer);
 	} else {
 		result = NULL;
