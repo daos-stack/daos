@@ -35,7 +35,7 @@ import (
 type PoolCreateReq struct {
 	ScmBytes   uint64
 	NvmeBytes  uint64
-	RankList   string
+	RankList   []uint32
 	NumSvcReps uint32
 	Sys        string
 	Usr        string
@@ -47,7 +47,7 @@ type PoolCreateReq struct {
 // PoolCreateResp struct contains response
 type PoolCreateResp struct {
 	UUID    string
-	SvcReps string
+	SvcReps []uint32
 }
 
 // PoolCreate will create a DAOS pool using provided parameters and generated

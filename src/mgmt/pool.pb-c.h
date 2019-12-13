@@ -35,12 +35,19 @@ typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
 struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
+  /*
+   * SCM size in bytes
+   */
   uint64_t scmbytes;
+  /*
+   * NVMe size in bytes
+   */
   uint64_t nvmebytes;
   /*
-   * comma separated integers
+   * target ranks
    */
-  char *ranks;
+  size_t n_ranks;
+  uint32_t *ranks;
   /*
    * desired number of pool service replicas
    */
@@ -69,7 +76,7 @@ struct  _Mgmt__PoolCreateReq
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -83,13 +90,14 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * comma separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, 0,NULL }
 
 
 /*
@@ -159,7 +167,7 @@ struct  _Mgmt__ListPoolsResp__Pool
    * pool service replica ranks
    */
   size_t n_svcreps;
-  int32_t *svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \

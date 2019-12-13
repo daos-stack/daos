@@ -124,13 +124,13 @@ func TestPoolDiscoveriesFromPB(t *testing.T) {
 			pbPools: []*mgmtpb.ListPoolsResp_Pool{
 				{
 					Uuid:    testUUIDs[0],
-					Svcreps: []int32{1},
+					Svcreps: []uint32{1},
 				},
 			},
 			expResult: []*PoolDiscovery{
 				{
 					UUID:        testUUIDs[0],
-					SvcReplicas: []int{1},
+					SvcReplicas: []uint32{1},
 				},
 			},
 		},
@@ -138,21 +138,21 @@ func TestPoolDiscoveriesFromPB(t *testing.T) {
 			pbPools: []*mgmtpb.ListPoolsResp_Pool{
 				{
 					Uuid:    testUUIDs[0],
-					Svcreps: []int32{1},
+					Svcreps: []uint32{1},
 				},
 				{
 					Uuid:    testUUIDs[1],
-					Svcreps: []int32{2},
+					Svcreps: []uint32{2},
 				},
 			},
 			expResult: []*PoolDiscovery{
 				{
 					UUID:        testUUIDs[0],
-					SvcReplicas: []int{1},
+					SvcReplicas: []uint32{1},
 				},
 				{
 					UUID:        testUUIDs[1],
-					SvcReplicas: []int{2},
+					SvcReplicas: []uint32{2},
 				},
 			},
 		},
@@ -160,13 +160,13 @@ func TestPoolDiscoveriesFromPB(t *testing.T) {
 			pbPools: []*mgmtpb.ListPoolsResp_Pool{
 				{
 					Uuid:    testUUIDs[0],
-					Svcreps: []int32{0, 1, 3, 5},
+					Svcreps: []uint32{0, 1, 3, 5},
 				},
 			},
 			expResult: []*PoolDiscovery{
 				{
 					UUID:        testUUIDs[0],
-					SvcReplicas: []int{0, 1, 3, 5},
+					SvcReplicas: []uint32{0, 1, 3, 5},
 				},
 			},
 		},
