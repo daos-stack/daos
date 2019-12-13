@@ -634,11 +634,11 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --instance_idx=idx, -I idx\n\
       Identifier for this server instance (default %u)\n\
-  --mem_size=mem_size, -r mem_size\n\
-      Allocates mem_size MB for SPDK when using primary process mode\n\
   --pinned_numa_node=numanode, -p numanode\n\
       Bind to cores within the specified NUMA node\n\
-    --help, -h\n\
+  --mem_size=mem_size, -r mem_size\n\
+      Allocates mem_size MB for SPDK when using primary process mode\n\
+  --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
 		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
