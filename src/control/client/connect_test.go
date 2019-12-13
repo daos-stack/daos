@@ -205,13 +205,12 @@ func TestStorageFormat(t *testing.T) {
 				return
 			}
 
-			//			AssertEqual(
-			//				t, cNvmeMap, NewClientNvmeResults(MockCtrlrResults, MockServers),
-			//				"unexpected client NVMe SSD controller results returned")
-			//
-			//			AssertEqual(
-			//				t, cMountMap, NewClientScmMountResults(MockMountResults, MockServers),
-			//				"unexpected client SCM Mount results returned")
+			for _, srv := range MockServers {
+				AssertEqual(t, formatResults[srv].Scm, MockMountResults,
+					"unexpected client SCM Mount results returned")
+				AssertEqual(t, formatResults[srv].Nvme, MockCtrlrResults,
+					"unexpected client NVMe SSD controller results returned")
+			}
 		})
 	}
 }
