@@ -1027,8 +1027,8 @@ void
 ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__ListContReq		*req = NULL;
-	Mgmt__ListContResp		resp = MGMT__LIST_CONT_RESP__INIT;
-	uuid_t				req_uuid;
+	Mgmt__ListContResp		 resp = MGMT__LIST_CONT_RESP__INIT;
+	uuid_t				 req_uuid;
 	uint8_t				*body;
 	size_t				 len;
 	struct daos_pool_cont_info	*containers = NULL;

@@ -2258,7 +2258,7 @@ ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 	crt_rpc_t			*rpc;
 	struct pool_list_cont_in	*in;
 	struct pool_list_cont_out	*out;
-	uint64_t			resp_ncont = 65536;
+	uint64_t			resp_ncont = 1024;
 	struct daos_pool_cont_info	*resp_cont = NULL;
 
 	D_DEBUG(DB_MGMT, DF_UUID": Getting container list\n", DP_UUID(uuid));
@@ -2306,7 +2306,6 @@ realloc_resp:
 		/* To simplify logic, destroy bulk hdl and buffer each time */
 		list_cont_bulk_destroy(in->plci_cont_bulk);
 		D_FREE(resp_cont);
-		resp_cont = NULL;
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
 		D_GOTO(rechoose, rc);
@@ -2314,11 +2313,10 @@ realloc_resp:
 
 	rc = out->plco_op.po_rc;
 	if (rc == -DER_TRUNC) {
-		/* resp_ncont buffer too small - double and retry */
-		resp_ncont *= 2;
+		/* resp_ncont too small - realloc with server-provided ncont */
+		resp_ncont = out->plco_ncont;
 		list_cont_bulk_destroy(in->plci_cont_bulk);
 		D_FREE(resp_cont);
-		resp_cont = NULL;
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
 		D_GOTO(realloc_resp, rc);
@@ -2334,7 +2332,7 @@ out_resp_buf:
 	if (rc != 0)
 		D_FREE(resp_cont);
 out_rpc:
-		crt_req_decref(rpc);
+	crt_req_decref(rpc);
 out_client:
 	rsvc_client_fini(&client);
 out:

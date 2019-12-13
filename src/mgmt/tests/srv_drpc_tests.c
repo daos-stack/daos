@@ -851,6 +851,7 @@ expect_drpc_list_cont_resp_with_error(Drpc__Response *resp,
 
 	mgmt__list_cont_resp__free_unpacked(lc_resp, NULL);
 }
+
 static void
 expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 					   struct daos_pool_cont_info *cont,
