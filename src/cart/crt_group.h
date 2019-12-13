@@ -61,7 +61,6 @@ struct crt_rank_map {
 
 
 #define RANK_LIST_REALLOC_SIZE 32
-#define CRT_NO_RANK 0xFFFFFFFF
 
 #define CRT_MAX_SEC_GRPS 10
 

@@ -2679,6 +2679,11 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
+	if (!crt_is_service()) {
+		D_WARN("Setting self rank is not supported on client\n");
+		return 0;
+	}
+
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
 		D_ERROR("Self rank was already set to %d\n",
 			default_grp_priv->gp_self);
@@ -2743,7 +2748,7 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (rank == grp_priv->gp_self)
+	if (rank == grp_priv->gp_self && crt_is_service())
 		return crt_self_uri_get(tag, uri_str);
 
 	rc = crt_grp_lc_lookup(grp_priv, 0, rank, tag, &uri, &hg_addr);

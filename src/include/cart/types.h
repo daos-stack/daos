@@ -112,6 +112,9 @@ typedef d_string_t	crt_group_id_t;
 /** default group ID */
 #define CRT_DEFAULT_GRPID	"crt_default_group"
 
+/** Indicates rank not being set */
+#define CRT_NO_RANK 0xFFFFFFFF
+
 typedef struct crt_group {
 	/** the group ID of this group */
 	crt_group_id_t	cg_grpid;
