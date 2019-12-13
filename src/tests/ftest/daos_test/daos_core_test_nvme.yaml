@@ -1,0 +1,24 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A 
+    - server-B 
+timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    bdev_class : nvme
+    bdev_list  : ["0000:5e:00.0","0000:5f:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+daos_tests:
+  num_clients:
+    num_clients: 1
+  num_replicas:
+    num_replicas: 1 
+  Tests: 
+    test_B:
+      daos_test: B 
+      test_name: DAOS Big IO tests
+      test_timeout: 600
