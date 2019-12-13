@@ -203,7 +203,10 @@ rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
-export OFI_INTERFACE=eth0
+
+# Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
+unset OFI_INTERFACE
+
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
