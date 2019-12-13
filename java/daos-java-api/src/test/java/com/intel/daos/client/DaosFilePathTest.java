@@ -3,7 +3,7 @@ package com.intel.daos.client;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class DaosFileTest {
+public class DaosFilePathTest {
 
   @Test
   public void testTwoLevelPathFromRoot() {

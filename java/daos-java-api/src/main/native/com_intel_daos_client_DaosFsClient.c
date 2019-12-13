@@ -201,7 +201,7 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_daosOpenCont
   (JNIEnv *env, jclass clientClass, jlong poolPtr, jstring contUuid, jint mode){
 	daos_handle_t poh;
 	memcpy(&poh, &poolPtr, sizeof(poh));
-	daos_cont_info_t	co_info;
+	daos_cont_info_t co_info;
 	const char *cont_str = (*env)->GetStringUTFChars(env, contUuid, NULL);
 	uuid_t cont_uuid;
 	uuid_parse(cont_str, cont_uuid);
@@ -242,7 +242,7 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_dfsMountFs
 	memcpy(&coh, &contPtr, sizeof(coh));
 	int rc = dfs_mount(poh, coh, flags, &dfsPtr);
 	if(rc){
-		char *msg = "Failed to mount fs";
+		char *msg = "Failed to mount fs ";
 		throw_exception_const_msg(env, msg, rc);
 		return -1;
 	}
@@ -697,6 +697,9 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat
 		char *tmp = "Failed to get StatAttribute of open object";
 		throw_exception_const_msg(env, tmp, rc);
 	}else{
+		if (bufferAddress == -1L){
+			return;
+		}
 		char *buffer = (char *)bufferAddress;
 		memcpy(buffer, &objId, 8);
 		cpyfield(env, buffer+8, &stat.st_mode, sizeof(stat.st_mode), 4);
@@ -704,10 +707,10 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat
 		cpyfield(env, buffer+20, &stat.st_gid, sizeof(stat.st_gid), 8);
 		cpyfield(env, buffer+28, &stat.st_blocks, sizeof(stat.st_blocks), 8);
 		cpyfield(env, buffer+36, &stat.st_size, sizeof(stat.st_size), 8);
-		cpyfield(env, buffer+44, &stat.st_atim, sizeof(stat.st_atim), 8);
-		cpyfield(env, buffer+52, &stat.st_mtim, sizeof(stat.st_mtim), 8);
-		cpyfield(env, buffer+60, &stat.st_ctim, sizeof(stat.st_ctim), 8);
-		buffer[68] = S_ISDIR(stat.st_mode) ? '\0':'1';
+		cpyfield(env, buffer+44, &stat.st_atim, sizeof(stat.st_atim), 16);
+		cpyfield(env, buffer+60, &stat.st_mtim, sizeof(stat.st_mtim), 16);
+		cpyfield(env, buffer+76, &stat.st_ctim, sizeof(stat.st_ctim), 16);
+		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
 	}
 }
 

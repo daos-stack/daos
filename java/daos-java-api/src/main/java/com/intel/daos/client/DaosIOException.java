@@ -120,7 +120,7 @@ public class DaosIOException extends IOException {
         daosMsg = errorMap.get(errorCode);
       }
     }
-    sb.append(" error msg: ").append(daosMsg);
+    sb.append(" error msg: ").append(daosMsg==null ? "":daosMsg);
     parsedMsg = sb.toString();
     return parsedMsg;
   }

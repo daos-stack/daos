@@ -8,7 +8,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-public class DaosFsClientIT {
+public class DaosFileBasicIT {
 
   private static String poolId;
   private static String contId;
@@ -17,33 +17,10 @@ public class DaosFsClientIT {
 
   @BeforeClass
   public static void setup()throws Exception{
-    poolId = "0eba76a4-5f9d-4c47-91c7-545b3677fb28";
-    contId = "3f56f74f-dd21-49ec-899e-2b410543314b";
+    poolId = System.getProperty("pool_id", DaosFsClientTestBase.DEFAULT_POOL_ID);
+    contId = System.getProperty("cont_id", DaosFsClientTestBase.DEFAULT_CONT_ID);
 
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId).containerId(contId);
-    client = builder.build();
-
-    try {
-      //clear all content
-      DaosFile daosFile = client.getFile("/");
-      String[] children = daosFile.listChildren();
-      for(String child : children) {
-        if(child.length() == 0 || ".".equals(child)){
-          continue;
-        }
-        String path = "/"+child;
-        DaosFile childFile = client.getFile(path);
-        if(childFile.delete(true)){
-          System.out.println("deleted folder "+path);
-        }else{
-          System.out.println("failed to delete folder "+path);
-        }
-      }
-    }catch (Exception e){
-      System.out.println("failed to clear/prepare file system");
-      e.printStackTrace();
-    }
+    client = DaosFsClientTestBase.prepareFs(poolId, contId);
   }
 
   @Test

@@ -9,6 +9,8 @@ public final class Constants {
   public static final int SET_XATTRIBUTE_REPLACE = 2;
 
 
+  public static final int ERROR_CODE_NOT_EXIST = 2;
+
   public static final String ERROR_NAME_PREFIX = "CUSTOM_ERR";
 
   public static final int CUSTOM_ERROR_BASE = -1000000;

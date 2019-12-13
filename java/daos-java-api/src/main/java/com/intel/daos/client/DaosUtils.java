@@ -39,7 +39,7 @@ public final class DaosUtils {
   /**
    * normalize path to make sure it's valid path
    * @param path
-   * @return
+   * @return String
    */
   public static String normalize(String path){
     if(path == null || (path=path.trim()).length() == 0){
@@ -60,7 +60,7 @@ public final class DaosUtils {
   /**
    * split parent and name
    * @param path
-   * @return
+   * @return String[]
    */
   public static String[] parsePath(String path) {
     int slash = path.lastIndexOf('/');

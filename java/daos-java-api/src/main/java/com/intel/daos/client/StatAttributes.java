@@ -52,11 +52,11 @@ public class StatAttributes {
 
   private final long length;
 
-  private final long accessTime;
+  private final TimeSpec accessTime;
 
-  private final long modifyTime;
+  private final TimeSpec modifyTime;
 
-  private final long createTime;
+  private final TimeSpec createTime;
 
   private final boolean file;
 
@@ -67,9 +67,9 @@ public class StatAttributes {
     gid = buffer.getLong();
     blockCnt = buffer.getLong();
     length = buffer.getLong();
-    accessTime = buffer.getLong();
-    modifyTime = buffer.getLong();
-    createTime = buffer.getLong();
+    accessTime = new TimeSpec(buffer.getLong(), buffer.getLong());
+    modifyTime = new TimeSpec(buffer.getLong(), buffer.getLong());
+    createTime = new TimeSpec(buffer.getLong(), buffer.getLong());
     file = buffer.get() > 0;
   }
 
@@ -81,11 +81,11 @@ public class StatAttributes {
     return objId;
   }
 
-  public long getAccessTime() {
+  public TimeSpec getAccessTime() {
     return accessTime;
   }
 
-  public long getCreateTime() {
+  public TimeSpec getCreateTime() {
     return createTime;
   }
 
@@ -101,7 +101,7 @@ public class StatAttributes {
     return length;
   }
 
-  public long getModifyTime() {
+  public TimeSpec getModifyTime() {
     return modifyTime;
   }
 
@@ -114,6 +114,24 @@ public class StatAttributes {
   }
 
   public static int objectSize(){
-    return 8*8 + 4 + 1;
+    return 5*8 + 4 + 3*16 + 1; //93
+  }
+
+  public static class TimeSpec{
+    private final long seconds;
+    private final long nano;
+
+    public TimeSpec(long seconds, long nano){
+      this.seconds = seconds;
+      this.nano = nano;
+    }
+
+    public long getNano() {
+      return nano;
+    }
+
+    public long getSeconds() {
+      return seconds;
+    }
   }
 }
