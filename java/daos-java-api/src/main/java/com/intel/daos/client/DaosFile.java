@@ -166,8 +166,9 @@ public class DaosFile {
         }
       }
     }
-
-    createCleaner();
+    if(isOpen()) {
+      createCleaner();
+    }
   }
 
   public boolean isOpen() {
@@ -210,13 +211,14 @@ public class DaosFile {
   }
 
   /**
-   * for internal use
+   * delete FS object. Non-empty directory will be deleted if
+   * <code>force</code> set to true
    *
    * @param force
    * @return
    * @throws IOException
    */
-  boolean delete(boolean force) throws IOException {
+  public boolean delete(boolean force) throws IOException {
     boolean deleted = client.delete(dfsPtr, parentPath, name, force);
     if (cleaner != null) {
       cleaned = true;

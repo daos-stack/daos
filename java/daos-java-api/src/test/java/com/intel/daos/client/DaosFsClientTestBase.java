@@ -3,6 +3,7 @@ package com.intel.daos.client;
 public class DaosFsClientTestBase {
 
   public static final String DEFAULT_POOL_ID = "0eba76a4-5f9d-4c47-91c7-545b3677fb28";
+//  public static final String DEFAULT_CONT_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
   public static final String DEFAULT_CONT_ID = "676074c6-a33a-4e07-8990-fe9279065145";
 
   public static DaosFsClient prepareFs(String poolId, String contId) throws Exception {

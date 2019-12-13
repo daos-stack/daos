@@ -95,7 +95,9 @@ public class Cleaner extends PhantomReference<Object> {
             try {//sleep for a while instead of busy wait
               Thread.sleep(2000);
             }catch (InterruptedException e){
-              log.info("cleaner thread interrupted", e);
+              if(log.isDebugEnabled()) {
+                log.debug("cleaner thread interrupted", e);
+              }
               break;
             }
           }
