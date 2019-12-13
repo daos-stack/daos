@@ -91,8 +91,6 @@ struct failed_shard {
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
-void
-reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,

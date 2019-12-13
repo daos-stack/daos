@@ -52,11 +52,13 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 		*/
 		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
 			f_shard->fs_shard_idx);
+
 		D_ASSERTF(f_new->fs_fseq != f_shard->fs_fseq,
 			  "same fseq %u!\n", f_new->fs_fseq);
 
 		if (f_new->fs_fseq < f_shard->fs_fseq)
 			continue;
+
 		d_list_add(&f_new->fs_list, tmp);
 		return;
 	}
@@ -92,20 +94,22 @@ alloc_f_shard(struct failed_shard **f_new,  unsigned int shard_idx,
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool is_reint)
+		struct pool_target *tgt, bool for_reint)
 {
 	struct failed_shard *f_new;
 	int rc;
 
 	rc = alloc_f_shard(&f_new, shard_idx, tgt);
 
-	if (rc == 0 && is_reint == false) {
+	if (rc != 0)
+		return rc;
+
+	if(!for_reint)
 		f_new->fs_tgt_id = -1;
-		remap_add_one(remap_list, f_new);
-	} else if (rc == 0 && is_reint == true) {
+	else
 		f_new->fs_tgt_id = tgt->ta_comp.co_id;
-		d_list_add(&f_new->fs_list, remap_list);
-	}
+
+	remap_add_one(remap_list, f_new);
 
 	return rc;
 }

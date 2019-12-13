@@ -214,9 +214,8 @@ main(int argc, char **argv)
 		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
 	D_PRINT("\n");
 	D_ASSERT(spare_cnt >= 1);
-	D_ASSERT(shard_ids[spare_cnt - 1] == 0);
-	D_ASSERT(spare_tgt_ranks[spare_cnt - 1] ==
-			lo_3->ol_shards[0].po_target);
+	D_ASSERT(shard_ids[0] == 0);
+	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
 
 	failed_tgts[0] = spare_tgt_candidate[0];
 	failed_tgts[1] = spare_tgt_candidate[1];
