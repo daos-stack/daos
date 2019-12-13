@@ -1,3 +1,26 @@
+/*
+ * (C) Copyright 2018-2019 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+
 #include "com_intel_daos_client_DaosFsClient.h"
 #include <sys/stat.h>
 #include <sys/xattr.h>
@@ -702,14 +725,14 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat
 		char *buffer = (char *)bufferAddress;
 		memcpy(buffer, &objId, 8);
 		cpyfield(env, buffer+8, &stat.st_mode, sizeof(stat.st_mode), 4);
-		cpyfield(env, buffer+12, &stat.st_uid, sizeof(stat.st_uid), 8);
-		cpyfield(env, buffer+20, &stat.st_gid, sizeof(stat.st_gid), 8);
-		cpyfield(env, buffer+28, &stat.st_blocks, sizeof(stat.st_blocks), 8);
-		cpyfield(env, buffer+36, &stat.st_size, sizeof(stat.st_size), 8);
-		cpyfield(env, buffer+44, &stat.st_atim, sizeof(stat.st_atim), 16);
-		cpyfield(env, buffer+60, &stat.st_mtim, sizeof(stat.st_mtim), 16);
-		cpyfield(env, buffer+76, &stat.st_ctim, sizeof(stat.st_ctim), 16);
-		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
+		cpyfield(env, buffer+12, &stat.st_uid, sizeof(stat.st_uid), 4);
+		cpyfield(env, buffer+16, &stat.st_gid, sizeof(stat.st_gid), 4);
+		cpyfield(env, buffer+20, &stat.st_blocks, sizeof(stat.st_blocks), 8);
+		cpyfield(env, buffer+28, &stat.st_size, sizeof(stat.st_size), 8);
+		cpyfield(env, buffer+36, &stat.st_atim, sizeof(stat.st_atim), 16);
+		cpyfield(env, buffer+52, &stat.st_mtim, sizeof(stat.st_mtim), 16);
+		cpyfield(env, buffer+68, &stat.st_ctim, sizeof(stat.st_ctim), 16);
+		buffer[84] = S_ISDIR(stat.st_mode) ? '\0':'1';
 	}
 }
 
@@ -736,7 +759,7 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr
 	dfs_obj_t *file = *(dfs_obj_t**)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	long value_len = expectedValueLen;
-	char *value = (char *)malloc(value_len);
+	char *value = (char *)malloc(value_len+1); // 1 for \0
 	jstring ret = NULL;
 	if (!value) {
 		char *tmp = "Failed to allocate %d bytes for reading extended attribute value";
@@ -753,6 +776,7 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr
 		throw_exception(env, msg, rc);
 		goto out;
 	}
+	value[value_len] = '\0';
 	ret = (*env)->NewStringUTF(env, value);
 
 out:

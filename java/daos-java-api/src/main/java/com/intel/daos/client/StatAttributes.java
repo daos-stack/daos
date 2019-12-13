@@ -44,9 +44,9 @@ public class StatAttributes {
 
   private final int mode;
 
-  private final long uid;
+  private final int uid;
 
-  private final long gid;
+  private final int gid;
 
   private final long blockCnt;
 
@@ -63,8 +63,8 @@ public class StatAttributes {
   protected StatAttributes(ByteBuffer buffer){
     objId = buffer.getLong();
     mode = buffer.getInt();
-    uid = buffer.getLong();
-    gid = buffer.getLong();
+    uid = buffer.getInt();
+    gid = buffer.getInt();
     blockCnt = buffer.getLong();
     length = buffer.getLong();
     accessTime = new TimeSpec(buffer.getLong(), buffer.getLong());
@@ -89,7 +89,7 @@ public class StatAttributes {
     return createTime;
   }
 
-  public long getGid() {
+  public int getGid() {
     return gid;
   }
 
@@ -105,7 +105,7 @@ public class StatAttributes {
     return modifyTime;
   }
 
-  public long getUid() {
+  public int getUid() {
     return uid;
   }
 
@@ -114,7 +114,7 @@ public class StatAttributes {
   }
 
   public static int objectSize(){
-    return 5*8 + 4 + 3*16 + 1; //93
+    return 3*8 + 3*4 + 3*16 + 1; //85
   }
 
   public static class TimeSpec{

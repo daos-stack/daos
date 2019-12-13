@@ -177,6 +177,11 @@ public class DaosFile {
     }
   }
 
+  /**
+   * check if file is opened from Daos
+   *
+   * @return true if file is opened, false otherwise
+   */
   public boolean isOpen() {
     return objId != 0;
   }
@@ -208,7 +213,7 @@ public class DaosFile {
   }
 
   /**
-   * delete FS object
+   * delete FS object.
    *
    * @throws IOException
    */
@@ -221,7 +226,7 @@ public class DaosFile {
    * <code>force</code> set to true
    *
    * @param force
-   * @return
+   * @return true if FS object is deleted. False otherwise
    * @throws IOException
    */
   public boolean delete(boolean force) throws IOException {
@@ -232,12 +237,25 @@ public class DaosFile {
     return deleted;
   }
 
+  /**
+   * length of FS object
+   * @return length in bytes
+   * @throws IOException
+   */
   public long length() throws IOException {
     open(true);
     long size = client.dfsGetSize(dfsPtr, objId);
     return size;
   }
 
+  /**
+   * list all children of this directory
+   *
+   * @return String array of file name.
+   * Empty string array is returned for empty directory
+   *
+   * @throws IOException
+   */
   public String[] listChildren() throws IOException {
     open(true);
     //no limit to max returned entries for now
@@ -262,21 +280,57 @@ public class DaosFile {
     client.dfsSetExtAttr(dfsPtr, objId, name, value, flags);
   }
 
+  /**
+   * get extended attribute
+   *
+   * @param name
+   * @param expectedValueLen
+   * expected value length. Make sure you give enough length so that actual value is not truncated.
+   * @return value in string
+   * value may be truncated if parameter <code>expectedValueLen</code> is less than actual value length
+   * @throws IOException
+   */
   public String getExtAttribute(String name, int expectedValueLen) throws IOException {
     open(true);
     return client.dfsGetExtAttr(dfsPtr, objId, name, expectedValueLen);
   }
 
+  /**
+   * remove extended attribute
+   *
+   * @param name
+   * @throws IOException
+   */
   public void remoteExtAttribute(String name) throws IOException {
     open(true);
     client.dfsRemoveExtAttr(dfsPtr, objId, name);
   }
 
-  public void getChunkSize() throws IOException {
+  /**
+   * get chunk size of this file
+   * @throws IOException
+   */
+  public long getChunkSize() throws IOException {
     open(true);
-    client.dfsGetChunkSize(objId);
+    return client.dfsGetChunkSize(objId);
   }
 
+  /**
+   * read <code>len</code> of data from file at <code>fileOffset</code> to <code>buffer</code> starting from
+   * <code>bufferOffset</code>.
+   *
+   * @param buffer
+   * Must be instance of {@link DirectBuffer}
+   * @param bufferOffset
+   * buffer offset
+   * @param fileOffset
+   * file offset
+   * @param len
+   * expected length in bytes read from file to buffer
+   * @return actual read bytes
+   *
+   * @throws IOException
+   */
   public long read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
     //no asynchronous for now
@@ -287,6 +341,23 @@ public class DaosFile {
     return client.dfsRead(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
+  /**
+   * write <code>len</code> bytes to file starting at <code>fileOffset</code> from <code>buffer</code> at
+   * <code>bufferOffset</code>
+   *
+   * @param buffer
+   * Must be instance of {@link DirectBuffer}
+   * @param bufferOffset
+   * buffer offset
+   * @param fileOffset
+   * file offset
+   * @param len
+   * length in bytes of data to write
+   * @return it's same as the parameter <code>len</code> since underlying DAOS FS doesn't give length of actual
+   * written data
+   *
+   * @throws IOException
+   */
   public long write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
     //no asynchronous for now
@@ -297,22 +368,52 @@ public class DaosFile {
     return client.dfsWrite(dfsPtr, objId, ((DirectBuffer) buffer).address() + bufferOffset, fileOffset, len, 0);
   }
 
+  /**
+   * create directory
+   *
+   * @throws IOException
+   */
   public void mkdir() throws IOException {
     mkdir(mode);
   }
 
+  /**
+   * create directory with file <code>mode</code> specified. It should be octal value like 0755
+   *
+   * @param mode
+   * @throws IOException
+   */
   public void mkdir(int mode) throws IOException {
     client.mkdir(path, mode, false);
   }
 
+  /**
+   * create this directory or all its ancestors if they are not existed
+   *
+   * @throws IOException
+   */
   public void mkdirs() throws IOException {
     mkdirs(mode);
   }
 
+  /**
+   * same as {@link #mkdirs()} with file <code>mode</code> specified.
+   *
+   * @param mode
+   * @throws IOException
+   *
+   * @see {@link #mkdir(int)} for <code>mode</code>
+   */
   public void mkdirs(int mode) throws IOException {
     client.mkdir(path, mode, true);
   }
 
+  /**
+   * check existence of file
+   *
+   * @return true if file exists. false otherwise
+   * @throws IOException
+   */
   public boolean exists() throws IOException {
     open(false);
     if (!this.isOpen()){
@@ -333,6 +434,12 @@ public class DaosFile {
     return true;
   }
 
+  /**
+   * rename this file to another file denoted by <code>destPath</code>
+   * @param destPath
+   * @return new DaosFile denoted by <code>destPath</code>
+   * @throws IOException
+   */
   public DaosFile rename(String destPath) throws IOException {
     destPath = DaosUtils.normalize(destPath);
     if (path.equals(destPath)) {
@@ -342,6 +449,12 @@ public class DaosFile {
     return new DaosFile(destPath, accessFlags, client);
   }
 
+  /**
+   * check if this file is a directory
+   *
+   * @return true if it's directory. false otherwise
+   * @throws IOException
+   */
   public boolean isDirectory() throws IOException {
     return client.dfsIsDirectory(getMode());
   }
@@ -356,11 +469,25 @@ public class DaosFile {
     }
   }
 
+  /**
+   * get mode of this file
+   * @return file mode
+   * @throws IOException
+   */
   public int getMode() throws IOException {
     open(true);
     return client.dfsGetMode(objId);
   }
 
+  /**
+   * get stat attributes of this file. It's also used for checking existence of opened FS object
+   * @param retrieve
+   * true if you want to retrieve attributes info back. false if you want to just check file existence.
+   * @return StatAttributes
+   * @throws IOException
+   *
+   * @see {@link StatAttributes}
+   */
   StatAttributes getStatAttributes(boolean retrieve) throws IOException {
     open(true);
     ByteBuffer buffer = null;
@@ -371,26 +498,55 @@ public class DaosFile {
     return buffer==null ? null:new StatAttributes(buffer);
   }
 
+  /**
+   * retrieve stat attributes of this file
+   *
+   * @return StatAttributes
+   * @throws IOException
+   *
+   * @see {@link StatAttributes}
+   */
   public StatAttributes getStatAttributes() throws IOException {
     return getStatAttributes(true);
   }
 
+  /**
+   * parent {@link DaosFile}
+   * @return parent file
+   */
   public DaosFile getParent() {
     return parent;
   }
 
+  /**
+   * parent path of this file
+   * @return parent path
+   */
   public String getParentPath() {
     return parentPath;
   }
 
+  /**
+   * full path of this file
+   * @return file path
+   */
   public String getPath() {
     return path;
   }
 
+  /**
+   * name part of this file
+   * @return file name
+   */
   public String getName() {
     return name;
   }
 
+  /**
+   * get DAOS object id of this file
+   * @return DAOS object id
+   * @throws IOException
+   */
   protected long getObjId() throws IOException {
     open(true);
     return objId;

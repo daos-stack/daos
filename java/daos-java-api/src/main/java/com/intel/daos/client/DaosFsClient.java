@@ -544,8 +544,8 @@ public final class DaosFsClient {
    * Order of fields to be read.
    *     objId = buffer.getLong();
    *     mode = buffer.getInt();
-   *     uid = buffer.getLong();
-   *     gid = buffer.getLong();
+   *     uid = buffer.getInt();
+   *     gid = buffer.getInt();
    *     blockCnt = buffer.getLong();
    *     length = buffer.getLong();
    *     accessTime = buffer.getLong() buffer.getLong();
