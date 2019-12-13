@@ -359,7 +359,11 @@ func (srv *IOServerInstance) StartManagementService() error {
 		}
 	}
 
-	// Notify the I/O server that it may set up its server modules now.
+	return nil
+}
+
+// LoadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) LoadModules() error {
 	return srv.callSetUp()
 }
 

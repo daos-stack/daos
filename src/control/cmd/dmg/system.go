@@ -34,9 +34,29 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
+	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+}
+
+type leaderQueryCmd struct {
+	logCmd
+	cfgCmd
+	connectedCmd
+}
+
+func (cmd *leaderQueryCmd) Execute(_ []string) error {
+	resp, err := cmd.conns.LeaderQuery(client.LeaderQueryReq{
+		System: cmd.config.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
+	}
+
+	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
+		strings.Join(resp.Replicas, ", "))
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.
