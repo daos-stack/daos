@@ -23,10 +23,9 @@ BuildRequires: cart-devel-%{cart_sha1}
 %else
 BuildRequires: cart-devel
 %endif
-# temporarliy until we can land ompi@PR-10 and
-# scons_local@bmurrell/ompi-env-module
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
+BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
