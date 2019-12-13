@@ -78,7 +78,7 @@ class CartSelfTest(TestWithoutServers):
         self.env_dict = {
             "CRT_PHY_ADDR_STR":     "ofi+sockets",
             "CRT_CTX_NUM":          "8",
-            "OFI_INTERFACE":        "eth0",
+            "OFI_INTERFACE":        os.environ.get("OFI_INTERFACE", "eth0"),
             "CRT_CTX_SHARE_ADDR":   str(self.share_addr)
         }
         self.env_list = []
