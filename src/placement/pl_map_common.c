@@ -104,7 +104,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	if (rc != 0)
 		return rc;
 
-	if(!for_reint)
+	if (!for_reint)
 		f_new->fs_tgt_id = -1;
 	else
 		f_new->fs_tgt_id = tgt->ta_comp.co_id;
