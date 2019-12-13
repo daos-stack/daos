@@ -48,7 +48,7 @@ def cart_repo = "cart@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def cart_repos = component_repos + ' ' + cart_repo
 //def cart_rpms = "openpa libfabric pmix ompi mercury"
 // don't need to install any RPMs for testing yet
-def cart_rpms = ""
+def cart_rpms = "openmpi3 environment-modules"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&

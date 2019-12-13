@@ -21,7 +21,6 @@ carthome := $(exec_prefix)/lib/$(DEB_BUILD_MULTIARCH)/$(name)
 
 SCONS = scons
 DEB_SCONS_OPTIONS := --config=force USE_INSTALLED=all \
-        OMPI_PREBUILT=/usr/lib/$(DEB_BUILD_MULTIARCH)/openmpi \
 	PREFIX=$(buildroot)$(prefix)
 
 %:
@@ -65,13 +64,11 @@ override_dh_auto_install:
 	find . -name SConscript | \
 	  xargs sed -i -e '/AppendUnique(RPATH=.*)/d'
 	mkdir -p $(buildroot)$(prefix)/include
-	cp -r /usr/lib/$(DEB_BUILD_MULTIARCH)/openmpi/include/* \
-	  $(buildroot)$(prefix)/include
 	$(SCONS) $(DEB_SCONS_OPTIONS) install
 	find . -name src/SConscript -exec mv -v -f '{}_orig' '{}' ';'
 	sed -i -r -e s%.+$(buildroot)$(prefix)%$(prefix)%g \
 	  $(buildroot)$(prefix)/TESTING/.build_vars.*
-	for f in cart_ctl crt_launch self_test ; do \
+	for f in cart_ctl self_test ; do \
 	  mv $(buildroot)$(prefix)/bin/$$f \
 	    $(buildroot)$(prefix)/bin/$(DEB_BUILD_MULTIARCH)-$$f ; \
 	  ln -s $(DEB_BUILD_MULTIARCH)-$$f $(buildroot)$(prefix)/bin/$$f ;done

@@ -61,7 +61,7 @@ RUN yum -y install epel-release; \
            pandoc patch python-requests python2-pygithub                  \
            python36-pylint python36-pep8 python36-requests                \
            python36-pygithub readline-devel sg3_utils ShellCheck yasm     \
-           python36-scons
+           python36-scons openmpi3-devel hwloc-devel environment-modules
 
 # CaRT specific
 RUN yum -y install python36-paramiko python36-PyYAML rsync valgrind
@@ -82,6 +82,9 @@ ARG NOBUILD
 # Fetch CaRT code
 RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/cart.git; fi
 WORKDIR /home/$USER/cart
+
+SHELL ["/bin/sh", "-c", "-l"]
+RUN module load mpi/openmpi3-x86_64
 
 # Build CaRT & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi

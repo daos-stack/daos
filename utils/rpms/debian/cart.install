@@ -1,7 +1,5 @@
 usr/bin/cart_ctl
-usr/bin/crt_launch
 usr/bin/*-cart_ctl
-usr/bin/*-crt_launch
 usr/bin/self_test
 usr/bin/*-self_test
 usr/lib/*/cart/utils/*

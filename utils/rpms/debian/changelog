@@ -1,3 +1,11 @@
+cart (4.1.0-1) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * 4.1.0-1 version of CaRT
+  * Removed explicit build of ompi and hwloc
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 11 Dec 2019 15:41:01 +0000
+
 cart (4.0.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]

@@ -26,7 +26,7 @@ hosts: !mux
 tests: !mux
   iv:
     name: iv_basic
-    srv_bin: crt_launch
+    srv_bin: ../bin/crt_launch
     srv_arg: "-e tests/iv_server -v 3"
     srv_env: ""
     srv_ppn: "5"

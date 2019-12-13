@@ -262,7 +262,7 @@ class CartIvOneNodeTest(Test):
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
-            self.utils.print("TEST FAILED: %s", str(exception))
+            self.utils.print("TEST FAILED: %s" % str(exception))
 
         ########## Shutdown Servers ##########
 

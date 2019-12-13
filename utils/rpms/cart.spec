@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       4.0.0
+Version:       4.1.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -14,7 +14,8 @@ BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
 BuildRequires: openpa-devel
 BuildRequires: mercury-devel = 1.0.1-21%{?dist}
-BuildRequires: ompi-devel
+BuildRequires: openmpi3-devel
+BuildRequires: libpsm2-devel
 BuildRequires: libevent-devel
 BuildRequires: boost-devel
 BuildRequires: libuuid-devel
@@ -57,6 +58,7 @@ Requires: libfabric-devel
 # can't do this until we can land ompi@PR-10 and
 # scons_local@bmurrell/ompi-env-module
 #Requires: ompi-devel
+Requires: openmpi-devel
 Requires: hwloc-devel
 %if %{defined sha1}
 Provides: %{name}-devel-%{sha1}
@@ -136,6 +138,11 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Wed Dec 11 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 4.1.0-1
+- Libcart version 4.1.0-1
+- OpenMPI build modified to use installed packages
+- Add BR: libpsm2-devel since we don't get that with ompi-devel now
+
 * Mon Dec 9 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.0.0-1
 - Libcart version 4.0.0-1
 - PMIX support removed along with all associated code

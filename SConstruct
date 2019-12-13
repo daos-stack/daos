@@ -90,8 +90,7 @@ def scons():
 
     opts = Variables(opts_file)
     prereqs = PreReqComponent(env, opts, arch=platform)
-    prereqs.load_definitions(prebuild=['ompi', 'mercury', 'uuid', 'crypto',
-                                       'boost'])
+    prereqs.load_definitions(prebuild=['mercury', 'uuid', 'crypto', 'boost'])
 
     if not env.GetOption('clean'):
         run_checks(env)
