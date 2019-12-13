@@ -10,6 +10,11 @@ hosts:
 timeout: 800
 server_config:
     name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -18,6 +23,7 @@ pool:
         group: daos_server
     createsize:
         scm_size: 1600000000
+        nvme_size: 9000000000
     createsvc:
         svcn: 1
 mdtest:
@@ -55,11 +61,20 @@ mdtest:
           depth: 5
     fpp:
       flags: "-u"
-      api: 'POSIX'
-      write_bytes: 4096
-      read_bytes: 4096
-      branching_factor: 1
-      num_of_files_dirs: 1000
-      depth: 20
+      mdtest_api: !mux
+        posix_api:
+          api: 'POSIX'
+          write_bytes: 4096
+          read_bytes: 4096
+          branching_factor: 1
+          num_of_files_dirs: 1000
+          depth: 20
+        dfs_api:
+          api: 'DFS'
+          write_bytes: 0
+          read_bytes: 0
+          branching_factor: 2
+          items: 10
+          depth: 5
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
