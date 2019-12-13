@@ -312,12 +312,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[9
   {
     "ranks",
     3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolCreateReq, n_ranks),
     offsetof(Mgmt__PoolCreateReq, ranks),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -442,12 +442,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   {
     "svcreps",
     2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolCreateResp, n_svcreps),
     offsetof(Mgmt__PoolCreateResp, svcreps),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -578,7 +578,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__list_pools_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__list_pools_req__field_descriptors[1] =
 {
   {
     "sys",
@@ -592,27 +592,14 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_req__field_descriptors[2]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "numPools",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ListPoolsReq, numpools),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__list_pools_req__field_indices_by_name[] = {
-  1,   /* field[1] = numPools */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__list_pools_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor =
 {
@@ -622,7 +609,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor =
   "Mgmt__ListPoolsReq",
   "mgmt",
   sizeof(Mgmt__ListPoolsReq),
-  2,
+  1,
   mgmt__list_pools_req__field_descriptors,
   mgmt__list_pools_req__field_indices_by_name,
   1,  mgmt__list_pools_req__number_ranges,
@@ -646,12 +633,12 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
   {
     "svcreps",
     2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__ListPoolsResp__Pool, n_svcreps),
     offsetof(Mgmt__ListPoolsResp__Pool, svcreps),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -680,7 +667,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor =
   (ProtobufCMessageInit) mgmt__list_pools_resp__pool__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__list_pools_resp__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__list_pools_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -706,28 +693,15 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__field_descriptors[3
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "numPools",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ListPoolsResp, numpools),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__list_pools_resp__field_indices_by_name[] = {
-  2,   /* field[2] = numPools */
   1,   /* field[1] = pools */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__list_pools_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor =
 {
@@ -737,7 +711,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor =
   "Mgmt__ListPoolsResp",
   "mgmt",
   sizeof(Mgmt__ListPoolsResp),
-  3,
+  2,
   mgmt__list_pools_resp__field_descriptors,
   mgmt__list_pools_resp__field_indices_by_name,
   1,  mgmt__list_pools_resp__number_ranges,

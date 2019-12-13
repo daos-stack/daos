@@ -1277,7 +1277,7 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = out->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
-		struct dc_pool *pool = dc_task_get_priv(task);
+		struct dc_pool *pool = arg->dqa_pool;
 
 		D_WARN("pool map buffer size (%ld) < required (%u)\n",
 			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);

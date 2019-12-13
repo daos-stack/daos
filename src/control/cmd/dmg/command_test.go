@@ -172,6 +172,16 @@ func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	return make(common.SystemMemberResults, 0), nil
 }
 
+func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", req.System))
+	return &client.LeaderQueryResp{}, nil
+}
+
+func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
+	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
+	return &client.ListPoolsResp{}, nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
