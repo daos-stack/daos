@@ -216,7 +216,9 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 		return "", err
 	}
 
-	fmt.Fprintf(out, "\n%s\n", errGroups)
+	if len(errGroups) > 0 {
+		fmt.Fprintf(out, "\n%s\n", errGroups)
+	}
 
 	if summary {
 		if len(groups) == 0 {
