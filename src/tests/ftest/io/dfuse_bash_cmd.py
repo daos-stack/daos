@@ -168,7 +168,8 @@ class BashCmd(TestWithServers):
             # perform test for multiple containers.
             for count in range(self.cont_count):
                 self.start_dfuse(count)
-                abs_dir_path = str(self.dfuse.mount_dir.value + "/" + self.dir_name)
+                abs_dir_path = str(self.dfuse.mount_dir.value + "/"
+                                   + self.dir_name)
                 abs_file_path1 = str(abs_dir_path + "/" + self.file_name1)
                 abs_file_path2 = str(abs_dir_path + "/" + self.file_name2)
                 # check if the dir exists.
