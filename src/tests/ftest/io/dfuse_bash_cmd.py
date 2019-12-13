@@ -115,7 +115,7 @@ class BashCmd(TestWithServers):
         self.dfuse.get_params(self)
 
         # update dfuse params
-        self.dfuse.mount_dir.update("/tmp/" + self.pool.uuid + "daos_dfuse"
+        self.dfuse.mount_dir.update("/tmp/" + self.pool.uuid + "_daos_dfuse"
                                     + str(count))
         self.dfuse.set_dfuse_params(self.pool)
         self.dfuse.set_dfuse_cont_param(self.create_cont())
@@ -168,9 +168,9 @@ class BashCmd(TestWithServers):
             # perform test for multiple containers.
             for count in range(self.cont_count):
                 self.start_dfuse(count)
-                abs_dir_path = self.dfuse.mount_dir.value + "/" + self.dir_name
-                abs_file_path1 = abs_dir_path + "/" + self.file_name1
-                abs_file_path2 = abs_dir_path + "/" + self.file_name2
+                abs_dir_path = str(self.dfuse.mount_dir.value + "/" + self.dir_name)
+                abs_file_path1 = str(abs_dir_path + "/" + self.file_name1)
+                abs_file_path2 = str(abs_dir_path + "/" + self.file_name2)
                 # check if the dir exists.
                 dir_exists, _ = general_utils.check_file_exists(
                     self.hostlist_clients[:-1], abs_dir_path, directory=True)
