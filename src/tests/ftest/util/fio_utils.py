@@ -318,6 +318,7 @@ class Fio(FioCommand):
         """
         # run fio command
         self.run_cmd = self.run_cmd.replace("fio", ' ').replace(" POSIX", '')
+        print("Running: {}".format('fio' + self.run_cmd))
         ret_code = general_utils.pcmd(host, 'fio' + self.run_cmd)
 
         # check for any failures

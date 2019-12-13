@@ -43,7 +43,6 @@ class FioBase(TestWithServers):
         super(FioBase, self).__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
-        self.hostfile_clients_slots = None
         self.dfuse = None
         self.container = None
 
@@ -59,6 +58,8 @@ class FioBase(TestWithServers):
                  if item[0].startswith('/run/fio')]))
         self.namespace.insert(
             0, self.namespace.pop(self.namespace.index('/run/fio/global')))
+        # removing runner node from hostlist_client, only need one client node.
+        self.hostlist_clients = self.hostlist_clients[:-1]
         # Get the parameters for Fio
         self.fio_cmd = Fio(self.namespace, self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
@@ -123,7 +124,8 @@ class FioBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           str(self.dfuse), str(
+                               NodeSet.fromlist(self.dfuse.hosts)),
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 

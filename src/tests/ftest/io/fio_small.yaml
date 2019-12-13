@@ -12,6 +12,8 @@ server_config:
     servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -36,7 +38,7 @@ fio:
     bs: !mux
       bs_256B:
         blocksize: '256B'
-        size: '16M'
+        size: '1M'
       bs_1M:
         blocksize: '1M'
         size: '1G'
@@ -48,6 +50,5 @@ fio:
   test:
     name: 'test'
     numjobs: 1
-
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
