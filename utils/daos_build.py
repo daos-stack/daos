@@ -37,9 +37,8 @@ def configure_mpi(prereqs, env, required=None):
     for mpi in mpis:
         if prereqs.check_component(mpi):
             env.ParseConfig('pkg-config --libs --cflags %s' % mpi)
-            print("%s is installed" % mpi);
+            print("%s is installed" % mpi)
             return mpi
-        print("No %s installed and/or loaded" % mpi);
-    print("No OMPI installed");
+        print("No %s installed and/or loaded" % mpi)
+    print("No OMPI installed")
     return None
-
