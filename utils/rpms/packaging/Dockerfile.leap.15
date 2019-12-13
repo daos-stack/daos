@@ -44,3 +44,5 @@ RUN set -x; zypper --non-interactive ar ${TOOLS}; \
       'openSUSE.org tools (openSUSE_15.1)'
 
 RUN zypper --non-interactive in build
+
+ENV PKG_CONFIG_PATH=/usr/lib64/mpi/gcc/openmpi3/lib/pkgconfig

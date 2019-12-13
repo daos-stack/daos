@@ -20,8 +20,6 @@ def scons():
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
-    prereqs.require(denv, mpi)
-
     daosctl = denv.Program('daosctl', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', daosctl)
 

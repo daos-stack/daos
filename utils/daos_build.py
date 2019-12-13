@@ -1,5 +1,8 @@
 """Common DAOS build functions"""
 from SCons.Script import Literal
+from prereq_tools import EnvironmentModule
+
+ENV_MODULE = EnvironmentModule()
 
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
@@ -35,8 +38,9 @@ def configure_mpi(prereqs, env, required=None):
             mpis = required
 
     for mpi in mpis:
+        ENV_MODULE.load_mpi(mpi)
         if prereqs.check_component(mpi):
-            env.ParseConfig('pkg-config --libs --cflags %s' % mpi)
+            prereqs.require(env, mpi)
             print("%s is installed" % mpi)
             return mpi
         print("No %s installed and/or loaded" % mpi)
