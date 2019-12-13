@@ -111,16 +111,20 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 // scanCmdDisplay returns tabulated output of grouped host summaries or groups
 // matched on all tabulatd device details per host.
 func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
+	out := &bytes.Buffer{}
+
 	groups, err := groupScanResults(result, summary)
 	if err != nil {
 		return "", err
 	}
 
 	if summary {
+		if len(groups) == 0 {
+			return out.String(), nil
+		}
 		return storageSummaryTable("Hosts", "SCM Total", "NVMe Total", groups)
 	}
 
-	out := &bytes.Buffer{}
 	for _, res := range groups.Keys() {
 		hostset := groups[res].RangedString()
 		lineBreak := strings.Repeat("-", len(hostset))
@@ -212,14 +216,16 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 		return "", err
 	}
 
-	fmt.Fprintf(out, "%s\n", errGroups)
+	fmt.Fprintf(out, "\n%s\n", errGroups)
 
 	if summary {
+		if len(groups) == 0 {
+			return out.String(), nil
+		}
 		sout, err := storageSummaryTable("Hosts", "SCM Format", "NVMe Format", groups)
 		if err != nil {
 			return "", err
 		}
-
 		return out.String() + sout, nil
 	}
 
