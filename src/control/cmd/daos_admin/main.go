@@ -24,9 +24,11 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -35,6 +37,8 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+var daosVersion string
 
 func exitWithError(log logging.Logger, err error) {
 	if err == nil {
@@ -61,9 +65,23 @@ func configureLogging(binName string) logging.Logger {
 		WithLogLevel(logLevel)
 }
 
+func checkParentName(log logging.Logger) {
+	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
+	if err != nil {
+		exitWithError(log, errors.Wrap(err, "failed to check parent process binary"))
+	}
+	daosServer := "daos_server"
+	if !strings.HasSuffix(pPath, daosServer) {
+		exitWithError(log, errors.Errorf("%s (version %s) may only be invoked by %s",
+			os.Args[0], daosVersion, daosServer))
+	}
+}
+
 func main() {
 	binName := filepath.Base(os.Args[0])
 	log := configureLogging(binName)
+
+	checkParentName(log)
 
 	if os.Geteuid() != 0 {
 		exitWithError(log, errors.Errorf("%s not setuid root", binName))

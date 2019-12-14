@@ -216,10 +216,18 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 				return err
 			}
 		}
-	}
 
-	if err := h.StartManagementService(ctx); err != nil {
-		return errors.Wrap(err, "failed to start management service")
+		// If this instance is a MS replica, start it before
+		// moving on so that other instances can join.
+		if instance.IsMSReplica() {
+			if err := instance.StartManagementService(); err != nil {
+				return errors.Wrap(err, "failed to start management service")
+			}
+		}
+
+		if err := instance.LoadModules(); err != nil {
+			return errors.Wrap(err, "failed to load I/O server modules")
+		}
 	}
 
 	// now monitor them

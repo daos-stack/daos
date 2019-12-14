@@ -408,12 +408,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[9
   {
     "ranks",
     3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolCreateReq, n_ranks),
     offsetof(Mgmt__PoolCreateReq, ranks),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -538,12 +538,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   {
     "svcreps",
     2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolCreateResp, n_svcreps),
     offsetof(Mgmt__PoolCreateResp, svcreps),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -730,7 +730,7 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     "svcreps",
     2,
     PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__ListPoolsResp__Pool, n_svcreps),
     offsetof(Mgmt__ListPoolsResp__Pool, svcreps),
     NULL,

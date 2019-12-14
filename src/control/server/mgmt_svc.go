@@ -533,6 +533,38 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	return resp, nil
 }
 
+func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	if len(svc.harness.Instances()) == 0 {
+		return nil, errors.New("no I/O servers configured; can't determine leader")
+	}
+
+	instance := svc.harness.Instances()[0]
+	sb := instance.getSuperblock()
+	if sb == nil {
+		return nil, errors.New("no I/O superblock found; can't determine leader")
+	}
+
+	if req.System != sb.System {
+		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
+			sb.System, req.System)
+	}
+
+	leaderAddr, err := instance.msClient.LeaderAddress()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to determine current leader address")
+	}
+
+	return &mgmtpb.LeaderQueryResp{
+		CurrentLeader: leaderAddr,
+		Replicas:      instance.msClient.cfg.AccessPoints,
+	}, nil
+}
+
+
 // ListContainers implements the method defined for the Management Service.
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
 	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
@@ -556,3 +588,4 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 
 	return resp, nil
 }
+

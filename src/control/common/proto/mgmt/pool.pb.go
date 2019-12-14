@@ -24,7 +24,7 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 type PoolCreateReq struct {
 	Scmbytes             uint64   `protobuf:"varint,1,opt,name=scmbytes,proto3" json:"scmbytes,omitempty"`
 	Nvmebytes            uint64   `protobuf:"varint,2,opt,name=nvmebytes,proto3" json:"nvmebytes,omitempty"`
-	Ranks                string   `protobuf:"bytes,3,opt,name=ranks,proto3" json:"ranks,omitempty"`
+	Ranks                []uint32 `protobuf:"varint,3,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`
 	Numsvcreps           uint32   `protobuf:"varint,4,opt,name=numsvcreps,proto3" json:"numsvcreps,omitempty"`
 	User                 string   `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
 	Usergroup            string   `protobuf:"bytes,6,opt,name=usergroup,proto3" json:"usergroup,omitempty"`
@@ -40,7 +40,7 @@ func (m *PoolCreateReq) Reset()         { *m = PoolCreateReq{} }
 func (m *PoolCreateReq) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateReq) ProtoMessage()    {}
 func (*PoolCreateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{0}
+	return fileDescriptor_pool_23a192e17755ec54, []int{0}
 }
 
 func (m *PoolCreateReq) XXX_Unmarshal(b []byte) error {
@@ -75,11 +75,11 @@ func (m *PoolCreateReq) GetNvmebytes() uint64 {
 	return 0
 }
 
-func (m *PoolCreateReq) GetRanks() string {
+func (m *PoolCreateReq) GetRanks() []uint32 {
 	if m != nil {
 		return m.Ranks
 	}
-	return ""
+	return nil
 }
 
 func (m *PoolCreateReq) GetNumsvcreps() uint32 {
@@ -127,7 +127,7 @@ func (m *PoolCreateReq) GetAcl() []string {
 // PoolCreateResp returns created pool uuid and ranks.
 type PoolCreateResp struct {
 	Status               int32    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	Svcreps              string   `protobuf:"bytes,2,opt,name=svcreps,proto3" json:"svcreps,omitempty"`
+	Svcreps              []uint32 `protobuf:"varint,2,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -137,7 +137,7 @@ func (m *PoolCreateResp) Reset()         { *m = PoolCreateResp{} }
 func (m *PoolCreateResp) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateResp) ProtoMessage()    {}
 func (*PoolCreateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{1}
+	return fileDescriptor_pool_23a192e17755ec54, []int{1}
 }
 
 func (m *PoolCreateResp) XXX_Unmarshal(b []byte) error {
@@ -165,11 +165,11 @@ func (m *PoolCreateResp) GetStatus() int32 {
 	return 0
 }
 
-func (m *PoolCreateResp) GetSvcreps() string {
+func (m *PoolCreateResp) GetSvcreps() []uint32 {
 	if m != nil {
 		return m.Svcreps
 	}
-	return ""
+	return nil
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -186,7 +186,7 @@ func (m *PoolDestroyReq) Reset()         { *m = PoolDestroyReq{} }
 func (m *PoolDestroyReq) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyReq) ProtoMessage()    {}
 func (*PoolDestroyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{2}
+	return fileDescriptor_pool_23a192e17755ec54, []int{2}
 }
 
 func (m *PoolDestroyReq) XXX_Unmarshal(b []byte) error {
@@ -240,7 +240,7 @@ func (m *PoolDestroyResp) Reset()         { *m = PoolDestroyResp{} }
 func (m *PoolDestroyResp) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyResp) ProtoMessage()    {}
 func (*PoolDestroyResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{3}
+	return fileDescriptor_pool_23a192e17755ec54, []int{3}
 }
 
 func (m *PoolDestroyResp) XXX_Unmarshal(b []byte) error {
@@ -280,7 +280,7 @@ func (m *ListPoolsReq) Reset()         { *m = ListPoolsReq{} }
 func (m *ListPoolsReq) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsReq) ProtoMessage()    {}
 func (*ListPoolsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{4}
+	return fileDescriptor_pool_23a192e17755ec54, []int{4}
 }
 
 func (m *ListPoolsReq) XXX_Unmarshal(b []byte) error {
@@ -321,7 +321,7 @@ func (m *ListPoolsResp) Reset()         { *m = ListPoolsResp{} }
 func (m *ListPoolsResp) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsResp) ProtoMessage()    {}
 func (*ListPoolsResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{5}
+	return fileDescriptor_pool_23a192e17755ec54, []int{5}
 }
 
 func (m *ListPoolsResp) XXX_Unmarshal(b []byte) error {
@@ -358,7 +358,7 @@ func (m *ListPoolsResp) GetPools() []*ListPoolsResp_Pool {
 
 type ListPoolsResp_Pool struct {
 	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Svcreps              []int32  `protobuf:"varint,2,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"`
+	Svcreps              []uint32 `protobuf:"varint,2,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -368,7 +368,7 @@ func (m *ListPoolsResp_Pool) Reset()         { *m = ListPoolsResp_Pool{} }
 func (m *ListPoolsResp_Pool) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsResp_Pool) ProtoMessage()    {}
 func (*ListPoolsResp_Pool) Descriptor() ([]byte, []int) {
-	return fileDescriptor_8a14d8612184524f, []int{5, 0}
+	return fileDescriptor_pool_23a192e17755ec54, []int{5, 0}
 }
 
 func (m *ListPoolsResp_Pool) XXX_Unmarshal(b []byte) error {
@@ -396,7 +396,7 @@ func (m *ListPoolsResp_Pool) GetUuid() string {
 	return ""
 }
 
-func (m *ListPoolsResp_Pool) GetSvcreps() []int32 {
+func (m *ListPoolsResp_Pool) GetSvcreps() []uint32 {
 	if m != nil {
 		return m.Svcreps
 	}
