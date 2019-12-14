@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -65,21 +66,28 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
 // of ports to HostSets.
-func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroups, error) {
-	portHosts := make(hostlist.HostGroups)
+func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostGroups, err error) {
+	var hostSet, port string
+	var inHostSet *hostlist.HostList
+	portHosts = make(hostlist.HostGroups)
 
-	for _, ptn := range addrPatterns {
-		hostSet, port, err := splitPort(ptn, defaultPort)
+	inHostSet, err = hostlist.Create(addrPatterns)
+	if err != nil {
+		return
+	}
+
+	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
+		hostSet, port, err = splitPort(ptn, defaultPort)
 		if err != nil {
-			return nil, err
+			return
 		}
 
-		if err := portHosts.AddHost(port, hostSet); err != nil {
-			return nil, err
+		if err = portHosts.AddHost(port, hostSet); err != nil {
+			return
 		}
 	}
 
-	return portHosts, nil
+	return
 }
 
 // flattenHostAddrs takes nodeset:port patterns and returns individual addresses
@@ -89,7 +97,7 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 
 	// expand any compressed nodesets for specific ports, should fail if no
 	// port in pattern.
-	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), defaultPort)
+	portHosts, err = hostsByPort(addrPatterns, defaultPort)
 	if err != nil {
 		return
 	}
@@ -101,6 +109,8 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
 		}
 	}
+
+	sort.Strings(addrs)
 
 	return
 }
