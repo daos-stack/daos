@@ -1799,15 +1799,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	d_iov_t			iov = { 0 };
-	d_sg_list_t			sgl;
 	int				rc;
-
-	/* lookup create the ds_pool first */
-	if (rpc->cr_co_bulk_hdl == NULL) {
-		D_ERROR("No pool map in scan rpc\n");
-		return -DER_INVAL;
-	}
 
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d/%d\n",
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
@@ -1819,19 +1811,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		return -DER_NONEXIST;
 	}
 
-	/* update the pool map */
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Then check sp_group */
 	if (pool->sp_group == NULL) {
 		char id[DAOS_UUID_STR_SIZE];
 
@@ -1889,7 +1868,7 @@ out:
 
 static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
 	.co_aggregate	= rebuild_tgt_scan_aggregator,
-	.co_pre_forward	= NULL,
+	.co_pre_forward	= rebuild_tgt_scan_pre_forward,
 	.co_post_reply	= rebuild_tgt_scan_post_reply,
 };
 
