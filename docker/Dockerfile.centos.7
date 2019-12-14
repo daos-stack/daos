@@ -63,7 +63,7 @@ RUN yum -y install                                                 \
            libyaml-devel                                           \
            scons pylint file ShellCheck python-pep8 lcov python    \
            python2-pygithub yum-plugin-copr hwloc-devel            \
-           openmpi3-devel environment-modules
+           openmpi3-devel
 
 # external deps build/repos
 # sadly this doesn't work
@@ -110,9 +110,6 @@ WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
 ARG NOBUILD
-
-SHELL ["/bin/sh", "-c", "-l"]
-RUN module load mpi/openmpi-x86_64
 
 RUN if [ -n "${HTTP_PROXY}" ]; then \
   git config --global http.proxy "${HTTP_PROXY}"; \
