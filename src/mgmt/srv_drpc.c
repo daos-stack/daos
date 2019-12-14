@@ -50,13 +50,13 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 	len = mgmt__daos_resp__get_packed_size(daos_resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 		return;
 	}
 
 	if (mgmt__daos_resp__pack(daos_resp, body) != len) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Unexpected num bytes for daos resp\n");
 		return;
 	}
@@ -77,7 +77,7 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__kill_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (kill rank)\n");
 		return;
 	}
@@ -121,7 +121,7 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__set_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (set rank)\n");
 		return;
 	}
@@ -167,7 +167,7 @@ ds_mgmt_drpc_create_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__create_ms_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (create MS)\n");
 		return;
 	}
@@ -258,7 +258,7 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (get attach info)\n");
 		return;
 	}
@@ -285,7 +285,7 @@ ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	len = mgmt__get_attach_info_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__get_attach_info_resp__pack(resp, body);
@@ -313,7 +313,7 @@ ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (join)\n");
 		return;
 	}
@@ -373,7 +373,7 @@ out:
 	len = mgmt__join_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__join_resp__pack(resp, body);
@@ -501,7 +501,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 						 drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (create pool)\n");
 		return;
 	}
@@ -564,7 +564,7 @@ out:
 	len = mgmt__pool_create_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_create_resp__pack(resp, body);
@@ -597,7 +597,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (destroy pool)\n");
 		return;
 	}
@@ -636,7 +636,7 @@ out:
 	len = mgmt__pool_destroy_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_destroy_resp__pack(resp, body);
@@ -696,7 +696,7 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	len = mgmt__aclresp__get_packed_size(acl_resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
@@ -718,7 +718,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				       drpc_req->body.data);
 	if (req == NULL) {
 		D_ERROR("Failed to unpack GetACLReq\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 
@@ -796,7 +796,7 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 	if (rc != 0)
@@ -831,7 +831,7 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 	if (rc != 0)
@@ -868,7 +868,7 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					  drpc_req->body.data);
 	if (req == NULL) {
 		D_ERROR("Failed to unpack DeleteACLReq\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 
@@ -928,7 +928,7 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__list_pools_req__unpack(NULL, drpc_req->body.len,
 					   drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (list pools)\n");
 		mgmt__list_pools_req__free_unpacked(req, NULL);
 		return;
@@ -985,7 +985,7 @@ out:
 	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
 		mgmt__list_pools_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1114,7 +1114,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (smd list devs)\n");
 		return;
 	}
@@ -1140,7 +1140,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	len = mgmt__smd_dev_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_dev_resp__pack(resp, body);
@@ -1183,7 +1183,7 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (smd list pools)\n");
 		return;
 	}
@@ -1209,7 +1209,7 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	len = mgmt__smd_pool_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_pool_resp__pack(resp, body);
@@ -1255,7 +1255,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (bio health query)\n");
 		return;
 	}
@@ -1327,7 +1327,7 @@ out:
 	len = mgmt__bio_health_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__bio_health_resp__pack(resp, body);
