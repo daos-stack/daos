@@ -899,7 +899,7 @@ test_drpc_list_cont_bad_request(void **state)
 
 	ds_mgmt_drpc_pool_list_cont(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 }

@@ -1028,7 +1028,7 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 					   drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (list containers)\n");
 		mgmt__list_cont_req__free_unpacked(req, NULL);
 		return;
@@ -1076,7 +1076,7 @@ out:
 	len = mgmt__list_cont_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
 		mgmt__list_cont_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
