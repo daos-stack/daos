@@ -296,7 +296,7 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -325,7 +325,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
