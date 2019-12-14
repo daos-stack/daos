@@ -24,6 +24,7 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -84,9 +85,9 @@ type Configuration struct {
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:      defaultSystemName,
-		AccessPoints:    []string{"localhost:" + defaultPort},
+		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultPort)},
 		Port:            defaultPort,
-		HostList:        []string{"localhost:" + defaultPort},
+		HostList:        []string{fmt.Sprintf("localhost:%d", defaultPort)},
 		RuntimeDir:      defaultRuntimeDir,
 		LogFile:         defaultLogFile,
 		Path:            defaultConfigPath,

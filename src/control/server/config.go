@@ -24,6 +24,7 @@
 package server
 
 import (
+	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -306,7 +307,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:         defaultSystemName,
 		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{"localhost:" + defaultPort},
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
 		ControlPort:        defaultPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
