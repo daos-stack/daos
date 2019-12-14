@@ -36,8 +36,7 @@ import (
 
 const (
 	summarySep = "/"
-	successMsg = "OK"
-	failMsg    = "FAIL"
+	successMsg = "storage format ok"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -211,28 +210,17 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string, error) {
 	out := &bytes.Buffer{}
 
-	groups, errGroups, err := groupFormatResults(results, summary)
+	groups, mixedGroups, err := groupFormatResults(results, summary)
 	if err != nil {
 		return "", err
 	}
 
-	if len(errGroups) > 0 {
-		fmt.Fprintf(out, "\n%s\n", errGroups)
+	if len(groups) > 0 {
+		fmt.Fprintf(out, "\n%s\n", groups)
 	}
 
-	if summary {
-		if len(groups) == 0 {
-			return out.String(), nil
-		}
-		sout, err := storageSummaryTable("Hosts", "SCM Format", "NVMe Format", groups)
-		if err != nil {
-			return "", err
-		}
-		return out.String() + sout, nil
-	}
-
-	for _, res := range groups.Keys() {
-		hostset := groups[res].RangedString()
+	for _, res := range mixedGroups.Keys() {
+		hostset := mixedGroups[res].RangedString()
 		lineBreak := strings.Repeat("-", len(hostset))
 		fmt.Fprintf(out, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
 	}
@@ -243,51 +231,40 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 // groupFormatResults collects identical output keyed on hostset from
 // format results and returns separate groups for host (as opposed to
 // storage subsystem) level errors. Summary will provide success/failure only.
-func groupFormatResults(results client.StorageFormatResults, summary bool) (groups, errGroups hostlist.HostGroups, err error) {
+func groupFormatResults(results client.StorageFormatResults, summary bool) (groups, mixedGroups hostlist.HostGroups, err error) {
 	var host string
 	buf := &bytes.Buffer{}
-	groups = make(hostlist.HostGroups)
-	errGroups = make(hostlist.HostGroups) // don't want to tabulate host errors
+	groups = make(hostlist.HostGroups)      // result either complete success or failure
+	mixedGroups = make(hostlist.HostGroups) // result mix of device success/failure
 
 	for _, srv := range results.Keys() {
 		buf.Reset()
+		result := results[srv]
 
 		host, _, err = splitPort(srv, 0) // disregard port when grouping output
 		if err != nil {
 			return
 		}
 
-		hostErr := results[srv].Err
+		hostErr := result.Err
 		if hostErr != nil {
-			if err = errGroups.AddHost(hostErr.Error(), host); err != nil {
+			if err = groups.AddHost(hostErr.Error(), host); err != nil {
 				return
 			}
 			continue
 		}
 
-		if summary {
-			smsg := successMsg
-			if results[srv].Scm.HasErrors() {
-				smsg = failMsg
-			}
-
-			nmsg := successMsg
-			if results[srv].Nvme.HasErrors() {
-				nmsg = failMsg
-			}
-
-			fmt.Fprintf(buf, "%s%s%s", smsg, summarySep, nmsg)
-
-			if err = groups.AddHost(buf.String(), host); err != nil {
+		if summary && !result.HasErrors() {
+			if err = groups.AddHost(successMsg, host); err != nil {
 				return
 			}
 			continue
 		}
 
-		fmt.Fprintf(buf, "%s\n", scmFormatTable(results[srv].Scm))
-		fmt.Fprintf(buf, "%s\n", nvmeFormatTable(results[srv].Nvme))
+		fmt.Fprintf(buf, "%s\n", scmFormatTable(result.Scm))
+		fmt.Fprintf(buf, "%s\n", nvmeFormatTable(result.Nvme))
 
-		if err = groups.AddHost(buf.String(), host); err != nil {
+		if err = mixedGroups.AddHost(buf.String(), host); err != nil {
 			return
 		}
 	}

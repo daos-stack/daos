@@ -398,6 +398,13 @@ type StorageFormatResult struct {
 	Err  error
 }
 
+func (sfr *StorageFormatResult) HasErrors() bool {
+	if sfr.Err != nil || sfr.Scm.HasErrors() || sfr.Nvme.HasErrors() {
+		return true
+	}
+	return false
+}
+
 // AccessControlList is a structure for the access control list.
 type AccessControlList struct {
 	Entries []string // Access Control Entries in short string format
