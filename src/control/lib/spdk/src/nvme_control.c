@@ -73,16 +73,16 @@ nvme_discover(void)
 struct ret_t *
 nvme_format(char *ctrlr_pci_addr)
 {
-	int					ns_id;
+	int					 ns_id;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_nvme_ns			*ns;
-	struct spdk_nvme_format			format = {};
+	struct spdk_nvme_format			 format = {};
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret();
+	ret = init_ret(0);
 
-	ctrlr_entry = get_controller(ctrlr_pci_addr, ret);
+	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)
 		return ret;
 
@@ -142,9 +142,9 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	struct ctrlr_entry			*ctrlr_entry;
 	struct ret_t				*ret;
 
-	ret = init_ret();
+	ret = init_ret(0);
 
-	ctrlr_entry = get_controller(ctrlr_pci_addr, ret);
+	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
 	if (ret->rc != 0)
 		return ret;
 
@@ -201,9 +201,10 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	spdk_dma_free(fw_image);
 
 	ret->rc = rc;
-	collect(ret);
+	if (ret->rc != 0)
+		return ret;
 
-	return ret;
+	return collect();
 }
 
 void
