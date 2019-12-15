@@ -33,6 +33,7 @@ fi
                   -s "utils/docker/SConstruct_info"\
                   -s "test/tool/SConstruct"\
                   -s "test/tool/src/SConscript"\
+                  "env_modules.py" \
                   site_tools/extra/extra.py
 
 exit $?
