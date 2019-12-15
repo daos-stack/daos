@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       4.1.0
+Version:       4.2.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -29,6 +29,7 @@ BuildRequires: libyaml-devel
 BuildRequires: libpsm_infinipath1
 # prefer over libcurl4-mini
 BuildRequires: libcurl4
+BuildRequires: Modules
 %endif
 BuildRequires: gcc-c++
 %if %{defined sha1}
@@ -138,6 +139,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Sat Dec 14 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 4.2.0-1
+- Libcart version 4.2.0-1
+- More modifications to cart build that may affect downstream components
+
 * Wed Dec 11 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 4.1.0-1
 - Libcart version 4.1.0-1
 - OpenMPI build modified to use installed packages

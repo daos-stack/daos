@@ -46,9 +46,9 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 def component_repos = ""
 def cart_repo = "cart@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def cart_repos = component_repos + ' ' + cart_repo
-//def cart_rpms = "openpa libfabric pmix ompi mercury"
+//def cart_rpms = "openpa libfabric mercury"
 // don't need to install any RPMs for testing yet
-def cart_rpms = "openmpi3 environment-modules"
+def cart_rpms = "openmpi3"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&

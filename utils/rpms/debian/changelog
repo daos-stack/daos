@@ -1,3 +1,11 @@
+cart (4.2.0-1) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * 4.2.0-1 version of CaRT
+  * More updates to build to find mpi
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Sat, 14 Dec 2019 16:53:01 +0000
+
 cart (4.1.0-1) unstable; urgency=medium
 
   [ Jeff Olivier ]

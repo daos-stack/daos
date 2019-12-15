@@ -42,6 +42,7 @@ import sys
 sys.path.insert(0, os.path.join(Dir('#').abspath, "scons_local"))
 try:
     from prereq_tools import PreReqComponent
+    from prereq_tools import EnvironmentModule
 except ImportError:
     raise ImportError \
           ("\'prereq_tools\' module not found; run \'git submodule update\'")
@@ -52,7 +53,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare']
 
-CART_VERSION = "4.0.0"
+CART_VERSION = "4.2.0"
 
 def save_build_info(env, prereqs, platform):
     """Save the build information"""
@@ -88,9 +89,11 @@ def scons():
 
     env = DefaultEnvironment()
 
+    env_module = EnvironmentModule()
     opts = Variables(opts_file)
     prereqs = PreReqComponent(env, opts, arch=platform)
     prereqs.load_definitions(prebuild=['mercury', 'uuid', 'crypto', 'boost'])
+    env_module.load_mpi('openmpi')
 
     if not env.GetOption('clean'):
         run_checks(env)
