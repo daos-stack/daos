@@ -42,7 +42,7 @@ import sys
 sys.path.insert(0, os.path.join(Dir('#').abspath, "scons_local"))
 try:
     from prereq_tools import PreReqComponent
-    from prereq_tools import EnvironmentModule
+    from env_modules import load_mpi
 except ImportError:
     raise ImportError \
           ("\'prereq_tools\' module not found; run \'git submodule update\'")
@@ -89,11 +89,10 @@ def scons():
 
     env = DefaultEnvironment()
 
-    env_module = EnvironmentModule()
     opts = Variables(opts_file)
     prereqs = PreReqComponent(env, opts, arch=platform)
     prereqs.load_definitions(prebuild=['mercury', 'uuid', 'crypto', 'boost'])
-    env_module.load_mpi('openmpi')
+    load_mpi('openmpi')
 
     if not env.GetOption('clean'):
         run_checks(env)
