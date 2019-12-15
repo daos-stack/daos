@@ -10,11 +10,6 @@ hosts:
 timeout: 800
 server_config:
     name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -23,7 +18,6 @@ pool:
         group: daos_server
     createsize:
         scm_size: 1600000000
-        nvme_size: 9000000000
     createsvc:
         svcn: 1
 mdtest:
