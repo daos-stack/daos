@@ -23,10 +23,10 @@ pool:
 cont:
     cont_count: 10
 dfuse:
-    mount_dir: "/tmp/"
+    mount_dir: /tmp/
 bashcmd:
-  dirname: 'test'
-  filename1: 'testfile1.txt'
-  filename2: 'testfile2.txt'
+  dirname: test
+  filename1: testfile1.txt
+  filename2: testfile2.txt
   dd_count: 1024
   dd_blocksize: 1024
