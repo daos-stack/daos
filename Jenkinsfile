@@ -120,11 +120,13 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
-                        returnStatus: true)
+       QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config", returnStdout: true).trim()
+        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config",
+                         returnStdout: true).trim()
+        QUICKBUILD_DEPS = sh(script: "rpmspec -q --define cart_sha1\\ ${env.CART_COMMIT} --srpm --requires utils/rpms/daos.spec 2>/dev/null",
+                             returnStdout: true)
     }
 
     options {
@@ -145,7 +147,7 @@ pipeline {
                 allOf {
                     not { branch 'weekly-testing' }
                     expression { env.CHANGE_TARGET != 'weekly-testing' }
-                    expression { return env.QUICKBUILD == '1' }
+                    expression { env.QUICKBUILD != 'true' }
                 }
             }
             parallel {
@@ -251,14 +253,15 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
                                           createrepo artifacts/centos7/
                                           cat $mockroot/result/{root,build}.log'''
                                script {
-                                   daos_packages_version = sh(script: 'rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm',
+                                   daos_packages_version = sh(label: "Determine RPM version",
+                                                              script: 'rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm',
                                       returnStdout: true)
                                }
                             publishToRepository product: 'daos',
@@ -278,17 +281,17 @@ pipeline {
                                        result: "FAILURE", ignore_failure: true
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/centos7
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/centos7/**'
@@ -332,10 +335,12 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
-                               script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
+                            sh label: "Build Log",
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
+                                          (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap15/)
-                                          createrepo artifacts/leap15/'''
+                                          createrepo artifacts/leap15/
+                                          cat $mockroot/result/{root,build}.log'''
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -353,18 +358,17 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
-                                          cat $mockroot/result/{root,build}.log
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/leap15
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/leap15/**'
@@ -380,7 +384,8 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=' + env.QUICKBUILD +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
+                                                ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
+                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
                                                 ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
@@ -464,7 +469,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -525,7 +530,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -587,7 +592,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -648,7 +653,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -709,7 +714,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -771,7 +776,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -993,8 +998,9 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=0' +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
+                                                '--build-arg QUICKBUILD=true' +
+                                                ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
+                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
                                                 ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
