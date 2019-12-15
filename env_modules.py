@@ -27,6 +27,10 @@ try:
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 from distutils.spawn import find_executable
+# pylint: disable=unused-import
+# used by module brought in by exec
+import re
+# pylint: enable=unused-import
 
 class _env_module():
     """Class for utilizing Modules component to load environment modules"""
