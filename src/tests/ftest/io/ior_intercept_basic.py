@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
@@ -58,15 +59,15 @@ class IorIntercept(IorTestBase):
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
-        intercept = self.prefix + "/lib64/libioil.so"
+        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         out = self.run_ior_with_pool(intercept)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
         mean_mib = int(IorMetrics.Mean_MiB)
-        write_x = 3
-        read_x = 2
-
+        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
+        read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
+ 
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
                         write_x * float(without_intercept[0][max_mib]))
