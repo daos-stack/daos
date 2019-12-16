@@ -31,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -448,4 +449,16 @@ func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)
+}
+
+// newMember returns reference to a new member struct if one can be retrieved
+// from superblock, error otherwise. Member populated with local reply address.
+func (srv *IOServerInstance) newMember() (*common.SystemMember, error) {
+	if !srv.hasSuperblock() {
+		return nil, errors.New("missing superblock")
+	}
+	sb := srv.getSuperblock()
+
+	return common.NewSystemMember(sb.Rank.Uint32(), sb.UUID,
+		srv.msClient.cfg.ControlAddr), nil
 }

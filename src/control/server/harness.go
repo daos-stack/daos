@@ -29,6 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -178,7 +179,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 
 // Start starts all configured instances and the management
 // service, then waits for them to exit.
-func (h *IOServerHarness) Start(parent context.Context) error {
+func (h *IOServerHarness) Start(parent context.Context, membership *common.Membership) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -222,6 +223,19 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		if instance.IsMSReplica() {
 			if err := instance.StartManagementService(); err != nil {
 				return errors.Wrap(err, "failed to start management service")
+			}
+			// registered instance with system membership
+			m, err := instance.newMember()
+			if err != nil {
+				return errors.Wrap(err, "failed to get member from instance")
+			}
+			count, err := membership.Add(m)
+			if err != nil {
+				return errors.Wrap(err, "failed to add MS replica to membership")
+			}
+			if count != 1 {
+				return errors.Errorf("expected MS replica to be first member "+
+					"(want 1, got %d)", count)
 			}
 		}
 

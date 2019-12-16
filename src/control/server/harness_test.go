@@ -325,7 +325,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 			done := make(chan struct{})
 			ctx, shutdown := context.WithCancel(context.Background())
 			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
-				common.CmpErr(t, expStartErr, th.Start(ctx))
+				common.CmpErr(t, expStartErr, th.Start(ctx, nil))
 				close(done)
 			}(t, tc.expStartErr, harness)
 
