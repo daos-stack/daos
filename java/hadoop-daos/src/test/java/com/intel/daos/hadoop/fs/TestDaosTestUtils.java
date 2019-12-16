@@ -10,7 +10,7 @@ import java.net.URI;
 /**
  *
  */
-public final class TestDaosTestUtils {
+public class TestDaosTestUtils {
   private static Configuration configuration;
   public static final String TEST_FS_DAOS_NAME = "test.fs.daos.name";
 
@@ -35,7 +35,7 @@ public final class TestDaosTestUtils {
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-            TestDaosTestUtils.TEST_FS_DAOS_NAME, "");
+            TestDaosTestUtils.TEST_FS_DAOS_NAME, "daos:///");
 
     boolean liveTest = !StringUtils.isEmpty(fsname);
     URI testURI = null;
@@ -61,4 +61,5 @@ public final class TestDaosTestUtils {
     return testUniqueForkId == null ? "/test" :
         "/" + testUniqueForkId + "/test";
   }
+
 }

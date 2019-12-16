@@ -20,7 +20,6 @@ public class TestDaosOutputStream{
   private static FileSystem fs;
   private static String testRootPath =
           TestDaosTestUtils.generateUniqueTestPath();
-  private static CreateDaosFS daosFS;
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);
@@ -28,10 +27,8 @@ public class TestDaosOutputStream{
   @BeforeClass
   public static void setup() throws IOException {
     System.out.println("@BeforeClass");
-    daosFS=new CreateDaosFS();
-    daosFS.getPool();
-    daosFS.getContainer();
-    fs = daosFS.getFs();
+    fs = DaosFSFactory.getFS();
+    fs.mkdirs(new Path(testRootPath));
   }
 
   @AfterClass
@@ -41,11 +38,14 @@ public class TestDaosOutputStream{
       fs.delete(new Path(testRootPath), true);
     }
     fs.close();
-    daosFS.close();
   }
 
-  private Path getTestPath() {
-    return new Path(testRootPath + "/test-daos1");
+  private Path getTestPath() throws IOException {
+    Path p = new Path(testRootPath + "/daos");
+    if(!fs.exists(p)){
+      fs.mkdirs(p);
+    }
+    return p;
   }
 
   @Test

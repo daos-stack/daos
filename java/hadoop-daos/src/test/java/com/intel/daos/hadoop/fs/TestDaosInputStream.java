@@ -5,8 +5,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.io.IOUtils;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -22,46 +22,45 @@ import static org.junit.Assert.assertTrue;
  *
  */
 public class TestDaosInputStream {
-  private static final Logger LOG =
-      LoggerFactory.getLogger(TestDaosInputStream.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestDaosInputStream.class);
   private static FileSystem fs;
-  private static String testRootPath =
-      TestDaosTestUtils.generateUniqueTestPath();
-  private static CreateDaosFS daosFS;
+  private static String testRootPath = TestDaosTestUtils.generateUniqueTestPath();
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);
 
-  @BeforeClass
-  public static void setup() throws IOException {
+  @Before
+  public void setup() throws IOException {
     System.out.println("@BeforeClass");
-    daosFS=new CreateDaosFS();
-    daosFS.getPool();
-    daosFS.getContainer();
-    fs = daosFS.getFs();
+    fs = DaosFSFactory.getFS();
+    fs.mkdirs(new Path(testRootPath));
   }
 
-  @AfterClass
-  public static void tearDown() throws Exception {
+  @After
+  public void tearDown() throws Exception {
     System.out.println("@AfterClass");
     if (fs != null) {
       fs.delete(new Path(testRootPath), true);
     }
     fs.close();
-    daosFS.close();
   }
 
-  private Path setPath(String path) {
+  private Path setPath(String path) throws IOException {
+    Path p ;
     if (path.startsWith("/")) {
-      return new Path(testRootPath + path);
+      p = new Path(testRootPath + path);
     } else {
-      return new Path(testRootPath + "/" + path);
+      p = new Path(testRootPath + "/" + path);
     }
+    if(!fs.exists(p.getParent())){
+      fs.mkdirs(p.getParent());
+    }
+    return p;
   }
 
   @Test
   public void testSeekFile() throws Exception {
-    Path smallSeekFile = setPath("/test18.txt");
+    Path smallSeekFile = setPath("/test.txt");
     long size = 5 * 1024 * 1024;
 
     ContractTestUtils.generateTestFile(fs, smallSeekFile, size, 256, 255);
@@ -97,7 +96,7 @@ public class TestDaosInputStream {
     final int sizeFlag = 5;
     String filename = "readTestFile_" + sizeFlag + ".txt";
     Path readTestFile = setPath("/test/" + filename);
-    long size = sizeFlag * 1024 * 1024;
+    long size = 2 * 1024 * 1024;
 
     ContractTestUtils.generateTestFile(fs, readTestFile, size, 256, 255);
     LOG.info(sizeFlag + "MB file created: /test/" + filename);
@@ -106,7 +105,7 @@ public class TestDaosInputStream {
     byte[] buf = new byte[bufLen];
     long bytesRead = 0;
     while (bytesRead < size) {
-      int bytes;
+      int bytes = 0 ;
       if (size - bytesRead < bufLen) {
         int remaining = (int) (size - bytesRead);
         bytes = instream.read(buf, 0, remaining);
@@ -126,5 +125,36 @@ public class TestDaosInputStream {
     }
     assertTrue(instream.available() == 0);
     IOUtils.closeStream(instream);
+  }
+
+  @Test
+  public void testSequentialAndRandomRead() throws  IOException{
+      Path smallSeekFile = setPath("/test/smallSeekFile.txt");
+      long size = 5 * 1024 * 1024;
+
+      ContractTestUtils.generateTestFile(this.fs, smallSeekFile, size, 256, 255);
+      LOG.info("5MB file created: smallSeekFile.txt");
+
+      FSDataInputStream fsDataInputStream = this.fs.open(smallSeekFile);
+      assertTrue("expected position at:" + 0 + ", but got:"
+              + fsDataInputStream.getPos(), fsDataInputStream.getPos() == 0);
+      DaosInputStream in =
+              (DaosInputStream)fsDataInputStream.getWrappedStream();
+      byte[] buf = new byte[Constants.DEFAULE_DAOS_READ_BUFFER_SIZE];
+      in.read(buf,0, Constants.DEFAULE_DAOS_READ_BUFFER_SIZE);
+      assertTrue("expected position at:"
+                      + Constants.DEFAULE_DAOS_READ_BUFFER_SIZE + ", but got:"
+                      + in.getFilePos(),
+              in.getFilePos() == Constants.DEFAULE_DAOS_READ_BUFFER_SIZE);
+
+      fsDataInputStream.seek(4 * 1024 * 1024);
+    in.read(buf,0, Constants.DEFAULE_DAOS_READ_BUFFER_SIZE);
+    assertTrue("expected position at:" + 4 * 1024 * 1024
+                      + Constants.DEFAULE_DAOS_READ_BUFFER_SIZE + ", but got:"
+                      + in.getFilePos(),
+              in.getFilePos() == 4 * 1024 * 1024
+                      + Constants.DEFAULE_DAOS_READ_BUFFER_SIZE);
+
+      IOUtils.closeStream(fsDataInputStream);
   }
 }

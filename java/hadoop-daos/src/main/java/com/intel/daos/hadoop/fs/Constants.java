@@ -18,13 +18,12 @@
 
 package com.intel.daos.hadoop.fs;
 
+import com.intel.daos.client.DaosObjectType;
+
 /**
  * ALL configuration constants for DAOS filesystem.
  */
 public final class Constants {
-
-  private Constants() {
-  }
 
   public static final String FS_DAOS = "daos";
 
@@ -37,6 +36,11 @@ public final class Constants {
   // daos container
   public static final String DAOS_CONTAINER_UUID = "fs.daos.container.uuid";
 
+  // daos chunk size
+  public static final String DAOS_CHUNK_SIZE = "fs.daos.chunk.size";
+  public static final int DEFAULT_DAOS_CHUNK_SIZE = 1024*1024;
+
+
   public static final int DAOS_MODLE = 0755;
 
   // the maximun of the read buffer size
@@ -44,8 +48,7 @@ public final class Constants {
   public static final int DEFAULE_DAOS_READ_BUFFER_SIZE = 1 * 1024 * 1024;
 
   // the maximun of the write buffer size
-  public static final String DAOS_WRITE_BUFFER_SIZE =
-      "fs.daos.write.buffer.size";
+  public static final String DAOS_WRITE_BUFFER_SIZE = "fs.daos.write.buffer.size";
   public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 1 * 1024 * 1024;
 
   // split file block size
