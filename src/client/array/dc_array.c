@@ -1028,15 +1028,16 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 	 * satisfy the number of records to read/write from the KV object
 	 */
 	do {
+		d_iov_t		*new_sg_iovs;
+
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
 		sgl->sg_nr++;
-		sgl->sg_iovs = (d_iov_t *)realloc
-			(sgl->sg_iovs, sizeof(d_iov_t) * sgl->sg_nr);
-		if (sgl->sg_iovs == NULL) {
-			D_ERROR("Failed memory allocation\n");
+		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
+		if (new_sg_iovs == NULL) {
 			return -DER_NOMEM;
 		}
+		sgl->sg_iovs = new_sg_iovs;
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +
 			cur_off;
@@ -1314,17 +1315,16 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		 */
 		do {
 			daos_off_t	old_array_idx;
+			daos_recx_t	*new_recxs;
 
 			iod->iod_nr++;
 
 			/** add another element to recxs */
-			iod->iod_recxs = (daos_recx_t *)realloc
-				(iod->iod_recxs, sizeof(daos_recx_t) *
-				 iod->iod_nr);
-			if (iod->iod_recxs == NULL) {
-				D_ERROR("Failed memory allocation\n");
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
+			if (new_recxs == NULL) {
 				D_GOTO(err_task, rc = -DER_NOMEM);
 			}
+			iod->iod_recxs = new_recxs;
 
 			/** set the record access for this range */
 			iod->iod_recxs[i].rx_idx = record_i;
