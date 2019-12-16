@@ -49,6 +49,28 @@ class _env_module():
         # pylint: disable=exec-used
         exec(output)
         # pylint: enable=exec-used
+        return True
+
+    @staticmethod
+    def _setup_old(default_func):
+        """Ensure MODULEPATH is set for invoking modulecmd"""
+        path = os.environ.get("MODULEPATH", None)
+        if path:
+            return _env_module._module_old
+        mhome = os.environ.get("MODULESHOME", None)
+        if mhome is None:
+            return default_func
+        fname = os.path.join(mhome, "init", ".modulespath")
+        if not os.path.exists(fname):
+            return default_func
+        with open(fname, "r") as pfile:
+            paths = []
+            for line in pfile.readlines():
+                line = re.sub(r"#.*$", "", line.strip())
+                if line:
+                    paths += line.split(":")
+            os.environ["MODULEPATH"] = ":".join(paths)
+        return _env_module._module_old
 
     def _init_module_func(self, default_func):
         """Initialize environment modules"""
@@ -67,7 +89,7 @@ class _env_module():
             subprocess.check_call(['sh', '-l', '-c', 'module -V'],
                                   stdout=DEVNULL, stderr=DEVNULL)
         except subprocess.CalledProcessError:
-            return self._module_old
+            return self._setup_old(default_func)
 
         tmp_globals = {'os': os, 're': re, 'subprocess': subprocess}
         tmp_locals = {}
