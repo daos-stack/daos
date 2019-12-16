@@ -93,17 +93,15 @@ drpc_response_create(Drpc__Call *call)
 {
 	Drpc__Response *resp;
 
-	if (call == NULL) {
-		D_ERROR("Can't build a response from a NULL call\n");
-		return NULL;
-	}
-
 	D_ALLOC_PTR(resp);
 	if (resp == NULL)
 		return NULL;
 
 	drpc__response__init(resp);
-	resp->sequence = call->sequence;
+	if (call == NULL)
+		resp->sequence = -1;
+	else
+		resp->sequence = call->sequence;
 
 	return resp;
 }

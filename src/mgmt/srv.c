@@ -78,6 +78,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * command errors should be indicated inside daos response.
 	 */
 	switch (drpc_req->method) {
+	case DRPC_METHOD_MGMT_PREP_SHUTDOWN:
+		ds_mgmt_drpc_prep_shutdown(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_KILL_RANK:
 		ds_mgmt_drpc_kill_rank(drpc_req, drpc_resp);
 		break;

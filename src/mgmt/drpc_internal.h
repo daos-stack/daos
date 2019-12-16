@@ -32,6 +32,9 @@
 #include <daos/drpc.pb-c.h>
 
 void
+ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
 ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
 void

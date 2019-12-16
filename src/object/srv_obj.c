@@ -1212,11 +1212,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
-		if (daos_is_zero_dti(&orw->orw_dti) ||
-		    orw->orw_flags & ORF_RESEND)
-			orw->orw_epoch = crt_hlc_get();
-		else
-			orw->orw_epoch = orw->orw_dti.dti_hlc;
+		orw->orw_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
@@ -1814,11 +1810,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
-		if (daos_is_zero_dti(&opi->opi_dti) ||
-		    opi->opi_flags & ORF_RESEND)
-			opi->opi_epoch = crt_hlc_get();
-		else
-			opi->opi_epoch = opi->opi_dti.dti_hlc;
+		opi->opi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
