@@ -49,24 +49,17 @@ class _env_module():
         # pylint: disable=exec-used
         exec(output)
         # pylint: enable=exec-used
-        return True
 
     @staticmethod
-    def _setup_old(default_func):
-        """Ensure MODULEPATH is set for invoking modulecmd"""
-        path = os.environ.get("MODULEPATH", None)
-        if path:
+    def _setup_old(path_init, default_func):
+        if os.environ.get("MODULEPATH", False):
             return _env_module._module_old
-        mhome = os.environ.get("MODULESHOME", None)
-        if mhome is None:
+        if not path_init or not os.path.exists(path_init):
             return default_func
-        fname = os.path.join(mhome, "init", ".modulespath")
-        if not os.path.exists(fname):
-            return default_func
-        with open(fname, "r") as pfile:
+        with open(path_init, "r") as pfile:
             paths = []
             for line in pfile.readlines():
-                line = re.sub(r"#.*$", "", line.strip())
+                line = re.sub(r"#.*$", "", line.strip()).strip()
                 if line:
                     paths += line.split(":")
             os.environ["MODULEPATH"] = ":".join(paths)
@@ -74,22 +67,27 @@ class _env_module():
 
     def _init_module_func(self, default_func):
         """Initialize environment modules"""
-        init_file = None
+        python_init = None
+        path_init = None
         for root, _dirs, files in os.walk('/usr/share/Modules'):
             for fname in files:
-                if fname == "python.py":
+                if not python_init and fname == "python.py":
                     temp = os.path.join(root, fname)
                     if "init" in temp:
-                        init_file = temp
-                        break
-        if init_file is None:
+                        python_init = temp
+                if not path_init and fname == ".modulespath":
+                    path_init = os.path.join(root, fname)
+                if path_init and python_init:
+                    break
+
+        if python_init is None:
             return default_func
 
         try:
             subprocess.check_call(['sh', '-l', '-c', 'module -V'],
                                   stdout=DEVNULL, stderr=DEVNULL)
         except subprocess.CalledProcessError:
-            return self._setup_old(default_func)
+            return self._setup_old(path_init, default_func)
 
         tmp_globals = {'os': os, 're': re, 'subprocess': subprocess}
         tmp_locals = {}
@@ -97,7 +95,7 @@ class _env_module():
             # if successful, this will define module, a function
             # that invokes module on the command line
             # pylint: disable=exec-used
-            exec(open(init_file).read(), tmp_globals, tmp_locals)
+            exec(open(python_init).read(), tmp_globals, tmp_locals)
             # pylint: enable=exec-used
         except KeyError:
             return default_func
