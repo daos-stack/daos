@@ -87,6 +87,8 @@ const (
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	// MethodBIOError is a ModuleSrv method
+	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
 const (

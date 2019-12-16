@@ -488,36 +488,3 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 
 	return 0;
 }
-
-/*
- * MEDIA ERROR event.
- * Store BIO I/O error in in-memory device state. Called from device owner
- * xstream only.
- */
-void
-bio_media_error(void *msg_arg)
-{
-	struct media_error_msg	*mem = msg_arg;
-	struct bio_dev_state	*dev_state;
-
-	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
-
-	if (mem->mem_unmap) {
-		/* Update unmap error counter */
-		dev_state->bds_bio_unmap_errs++;
-		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
-	} else {
-		/* Update read/write I/O error counters */
-		if (mem->mem_update)
-			dev_state->bds_bio_write_errs++;
-		else
-			dev_state->bds_bio_read_errs++;
-		D_ERROR("%s error logged from xs_id:%d\n",
-			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
-	}
-
-	/* TODO Implement checksum error counter */
-	dev_state->bds_checksum_errs = 0;
-
-	D_FREE(mem);
-}

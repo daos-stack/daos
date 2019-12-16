@@ -313,6 +313,7 @@ bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
 struct bio_reaction_ops {
 	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
+	int (*ioerr_reaction)(bool unmap, bool update, int tgt_id);
 };
 
 /*
