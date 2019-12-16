@@ -616,17 +616,14 @@ def check_flags(env, config, key, value):
         if flag in checked:
             continue
         insert = False
-        if not flag.startswith('-W'):
-            insert = True
-        else:
-            if key == "CCFLAGS":
-                if config.CheckFlag(flag) and config.CheckFlagCC(flag):
-                    insert = True
-            elif key == "CFLAGS":
-                if config.CheckFlag(flag):
-                    insert = True
-            elif config.CheckFlagCC(flag):
+        if key == "CCFLAGS":
+            if config.CheckFlag(flag) and config.CheckFlagCC(flag):
                 insert = True
+        elif key == "CFLAGS":
+            if config.CheckFlag(flag):
+                insert = True
+        elif config.CheckFlagCC(flag):
+            insert = True
         if insert:
             env.AppendUnique(**{key : [flag]})
         checked.append(flag)
