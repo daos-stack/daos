@@ -24,15 +24,19 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+var daosVersion string
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -47,6 +51,15 @@ type mainOpts struct {
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
 	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version versionCmd `command:"version" description:"Print daos_server version"`
+}
+
+type versionCmd struct{}
+
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("daos_server version %s\n", daosVersion)
+	os.Exit(0)
+	return nil
 }
 
 type cmdLogger interface {
@@ -66,6 +79,9 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 func exitWithError(log *logging.LeveledLogger, err error) {
 	log.Debugf("%+v", err)
 	log.Errorf("%v", err)
+	if fault.HasResolution(err) {
+		log.Error(fault.ShowResolutionFor(err))
+	}
 	os.Exit(1)
 }
 

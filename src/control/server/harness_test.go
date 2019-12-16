@@ -32,12 +32,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -46,10 +49,10 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	defer os.RemoveAll(testDir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(testDir)
 
 	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
@@ -75,11 +78,10 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 				AccessPoints: defaultApList,
 			},
 		)
-		mb := scm.DefaultMockBackend()
-		sys := scm.NewMockSysProvider(&scm.MockSysConfig{
+		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
-		})
-		mp := scm.NewProvider(log, mb, sys)
+		}
+		mp := scm.NewMockProvider(log, nil, msc)
 		srv := NewIOServerInstance(log, nil, mp, ms, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
@@ -229,6 +231,129 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 
 			_, err := h.GetMSLeaderInstance()
 			common.CmpErr(t, tc.expError, err)
+		})
+	}
+}
+
+func TestHarnessIOServerStart(t *testing.T) {
+	for name, tc := range map[string]struct {
+		trc           *ioserver.TestRunnerConfig
+		expStartErr   error
+		expStartCount int
+	}{
+		"normal startup/shutdown": {
+			expStartErr:   context.Canceled,
+			expStartCount: maxIoServers,
+		},
+		"fails to start": {
+			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
+			expStartErr:   errors.New("no"),
+			expStartCount: 1, // first one starts, dies, next one never starts
+		},
+		"delayed failure": {
+			trc: &ioserver.TestRunnerConfig{
+				ErrChanCb: func() error {
+					time.Sleep(10 * time.Millisecond)
+					return errors.New("oops")
+				},
+			},
+			expStartErr:   errors.New("oops"),
+			expStartCount: maxIoServers,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(testDir)
+
+			srvCfgs := make([]*ioserver.Config, maxIoServers)
+			for i := 0; i < maxIoServers; i++ {
+				srvCfgs[i] = ioserver.NewConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
+			}
+			config := NewConfiguration().WithServers(srvCfgs...)
+
+			instanceStarts := 0
+			harness := NewIOServerHarness(log)
+			for _, srvCfg := range config.Servers {
+				if err := os.MkdirAll(srvCfg.Storage.SCM.MountPoint, 0777); err != nil {
+					t.Fatal(err)
+				}
+
+				if tc.trc == nil {
+					tc.trc = &ioserver.TestRunnerConfig{}
+				}
+				if tc.trc.StartCb == nil {
+					tc.trc.StartCb = func() { instanceStarts++ }
+				}
+				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
+				bdevProvider, err := bdev.NewClassProvider(log,
+					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+				if err != nil {
+					t.Fatal(err)
+				}
+				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
+				msClientCfg := mgmtSvcClientCfg{
+					ControlAddr:  &net.TCPAddr{},
+					AccessPoints: []string{"localhost"},
+				}
+				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
+				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
+				if err := harness.AddInstance(srv); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if err := harness.CreateSuperblocks(false); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, srv := range harness.Instances() {
+				// simulate ready notification
+				srv.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
+					SendMsgResponse: &drpc.Response{},
+				}))
+			}
+
+			done := make(chan struct{})
+			ctx, shutdown := context.WithCancel(context.Background())
+			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
+				common.CmpErr(t, expStartErr, th.Start(ctx))
+				close(done)
+			}(t, tc.expStartErr, harness)
+
+			time.Sleep(50 * time.Millisecond)
+			shutdown()
+			<-done // wait for inner goroutine to finish
+
+			if instanceStarts != tc.expStartCount {
+				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
+			}
+
+			if tc.expStartErr != context.Canceled {
+				return
+			}
+
+			for _, srv := range harness.Instances() {
+				expCall := &drpc.Call{
+					Module: drpc.ModuleMgmt,
+					Method: drpc.MethodSetUp,
+				}
+				lastCall := srv._drpcClient.(*mockDrpcClient).SendMsgInputCall
+				if lastCall == nil ||
+					lastCall.Module != expCall.Module ||
+					lastCall.Method != expCall.Method {
+					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
+						srv.Index(), expCall, lastCall)
+				}
+			}
 		})
 	}
 }

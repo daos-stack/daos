@@ -461,6 +461,9 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 
 	D_ASSERT(xs_ctxt != NULL);
 	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
+	ctxt->bic_io_unit = spdk_bs_get_io_unit_size(bbs->bb_bs);
+	D_ASSERT(ctxt->bic_io_unit > 0 && ctxt->bic_io_unit <= BIO_DMA_PAGE_SZ);
+
 	/*
 	 * Query per-server metadata to get blobID for this pool:target
 	 */
@@ -687,8 +690,9 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 
 	ioctxt->bic_inflight_dmas++;
 	ba->bca_inflights = 1;
-	spdk_blob_io_unmap(ioctxt->bic_blob, channel, pg_off, pg_cnt, blob_cb,
-			   &bma);
+	spdk_blob_io_unmap(ioctxt->bic_blob, channel,
+			   page2io_unit(ioctxt, pg_off),
+			   page2io_unit(ioctxt, pg_cnt), blob_cb, &bma);
 
 	/* Wait for blob unmap done */
 	blob_wait_completion(ioctxt->bic_xs_ctxt, ba);

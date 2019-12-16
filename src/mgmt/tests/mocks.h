@@ -30,6 +30,7 @@
 
 #include <gurt/types.h>
 #include <daos_security.h>
+#include "../rpc.h"
 
 /*
  * Mock ds_mgmt_pool_get_acl
@@ -41,5 +42,57 @@ extern void		*ds_mgmt_pool_get_acl_acl_ptr;
 
 void mock_ds_mgmt_pool_get_acl_setup(void);
 void mock_ds_mgmt_pool_get_acl_teardown(void);
+
+/*
+ * Mock ds_mgmt_pool_overwrite_acl
+ */
+extern int		ds_mgmt_pool_overwrite_acl_return;
+extern uuid_t		ds_mgmt_pool_overwrite_acl_uuid;
+extern struct daos_acl	*ds_mgmt_pool_overwrite_acl_acl;
+extern struct daos_acl	*ds_mgmt_pool_overwrite_acl_result;
+extern void		*ds_mgmt_pool_overwrite_acl_result_ptr;
+
+void mock_ds_mgmt_pool_overwrite_acl_setup(void);
+void mock_ds_mgmt_pool_overwrite_acl_teardown(void);
+
+/*
+ * Mock ds_mgmt_pool_update_acl
+ */
+extern int		ds_mgmt_pool_update_acl_return;
+extern uuid_t		ds_mgmt_pool_update_acl_uuid;
+extern struct daos_acl	*ds_mgmt_pool_update_acl_acl;
+extern struct daos_acl	*ds_mgmt_pool_update_acl_result;
+extern void		*ds_mgmt_pool_update_acl_result_ptr;
+
+void mock_ds_mgmt_pool_update_acl_setup(void);
+void mock_ds_mgmt_pool_update_acl_teardown(void);
+
+/*
+ * Mock ds_mgmt_pool_delete_acl
+ */
+extern int		ds_mgmt_pool_delete_acl_return;
+extern uuid_t		ds_mgmt_pool_delete_acl_uuid;
+extern const char	*ds_mgmt_pool_delete_acl_principal;
+extern struct daos_acl	*ds_mgmt_pool_delete_acl_result;
+extern void		*ds_mgmt_pool_delete_acl_result_ptr;
+
+void mock_ds_mgmt_pool_delete_acl_setup(void);
+void mock_ds_mgmt_pool_delete_acl_teardown(void);
+
+/*
+ * Mock ds_mgmt_list_pools
+ */
+extern int				ds_mgmt_list_pools_return;
+extern char				ds_mgmt_list_pools_group[];
+extern void				*ds_mgmt_list_pools_npools_ptr;
+extern uint64_t				ds_mgmt_list_pools_npools;
+extern void				*ds_mgmt_list_pools_poolsp_ptr;
+extern struct mgmt_list_pools_one	*ds_mgmt_list_pools_poolsp_out;
+extern void				*ds_mgmt_list_pools_len_ptr;
+extern size_t				ds_mgmt_list_pools_len_out;
+
+void mock_ds_mgmt_list_pools_setup(void);
+void mock_ds_mgmt_list_pools_teardown(void);
+void mock_ds_mgmt_list_pools_gen_pools(size_t num_pools);
 
 #endif /* __MGMT_TESTS_MOCKS_H__ */

@@ -20,10 +20,10 @@ def scons():
                                  SHLIBVERSION=DAOS_VERSION,
                                  LIBS=['daos_common'])
     if hasattr(env, 'InstallVersionedLib'):
-        env.InstallVersionedLib('$PREFIX/lib/', libdaos,
+        env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
                                 SHLIBVERSION=DAOS_VERSION)
     else:
-        env.Install('$PREFIX/lib/', libdaos)
+        env.Install('$PREFIX/lib64/', libdaos)
 
     SConscript('tests/SConscript', exports='denv')
 

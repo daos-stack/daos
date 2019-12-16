@@ -36,12 +36,9 @@ import (
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	return nil, errors.New("mgmt module handler is not implemented")
+func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+	return nil, drpc.UnknownMethodFailure()
 }
-
-// InitModule is empty for this module
-func (m *mgmtModule) InitModule(state drpc.ModuleState) {}
 
 // ID will return Mgmt module ID
 func (m *mgmtModule) ID() int32 {
@@ -55,16 +52,16 @@ type srvModule struct {
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
+	case drpc.MethodBIOError:
+		return nil, mod.handleBioErr(req)
 	default:
-		return nil, errors.Errorf("unknown dRPC %d", method)
+		return nil, drpc.UnknownMethodFailure()
 	}
 }
-
-func (mod *srvModule) InitModule(state drpc.ModuleState) {}
 
 func (mod *srvModule) ID() int32 {
 	return drpc.ModuleSrv
@@ -73,7 +70,7 @@ func (mod *srvModule) ID() int32 {
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	req := &srvpb.NotifyReadyReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return errors.Wrap(err, "unmarshal NotifyReady request")
+		return drpc.UnmarshalingPayloadFailure()
 	}
 
 	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
@@ -86,6 +83,26 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	}
 
 	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
+
+	return nil
+}
+
+func (mod *srvModule) handleBioErr(reqb []byte) error {
+	req := &srvpb.BioErrorReq{}
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return errors.Wrap(err, "unmarshal BioError request")
+	}
+
+	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+		return errors.Errorf("instance index %v is out of range (%v instances)",
+			req.InstanceIdx, len(mod.iosrvs))
+	}
+
+	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
+		return errors.Wrap(err, "check BioErr request socket path")
+	}
+
+	mod.iosrvs[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
 }

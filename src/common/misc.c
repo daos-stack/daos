@@ -372,7 +372,8 @@ daos_rank_list_parse(const char *str, const char *sep)
 	D_ALLOC_ARRAY(buf, cap);
 	if (buf == NULL)
 		D_GOTO(out, ranks = NULL);
-	s = s_saved = strdup(str);
+	D_STRNDUP(s_saved, str, strlen(str));
+	s = s_saved;
 	if (s == NULL)
 		D_GOTO(out_buf, ranks = NULL);
 
@@ -408,26 +409,6 @@ out_buf:
 	D_FREE(buf);
 out:
 	return ranks;
-}
-
-/* Find the first unset bit. */
-int
-daos_first_unset_bit(uint32_t *bits, unsigned int size)
-{
-	unsigned int idx = 0;
-	unsigned int off;
-
-	while (*bits == (uint32_t)(-1) && ++idx < size)
-		bits++;
-
-	if (idx == size)
-		return -1;
-
-	for (off = 0; off < 32; off++)
-		if (isclr(bits, off))
-			break;
-
-	return idx * 32 + off;
 }
 
 bool

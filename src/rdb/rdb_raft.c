@@ -678,11 +678,15 @@ out:
 	return rc;
 }
 
+struct rdb_raft_unpack_arg {
+	daos_epoch_t eph;
+	daos_handle_t slc;
+};
+
 static int
 rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 {
-	daos_handle_t  *slc = arg;
-
+	struct rdb_raft_unpack_arg *unpack_arg = arg;
 #if 0
 	int i;
 
@@ -704,17 +708,17 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 		D_ASSERT(io->ui_sgls[i].sg_iovs[0].iov_len > 0);
 	}
 #endif
-
-	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
-			      &io->ui_dkey, io->ui_iods_size, io->ui_iods,
-			      io->ui_sgls);
+	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
+			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
+			      io->ui_iods, io->ui_sgls);
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 {
-	struct dss_enum_arg	arg;
-	d_sg_list_t		sgl;
+	struct dss_enum_arg	   arg;
+	struct rdb_raft_unpack_arg unpack_arg;
+	d_sg_list_t		   sgl;
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
@@ -729,9 +733,12 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 	sgl.sg_iovs = data;
 	arg.sgl = &sgl;
 
+	unpack_arg.eph = index;
+	unpack_arg.slc = slc;
+
 	/* Unpack from the object level. */
 	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
-			       &slc);
+			       &unpack_arg);
 }
 
 static int
@@ -831,7 +838,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 
 	/* Save this chunk but do not update the SLC record yet. */
 	rc = rdb_raft_unpack_chunk(*slc, &in->isi_local.rl_kds_iov,
-				   &in->isi_local.rl_data_iov);
+				   &in->isi_local.rl_data_iov, msg->last_idx);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
 			DP_DB(db), in->isi_msg.last_idx, in->isi_seq, rc);
@@ -2530,7 +2537,11 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
+	d_rank_t			srcrank;
 	int				rc;
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
@@ -2539,16 +2550,16 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
-		rpc->cr_ep.ep_rank);
+		srcrank);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_requestvote(db->d_raft,
 				   raft_get_node(db->d_raft,
-						 rpc->cr_ep.ep_rank),
+						 srcrank),
 				   &in->rvi_msg, &out->rvo_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process REQUESTVOTE from rank %u: "
-			"%d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+			"%d\n", DP_DB(db), srcrank, rc);
 		/* raft_recv_requestvote() always generates a valid reply. */
 		rc = 0;
 	}
@@ -2560,7 +2571,7 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to send REQUESTVOTE reply to rank %u: "
-			"%d\n", DP_UUID(in->rvi_op.ri_uuid), rpc->cr_ep.ep_rank,
+			"%d\n", DP_UUID(in->rvi_op.ri_uuid), srcrank,
 			rc);
 }
 
@@ -2571,7 +2582,11 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	struct rdb_appendentries_out   *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
+	d_rank_t			srcrank;
 	int				rc;
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
@@ -2580,16 +2595,15 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
-		rpc->cr_ep.ep_rank);
+		srcrank);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_appendentries(db->d_raft,
-				     raft_get_node(db->d_raft,
-						   rpc->cr_ep.ep_rank),
+				     raft_get_node(db->d_raft, srcrank),
 				     &in->aei_msg, &out->aeo_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process APPENDENTRIES from rank %u: "
-			"%d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+			"%d\n", DP_DB(db), srcrank, rc);
 		/* raft_recv_appendentries() always generates a valid reply. */
 		rc = 0;
 	}
@@ -2602,7 +2616,7 @@ out:
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to send APPENDENTRIES reply to rank "
 			"%u: %d\n", DP_UUID(in->aei_op.ri_uuid),
-			rpc->cr_ep.ep_rank, rc);
+			srcrank, rc);
 }
 
 void
@@ -2612,7 +2626,11 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	struct rdb_installsnapshot_out *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
+	d_rank_t			srcrank;
 	int				rc;
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->isi_op.ri_uuid);
 	if (db == NULL) {
@@ -2625,7 +2643,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_TRACE, DF_DB": handling raft is from rank %u\n", DP_DB(db),
-		rpc->cr_ep.ep_rank);
+		srcrank);
 
 	/* Receive the bulk data buffers before entering raft. */
 	rc = rdb_raft_recv_is(db, rpc, &in->isi_local.rl_kds_iov,
@@ -2639,13 +2657,12 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_installsnapshot(db->d_raft,
-				       raft_get_node(db->d_raft,
-						     rpc->cr_ep.ep_rank),
+				       raft_get_node(db->d_raft, srcrank),
 				       &in->isi_msg, &out->iso_msg);
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to process INSTALLSNAPSHOT from rank "
-			"%u: %d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+			"%u: %d\n", DP_DB(db), srcrank, rc);
 		/*
 		 * raft_recv_installsnapshot() always generates a valid reply.
 		 */
@@ -2662,7 +2679,7 @@ out:
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to send INSTALLSNAPSHOT reply to rank "
 			"%u: %d\n", DP_UUID(in->isi_op.ri_uuid),
-			rpc->cr_ep.ep_rank, rc);
+			srcrank, rc);
 }
 
 void
@@ -2674,9 +2691,15 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out_rv;
 	struct rdb_appendentries_out   *out_ae;
 	struct rdb_installsnapshot_out *out_is;
-	d_rank_t			rank = rpc->cr_ep.ep_rank;
+	d_rank_t			rank;
 	raft_node_t		       *node;
 	int				rc;
+
+	/* Get the destination of the request - that is the source
+	 * rank of this reply. This CaRT API is based on request hdr.
+	 */
+	rc = crt_req_dst_rank_get(rpc, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {

@@ -25,19 +25,11 @@ package server
 
 import (
 	"context"
-	"os"
-	"strconv"
 	"sync"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
-)
-
-const (
-	// index in IOServerHarness.instances
-	defaultManagementInstance = 0
 )
 
 // IOServerHarness is responsible for managing IOServer instances
@@ -76,9 +68,7 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 	h.Lock()
 	defer h.Unlock()
-	srvIdx := len(h.instances)
-	srv.Index = uint32(srvIdx)
-	srv.runner.Config.Index = uint32(srvIdx)
+	srv.SetIndex(uint32(len(h.instances)))
 
 	h.instances = append(h.instances, srv)
 	return nil
@@ -131,7 +121,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 	for _, instance := range toCreate {
 		// Only the first I/O server can be an MS replica.
-		if instance.Index == 0 {
+		if instance.Index() == 0 {
 			mInfo, err := getMgmtInfo(instance)
 			if err != nil {
 				return err
@@ -151,7 +141,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 // AwaitStorageReady blocks until all managed IOServer instances
 // have storage available and ready to be used.
-func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
+func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -163,20 +153,24 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
-			return errors.Wrap(err, "failed to check storage formatting")
+			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
+			needsScmFormat = true
 		}
 
 		if !needsScmFormat {
+			if skipMissingSuperblock {
+				continue
+			}
 			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
-				return errors.Wrap(err, "failed to check instance superblock")
+				h.log.Errorf("failed to check instance superblock: %s", err)
 			}
 			if !needsSuperblock {
 				continue
 			}
 		}
-		h.log.Debug("SCM format required")
+		h.log.Info("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
@@ -217,34 +211,40 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 				return err
 			}
 		case ready := <-instance.AwaitReady():
-			if pmixless() {
-				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
-				if err := instance.SetRank(ctx, ready); err != nil {
-					return err
-				}
+			h.log.Debugf("instance ready: %v", ready)
+			if err := instance.SetRank(ctx, ready); err != nil {
+				return err
 			}
 		}
-	}
 
-	if err := h.StartManagementService(ctx); err != nil {
-		return errors.Wrap(err, "failed to start management service")
+		// If this instance is a MS replica, start it before
+		// moving on so that other instances can join.
+		if instance.IsMSReplica() {
+			if err := instance.StartManagementService(); err != nil {
+				return errors.Wrap(err, "failed to start management service")
+			}
+		}
+
+		if err := instance.LoadModules(); err != nil {
+			return errors.Wrap(err, "failed to load I/O server modules")
+		}
 	}
 
 	// now monitor them
-	for {
-		select {
-		case <-parent.Done():
-			return nil
-		case err := <-errChan:
-			// If we receive an error from any instance, shut them all down.
-			// TODO: Restart failed instances rather than shutting everything
-			// down.
-			h.log.Errorf("instance error: %s", err)
-			if err != nil {
-				return errors.Wrap(err, "Instance error")
-			}
+	select {
+	case <-parent.Done():
+		return parent.Err()
+	case err := <-errChan:
+		// If we receive an error from any instance, shut them all down.
+		// TODO: Restart failed instances rather than shutting everything
+		// down.
+		h.log.Errorf("instance error: %s", err)
+		if err != nil {
+			return errors.Wrap(err, "Instance error")
 		}
 	}
+
+	return nil
 }
 
 // StartManagementService starts the DAOS management service on this node.
@@ -259,31 +259,6 @@ func (h *IOServerHarness) StartManagementService(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// pmixless returns if we are in PMIx-less or PMIx mode.
-func pmixless() bool {
-	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
-		return true
-	}
-	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
-		return true
-	}
-	return false
-}
-
-// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
-// value, it returns an error.
-func pmixRank() (ioserver.Rank, error) {
-	s, ok := os.LookupEnv("PMIX_RANK")
-	if !ok {
-		return ioserver.NilRank, errors.New("not in PMIx mode")
-	}
-	r, err := strconv.ParseUint(s, 0, 32)
-	if err != nil {
-		return ioserver.NilRank, errors.Wrap(err, "PMIX_RANK="+s)
-	}
-	return ioserver.Rank(r), nil
 }
 
 type mgmtInfo struct {
@@ -301,18 +276,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-	// A temporary workaround to create and start MS before we fully
-	// migrate to PMIx-less mode.
-	if !pmixless() {
-		rank, err := pmixRank()
-		if err != nil {
-			return nil, err
-		}
-		if rank == 0 {
-			mi.isReplica = true
-			mi.shouldBootstrap = true
-		}
 	}
 
 	return mi, nil

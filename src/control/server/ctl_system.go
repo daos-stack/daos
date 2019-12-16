@@ -48,8 +48,9 @@ func (svc *ControlService) systemStop(ctx context.Context, leader *IOServerInsta
 
 		result := common.SystemMemberResult{ID: member.String(), Action: "stop"}
 
+		// TODO: force should be applied if a number of retries fail
 		resp, err := leader.msClient.Stop(ctx, member.Addr.String(),
-			&mgmtpb.DaosRank{Rank: member.Rank})
+			&mgmtpb.KillRankReq{Rank: member.Rank, Force: false})
 		if err != nil {
 			result.Err = err
 		} else if resp.GetStatus() != 0 {

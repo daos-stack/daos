@@ -22,7 +22,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 type PoolCreateReq struct {
 	Scmbytes             uint64   `protobuf:"varint,1,opt,name=scmbytes,proto3" json:"scmbytes,omitempty"`
 	Nvmebytes            uint64   `protobuf:"varint,2,opt,name=nvmebytes,proto3" json:"nvmebytes,omitempty"`
-	Ranks                string   `protobuf:"bytes,3,opt,name=ranks,proto3" json:"ranks,omitempty"`
+	Ranks                []uint32 `protobuf:"varint,3,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`
 	Numsvcreps           uint32   `protobuf:"varint,4,opt,name=numsvcreps,proto3" json:"numsvcreps,omitempty"`
 	User                 string   `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
 	Usergroup            string   `protobuf:"bytes,6,opt,name=usergroup,proto3" json:"usergroup,omitempty"`
@@ -38,7 +38,7 @@ func (m *PoolCreateReq) Reset()         { *m = PoolCreateReq{} }
 func (m *PoolCreateReq) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateReq) ProtoMessage()    {}
 func (*PoolCreateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_85fd60d184412972, []int{0}
+	return fileDescriptor_pool_23a192e17755ec54, []int{0}
 }
 func (m *PoolCreateReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateReq.Unmarshal(m, b)
@@ -72,11 +72,11 @@ func (m *PoolCreateReq) GetNvmebytes() uint64 {
 	return 0
 }
 
-func (m *PoolCreateReq) GetRanks() string {
+func (m *PoolCreateReq) GetRanks() []uint32 {
 	if m != nil {
 		return m.Ranks
 	}
-	return ""
+	return nil
 }
 
 func (m *PoolCreateReq) GetNumsvcreps() uint32 {
@@ -124,7 +124,7 @@ func (m *PoolCreateReq) GetAcl() []string {
 // PoolCreateResp returns created pool uuid and ranks.
 type PoolCreateResp struct {
 	Status               int32    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	Svcreps              string   `protobuf:"bytes,2,opt,name=svcreps,proto3" json:"svcreps,omitempty"`
+	Svcreps              []uint32 `protobuf:"varint,2,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -134,7 +134,7 @@ func (m *PoolCreateResp) Reset()         { *m = PoolCreateResp{} }
 func (m *PoolCreateResp) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateResp) ProtoMessage()    {}
 func (*PoolCreateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_85fd60d184412972, []int{1}
+	return fileDescriptor_pool_23a192e17755ec54, []int{1}
 }
 func (m *PoolCreateResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateResp.Unmarshal(m, b)
@@ -161,11 +161,11 @@ func (m *PoolCreateResp) GetStatus() int32 {
 	return 0
 }
 
-func (m *PoolCreateResp) GetSvcreps() string {
+func (m *PoolCreateResp) GetSvcreps() []uint32 {
 	if m != nil {
 		return m.Svcreps
 	}
-	return ""
+	return nil
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -182,7 +182,7 @@ func (m *PoolDestroyReq) Reset()         { *m = PoolDestroyReq{} }
 func (m *PoolDestroyReq) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyReq) ProtoMessage()    {}
 func (*PoolDestroyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_85fd60d184412972, []int{2}
+	return fileDescriptor_pool_23a192e17755ec54, []int{2}
 }
 func (m *PoolDestroyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyReq.Unmarshal(m, b)
@@ -235,7 +235,7 @@ func (m *PoolDestroyResp) Reset()         { *m = PoolDestroyResp{} }
 func (m *PoolDestroyResp) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyResp) ProtoMessage()    {}
 func (*PoolDestroyResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_85fd60d184412972, []int{3}
+	return fileDescriptor_pool_23a192e17755ec54, []int{3}
 }
 func (m *PoolDestroyResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyResp.Unmarshal(m, b)
@@ -262,32 +262,171 @@ func (m *PoolDestroyResp) GetStatus() int32 {
 	return 0
 }
 
+// ListPoolsReq represents a request to list pools on a given DAOS system.
+type ListPoolsReq struct {
+	Sys                  string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ListPoolsReq) Reset()         { *m = ListPoolsReq{} }
+func (m *ListPoolsReq) String() string { return proto.CompactTextString(m) }
+func (*ListPoolsReq) ProtoMessage()    {}
+func (*ListPoolsReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_pool_23a192e17755ec54, []int{4}
+}
+func (m *ListPoolsReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ListPoolsReq.Unmarshal(m, b)
+}
+func (m *ListPoolsReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ListPoolsReq.Marshal(b, m, deterministic)
+}
+func (dst *ListPoolsReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsReq.Merge(dst, src)
+}
+func (m *ListPoolsReq) XXX_Size() int {
+	return xxx_messageInfo_ListPoolsReq.Size(m)
+}
+func (m *ListPoolsReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ListPoolsReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ListPoolsReq proto.InternalMessageInfo
+
+func (m *ListPoolsReq) GetSys() string {
+	if m != nil {
+		return m.Sys
+	}
+	return ""
+}
+
+// ListPoolsResp returns the list of pools in the system.
+type ListPoolsResp struct {
+	Status               int32                 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Pools                []*ListPoolsResp_Pool `protobuf:"bytes,2,rep,name=pools,proto3" json:"pools,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+}
+
+func (m *ListPoolsResp) Reset()         { *m = ListPoolsResp{} }
+func (m *ListPoolsResp) String() string { return proto.CompactTextString(m) }
+func (*ListPoolsResp) ProtoMessage()    {}
+func (*ListPoolsResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_pool_23a192e17755ec54, []int{5}
+}
+func (m *ListPoolsResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ListPoolsResp.Unmarshal(m, b)
+}
+func (m *ListPoolsResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ListPoolsResp.Marshal(b, m, deterministic)
+}
+func (dst *ListPoolsResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsResp.Merge(dst, src)
+}
+func (m *ListPoolsResp) XXX_Size() int {
+	return xxx_messageInfo_ListPoolsResp.Size(m)
+}
+func (m *ListPoolsResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ListPoolsResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ListPoolsResp proto.InternalMessageInfo
+
+func (m *ListPoolsResp) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *ListPoolsResp) GetPools() []*ListPoolsResp_Pool {
+	if m != nil {
+		return m.Pools
+	}
+	return nil
+}
+
+type ListPoolsResp_Pool struct {
+	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Svcreps              []uint32 `protobuf:"varint,2,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ListPoolsResp_Pool) Reset()         { *m = ListPoolsResp_Pool{} }
+func (m *ListPoolsResp_Pool) String() string { return proto.CompactTextString(m) }
+func (*ListPoolsResp_Pool) ProtoMessage()    {}
+func (*ListPoolsResp_Pool) Descriptor() ([]byte, []int) {
+	return fileDescriptor_pool_23a192e17755ec54, []int{5, 0}
+}
+func (m *ListPoolsResp_Pool) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ListPoolsResp_Pool.Unmarshal(m, b)
+}
+func (m *ListPoolsResp_Pool) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ListPoolsResp_Pool.Marshal(b, m, deterministic)
+}
+func (dst *ListPoolsResp_Pool) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsResp_Pool.Merge(dst, src)
+}
+func (m *ListPoolsResp_Pool) XXX_Size() int {
+	return xxx_messageInfo_ListPoolsResp_Pool.Size(m)
+}
+func (m *ListPoolsResp_Pool) XXX_DiscardUnknown() {
+	xxx_messageInfo_ListPoolsResp_Pool.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ListPoolsResp_Pool proto.InternalMessageInfo
+
+func (m *ListPoolsResp_Pool) GetUuid() string {
+	if m != nil {
+		return m.Uuid
+	}
+	return ""
+}
+
+func (m *ListPoolsResp_Pool) GetSvcreps() []uint32 {
+	if m != nil {
+		return m.Svcreps
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*PoolCreateReq)(nil), "mgmt.PoolCreateReq")
 	proto.RegisterType((*PoolCreateResp)(nil), "mgmt.PoolCreateResp")
 	proto.RegisterType((*PoolDestroyReq)(nil), "mgmt.PoolDestroyReq")
 	proto.RegisterType((*PoolDestroyResp)(nil), "mgmt.PoolDestroyResp")
+	proto.RegisterType((*ListPoolsReq)(nil), "mgmt.ListPoolsReq")
+	proto.RegisterType((*ListPoolsResp)(nil), "mgmt.ListPoolsResp")
+	proto.RegisterType((*ListPoolsResp_Pool)(nil), "mgmt.ListPoolsResp.Pool")
 }
 
-func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_85fd60d184412972) }
+func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_23a192e17755ec54) }
 
-var fileDescriptor_pool_85fd60d184412972 = []byte{
-	// 272 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcf, 0x4a, 0xc4, 0x30,
-	0x10, 0xc6, 0x49, 0xff, 0x6d, 0x3b, 0xb0, 0x2a, 0xc3, 0x22, 0x41, 0x44, 0x4a, 0x4f, 0xf5, 0xe2,
-	0xc5, 0x37, 0x50, 0x8f, 0x1e, 0x24, 0x6f, 0xd0, 0xed, 0xc6, 0x65, 0xb1, 0x6d, 0x6a, 0x26, 0x59,
-	0xe8, 0x23, 0xfb, 0x16, 0x92, 0x64, 0x6b, 0x57, 0xc4, 0x53, 0xe7, 0xfb, 0x0d, 0xf3, 0xf5, 0x9b,
-	0x09, 0xc0, 0xa8, 0x54, 0xf7, 0x30, 0x6a, 0x65, 0x14, 0x26, 0xfd, 0xbe, 0x37, 0xd5, 0x17, 0x83,
-	0xf5, 0x9b, 0x52, 0xdd, 0xb3, 0x96, 0x8d, 0x91, 0x42, 0x7e, 0xe2, 0x0d, 0xe4, 0xd4, 0xf6, 0xdb,
-	0xc9, 0x48, 0xe2, 0xac, 0x64, 0x75, 0x22, 0x7e, 0x34, 0xde, 0x42, 0x31, 0x1c, 0x7b, 0x19, 0x9a,
-	0x91, 0x6f, 0x2e, 0x00, 0x37, 0x90, 0xea, 0x66, 0xf8, 0x20, 0x1e, 0x97, 0xac, 0x2e, 0x44, 0x10,
-	0x78, 0x07, 0x30, 0xd8, 0x9e, 0x8e, 0xad, 0x96, 0x23, 0xf1, 0xa4, 0x64, 0xf5, 0x5a, 0x9c, 0x11,
-	0x44, 0x48, 0x2c, 0x49, 0xcd, 0x53, 0x3f, 0xe4, 0x6b, 0xf7, 0x1f, 0xf7, 0xdd, 0x6b, 0x65, 0x47,
-	0x9e, 0xf9, 0xc6, 0x02, 0xfc, 0x84, 0x3d, 0xec, 0xf8, 0xea, 0x34, 0x61, 0x0f, 0x3b, 0xbc, 0x82,
-	0x98, 0x26, 0xe2, 0xb9, 0x47, 0xae, 0x74, 0xa4, 0x69, 0x3b, 0x5e, 0x94, 0xb1, 0x23, 0x4d, 0xdb,
-	0x55, 0x4f, 0x70, 0x71, 0xbe, 0x2a, 0x8d, 0x78, 0x0d, 0x19, 0x99, 0xc6, 0xd8, 0xb0, 0x69, 0x2a,
-	0x4e, 0x0a, 0x39, 0xac, 0xe6, 0xc0, 0x91, 0x77, 0x9c, 0x65, 0xf5, 0x1a, 0x3c, 0x5e, 0x24, 0x19,
-	0xad, 0x26, 0x77, 0xaf, 0x39, 0x0d, 0xfb, 0x9b, 0x26, 0x5a, 0xd2, 0x6c, 0x20, 0x7d, 0x57, 0xba,
-	0x95, 0xfe, 0x36, 0xb9, 0x08, 0xa2, 0xba, 0x87, 0xcb, 0x5f, 0x6e, 0xff, 0x47, 0xda, 0x66, 0xfe,
-	0xd5, 0x1e, 0xbf, 0x03, 0x00, 0x00, 0xff, 0xff, 0x5a, 0x9c, 0x9e, 0x00, 0xc3, 0x01, 0x00, 0x00,
+var fileDescriptor_pool_23a192e17755ec54 = []byte{
+	// 331 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x52, 0x4d, 0x4e, 0xf3, 0x30,
+	0x10, 0x95, 0x9b, 0xa4, 0x3f, 0xf3, 0x7d, 0x01, 0x64, 0x55, 0xc8, 0xaa, 0x10, 0xb2, 0xb2, 0x0a,
+	0x9b, 0x2c, 0x80, 0x13, 0x00, 0xcb, 0x2e, 0x90, 0x6f, 0x90, 0xa6, 0xa6, 0xaa, 0x48, 0xea, 0xe0,
+	0x71, 0x2a, 0xf5, 0x10, 0x1c, 0x94, 0x5b, 0xa0, 0xb1, 0xfb, 0x2b, 0x28, 0x2b, 0xcf, 0x7b, 0x33,
+	0xe3, 0x79, 0x6f, 0x34, 0x00, 0xad, 0x31, 0x75, 0xd1, 0x5a, 0xe3, 0x0c, 0x8f, 0x9b, 0x45, 0xe3,
+	0xb2, 0x2f, 0x06, 0xe9, 0xab, 0x31, 0xf5, 0xb3, 0xd5, 0xa5, 0xd3, 0x4a, 0x7f, 0xf0, 0x09, 0x0c,
+	0xb1, 0x6a, 0x66, 0x1b, 0xa7, 0x51, 0x30, 0xc9, 0xf2, 0x58, 0xed, 0x31, 0xbf, 0x81, 0xd1, 0x6a,
+	0xdd, 0xe8, 0x90, 0xec, 0xf9, 0xe4, 0x81, 0xe0, 0x63, 0x48, 0x6c, 0xb9, 0x7a, 0x47, 0x11, 0xc9,
+	0x28, 0x4f, 0x55, 0x00, 0xfc, 0x16, 0x60, 0xd5, 0x35, 0xb8, 0xae, 0xac, 0x6e, 0x51, 0xc4, 0x92,
+	0xe5, 0xa9, 0x3a, 0x62, 0x38, 0x87, 0xb8, 0x43, 0x6d, 0x45, 0x22, 0x59, 0x3e, 0x52, 0x3e, 0xa6,
+	0x39, 0xf4, 0x2e, 0xac, 0xe9, 0x5a, 0xd1, 0xf7, 0x89, 0x03, 0xe1, 0x3b, 0xba, 0xe5, 0x5c, 0x0c,
+	0xb6, 0x1d, 0xdd, 0x72, 0xce, 0xaf, 0x20, 0xc2, 0x0d, 0x8a, 0xa1, 0xa7, 0x28, 0x24, 0xa6, 0xac,
+	0x6a, 0x31, 0x92, 0x11, 0x31, 0x65, 0x55, 0x67, 0x4f, 0x70, 0x71, 0x6c, 0x15, 0x5b, 0x7e, 0x0d,
+	0x7d, 0x74, 0xa5, 0xeb, 0x82, 0xd3, 0x44, 0x6d, 0x11, 0x17, 0x30, 0xd8, 0x09, 0xee, 0x79, 0x2f,
+	0x3b, 0x98, 0x4d, 0xc3, 0x1f, 0x2f, 0x1a, 0x9d, 0x35, 0x1b, 0xda, 0xd7, 0x4e, 0x0d, 0xfb, 0xa9,
+	0xa6, 0x77, 0x50, 0x33, 0x86, 0xe4, 0xcd, 0xd8, 0x4a, 0x8b, 0x48, 0xb2, 0x7c, 0xa8, 0x02, 0xc8,
+	0xee, 0xe0, 0xf2, 0xe4, 0xb7, 0xf3, 0x92, 0x32, 0x09, 0xff, 0xa7, 0x4b, 0x74, 0x54, 0x8e, 0x34,
+	0x76, 0x3b, 0x82, 0xed, 0x47, 0x64, 0x9f, 0x0c, 0xd2, 0xa3, 0x92, 0x3f, 0xec, 0x15, 0x90, 0xd0,
+	0x21, 0x04, 0x73, 0xff, 0xee, 0x45, 0x41, 0xa7, 0x50, 0x9c, 0xf4, 0x16, 0x14, 0xa9, 0x50, 0x36,
+	0x79, 0x84, 0x98, 0xe0, 0xaf, 0x56, 0xcf, 0xae, 0x6a, 0xd6, 0xf7, 0x77, 0xf6, 0xf0, 0x1d, 0x00,
+	0x00, 0xff, 0xff, 0xa8, 0x58, 0xf1, 0x5f, 0x75, 0x02, 0x00, 0x00,
 }

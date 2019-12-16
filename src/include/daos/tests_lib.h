@@ -27,6 +27,13 @@
 #include <getopt.h>
 #include <daos_types.h>
 #include <daos/object.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
+
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);

@@ -55,10 +55,10 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
-		return nil, err
+		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	if m.config.AllowInsecure == true {
+	if m.config.AllowInsecure {
 		key = nil
 	} else {
 		certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
@@ -78,23 +78,20 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 	responseBytes, err := proto.Marshal(credential.Token)
 	if err != nil {
-		return nil, err
+		return nil, drpc.MarshalingFailure()
 	}
 	return responseBytes, nil
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	if method != drpc.MethodValidateCredentials {
-		return nil, errors.Errorf("Attempt to call unregistered function")
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	responseBytes, err := m.processValidateCredentials(body)
 	return responseBytes, err
 }
-
-// InitModule is empty for this module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
 
 // ID will return Security module ID
 func (m *SecurityModule) ID() int32 {

@@ -31,6 +31,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
@@ -59,16 +60,33 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	/* The time for the latest DTX resync operation. */
-	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_reindex:1,
+				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
-	/** Aggregation limit (set when snapshot is in progress) **/
+
+	/* Aggregate ULT */
+	struct dss_sleep_ult	 *sc_agg_ult;
+	/*
+	 * Lower bound of aggregation epoch, it can be:
+	 *
+	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
+	 *			  round of aggregation
+	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
+	 *			  aggregation
+	 */
+	uint64_t		 sc_aggregation_min;
+	/* Upper bound of aggregation epoch, it can be:
+	 *
+	 * 0			: When snapshot list isn't retrieved yet
+	 * DAOS_EPOCH_MAX	: When snapshot list is retrieved
+	 * snapshot epoch	: When the snapshot creation is in-progress
+	 */
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
@@ -98,6 +116,8 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
@@ -105,25 +125,24 @@ int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int
-ds_cont_child_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid);
-int
 ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont);
 
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
+typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int
-ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
+ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	     void *arg, uint32_t type);
-
 int
 cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int
 cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			 uint64_t *snapshots, int snap_count);
-
-
+int
+cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
+			int *snap_count);
 /**
  * Query container properties.
  *
@@ -151,5 +170,9 @@ cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_hdl_uuid,
 int
 cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		   uuid_t cont_uuid, struct ds_cont_hdl **cont_hdl);
+
+int
+cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
+			    unsigned int sync_mode);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

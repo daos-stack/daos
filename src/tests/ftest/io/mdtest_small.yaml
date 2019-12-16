@@ -1,13 +1,13 @@
 hosts:
-    test_servers:
-        - boro-A
-        - boro-B
-        - boro-C
-        - boro-D
-    test_clients:
-        - boro-E
-        - boro-F
-timeout: 600
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+timeout: 800
 server_config:
     name: daos_server
 pool:
@@ -17,41 +17,58 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 300000000
+        scm_size: 1600000000
     createsvc:
         svcn: 1
 mdtest:
-    client_processes:
-        np_8:
-            np: 8
-    api: 'DFS'
-    test_dir: "/"
-    iteration: 1
-    dfs_destroy: True
-    data: !mux
+  client_processes:
+    np_8:
+      np: 8
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: True
+  manager: "MPICH"
+  mdtest_flags: !mux
+    ssf:
+      flags: ' '
+      mdtest_api: !mux
+        dfs:
+          api: 'DFS'
+          write_bytes: 4096
+          read_bytes: 4096
+        posix:
+          api: 'POSIX'
+          write_bytes: 0
+          read_bytes: 0
+      branch: !mux
         zero:
-            write_bytes: 0
-            read_bytes: 0
-        4K:
-            write_bytes: 4096
-            read_bytes: 4096
-    branch: !mux
-        zero:
-            branching_factor: 1
-            num_of_files_dirs: 1000
-            diff_flags: !mux
-                flags_ssf:
-                    flags: " "
-                flags_fpp:
-                    flags: "-u"
-            directory_depth: !mux
-                depth_0:
-                    depth: 0
-                depth_20:
-                    depth: 20
+          branching_factor: 1
+          num_of_files_dirs: 1000
+          directory_depth: !mux
+            depth_0:
+              depth: 0
+            depth_20:
+              depth: 20
         two:
-            branching_factor: 2
-            items: 10
-            flags: " "
-            depth: 5
-    manager: "MPICH"
+          branching_factor: 2
+          items: 10
+          depth: 5
+    fpp:
+      flags: "-u"
+      mdtest_api: !mux
+        posix_api:
+          api: 'POSIX'
+          write_bytes: 4096
+          read_bytes: 4096
+          branching_factor: 1
+          num_of_files_dirs: 1000
+          depth: 20
+        dfs_api:
+          api: 'DFS'
+          write_bytes: 0
+          read_bytes: 0
+          branching_factor: 2
+          items: 10
+          depth: 5
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

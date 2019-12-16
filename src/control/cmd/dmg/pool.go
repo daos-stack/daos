@@ -26,6 +26,7 @@ package main
 import (
 	"fmt"
 	"os/user"
+	"strconv"
 	"strings"
 
 	"github.com/inhies/go-bytesize"
@@ -44,9 +45,12 @@ const (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create  PoolCreateCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
-	Destroy PoolDestroyCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	GetACL  PoolGetACLCmd  `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
+	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
+	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
+	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
+	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -94,7 +98,125 @@ type PoolGetACLCmd struct {
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
 func (d *PoolGetACLCmd) Execute(args []string) error {
-	return poolGetACL(d.log, d.conns, d.UUID)
+	req := client.PoolGetACLReq{UUID: d.UUID}
+
+	resp, err := d.conns.PoolGetACL(req)
+	if err != nil {
+		d.log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
+}
+
+// PoolOverwriteACLCmd represents the command to overwrite the Access Control
+// List of a DAOS pool.
+type PoolOverwriteACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	ACLFile string `short:"a" long:"acl-file" required:"1" description:"Path for new Access Control List file"`
+}
+
+// Execute is run when the PoolOverwriteACLCmd subcommand is activated
+func (d *PoolOverwriteACLCmd) Execute(args []string) error {
+	acl, err := readACLFile(d.ACLFile)
+	if err != nil {
+		return err
+	}
+
+	req := client.PoolOverwriteACLReq{
+		UUID: d.UUID,
+		ACL:  acl,
+	}
+
+	resp, err := d.conns.PoolOverwriteACL(req)
+	if err != nil {
+		d.log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
+}
+
+// PoolUpdateACLCmd represents the command to update the Access Control List of
+// a DAOS pool.
+type PoolUpdateACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	ACLFile string `short:"a" long:"acl-file" required:"0" description:"Path for new Access Control List file"`
+	Entry   string `short:"e" long:"entry" required:"0" description:"Single Access Control Entry to add or update"`
+}
+
+// Execute is run when the PoolUpdateACLCmd subcommand is activated
+func (d *PoolUpdateACLCmd) Execute(args []string) error {
+	if (d.ACLFile == "" && d.Entry == "") || (d.ACLFile != "" && d.Entry != "") {
+		return errors.New("either ACL file or entry parameter is required")
+	}
+
+	var acl *client.AccessControlList
+	if d.ACLFile != "" {
+		aclFileResult, err := readACLFile(d.ACLFile)
+		if err != nil {
+			return err
+		}
+		acl = aclFileResult
+	} else {
+		acl = &client.AccessControlList{
+			Entries: []string{d.Entry},
+		}
+	}
+
+	req := client.PoolUpdateACLReq{
+		UUID: d.UUID,
+		ACL:  acl,
+	}
+
+	resp, err := d.conns.PoolUpdateACL(req)
+	if err != nil {
+		d.log.Infof("Pool-update-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
+}
+
+// PoolDeleteACLCmd represents the command to delete an entry from the Access
+// Control List of a DAOS pool.
+type PoolDeleteACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Principal string `short:"p" long:"principal" required:"1" description:"Principal whose entry should be removed"`
+}
+
+// Execute is run when the PoolDeleteACLCmd subcommand is activated
+func (d *PoolDeleteACLCmd) Execute(args []string) error {
+	req := client.PoolDeleteACLReq{
+		UUID:      d.UUID,
+		Principal: d.Principal,
+	}
+
+	resp, err := d.conns.PoolDeleteACL(req)
+	if err != nil {
+		d.log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -200,7 +322,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
-	var acl []string
+	var acl *client.AccessControlList
 	if aclFile != "" {
 		acl, err = readACLFile(aclFile)
 		if err != nil {
@@ -218,10 +340,25 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
+	ranks := make([]uint32, 0)
+	if len(rankList) > 0 {
+		rankStr := strings.Split(rankList, ",")
+		for _, rank := range rankStr {
+			r, err := strconv.Atoi(rank)
+			if err != nil {
+				return errors.WithMessage(err, "parsing rank list")
+			}
+			if r < 0 {
+				return errors.Errorf("invalid rank: %d", r)
+			}
+			ranks = append(ranks, uint32(r))
+		}
+	}
+
 	req := &client.PoolCreateReq{
 		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
-		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp, Acl: acl,
+		RankList: ranks, NumSvcReps: numSvcReps, Sys: sys,
+		Usr: usr, Grp: grp, ACL: acl,
 	}
 
 	resp, err := conns.PoolCreate(req)
@@ -229,7 +366,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
 		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.Uuid, resp.SvcReps)
+			resp.UUID, formatPoolSvcReps(resp.SvcReps))
 	}
 
 	log.Infof("Pool-create command %s\n", msg)
@@ -241,7 +378,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{Uuid: poolUUID, Force: force}
+	req := &client.PoolDestroyReq{UUID: poolUUID, Force: force}
 
 	err := conns.PoolDestroy(req)
 	if err != nil {
@@ -251,27 +388,4 @@ func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, forc
 	log.Infof("Pool-destroy command %s\n", msg)
 
 	return err
-}
-
-func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error {
-	req := &client.PoolGetACLReq{UUID: poolUUID}
-
-	resp, err := conns.PoolGetACL(req)
-	if err != nil {
-		log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
-		return err
-	}
-
-	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
-	acl := resp.ACL
-
-	log.Info("# Entries:\n")
-	if len(acl) == 0 {
-		log.Info("None\n")
-	}
-	for _, ace := range acl {
-		log.Infof("%s\n", ace)
-	}
-
-	return nil
 }

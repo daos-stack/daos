@@ -395,33 +395,31 @@ for latest information and examples.
 
 ## Server Startup
 
-DAOS currently relies on PMIx for server wire-up and application to
-server connection. As a result, the DAOS servers can only be started via
-orterun (part of OpenMPI). A new bootstrap procedure is under
-implementation and will be available for DAOS v1.0. This will remove the
-dependency on PMIx and will allow the DAOS servers to be started
+DAOS is currently switching from the PMIx-based server wire-up to a
+self-contained bootstrap procedure. The new bootstrap procedure will be
+available for DAOS v1.0 and will allow the DAOS servers to be started
 individually (e.g. independently on each storage node via systemd) or
-collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
+collectively (e.g. pdsh, mpirun or as a Kubernetes Pod). Meanwhile, servers
+no longer have to be started by orterun, with a temporary limitation that if
+one of them is restarted, the others must also be restarted.
 
 ### Parallel Launcher
 
-As stated above, only orterun(1) is currently supported.
+As stated above, orterun(1) is no longer required, provided the temporary
+limitation is accommodated. The section still uses orterun as an example.
 
 The list of storage nodes can be specified on the command line via the -H
-option. The DAOS server and the application can be started
-separately but must share a URI directory (referred to as shared_dir) to
-connect. Also, the DAOS server must be started with the --enable-recovery option
+option. The DAOS server and the application can be started separately.
+Also, the DAOS server must be started with the --enable-recovery option
 to support server failure. See the orterun(1) man page for additional options.
 
 To start the DAOS server, run:
 ```
 orterun --map-by node --mca btl tcp,self --mca oob tcp -np <num_servers>
--H <server_list> --enable-recovery daos_server start -a <shared_dir> -o <config_file>
+-H <server_list> --enable-recovery daos_server start -o <config_file>
 ```
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
-
-The shared directory should be accessible by all nodes.
 
 The --allow-run-as-root option can be added to the command line to
 allow the daos_server to run with root privileges on each storage
@@ -430,13 +428,6 @@ to storage format).
 
 The content of the configuration file is documented in the next section
 and a few examples are [available](/src/utils/config/examples).
-
-Client processes (i.e. utilities, applications, ...) should have the
-following environment variables set to connect to the DAOS servers:
-```
-export DAOS_SINGLETON_CLI=1
-export CRT_ATTACH_INFO_PATH=/path/to/shared_dir
-```
 
 ### Systemd Integration
 
@@ -492,11 +483,11 @@ the process to act as a primary in multi-process mode. From there,
 the main process can respond to requests over the client API for
 information through the SPDK interface.
 
-The daos_shell is a transitory tool used to exercise the management api
-and can be used to verify that the DAOS servers are up and running. It
-is to be run as a standard, unprivileged user as follows:
+dmg is a tool built on top of the management api and can be used
+to verify that the DAOS servers are up and running. It is to be run
+as a standard, unprivileged user as follows:
 ```
-$ daos_shell -l storagenode1:10001,storagenode2:10001 storage scan
+$ dmg -l storagenode1:10001,storagenode2:10001 storage scan
 ```
 "storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
@@ -507,12 +498,12 @@ first version will be available for DAOS v1.0.
 ## Storage Formatting
 
 When 'daos_server' is started for the first time (and no SCM directory exists),
-it enters "maintenance mode" and waits for a `daos_shell storage format` call to
+it enters "maintenance mode" and waits for a `dmg storage format` call to
 be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
-`daos_shell -i -l <host:port>[,...] storage format` will normally be run on a login
+`dmg -i -l <host:port>[,...] storage format` will normally be run on a login
 node specifying a hostlist (`-l <host:port>[,...]`) of storage nodes with SCM/DCPM
 modules and NVMe SSDs installed and prepared.
 
@@ -564,16 +555,15 @@ IO services if the `superblock` is found in `scm_mount`.
 ## Basic Workflow
 
 Control plane server ([daos_server](/src/control/server)) instances will
-listen for requests from the management tool ([daos_shell](/src/control/cmd/dmg)),
+listen for requests from the management tool ([dmg](/src/control/cmd/dmg)),
 enabling users to perform provisioning operations on network and storage
 hardware remotely on storage nodes (from for example a login node).
 
 When `daos_server` instances have been started on each storage node
-for the first time, calling
-`daos_shell -l <host:port>,... storage format -f` formats persistent
-storage on the server node (skipping confirmation) on devices specified
-in the server configuration file, then writes the superblock and
-starts the data plane.
+for the first time, calling `dmg -l <host:port>,... storage format`
+formats persistent storage on the server node on devices specified in
+the server configuration file, then writes the superblock and starts
+the data plane.
 
 ![../graph/server_format_flow.png](../graph/server_format_flow.png "Server Format Diagram")
 
@@ -594,7 +584,7 @@ Typically an administrator will perform the following tasks:
     - just specify NVMe PCI addresses with `bdev_list` for now
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --enable-recovery daos_server start -a shared_dir -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --enable-recovery daos_server start -o <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#parallel-launcher)
 
 5. Provision Storage
@@ -605,12 +595,15 @@ Typically an administrator will perform the following tasks:
 requires a subsequent restart of `daos_server`)
     - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#server-configuration)
+    - pick one server in the system and set `access_points` to this server's
+      host and port
     - populate the `scm_*` and `bdev_*` parameters as used in format (below)
 
 7. Format Storage (from any node)
     - When `daos_server` is started for the first time (and no SCM directory exists),
-`daos_server` enters "maintenance mode" and waits for a `daos_shell storage format` call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
-    - `daos_shell -i -l <host:port>,... storage format -f`
+`daos_server` enters "maintenance mode" and waits for a `dmg storage format` call to be
+issued from the management tool.
+    - `dmg -i -l <host:port>,... storage format`
 [management tool details](/src/control/cmd/dmg/README.md#storage-format)
     - [SCM specific details](/src/control/server/README.md#scm-format)
     - [NVMe specific details](/src/control/server/README.md#nvme-format)
@@ -621,7 +614,7 @@ requires a subsequent restart of `daos_server`)
 <p>
 
 ```bash
-$ daos_shell -i -l <hostname>:10001 -i storage format -f
+$ dmg -i -l <hostname>:10001 -i storage format
 Active connections: [<hostname):10001]
 This is a destructive operation and storage devices specified in the server config file will be erased.
 Please be patient as it may take several minutes.

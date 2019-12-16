@@ -125,8 +125,8 @@ if ${TEARDOWN_ONLY:-false}; then
 fi
 
 # let's output to a dir in the tree
-rm -rf src/tests/ftest/avocado ./*_results.xml
-mkdir -p src/tests/ftest/avocado/job-results
+rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
+mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
 trap 'set +e; cleanup' EXIT
 
@@ -175,6 +175,13 @@ wq
 EOF
 mount \\\"$DAOS_BASE\\\"\"
 
+# first, strip the execute bit from the in-tree binary,
+# then copy daos_admin binary into \$PATH and fix perms
+chmod -x $DAOS_BASE/install/bin/daos_admin && \
+sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+	sudo chown root /usr/bin/daos_admin && \
+	sudo chmod 4755 /usr/bin/daos_admin
+
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
 if [ -z \"\$JENKINS_URL\" ]; then
@@ -196,7 +203,10 @@ rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
-export OFI_INTERFACE=eth0
+
+# Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
+unset OFI_INTERFACE
+
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
@@ -205,7 +215,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-logs_dir = $DAOS_BASE/src/tests/ftest/avocado/job-results
+logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
 
 [sysinfo.collectibles]
 # File with list of commands that will be executed and have their output
@@ -294,7 +304,7 @@ wq
 EOF
 fi
 
-pushd src/tests/ftest
+pushd install/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
@@ -302,6 +312,15 @@ rm -f core.* *_results.xml
 # see if we just wanted to set up
 if ${SETUP_ONLY:-false}; then
     exit 0
+fi
+
+# check if slurm needs to be configured for soak
+if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
+    if ! ./slurm_setup.py -c ${nodes[0]} -n ${TEST_NODES} -s -i; then
+        exit \${PIPESTATUS[0]}
+    else
+        rc=0
+    fi
 fi
 
 # now run it!
@@ -313,7 +332,7 @@ fi
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-unlink $DAOS_BASE/src/tests/ftest/avocado/job-results/latest
+unlink $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results/latest
 
 # get stacktraces for the core files
 if ls core.*; then

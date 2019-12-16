@@ -37,8 +37,16 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+// IOServerStarter defines an interface for starting the actual
+// daos_io_server.
+type IOServerStarter interface {
+	Start(context.Context, chan<- error) error
+	GetConfig() *ioserver.Config
+}
 
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
@@ -48,16 +56,14 @@ import (
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	Index uint32
-
-	log           logging.Logger
-	runner        *ioserver.Runner
-	bdevProvider  *storage.BdevProvider
-	scmProvider   *scm.Provider
-	msClient      *mgmtSvcClient
-	instanceReady chan *srvpb.NotifyReadyReq
-	storageReady  chan struct{}
-	fsRoot        string
+	log               logging.Logger
+	runner            IOServerStarter
+	bdevClassProvider *bdev.ClassProvider
+	scmProvider       *scm.Provider
+	msClient          *mgmtSvcClient
+	instanceReady     chan *srvpb.NotifyReadyReq
+	storageReady      chan struct{}
+	fsRoot            string
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -70,43 +76,28 @@ type IOServerInstance struct {
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
-	bp *storage.BdevProvider, sp *scm.Provider,
-	msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
+	bcp *bdev.ClassProvider, sp *scm.Provider,
+	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
 
 	return &IOServerInstance{
-		Index:         r.Config.Index,
-		log:           log,
-		runner:        r,
-		bdevProvider:  bp,
-		scmProvider:   sp,
-		msClient:      msc,
-		instanceReady: make(chan *srvpb.NotifyReadyReq),
-		storageReady:  make(chan struct{}),
+		log:               log,
+		runner:            r,
+		bdevClassProvider: bcp,
+		scmProvider:       sp,
+		msClient:          msc,
+		instanceReady:     make(chan *srvpb.NotifyReadyReq),
+		storageReady:      make(chan struct{}),
 	}
 }
 
-// scmConfig returns the SCM configuration assigned to this instance.
-func (srv *IOServerInstance) scmConfig() (storage.ScmConfig, error) {
-	var nullCfg storage.ScmConfig
-	if srv.runner == nil {
-		return nullCfg, errors.New("no runner configured")
-	}
-	if srv.runner.Config == nil {
-		return nullCfg, errors.New("no ioserver config set on runner")
-	}
-	return srv.runner.Config.Storage.SCM, nil
+// scmConfig returns the scm configuration assigned to this instance.
+func (srv *IOServerInstance) scmConfig() storage.ScmConfig {
+	return srv.runner.GetConfig().Storage.SCM
 }
 
 // bdevConfig returns the block device configuration assigned to this instance.
-func (srv *IOServerInstance) bdevConfig() (storage.BdevConfig, error) {
-	var nullCfg storage.BdevConfig
-	if srv.runner == nil {
-		return nullCfg, errors.New("no runner configured")
-	}
-	if srv.runner.Config == nil {
-		return nullCfg, errors.New("no ioserver config set on runner")
-	}
-	return srv.runner.Config.Storage.Bdev, nil
+func (srv *IOServerInstance) bdevConfig() storage.BdevConfig {
+	return srv.runner.GetConfig().Storage.Bdev
 }
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -124,14 +115,21 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	return srv._drpcClient, nil
 }
 
+// SetIndex sets the server index assigned by the harness.
+func (srv *IOServerInstance) SetIndex(idx uint32) {
+	srv.runner.GetConfig().Index = idx
+}
+
+// Index returns the server index assigned by the harness.
+func (srv *IOServerInstance) Index() uint32 {
+	return srv.runner.GetConfig().Index
+}
+
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (srv *IOServerInstance) MountScmDevice() error {
-	scmCfg, err := srv.scmConfig()
-	if err != nil {
-		return err
-	}
+	scmCfg := srv.scmConfig()
 
 	isMount, err := srv.scmProvider.IsMounted(scmCfg.MountPoint)
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
@@ -174,10 +172,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	}
 	srv.RUnlock()
 
-	scmCfg, err := srv.scmConfig()
-	if err != nil {
-		return false, err
-	}
+	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
 
@@ -196,8 +191,9 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 		return false, err
 	}
 
-	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, !res.Formatted)
-	return !res.Formatted, nil
+	needsFormat := !res.Mounted && !res.Mountable
+	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
+	return needsFormat, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before
@@ -209,10 +205,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 			return errors.Wrap(err, "start failed; no superblock")
 		}
 	}
-	if err := srv.bdevProvider.PrepareDevices(); err != nil {
+	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
 		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
 	}
-	if err := srv.bdevProvider.GenConfigFile(); err != nil {
+	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
 
@@ -222,7 +218,7 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 // NotifyReady receives a ready message from the running IOServer
 // instance.
 func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
+	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
@@ -241,7 +237,7 @@ func (srv *IOServerInstance) AwaitReady() chan *srvpb.NotifyReadyReq {
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
-	srv.log.Debugf("I/O server instance %d notifying storage ready", srv.Index)
+	srv.log.Debugf("I/O server instance %d notifying storage ready", srv.Index())
 	go func() {
 		close(srv.storageReady)
 	}()
@@ -251,9 +247,9 @@ func (srv *IOServerInstance) NotifyStorageReady() {
 func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index, ctx.Err())
+		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index(), ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Infof("I/O server instance %d storage ready", srv.Index)
+		srv.log.Infof("I/O server instance %d storage ready", srv.Index())
 	}
 }
 
@@ -328,7 +324,7 @@ func (srv *IOServerInstance) StartManagementService() error {
 
 	// should have been loaded by now
 	if superblock == nil {
-		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index)
+		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index())
 	}
 
 	if superblock.CreateMS {
@@ -363,7 +359,11 @@ func (srv *IOServerInstance) StartManagementService() error {
 		}
 	}
 
-	// Notify the I/O server that it may set up its server modules now.
+	return nil
+}
+
+// LoadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) LoadModules() error {
 	return srv.callSetUp()
 }
 
@@ -442,4 +442,10 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+
+	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
+		srv.Index(), bio.TgtId, bio)
 }

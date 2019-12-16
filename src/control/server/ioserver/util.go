@@ -24,10 +24,6 @@
 package ioserver
 
 import (
-	"os"
-	"os/exec"
-	"path"
-
 	"github.com/pkg/errors"
 )
 
@@ -50,24 +46,4 @@ func (cl *cmdLogger) Write(data []byte) (int, error) {
 	msg += string(data)
 	cl.logFn(msg)
 	return len(data), nil
-}
-
-func findBinary(binName string) (string, error) {
-	// Try the direct route first
-	binPath, err := exec.LookPath(binName)
-	if err == nil {
-		return binPath, nil
-	}
-
-	// If that fails, look to see if it's adjacent to
-	// this binary
-	selfPath, err := os.Readlink("/proc/self/exe")
-	if err != nil {
-		return "", errors.Wrap(err, "unable to determine path to self")
-	}
-	binPath = path.Join(path.Dir(selfPath), binName)
-	if _, err := os.Stat(binPath); err != nil {
-		return "", errors.Errorf("unable to locate %s", binName)
-	}
-	return binPath, nil
 }

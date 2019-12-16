@@ -1,7 +1,7 @@
 # Unittests Name and Paramter to be mention in this file.
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 timeout: 600
 server_config:
   name: daos_server
@@ -10,8 +10,10 @@ UnitTest:
     testname: smd_ut
   vea_ut:
     testname: vea_ut
-  pl_map:
-    testname: pl_map
+  ring_pl_map:
+    testname: ring_pl_map
+  jump_pl_map:
+    testname: jump_pl_map
   eq_tests:
     testname: eq_tests
   vos_tests:

@@ -80,6 +80,8 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
+	else if (strcmp(str, "uns-insert") == 0)
+		return CONT_UNS_INSERT;
 	return -1;
 }
 
@@ -119,7 +121,7 @@ obj_op_parse(const char *str)
 static void
 cmd_args_print(struct cmd_args_s *ap)
 {
-	char	oclass[10], type[10];
+	char	oclass[10] = {}, type[10] = {};
 
 	if (ap == NULL)
 		return;
@@ -138,6 +140,7 @@ cmd_args_print(struct cmd_args_s *ap)
 	D_INFO("\tattr: name=%s, value=%s\n",
 		ap->attrname_str ? ap->attrname_str : "NULL",
 		ap->value_str ? ap->value_str : "NULL");
+
 	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
 		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
@@ -463,8 +466,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
-	    (ap->p_op == POOL_LIST_CONTAINERS ||
-	     ap->p_op == POOL_STAT ||
+	    (ap->p_op == POOL_STAT ||
 	     ap->p_op == POOL_GET_PROP ||
 	     ap->p_op == POOL_GET_ATTR ||
 	     ap->p_op == POOL_LIST_ATTRS)) {
@@ -543,11 +545,11 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_QUERY:
 		rc = pool_query_hdlr(ap);
 		break;
+	case POOL_LIST_CONTAINERS:
+		rc = pool_list_containers_hdlr(ap);
+		break;
 
 	/* TODO: implement the following ops */
-	case POOL_LIST_CONTAINERS:
-		/* rc = pool_list_containers_hdlr() */
-		break;
 	case POOL_STAT:
 		/* rc = pool_stat_hdlr(ap); */
 		break;
@@ -583,7 +585,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((op != CONT_CREATE) && (ap->path != NULL)) {
+	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT) &&
+	    (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
@@ -689,6 +692,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
 		break;
+	case CONT_UNS_INSERT:
+		rc = cont_uns_insert_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -789,11 +795,14 @@ help_hdlr(struct cmd_args_s *ap)
 
 	stream = (ap->ostream != NULL) ? ap->ostream : stdout;
 
+	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
+
 	fprintf(stream,
 "usage: daos RESOURCE COMMAND [OPTIONS]\n"
 "resources:\n"
 "	  pool             pool\n"
 "	  container (cont) container\n"
+"	  version          print command version\n"
 "	  help             print this message and exit\n");
 
 	fprintf(stream, "\n"
@@ -831,7 +840,8 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-snaps       list container snapshots taken\n"
 "	  destroy-snap     destroy container snapshots\n"
 "			   by name, epoch or range\n"
-"	  rollback         roll back container to specified snapshot\n");
+"	  rollback         roll back container to specified snapshot\n"
+"	  uns-insert       insert container into UNS\n");
 
 #if 0
 	fprintf(stream,
@@ -900,12 +910,15 @@ main(int argc, char *argv[])
 	command_hdlr_t		hdlr = NULL;
 	struct cmd_args_s	dargs = {0};
 
-	/* argv[1] is RESOURCE or "help";
+	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc <= 2 || strcmp(argv[1], "help") == 0)
+	if (argc < 2 || strcmp(argv[1], "help") == 0)
 		hdlr = help_hdlr;
-	else if ((strcmp(argv[1], "container") == 0) ||
+	else if (strcmp(argv[1], "version") == 0) {
+		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		return 0;
+	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "pool") == 0)
