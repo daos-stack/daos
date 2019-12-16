@@ -155,7 +155,7 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
 		strcat(tmp, " ");
 		int i;
 		/* Print the pool service replica ranks. */
-		for (i = 0; i < svcl.rl_nr - 1; i++){
+		for (i = 0; i < svcl.rl_nr; i++){
 			if(i) strcat(tmp, ":");
 			char rs[10] = {'\0'};
 			sprintf(rs, "%d", svcl.rl_ranks[i]);
@@ -167,6 +167,23 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
 	}
 	(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
 	return ret;
+}
+
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_destroyPool
+  (JNIEnv *env, jclass clientClass, jstring serverGroup, jstring poolId, jboolean force){
+	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
+	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup, 0);
+	uuid_t pool_uuid;
+	uuid_parse(pool_str, pool_uuid);
+	int rc = daos_pool_destroy(pool_uuid, server_group, force, 0);
+	if (rc) {
+		char *tmp = "Failed to destroy pool, %s with server group, %s";
+		char *msg = (char *)malloc(strlen(tmp) + strlen(pool_str) + strlen(server_group));
+		sprintf(msg, tmp, pool_str, server_group);
+		throw_exception(env, msg, rc);
+	}
+	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
+	(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
 }
 
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_daosOpenPool

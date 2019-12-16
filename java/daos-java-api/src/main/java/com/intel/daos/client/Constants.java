@@ -27,6 +27,13 @@ public final class Constants {
 
   private Constants() {}
 
+  public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
+  public static final String POOL_DEFAULT_RANKS = "0";
+  public static final int POOL_DEFAULT_SVC_REPLICS = 1;
+
+  public static final int FILE_DEFAULT_CHUNK_SIZE = 8192;
+  public static final int FILE_DEFAULT_FILE_MODE = 0755;
+
   public static final int SET_XATTRIBUTE_NO_CHECK = 0;
   public static final int SET_XATTRIBUTE_CREATE = 1;
   public static final int SET_XATTRIBUTE_REPLACE = 2;
@@ -38,10 +45,14 @@ public final class Constants {
 
   public static final int CUSTOM_ERROR_BASE = -1000000;
 
-  public static final ErrorCode CUSTOM_ERR1 = new ErrorCode(-1000001, "scm size and nvme size no greater than 0");
-  public static final ErrorCode CUSTOM_ERR2 = new ErrorCode(-1000002, "failed to parse service replics string");
-  public static final ErrorCode CUSTOM_ERR3 = new ErrorCode(-1000003, "malloc or realloc buffer failed");
-  public static final ErrorCode CUSTOM_ERR4 = new ErrorCode(-1000004, "value length greater than expected");
+  public static final ErrorCode CUSTOM_ERR_NO_POOL_SIZE =
+          new ErrorCode(-1000001, "scm size and nvme size no greater than 0");
+  public static final ErrorCode CUSTOM_ERR_INCORRECT_SVC_REPLICS =
+          new ErrorCode(-1000002, "failed to parse service replics string");
+  public static final ErrorCode CUSTOM_ERR_BUF_ALLOC_FAILED =
+          new ErrorCode(-1000003, "malloc or realloc buffer failed");
+  public static final ErrorCode CUSTOM_ERR_TOO_LONG_VALUE =
+          new ErrorCode(-1000004, "value length greater than expected");
 
   public static final int ACCESS_FLAG_FILE_READONLY = 01;
   public static final int ACCESS_FLAG_FILE_READWRITE = 02;

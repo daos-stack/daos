@@ -8,16 +8,16 @@ public class DaosIOExceptionTest {
   @Test
   public void testLoadErrorCode(){
     Assert.assertEquals(4, DaosIOException.errorMap.size());
-    ErrorCode errorCode = Constants.CUSTOM_ERR1;
+    ErrorCode errorCode = Constants.CUSTOM_ERR_NO_POOL_SIZE;
     Assert.assertEquals(errorCode.getMsg(), DaosIOException.errorMap.get(errorCode.getCode()));
 
-    errorCode = Constants.CUSTOM_ERR4;
+    errorCode = Constants.CUSTOM_ERR_TOO_LONG_VALUE;
     Assert.assertEquals(errorCode.getMsg(), DaosIOException.errorMap.get(errorCode.getCode()));
   }
 
   @Test
   public void testParseCustomError(){
-    ErrorCode errorCode = Constants.CUSTOM_ERR2;
+    ErrorCode errorCode = Constants.CUSTOM_ERR_INCORRECT_SVC_REPLICS;
     String m = "test get message";
     DaosIOException exception = new DaosIOException(m, errorCode.getCode(), errorCode.getMsg());
     String msg = exception.getMessage();

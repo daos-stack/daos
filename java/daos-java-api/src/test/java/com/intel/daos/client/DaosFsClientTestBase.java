@@ -34,4 +34,17 @@ public class DaosFsClientTestBase {
     }
     return null;
   }
+
+  public static void main(String args[])throws Exception{
+    DaosFsClient client = null;
+    try{
+      client = prepareFs(DEFAULT_POOL_ID, DEFAULT_CONT_ID);
+    }finally {
+      client.disconnect();
+    }
+    if(client != null){
+      System.out.println("quitting");
+    }
+
+  }
 }

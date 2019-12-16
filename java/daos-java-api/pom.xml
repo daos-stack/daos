@@ -173,11 +173,11 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <java.library.path>${project.build.directory}/classes:${daos.install.path}/lib:${daos.install.path}/lib64
+            <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
             </java.library.path>
           </systemPropertyVariables>
           <argLine>
-            -Djava.library.path=${project.build.directory}/classes:${daos.install.path}/lib:${daos.install.path}/lib64
+            -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
           </argLine>
         </configuration>
         <executions>

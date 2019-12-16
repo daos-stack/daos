@@ -399,10 +399,10 @@ public class DaosFile {
   /**
    * same as {@link #mkdirs()} with file <code>mode</code> specified.
    *
+   * check {@link #mkdir(int)} for <code>mode</code>
+   *
    * @param mode
    * @throws IOException
-   *
-   * @see {@link #mkdir(int)} for <code>mode</code>
    */
   public void mkdirs(int mode) throws IOException {
     client.mkdir(path, mode, true);
@@ -486,7 +486,7 @@ public class DaosFile {
    * @return StatAttributes
    * @throws IOException
    *
-   * @see {@link StatAttributes}
+   * @see StatAttributes
    */
   StatAttributes getStatAttributes(boolean retrieve) throws IOException {
     open(true);
@@ -504,7 +504,7 @@ public class DaosFile {
    * @return StatAttributes
    * @throws IOException
    *
-   * @see {@link StatAttributes}
+   * @see StatAttributes
    */
   public StatAttributes getStatAttributes() throws IOException {
     return getStatAttributes(true);

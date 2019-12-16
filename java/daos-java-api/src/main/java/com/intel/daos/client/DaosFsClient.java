@@ -56,6 +56,19 @@ import java.util.concurrent.*;
  *
  * After getting {@linkplain DaosFsClient}, user usually get {@link DaosFile} object via {@linkplain #getFile} methods.
  *
+ * For example, user can simply create {@linkplain DaosFsClient} and {@link DaosFile} with all default values
+ * by following code.
+ * <code>
+ *   DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+ *   builder.poolId(poolId).containerId(contId);
+ *   DaosFsClient client = builder.build();
+ *
+ *   DaosFile daosFile = client.getFile("/path");
+ *   if (!daosFile.exists()){
+ *     daosFile.mkdir();
+ *   }
+ * </code>
+ *
  * @see DaosFsClientBuilder
  * @see DaosFile
  * @see Cleaner
@@ -85,7 +98,7 @@ public final class DaosFsClient {
   //make it non-daemon so that all DAOS file object can be released
   private final ExecutorService cleanerExe = Executors.newSingleThreadExecutor((r) -> {
     Thread thread = new Thread(r, "DAOS file object cleaner thread");
-    thread.setDaemon(false);
+    thread.setDaemon(true);
     return thread;
   });
 
@@ -108,7 +121,7 @@ public final class DaosFsClient {
       log.info("loading lib{}.so", LIB_NAME);
       System.loadLibrary(LIB_NAME);
     } catch (UnsatisfiedLinkError e) {
-      log.info("failed to load from lib directory. loading from jar instead " + LIB_NAME, e);
+      log.warn("failed to load from lib directory. Ignoring error and loading it from jar instead " + LIB_NAME);
       loadFromJar();
     }
   }
@@ -119,7 +132,7 @@ public final class DaosFsClient {
     try {
       tempDir = Files.createTempDirectory("daos").toFile();
       tempDir.deleteOnExit();
-      String filePath = new StringBuilder("/lib").append(LIB_NAME).append("so").toString();
+      String filePath = new StringBuilder("/lib").append(LIB_NAME).append(".so").toString();
       loadByPath(filePath, tempDir);
     } catch (IOException e) {
       if (tempDir != null) {
@@ -204,6 +217,14 @@ public final class DaosFsClient {
     return dfsPtr;
   }
 
+  public String getPoolId() {
+    return poolId;
+  }
+
+  public String getContId() {
+    return contId;
+  }
+
   public static String createPool(DaosFsClientBuilder builder)throws IOException {
     String poolInfo = daosCreatePool(builder.serverGroup,
                           builder.poolSvcReplics,
@@ -211,8 +232,13 @@ public final class DaosFsClient {
                           builder.poolScmSize,
                           builder.poolNvmeSize);
     log.info("opened pool: {}", poolInfo);
-    //TODO: parse poolInfo to set poolId and svc , poolId svc1:svc2...
-    return poolInfo;
+    String[] fields = poolInfo.split(" ");
+    String pooId = fields[0];
+    if (fields.length > 1){
+      builder.ranks = fields[1];
+      builder.poolId = pooId;
+    }
+    return pooId;
   }
 
   public static synchronized long mountFileSystem(long poolPtr, long contPtr, boolean readOnly) throws IOException{
@@ -333,7 +359,6 @@ public final class DaosFsClient {
   /**
    * create new file
    *
-   * //TODO: dfs_release parent object
    * @param dfsPtr
    * @param parentPath
    * null for root
@@ -381,6 +406,15 @@ public final class DaosFsClient {
    */
   static native String daosCreatePool(String serverGroup, int poolSvcReplics, int mode, long scmSize,
                                       long nvmeSize)throws IOException;
+
+  /**
+   * destroy pool
+   * @param serverGroup
+   * @param poolId
+   * @param force
+   * @throws IOException
+   */
+  static native void destroyPool(String serverGroup, String poolId, boolean force)throws IOException;
 
   /**
    * open pool
@@ -670,18 +704,18 @@ public final class DaosFsClient {
   public static class DaosFsClientBuilder implements Cloneable{
     private String poolId;
     private String contId;
-    private String ranks = "0";
-    private String serverGroup = "daos_server";
-    private int poolSvcReplics = 1;
+    private String ranks = Constants.POOL_DEFAULT_RANKS;
+    private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
+    private int poolSvcReplics = Constants.POOL_DEFAULT_SVC_REPLICS;
     private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
     private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
     private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE
             | Constants.MODE_POOL_USER_READWRITE;
     private long poolScmSize;
     private long poolNvmeSize;
-    private int defaultFileChunkSize = 8192; //8k
+    private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE; //8k
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
-    private int defaultFileMode = 0755;
+    private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
     private boolean readOnlyFs = false;
     private boolean shareFsClient = true;

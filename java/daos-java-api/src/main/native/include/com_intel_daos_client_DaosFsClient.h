@@ -49,6 +49,14 @@ JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
+ * Method:    destroyPool
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Z)V
+ */
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_destroyPool
+  (JNIEnv *, jclass, jstring, jstring, jboolean);
+
+/*
+ * Class:     com_intel_daos_client_DaosFsClient
  * Method:    daosOpenPool
  * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)J
  */
