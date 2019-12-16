@@ -197,6 +197,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 struct bio_reaction_ops {
 	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
+	int (*ioerr_reaction)(bool unmap, bool update, int tgt_id);
 };
 
 /*
