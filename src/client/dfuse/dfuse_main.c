@@ -141,9 +141,19 @@ main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(out_fini, ret = -DER_NOMEM);
+		D_GOTO(out, ret = -DER_NOMEM);
+
+	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(out, ret = rc);
+	}
 
 	dfuse_info->di_threaded = true;
 
@@ -207,8 +217,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
-
 	if (!dfuse_info->di_foreground) {
 		rc = daemon(0, 0);
 		if (rc)
@@ -217,7 +225,9 @@ main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
+		D_GOTO(out_debug, ret = rc);
+
+	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
@@ -229,6 +239,10 @@ main(int argc, char **argv)
 	if (!dfs) {
 		D_GOTO(out_svcl, 0);
 	}
+
+	DFUSE_TRA_UP(dfs, dfuse_info, "dfs");
+
+	d_list_add(&dfs->dfs_list, &dfuse_info->di_dfs_list);
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
@@ -297,14 +311,54 @@ out_pool:
 	if (dfuse_info->di_pool)
 		daos_pool_disconnect(dfs->dfs_poh, NULL);
 out_dfs:
-	D_FREE(dfs);
+	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
+				       struct dfuse_dfs, dfs_list))) {
+		/* Try and close/disconnect all container/pool handles and free
+		 * the dfs struct.
+		 *
+		 * dfuse_destroy_fuse() has already been called here which will
+		 * have iterated the inode table and should have dropped all
+		 * references to the dfs entries, however depending on the order
+		 * some pools/containers may be left open here so check for this
+		 * and try them again.
+		 */
+		if (!daos_handle_is_inval(dfs->dfs_coh)) {
+
+			if (dfs->dfs_ns) {
+				rc = dfs_umount(dfs->dfs_ns);
+				if (rc != 0)
+					DFUSE_TRA_ERROR(dfs,
+							"dfs_umount() failed (%d)",
+							rc);
+			}
+
+			rc = daos_cont_close(dfs->dfs_coh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_cont_close() failed: (%d)",
+						rc);
+			}
+
+		} else if (!daos_handle_is_inval(dfs->dfs_poh)) {
+			rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_pool_disconnect() failed: (%d)",
+						rc);
+			}
+		}
+
+		D_FREE(dfs);
+	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
+	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	D_FREE(dfuse_info);
-out_fini:
 	daos_fini();
+out_debug:
+	daos_debug_fini();
 out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not

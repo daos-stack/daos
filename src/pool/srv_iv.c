@@ -528,7 +528,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(iv_prop->pip_label) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_label);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (prop_entry->dpe_str)
 				label_alloc = prop_entry->dpe_str;
 			else
@@ -537,7 +538,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_alloc = prop_entry->dpe_str;
 			else
@@ -546,7 +548,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner_grp);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else
