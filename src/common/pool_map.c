@@ -1895,23 +1895,15 @@ pool_map_update_failed_cnt(struct pool_map *map)
 {
 	int rc;
 	struct pool_domain *root;
-	struct pool_fail_comp *new_fail_cnts;
+	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
 
-	/** New domain layers may have been added */
-	D_REALLOC_ARRAY(new_fail_cnts, map->po_comp_fail_cnts,
-			map->po_domain_layers);
-	if (new_fail_cnts == NULL)
-		return -DER_NOMEM;
-
-	memset(new_fail_cnts, 0, sizeof(new_fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)
 		return -DER_INVAL;
 
-	update_failed_cnt_helper(root, new_fail_cnts, 0);
-	map->po_comp_fail_cnts = new_fail_cnts;
-
+	update_failed_cnt_helper(root, fail_cnts, 0);
 	return 0;
 }
 

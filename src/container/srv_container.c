@@ -82,7 +82,7 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
  *		if it does not.
  */
 static int
-con_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
+cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 {
 	int num_failed;
 	int rc = 0;
@@ -107,18 +107,36 @@ con_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 
 	num_failed = rc;
 	switch (redun_fac) {
+	/**
+	 * A pool with a redundancy factor of 0 can be created and an
+	 * error is reported as soon as one target fails
+	 */
 	case DAOS_PROP_CO_REDUN_RF0:
 		if (num_failed > 0)
 			rc = DER_INVAL;
 		break;
+	/** RF1: no data protection. scratched data. */
 	case DAOS_PROP_CO_REDUN_RF1:
 		rc = 0;
 		break;
+	/**
+	 * A pool with a RF of n can lose up to n simultaneous servers
+	 * without any errors reported.
+	 */
+	case DAOS_PROP_CO_REDUN_RF2:
+		if (num_failed > 2)
+			rc = DER_INVAL;
+		break;
 	case DAOS_PROP_CO_REDUN_RF3:
-		rc = DER_NOSYS;
+		if (num_failed > 3)
+			rc = DER_INVAL;
+		break;
+	case DAOS_PROP_CO_REDUN_RF4:
+		if (num_failed > 4)
+			rc = DER_INVAL;
 		break;
 	default:
-		rc = DER_INVAL;
+		rc = -DER_INVAL;
 	}
 
 	return rc;
@@ -800,7 +818,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	if (!(in->coi_capas & DAOS_COO_FORCE)) {
 		pmap = pool_hdl->sph_pool->sp_map;
-		rc = con_verify_redun_req(pmap, prop);
+		rc = cont_verify_redun_req(pmap, prop);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": Container does not meet redundancy "
 					"requirments, set DAOS_COO_FORCE to "
