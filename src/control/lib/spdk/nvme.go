@@ -42,6 +42,8 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 // NVME is the interface that provides SPDK NVMe functionality.
@@ -114,7 +116,7 @@ func (n *Nvme) Discover() ([]Controller, error) {
 		return processReturn(retPtr, failLocation)
 	}
 
-	return nil, fmt.Errorf("%s unexpectedly returned NULL", failLocation)
+	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
 }
 
 // Format device at given pci address, destructive operation!
@@ -153,7 +155,7 @@ func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controlle
 		return processReturn(retPtr, failLocation)
 	}
 
-	return nil, fmt.Errorf("%s unexpectedly returned NULL", failLocation)
+	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
 }
 
 // Cleanup unlinks and detaches any controllers or namespaces,
@@ -203,27 +205,27 @@ func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 
 // processReturn parses return structs
 func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Controller, err error) {
-	defer C.free(unsafe.Pointer(retPtr))
+	if retPtr == nil {
+		return nil, errors.New("empty return value")
+	}
 
 	if retPtr.rc != 0 {
-		return nil, fmt.Errorf("%s failed, rc: %d, %s",
+		cleanReturn(retPtr)
+
+		return nil, errors.Errorf("%s failed, rc: %d, %s",
 			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
-		defer C.free(unsafe.Pointer(ctrlrPtr))
-
 		ctrlr := c2GoController(ctrlrPtr)
 		if nsPtr := ctrlrPtr.nss; nsPtr != nil {
 			for nsPtr != nil {
-				defer C.free(unsafe.Pointer(nsPtr))
 				ctrlr.Namespaces = append(ctrlr.Namespaces, c2GoNamespace(nsPtr))
 				nsPtr = nsPtr.next
 			}
 		}
 		if healthPtr := ctrlrPtr.dev_health; healthPtr != nil {
-			defer C.free(unsafe.Pointer(healthPtr))
 			ctrlr.Health = c2GoDeviceHealth(healthPtr)
 		}
 		ctrlrs = append(ctrlrs, ctrlr)
@@ -231,5 +233,33 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Contro
 		ctrlrPtr = ctrlrPtr.next
 	}
 
+	cleanReturn(retPtr)
+
 	return ctrlrs, nil
+}
+
+// cleanReturn frees memory that was allocated in C
+func cleanReturn(retPtr *C.struct_ret_t) {
+	ctrlr := retPtr.ctrlrs
+
+	for ctrlr != nil {
+		ctrlrNext := ctrlr.next
+
+		ns := ctrlr.nss
+		for ns != nil {
+			nsNext := ns.next
+			C.free(unsafe.Pointer(ns))
+			ns = nsNext
+		}
+
+		if ctrlr.dev_health != nil {
+			C.free(unsafe.Pointer(ctrlr.dev_health))
+		}
+
+		C.free(unsafe.Pointer(ctrlr))
+		ctrlr = ctrlrNext
+	}
+
+	C.free(unsafe.Pointer(retPtr))
+	retPtr = nil
 }
