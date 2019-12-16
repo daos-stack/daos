@@ -265,9 +265,9 @@ class IorCommand(ExecutableCommand):
         return (write_metrics, read_metrics)
 
 class IorMetrics(IntEnum):
+    """Index Name and Number of each column in IOR result summary.
     """
-    Index Name and Number of each column in IOR result summary.
-    """
+
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt

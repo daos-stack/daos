@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
@@ -29,7 +30,7 @@ from ior_utils import IorCommand, IorMetrics
 class IorIntercept(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with and without interception
-       library on a multi server and multi client settings with
+       library on a single server and single client setting with
        basic parameters.
 
     :avocado: recursive
@@ -47,37 +48,38 @@ class IorIntercept(IorTestBase):
             library make significant performance improvement.
 
         Use case:
-            Run ior with read, write, CheckWrite, CheckRead, fsync
-                in fpp mode for 5 minutes
-            Run ior with read, write, CheckWrite, CheckRead, fsync
-                in fpp mode for 5 minutes with interception library
+            Run ior with read, write, CheckWrite, CheckRead
+                for 5 minutes
+            Run ior with read, write, CheckWrite, CheckRead
+                for 5 minutes with interception library
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,pr,hw,iorinterceptbasic
+        :avocado: tags=all,daosio,medium,hw,full_regression,iorinterceptbasic
         """
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
-        intercept = self.prefix + "/lib64/libioil.so"
+        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         out = self.run_ior_with_pool(intercept)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
         mean_mib = int(IorMetrics.Mean_MiB)
-        x_improvement = 1
+        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
+        read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
 
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
-                        x_improvement * float(without_intercept[0][max_mib]))
+                        write_x * float(without_intercept[0][max_mib]))
         self.assertTrue(float(with_intercept[0][min_mib]) >
-                        x_improvement * float(without_intercept[0][min_mib]))
+                        write_x * float(without_intercept[0][min_mib]))
         self.assertTrue(float(with_intercept[0][mean_mib]) >
-                        x_improvement * float(without_intercept[0][mean_mib]))
+                        write_x * float(without_intercept[0][mean_mib]))
 
         # Verifying read performance
         self.assertTrue(float(with_intercept[1][max_mib]) >
-                        x_improvement * float(without_intercept[1][max_mib]))
+                        read_x * float(without_intercept[1][max_mib]))
         self.assertTrue(float(with_intercept[1][min_mib]) >
-                        x_improvement * float(without_intercept[1][min_mib]))
+                        read_x * float(without_intercept[1][min_mib]))
         self.assertTrue(float(with_intercept[1][mean_mib]) >
-                        x_improvement * float(without_intercept[1][mean_mib]))
+                        read_x * float(without_intercept[1][mean_mib]))

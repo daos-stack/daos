@@ -6,7 +6,7 @@ hosts:
 timeout: 2400
 server_config:
     name: daos_server
-    server:
+    servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
         scm_class: dcpm
@@ -18,9 +18,9 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 512 G
-        scm_size: 512000000000
-        nvme_size: 512000000000
+        # 300 G
+        scm_size: 10
+        nvme_size: 300000000000
     createsvc:
         svcn: 1
 ior:
@@ -33,7 +33,7 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-v -D 300 -w -r -W -R"
+          flags: "-v -D 300 -w -r"
           ior_api:
             posix:
               api: POSIX
@@ -41,6 +41,12 @@ ior:
             1M:
               transfer_size: '1M'
               block_size: '8G'
+              # Expected performance improvement
+              # of write and read for the specific
+              # transfer/block size when using
+              # interception library.
+              write_x: 3
+              read_x: 2
           objectclass:
             oclass_SX:
               daos_oclass: "SX"

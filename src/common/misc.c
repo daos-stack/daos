@@ -372,7 +372,8 @@ daos_rank_list_parse(const char *str, const char *sep)
 	D_ALLOC_ARRAY(buf, cap);
 	if (buf == NULL)
 		D_GOTO(out, ranks = NULL);
-	s = s_saved = strdup(str);
+	D_STRNDUP(s_saved, str, strlen(str));
+	s = s_saved;
 	if (s == NULL)
 		D_GOTO(out_buf, ranks = NULL);
 
