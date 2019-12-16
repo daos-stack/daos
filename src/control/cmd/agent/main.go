@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -40,19 +41,30 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+var daosVersion string
+
 const (
 	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
 )
 
 type cliOptions struct {
-	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
-	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
-	Insecure   bool   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
+	JSON       bool       `short:"j" long:"json" description:"Enable JSON output"`
+	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
+	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Version    versionCmd `command:"version" description:"Print daos_agent version"`
+}
+
+type versionCmd struct{}
+
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("daos_agent version %s\n", daosVersion)
+	os.Exit(0)
+	return nil
 }
 
 func exitWithError(log logging.Logger, err error) {
@@ -82,7 +94,7 @@ func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cl
 		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
 		c.LogFile = opts.LogFile
 	}
-	if opts.Insecure == true {
+	if opts.Insecure {
 		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
 		c.TransportConfig.AllowInsecure = true
 	}
@@ -92,6 +104,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	log.Info("Starting daos_agent:")
 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
+	p.SubcommandsOptional = true
 
 	_, err := p.Parse()
 	if err != nil {
