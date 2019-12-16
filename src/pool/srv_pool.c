@@ -242,8 +242,8 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 	char   *path;
 	int	rc;
 
-	rc = asprintf(&name, RDB_FILE"pool%s", suffix);
-	if (rc < 0)
+	D_ASPRINTF(name, RDB_FILE"pool%s", suffix);
+	if (name == NULL)
 		return NULL;
 	rc = ds_mgmt_tgt_file(pool_uuid, name, NULL /* idx */, &path);
 	D_FREE(name);

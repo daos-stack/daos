@@ -161,7 +161,7 @@ modules_load(uint64_t *facs)
 	uint64_t	 mod_facs;
 	int		 rc = 0;
 
-	sep = strdup(modules);
+	D_STRNDUP(sep, modules, MAX_MODULE_OPTIONS + 1);
 	if (sep == NULL)
 		return -DER_NOMEM;
 	run = sep;
@@ -469,8 +469,7 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	rc = crt_init_opt(daos_sysname,
-			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE |
-			  CRT_FLAG_BIT_PMIX_DISABLE,
+			  CRT_FLAG_BIT_SERVER,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
