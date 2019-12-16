@@ -274,17 +274,14 @@ int ds_mgmt_pool_list_cont(uuid_t uuid,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers)
 {
-	size_t i;
-
 	if (containers != NULL && ncontainers != NULL &&
 	    ds_mgmt_pool_list_cont_out != NULL) {
 		*ncontainers = ds_mgmt_pool_list_cont_nc_out;
 		D_ALLOC_ARRAY(*containers, *ncontainers);
-		for (i = 0; i < *ncontainers; i++) {
-			uuid_copy((*containers)[i].pci_uuid,
-				  ds_mgmt_pool_list_cont_out[i].pci_uuid);
-		}
+		memcpy(*containers, ds_mgmt_pool_list_cont_out,
+		       *ncontainers * sizeof(struct daos_pool_cont_info));
 	}
+
 	return ds_mgmt_pool_list_cont_return;
 }
 

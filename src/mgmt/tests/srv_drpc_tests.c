@@ -708,8 +708,8 @@ test_drpc_list_pools_svc_results_invalid(void **state)
 
 static void
 expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
-				       struct mgmt_list_pools_one *pools,
-				       size_t pools_len)
+				       struct mgmt_list_pools_one *exp_pools,
+				       size_t exp_pools_len)
 {
 	Mgmt__ListPoolsResp	*pool_resp = NULL;
 	size_t			i, j;
@@ -721,19 +721,19 @@ expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
 						 resp->body.data);
 	assert_non_null(pool_resp);
 	assert_int_equal(pool_resp->status, 0);
-	assert_int_equal(pool_resp->n_pools, pools_len);
+	assert_int_equal(pool_resp->n_pools, exp_pools_len);
 
-	for (i = 0; i < pools_len; i++) {
+	for (i = 0; i < exp_pools_len; i++) {
 		char	exp_uuid[UUID_STR_LEN];
 
-		uuid_unparse(pools[i].lp_puuid, exp_uuid);
+		uuid_unparse(exp_pools[i].lp_puuid, exp_uuid);
 		assert_string_equal(pool_resp->pools[i]->uuid, exp_uuid);
 
 		assert_int_equal(pool_resp->pools[i]->n_svcreps,
-				 pools[i].lp_svc->rl_nr);
-		for (j = 0; j < pools[i].lp_svc->rl_nr; j++)
+				 exp_pools[i].lp_svc->rl_nr);
+		for (j = 0; j < exp_pools[i].lp_svc->rl_nr; j++)
 			assert_int_equal(pool_resp->pools[i]->svcreps[j],
-					 pools[i].lp_svc->rl_ranks[j]);
+					 exp_pools[i].lp_svc->rl_ranks[j]);
 	}
 
 	mgmt__list_pools_resp__free_unpacked(pool_resp, NULL);
@@ -830,7 +830,7 @@ setup_list_cont_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__ListContReq lc_req = MGMT__LIST_CONT_REQ__INIT;
 
-	lc_req.uuid = uuid;	/* pool UUID */
+	lc_req.uuid = uuid;
 	pack_list_cont_req(call, &lc_req);
 }
 
@@ -854,8 +854,8 @@ expect_drpc_list_cont_resp_with_error(Drpc__Response *resp,
 
 static void
 expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
-					   struct daos_pool_cont_info *cont,
-					   uint64_t cont_len)
+					   struct daos_pool_cont_info *exp_cont,
+					   uint64_t exp_cont_len)
 {
 	Mgmt__ListContResp	*cont_resp = NULL;
 	size_t			 i;
@@ -869,15 +869,15 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 	assert_int_equal(cont_resp->status, 0);
 
 	/* number of containers in response list == expected value. */
-	assert_int_equal(cont_resp->n_containers, cont_len);
+	assert_int_equal(cont_resp->n_containers, exp_cont_len);
 
 	/* number of containers in response list == total number in pool */
 	assert_int_equal(cont_resp->n_containers, cont_resp->numcontainers);
 
-	for (i = 0; i < cont_len; i++) {
+	for (i = 0; i < exp_cont_len; i++) {
 		char exp_uuid[DAOS_UUID_STR_SIZE];
 
-		uuid_unparse(cont[i].pci_uuid, exp_uuid);
+		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
 		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
 	}
 }
