@@ -26,7 +26,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	"github.com/daos-stack/daos/src/control/client"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -119,16 +118,12 @@ func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error
 
 	if summary {
 		if len(groups) == 0 {
-			return out.String(), nil
+			return "no hosts found", nil
 		}
 		return storageSummaryTable("Hosts", "SCM Total", "NVMe Total", groups)
 	}
 
-	for _, res := range groups.Keys() {
-		hostset := groups[res].RangedString()
-		lineBreak := strings.Repeat("-", len(hostset))
-		fmt.Fprintf(out, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
-	}
+	formatHostGroupResults(out, groups)
 
 	return out.String(), nil
 }
@@ -219,13 +214,7 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 		fmt.Fprintf(out, "\n%s\n", groups)
 	}
 
-	for _, res := range mixedGroups.Keys() {
-		hostset := mixedGroups[res].RangedString()
-		lineBreak := strings.Repeat("-", len(hostset))
-		fmt.Fprintf(out, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
-	}
-
-	return out.String(), nil
+	return formatHostGroupResults(out, mixedGroups), nil
 }
 
 // groupFormatResults collects identical output keyed on hostset from

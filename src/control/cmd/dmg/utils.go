@@ -24,6 +24,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
@@ -134,4 +135,14 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	}
 
 	return
+}
+
+func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+	for _, res := range groups.Keys() {
+		hostset := groups[res].RangedString()
+		lineBreak := strings.Repeat("-", len(hostset))
+		fmt.Fprintf(buf, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
+	}
+
+	return buf.String()
 }
