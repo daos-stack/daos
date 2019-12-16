@@ -56,10 +56,7 @@ Requires: boost-devel
 Requires: mercury-devel = 1.0.1-21%{?dist}
 Requires: openpa-devel
 Requires: libfabric-devel
-# can't do this until we can land ompi@PR-10 and
-# scons_local@bmurrell/ompi-env-module
-#Requires: ompi-devel
-Requires: openmpi-devel
+Requires: openmpi3-devel
 Requires: hwloc-devel
 %if %{defined sha1}
 Provides: %{name}-devel-%{sha1}
