@@ -26,7 +26,7 @@ package common
 import (
 	"fmt"
 	"net"
-	"strings"
+	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -34,29 +34,35 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+// MemberState represents the activity state of DAOS system members.
+//go:generate stringer -type=MemberState
+type MemberState int
+
+const (
+	MemberStateStarted MemberState = iota
+	MemberStateStopping
+	MemberStateErrored
+	MemberStateUnresponsive
+)
+
 // SystemMember refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type SystemMember struct {
-	Addr net.Addr
-	Uuid string
-	Rank uint32
+	Rank  uint32
+	UUID  string
+	Addr  net.Addr
+	State MemberState
 }
 
 func (sm SystemMember) String() string {
-	return fmt.Sprintf("%s/%s/%d", sm.Addr, sm.Uuid, sm.Rank)
+	return fmt.Sprintf("%s/%s/%d", sm.Addr, sm.UUID, sm.Rank)
+}
+
+func NewSystemMember(rank uint32, uuid string, addr net.Addr) *SystemMember {
+	return &SystemMember{Rank: rank, UUID: uuid, Addr: addr}
 }
 
 type SystemMembers []*SystemMember
-
-func (sms SystemMembers) String() string {
-	var sb strings.Builder
-
-	for _, m := range sms {
-		sb.WriteString(m.String() + " ")
-	}
-
-	return sb.String()
-}
 
 // SystemMemberResult refers to the result of an action on a SystemMember
 // identified by string representation "address/uuid/rank".
@@ -66,85 +72,107 @@ type SystemMemberResult struct {
 	Err    error
 }
 
-func (smr SystemMemberResult) String() string {
-	msgResult := "OK"
-	if smr.Err != nil {
-		msgResult = "FAIL, " + smr.Err.Error()
-	}
-
-	return fmt.Sprintf("%s %s: %s", smr.ID, smr.Action, msgResult)
+func NewSystemMemberResult(memberID, action string) *SystemMemberResult {
+	return &SystemMemberResult{ID: memberID, Action: action}
 }
 
 type SystemMemberResults []*SystemMemberResult
 
-func (smrs SystemMemberResults) String() string {
-	var sb strings.Builder
-
-	for _, smr := range smrs {
-		sb.WriteString(smr.String() + ", ")
+func (smr SystemMemberResults) HasErrors() bool {
+	for _, res := range smr {
+		if res.Err != nil {
+			return true
+		}
 	}
-
-	return sb.String()
+	return false
 }
 
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
 	log     logging.Logger
-	members map[string]SystemMember
+	members map[uint32]*SystemMember
 }
 
-// Add adds member to membership.
-func (m *Membership) Add(member SystemMember) (int, error) {
+// Add adds member to membership, returns member count.
+func (m *Membership) Add(member *SystemMember) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	if value, found := m.members[member.Uuid]; found {
+	if value, found := m.members[member.Rank]; found {
 		return -1, errors.Errorf("member %s already exists", value)
 	}
 
-	m.members[member.Uuid] = member
+	m.members[member.Rank] = member
 
 	return len(m.members), nil
 }
 
-// Remove removes member from membership, idenpotent.
-//
-// Avoid taking a RW lock where possible.
-func (m *Membership) Remove(uuid string) {
+// Update updates existing member in membership, returns error.
+func (m *Membership) Update(member *SystemMember) error {
 	m.Lock()
 	defer m.Unlock()
 
-	delete(m.members, uuid)
+	if _, found := m.members[member.Rank]; !found {
+		return errors.Errorf("member with rank %d not found", member.Rank)
+	}
+
+	m.members[member.Rank] = member
+
+	return nil
 }
 
-// GetMember retrieves member from membership based on UUID.
-func (m *Membership) GetMember(uuid string) (*SystemMember, error) {
+// Remove removes member from membership, idempotent.
+func (m *Membership) Remove(rank uint32) {
+	m.Lock()
+	defer m.Unlock()
+
+	delete(m.members, rank)
+}
+
+// Get retrieves member from membership based on UUID.
+func (m *Membership) Get(rank uint32) (member *SystemMember, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	member, found := m.members[uuid]
+	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Errorf("member with uuid %s not found", uuid)
+		return nil, errors.Errorf("member with rank %d not found", rank)
 	}
 
-	return &member, nil
+	return
 }
 
-// GetMembers returns internal member structs as a sequence.
-func (m *Membership) GetMembers() SystemMembers {
-	members := make([]*SystemMember, 0, len(m.members))
-
+// Ranks returns ordered member ranks.
+func (m *Membership) Ranks() (ranks []uint32) {
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, m := range m.members {
-		members = append(members, &m)
+	for rank, _ := range m.members {
+		ranks = append(ranks, rank)
 	}
 
-	return members
+	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
+
+	return
+}
+
+// Members returns all system members.
+func (m *Membership) Members() (ms SystemMembers) {
+	m.RLock()
+	defer m.RUnlock()
+
+	for _, r := range m.Ranks() {
+		m, err := m.Get(r)
+		if err != nil {
+			panic(err) // should never happen
+		}
+		ms = append(ms, m)
+	}
+
+	return ms
 }
 
 func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[string]SystemMember), log: log}
+	return &Membership{members: make(map[uint32]*SystemMember), log: log}
 }

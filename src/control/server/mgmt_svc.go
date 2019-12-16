@@ -230,9 +230,8 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		newMember := common.SystemMember{
-			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
-		}
+		newMember := common.NewSystemMember(resp.GetRank(), req.GetUuid(),
+			replyAddr)
 
 		count, err := svc.membership.Add(newMember)
 		if err != nil {

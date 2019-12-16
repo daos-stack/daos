@@ -32,39 +32,37 @@ import (
 )
 
 // MembersToPB converts internal member structs to protobuf equivalents.
-func MembersToPB(members SystemMembers) []*ctlpb.SystemMember {
-	pbMembers := make([]*ctlpb.SystemMember, 0, len(members))
+func MembersToPB(members SystemMembers) (pbMembers []*ctlpb.SystemMember, err error) {
+	pbMembers = make([]*ctlpb.SystemMember, len(members))
 
 	for _, m := range members {
 		pbMembers = append(pbMembers, &ctlpb.SystemMember{
-			Addr: m.Addr.String(), Uuid: m.Uuid, Rank: m.Rank,
+			Addr: m.Addr.String(), Uuid: m.UUID, Rank: m.Rank,
 		})
 	}
 
-	return pbMembers
+	return
 }
 
 // MembersFromPB converts to member slice from protobuf format.
 //
 // Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) SystemMembers {
-	members := make(SystemMembers, 0, len(pbMembers))
+func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) (members SystemMembers, err error) {
+	var addr net.Addr
+	members = make(SystemMembers, len(pbMembers))
 
 	for _, m := range pbMembers {
-		var addr net.Addr
-
-		addr, err := net.ResolveTCPAddr("tcp", m.Addr)
+		addr, err = net.ResolveTCPAddr("tcp", m.Addr)
 		if err != nil {
-			log.Errorf("cannot resolve member address %s: %s", m, err)
-			continue
+			return
 		}
 
 		members = append(members, &SystemMember{
-			Addr: addr, Uuid: m.Uuid, Rank: m.Rank,
+			Addr: addr, UUID: m.Uuid, Rank: m.Rank,
 		})
 	}
 
-	return members
+	return
 }
 
 // MemberResultsToPB converts SystemMemberResults to equivalent protobuf format.

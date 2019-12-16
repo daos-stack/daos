@@ -76,7 +76,7 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 
 	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
 
-	return common.MembersFromPB(c.log, rpcResp.Members), nil
+	return common.MembersFromPB(c.log, rpcResp.Members)
 }
 
 // KillRank Will terminate server running at given rank on pool specified by

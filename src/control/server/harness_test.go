@@ -122,7 +122,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 
 	for idx, i := range h.Instances() {
-		if uint32(*i._superblock.Rank) != uint32(idx) {
+		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 		if i == mi {
