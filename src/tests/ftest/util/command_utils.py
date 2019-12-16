@@ -617,7 +617,7 @@ class Mpirun(JobManager):
 
         """
         load_mpi(self.mpitype)
-        return super(Orterun, self).run()
+        return super(Mpirun, self).run()
 
 
 class Srun(JobManager):
