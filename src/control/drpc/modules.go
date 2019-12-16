@@ -25,6 +25,8 @@
 
 package drpc
 
+import "github.com/golang/protobuf/proto"
+
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
 import "C"
@@ -105,3 +107,13 @@ const (
 	// MethodValidateCredentials is a ModuleSecurity method
 	MethodValidateCredentials = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
+
+// Marshal is a utility function that can be used by dRPC method handlers to
+// marshal their method-specific response to be passed back to the ModuleService.
+func Marshal(message proto.Message) ([]byte, error) {
+	msgBytes, err := proto.Marshal(message)
+	if err != nil {
+		return nil, MarshalingFailure()
+	}
+	return msgBytes, nil
+}

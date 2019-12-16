@@ -136,6 +136,9 @@ def scons():
     denv.AppendENVPath('GOPATH', denv['GOPATH'])
     denv['ENV']['GOBIN'] = join(gopath, "bin")
 
+    prereqs.require(denv, 'cart')
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$CART_PREFIX/include"))
+
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
     install_go_bin(denv, gosrc, gopath, None, "daos_admin", "daos_admin")
