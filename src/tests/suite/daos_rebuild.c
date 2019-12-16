@@ -56,6 +56,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		 * targets on this rank.
 		 **/
 		D_ASSERT(tgt_idx == -1);
+		return;
 	}
 
 	for (i = 0; i < arg_cnt; i++) {

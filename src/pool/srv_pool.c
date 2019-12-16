@@ -63,6 +63,8 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 };
 
+static bool pool_disable_evict = false;
+
 static struct pool_svc *
 pool_svc_obj(struct ds_rsvc *rsvc)
 {
@@ -923,6 +925,91 @@ err:
 }
 
 static void
+pool_svc_get(struct pool_svc *svc)
+{
+	ds_rsvc_get(&svc->ps_rsvc);
+}
+
+static void
+pool_svc_put(struct pool_svc *svc)
+{
+	ds_rsvc_put(&svc->ps_rsvc);
+}
+
+struct ds_pool_evict_arg {
+	struct pool_svc *svc;
+	d_rank_t	rank;
+};
+
+void
+ds_pool_evict_rank_ult(void *data)
+{
+	struct ds_pool_evict_arg *arg = data;
+	int			 rc;
+
+	rc = ds_pool_evict_rank(arg->svc->ps_uuid, arg->rank);
+
+	D_DEBUG(DB_MGMT, DF_UUID" evict rank %u : rc %d\n",
+		DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
+
+	pool_svc_put(arg->svc);
+	D_FREE_PTR(arg);
+}
+
+/* Disable all pools eviction */
+void
+ds_pool_disable_evict(void)
+{
+	pool_disable_evict = true;
+}
+
+void
+ds_pool_enable_evict(void)
+{
+	pool_disable_evict = false;
+}
+
+static void
+ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+		     enum crt_event_type type, void *arg)
+{
+	struct ds_pool_evict_arg	*ult_arg;
+	struct pool_svc			*svc = arg;
+	int				rc = 0;
+
+	/* Only used for evict the rank for the moment */
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore src/type %u/%u\n", src, type);
+		return;
+	}
+
+	if (pool_disable_evict) {
+		D_DEBUG(DB_MGMT, "event response is disabled\n");
+		return;
+	}
+
+	D_ALLOC_PTR(ult_arg);
+	/* Failure allocation might cause event lost,
+	 * let's use assert for now XXX
+	 */
+	D_ASSERT(ult_arg);
+
+	/* Since this is called from swim_progress, let's create another
+	 * ult to do the job asynchronously, so this can return quickly.
+	 */
+	pool_svc_get(svc);
+	ult_arg->svc = svc;
+	ult_arg->rank = rank;
+	rc = dss_ult_create(ds_pool_evict_rank_ult, ult_arg, DSS_ULT_MISC,
+			    DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		pool_svc_put(svc);
+		D_FREE_PTR(ult_arg);
+		D_ERROR("create evict ult failed: rc %d\n", rc);
+	}
+}
+
+static void
 pool_svc_free_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc *svc = pool_svc_obj(rsvc);
@@ -982,6 +1069,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
 	bool			cont_svc_up = false;
+	bool			event_cb_registered = false;
 	d_rank_t		rank;
 	int			rc;
 
@@ -1026,6 +1114,11 @@ out_lock:
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 	cont_svc_up = true;
 
+	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
+	if (rc)
+		goto out;
+	event_cb_registered = true;
+
 	rc = ds_rebuild_regenerate_task(svc->ps_pool, replicas);
 	if (rc != 0)
 		goto out;
@@ -1036,6 +1129,8 @@ out_lock:
 		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 out:
 	if (rc != 0) {
+		if (event_cb_registered)
+			crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1054,6 +1149,8 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	d_rank_t		rank;
 	int			rc;
+
+	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
@@ -1145,12 +1242,6 @@ pool_svc_lookup(uuid_t uuid, struct pool_svc **svcp)
 		return rc;
 	*svcp = pool_svc_obj(rsvc);
 	return 0;
-}
-
-static void
-pool_svc_put(struct pool_svc *svc)
-{
-	ds_rsvc_put(&svc->ps_rsvc);
 }
 
 static int
@@ -3475,6 +3566,31 @@ out:
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 	pool_target_addr_list_free(&out_list);
+}
+
+int
+ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank)
+{
+	struct pool_target_addr_list	list;
+	struct pool_target_addr_list	out_list = { 0 };
+	struct pool_target_addr		tgt_rank;
+	uint32_t			map_version = 0;
+	int				rc;
+
+	tgt_rank.pta_rank = rank;
+	tgt_rank.pta_target = -1;
+	list.pta_number = 1;
+	list.pta_addrs = &tgt_rank;
+
+	rc = ds_pool_update(pool_uuid, POOL_EXCLUDE, &list, &out_list,
+			    &map_version, NULL);
+
+	D_DEBUG(DB_MGMT, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
+		DP_UUID(pool_uuid), map_version, rank, rc);
+
+	pool_target_addr_list_free(&out_list);
+
+	return rc;
 }
 
 struct evict_iter_arg {
