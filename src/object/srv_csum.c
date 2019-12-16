@@ -210,10 +210,10 @@ static bool
 cc_need_new_csum(struct csum_context *ctx)
 {
 
-	return ext_needs_new_csum(&ctx->cc_raw, &ctx->cc_req,
-				  &ctx->cc_chunk,
-				  ctx->cc_csum_started,
-				  cc2iov2(ctx) != NULL);
+	return ds_csum_calc_needed(&ctx->cc_raw, &ctx->cc_req,
+				   &ctx->cc_chunk,
+				   ctx->cc_csum_started,
+				   cc2iov2(ctx) != NULL);
 }
 
 static uint8_t *
@@ -520,11 +520,11 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 }
 
 bool
-ext_needs_new_csum(struct daos_csum_range *raw_ext,
-		   struct daos_csum_range *req_ext,
-		   struct daos_csum_range *chunk,
-		   bool csum_started,
-		   bool has_next_biov)
+ds_csum_calc_needed(struct daos_csum_range *raw_ext,
+		    struct daos_csum_range *req_ext,
+		    struct daos_csum_range *chunk,
+		    bool csum_started,
+		    bool has_next_biov)
 {
 	bool	is_only_extent_in_chunk;
 	bool	biov_extends_past_chunk;

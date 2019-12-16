@@ -41,16 +41,25 @@
  * @return
  */
 bool
-ext_needs_new_csum(struct daos_csum_range *raw_ext,
-		   struct daos_csum_range *req_ext,
-		   struct daos_csum_range *chunk,
-		   bool csum_started,
-		   bool has_next_biov);
+ds_csum_calc_needed(struct daos_csum_range *raw_ext,
+		    struct daos_csum_range *req_ext,
+		    struct daos_csum_range *chunk,
+		    bool csum_started,
+		    bool has_next_biov);
 
 /**
- * will process the bsgl and create new checksums or use the stored
+ * Process the bsgl and create new checksums or use the stored
  * checksums for the bsgl as needed and appropriate. The result is the iod will
  * have checksums appropriate for the extents and data they represent
+ *
+ * @param iod[in]			I/O Descriptor that will receive the
+ *					csums
+ * @param csummer[in]			csummer object for calculating and csum
+ *					logic
+ * @param bsgl[in]			bio scatter gather list with the data
+ * @param biov_dcbs[in]			list csum info for each \bsgl
+ * @param biov_dcbs_used[in/out]	track the number of dcbs used
+ * @return
  */
 int
 ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,

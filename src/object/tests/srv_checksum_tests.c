@@ -305,7 +305,7 @@ need_new_checksum_tests_testcase(char *file, int line, bool expected,
 	dcr_set_idx_nr(&req, args.req_start, args.req_len);
 	dcr_set_idx_nr(&raw, args.req_start, args.raw_len);
 
-	result = ext_needs_new_csum(&raw, &req, &chunk, started, has_next);
+	result = ds_csum_calc_needed(&raw, &req, &chunk, started, has_next);
 	if (result != expected) {
 		print_error("%s:%d expected %d but found %d\n", file, line,
 			    expected, result);
