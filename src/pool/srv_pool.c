@@ -2235,7 +2235,7 @@ out:
 }
 
 /**
- * Send CaRT RPC from mgmt svc (drpc) to pool svc to get container list.
+ * Send CaRT RPC to pool svc to get container list.
  *
  * \param[in]	uuid		UUID of the pool
  * \param[in]	ranks		Pool service replicas

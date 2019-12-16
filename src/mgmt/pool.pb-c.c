@@ -890,7 +890,7 @@ const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor =
   (ProtobufCMessageInit) mgmt__list_cont_resp__cont__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__list_cont_resp__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__list_cont_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -916,28 +916,15 @@ static const ProtobufCFieldDescriptor mgmt__list_cont_resp__field_descriptors[3]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "numContainers",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ListContResp, numcontainers),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__list_cont_resp__field_indices_by_name[] = {
   1,   /* field[1] = containers */
-  2,   /* field[2] = numContainers */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__list_cont_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor =
 {
@@ -947,7 +934,7 @@ const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor =
   "Mgmt__ListContResp",
   "mgmt",
   sizeof(Mgmt__ListContResp),
-  3,
+  2,
   mgmt__list_cont_resp__field_descriptors,
   mgmt__list_cont_resp__field_indices_by_name,
   1,  mgmt__list_cont_resp__number_ranges,

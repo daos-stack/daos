@@ -86,5 +86,4 @@ message ListContResp {
 	}
 	int32 status = 1; // DAOS error code
 	repeated Cont containers = 2; // containers
-	uint64 numContainers = 3; // number of containers in the pool
 }

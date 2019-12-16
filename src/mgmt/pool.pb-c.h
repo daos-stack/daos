@@ -241,14 +241,10 @@ struct  _Mgmt__ListContResp
    */
   size_t n_containers;
   Mgmt__ListContResp__Cont **containers;
-  /*
-   * number of containers in the pool
-   */
-  uint64_t numcontainers;
 };
 #define MGMT__LIST_CONT_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL }
 
 
 /* Mgmt__PoolCreateReq methods */

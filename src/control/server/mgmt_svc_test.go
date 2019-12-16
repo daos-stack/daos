@@ -291,9 +291,7 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 
-	expectedResp := &mgmtpb.ListContResp{
-		NumContainers: 0,
-	}
+	expectedResp := &mgmtpb.ListContResp{}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
@@ -321,7 +319,6 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 			{Uuid: "78123456-7812-7812-7812-123456789abc"},
 			{Uuid: "81234567-8123-8123-8123-123456789abc"},
 		},
-		NumContainers: 4,
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 

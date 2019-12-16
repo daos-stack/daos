@@ -871,9 +871,6 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 	/* number of containers in response list == expected value. */
 	assert_int_equal(cont_resp->n_containers, exp_cont_len);
 
-	/* number of containers in response list == total number in pool */
-	assert_int_equal(cont_resp->n_containers, cont_resp->numcontainers);
-
 	for (i = 0; i < exp_cont_len; i++) {
 		char exp_uuid[DAOS_UUID_STR_SIZE];
 

@@ -1074,7 +1074,7 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to list containers in DAOS pool %s\n",
 		req->uuid);
 
-	/* resp.containers, n_containers, and numcontainers are all NULL/0 */
+	/* resp.containers, n_containers are NULL/0 */
 
 	if (uuid_parse(req->uuid, req_uuid) != 0) {
 		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
@@ -1109,7 +1109,6 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	resp.numcontainers = containers_len;
 	len = mgmt__list_cont_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
