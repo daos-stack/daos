@@ -50,32 +50,6 @@
   <build>
     <plugins>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy</id>
-            <phase>prepare-package</phase>
-            <goals>
-              <goal>copy</goal>
-            </goals>
-            <configuration>
-              <artifactItems>
-                <artifactItem>
-                  <artifactId>daos-jni</artifactId>
-                  <groupId>com.intel.daos</groupId>
-                  <version>${project.version}</version>
-                  <type>so</type>
-                  <overWrite>false</overWrite>
-                  <outputDirectory>${project.build.directory}/classes</outputDirectory>
-                  <destFileName>libdaos-jni.so</destFileName>
-                </artifactItem>
-              </artifactItems>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>native-maven-plugin</artifactId>
         <version>1.0-alpha-9</version>
