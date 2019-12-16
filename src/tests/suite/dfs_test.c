@@ -73,6 +73,46 @@ dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 }
 
 static void
+dfs_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
+{
+	d_iov_t	ghdl = { NULL, 0, 0 };
+	int	rc;
+
+	if (rank == 0) {
+		/** fetch size of global handle */
+		rc = dfs_obj_local2global(dfs, *obj, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast size of global handle to all peers */
+	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	/** allocate buffer for global pool handle */
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	if (rank == 0) {
+		/** generate actual global handle to share with peer tasks */
+		rc = dfs_obj_local2global(dfs, *obj, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast global handle to all peers */
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	if (rank != 0) {
+		/** unpack global handle */
+		rc = dfs_obj_global2local(dfs, flags, ghdl, obj);
+		assert_int_equal(rc, 0);
+	}
+
+	D_FREE(ghdl.iov_buf);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
 dfs_test_mount(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -89,7 +129,8 @@ dfs_test_mount(void **state)
 	uuid_generate(cuuid);
 	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
-	printf("Created non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created non-POSIX Container "DF_UUIDF"\n",
+		      DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
@@ -102,12 +143,13 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	printf("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
+		      DP_UUID(cuuid));
 
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	printf("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
@@ -121,7 +163,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	printf("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
 
 static int
@@ -282,10 +324,139 @@ dfs_test_read_shared_file(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+#define NUM_SEGS 10
+
+static void
+dfs_test_short_read(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	daos_size_t		read_size;
+	daos_size_t		chunk_size = 2000;
+	daos_size_t		buf_size = 1024;
+	int			*wbuf, *rbuf[NUM_SEGS];
+	char			*name = "short_read_file";
+	d_sg_list_t		wsgl, rsgl;
+	d_iov_t			iov;
+	int			i, rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	D_ALLOC(wbuf, buf_size);
+	assert_non_null(wbuf);
+	for (i = 0; i < buf_size/sizeof(int); i++)
+		wbuf[i] = i+1;
+
+	for (i = 0; i < NUM_SEGS; i++) {
+		D_ALLOC_ARRAY(rbuf[i], buf_size);
+		assert_non_null(rbuf[i]);
+	}
+
+	/** set memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+
+	d_iov_set(&iov, wbuf, buf_size);
+	wsgl.sg_nr = 1;
+	wsgl.sg_iovs = &iov;
+
+	if (arg->myrank == 0) {
+		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
+
+	/** reading empty file should return 0 */
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+
+	/** write strided pattern and check read size with segmented buffers */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 2 * buf_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 3);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 5 * buf_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 6);
+
+	/** truncate the buffer to a large size, read should return all */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 1048576*2, 0);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
+
+	/** punch all the data, read should return 0 */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+
+	/** write to 2 chunks with a large gap in the middle */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576*2, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	/** reading in between, even holes should not be a short read */
+	rc = dfs_read(dfs_mt, obj, &rsgl, 1048576, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
+
+	rc = dfs_release(obj);
+	dfs_test_file_del(name);
+
+	D_FREE(wbuf);
+	for (i = 0; i < NUM_SEGS; i++)
+		D_FREE(rbuf[i]);
+	D_FREE(rsgl.sg_iovs);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_TEST2: multi-threads read shared file",
+	{ "DFS_TEST2: DFS short reads",
+	  dfs_test_short_read, async_disable, test_case_teardown},
+	{ "DFS_TEST3: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 };
 
@@ -318,8 +489,8 @@ dfs_setup(void **state)
 static int
 dfs_teardown(void **state)
 {
-	test_arg_t		*arg = *state;
-	int rc;
+	test_arg_t	*arg = *state;
+	int		rc;
 
 	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
@@ -341,11 +512,12 @@ dfs_teardown(void **state)
 int
 run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int	rc;
+	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-					 dfs_tests, dfs_setup, dfs_teardown);
+					 dfs_tests, dfs_setup,
+					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

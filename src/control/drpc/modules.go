@@ -48,6 +48,8 @@ const (
 )
 
 const (
+	// MethodPrepShutdown is a ModuleMgmt method
+	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
 	// MethodKillRank is a ModuleMgmt method
 	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
 	// MethodSetRank is a ModuleMgmt method
@@ -87,6 +89,8 @@ const (
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	// MethodBIOError is a ModuleSrv method
+	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
 const (

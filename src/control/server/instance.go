@@ -359,7 +359,11 @@ func (srv *IOServerInstance) StartManagementService() error {
 		}
 	}
 
-	// Notify the I/O server that it may set up its server modules now.
+	return nil
+}
+
+// LoadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) LoadModules() error {
 	return srv.callSetUp()
 }
 
@@ -438,4 +442,10 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+
+	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
+		srv.Index(), bio.TgtId, bio)
 }
