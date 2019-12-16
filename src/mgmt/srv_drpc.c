@@ -67,6 +67,43 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 }
 
 void
+ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PrepShutdownReq	 *req = NULL;
+	Mgmt__DaosResp		 *resp = NULL;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__prep_shutdown_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (prep shutdown)\n");
+		return;
+	}
+
+	D_INFO("Received request to prep shutdown %u\n", req->rank);
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__prep_shutdown_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__daos_resp__init(resp);
+
+	/* TODO: disable auto evict and pool rebuild here */
+	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
+		req->rank);
+
+	mgmt__prep_shutdown_req__free_unpacked(req, NULL);
+	pack_daos_response(resp, drpc_resp);
+	D_FREE(resp);
+}
+
+void
 ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__KillRankReq	 *req = NULL;

@@ -39,7 +39,9 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
 
-	DFUSE_TRA_INFO(parent, "parent, mode %d", mode);
+	DFUSE_TRA_UP(ie, parent, "inode");
+
+	DFUSE_TRA_INFO(ie, "parent, mode %d", mode);
 
 	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 		      mode | S_IFDIR, O_CREAT, 0, 0, NULL, &ie->ie_obj);

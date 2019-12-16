@@ -94,11 +94,9 @@ mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
 }
 
 static int
-mock_copy_ctrlr_data(struct ctrlr_t *cdst, struct ret_t *ret,
-		     struct ctrlr_entry *csrc)
+mock_copy_ctrlr_data(struct ctrlr_t *cdst, struct ctrlr_entry *csrc)
 {
 	(void)cdst;
-	(void)ret;
 	(void)csrc;
 	return 0;
 }
@@ -126,6 +124,48 @@ mock_spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
  * Test functions
  * ===================
  */
+
+static void
+attach_mock_controllers(void)
+{
+	struct spdk_nvme_ctrlr_opts	opts = {};
+	struct spdk_nvme_transport_id	trid1 = {};
+	struct spdk_nvme_transport_id	trid2 = {};
+	struct spdk_nvme_ctrlr		ctrlr1;
+	struct spdk_nvme_ctrlr		ctrlr2;
+	struct ctrlr_entry	       *entry1;
+	struct ctrlr_entry	       *entry2;
+
+	memset(&ctrlr1, 0, sizeof(struct spdk_nvme_ctrlr));
+	snprintf(ctrlr1.trid.traddr, sizeof(ctrlr1.trid.traddr),
+		 "0000:01:00.0");
+	ctrlr1.trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	memset(&ctrlr2, 0, sizeof(struct spdk_nvme_ctrlr));
+	snprintf(ctrlr2.trid.traddr, sizeof(ctrlr2.trid.traddr),
+		 "0000:02:00.0");
+	ctrlr2.trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+
+	memset(&trid1, 0, sizeof(trid1));
+	trid1.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	snprintf(trid1.traddr, sizeof(trid1.traddr),
+		 "0000:01:00.0");
+	memset(&trid2, 0, sizeof(trid2));
+	trid2.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	snprintf(trid2.traddr, sizeof(trid2.traddr),
+		 "0000:02:00.0");
+
+	/* attach_cb gets called with matching trid & ctrlr.trid by probe for
+	 * each controller on the bus
+	 */
+	assert_null(g_controllers);
+	attach_cb(NULL, &trid1, &ctrlr1, &opts);
+	assert_non_null(g_controllers);
+	entry1 = g_controllers;
+	attach_cb(NULL, &trid2, &ctrlr2, &opts);
+	assert_non_null(g_controllers);
+	entry2 = g_controllers;
+	assert_ptr_not_equal(entry1, entry2);
+}
 
 static void
 test_discover_null_controllers(void **state)
@@ -178,47 +218,11 @@ test_discover_probe_fail(void **state)
 static void
 test_collect(void **state)
 {
-	struct spdk_nvme_ctrlr_opts	opts = {};
-	struct spdk_nvme_transport_id	trid1 = {};
-	struct spdk_nvme_transport_id	trid2 = {};
-	struct spdk_nvme_ctrlr		ctrlr1;
-	struct spdk_nvme_ctrlr		ctrlr2;
-	struct ctrlr_entry	       *entry1;
-	struct ctrlr_entry	       *entry2;
-
 	(void)state;
 
-	memset(&ctrlr1, 0, sizeof(struct spdk_nvme_ctrlr));
-	snprintf(ctrlr1.trid.traddr, sizeof(ctrlr1.trid.traddr),
-		 "0000:01:00.0");
-	ctrlr1.trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
-	memset(&ctrlr2, 0, sizeof(struct spdk_nvme_ctrlr));
-	snprintf(ctrlr2.trid.traddr, sizeof(ctrlr2.trid.traddr),
-		 "0000:02:00.0");
-	ctrlr2.trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	attach_mock_controllers();
 
-	memset(&trid1, 0, sizeof(trid1));
-	trid1.trtype = SPDK_NVME_TRANSPORT_PCIE;
-	snprintf(trid1.traddr, sizeof(trid1.traddr),
-		 "0000:01:00.0");
-	memset(&trid2, 0, sizeof(trid2));
-	trid2.trtype = SPDK_NVME_TRANSPORT_PCIE;
-	snprintf(trid2.traddr, sizeof(trid2.traddr),
-		 "0000:02:00.0");
-
-	/* attach_cb gets called with matching trid & ctrlr.trid by probe for
-	 * each controller on the bus
-	 */
-	assert_null(g_controllers);
-	attach_cb(NULL, &trid1, &ctrlr1, &opts);
-	assert_non_null(g_controllers);
-	entry1 = g_controllers;
-	attach_cb(NULL, &trid2, &ctrlr2, &opts);
-	assert_non_null(g_controllers);
-	entry2 = g_controllers;
-	assert_ptr_not_equal(entry1, entry2);
-
-	test_ret = init_ret();
+	test_ret = init_ret(0);
 
 	assert_null(test_ret->ctrlrs);
 	_collect(test_ret, &mock_copy_ctrlr_data,
@@ -227,12 +231,57 @@ test_collect(void **state)
 
 	if (test_ret->rc != 0)
 		fprintf(stderr, "collect err: %s\n", test_ret->err);
-	assert_return_code(test_ret->rc, 0);
+	assert_int_equal(test_ret->rc, 0);
 	assert_non_null(test_ret->ctrlrs);
 	assert_string_equal(test_ret->ctrlrs->pci_addr, "0000:01:00.0");
 	assert_non_null(test_ret->ctrlrs->next);
 	assert_string_equal(test_ret->ctrlrs->next->pci_addr, "0000:02:00.0");
 	assert_null(test_ret->ctrlrs->next->next);
+}
+
+static void
+test_get_controller(void **state)
+{
+	int			 rc;
+	struct spdk_pci_addr	 pci_addr;
+	struct ctrlr_entry	*entry = NULL;
+	char			*addr1 = "0000:01:00.0";
+	char			*addr2 = "0000:02:00.0";
+	char			*addr3 = "0000:03:00.0";
+
+	entry = g_controllers;
+
+	(void)state;
+
+	attach_mock_controllers();
+
+	/* check mismatch fails */
+	rc = get_controller(&entry, addr2);
+	assert_int_equal(rc, 0);
+	rc = spdk_pci_addr_parse(&pci_addr, addr1);
+	assert_int_equal(rc, 0);
+	rc = spdk_pci_addr_compare(&entry->pci_addr, &pci_addr);
+	assert_int_equal(rc, 1);
+
+	/* check 2nd ctrlr is found */
+	rc = get_controller(&entry, addr2);
+	assert_int_equal(rc, 0);
+	rc = spdk_pci_addr_parse(&pci_addr, addr2);
+	assert_int_equal(rc, 0);
+	rc = spdk_pci_addr_compare(&entry->pci_addr, &pci_addr);
+	assert_int_equal(rc, 0);
+
+	/* non-existent address should not be found */
+	rc = get_controller(&entry, addr3);
+	assert_int_equal(rc, -NVMEC_ERR_CTRLR_NOT_FOUND);
+
+	/* check 1st ctrlr is found */
+	rc = get_controller(&entry, addr1);
+	assert_int_equal(rc, 0);
+	rc = spdk_pci_addr_parse(&pci_addr, addr1);
+	assert_return_code(rc, 0);
+	rc = spdk_pci_addr_compare(&entry->pci_addr, &pci_addr);
+	assert_return_code(rc, 0);
 }
 
 static int
@@ -267,6 +316,8 @@ main(void)
 		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup,
 						teardown),
 		cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
+		cmocka_unit_test_setup_teardown(test_get_controller, setup,
+						teardown),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

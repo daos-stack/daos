@@ -475,6 +475,40 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	return resp, nil
 }
 
+// PrepShutdown implements the method defined for the Management Service.
+//
+// Prepare data-plane instance managed by control-plane for a controlled shutdown,
+// identified by unique rank.
+func (svc *mgmtSvc) PrepShutdown(ctx context.Context, req *mgmtpb.PrepShutdownReq) (*mgmtpb.DaosResp, error) {
+	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
+
+	var mi *IOServerInstance
+	for _, i := range svc.harness.Instances() {
+		if i.hasSuperblock() && i.getSuperblock().Rank.Equals(ioserver.NewRankPtr(req.Rank)) {
+			mi = i
+			break
+		}
+	}
+
+	if mi == nil {
+		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // KillRank implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
