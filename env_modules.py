@@ -27,10 +27,7 @@ try:
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 from distutils.spawn import find_executable
-# pylint: disable=unused-import
-# used by module brought in by exec
 import re
-# pylint: enable=unused-import
 
 class _env_module():
     """Class for utilizing Modules component to load environment modules"""
@@ -72,18 +69,20 @@ class _env_module():
         except subprocess.CalledProcessError:
             return self._module_old
 
+        tmp_globals = {'os': os, 're': re, 'subprocess': subprocess}
+        tmp_locals = {}
         try:
             # if successful, this will define module, a function
             # that invokes module on the command line
             # pylint: disable=exec-used
-            exec(open(init_file).read())
+            exec(open(init_file).read(), tmp_globals, tmp_locals)
             # pylint: enable=exec-used
         except KeyError:
             return default_func
 
-        # pylint: disable=undefined-variable
+        module = tmp_locals.get('module', default_func)
+
         return module
-        # pylint: enable=undefined-variable
 
     def _init_mpi_module(self):
         """init mpi module function"""
