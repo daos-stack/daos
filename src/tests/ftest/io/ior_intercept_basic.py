@@ -67,7 +67,7 @@ class IorIntercept(IorTestBase):
         mean_mib = int(IorMetrics.Mean_MiB)
         write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
         read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
- 
+
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
                         write_x * float(without_intercept[0][max_mib]))
