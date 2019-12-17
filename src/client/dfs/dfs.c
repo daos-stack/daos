@@ -324,7 +324,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	i++;
 
 	if (fetch_sym) {
-		value = malloc(PATH_MAX);
+		D_ALLOC(value, PATH_MAX);
 		if (value == NULL)
 			return ENOMEM;
 		/** Set Akey for Symlink Value, will be empty if no symlink */
@@ -360,7 +360,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 		if (sym_len != 0) {
 			D_ASSERT(value);
-			entry->value = strndup(value, PATH_MAX-1);
+			D_STRNDUP(entry->value, value, PATH_MAX - 1);
 			if (entry->value == NULL)
 				D_GOTO(out, rc = ENOMEM);
 		}
@@ -885,8 +885,9 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
-		sym->value = strndup(value, PATH_MAX-1);
-		entry.value = sym->value;
+		D_STRNDUP(sym->value, value, PATH_MAX - 1);
+		if (sym->value == NULL)
+			return ENOMEM;
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
 		if (rc) {
@@ -1288,7 +1289,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
 		return EINVAL;
 
-	dfs->prefix = strndup(prefix, PATH_MAX-1);
+	D_STRNDUP(dfs->prefix, prefix, PATH_MAX - 1);
 	if (dfs->prefix == NULL)
 		return ENOMEM;
 
@@ -1553,7 +1554,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rem = strndup(path, PATH_MAX-1);
+	D_STRNDUP(rem, path, PATH_MAX - 1);
 	if (rem == NULL)
 		return ENOMEM;
 
@@ -2119,7 +2120,9 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	}
 	case S_IFLNK:
-		new_obj->value = strndup(obj->value, PATH_MAX-1);
+		D_STRNDUP(new_obj->value, obj->value, PATH_MAX - 1);
+		if (new_obj->value == NULL)
+			D_GOTO(err, rc = ENOMEM);
 		break;
 	default:
 		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
@@ -3145,12 +3148,9 @@ concat(const char *s1, const char *s2)
 {
 	char *result = NULL;
 
-	result = malloc(strlen(s1)+strlen(s2)+1);
+	D_ASPRINTF(result, "%s%s", s1, s2);
 	if (result == NULL)
 		return NULL;
-
-	strcpy(result, s1);
-	strcat(result, s2);
 
 	return result;
 }
