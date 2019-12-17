@@ -251,8 +251,19 @@ daos_key2str(daos_key_t *key)
 		strcpy(buf, "<NULL>");
 	} else {
 		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+		int i;
+		char *akey = key->iov_buf;
+		bool can_print = true;
 
-		if (isprint(*(char *)key->iov_buf)) {
+		for (i = 0 ; i < len ; i++) {
+			if (akey[i] == '\0')
+				break;
+			if (!isprint(akey[i])) {
+				can_print = false;
+				break;
+			}
+		}
+		if (can_print) {
 			strncpy(buf, key->iov_buf, len);
 			buf[len] = 0;
 		} else {
