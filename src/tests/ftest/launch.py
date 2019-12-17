@@ -165,6 +165,7 @@ def set_test_environment():
     provider = ""
     if interface == "ib0":
         provider = "ofi+verbs"
+        os.environ["OFI_DOMAIN"] = "hfi1_0"
     else:
         provider = "ofi+sockets"
     os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
