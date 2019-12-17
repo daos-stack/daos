@@ -48,7 +48,7 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@PR-23 ior-hpc@PR-48"
+def ior_repos = "mpich@PR-23 ior-hpc@PR-52"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -1028,7 +1028,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload-cart-4-daos-0 ndctl'
+                                                  'ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1104,14 +1104,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload-cart-4-daos-0 ndctl'
+                                                  'ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload-cart-4-daos-0 ndctl'
+                                                  'ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
