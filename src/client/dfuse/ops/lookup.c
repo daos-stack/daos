@@ -213,6 +213,11 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	rc = dfs_obj2id(ie->ie_obj, &oid);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
+
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
 	if (rc)
@@ -258,6 +263,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	D_ALLOC_PTR(ie);
 	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
+
+	DFUSE_TRA_UP(ie, parent, "inode");
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
