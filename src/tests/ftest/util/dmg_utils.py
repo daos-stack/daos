@@ -66,6 +66,7 @@ class DmgCommand(CommandWithSubCommand):
                 "/run/dmg/network/*", "network")
 
         def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
             if self.sub_command.value == "scan":
                 self.sub_command_class = self.ScanSubCommand()
@@ -92,6 +93,7 @@ class DmgCommand(CommandWithSubCommand):
                 "/run/dmg/pool/*", "pool")
 
         def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
             """Get the dmg pool sub command object."""
             if self.sub_command.value == "create":
                 self.sub_command_class = self.CreateSubCommand()
@@ -195,6 +197,7 @@ class DmgCommand(CommandWithSubCommand):
                 "/run/dmg/storage/*", "storage")
 
         def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
             """Get the dmg storage sub command object."""
             if self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
@@ -246,6 +249,7 @@ class DmgCommand(CommandWithSubCommand):
                         "/run/dmg/storage/query/*", "query")
 
             def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
                 """Get the dmg pool sub command object."""
                 if self.sub_command.value == "blobstore-health":
                     self.sub_command_class = self.BlobstoreHealthSubCommand()

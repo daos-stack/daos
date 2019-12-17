@@ -78,6 +78,9 @@ class DestroyTests(TestWithServers):
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
         # Commented out due to DAOS-3836.
+        self.log.info(
+            "Skipping calling self.pool.check_files(%s) due to DAOS-3836",
+            hosts)
         # # Check that the pool was created
         # self.assertTrue(
         #    self.pool.check_files(hosts),
@@ -116,6 +119,9 @@ class DestroyTests(TestWithServers):
         # Restore the valid server group and check if valid pool still exists
         self.pool.uuid = saved_uuid
         # Commented out due to DAOS-3836.
+        self.log.info(
+            "Skipping calling self.pool.check_files(%s) due to DAOS-3836",
+            hosts)
         # if exception_detected:
         #    self.log.info(
         #        "Check pool data still exists after a failed pool destroy")

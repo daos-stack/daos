@@ -33,8 +33,7 @@ from avocado import skip, TestFail, fail_on
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from configuration_utils import Configuration
-from command_utils import CommonConfig, YamlParameters, BasicParameter
-from command_utils import CommandFailure
+from command_utils import CommonConfig, CommandFailure
 from agent_utils import DaosAgentYamlParameters, DaosAgentCommand
 from agent_utils import DaosAgentManager, DaosAgentTransportCredentials
 from agent_utils import include_local_host
@@ -275,7 +274,7 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_servers:
             self.start_servers()
 
-    def start_agents(self, agent_groups=None):
+    def start_agents(self, agent_groups=None, servers=None):
         """Start the daos_agent processes.
 
         Args:
@@ -284,6 +283,8 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name from
                 the test's yaml file to start the daos agents on all client
                 hosts specified in the test's yaml file.
+            servers (list): list of hosts running the doas servers to be used to
+                define the access points in the agent yaml config file
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -301,8 +302,7 @@ class TestWithServers(TestWithoutServers):
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 # Setup the access points with the server hosts
-                common_cfg = self.get_common_config(
-                        transport, group, self.hostlist_servers)
+                common_cfg = self.get_common_config(transport, group, servers)
                 self.add_agent_manager(config_file, common_cfg)
                 self.configure_manager(
                     "agent",
@@ -359,17 +359,24 @@ class TestWithServers(TestWithoutServers):
         """
         return os.path.join(self.tmp, "test_{}_{}.yaml".format(name, command))
 
-    def get_common_config(self, transport, group, hosts):
+    def get_common_config(self, transport, group, hosts=None):
         """Get the daos_agent common yaml configuration file parameters.
 
         Args:
-            transport (TransportCredentials):
+            transport (TransportCredentials): the transport credentials
+                configuration parameters
             group (str): server group name
+            hosts (list, optional): list of hosts to be used as access points in
+                the configuration file. Defaulys to None, which will use all the
+                server hosts
 
         Returns:
             CommonConfig: common yaml configuration file parameters
 
         """
+        if hosts is None:
+            hosts = self.hostlist_servers
+
         common_cfg = CommonConfig(group, transport)
         common_cfg.update_hosts(hosts)
         return common_cfg
