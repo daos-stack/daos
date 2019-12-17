@@ -34,7 +34,7 @@ if (( $# >= 4 )); then	# -s $RSIZE
 	RSIZE=$4	#    value size
 fi
 
-ORTERUN=$(which orterun)
+ORTERUN=$(command -v orterun)
 
 set -x
 $ORTERUN 				\
