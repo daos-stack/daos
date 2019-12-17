@@ -82,7 +82,7 @@ struct bio_nvme_data {
 	d_list_t		 bd_bdevs;
 	char			*bd_nvme_conf;
 	int			 bd_shm_id;
-	/* When using SPDK primary mode, specifies memory allocation size */
+	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 };
 
@@ -864,7 +864,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc;
-
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (nvme_glb.bd_nvme_conf == NULL) {
