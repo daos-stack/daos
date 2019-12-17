@@ -77,8 +77,6 @@ struct crt_global_ns {
 	uint32_t		gn_num_class;
 	/* Associated tree topology */
 	int			gn_tree_topo;
-	/* Associated group ID */
-	uint64_t		gn_int_grp_id;
 
 };
 
@@ -726,10 +724,6 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 	ivns_internal->cii_ctx = crt_ctx;
 
 	ivns_internal->cii_grp_priv = grp_priv;
-	ivns_internal->cii_gns.gn_int_grp_id = grp_priv->gp_int_grpid;
-
-	D_DEBUG(DB_TRACE, "Group id was 0x%lx\n",
-		ivns_internal->cii_gns.gn_int_grp_id);
 
 	D_MUTEX_LOCK(&ns_list_lock);
 	d_list_add_tail(&ivns_internal->cii_link, &ns_list);

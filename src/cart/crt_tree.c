@@ -147,7 +147,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
 
-	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
@@ -185,7 +185,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			root, self, rc);
 
 out:
-	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -215,7 +215,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	int			 i, rc = 0;
 
 
-	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock_ft);
 	if (ver_match != NULL) {
 		*ver_match = (bool)(grp_ver == grp_priv->gp_membs_ver);
 
@@ -296,7 +296,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*children_rank_list = result_rank_list;
 
 out:
-	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -315,7 +315,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
 
-	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
@@ -355,7 +355,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*parent_rank = grp_rank_list->rl_ranks[tree_parent];
 
 out:
-	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;

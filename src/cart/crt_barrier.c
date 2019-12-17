@@ -115,7 +115,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 
 	D_MUTEX_LOCK(&info->bi_lock);
 
-	D_RWLOCK_RDLOCK(primary_grp->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&primary_grp->gp_rwlock_ft);
 
 	membs = grp_priv_get_membs(grp_priv);
 
@@ -149,7 +149,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 	}
 
 out:
-	D_RWLOCK_UNLOCK(primary_grp->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&primary_grp->gp_rwlock_ft);
 	D_MUTEX_UNLOCK(&info->bi_lock);
 
 	return new_master;

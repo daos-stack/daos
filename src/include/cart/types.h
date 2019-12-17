@@ -171,11 +171,6 @@ typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 
 /** RPC flags enumeration */
 enum crt_rpc_flags {
-	/**
-	 * destroy subgroup when the bcast RPC finishes, only valid for corpc
-	 */
-	CRT_RPC_FLAG_GRP_DESTROY	= (1U << 0),
-
 	/** send CORPC exclusively to a specified set of ranks */
 	CRT_RPC_FLAG_EXCLUSIVE		= (1U << 1)
 };

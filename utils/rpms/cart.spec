@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       4.2.0
+Version:       4.3.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -136,6 +136,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Dec 16 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.3.0-1
+- Libcart version 4.3.0-1
+
 * Sat Dec 14 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 4.2.0-1
 - Libcart version 4.2.0-1
 - More modifications to cart build that may affect downstream components

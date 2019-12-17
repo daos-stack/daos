@@ -151,8 +151,7 @@ static int run_echo_srver(void)
 		/* make sure grp is populated */
 		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
-		flags = gecho.grp_destroy_piggyback ?
-			CRT_RPC_FLAG_GRP_DESTROY : 0;
+		flags = 0;
 		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp_hdl,
 					  &excluded_membs, ECHO_CORPC_EXAMPLE,
 					  NULL, NULL, flags,

@@ -87,8 +87,6 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		else if (flags & CRT_RPC_FLAG_GRP_DESTROY)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_GRP_DESTROY;
 		if (flags & CRT_RPC_FLAG_EXCLUSIVE)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_EXCLUSIVE;
 
@@ -438,9 +436,9 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		}
 	}
 
-	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock_ft);
 	grp_ver = grp_priv->gp_membs_ver;
-	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock_ft);
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_filter_ranks,
 				 grp_ver /* grp_ver */, co_bulk_hdl, priv,
@@ -578,9 +576,6 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 		 */
 		rpc_priv->crp_coreq_hdr.coh_bulk_hdl = NULL;
 	}
-	if (co_info->co_rc == 0 && co_info->co_root_excluded == 0 &&
-	    (rpc_priv->crp_flags & CRT_RPC_FLAG_GRP_DESTROY))
-		crt_grp_priv_decref(co_info->co_grp_priv);
 
 	/* correspond to addref in crt_corpc_req_hdlr */
 	RPC_DECREF(rpc_priv);

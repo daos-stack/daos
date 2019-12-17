@@ -1181,9 +1181,7 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  * \param[in] priv             A private pointer associated with the request
  *                             will be passed to crt_corpc_ops::co_aggregate as
  *                             2nd parameter.
- * \param[in] flags            collective RPC flags for example taking
- *                             CRT_RPC_FLAG_GRP_DESTROY to destroy the subgroup
- *                             when this bcast RPC successfully finished, or
+ * \param[in] flags            collective RPC flags:
  *                             CRT_RPC_FLAG_EXCLUSIVE to send exclusively to
  *                             \a filter_ranks.
  * \param[in] tree_topo        tree topology for the collective propagation,

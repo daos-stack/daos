@@ -45,20 +45,9 @@
 #include "crt_barrier.h"
 #include "crt_swim.h"
 
-enum crt_rank_status {
-	CRT_RANK_NOENT = 0x87, /* rank non-existed for this primary group */
-	CRT_RANK_ALIVE, /* rank alive */
-	CRT_RANK_DEAD, /* rank dead */
-};
-
-struct crt_rank_map {
-	d_rank_t		rm_rank; /* rank in primary group */
-	enum crt_rank_status	rm_status; /* health status */
-};
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
-
 
 #define RANK_LIST_REALLOC_SIZE 32
 
@@ -87,11 +76,6 @@ struct crt_grp_membs {
 };
 
 struct crt_grp_priv;
-
-struct crt_sec_grp_info {
-	struct crt_grp_priv	*priv;
-	bool			inited;
-};
 
 struct crt_grp_priv {
 	d_list_t		 gp_link; /* link to crt_grp_list */
@@ -122,20 +106,10 @@ struct crt_grp_priv {
 	/*
 	 * protects group modifications
 	 */
-	pthread_rwlock_t	*gp_rwlock_ft;
+	pthread_rwlock_t	 gp_rwlock_ft;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
 	crt_context_t		 gp_ctx;
 
-	/*
-	 * internal group ID, it is (gp_self << 32) for primary group,
-	 * and plus with the gp_subgrp_idx as the internal sub-group ID.
-	 */
-	uint64_t		 gp_int_grpid;
-	/*
-	 * subgrp index within the primary group, it bumps up one for every
-	 * sub-group creation.
-	 */
-	uint32_t		 gp_subgrp_idx;
 	/* size (number of membs) of group */
 	uint32_t		 gp_size;
 	/*
@@ -287,8 +261,7 @@ struct crt_lookup_item {
 
 	/* reference count */
 	uint32_t		 li_ref;
-	uint32_t		 li_initialized:1,
-				 li_evicted:1;
+	uint32_t		 li_initialized:1;
 	pthread_mutex_t		 li_mutex;
 };
 
@@ -296,12 +269,7 @@ struct crt_lookup_item {
 /* structure of global group data */
 struct crt_grp_gdata {
 	struct crt_grp_priv	*gg_primary_grp;
-	d_list_t		 gg_secondary_grps;
 
-	/* sub-grp list, only meaningful for server */
-	d_list_t		 gg_sub_grps;
-	/* some flags */
-	uint32_t		 gg_inited:1; /* all initialized */
 	/* rwlock to protect above fields */
 	pthread_rwlock_t	 gg_rwlock;
 };
@@ -326,14 +294,8 @@ void crt_grp_priv_destroy(struct crt_grp_priv *grp_priv);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 
-static inline bool crt_grp_is_subgrp_id(uint64_t grp_id)
-{
-	/* Primary group has lower 32 bits set to 0x0 */
-	return ((grp_id & 0xFFFFFFFF) == 0) ? false : true;
-}
 
 /* some simple helpers */
-
 static inline bool
 crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
 {
@@ -359,28 +321,6 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 struct crt_lookup_item *crt_li_link2ptr(d_list_t *rlink);
 
 struct crt_uri_item *crt_ui_link2ptr(d_list_t *rlink);
-
-static inline uint64_t
-crt_get_subgrp_id()
-{
-	struct crt_grp_priv	*grp_priv;
-	uint64_t		 subgrp_id;
-
-	D_ASSERT(crt_initialized());
-	D_ASSERT(crt_is_service());
-	grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	D_ASSERT(grp_priv != NULL);
-
-	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	subgrp_id = grp_priv->gp_int_grpid + grp_priv->gp_subgrp_idx;
-	grp_priv->gp_subgrp_idx++;
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-
-	D_DEBUG(DB_TRACE, "crt_get_subgrp_id get subgrp_id: "DF_X64".\n",
-		subgrp_id);
-
-	return subgrp_id;
-}
 
 static inline void
 crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
@@ -459,11 +399,11 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 	D_ASSERTF(priv != NULL, "group priv is NULL\n");
 
-	D_RWLOCK_RDLOCK(priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&priv->gp_rwlock_ft);
 	membs = grp_priv_get_membs(priv);
 	if (membs)
 		ret = d_rank_in_rank_list(membs, rank);
-	D_RWLOCK_UNLOCK(priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&priv->gp_rwlock_ft);
 
 	return ret;
 }
