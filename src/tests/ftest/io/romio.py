@@ -52,13 +52,13 @@ class Romio(TestWithServers):
 
         # initialize MpioUtils
         self.mpio = MpioUtils()
-        if self.mpio.mpich_installed(self.manager.hostlist_clients) is False:
+        if self.mpio.mpich_installed(self.hostlist_clients) is False:
             self.fail("Exiting Test: Mpich not installed")
 
         try:
             # Run romio
             self.mpio.run_romio(
-                self.basepath, self.manager.hostlist_clients, romio_test_repo)
+                self.basepath, self.hostlist_clients, romio_test_repo)
 
             # Parsing output to look for failures
             # stderr directed to stdout

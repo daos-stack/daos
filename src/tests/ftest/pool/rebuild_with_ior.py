@@ -26,7 +26,6 @@ from __future__ import print_function
 from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
-
 #pylint: disable=R0903
 class RebuildWithIOR(IorTestBase):
     """
@@ -65,8 +64,8 @@ class RebuildWithIOR(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.manager.hostlist_servers),
-            "pi_ntargets": len(self.manager.hostlist_servers) * targets,
+            "pi_nnodes": len(self.hostlist_servers),
+            "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(

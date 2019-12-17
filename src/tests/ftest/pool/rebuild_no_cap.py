@@ -62,8 +62,8 @@ class RebuildNoCap(TestWithServers):
         # Write enough data to the pool that will not be able to be rebuilt
         data = self.pool.scm_size.value * (targets - 1)
         self.pool.write_file(
-            self.orterun, len(self.manager.hostlist_clients),
-            self.manager.hostlist_clients, data)
+            self.orterun, len(self.hostlist_clients), self.hostlist_clients,
+            data)
 
         # Display pool size after write
         self.pool.display_pool_daos_space("after write")
@@ -71,7 +71,7 @@ class RebuildNoCap(TestWithServers):
         # Verify the pool information before starting rebuild
 
         # Check the pool information after the rebuild
-        server_count = len(self.manager.hostlist_servers)
+        server_count = len(self.hostlist_servers)
         status = self.pool.check_pool_info(
             pi_nnodes=server_count,
             # pi_ntargets=(server_count * targets),  # DAOS-2799

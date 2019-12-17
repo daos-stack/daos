@@ -208,8 +208,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the ior_runner_thread method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(
-                    self.manager.get_server_config_value("name"), self.pool)
+                ior_cmd.set_daos_params(self.server_group, self.pool)
                 ior_cmd.flags.value = self.params.get(
                     "F", "/run/ior/ior{}flags/".format(operation))
 
@@ -217,7 +216,7 @@ class ObjectMetadata(TestWithServers):
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
                 env = ior_cmd.get_default_env(str(manager), self.tmp)
-                hostfile = self.manager.agent_managers[0].create_hostfile(
+                hostfile = self.agent_managers[0].create_hostfile(
                     self.workdir, None)
                 manager.setup_command(env, hostfile, processes)
 
@@ -242,19 +241,19 @@ class ObjectMetadata(TestWithServers):
             # Restart the agents and servers after the write / before the read
             if operation == "write":
                 # Stop the agents
-                errors = self.manager.stop_agents()
+                errors = self.stop_agents()
                 self.assertEqual(
                     len(errors), 0,
                     "Error stopping agents:\n  {}".format("\n  ".join(errors)))
 
                 # Stop the servers
-                errors = self.manager.stop_servers()
+                errors = self.stop_servers()
                 self.assertEqual(
                     len(errors), 0,
                     "Error stopping servers:\n  {}".format("\n  ".join(errors)))
 
                 # Start the agents
-                self.manager.start_agent_managers()
+                self.start_agent_managers()
 
                 # Start the servers
-                self.manager.start_server_managers()
+                self.start_server_managers()

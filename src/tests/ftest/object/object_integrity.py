@@ -33,9 +33,10 @@ import write_host_file
 
 from pydaos.raw import (DaosPool, DaosContainer, IORequest,
                         DaosObj, DaosApiError)
-from apricot import skipForTicket, TestWithoutServers
+from apricot import skipForTicket, TestWithServers
 
-class ObjectDataValidation(TestWithoutServers):
+
+class ObjectDataValidation(TestWithServers):
     """
     Test Class Description:
         Tests that create Different length records,
@@ -44,33 +45,25 @@ class ObjectDataValidation(TestWithoutServers):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes
-    def setUp(self):
-        super(ObjectDataValidation, self).setUp()
-        self.agent_sessions = None
-        self.pool = None
-        self.container = None
-        self.obj = None
-        self.ioreq = None
-        self.hostlist = None
-        self.hostfile = None
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a ObjectDataValidation object."""
+        super(ObjectDataValidation, self).__init__(*args, **kwargs)
         self.no_of_dkeys = None
         self.no_of_akeys = None
         self.array_size = None
         self.record_length = None
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.hostlist = self.params.get("test_servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
+        self.obj = None
+        self.ioreq = None
+
+    def setUp(self):
+        """Set up a ObjectDataValidation object."""
+        super(ObjectDataValidation, self).setUp()
+
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
-        self.agent_sessions = agent_utils.run_agent(
-            self, self.hostlist)
-        server_utils.run_server(self, self.hostfile, server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -92,30 +85,14 @@ class ObjectDataValidation(TestWithoutServers):
                                self.container,
                                self.obj, objtype=4)
 
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
-
     def reconnect(self):
-        '''
-        Function to reconnect the pool/container and reopen the Object
-        for read verification.
-        '''
-        #Close the Obj/Container, Disconnect the Pool.
+        """Reconnect the pool/container and reopen the Object to verify read."""
+        # Close the Obj/Container, Disconnect the Pool.
         self.obj.close()
         self.container.close()
         self.pool.disconnect()
         time.sleep(5)
-        #Connect Pool, Open Container and Object
+        # Connect Pool, Open Container and Object
         self.pool.connect(2)
         self.container.open()
         self.obj.open()
@@ -152,7 +129,7 @@ class ObjectDataValidation(TestWithoutServers):
         try:
             new_transaction = self.container.get_new_tx()
         except DaosApiError as excep:
-            #initial container get_new_tx failed, skip rest of the test
+            # initial container get_new_tx failed, skip rest of the test
             self.fail("##container get_new_tx failed: {}".format(excep))
         invalid_transaction = new_transaction + random.randint(1000, 383838)
         self.log.info("==new_transaction=     %s", new_transaction)
@@ -203,7 +180,7 @@ class ObjectDataValidation(TestWithoutServers):
                     "##(4.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
 
-        #Try to abort the transaction which already closed.
+        # Try to abort the transaction which already closed.
         try:
             self.container.abort_tx(new_transaction)
             self.fail(
@@ -217,7 +194,7 @@ class ObjectDataValidation(TestWithoutServers):
                     "##(5.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
 
-        #open another transaction for abort test
+        # open another transaction for abort test
         try:
             new_transaction2 = self.container.get_new_tx()
         except DaosApiError as excep:
@@ -231,7 +208,6 @@ class ObjectDataValidation(TestWithoutServers):
         except DaosApiError as excep:
             self.log.info(str(excep))
             self.fail("##(6.2)Failed on abort_tx.")
-
 
     @avocado.fail_on(DaosApiError)
     @skipForTicket("DAOS-3208")

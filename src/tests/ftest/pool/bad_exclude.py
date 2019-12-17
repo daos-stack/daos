@@ -29,36 +29,17 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
-class BadExcludeTest(TestWithoutServers):
+
+class BadExcludeTest(TestWithServers):
     """
     Tests target exclude calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
 
     :avocado: recursive
     """
-
-    def setUp(self):
-        super(BadExcludeTest, self).setUp()
-        self.agent_sessions = None
-        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.agent_sessions = agent_utils.run_agent(self,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self, self.hostfile_servers, server_group)
-
-    def tearDown(self):
-        if self.agent_sessions:
-            agent_utils.stop_agent(self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist_servers)
 
     def test_exclude(self):
         """

@@ -27,6 +27,7 @@ from apricot import TestWithServers
 
 from command_utils import EnvironmentVariables, ExecutableCommand
 from command_utils import FormattedParameter, Orterun, CommandFailure
+from server_utils import DaosServerTransportCredentials
 
 
 class SelfTest(ExecutableCommand):
@@ -78,28 +79,30 @@ class CartSelfTest(TestWithServers):
         self.uri_file = os.path.join(self.tmp, "uri.txt")
 
         # Configure the daos server to use a uri file
-        self.manager.add_server_manager(self)
-        self.manager.configure_manager(
+        transport = DaosServerTransportCredentials()
+        self.add_server_manager(
+            self.get_config_file(self.server_group, "server"),
+            self.get_common_config(
+                transport, self.server_group, self.hostlist_servers))
+        self.configure_manager(
             "server",
-            self.manager.server_managers[-1],
-            self,
-            self.manager.test_servers.value,
+            self.server_managers[-1],
+            self.hostlist_servers,
             self.hostfile_servers_slots)
-        self.manager.server_managers[-1].report_uri.value = self.uri_file
+        self.server_managers[0].report_uri.value = self.uri_file
 
         # Setup additional environment variables for the server orterun command
         share_addr = self.params.get("share_addr", "/run/test/*")
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \
-            self.manager.get_server_config_value("provider")
+            self.server_managers[0].job.get_server_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
-            self.manager.get_server_config_value("fabric_iface")
-        self.manager.server_managers[-1].add_environment_variables(
-            self.cart_env)
+            self.server_managers[0].job.get_server_config_value("fabric_iface")
+        self.server_managers[0].add_environment_variables(self.cart_env)
 
         # Start the daos server
-        self.manager.start_server_managers()
+        self.start_server_managers()
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
@@ -115,8 +118,7 @@ class CartSelfTest(TestWithServers):
 
         # Get the self_test command line parameters
         orterun.job.get_params(self)
-        orterun.job.group_name.value = self.manager.get_server_config_value(
-            "name")
+        orterun.job.group_name.value = self.server_group
 
         # Setup the environment variables for the self_test orterun command
         orterun.add_environment_variables(self.cart_env)

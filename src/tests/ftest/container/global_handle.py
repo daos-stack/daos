@@ -47,7 +47,7 @@ class GlobalHandle(TestWithServers):
             super(GlobalHandle, self).tearDown()
         finally:
             # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.manager.hostlist_servers)
+            check_for_pool.cleanup_pools(self.hostlist_servers)
 
     @fail_on(DaosApiError)
     def check_handle(self, pool_glob_handle, uuidstr, cont_glob_handle, rank):

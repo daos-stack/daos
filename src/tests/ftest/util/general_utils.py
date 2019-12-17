@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
+from logging import getLogger
 
 import os
 import re
@@ -31,7 +32,8 @@ import string
 from pathlib import Path
 from errno import ENOENT
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from avocado.utils import process
 
 
 class DaosTestError(Exception):
@@ -90,8 +92,10 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         retcode_dict[retcode].add(nodeset)
 
         # Display any errors or requested output
-        if retcode != expect_rc or verbose:
-            msg = "failure running" if retcode != expect_rc else "output from"
+        if verbose or (expect_rc is not None and expect_rc != retcode):
+            msg = "output from"
+            if expect_rc is not None and expect_rc != retcode:
+                msg = "failure running"
             if len(list(task.iter_buffers(rc_nodes))) == 0:
                 print(
                     "{}: {} '{}': rc={}".format(
@@ -264,3 +268,64 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        hosts (list): hosts on which to stop the daos server processes
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+    """
+    log = getLogger()
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    if hosts is not None:
+        commands = [
+            "if pgrep --list-name {}".format(pattern),
+            "then sudo pkill {}".format(pattern),
+            "if pgrep --list-name {}".format(pattern),
+            "then sleep 5",
+            "pkill --signal KILL {}".format(pattern),
+            "fi",
+            "fi",
+            "exit 0",
+        ]
+        pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+
+
+def get_partition_hosts(partition):
+    """Get a list of hosts in the specified slurm partition.
+
+    Args:
+        partition (str): name of the partition
+
+    Returns:
+        list: list of hosts in the specified partition
+
+    """
+    log = getLogger()
+    hosts = []
+    if partition is not None:
+        # Get the partition name information
+        cmd = "scontrol show partition {}".format(partition)
+        try:
+            result = process.run(cmd, shell=True, timeout=10)
+        except process.CmdError as error:
+            log.warning(
+                "Unable to obtain hosts from the %s slurm "
+                "partition: %s", partition, error)
+            result = None
+
+        if result:
+            # Get the list of hosts from the partition information
+            output = result.stdout
+            try:
+                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
+            except (NodeSetParseError, IndexError):
+                log.warning(
+                    "Unable to obtain hosts from the %s slurm partition "
+                    "output: %s", partition, output)
+    return hosts

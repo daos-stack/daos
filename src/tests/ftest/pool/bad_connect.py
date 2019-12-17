@@ -29,9 +29,10 @@ import agent_utils
 import server_utils
 import write_host_file
 from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
-from apricot import TestWithoutServers, skipForTicket
+from apricot import TestWithServers, skipForTicket
 
-class BadConnectTest(TestWithoutServers):
+
+class BadConnectTest(TestWithServers):
     """
     Tests pool connect calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
@@ -41,9 +42,6 @@ class BadConnectTest(TestWithoutServers):
     # start servers, establish file locations, etc.
     def setUp(self):
         super(BadConnectTest, self).setUp()
-        self.agent_sessions = None
-        self.hostlist_servers = None
-        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
 
         # NULL is causing connect to blow up so skip that test for now
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
@@ -51,19 +49,6 @@ class BadConnectTest(TestWithoutServers):
         if connectuuid == 'NULLPTR':
             self.cancel("skipping null pointer test until DAOS-1781 is fixed")
 
-        # launch the server
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-        server_group = self.params.get("name", '/server_config/',
-                                       'daos_server')
-        self.agent_sessions = agent_utils.run_agent(self,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self, self.hostfile_servers, server_group)
-
-    def tearDown(self):
-        if self.agent_sessions:
-            agent_utils.stop_agent(self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist_servers)
 
     @skipForTicket("DAOS-3819")
     def test_connect(self):

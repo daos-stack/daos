@@ -44,7 +44,7 @@ class GlobalHandle(TestWithServers):
             super(GlobalHandle, self).tearDown()
         finally:
             # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.manager.hostlist_servers)
+            check_for_pool.cleanup_pools(self.hostlist_servers)
 
     def check_handle(self, buf_len, iov_len, buf, uuidstr, rank):
         """

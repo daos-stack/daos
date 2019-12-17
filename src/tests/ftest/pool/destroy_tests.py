@@ -23,12 +23,10 @@ portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
 
-import os
+from server_utils import ServerFailed
 
 from apricot import TestWithServers, skipForTicket
 from avocado.core.exceptions import TestFail
-from command_utils import CommandFailure
-from host_utils import CommonConfig
 from test_utils import TestPool, CallbackHandler, TestContainer
 from pydaos.raw import DaosApiError
 import ctypes
@@ -45,33 +43,6 @@ class DestroyTests(TestWithServers):
         self.setup_start_servers = False
         super(DestroyTests, self).setUp()
 
-    def start_daos_servers(self, group_hosts):
-        """Start a daos server manager for each unique group name.
-
-        Args:
-            group_hosts (dict): a dictionary of daos server group name keys and
-                values of list of hosts
-        """
-        for group, hosts in group_hosts.items():
-            # Create a unique yaml file for the daos server group
-            yaml_file = os.path.join(self.tmp, "test_{}.yaml".format(group))
-            self.manager.add_server_manager(self, yaml_file, CommonConfig())
-
-            # Configure the daos server group to run on the specified hosts
-            self.manager.configure_manager(
-                "server",
-                self.manager.server_managers[-1],
-                self,
-                hosts,
-                self.hostfile_servers_slots)
-
-            # Assign the daos server group name and update the yaml
-            self.manager.server_managers[-1].job.yaml.other_params.name = group
-            self.manager.server_managers[-1].job.create_yaml()
-
-        # Start all the daos server groups
-        self.manager.start_server_managers()
-
     def execute_test(self, hosts, group_name, case, exception_expected=False):
         """Execute the pool destroy test.
 
@@ -83,7 +54,7 @@ class DestroyTests(TestWithServers):
                 raised when destroying the pool. Defaults to False.
         """
         # Start servers with the server group
-        self.start_daos_servers({group_name: hosts})
+        self.start_servers({group_name: hosts})
 
         # Validate the creation of a pool
         self.validate_pool_creation(hosts, group_name)
@@ -107,8 +78,8 @@ class DestroyTests(TestWithServers):
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
         # Commented out due to DAOS-3836.
-        ## Check that the pool was created
-        #self.assertTrue(
+        # # Check that the pool was created
+        # self.assertTrue(
         #    self.pool.check_files(hosts),
         #    "Pool data not detected on servers before destroy")
 
@@ -145,14 +116,14 @@ class DestroyTests(TestWithServers):
         # Restore the valid server group and check if valid pool still exists
         self.pool.uuid = saved_uuid
         # Commented out due to DAOS-3836.
-        #if exception_detected:
+        # if exception_detected:
         #    self.log.info(
         #        "Check pool data still exists after a failed pool destroy")
         #    self.assertTrue(
         #        self.pool.check_files(hosts),
         #        "Pool data was not detected on servers after "
         #        "failing to destroy a pool {}".format(case))
-        #else:
+        # else:
         #    self.log.info(
         #        "Check pool data does not exist after the pool destroy")
         #    self.assertFalse(
@@ -170,7 +141,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,pr
         :avocado: tags=pool,destroy,destroysingle
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -182,7 +153,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,pr
         :avocado: tags=pool,destroy,destroymutli
         """
-        hostlist_servers = self.manager.hostlist_servers[:2]
+        hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -197,18 +168,17 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,full_regression
         :avocado: tags=pool,destroy,destroysingleloop
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
-        server_group = self.manager.get_server_config_value("name")
+        hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_daos_servers({server_group: hostlist_servers})
+        self.start_servers({self.server_group: hostlist_servers})
 
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers, server_group)
+            self.validate_pool_creation(hostlist_servers, self.server_group)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
@@ -221,18 +191,17 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,full_regression
         :avocado: tags=pool,destroy,destroymutliloop
         """
-        hostlist_servers = self.manager.hostlist_servers[:6]
-        server_group = self.manager.get_server_config_value("name")
+        hostlist_servers = self.hostlist_servers[:6]
 
         # Start servers
-        self.start_daos_servers({server_group: hostlist_servers})
+        self.start_servers({self.server_group: hostlist_servers})
 
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers, server_group)
+            self.validate_pool_creation(hostlist_servers, self.server_group)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
@@ -246,11 +215,11 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,full_regression
         :avocado: tags=pool,destroy,destroyinvaliduuid
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_daos_servers({setid: hostlist_servers})
+        self.start_servers({setid: hostlist_servers})
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -276,12 +245,12 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,full_regression
         :avocado: tags=pool,destroy,destroyinvalidgroup
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
         badsetid = self.params.get("setname", '/run/setnames/badsetname/')
 
         # Start servers
-        self.start_daos_servers({setid: hostlist_servers})
+        self.start_servers({setid: hostlist_servers})
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
@@ -312,13 +281,12 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,full_regression
         :avocado: tags=pool,destroy,destroywronggroup
         """
-        server_group = self.manager.get_server_config_value("name")
-        group_names = [server_group + "_a", server_group + "_b"]
+        group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.manager.hostlist_servers[:1],
-            group_names[1]: self.manager.hostlist_servers[1:2],
+            group_names[0]: self.hostlist_servers[:1],
+            group_names[1]: self.hostlist_servers[1:2],
         }
-        self.start_daos_servers(group_hosts)
+        self.start_servers(group_hosts)
 
         self.log.info("Create a pool in server group %s", group_names[0])
         self.pool = TestPool(self.context, self.log)
@@ -328,11 +296,11 @@ class DestroyTests(TestWithServers):
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
         # Commented out due to DAOS-3836.
-        #self.assertTrue(
+        # self.assertTrue(
         #    self.pool.check_files(group_hosts[group_names[0]]),
         #    "Pool UUID {} not dected in server group {}".format(
         #        self.pool.uuid, group_names[0]))
-        #self.assertFalse(
+        # self.assertFalse(
         #    self.pool.check_files(group_hosts[group_names[1]]),
         #    "Pool UUID {} detected in server group {}".format(
         #        self.pool.uuid, group_names[1]))
@@ -363,14 +331,13 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,pr
         :avocado: tags=pool,destroy,destroyconnected
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
-        server_group = self.manager.get_server_config_value("name")
+        hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_daos_servers({server_group: hostlist_servers})
+        self.start_servers({self.server_group: hostlist_servers})
 
         # Create the pool
-        self.validate_pool_creation(hostlist_servers, server_group)
+        self.validate_pool_creation(hostlist_servers, self.server_group)
 
         # Connect to the pool
         self.assertTrue(
@@ -396,8 +363,8 @@ class DestroyTests(TestWithServers):
             self.pool.pool = None
 
         # Commented out due to DAOS-3836.
-        #self.log.info("Check if files still exist")
-        #self.assertTrue(
+        # self.log.info("Check if files still exist")
+        # self.assertTrue(
         #    self.pool.check_files(hostlist_servers),
         #    "Pool UUID {} should not be removed when connected".format(
         #        self.pool.uuid))
@@ -415,14 +382,13 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,medium,pr
         :avocado: tags=pool,destroy,destroywithdata
         """
-        hostlist_servers = self.manager.hostlist_servers[:1]
-        server_group = self.manager.get_server_config_value("name")
+        hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
-        self.start_daos_servers({server_group: hostlist_servers})
+        self.start_servers({self.server_group: hostlist_servers})
 
         # Attempt to destroy the pool with an invald server group name
-        self.validate_pool_creation(hostlist_servers, server_group)
+        self.validate_pool_creation(hostlist_servers, self.server_group)
 
         # Connect to the pool
         self.assertTrue(
@@ -457,8 +423,8 @@ class DestroyTests(TestWithServers):
             self.pool.pool = None
 
         # Commented out due to DAOS-3836.
-        #self.log.info("Check if files still exist")
-        #self.assertTrue(
+        # self.log.info("Check if files still exist")
+        # self.assertTrue(
         #    self.pool.check_files(hostlist_servers),
         #    "Pool UUID {} should not be removed when connected".format(
         #        self.pool.uuid))
@@ -479,13 +445,12 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,destroy,destroyasync
         """
         # Start two server groups
-        server_group = self.manager.get_server_config_value("name")
-        group_names = [server_group + "_a", server_group + "_b"]
+        group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
-            group_names[0]: self.manager.hostlist_servers[:1],
-            group_names[1]: self.manager.hostlist_servers[1:2]
+            group_names[0]: self.hostlist_servers[:1],
+            group_names[1]: self.hostlist_servers[1:2]
         }
-        self.start_daos_servers(group_hosts)
+        self.start_servers(group_hosts)
 
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
@@ -495,14 +460,14 @@ class DestroyTests(TestWithServers):
                       self.pool.uuid, group_names[0])
 
         # Commented out due to DAOS-3836.
-        ## Check that the pool was created on server_group_a
-        #self.assertTrue(
+        # # Check that the pool was created on server_group_a
+        # self.assertTrue(
         #    self.pool.check_files(group_hosts[group_names[0]]),
         #    "Pool data not detected on servers before destroy")
 
         # Commented out due to DAOS-3836.
-        ## Check that the pool was not created on server_group_b
-        #self.assertFalse(
+        # # Check that the pool was not created on server_group_b
+        # self.assertFalse(
         #    self.pool.check_files(group_hosts[group_names[1]]),
         #    "Pool data detected on servers before destroy")
 
@@ -517,7 +482,7 @@ class DestroyTests(TestWithServers):
             self.fail("destroy-pool was expected to PASS")
 
         # Commented out due to DAOS-3836.
-        #self.assertFalse(
+        # self.assertFalse(
         #    self.pool.check_files(group_hosts[group_names[0]]),
         #    "Pool data detected on {} after destroy".format(group_names[0]))
 
@@ -531,21 +496,21 @@ class DestroyTests(TestWithServers):
                       self.pool.uuid, group_names[0])
 
         # Commented out due to DAOS-3836.
-        ## Check that the pool was created on server_group_a
-        #self.assertTrue(
+        # # Check that the pool was created on server_group_a
+        # self.assertTrue(
         #    self.pool.check_files(group_hosts[group_names[0]]),
         #    "Pool data not detected on servers before destroy")
 
         # Commented out due to DAOS-3836.
-        ## Check that the pool was not created on server_group_b
-        #self.assertFalse(
+        # # Check that the pool was not created on server_group_b
+        # self.assertFalse(
         #    self.pool.check_files(group_hosts[group_names[1]]),
         #    "Pool data detected on servers before destroy")
 
         self.log.info("Stopping one server")
         try:
-            self.manager.server_managers[1].stop()
-        except CommandFailure as error:
+            self.server_managers[1].stop()
+        except ServerFailed as error:
             self.fail(
                 "Error stopping daos server group '{}': {}".format(
                     group_names[1], error))
@@ -559,6 +524,6 @@ class DestroyTests(TestWithServers):
             self.fail("destroy-pool was expected to PASS")
 
         # Commented out due to DAOS-3836.
-        #self.assertFalse(
+        # self.assertFalse(
         #    self.pool.check_files(group_hosts[group_names[1]]),
         #    "Pool data detected on servers after destroy")

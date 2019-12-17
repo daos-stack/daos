@@ -35,7 +35,6 @@ import server_utils
 import check_for_pool
 import write_host_file
 
-
 # pylint: disable = broad-except
 class MultipleCreatesTest(TestWithServers):
     """
@@ -85,7 +84,7 @@ class MultipleCreatesTest(TestWithServers):
             uuid_str = """{0}""".format(process.system_output(cmd))
             print("uuid is {0}\n".format(uuid_str))
 
-            host = self.manager.hostlist_servers[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str,
@@ -154,7 +153,7 @@ class MultipleCreatesTest(TestWithServers):
             uuid_str_1 = """{0}""".format(process.system_output(cmd))
             uuid_str_2 = """{0}""".format(process.system_output(cmd))
 
-            host = self.manager.hostlist_servers[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,
@@ -239,7 +238,7 @@ class MultipleCreatesTest(TestWithServers):
             uuid_str_2 = """{0}""".format(process.system_output(cmd))
             uuid_str_3 = """{0}""".format(process.system_output(cmd))
 
-            host = self.manager.hostlist_servers[0]
+            host = self.hostlist_servers[0]
             exists = check_for_pool.check_for_pool(host, uuid_str_1)
             if exists != 0:
                 self.fail("Pool {0} not found on host {1}.\n".format(uuid_str_1,

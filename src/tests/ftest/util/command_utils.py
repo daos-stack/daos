@@ -29,7 +29,7 @@ import signal
 import yaml
 
 from avocado.utils import process
-from general_utils import pcmd, check_file_exists
+from general_utils import pcmd, check_file_exists, stop_processes
 from write_host_file import write_host_file
 
 
@@ -84,6 +84,37 @@ class BasicParameter(object):
         self.value = value
         if name is not None:
             self.log.debug("Updated param %s => %s", name, self.value)
+
+
+class NamedParameter(BasicParameter):
+    # pylint: disable=too-few-public-methods
+    """A class for test parameters whose values are read from a yaml file.
+
+    This is essentially a BasicParameter object whose yaml value is obtained
+    with a different name than the one assigned to the object.
+    """
+
+    def __init__(self, name, value, default=None):
+        """Create a NamedParameter  object.
+
+        Args:
+            name (str): yaml key name
+            value (object): intial value for the parameter
+            default (object): default value for the param
+        """
+        super(NamedParameter, self).__init__(value, default)
+        self._name = name
+
+    def get_yaml_value(self, name, test, path):
+        """Get the value for the parameter from the test case's yaml file.
+
+        Args:
+            name (str): name of the value in the yaml file - not used
+            test (Test): avocado Test object to use to read the yaml file
+            path (str): yaml path where the name is to be found
+        """
+        return super(NamedParameter, self).get_yaml_value(
+            self._name, test, path)
 
 
 class FormattedParameter(BasicParameter):
@@ -206,9 +237,9 @@ class CommandWithParameters(ObjectWithParameters):
         return self._command
 
     @property
-    def description(self):
-        """Get the command description."""
-        return self._command
+    def path(self):
+        """Get the path used for the command."""
+        return self._path
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -268,6 +299,18 @@ class ExecutableCommand(CommandWithParameters):
         self.env = None
         self.sudo = False
 
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        value = super(ExecutableCommand, self).__str__()
+        if self.sudo:
+            value = " ".join(["sudo -n", value])
+        return value
+
     @property
     def process(self):
         """Getter for process attribute of the ExecutableCommand class."""
@@ -300,7 +343,7 @@ class ExecutableCommand(CommandWithParameters):
             "allow_output_check": "combined",
             "shell": True,
             "env": self.env,
-            "sudo": self.sudo,
+            # "sudo": self.sudo,
         }
         try:
             # Block until the command is complete or times out
@@ -394,44 +437,48 @@ class ExecutableCommand(CommandWithParameters):
             self._process = None
 
 
-class DaosCommand(ExecutableCommand):
-    """A class for similar daos command line tools."""
+class CommandWithSubCommand(ExecutableCommand):
+    """A class for a command with a sub command."""
 
-    def __init__(self, namespace, command, path="", timeout=60):
-        """Create DaosCommand object.
-
-        Specific type of command object built so command str returns:
-            <command> <options> <request> <action/subcommand> <options>
+    def __init__(self, namespace, command, path="", subprocess=False):
+        """Create a CommandWithSubCommand object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            path (str, optional): path to location of daos command binary.
-                Defaults to ""
-            timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 60 seconds.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
         """
-        super(DaosCommand, self).__init__(namespace, command, path)
-        self.request = BasicParameter(None)
-        self.action = BasicParameter(None)
-        self.action_command = None
+        super(CommandWithSubCommand, self).__init__(namespace, command, path)
 
-        # Attributes used to determine command success when run as a subprocess
-        # See self.check_subprocess_status() for details.
-        self.timeout = timeout
-        self.pattern = None
-        self.pattern_count = 1
+        # Define the sub-command parameter whose value is used to assign the
+        # sub-command's CommandWithParameters-based class.  Use the command to
+        # create uniquely named yaml parameter names.
+        self.sub_command = NamedParameter(
+            "{}_sub_command".format(self._command), None)
 
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
+        # The class used to define the sub-command and it's specific parameters.
+        # Multiple sub-commands may be available, but only one can be active at
+        # a given time.  The self.get_sub_command_class() method is called after
+        # obtaining the main command's parameter values, in self.get_params(),
+        # to assign the sub-command's class.  This is typically a class based
+        # upon CommandWithParameters class, but can be anything with a __str__()
+        # method.
+        self.sub_command_class = None
 
     def get_param_names(self):
-        """Get a sorted list of DaosCommand parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        for attribute_name in ("request", "action"):
-            if isinstance(getattr(self, attribute_name), BasicParameter):
-                names.append(attribute_name)
+        """Get a sorted list of the names of the BasicParameter attributes.
+
+        Ensure the sub command appears at the end of the list
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
+        names = self.get_attribute_names(BasicParameter)
+        names.append(names.pop(names.index("sub_command")))
         return names
 
     def get_params(self, test):
@@ -440,13 +487,25 @@ class DaosCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosCommand, self).get_params(test)
-        self.get_action_command()
-        if isinstance(self.action_command, ObjectWithParameters):
-            self.action_command.get_params(test)
+        super(CommandWithSubCommand, self).get_params(test)
+        self.get_sub_command_class()
+        if isinstance(self.sub_command_class, ObjectWithParameters):
+            self.sub_command_class.get_params(test)
+
+    def get_sub_command_class(self):
+        """Get the class assignment for the sub command.
+
+        Override this method with sub_command_class assignment that maps to the
+        expected sub_command value.
+        """
+        self.sub_command_class = None
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
+
+        If the sub-command parameter yields a sub-command class, replace the
+        sub-command value with the resulting string from the sub-command class
+        when assembling that command string.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -454,12 +513,45 @@ class DaosCommand(ExecutableCommand):
 
         """
         names = self.get_param_names()
-        if self.action_command is not None:
-            names[-1] = "action_command"
+        if self.sub_command_class is not None:
+            index = names.index("sub_command")
+            names[index] = "sub_command_class"
         return names
 
+    def set_sub_command(self, value):
+        """Set the command's sub-command value and update the sub-command class.
+
+        Args:
+            value (str): sub-command value
+        """
+        self.sub_command.value = value
+        self.get_sub_command_class()
+
+
+class SubProcessCommand(CommandWithSubCommand):
+    """A class for a command run as a subprocess with a sub command."""
+
+    def __init__(self, namespace, command, path="", timeout=60):
+        """Create a SubProcessCommand object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
+        """
+        super(SubProcessCommand, self).__init__(namespace, command, path, True)
+
+        # Attributes used to determine command success when run as a subprocess
+        # See self.check_subprocess_status() for details.
+        self.timeout = timeout
+        self.pattern = None
+        self.pattern_count = 1
+
     def check_subprocess_status(self, sub_process):
-        """Verify the status of the doas command started as a subprocess.
+        """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
         until the expected number of patterns (self.pattern_count) have been
@@ -569,6 +661,7 @@ class JobManager(ExecutableCommand):
         commands = [super(JobManager, self).__str__(), str(self.job)]
         if self.job.sudo:
             commands.insert(-1, "sudo -n")
+
         return " ".join(commands)
 
     def check_subprocess_status(self, subprocess):
@@ -817,33 +910,26 @@ class YamlParameters(ObjectWithParameters):
         return value
 
 
-class DaosYamlCommand(DaosCommand):
-    """Defines a daos command that makes use of a yaml configuration file."""
+class YamlCommand(SubProcessCommand):
+    """Defines a sub-process command that utilizes a yaml configuration file."""
 
-    def __init__(self, namespace, command, yaml_config, path="", timeout=60):
-        """Create a daos_server command object.
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=60):
+        """Create a YamlCommand command object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            yaml_config (YamlParameters): yaml configuration parameters
+            yaml_cfg (YamlParameters, optional): yaml configuration parameters.
+                Defaults to None.
             path (str, optional): path to location of daos command binary.
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
         """
-        super(DaosYamlCommand, self).__init__(namespace, command, path)
+        super(YamlCommand, self).__init__(namespace, command, path)
 
         # Command configuration yaml file
-        self.yaml = yaml_config
-
-        # Command line parameters:
-        # -d, --debug        Enable debug output
-        # -j, --json         Enable JSON output
-        # -o, --config-path= Path to agent configuration file
-        self.debug = FormattedParameter("-d", False)
-        self.json = FormattedParameter("-j", False)
-        self.config = FormattedParameter("-o {}", self.yaml.filename)
+        self.yaml = yaml_cfg
 
     def get_params(self, test):
         """Get values for the daos command and its yaml config file.
@@ -851,18 +937,10 @@ class DaosYamlCommand(DaosCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosYamlCommand, self).get_params(test)
-        self.yaml.get_params(test)
-        self.yaml.create_yaml()
-
-    # def update_log_file(self, name, index=0):
-    #     """Update the logfile parameter for the daos server.
-
-    #     Args:
-    #         name (str): new log file name and path
-    #         index (int, optional): server index to update. Defaults to 0.
-    #     """
-    #     self.yaml.update_log_file(name, index)
+        super(YamlCommand, self).get_params(test)
+        if isinstance(self.yaml, YamlParameters):
+            self.yaml.get_params(test)
+            self.yaml.create_yaml()
 
     def get_config_value(self, name):
         """Get the value of the yaml configuration parameter name.
@@ -875,7 +953,24 @@ class DaosYamlCommand(DaosCommand):
             object: the yaml configuration parameter value or None
 
         """
-        return self.yaml.get_value(name)
+        value = None
+        if isinstance(self.yaml, YamlParameters):
+            value = self.yaml.get_value(name)
+        return value
+
+    @property
+    def access_points(self):
+        """Get the access points used with this command.
+
+        Returns:
+            AccessPoints: an object with the list of hosts and ports that serve
+                as access points for the command.
+
+        """
+        value = None
+        if isinstance(self.yaml, YamlParameters):
+            value = self.yaml.get_config_value("access_points")
+        return value
 
 
 class SubprocessManager(Orterun):
@@ -950,20 +1045,11 @@ class SubprocessManager(Orterun):
             # Kill the subprocess, anything that might have started
             self.kill()
             raise CommandFailure(
-                "Failed to start {}.".format(self.job.description))
+                "Failed to start {}.".format(str(self.job)))
 
     def kill(self):
         """Forcably terminate any sub process running on hosts."""
-        kill_cmds = [
-            "sudo pkill '({})' --signal INT".format("|".join(self._exe_names)),
-            "if pgrep -l '({})'".format("|".join(self._exe_names)),
-            "then sleep 5",
-            "pkill '({})' --signal KILL".format("|".join(self._exe_names)),
-            "pgrep -l '({})'".format("|".join(self._exe_names)),
-            "fi"
-        ]
-        self.log.info("Killing any %s processes", "|".join(self._exe_names))
-        pcmd(self._hosts, "; ".join(kill_cmds), False, None, None)
+        stop_processes(self._hosts, "'({})'".format("|".join(self._exe_names)))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
@@ -999,3 +1085,149 @@ class SubprocessManager(Orterun):
         if self.job is not None and hasattr(self.job, "get_config_value"):
             value = self.job.get_config_value(name)
         return value
+
+
+class TransportCredentials(YamlParameters):
+    """Transport credentials listing certificates for secure communication."""
+
+    def __init__(self, namespace, title):
+        """Initialize a TransportConfig object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            title (str, optional): namespace under which to place the
+                parameters when creating the yaml file. Defaults to None.
+        """
+        super(TransportCredentials, self).__init__(namespace, None, title)
+
+        # Transport credential parameters:
+        #   - allow_insecure: false|true
+        #       Specify 'false' to bypass loading certificates and use insecure
+        #       communications channnels
+        #
+        #   - ca_cert: <file>, e.g. ".daos/daosCA.crt"
+        #       Custom CA Root certificate for generated certs
+        #
+        #   - cert: <file>, e.g. ".daos/daos_agent.crt"
+        #       Agent certificate for use in TLS handshakes
+        #
+        #   - key: <file>, e.g. ".daos/daos_agent.key"
+        #       Key portion of Server Certificate
+        #
+        self.allow_insecure = BasicParameter(True, True)
+        self.ca_cert = BasicParameter(None)
+        self.cert = BasicParameter(None)
+        self.key = BasicParameter(None)
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        yaml_data = super(TransportCredentials, self).get_yaml_data()
+
+        # Convert the boolean value into a string
+        if self.title is not None:
+            yaml_data[self.title]["allow_insecure"] = self.allow_insecure.value
+        else:
+            yaml_data["allow_insecure"] = self.allow_insecure.value
+
+        return yaml_data
+
+
+class CommonConfig(YamlParameters):
+    """Defines common daos_agent and daos_server configuration file parameters.
+
+    Includes:
+        - the daos system name (name)
+        - a list of access point nodes (access_points)
+        - the default port number (port)
+    """
+
+    def __init__(self, name, transport):
+        """Initialize a CommonConfig object.
+
+        Args:
+            name (str): default value for the name configuration parameter
+            transport (TransportCredentials): transport credentails
+        """
+        super(CommonConfig, self).__init__(
+            "/run/common_config/*", None, None, transport)
+
+        # Common configuration paramters
+        #   - name: <str>, e.g. "daos_server"
+        #       Name associated with the DAOS system.
+        #
+        #   - access_points: <list>, e.g.  ["hostname1:10001"]
+        #       Hosts can be specified with or without port, default port below
+        #       assumed if not specified. Defaults to the hostname of this node
+        #       at port 10000 for local testing
+        #
+        #   - port: <int>, e.g. 10001
+        #       Default port number with whith to bind the daos_server. This
+        #       will also be used when connecting to access points if the list
+        #       only contains host names.
+        #
+        self.name = BasicParameter(None, name)
+        self.access_points = AccessPoints(10001)
+        self.port = BasicParameter(None, 10001)
+
+    def update_hosts(self, hosts):
+        """Update the list of hosts for the access point.
+
+        Args:
+            hosts (list): list of access point hosts
+        """
+        if isinstance(hosts, list):
+            self.access_points.hosts = [host for host in hosts]
+        else:
+            self.access_points.hosts = []
+
+    def get_params(self, test):
+        """Get values for starting agents and server from the yaml file.
+
+        Obtain the lists of hosts from the BasicParameter class attributes.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        # Get the common parameters: name & port
+        super(CommonConfig, self).get_params(test)
+        self.access_points.port = self.port.value
+
+        # Get the transport credentials parameters
+        self.other_params.get_params(test)
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        yaml_data = super(CommonConfig, self).get_yaml_data()
+        yaml_data.pop("pmix", None)
+        if self.access_points.hosts:
+            yaml_data["access_points"] = self.access_points.hosts[:1]
+        return yaml_data
+
+
+class AccessPoints(object):
+    # pylint: disable=too-few-public-methods
+    """Defines an object for storing access point data."""
+
+    def __init__(self, port=10001):
+        """Initialize a AccessPoints object.
+
+        Args:
+            port (int, optional): port number. Defaults to 10001.
+        """
+        self.hosts = []
+        self.port = port
+
+    def __str__(self):
+        """Return a comma-separated list of <host>:<port>."""
+        return ",".join(
+            [":".join([host, str(self.port)]) for host in self.hosts])

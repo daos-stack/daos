@@ -32,16 +32,18 @@ from pydaos.raw import DaosPool, DaosServer, DaosApiError
 
 
 class PoolSvc(TestWithServers):
-    """Tests svc argument while pool create.
-
+    """
+    Tests svc argument while pool create.
     :avocado: recursive
     """
 
     def test_poolsvc(self):
-        """Test svc arg during pool create.
+        """
+        Test svc arg during pool create.
 
         :avocado: tags=all,pool,pr,medium,svc
         """
+
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
         createuid = os.geteuid()
@@ -88,10 +90,7 @@ class PoolSvc(TestWithServers):
                 self.pool.connect(1 << 1)
                 self.pool.disconnect()
                 # kill another server which is not a leader and exclude it
-                server = DaosServer(
-                    self.context,
-                    self.manager.get_server_config_value("name"),
-                    3)
+                server = DaosServer(self.context, self.server_group, 3)
                 server.kill(1)
                 self.pool.exclude([3])
                 # perform pool connect
