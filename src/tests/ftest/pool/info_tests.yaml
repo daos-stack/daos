@@ -4,7 +4,7 @@ hosts:
 server_config:
   name: daos_server
   servers:
-    targets: 1
+    targets: 8
 pool:
   createmode: !mux
     mode_all:
