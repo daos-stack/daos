@@ -24,6 +24,7 @@
 package client
 
 import (
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -99,4 +100,76 @@ func (c *connList) KillRank(rank uint32) ResultMap {
 	results[result.Address] = result
 
 	return results
+}
+
+// LeaderQueryReq contains the inputs for the list pools command.
+type LeaderQueryReq struct {
+	System string
+}
+
+// LeaderQueryResp contains the status of the request and, if successful, the list
+// of pools in the system.
+type LeaderQueryResp struct {
+	Leader   string
+	Replicas []string
+}
+
+// LeaderQuery requests the current Management Service leader and the set of
+// MS replicas.
+func (c *connList) LeaderQuery(req LeaderQueryReq) (*LeaderQueryResp, error) {
+	if len(c.controllers) == 0 {
+		return nil, errors.New("no controllers defined")
+	}
+
+	client := c.controllers[0].getSvcClient()
+	resp, err := client.LeaderQuery(context.TODO(), &mgmtpb.LeaderQueryReq{System: req.System})
+	if err != nil {
+		return nil, err
+	}
+
+	return &LeaderQueryResp{
+		Leader:   resp.CurrentLeader,
+		Replicas: resp.Replicas,
+	}, nil
+}
+
+// ListPoolsReq contains the inputs for the list pools command.
+type ListPoolsReq struct {
+	SysName string
+}
+
+// ListPoolsResp contains the status of the request and, if successful, the list
+// of pools in the system.
+type ListPoolsResp struct {
+	Status int32
+	Pools  []*PoolDiscovery
+}
+
+// ListPools fetches the list of all pools and their service replicas from the
+// system.
+func (c *connList) ListPools(req ListPoolsReq) (*ListPoolsResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.ListPoolsReq{Sys: req.SysName}
+
+	c.log.Debugf("List DAOS pools request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().ListPools(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("List DAOS pools response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &ListPoolsResp{
+		Pools: poolDiscoveriesFromPB(pbResp.Pools),
+	}, nil
 }

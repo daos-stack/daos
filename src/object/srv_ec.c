@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_sr
+ * DAOS server erasure-coded object IO handling.
  *
  * src/object/srv_ec.c
  */
@@ -33,6 +33,102 @@
 #include <daos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+
+/**
+ * Split EC obj read/write request.
+ * For object update, client sends update request to leader, the leader needs to
+ * split it for different targets before dispatch.
+ */
+int
+obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
+{
+	daos_iod_t		*iod, *iods = orw->orw_iod_array.oia_iods;
+	struct obj_io_desc	*oiods = orw->orw_iod_array.oia_oiods;
+	struct daos_shard_tgt	*fw_tgts = orw->orw_shard_tgts.ca_arrays;
+	struct obj_ec_split_req	*req;
+	daos_iod_t		*split_iod, *split_iods;
+	struct obj_shard_iod	*siod;
+	struct obj_tgt_oiod	*tgt_oiod, *tgt_oiods = NULL;
+	uint32_t		 tgt_nr = orw->orw_shard_tgts.ca_count;
+	uint32_t		 iod_nr = orw->orw_nr;
+	uint32_t		 start_shard = orw->orw_start_shard;
+	uint32_t		 i, tgt_idx, tgt_max_idx;
+	daos_size_t		 req_size, iods_size;
+	uint8_t			 tgt_bit_map[OBJ_TGT_BITMAP_LEN] = {0};
+	void			*buf = NULL;
+	int			 rc = 0;
+
+	/* minimal K/P is 2/1, so at least 2 forward targets */
+	D_ASSERT(tgt_nr >= 2);
+	D_ASSERT(oiods != NULL);
+	/* as we select the last parity node as leader, and for any update
+	 * there must be a siod (the last siod) for leader.
+	 */
+	D_ASSERT(oiods[0].oiod_nr >= 2);
+	tgt_max_idx = oiods[0].oiod_siods[oiods[0].oiod_nr - 1].siod_tgt_idx;
+
+	req_size = roundup(sizeof(struct obj_ec_split_req), 8);
+	iods_size = roundup(sizeof(daos_iod_t) * iod_nr, 8);
+	D_ALLOC(buf, req_size + iods_size);
+	if (buf == NULL)
+		return -DER_NOMEM;
+	req = buf;
+	req->osr_iods = buf + req_size;
+	req->osr_start_shard = start_shard;
+
+	for (i = 0; i < tgt_nr; i++) {
+		tgt_idx = fw_tgts[i].st_shard - start_shard;
+		D_ASSERT(tgt_idx < tgt_max_idx);
+		setbit(tgt_bit_map, tgt_idx);
+	}
+	setbit(tgt_bit_map, tgt_max_idx);
+
+	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,
+					 tgt_max_idx, tgt_nr + 1);
+	if (tgt_oiods == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	req->osr_tgt_oiods = tgt_oiods;
+	tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr + 1, tgt_max_idx);
+	D_ASSERT(tgt_oiod != NULL && tgt_oiod->oto_tgt_idx == tgt_max_idx);
+	req->osr_offs = tgt_oiod->oto_offs;
+
+	split_iods = req->osr_iods;
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		split_iod = &split_iods[i];
+		split_iod->iod_name = iod->iod_name;
+		split_iod->iod_kcsum = iod->iod_kcsum;
+		split_iod->iod_type = iod->iod_type;
+		split_iod->iod_size = iod->iod_size;
+		siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
+		split_iod->iod_nr = siod->siod_nr;
+		if (iod->iod_recxs != NULL)
+			split_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
+		if (iod->iod_csums != NULL)
+			split_iod->iod_csums = &iod->iod_csums[siod->siod_idx];
+		if (iod->iod_eprs != NULL)
+			split_iod->iod_eprs = &iod->iod_eprs[siod->siod_idx];
+	}
+
+	*split_req = req;
+
+out:
+	if (rc) {
+		if (buf != NULL)
+			D_FREE(buf);
+		obj_ec_tgt_oiod_fini(tgt_oiods);
+	}
+	return rc;
+}
+
+void
+obj_ec_split_req_fini(struct obj_ec_split_req *req)
+{
+	if (req == NULL)
+		return;
+	obj_ec_tgt_oiod_fini(req->osr_tgt_oiods);
+	D_FREE(req);
+}
 
 /* Determines if entire update affects just this target. If so, no IOD
  * modifications or special bulk-transfer handling are needed for this

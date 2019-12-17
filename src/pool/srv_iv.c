@@ -253,15 +253,46 @@ pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 	return pool_iv_value_alloc_internal(entry->iv_class->iv_class_id, sgl);
 }
 
+static int
+pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *value)
+{
+	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct ds_pool		*pool;
+	struct pool_buf		*map_buf = NULL;
+	int			 rc;
+
+	/* This function is only for IV_POOL_MAP. */
+	if (entry->iv_class->iv_class_id != IV_POOL_MAP)
+		return 0;
+
+	pool = ds_pool_lookup(v->piv_pool_uuid);
+	if (pool == NULL) {
+		D_DEBUG(DB_TRACE, DF_UUID": pool not found\n",
+			DP_UUID(v->piv_pool_uuid));
+		/* Return 0 to keep forwarding this sync request. */
+		return 0;
+	}
+
+	if (v->piv_map.piv_pool_buf.pb_nr > 0)
+		map_buf = &v->piv_map.piv_pool_buf;
+
+	rc = ds_pool_tgt_map_update(pool, map_buf, v->piv_pool_map_ver);
+
+	ds_pool_put(pool);
+	return rc;
+}
+
 struct ds_iv_class_ops pool_iv_ops = {
-	.ivc_ent_init	= pool_iv_ent_init,
-	.ivc_ent_get	= pool_iv_ent_get,
-	.ivc_ent_put	= pool_iv_ent_put,
-	.ivc_ent_destroy = pool_iv_ent_destroy,
-	.ivc_ent_fetch	= pool_iv_ent_fetch,
-	.ivc_ent_update	= pool_iv_ent_update,
-	.ivc_ent_refresh = pool_iv_ent_refresh,
-	.ivc_value_alloc = pool_iv_value_alloc,
+	.ivc_ent_init		= pool_iv_ent_init,
+	.ivc_ent_get		= pool_iv_ent_get,
+	.ivc_ent_put		= pool_iv_ent_put,
+	.ivc_ent_destroy	= pool_iv_ent_destroy,
+	.ivc_ent_fetch		= pool_iv_ent_fetch,
+	.ivc_ent_update		= pool_iv_ent_update,
+	.ivc_ent_refresh	= pool_iv_ent_refresh,
+	.ivc_value_alloc	= pool_iv_value_alloc,
+	.ivc_pre_sync		= pool_iv_pre_sync
 };
 
 int
@@ -329,6 +360,9 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	uint32_t		 size;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
+		map_ver);
+
 	size = pool_iv_map_ent_size(buf->pb_nr);
 	D_ALLOC(iv_entry, size);
 	if (iv_entry == NULL)
@@ -345,15 +379,11 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
-
-	/* Some nodes ivns does not exist, might because of the disconnection,
-	 * let's ignore it
-	 */
-	if (rc == -DER_NONEXIST)
-		rc = 0;
+	if (rc != 0)
+		D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u: %d\n",
+			DP_UUID(pool->sp_uuid), map_ver, rc);
 
 	D_FREE(iv_entry);
-
 	return rc;
 }
 
@@ -498,7 +528,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(iv_prop->pip_label) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_label);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (prop_entry->dpe_str)
 				label_alloc = prop_entry->dpe_str;
 			else
@@ -507,7 +538,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_alloc = prop_entry->dpe_str;
 			else
@@ -516,7 +548,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner_grp);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else

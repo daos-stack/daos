@@ -43,7 +43,7 @@ class BadConnectTest(TestWithoutServers):
         super(BadConnectTest, self).setUp()
         self.agent_sessions = None
         self.hostlist_servers = None
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
 
         # NULL is causing connect to blow up so skip that test for now
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')

@@ -96,7 +96,6 @@ dfuse_da_destroy(struct dfuse_da *da)
 			DFUSE_TRA_ERROR(type,
 					"Failed to destroy lock %d %s",
 					rc, strerror(rc));
-		DFUSE_TRA_DOWN(type);
 		D_FREE(type);
 	}
 	rc = pthread_mutex_destroy(&da->lock);
@@ -315,7 +314,6 @@ dfuse_da_register(struct dfuse_da *da, struct dfuse_da_reg *reg)
 		 * injected fault would be ignored - failing the specific
 		 * test.
 		 */
-		DFUSE_TRA_DOWN(type);
 		D_MUTEX_DESTROY(&type->lock);
 		D_FREE(type);
 		return NULL;
