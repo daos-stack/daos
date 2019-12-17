@@ -161,15 +161,20 @@ def set_test_environment():
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["OFI_DOMAIN"] = "hfi1_0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-    provider = ""
-    if interface == "ib0":
-        provider = "ofi+verbs"
-    else:
-        provider = "ofi+sockets"
+    # Update the default provider,domain based on the interface
+    default_provider = "ofi+sockets"
+    if os.environ["OFI_INTERFACE"].startswith("ib"):
+        default_provider = "ofi+verbs"
     os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
-                                                    provider)
+                                                    default_provider)
+    default_domain = os.environ.get("OFI_INTERFACE")
+    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if (os.environ["OFI_INTERFACE"].startswith("ib") and
+       provider != "ofi+sockets"):
+        default_domain = "hfi1_0"
+    os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", default_domain)
+
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing

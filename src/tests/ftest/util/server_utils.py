@@ -250,7 +250,7 @@ class DaosServerConfig(ObjectWithParameters):
         super(DaosServerConfig, self).__init__("/run/server_config/*")
 
         # Parameters
-        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+verbs")
+        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
         self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)       # e.g. "<host>:<port>"
         self.port = BasicParameter(None, 10001)
