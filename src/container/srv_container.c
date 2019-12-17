@@ -683,7 +683,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
-	struct cont_query_out  *out = crt_reply_get(rpc);
+	struct cont_open_out   *out = crt_reply_get(rpc);
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
@@ -757,7 +757,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 * ds_cont_op_handler.
 	 */
 	rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
-	out->cqo_prop = prop;
+	out->coo_prop = prop;
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",

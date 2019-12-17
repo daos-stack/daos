@@ -58,8 +58,10 @@ int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
  */
 struct ds_cont_child {
 	struct daos_llink	 sc_list;
-	daos_handle_t		 sc_hdl;
-	uuid_t			 sc_uuid;
+	daos_handle_t		 sc_hdl;	/* vos_container handle */
+	uuid_t			 sc_uuid;	/* container UUID */
+	struct ds_pool_child	*sc_pool;
+	d_list_t		 sc_link;	/* link to spc_cont_list */
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
@@ -70,7 +72,7 @@ struct ds_cont_child {
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,
-				 sc_destroying:1;
+				 sc_stopping:1;
 	uint32_t		 sc_dtx_flush_wait_count;
 
 	/* Aggregate ULT */
@@ -105,12 +107,9 @@ struct ds_cont_hdl {
 	d_list_t		sch_entry;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_capas;
-	struct ds_pool_child	*sch_pool;
 	struct ds_cont_child	*sch_cont;
 	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
-	uint32_t		sch_dtx_registered:1,
-				sch_deleted:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -124,6 +123,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
+
+int ds_cont_child_start_all(struct ds_pool_child *pool_child);
+void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int
 ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,

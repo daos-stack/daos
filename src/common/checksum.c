@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#define D_LOGFAC	DD_FAC(csum)
+
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,14 +30,55 @@
 
 #include <isa-l.h>
 #include <gurt/types.h>
-#include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
 
+#define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
+#define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
 
 /** File function signatures */
 static int
 checksum_sgl_cb(uint8_t *buf, size_t len, void *args);
+
+/** helper function to trace bytes */
+static void
+trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
+{
+	size_t	char_buf_len = max == 0 ? len : min(max, len);
+	char	char_buf[char_buf_len * 2 + 1];
+	int	i;
+
+	if (buf == NULL)
+		return;
+
+	for (i = 0; i <  len && (i < max || max == 0); i++)
+		sprintf(char_buf + i * 2, "%x", buf[i]);
+	char_buf[i] = '\0';
+	C_TRACE("%s\n", char_buf);
+}
+
+/** helper function to trace chars */
+static void
+trace_chars(const uint8_t *buf, const size_t buf_len, const uint32_t max)
+{
+	int	i;
+	size_t	len = max == 0 ? buf_len : min(buf_len, max);
+	char	str[len + 1];
+
+	if (buf == NULL)
+		return;
+
+	for (i = 0; i <  len ; i++)
+		str[i] = buf[i] == '\0' ? '_' : buf[i];
+	str[i] = '\0';
+	C_TRACE("%s", str);
+}
+
+static void
+daos_csummer_trace_csum(struct daos_csummer *obj, uint8_t *csum)
+{
+	trace_bytes(csum, daos_csummer_get_csum_len(obj), 0);
+}
 
 /** Container Property knowledge */
 uint32_t
@@ -82,7 +125,6 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 		return false;
 	return true;
 }
-
 
 enum DAOS_CSUM_TYPE
 daos_contprop2csumtype(int contprop_csum_val)
@@ -284,10 +326,23 @@ daos_csummer_reset(struct daos_csummer *obj)
 int
 daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
-	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
-		return obj->dcs_algo->cf_update(obj, buf, buf_len);
+	int rc = 0;
 
-	return 0;
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Buffer (len=%lu):\n", buf_len);
+		trace_chars(buf, buf_len, 50);
+		C_TRACE("\n");
+	}
+
+	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
+		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
+
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("CSUM: ...");
+		daos_csummer_trace_csum(obj, obj->dcs_csum_buf);
+	}
+
+	return rc;
 }
 
 int
@@ -299,17 +354,42 @@ daos_csummer_finish(struct daos_csummer *obj)
 }
 
 bool
-daos_csummer_compare(struct daos_csummer *obj, daos_csum_buf_t *a,
-		     daos_csum_buf_t *b)
+daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
+			 daos_csum_buf_t *b)
 {
-	uint32_t a_len = a->cs_len * a->cs_nr;
-	uint32_t b_len = b->cs_len * b->cs_nr;
+	uint32_t	a_len = a->cs_len * a->cs_nr;
+	uint32_t	b_len = b->cs_len * b->cs_nr;
+	bool		match = true;
+	int		i;
 
 	D_ASSERT(a->cs_type == b->cs_type);
 
 	if (a_len != b_len)
 		return false;
-	return memcmp(a->cs_csum, b->cs_csum, a_len) == 0;
+
+	for (i = 0; i < a->cs_nr && match; i++) {
+		match = daos_csummer_csum_compare(obj, dcb_idx2csum(a, i),
+						  dcb_idx2csum(b, i),
+						  a->cs_len);
+	}
+
+	return match;
+}
+
+bool
+daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
+			  uint8_t *b, uint32_t csum_len)
+{
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Comparing: ");
+		daos_csummer_trace_csum(obj, a);
+		daos_csummer_trace_csum(obj, b);
+	}
+
+	if (obj->dcs_algo->cf_compare)
+		return obj->dcs_algo->cf_compare(obj, a, b, csum_len);
+
+	return memcmp(a, b, csum_len) == 0;
 }
 
 /**
@@ -324,6 +404,7 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 	uint32_t	chunksize;
 	size_t		csum_len;
 	uint8_t		*buf_end;
+	uint8_t		*buf_ptr;
 	uint32_t	iod_idx;
 	uint32_t	recx_idx;
 	uint32_t	cd_idx;
@@ -331,6 +412,7 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 	chunksize	= daos_csummer_get_chunksize(obj);
 	csum_len	= daos_csummer_get_csum_len(obj);
 	buf_end		= csum_buf + csum_buf_len;
+	buf_ptr		= csum_buf;
 
 	iod_idx = recx_idx = 0;
 	for (cd_idx = 0; cd_idx < dcb_nr; cd_idx++) {
@@ -345,10 +427,10 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 		D_ASSERT(recx_idx < iod->iod_nr);
 		recx = &iod->iod_recxs[recx_idx];
 
-		csum_nr = daos_recx_calc_chunks(*recx,
-						iod->iod_size,
+		if (!csum_iod_is_supported(obj->dcs_chunk_size, iod))
+			continue;
+		csum_nr = daos_recx_calc_chunks(*recx, iod->iod_size,
 						chunksize);
-
 		buf_len = csum_len * csum_nr;
 
 		dcb->cs_type = daos_csummer_get_type(obj);
@@ -357,17 +439,17 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 
 		dcb->cs_nr = csum_nr;
 		dcb->cs_buf_len = buf_len;
-		dcb->cs_csum = csum_buf;
+		dcb->cs_csum = buf_ptr;
 
-		csum_buf += buf_len;
-		D_ASSERT(csum_buf <= buf_end);
+		buf_ptr += buf_len;
+		D_ASSERT(buf_ptr <= buf_end);
 
 		/** go to the next recx/iod as needed */
 		recx_idx++;
 		if (recx_idx == iod->iod_nr) {
 			recx_idx = 0;
 			iod_idx++;
-			D_ASSERT(iod_idx < iods_nr);
+			D_ASSERT(iod_idx <= iods_nr);
 		}
 	}
 }
@@ -466,14 +548,18 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 
 	for (i = 0; i < nr; i++) { /** for each extent/checksum buf */
 		csum_nr = daos_recx_calc_chunks(recxs[i], rec_len, chunk_size);
+		C_TRACE("csum_nr: %lu\n", csum_nr);
 		bytes = recxs[i].rx_nr * rec_len;
 
 		for (j = 0; j < csum_nr; j++) {
+			struct daos_csum_range chunk = csum_recx_chunkidx2range(
+				&recxs[i], rec_len, chunk_size, j);
+
 			buf = dcb_idx2csum(&csums[i], j);
 			daos_csummer_set_buffer(obj, buf, csums->cs_len);
 			daos_csummer_reset(obj);
 
-			bytes_for_csum = MIN(chunk_size, bytes);
+			bytes_for_csum = chunk.dcr_nr * rec_len;
 			rc = daos_sgl_processor(sgl, &idx, bytes_for_csum,
 						checksum_sgl_cb, obj);
 			if (rc)
@@ -494,7 +580,9 @@ daos_csummer_calc(struct daos_csummer *obj, d_sg_list_t *sgl,
 	int		rc = 0;
 	uint32_t	csum_nr = 0;
 
-	if (!(daos_csummer_initialized(obj) && iod && sgl))
+	if (!daos_csummer_initialized(obj) ||
+	    !csum_iod_is_supported(obj->dcs_chunk_size, iod) ||
+	    sgl == NULL)
 		return 0;
 
 	rc = daos_csummer_alloc_dcbs(obj, iod, 1, pcsum_bufs, &csum_nr);
@@ -522,23 +610,22 @@ daos_csummer_verify(struct daos_csummer *obj,
 	daos_csum_buf_t		*csum_bufs;
 	int			 i;
 	int			 rc;
+	bool			 match;
 
 	rc = daos_csummer_calc(obj, sgl, iod, &csum_bufs);
 	if (rc != 0)
 		return rc;
 
-	for (i = 0; i < iod->iod_nr && rc == 0; i++) {
-		bool match = daos_csummer_compare(obj, &csum_bufs[i],
-						  &iod->iod_csums[i]);
+	for (i = 0; i < iod->iod_nr; i++) {
+		match = daos_csummer_compare_dcb(obj, &csum_bufs[i],
+						 &iod->iod_csums[i]);
 		if (!match) {
 			D_ERROR("Data corruption found\n");
-			/** TODO: change rc to a new more appropriate
-			 * error code
-			 */
-			rc = -DER_IO;
+			D_GOTO(done, rc = -DER_CSUM);
 		}
 	}
 
+done:
 	daos_csummer_free_dcbs(obj, &csum_bufs);
 	return rc;
 }
@@ -577,6 +664,17 @@ dcb_is_valid(const daos_csum_buf_t *csum)
 	       csum->cs_nr > 0;
 }
 
+void
+dcb_insert(daos_csum_buf_t *dcb, int idx, uint8_t *csum_buf, size_t len)
+{
+	uint8_t *to_update;
+
+	D_ASSERT(idx < dcb->cs_nr);
+
+	to_update = dcb->cs_csum + idx * dcb->cs_len;
+	memcpy(to_update, csum_buf, len);
+}
+
 uint32_t
 dcb_off2idx(daos_csum_buf_t *csum_buf, uint32_t offset_bytes)
 {
@@ -604,17 +702,118 @@ dcb_off2csum(daos_csum_buf_t *csum_buf, uint32_t offset)
 }
 
 /** Other Functions */
-
 uint32_t
 daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 		      uint32_t chunk_size)
 {
+	if (extent.rx_nr == 0)
+		return 0;
+
 	return csum_chunk_count(chunk_size,
 				extent.rx_idx,
-				extent.rx_idx + extent.rx_nr,
+				extent.rx_idx + extent.rx_nr - 1,
 				record_size);
 }
 
+daos_off_t
+csum_chunk_align_floor(daos_off_t off, size_t chunksize)
+{
+	D_ASSERT(chunksize != 0);
+	return off - (off % chunksize);
+}
+daos_off_t
+csum_chunk_align_ceiling(daos_off_t off, size_t chunksize)
+{
+	daos_off_t lo = csum_chunk_align_floor(off, chunksize);
+	daos_off_t hi = (lo + chunksize) - 1;
+
+	if (hi < lo) /** overflow */
+		hi = UINT64_MAX;
+	return hi;
+}
+
+struct daos_csum_range
+csum_recidx2range(size_t chunksize, daos_off_t record_idx, size_t lo_boundary,
+		  daos_off_t hi_boundary, size_t rec_size)
+{
+	struct daos_csum_range	result = {0};
+	daos_off_t		lo;
+	daos_off_t		hi;
+
+	if (record_idx > hi_boundary)
+		return result;
+
+	chunksize /= rec_size;
+	lo = csum_chunk_align_floor(record_idx, chunksize);
+	hi = csum_chunk_align_ceiling(record_idx, chunksize);
+
+	result.dcr_lo = max(lo, lo_boundary);
+	result.dcr_hi = min(hi, hi_boundary);
+
+	result.dcr_nr = result.dcr_hi - result.dcr_lo + 1;
+
+	return result;
+}
+
+struct daos_csum_range
+csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx,
+		    uint64_t lo, uint64_t hi)
+{
+	uint64_t record_idx = csum_chunk_align_floor(lo, chunksize / rec_size)
+			      + chunk_idx * (chunksize / rec_size);
+
+	return csum_recidx2range(chunksize, record_idx, lo, hi, rec_size);
+}
+
+struct daos_csum_range
+csum_chunkrange(uint64_t chunksize, uint64_t idx)
+{
+	struct daos_csum_range	result;
+
+	dcr_set_idx_nr(&result, idx * chunksize, chunksize);
+
+	return result;
+}
+
+struct daos_csum_range
+csum_align_boundaries(daos_off_t lo, daos_off_t hi,
+		      daos_off_t lo_boundary, daos_off_t hi_boundary,
+		      daos_off_t record_size, size_t chunksize)
+
+{
+	struct daos_csum_range	result = {0};
+	size_t			chunksize_records;
+	daos_off_t		lo_aligned;
+	daos_off_t		hi_aligned;
+	uint64_t		overflow_gaurd;
+
+	if (lo < lo_boundary || hi > hi_boundary)
+		return result;
+
+	/** Calculate alignment based on records ... otherwise if ex_hi is
+	 * UINT64_MAX the calculations would wrap and be incorrect
+	 */
+	chunksize_records = chunksize / record_size;
+	lo_aligned = csum_chunk_align_floor(lo, chunksize_records);
+	hi_aligned = csum_chunk_align_ceiling(hi, chunksize_records);
+
+	result.dcr_lo = max(lo_boundary, lo_aligned);
+	result.dcr_hi = min(hi_boundary, hi_aligned);
+	overflow_gaurd = result.dcr_hi + 1;
+	if (overflow_gaurd < result.dcr_hi)
+		overflow_gaurd = UINT64_MAX;
+	result.dcr_nr = overflow_gaurd - result.dcr_lo;
+
+	return result;
+}
+
+struct daos_csum_range
+csum_recx_chunkidx2range(daos_recx_t *recx, uint32_t rec_size,
+			 uint32_t chunksize, uint64_t chunk_idx)
+{
+	return csum_chunkidx2range(rec_size, chunksize, chunk_idx, recx->rx_idx,
+				   recx->rx_idx + recx->rx_nr - 1);
+}
 
 void
 daos_iods_count_needed_csum(daos_iod_t *iods, int nr, int chunksize,
@@ -625,13 +824,17 @@ daos_iods_count_needed_csum(daos_iod_t *iods, int nr, int chunksize,
 	int i, j;
 
 	for (i = 0; i < nr; i++) {
-		dcb_nr += iods[i].iod_nr;
+		daos_iod_t *iod = &iods[i];
 
-		for (j = 0; j < iods[i].iod_nr; j++) {
-			csum_nr +=
-				daos_recx_calc_chunks(iods[i].iod_recxs[j],
-						      iods[i].iod_size,
-						      chunksize);
+		dcb_nr += iod->iod_nr;
+
+		for (j = 0; j < iod->iod_nr; j++) {
+			if (csum_iod_is_supported(chunksize, iod)) {
+				csum_nr +=
+					daos_recx_calc_chunks(iod->iod_recxs[j],
+							      iod->iod_size,
+							      chunksize);
+			}
 		}
 	}
 
@@ -644,22 +847,14 @@ uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size)
 {
-	uint64_t	lo = lo_idx * rec_size;
-	uint64_t	hi = hi_idx * rec_size;
-	daos_off_t	width;
-	uint64_t	unaligned_hi;
+	struct daos_csum_range chunk;
 
-	if (chunk_size == 0)
+	if (rec_size == 0)
 		return 0;
-
-	/** Align to chunk size */
-	lo = lo - lo % chunk_size;
-	unaligned_hi = hi % chunk_size;
-	if (unaligned_hi)
-		hi = hi + chunk_size - unaligned_hi;
-	width = hi - lo;
-
-	return (uint32_t)(width / chunk_size);
+	chunk = csum_align_boundaries(lo_idx, hi_idx, 0, UINT64_MAX,
+				      rec_size, chunk_size);
+	daos_size_t result = chunk.dcr_nr / (chunk_size / rec_size);
+	return result;
 }
 
 static int

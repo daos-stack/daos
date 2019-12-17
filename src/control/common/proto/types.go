@@ -235,47 +235,6 @@ func (ncr NvmeControllerResults) HasErrors() bool {
 	return false
 }
 
-func (ncr NvmeControllerResults) String() string {
-	var buf bytes.Buffer
-
-	for _, resp := range ncr {
-		fmt.Fprintf(&buf, "\tPCI Addr:%s Status:%s", resp.Pciaddr, resp.State.Status)
-
-		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
-		}
-		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
-		}
-
-		fmt.Fprintf(&buf, "\n")
-	}
-
-	return buf.String()
-}
-
-// CtrlrResults contains controllers and/or results of operations on controllers
-// and an error signifying a problem in making the request.
-type CtrlrResults struct {
-	Ctrlrs    NvmeControllers
-	Responses NvmeControllerResults
-	Err       error
-}
-
-func (cr CtrlrResults) String() string {
-	if cr.Err != nil {
-		return cr.Err.Error()
-	}
-	if len(cr.Ctrlrs) > 0 {
-		return cr.Ctrlrs.String()
-	}
-	if len(cr.Responses) > 0 {
-		return cr.Responses.String()
-	}
-
-	return "no controllers found"
-}
-
 // ScmNamespaces is an alias for protobuf PmemDevice message slice representing
 // a number of PMEM device files created on SCM namespaces on a storage node.
 type ScmNamespaces []*ctlpb.PmemDevice
@@ -294,16 +253,6 @@ func (pds ScmNamespaces) String() string {
 // by mount points
 type ScmMounts []*ctlpb.ScmMount
 
-func (sm ScmMounts) String() string {
-	var buf bytes.Buffer
-
-	for _, mount := range sm {
-		fmt.Fprintf(&buf, "\t%+v\n", mount)
-	}
-
-	return buf.String()
-}
-
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // representing operation results on a number of SCM mounts.
 type ScmMountResults []*ctlpb.ScmMountResult
@@ -317,48 +266,6 @@ func (smr ScmMountResults) HasErrors() bool {
 	return false
 }
 
-func (smr ScmMountResults) String() string {
-	var buf bytes.Buffer
-
-	for _, resp := range smr {
-		fmt.Fprintf(
-			&buf, "\tMntpoint:%s Status:%s", resp.Mntpoint, resp.State.Status)
-
-		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
-		}
-		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
-		}
-
-		fmt.Fprintf(&buf, "\n")
-	}
-
-	return buf.String()
-}
-
-// MountResults contains modules and/or results of operations on mounted SCM
-// regions and an error signifying a problem in making the request.
-type MountResults struct {
-	Mounts    ScmMounts
-	Responses ScmMountResults
-	Err       error
-}
-
-func (mr MountResults) String() string {
-	if mr.Err != nil {
-		return mr.Err.Error()
-	}
-	if len(mr.Mounts) > 0 {
-		return mr.Mounts.String()
-	}
-	if len(mr.Responses) > 0 {
-		return mr.Responses.String()
-	}
-
-	return "no scm mounts found"
-}
-
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
 type ScmModules []*ctlpb.ScmModule
@@ -366,26 +273,3 @@ type ScmModules []*ctlpb.ScmModule
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.
 type ScmModuleResults []*ctlpb.ScmModuleResult
-
-func (smr ScmModuleResults) String() string {
-	var buf bytes.Buffer
-
-	for _, resp := range smr {
-		fmt.Fprintf(&buf,
-			"\tModule Location:(socket:%d memctrlr:%d chan:%d "+
-				"pos:%d) Status:%s",
-			resp.Loc.Socket, resp.Loc.Memctrlr, resp.Loc.Channel,
-			resp.Loc.Channelpos, resp.State.Status)
-
-		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
-		}
-		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
-		}
-
-		fmt.Fprintf(&buf, "\n")
-	}
-
-	return buf.String()
-}
