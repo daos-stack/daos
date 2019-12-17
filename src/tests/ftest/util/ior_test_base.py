@@ -164,11 +164,10 @@ class IorTestBase(TestWithServers):
 
         if self.dfuse:
             self.dfuse = None
-        if self.pool:        
+        if self.pool:
             errors = self.destroy_pools(self.pool)
             if errors:
-                self.log.error("Error destroying pool. \n {}".format(
-                                errors))
+                self.log.error(errors)
             self.pool = None
 
         return out
