@@ -357,7 +357,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
 
-	vos_ilog_desc_cbs_init(&cbs, DAOS_HDL_INVAL);
+	vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
 	rc = ilog_destroy(&tins->ti_umm, &cbs, &krec->kr_ilog);
 	if (rc != 0)
 		return rc;
@@ -438,12 +438,12 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
 
-	if (biov->bi_data_len != rbund->rb_rsize)
+	if (bio_iov2len(biov) != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = biov->bi_data_len;
+	irec->ir_size	 = bio_iov2len(biov);
 	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
@@ -486,7 +486,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 		kbund->kb_epoch = skey->sv_epoch;
 
 	/* NB: return record address, caller should copy/rma data for it */
-	biov->bi_data_len = irec->ir_size;
+	bio_iov_set_len(biov, irec->ir_size);
 	biov->bi_addr = irec->ir_ex_addr;
 	biov->bi_buf = NULL;
 
@@ -600,8 +600,8 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
-	vos_dtx_deregister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
-				  DTX_RT_SVT);
+	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
+				  irec->ir_dtx, rec->rec_off);
 
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -745,11 +745,14 @@ evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
 				       &desc->dc_dtx);
 }
 
-int
+static int
 evt_dop_log_del(struct umem_instance *umm, struct evt_desc *desc, void *args)
 {
-	vos_dtx_deregister_record(umm, desc->dc_dtx,
-				  umem_ptr2off(umm, desc), DTX_RT_EVT);
+	daos_handle_t	coh;
+
+	coh.cookie = (unsigned long)args;
+	vos_dtx_deregister_record(umm, coh, desc->dc_dtx,
+				  umem_ptr2off(umm, desc));
 	return 0;
 }
 
@@ -765,7 +768,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 	cbs->dc_log_add_cb	= evt_dop_log_add;
 	cbs->dc_log_add_args	= NULL;
 	cbs->dc_log_del_cb	= evt_dop_log_del;
-	cbs->dc_log_del_args	= NULL;
+	cbs->dc_log_del_args	= (void *)(unsigned long)coh.cookie;
 }
 
 static int

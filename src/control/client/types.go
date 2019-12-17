@@ -29,8 +29,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -257,46 +257,6 @@ func (rm ResultSmdMap) String() string {
 	return buf.String()
 }
 
-// ClientCtrlrMap is an alias for query results of NVMe controllers (and
-// any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]pb_types.CtrlrResults
-
-func (ccm ClientCtrlrMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(ccm))
-
-	for server := range ccm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientMountMap is an alias for query results of SCM regions mounted
-// on connected servers keyed on address.
-type ClientMountMap map[string]pb_types.MountResults
-
-func (cmm ClientMountMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
 // ScmScanResult represents the result of scanning for SCM
 // modules installed on a storage node and SCM namespaces.
 type ScmScanResult struct {
@@ -319,13 +279,13 @@ func (result *ScmScanResult) String() string {
 func (result *ScmScanResult) Summary() (out string) {
 	switch {
 	case result.Err != nil:
-		return fmt.Sprintf("SCM Error: %s", result.Err)
+		return fmt.Sprintf("Error: %s", result.Err)
 	case len(result.Namespaces) > 0:
 		out = result.Namespaces.Summary()
 	default:
 		out = result.Modules.Summary()
 	}
-	return fmt.Sprintf("SCM: %s", out)
+	return fmt.Sprintf("%s", out)
 }
 
 // ScmScanMap maps ScmModuleScanResult structs to the addresses
@@ -335,7 +295,7 @@ type ScmScanResults map[string]*ScmScanResult
 // NvmeScanResult represents the result of scanning for SCM
 // modules installed on a storage node.
 type NvmeScanResult struct {
-	Ctrlrs pb_types.NvmeControllers
+	Ctrlrs proto.NvmeControllers
 	Err    error
 }
 
@@ -355,16 +315,16 @@ func (result *NvmeScanResult) StringHealthStats() string {
 
 func (result *NvmeScanResult) Summary() (out string) {
 	if result.Err != nil {
-		return fmt.Sprintf("NVMe Error: %s", result.Err)
+		return fmt.Sprintf("Error: %s", result.Err)
 	}
-	return fmt.Sprintf("NVMe: %s", result.Ctrlrs.Summary())
+	return fmt.Sprintf("%s", result.Ctrlrs.Summary())
 }
 
 // NvmeScanResults maps NvmeScanResult structs to the addresses
 // of remote servers identified by an address string.
 type NvmeScanResults map[string]*NvmeScanResult
 
-func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
+func scmModulesFromPB(pbMms proto.ScmModules) (mms []storage.ScmModule) {
 	for _, c := range pbMms {
 		mms = append(mms,
 			storage.ScmModule{
@@ -379,7 +339,7 @@ func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
 	return
 }
 
-func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespace) {
+func scmNamespacesFromPB(pbNss proto.ScmNamespaces) (nss []storage.ScmNamespace) {
 	for _, ns := range pbNss {
 		nss = append(nss,
 			storage.ScmNamespace{
@@ -394,32 +354,13 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 }
 
 // StorageScanReq encapsulated subsystem scan parameters.
-type StorageScanReq struct {
-	Summary bool
-}
+type StorageScanReq struct{}
 
 // StorageScanResp encapsulated subsystem results.
 type StorageScanResp struct {
-	summary bool
 	Servers []string
 	Nvme    NvmeScanResults
 	Scm     ScmScanResults
-}
-
-func (ssr *StorageScanResp) String() string {
-	var buf bytes.Buffer
-
-	for _, srv := range ssr.Servers {
-		fmt.Fprintf(&buf, "%s\n", srv)
-		if !ssr.summary {
-			fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
-			fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
-		}
-		fmt.Fprintf(&buf, "\tSummary:\n\t\t%s\n\t\t%s\n",
-			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
-	}
-
-	return buf.String()
 }
 
 func (ssr *StorageScanResp) StringHealthStats() string {
@@ -433,11 +374,35 @@ func (ssr *StorageScanResp) StringHealthStats() string {
 	return buf.String()
 }
 
-// StorageFormatResult stores results of format operations on NVMe controllers
+// StorageFormatReq encapsulated subsystem format parameters.
+type StorageFormatReq struct {
+	Reformat bool
+}
+
+// StorageFormatResults stores results of format operations on NVMe controllers
 // and SCM mountpoints.
+type StorageFormatResults map[string]StorageFormatResult
+
+func (sfr StorageFormatResults) Keys() (keys []string) {
+	for key, _ := range sfr {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return keys
+}
+
 type StorageFormatResult struct {
-	nvmeCtrlr pb_types.CtrlrResults
-	scmMount  pb_types.MountResults
+	Nvme proto.NvmeControllerResults
+	Scm  proto.ScmMountResults
+	Err  error
+}
+
+func (sfr *StorageFormatResult) HasErrors() bool {
+	if sfr.Err != nil || sfr.Scm.HasErrors() || sfr.Nvme.HasErrors() {
+		return true
+	}
+	return false
 }
 
 // AccessControlList is a structure for the access control list.
@@ -468,4 +433,29 @@ func (acl *AccessControlList) Empty() bool {
 		return true
 	}
 	return false
+}
+
+// PoolDiscovery represents the basic discovery information for a pool.
+type PoolDiscovery struct {
+	UUID        string   // Unique identifier
+	SvcReplicas []uint32 // Ranks of pool service replicas
+}
+
+// poolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
+// PoolDiscovery structures.
+func poolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*PoolDiscovery {
+	pools := make([]*PoolDiscovery, 0, len(pbPools))
+	for _, pbPool := range pbPools {
+		svcReps := make([]uint32, 0, len(pbPool.Svcreps))
+		for _, rep := range pbPool.Svcreps {
+			svcReps = append(svcReps, rep)
+		}
+
+		pools = append(pools, &PoolDiscovery{
+			UUID:        pbPool.Uuid,
+			SvcReplicas: svcReps,
+		})
+	}
+
+	return pools
 }

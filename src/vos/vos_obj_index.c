@@ -129,7 +129,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
-	vos_ilog_desc_cbs_init(&cbs, DAOS_HDL_INVAL);
+	vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
 	rc = ilog_destroy(umm, &cbs, &obj->vo_ilog);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy incarnation log: "DF_RC"\n",

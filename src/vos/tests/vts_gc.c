@@ -28,7 +28,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include "csum_extent_tests.h"
 #include <daos_api.h>
 
 #define NO_FLAGS	    (0)

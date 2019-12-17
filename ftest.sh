@@ -203,7 +203,10 @@ rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
-export OFI_INTERFACE=eth0
+
+# Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
+unset OFI_INTERFACE
+
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
@@ -309,6 +312,15 @@ rm -f core.* *_results.xml
 # see if we just wanted to set up
 if ${SETUP_ONLY:-false}; then
     exit 0
+fi
+
+# check if slurm needs to be configured for soak
+if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
+    if ! ./slurm_setup.py -c ${nodes[0]} -n ${TEST_NODES} -s -i; then
+        exit \${PIPESTATUS[0]}
+    else
+        rc=0
+    fi
 fi
 
 # now run it!
