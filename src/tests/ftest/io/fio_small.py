@@ -38,7 +38,7 @@ class FioSmall(FioBase):
             of following fio configs:
             1 Client
             ioengine: 'libaio'
-            threads: 16
+            thread: 1
             verify: 'crc64'
             iodepth: 16
             blocksize: 256B|1M
