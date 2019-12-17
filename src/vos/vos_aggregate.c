@@ -1555,7 +1555,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
-		cont->vc_abort_aggregation = 0;
 		return 1;
 	}
 
@@ -1588,6 +1587,7 @@ aggregate_enter(struct vos_container *cont, bool discard)
 	}
 
 	cont->vc_in_aggregation = 1;
+	cont->vc_abort_aggregation = 0;
 	return 0;
 }
 
