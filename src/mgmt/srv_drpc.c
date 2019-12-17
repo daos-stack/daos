@@ -203,9 +203,9 @@ ds_mgmt_drpc_start_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_svc_start(false /* !create */, 0 /* size */,
 			       false /* !bootstrap */, NULL /* uuid */,
 			       NULL /* addr */);
-	if (rc == -DER_ALREADY)
+	if (rc == -DER_ALREADY) {
 		D_DEBUG(DB_MGMT, "MS already started\n");
-	else if (rc != 0) {
+	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
 		resp.status = rc;
 	}
