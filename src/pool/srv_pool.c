@@ -280,8 +280,8 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	uuid_generate(target_uuid);
 
 	/* Store target_uuid in DSM_META_FILE. */
-	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
-	if (rc < 0)
+	D_ASPRINTF(fpath, "%s/%s", path, DSM_META_FILE);
+	if (fpath == NULL)
 		return -DER_NOMEM;
 	rc = uuid_store(fpath, target_uuid);
 	D_FREE(fpath);
