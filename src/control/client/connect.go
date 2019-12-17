@@ -77,6 +77,8 @@ type Connect interface {
 	StorageScan(*StorageScanReq) *StorageScanResp
 	StorageFormat(reformat bool) StorageFormatResults
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
