@@ -1172,7 +1172,7 @@ out:
 void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResp	*resp = MGMT__DAOS_RESP__INIT;
+	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
 
 	D_INFO("Received request to setup server\n");
 
