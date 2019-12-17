@@ -37,7 +37,7 @@ type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
 func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
-	return nil, errors.New("mgmt module handler is not implemented")
+	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
@@ -59,7 +59,7 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte
 	case drpc.MethodBIOError:
 		return nil, mod.handleBioErr(req)
 	default:
-		return nil, errors.Errorf("unknown dRPC %d", method)
+		return nil, drpc.UnknownMethodFailure()
 	}
 }
 
@@ -70,7 +70,7 @@ func (mod *srvModule) ID() int32 {
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	req := &srvpb.NotifyReadyReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return errors.Wrap(err, "unmarshal NotifyReady request")
+		return drpc.UnmarshalingPayloadFailure()
 	}
 
 	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {

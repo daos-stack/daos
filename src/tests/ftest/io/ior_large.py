@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,41 +24,56 @@
 from ior_test_base import IorTestBase
 
 
-class IorEightServersMpiio(IorTestBase):
-    """Test class Description: Runs IOR with 8 servers with MPIIO.
+class IorLarge(IorTestBase):
+    """Test class Description: Runs IOR with different
+                               number of servers.
 
     :avocado: recursive
     """
 
-    def test_ssf(self):
-        """Test ID: DAOS-2121.
+    def test_sequential(self):
+        """Jira ID: DAOS-1264.
 
         Test Description:
-            Run IOR with 1,64 and 128 clients config in ssf mode.
+            Run IOR with 1,64 and 128 clients config sequentially.
 
         Use Cases:
-            Different combinations of 1/64/128 Clients, 1K/4K/32K/128K/512K/1M
-            transfersize and block size of 32M for 1K transfer size and 128M
-            for rest.
+            Different combinations of 1/64/128 Clients and
+            1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=ior_ssf
+        :avocado: tags=all,daosio,iorlarge_sequential,iorlarge
         """
-        ior_flags = self.params.get("F", "/run/ior/iorflags/ssf/")
+        ior_flags = self.params.get("F", "/run/ior/iorflags/sequential/")
+        self.ior_cmd.flags.update(ior_flags)
+        self.run_ior_with_pool()
+
+    def test_random(self):
+        """Jira ID: DAOS-1264.
+
+        Test Description:
+            Run IOR with 1,64 and 128 clients config in random order.
+
+        Use Cases:
+            Different combinations of 1/64/128 Clients and
+            1K/4K/32K/128K/512K/1M transfersize.
+
+        :avocado: tags=all,daosio,iorlarge_random,iorlarge
+        """
+        ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
         self.ior_cmd.flags.update(ior_flags)
         self.run_ior_with_pool()
 
     def test_fpp(self):
-        """Test ID: DAOS-2121.
+        """Jira ID: DAOS-2491.
 
         Test Description:
-            Run IOR with 1,64 and 128 clients config in fpp mode.
+            Run IOR with 1,64 and 128 clients config file-per-process.
 
         Use Cases:
-            Different combinations of 1/64/128 Clients, 1K/4K/32K/128K/512K/1M
-            transfersize and block size of 32M for 1K transfer size and 128M
-            for rest.
+            Different combinations of 1/64/128 Clients and
+            1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=ior_fpp
+        :avocado: tags=all,daosio,iorlarge_fpp,iorlarge
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
         self.ior_cmd.flags.update(ior_flags)
