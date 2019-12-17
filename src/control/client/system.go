@@ -32,17 +32,23 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
+// SystemStopReq contains the inputs for the system stop command.
+type SystemStopReq struct {
+	Prep bool
+	Kill bool
+}
+
 // SystemStop will perform a controlled shutdown of DAOS system and a list
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop() (common.SystemMemberResults, error) {
+func (c *connList) SystemStop(req SystemStopReq) (common.SystemMemberResults, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStopReq{}
+	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill}
 
 	c.log.Debugf("DAOS system shutdown request: %s\n", rpcReq)
 
@@ -102,13 +108,13 @@ func (c *connList) KillRank(rank uint32) ResultMap {
 	return results
 }
 
-// LeaderQueryReq contains the inputs for the list pools command.
+// LeaderQueryReq contains the inputs for the leader query command.
 type LeaderQueryReq struct {
 	System string
 }
 
-// LeaderQueryResp contains the status of the request and, if successful, the list
-// of pools in the system.
+// LeaderQueryResp contains the status of the request and, if successful, the
+// MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
 	Leader   string
 	Replicas []string

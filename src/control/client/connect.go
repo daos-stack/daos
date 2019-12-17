@@ -78,7 +78,7 @@ type Connect interface {
 	StorageFormat(reformat bool) StorageFormatResults
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	SystemMemberQuery() (common.SystemMembers, error)
-	SystemStop() (common.SystemMemberResults, error)
+	SystemStop(SystemStopReq) (common.SystemMemberResults, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
 	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }

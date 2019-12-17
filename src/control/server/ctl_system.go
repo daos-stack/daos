@@ -165,27 +165,37 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 		return nil, err
 	}
 
-	svc.log.Debug("received SystemStop RPC; preparing to shutdown DAOS system")
+	svc.log.Debug("Received SystemStop RPC")
 
 	// TODO: consider locking to prevent join attempts when shutting down
 
-	// prepare system members for shutdown
-	prepResults := svc.prepShutdown(ctx, mi)
-	if prepResults.HasErrors() {
+	if req.Prep {
+		svc.log.Debug("Preparing to shutdown DAOS system")
+
+		// prepare system members for shutdown
+		prepResults := svc.prepShutdown(ctx, mi)
 		resp.Results = common.MemberResultsToPB(prepResults)
-		return resp, errors.New("PrepShutdown HasErrors")
+		if prepResults.HasErrors() {
+			return resp, errors.New("PrepShutdown HasErrors")
+		}
 	}
 
-	svc.log.Debug("system ready for shutdown; stopping system members")
+	if req.Kill {
+		svc.log.Debug("Stopping system members")
 
-	// shutdown by stopping system members
-	results, err := svc.stopMembers(ctx, mi)
-	if err != nil {
-		return nil, err
+		// shutdown by stopping system members
+		results, err := svc.stopMembers(ctx, mi)
+		if err != nil {
+			return nil, err
+		}
+		resp.Results = common.MemberResultsToPB(results)
 	}
-	resp.Results = common.MemberResultsToPB(results)
 
-	svc.log.Debug("responding to SystemStop RPC")
+	if resp.Results == nil {
+		return nil, errors.New("response results not populated")
+	}
+
+	svc.log.Debug("Responding to SystemStop RPC")
 
 	return resp, nil
 }

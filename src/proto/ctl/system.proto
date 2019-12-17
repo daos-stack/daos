@@ -36,7 +36,10 @@ message SystemMember {
 }
 
 // SystemStopReq supplies system shutdown parameters.
-message SystemStopReq {}
+message SystemStopReq {
+	bool prep = 1; // indicates that the prep stage should be performed
+	bool kill = 2; // indicates that the kill stage should be performed
+}
 
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.

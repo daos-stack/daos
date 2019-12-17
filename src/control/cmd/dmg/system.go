@@ -63,11 +63,19 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
+	Prep bool `long:"prep" description:"Perform prep phase of controlled shutdown."`
+	Kill bool `long:"kill" description:"Perform kill phase of controlled shutdown."`
 }
 
 // Execute is run when systemStopCmd activates
 func (cmd *systemStopCmd) Execute(args []string) error {
-	results, err := cmd.conns.SystemStop()
+	if !cmd.Prep && !cmd.Kill {
+		cmd.Prep = true
+		cmd.Kill = true
+	}
+
+	req := client.SystemStopReq{Prep: cmd.Prep, Kill: cmd.Kill}
+	results, err := cmd.conns.SystemStop(req)
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
 	}

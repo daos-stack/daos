@@ -167,7 +167,7 @@ func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 	return make(common.SystemMembers, 0), nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
+func (tc *testConn) SystemStop(req client.SystemStopReq) (common.SystemMemberResults, error) {
 	tc.appendInvocation("SystemStop")
 	return make(common.SystemMemberResults, 0), nil
 }
