@@ -325,8 +325,8 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			entry_dup->dpe_str = strndup(entry->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_dup->dpe_str == NULL) {
 				D_ERROR("failed to dup label.\n");
 				daos_prop_free(prop_dup);
@@ -431,8 +431,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
-			entry_req->dpe_str = strndup(entry_reply->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			label_alloc = true;
