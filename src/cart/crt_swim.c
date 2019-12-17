@@ -188,20 +188,18 @@ static int crt_swim_send_message(struct swim_context *ctx, swim_id_t to,
 	crt_endpoint_t		 ep;
 	crt_opcode_t		 opc;
 	int			 opc_idx = 0;
+	int			 ctx_idx = csm->csm_crt_ctx_idx;
 	int			 rc;
 
-	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
-	crt_ctx = crt_context_lookup(csm->csm_crt_ctx_idx);
+	crt_ctx = crt_context_lookup(ctx_idx);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
-		D_RWLOCK_UNLOCK(&csm->csm_rwlock);
 		D_ERROR("crt_context_lookup failed\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	ep.ep_grp  = &grp_priv->gp_pub;
 	ep.ep_rank = (d_rank_t)to;
-	ep.ep_tag  = csm->csm_crt_ctx_idx;
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	ep.ep_tag  = ctx_idx;
 
 	if (nupds > 0 && upds[0].smu_state.sms_status == SWIM_MEMBER_INACTIVE)
 		opc_idx = 1;
@@ -251,7 +249,7 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 
 	D_ASSERT(csm->csm_target != NULL);
 
-	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	do {
 		if (count++ > grp_priv->gp_size) /* don't have a candidate */
 			D_GOTO(out, id = SWIM_ID_INVALID);
@@ -265,7 +263,7 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 	} while (id == self_id ||
 		 csm->csm_target->cst_state.sms_status == SWIM_MEMBER_DEAD);
 out:
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 	D_DEBUG(DB_TRACE, "select dping target: %lu => %lu\n", self_id, id);
 	return id;
 }
@@ -280,7 +278,7 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 
 	D_ASSERT(csm->csm_target != NULL);
 
-	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	do {
 		if (count++ > grp_priv->gp_size) /* don't have a candidate */
 			D_GOTO(out, id = SWIM_ID_INVALID);
@@ -294,7 +292,7 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 	} while (id == self_id ||
 		 csm->csm_target->cst_state.sms_status != SWIM_MEMBER_ALIVE);
 out:
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 	D_DEBUG(DB_TRACE, "select iping target: %lu => %lu\n", self_id, id);
 	return id;
 }
@@ -339,7 +337,7 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
 
-	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
 			*state = cst->cst_state;
@@ -347,7 +345,7 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 			break;
 		}
 	}
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 
 	return rc;
 }
@@ -361,7 +359,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
 
-	D_RWLOCK_RDLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
 			cst->cst_state = *state;
@@ -369,7 +367,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 			break;
 		}
 	}
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 
 	if (rc == 0)
 		crt_swim_notify_rank_state((d_rank_t)id, state);
@@ -475,9 +473,13 @@ out:
 int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 {
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	swim_id_t		 seld_id;
 	d_rank_t		 self = grp_priv->gp_self;
+	swim_id_t		 seld_id;
+	int			 old_ctx_idx = -1;
 	int			 rc = 0;
+
+	if (!crt_initialized() || !crt_is_service())
+		D_GOTO(out, rc = 0);
 
 	if (self == CRT_NO_RANK) {
 		D_ERROR("Self rank was not set yet\n");
@@ -489,27 +491,29 @@ int crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
-	if (csm->csm_crt_ctx_idx != crt_ctx_idx) {
-		if (csm->csm_crt_ctx_idx != -1) {
-			rc = crt_unregister_progress_cb(crt_swim_progress_cb,
-							csm->csm_crt_ctx_idx,
-							NULL);
-			if (rc)
-				D_ERROR("crt_unregister_progress_cb() failed: "
-					"rc=%d\n", rc);
-		}
-		csm->csm_crt_ctx_idx = crt_ctx_idx;
+	D_SPIN_LOCK(&csm->csm_lock);
+	if (csm->csm_crt_ctx_idx != crt_ctx_idx)
+		old_ctx_idx = csm->csm_crt_ctx_idx;
+	csm->csm_crt_ctx_idx = crt_ctx_idx;
+	seld_id = swim_self_get(csm->csm_ctx);
+	if (seld_id != (swim_id_t)self)
+		swim_self_set(csm->csm_ctx, (swim_id_t)self);
+	D_SPIN_UNLOCK(&csm->csm_lock);
+
+	if (old_ctx_idx != -1) {
+		rc = crt_unregister_progress_cb(crt_swim_progress_cb,
+						old_ctx_idx, NULL);
+		if (rc)
+			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
+				rc);
+	}
+	if (old_ctx_idx != crt_ctx_idx) {
 		rc = crt_register_progress_cb(crt_swim_progress_cb,
 					      crt_ctx_idx, NULL);
 		if (rc)
 			D_ERROR("crt_register_progress_cb() failed: rc=%d\n",
 				rc);
 	}
-	seld_id = swim_self_get(csm->csm_ctx);
-	if (seld_id != (swim_id_t)self)
-		swim_self_set(csm->csm_ctx, (swim_id_t)self);
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
 
 out:
 	return rc;
@@ -518,24 +522,32 @@ out:
 int crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx)
 {
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	int			 old_ctx_idx = -1;
 	int			 rc = -DER_NONEXIST;
+
+	if (!crt_initialized() || !crt_is_service())
+		D_GOTO(out, rc = 0);
 
 	if (crt_ctx_idx < 0) {
 		swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 		D_GOTO(out, rc = 0);
 	}
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	if (csm->csm_crt_ctx_idx == crt_ctx_idx) {
-		rc = crt_unregister_progress_cb(crt_swim_progress_cb,
-						csm->csm_crt_ctx_idx, NULL);
-		if (rc)
-			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
-				rc);
+		old_ctx_idx = csm->csm_crt_ctx_idx;
 		csm->csm_crt_ctx_idx = -1;
 		swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 	}
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
+
+	if (old_ctx_idx != -1) {
+		rc = crt_unregister_progress_cb(crt_swim_progress_cb,
+						old_ctx_idx, NULL);
+		if (rc)
+			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
+				rc);
+	}
 
 out:
 	return rc;
@@ -545,19 +557,25 @@ void crt_swim_disable_all(void)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	int			 old_ctx_idx;
 	int			 rc;
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
-	if (csm->csm_crt_ctx_idx != -1) {
+	if (!crt_initialized() || !crt_is_service())
+		return;
+
+	D_SPIN_LOCK(&csm->csm_lock);
+	old_ctx_idx = csm->csm_crt_ctx_idx;
+	csm->csm_crt_ctx_idx = -1;
+	swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
+	D_SPIN_UNLOCK(&csm->csm_lock);
+
+	if (old_ctx_idx != -1) {
 		rc = crt_unregister_progress_cb(crt_swim_progress_cb,
-						csm->csm_crt_ctx_idx, NULL);
+						old_ctx_idx, NULL);
 		if (rc)
 			D_ERROR("crt_unregister_progress_cb() failed: rc=%d\n",
 				rc);
 	}
-	csm->csm_crt_ctx_idx = -1;
-	swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
 }
 
 int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
@@ -584,7 +602,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	if (cst == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	if (D_CIRCLEQ_EMPTY(&csm->csm_head)) {
 		cst->cst_id = (swim_id_t)self;
 		cst->cst_state.sms_incarnation = 0;
@@ -630,7 +648,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		swim_self_set(csm->csm_ctx, (swim_id_t)self);
 
 out_unlock:
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 out:
 	if (cst != NULL)
 		D_FREE(cst);
@@ -655,7 +673,7 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	if (!crt_is_service())
 		D_GOTO(out, rc = 0);
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == (swim_id_t)rank) {
 			D_DEBUG(DB_TRACE, "del member {%lu %c %lu}\n",
@@ -677,7 +695,7 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			break;
 		}
 	}
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 
 	if (rc == 0)
 		D_FREE(cst);
@@ -693,7 +711,7 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 	if (!crt_initialized() || !crt_is_service())
 		return;
 
-	D_RWLOCK_WRLOCK(&csm->csm_rwlock);
+	D_SPIN_LOCK(&csm->csm_lock);
 	swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 	csm->csm_target = NULL;
 	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
@@ -704,7 +722,7 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
 		D_FREE(cst);
 	}
-	D_RWLOCK_UNLOCK(&csm->csm_rwlock);
+	D_SPIN_UNLOCK(&csm->csm_lock);
 }
 
 int

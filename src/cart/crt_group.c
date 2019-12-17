@@ -1090,7 +1090,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	csm = &grp_priv->gp_membs_swim;
 	D_CIRCLEQ_INIT(&csm->csm_head);
 
-	rc = D_RWLOCK_INIT(&csm->csm_rwlock, NULL);
+	rc = D_SPIN_INIT(&csm->csm_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc)
 		D_GOTO(out_grpid, rc);
 
@@ -1116,7 +1116,7 @@ out_swim_lock:
 		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
 		D_FREE(cst);
 	}
-	D_RWLOCK_DESTROY(&csm->csm_rwlock);
+	D_SPIN_DESTROY(&csm->csm_lock);
 out_grpid:
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 out_grp_priv:
@@ -1176,7 +1176,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
 	crt_swim_rank_del_all(grp_priv);
-	D_RWLOCK_DESTROY(&grp_priv->gp_membs_swim.csm_rwlock);
+	D_SPIN_DESTROY(&grp_priv->gp_membs_swim.csm_lock);
 
 	/* destroy the members */
 	grp_priv_fini_membs(grp_priv);

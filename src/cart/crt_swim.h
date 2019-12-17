@@ -57,7 +57,7 @@ struct crt_swim_target {
 };
 
 struct crt_swim_membs {
-	pthread_rwlock_t		 csm_rwlock;
+	pthread_spinlock_t		 csm_lock;
 	D_CIRCLEQ_HEAD(, crt_swim_target) csm_head;
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
