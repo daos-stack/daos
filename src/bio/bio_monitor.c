@@ -36,15 +36,6 @@
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define NVME_MAX_ERROR_LOG_PAGES	256
 
-/* See DAOS-3319 on this.  We should generally try to avoid reading unaligned
- * variables directly as it results in more than one instruction for each such
- * access.  The instances of these possible unaligned accesses happen with
- * default gcc on Fedora 30.
- */
-#if D_HAS_WARNING(9, "-Waddress-of-packed-member")
-	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif
-
 /*
  * Used for getting bio device state, which requires exclusive access from
  * the device owner xstream.
@@ -274,7 +265,8 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	dev_state->bds_read_only_warning = crit_warn;
 	crit_warn = hp->critical_warning.bits.volatile_memory_backup;
 	dev_state->bds_volatile_mem_warning = crit_warn;
-	dev_state->bds_media_errors = hp->media_errors;
+	memcpy(dev_state->bds_media_errors, hp->media_errors,
+	       sizeof(hp->media_errors));
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
