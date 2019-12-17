@@ -355,14 +355,14 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		struct bio_iov *biov = &bsgl->bs_iovs[0];
 
 		D_ASSERTF(bsgl->bs_nr_out == 1, "%u\n", bsgl->bs_nr_out);
-		D_ASSERTF(iod.iod_size == biov->bi_data_len,
+		D_ASSERTF(iod.iod_size == bio_iov2len(biov),
 			  DF_U64" == "DF_U64"\n", iod.iod_size,
-			  biov->bi_data_len);
+			  bio_iov2len(biov));
 		D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_SCM);
 
-		value->iov_buf = biov->bi_buf;
-		value->iov_buf_len = biov->bi_data_len;
-		value->iov_len = biov->bi_data_len;
+		value->iov_buf = bio_iov2raw_buf(biov);
+		value->iov_buf_len = bio_iov2len(biov);
+		value->iov_len = bio_iov2len(biov);
 	}
 
 	rc = bio_iod_post(vos_ioh2desc(io));
