@@ -29,17 +29,20 @@ import traceback
 from apricot import TestWithServers
 
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 
 class GlobalHandle(TestWithServers):
-    """
+    """Test pool global handles.
+
     This class contains tests to verify the ability to share pool
     handles amoung processes.
+
     :avocado: recursive
     """
 
     def tearDown(self):
+        """Tear down each test case."""
         try:
             super(GlobalHandle, self).tearDown()
         finally:
@@ -47,11 +50,11 @@ class GlobalHandle(TestWithServers):
             check_for_pool.cleanup_pools(self.hostlist_servers)
 
     def check_handle(self, buf_len, iov_len, buf, uuidstr, rank):
-        """
+        """Verify the global handle can be turned into a local handle.
+
         This gets run in a child process and verifyes the global
         handle can be turned into a local handle in another process.
         """
-
         pool = DaosPool(self.context)
         pool.set_uuid_str(uuidstr)
         pool.set_svc(rank)
@@ -67,14 +70,12 @@ class GlobalHandle(TestWithServers):
         container.create(pool.handle)
 
     def test_global_handle(self):
-        """
-        Test ID: DAO
+        """Test ID: DAOS-XXXX.
 
         Test Description: Use a pool handle in another process.
 
         :avocado: tags=all,pool,pr,tiny,poolglobalhandle
         """
-
         try:
 
             # use the uid/gid of the user running the test, these should
@@ -103,10 +104,10 @@ class GlobalHandle(TestWithServers):
             iov_len, buf_len, buf = self.pool.local2global()
 
             # this should work in the future but need on-line server addition
-            #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
-            #p = Process(target=check_handle, args=arg_list)
-            #p.start()
-            #p.join()
+            # arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
+            # p = Process(target=check_handle, args=arg_list)
+            # p.start()
+            # p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
             self.check_handle(buf_len, iov_len, buf,

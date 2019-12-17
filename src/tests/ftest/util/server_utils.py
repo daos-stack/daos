@@ -23,12 +23,7 @@
 """
 from __future__ import print_function
 
-import traceback
-import sys
 import os
-import re
-import time
-import yaml
 import getpass
 
 from command_utils import YamlParameters, BasicParameter, FormattedParameter
@@ -37,8 +32,6 @@ from command_utils import CommandWithParameters, TransportCredentials
 from command_utils import CommandFailure
 from general_utils import pcmd
 from dmg_utils import storage_format
-from write_host_file import write_host_file
-
 
 # This is out of date and should not be used
 AVOCADO_FILE = "daos_avocado_test.yaml"
@@ -368,8 +361,7 @@ class DaosServerYamlParameters(YamlParameters):
 class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
-    # NORMAL_PATTERN = "DAOS I/O server.*started"
-    NORMAL_PATTERN = "instance ready: uri:.* drpcListenerSock:"
+    NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "SCM format required"
 
     def __init__(self, path="", yaml_cfg=None, timeout=120):
@@ -407,6 +399,7 @@ class DaosServerCommand(YamlCommand):
         self.sub_command_override = None
 
     def get_sub_command_class(self):
+        # pylint: disable=redefined-variable-type
         """Get the daos_server sub command object based upon the sub-command."""
         if self.sub_command_override is not None:
             # Override the sub_command parameter
@@ -649,41 +642,37 @@ class DaosServerManager(SubprocessManager):
         self.job.sub_command_override = "start"
         self._exe_names.append("daos_io_server")
 
-    def start(self):
-        """Start the server through the runner."""
+    def prepare(self):
+        """Prepare the host to run the server."""
         self.log.info(
             "--- PREPARING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
 
-        self.server_clean()
+        # Kill any doas servers running on the hosts
+        self.kill()
 
-        # Prepare SCM storage in servers
-        storage_prep_flag = ""
-        if self.job.using_dcpm:
-            storage_prep_flag = "dcpm"
-            self.log.info("Performing SCM storage prepare in <format> mode")
-        else:
-            storage_prep_flag = "ram"
+        # Clean up any files that exist on the hosts
+        self.clean_files()
 
-        # Prepare nvme storage in servers
+        # Make sure log file has been created for ownership change
         if self.job.using_nvme:
-            if storage_prep_flag == "dcpm":
-                storage_prep_flag = "dcpm_nvme"
-            elif storage_prep_flag == "ram":
-                storage_prep_flag = "ram_nvme"
-            else:
-                storage_prep_flag = "nvme"
-            self.log.info("Performing NVMe storage prepare in <format> mode")
-            # Make sure log file has been created for ownership change
             log_file = self.job.get_config_value("log_file")
             if log_file is not None:
                 self.log.info("Creating log file: %s", log_file)
                 pcmd(self._hosts, "touch {}".format(log_file), False)
 
-        if storage_prep_flag != "ram":
-            self.prepare_storage("root", storage_prep_flag)
+        # Prepare server storage
+        if self.job.using_nvme or self.job.using_dcpm:
+            self.log.info("Preparing storage in <format> mode")
+            self.prepare_storage("root")
             self.mca.value = {"plm_rsh_args": "-l root"}
 
+    def start(self):
+        """Start the server through the runner."""
+        # Prepare the servers
+        self.prepare()
+
+        # Start the servers
         self.log.info(
             "--- STARTING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
@@ -744,13 +733,6 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
-    def server_clean(self):
-        """Prepare the hosts before starting daos server."""
-        # Kill any doas servers running on the hosts
-        self.kill()
-        # Clean up any files that exist on the hosts
-        self.clean_files()
-
     def clean_files(self, verbose=True):
         """Clean up the daos server files.
 
@@ -789,12 +771,11 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Cleaning up directories: %s", str(scm_mount))
         pcmd(self._hosts, "; ".join(clean_cmds), verbose)
 
-    def prepare_storage(self, user, device_type):
+    def prepare_storage(self, user):
         """Prepare the server storage.
 
         Args:
             user (str): username
-            device_type (str): storage device type
 
         Raises:
             ServerFailed: if there was an error preparing the storage.
@@ -808,15 +789,13 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        if device_type == "dcpm":
+        if self.job.using_dcpm and not self.job.using_nvme:
             cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif device_type == "dcpm_nvme":
-            cmd.sub_command_class.sub_command_class.hugepages.value = 4096
-        elif device_type == "ram_nvme" or device_type == "nvme":
+        elif not self.job.using_dcpm and self.job.using_nvme:
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
+
+        if self.job.using_nvme:
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
-        else:
-            raise ServerFailed("Invalid device type")
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -856,341 +835,3 @@ class DaosServerManager(SubprocessManager):
             "Changing ownership to %s for: %s", user, ", ".join(scm_mount))
         cmd = "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount))
         pcmd(self._hosts, cmd, False)
-
-    # def prepare(self):
-    #     """Prepare the storge before starting the daos_server."""
-    #     self.log.info(
-    #         "--- PREPARING SERVERS ON %s ---",
-    #         ", ".join([host.upper() for host in self._hosts]))
-
-    #     # Kill any doas servers running on the hosts
-    #     self.kill()
-
-    #     # Clean up any files that exist on the hosts
-    #     self.clean_files()
-
-    #     # Ensure the server log file can be accessed by both this user and root
-    #     if self.job.using_dcpm or self.job.using_nvme:
-    #         log_file = self.job.get_config_value("log_file")
-    #         if log_file is not None:
-    #             self.log.info("Creating log file: %s", log_file)
-    #             pcmd(self._hosts, "touch {}".format(log_file), False)
-
-    #     # Prepare SCM/NVMe storage if present
-    #     self.prepare_storage("root")
-
-    #     # Issue the orterun command as root with SCM or NVMe storage
-    #     if self.job.using_dcpm or self.job.using_nvme:
-    #         self.runner.mca.value = {"plm_rsh_args": "-l root"}
-
-    # def prepare_storage(self, user):
-    #     """Prepare the server storage.
-
-    #     Args:
-    #         user (str): username
-
-    #     Raises:
-    #         ServerFailed: if there was an error preparing the storage.
-
-    #     """
-    #     if self.job.using_dcpm or self.job.using_nvme:
-    #         cmd = DaosServerCommand(self.job.path)
-    #         cmd.sudo = True
-    #         cmd.set_sub_command("storage")
-    #         cmd.sub_command_class.set_sub_command("prepare")
-    #         cmd.sub_command_class.sub_command_class.target_user.value = user
-    #         cmd.sub_command_class.sub_command_class.force.value = True
-
-    #         prepare_type = "SCM and NVMe"
-    #         if self.job.using_dcpm and not self.job.using_nvme:
-    #             prepare_type = "SCM"
-    #             cmd.sub_command_class.sub_command_class.scm_only.value = True
-    #         elif not self.job.using_dcpm and self.job.using_nvme:
-    #             prepare_type = "NVMe"
-    #             cmd.sub_command_class.sub_command_class.nvme_only.value = True
-
-    #         if self.job.using_nvme:
-    #             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
-
-    #         self.log.info(
-    #             "Preparing DAOS %s server storage: %s", prepare_type, str(cmd))
-    #         result = pcmd(self._hosts, str(cmd), timeout=120)
-    #         if len(result) > 1 or 0 not in result:
-    #             raise ServerFailed("Error preparing storage")
-
-# def storage_prepare(hosts, user, device_type, bin_path):
-#     """Prepare the server storage using the DAOS server's yaml settings file.
-
-#     Args:
-#         hosts (str): a string of comma-separated host names
-#         user (): Username
-#         device_type (): scm or nvme
-#         bin_path ():
-
-#     Raises:
-#         ServerFailed: if server failed to prepare storage
-#     """
-#     # Get the daos_server from the install path. Useful for testing
-#     # with daos built binaries.
-#     dev_param = ""
-#     device_args = ""
-#     if device_type == "dcpm":
-#         dev_param = "-s"
-#     elif device_type == "dcpm_nvme":
-#         device_args = " --hugepages=4096"
-#     elif device_type == "ram_nvme" or device_type == "nvme":
-#         dev_param = "-n"
-#         device_args = " --hugepages=4096"
-#     else:
-#         raise ServerFailed("Invalid device type")
-#     cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
-#            .format(, dev_param, user, device_args))
-#     result = pcmd(hosts, cmd, timeout=120)
-#     if len(result) > 1 or 0 not in result:
-#         raise ServerFailed("Error preparing NVMe storage")
-
-
-# def storage_reset(hosts):
-#     """
-#     Reset the Storage on servers using the DAOS server's yaml settings file.
-#     NOTE: Don't enhance this method to reset SCM. SCM
-#     will not be in a useful state for running next tests.
-#     Args:
-#         hosts (str): a string of comma-separated host names
-#     Raises:
-#         ServerFailed: if server failed to reset storage
-#     """
-#     daos_srv_bin = get_file_path("bin/daos_server")
-#     cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
-#     result = pcmd(hosts, cmd)
-#     if len(result) > 1 or 0 not in result:
-#         raise ServerFailed("Error resetting NVMe storage")
-
-
-# def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
-#                clean=True):
-#     """Launch DAOS servers in accordance with the supplied hostfile.
-
-#     Args:
-#         test (Test): avocado Test object
-#         hostfile (str): hostfile defining on which hosts to start servers
-#         setname (str): session name
-#         uri_path (str, optional): path to uri file. Defaults to None.
-#         env_dict (dict, optional): dictionary on env variable names and values.
-#             Defaults to None.
-#         clean (bool, optional): clean the mount point. Defaults to True.
-
-#     Raises:
-#         ServerFailed: if there is an error starting the servers
-
-#     """
-#     global SESSIONS    # pylint: disable=global-variable-not-assigned
-#     try:
-#         servers = (
-#             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
-#         server_count = len(servers)
-
-#         # Pile of build time variables
-#         with open("../../.build_vars.json") as json_vars:
-#             build_vars = json.load(json_vars)
-
-#         # Create the DAOS server configuration yaml file to pass
-#         # with daos_server -o <FILE_NAME>
-#         print("Creating the server yaml file in {}".format(test.tmp))
-#         server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
-#         server_config = DaosServerConfig()
-#         server_config.get_params(test)
-#         access_points = ":".join((servers[0], str(server_config.port)))
-#         server_config.access_points.value = access_points.split()
-#         # if hasattr(test, "server_log") and test.server_log is not None:
-#         #     server_config.update_log_file(test.server_log)
-#         server_config.create_yaml(server_yaml)
-
-#         # first make sure there are no existing servers running
-#         print("Removing any existing server processes")
-#         kill_server(servers)
-
-#         # clean the tmpfs on the servers
-#         if clean:
-#             print("Cleaning the server tmpfs directories")
-#             result = pcmd(
-#                 servers,
-#                 "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-#                 "xargs -0r rm -rf",
-#                 verbose=False)
-#             if len(result) > 1 or 0 not in result:
-#                 raise ServerFailed(
-#                     "Error cleaning tmpfs on servers: {}".format(
-#                         ", ".join(
-#                             [str(result[key]) for key in result if key != 0])))
-
-#         server_cmd = [
-#             os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
-#             "--np", str(server_count)]
-#         if uri_path is not None:
-#             server_cmd.extend(["--report-uri", uri_path])
-#         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
-
-#         # Add any user supplied environment
-#         if env_dict is not None:
-#             for key, value in env_dict.items():
-#                 os.environ[key] = value
-#                 server_cmd.extend(["-x", "{}={}".format(key, value)])
-
-#         # the remote orte needs to know where to find daos, in the
-#         # case that it's not in the system prefix
-#         # but it should already be in our PATH, so just pass our
-#         # PATH along to the remote
-#         if build_vars["PREFIX"] != "/usr":
-#             server_cmd.extend(["-x", "PATH"])
-
-#         # Run server in insecure mode until Certificate tests are in place
-#         server_cmd.extend(
-#             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
-#              "--debug",
-#              "--config", server_yaml,
-#              "start", "-i", "--recreate-superblocks"])
-
-#         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
-
-#         resource.setrlimit(
-#             resource.RLIMIT_CORE,
-#             (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
-
-#         SESSIONS[setname] = subprocess.Popen(server_cmd,
-#                                              stdout=subprocess.PIPE,
-#                                              stderr=subprocess.PIPE)
-#         fdesc = SESSIONS[setname].stdout.fileno()
-#         fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
-#         fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
-#         timeout = 600
-#         start_time = time.time()
-#         matches = 0
-#         pattern = "DAOS I/O server.*started"
-#         expected_data = "Starting Servers\n"
-#         while True:
-#             output = ""
-#             try:
-#                 output = SESSIONS[setname].stdout.read()
-#             except IOError as excpn:
-#                 if excpn.errno != errno.EAGAIN:
-#                     raise ServerFailed("Server didn't start: {}".format(excpn))
-#                 continue
-#             match = re.findall(pattern, output)
-#             expected_data += output
-#             matches += len(match)
-#             if not output or matches == server_count or \
-#                time.time() - start_time > timeout:
-#                 print("<SERVER>: {}".format(expected_data))
-#                 if matches != server_count:
-#                     raise ServerFailed("Server didn't start!")
-#                 break
-#         print(
-#             "<SERVER> server started and took {} seconds to start".format(
-#                 time.time() - start_time))
-
-#     except Exception as error:
-#         print("<SERVER> Exception occurred: {0}".format(str(error)))
-#         traceback.print_exception(error.__class__, error, sys.exc_info()[2])
-#         # We need to end the session now -- exit the shell
-#         try:
-#             SESSIONS[setname].send_signal(signal.SIGINT)
-#             time.sleep(5)
-#             # get the stderr
-#             error = SESSIONS[setname].stderr.read()
-#             if SESSIONS[setname].poll() is None:
-#                 SESSIONS[setname].kill()
-#             retcode = SESSIONS[setname].wait()
-#             print(
-#                 "<SERVER> server start return code: {}\nstderr:\n{}".format(
-#                     retcode, error))
-#         except KeyError:
-#             pass
-#         raise ServerFailed("Server didn't start!")
-
-
-# def stop_server(setname=None, hosts=None):
-#     """Stop the daos servers.
-
-#     Attempt to initiate an orderly shutdown of all orterun processes it has
-#     spawned by sending a ctrl-c to the process matching the setname (or all
-#     processes if no setname is provided).
-
-#     If a list of hosts is provided, verify that all daos server processes are
-#     dead.  Report an error if any processes are found and attempt to forcably
-#     kill the processes.
-
-#     Args:
-#         setname (str, optional): server group name used to match the session
-#             used to start the server. Defaults to None.
-#         hosts (list, optional): list of hosts running the server processes.
-#             Defaults to None.
-
-#     Raises:
-#         ServerFailed: if there was an error attempting to send a signal to stop
-#             the processes running the servers or after sending the signal if
-#             there are processes stiull running.
-
-#     """
-#     global SESSIONS    # pylint: disable=global-variable-not-assigned
-#     try:
-#         if setname is None:
-#             for _key, val in SESSIONS.items():
-#                 val.send_signal(signal.SIGINT)
-#                 time.sleep(5)
-#                 if val.poll() is None:
-#                     val.kill()
-#                 val.wait()
-#         else:
-#             SESSIONS[setname].send_signal(signal.SIGINT)
-#             time.sleep(5)
-#             if SESSIONS[setname].poll() is None:
-#                 SESSIONS[setname].kill()
-#             SESSIONS[setname].wait()
-#         print("<SERVER> server stopped")
-
-#     except Exception as error:
-#         print("<SERVER> Exception occurred: {0}".format(str(error)))
-#         raise ServerFailed("Server didn't stop!")
-
-#     if not hosts:
-#         return
-
-#     # Make sure the servers actually stopped.  Give them time to stop first
-#     # pgrep exit status:
-#     #   0 - One or more processes matched the criteria.
-#     #   1 - No processes matched.
-#     #   2 - Syntax error in the command line.
-#     #   3 - Fatal error: out of memory etc.
-#     time.sleep(5)
-#     result = pcmd(
-#         hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
-#     if len(result) > 1 or 1 not in result:
-#         bad_hosts = [
-#             node for key in result if key != 1 for node in list(result[key])]
-#         kill_server(bad_hosts)
-#         raise ServerFailed(
-#             "DAOS server processes detected after attempted stop on {}".format(
-#                 ", ".join([str(result[key]) for key in result if key != 1])))
-
-#     # we can also have orphaned ssh processes that started an orted on a
-#     # remote node but never get cleaned up when that remote node spontaneiously
-#     # reboots
-#     subprocess.call(["pkill", "^ssh$"])
-
-
-# def kill_server(hosts):
-#     """Forcably kill any daos server processes running on the specified hosts.
-
-#     Sometimes stop doesn't get everything.  Really whack everything with this.
-
-#     Args:
-#         hosts (list): list of host names where servers are running
-#     """
-#     kill_cmds = [
-#         "pkill '(daos_server|daos_io_server)' --signal INT",
-#         "sleep 5",
-#         "pkill '(daos_server|daos_io_server)' --signal KILL",
-#     ]
-#     # Intentionally ignoring the exit status of the command
-#     pcmd(hosts, "; ".join(kill_cmds), False, None, None)

@@ -25,22 +25,22 @@ from __future__ import print_function
 
 import traceback
 import ctypes
-import agent_utils
-import server_utils
-import write_host_file
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 from apricot import TestWithServers, skipForTicket
 
 
 class BadConnectTest(TestWithServers):
-    """
+    """Test pool connect.
+
     Tests pool connect calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
+
     :avocado: recursive
     """
 
     # start servers, establish file locations, etc.
     def setUp(self):
+        """Set up each test case."""
         super(BadConnectTest, self).setUp()
 
         # NULL is causing connect to blow up so skip that test for now
@@ -49,15 +49,12 @@ class BadConnectTest(TestWithServers):
         if connectuuid == 'NULLPTR':
             self.cancel("skipping null pointer test until DAOS-1781 is fixed")
 
-
     @skipForTicket("DAOS-3819")
     def test_connect(self):
-        """
-        Pass bad parameters to pool connect
+        """Pass bad parameters to pool connect.
 
         :avocado: tags=all,pool,full_regression,tiny,badconnect
         """
-
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/connecttests/createmode/')
         createuid = self.params.get("uid", '/run/connecttests/uids/createuid/')

@@ -25,17 +25,12 @@ from __future__ import print_function
 
 import os
 import json
-import re
 from getpass import getuser
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
-from avocado.utils import process
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
-import agent_utils
-import write_host_file
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from configuration_utils import Configuration
 from command_utils import CommonConfig, YamlParameters, BasicParameter
@@ -80,36 +75,6 @@ class Test(avocadoTest):
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
 
-        self.basepath = None
-        self.prefix = None
-        self.bin = None
-        self.daos_test = None
-        self.daosctl = None
-        self.cart_prefix = None
-        self.cart_bin = None
-        self.ompi_prefix = None
-        self.ompi_bin = None
-        self.orterun = None
-        self.tmp = None
-        self.server_group = None
-        self.context = None
-        self.pool = None
-        self.container = None
-        self.hostlist_servers = None
-        self.hostfile_servers = None
-        self.hostfile_servers_slots = 1
-        self.partition_servers = None
-        self.hostlist_clients = None
-        self.hostfile_clients = None
-        self.hostfile_clients_slots = 1
-        self.partition_clients = None
-        self.d_log = None
-        self.uri_file = None
-        self.fault_file = None
-        self.debug = False
-        self.config = None
-        self.test_log = None
-
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
         """Skip a test due to a ticket needing to be completed."""
@@ -122,6 +87,26 @@ class TestWithoutServers(Test):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super(TestWithoutServers, self).__init__(*args, **kwargs)
+
+        self.basepath = None
+        self.prefix = None
+        self.bin = None
+        self.daos_test = None
+        self.daosctl = None
+        self.cart_prefix = None
+        self.cart_bin = None
+        self.ompi_prefix = None
+        self.ompi_bin = None
+        self.orterun = None
+        self.tmp = None
+        self.fault_file = None
+        self.context = None
+        self.d_log = None
+        self.test_log = None
 
     def setUp(self):
         """Set up run before each test."""
@@ -174,20 +159,6 @@ class TestWithoutServers(Test):
         if self.fault_file:
             os.remove(self.fault_file)
 
-    # def multi_log(self, msg, log_type="info"):
-    #     """Log the provided message to the daos log and the test log.
-
-    #     Args:
-    #         msg (str): message to log
-    #         log_type (str, optional): logging method name to call with the
-    #             message.  Defaults to "info".
-    #     """
-    #     for log_object in (self.d_log, self.log):
-    #         try:
-    #             getattr(log_object, log_type)(msg)
-    #         except AttributeError as error:
-    #             self.fail("Error logging '{}': {}".format(msg, error))
-
 
 class TestWithServers(TestWithoutServers):
     """Run tests with DAOS servers and at least one client.
@@ -202,10 +173,24 @@ class TestWithServers(TestWithoutServers):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
 
-        self.agent_managers = []
-        self.server_managers = []
+        self.server_group = None
+        self.hostlist_servers = None
+        self.hostlist_clients = None
+        self.partition_servers = None
+        self.partition_clients = None
+        self.config = None
+        self.debug = False
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.hostfile_servers = None
+        self.hostfile_clients = None
+        self.hostfile_servers_slots = 1
+        self.hostfile_clients_slots = 1
+        self.agent_managers = []
+        self.server_managers = []
+        self.pool = None
+        self.container = None
+        self.uri_file = None
         self.agent_log = None
         self.server_log = None
         self.client_log = None
@@ -282,12 +267,6 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # # Create host files
-        # if self.hostlist_clients:
-        #     self.hostfile_clients = write_host_file.write_host_file(
-        #         self.hostlist_clients, self.workdir,
-        #         self.hostfile_clients_slots)
-
         # Start the clients (agents)
         if self.setup_start_agents:
             self.start_agents()
@@ -318,11 +297,13 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(agent_groups, dict):
             for group, hosts in agent_groups.items():
-                # Use the unique agent group name to create a unique yaml file
                 transport = DaosAgentTransportCredentials()
-                self.add_agent_manager(
-                    self.get_config_file(group, "agent"),
-                    self.get_common_config(transport, group, hosts))
+                # Use the unique agent group name to create a unique yaml file
+                config_file = self.get_config_file(group, "agent")
+                # Setup the access points with the server hosts
+                common_cfg = self.get_common_config(
+                        transport, group, self.hostlist_servers)
+                self.add_agent_manager(config_file, common_cfg)
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
@@ -352,11 +333,12 @@ class TestWithServers(TestWithoutServers):
 
         if isinstance(server_groups, dict):
             for group, hosts in server_groups.items():
-                # Use the unique server group name to create a unique yaml file
                 transport = DaosServerTransportCredentials()
-                self.add_server_manager(
-                    self.get_config_file(group, "server"),
-                    self.get_common_config(transport, group, hosts))
+                # Use the unique agent group name to create a unique yaml file
+                config_file = self.get_config_file(group, "server")
+                # Setup the access points with the server hosts
+                common_cfg = self.get_common_config(transport, group, hosts)
+                self.add_server_manager(config_file, common_cfg)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -392,12 +374,12 @@ class TestWithServers(TestWithoutServers):
         common_cfg.update_hosts(hosts)
         return common_cfg
 
-    def add_agent_manager(self, yaml_file=None, common_cfg=None, timeout=60):
+    def add_agent_manager(self, config_file=None, common_cfg=None, timeout=60):
         """Add a new daos agent manager object to the agent manager list.
 
         Args:
-            yaml_file (str, optional): daos agent config file name. Defaults to
-                None, which will use a default file name.
+            config_file (str, optional): daos agent config file name. Defaults
+                to None, which will use a default file name.
             common_cfg (CommonConfig, optional): daos agent config file
                 settings shared between the agent and server. Defaults to None,
                 which uses the class CommonConfig.
@@ -407,14 +389,15 @@ class TestWithServers(TestWithoutServers):
         self.log.info("--- ADDING AGENT MANAGER ---")
 
         # Setup defaults
-        if yaml_file is None:
-            yaml_file = os.path.join(self.tmp, "test_daos_agent.yaml")
+        if config_file is None:
+            config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                "daos_server", DaosAgentTransportCredentials())
+            common_cfg = self.get_common_config(
+                DaosAgentTransportCredentials(), self.server_group,
+                self.hostfile_servers)
 
         # Create an AgentCommand to manage with a new AgentManager object
-        agent_cfg = DaosAgentYamlParameters(yaml_file, common_cfg)
+        agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
         if self.agent_log is not None:
             self.log.info(
                 "Using a test-specific daos_agent log file: %s",
@@ -423,15 +406,15 @@ class TestWithServers(TestWithoutServers):
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
         self.agent_managers.append(DaosAgentManager(self.ompi_bin, agent_cmd))
 
-    def add_server_manager(self, yaml_file=None, common_cfg=None, timeout=60):
+    def add_server_manager(self, config_file=None, common_cfg=None, timeout=60):
         """Add a new daos server manager object to the server manager list.
 
         When adding multiple server managers unique yaml config file names
         and common config setting (due to the server group name) should be used.
 
         Args:
-            yaml_file (str, optional): daos server config file name. Defaults to
-                None, which will use a default file name.
+            config_file (str, optional): daos server config file name. Defaults
+                to None, which will use a default file name.
             common_cfg (CommonConfig, optional): daos server config file
                 settings shared between the agent and server. Defaults to None,
                 which uses the class CommonConfig.
@@ -441,14 +424,15 @@ class TestWithServers(TestWithoutServers):
         self.log.info("--- ADDING SERVER MANAGER ---")
 
         # Setup defaults
-        if yaml_file is None:
-            yaml_file = os.path.join(self.tmp, "test_daos_server.yaml")
+        if config_file is None:
+            config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
-            common_cfg = CommonConfig(
-                "daos_server", DaosServerTransportCredentials())
+            common_cfg = self.get_common_config(
+                DaosServerTransportCredentials(), self.server_group,
+                self.hostfile_servers)
 
         # Create an ServerCommand to manage with a new ServerManager object
-        server_cfg = DaosServerYamlParameters(yaml_file, common_cfg)
+        server_cfg = DaosServerYamlParameters(config_file, common_cfg)
         if self.server_log is not None:
             self.log.info(
                 "Using a test-specific daos_server log file: %s",
@@ -646,78 +630,6 @@ class TestWithServers(TestWithoutServers):
                     error_list.append(
                         "Error stopping {}: {}".format(name, error))
         return error_list
-
-    # def start_servers(self, server_groups=None):
-    #     """Start the daos_server processes.
-
-    #     Args:
-    #         server_groups (dict, optional): [description]. Defaults to None.
-    #     """
-    #     if server_groups is None:
-    #         server_groups = {self.server_group: self.hostlist_servers}
-
-    #     if isinstance(server_groups, dict):
-    #         # Optionally start servers on a different subset of hosts with a
-    #         # different server group
-    #         for group, hosts in server_groups.items():
-    #             self.log.info(
-    #                 "Starting servers: group=%s, hosts=%s", group, hosts)
-    #             self.server_managers.append(ServerManager(
-    #                 self.bin,
-    #                 os.path.join(self.ompi_prefix, "bin")))
-    #             self.server_managers[-1].get_params(self)
-    #             self.server_managers[-1].runner.job.yaml_params.name = group
-    #             self.server_managers[-1].hosts = (
-    #                 hosts, self.workdir, self.hostfile_servers_slots)
-    #             if self.prefix != "/usr":
-    #                 if self.server_managers[-1].runner.export.value is None:
-    #                     self.server_managers[-1].runner.export.value = []
-    #                 self.server_managers[-1].runner.export.value.extend(
-    #                     ["PATH"])
-    #             try:
-    #                 yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
-    #                 self.server_managers[-1].start(yamlfile)
-    #             except ServerFailed as error:
-    #                 self.multi_log("  {}".format(error))
-    #                 self.fail("Error starting server: {}".format(error))
-
-    # def get_partition_hosts(self, partition_key, host_list):
-    #     """[summary].
-
-    #     Args:
-    #         partition_key ([type]): [description]
-    #         host_list ([type]): [description]
-
-    #     Returns:
-    #         tuple: [description]
-
-    #     """
-    #     hosts = []
-    #     partiton_name = self.params.get(partition_key, "/run/hosts/*")
-    #     if partiton_name is not None:
-    #         cmd = "scontrol show partition {}".format(partiton_name)
-
-    #         try:
-    #             result = process.run(cmd, shell=True, timeout=10)
-    #         except process.CmdError as error:
-    #             self.log.warning(
-    #                 "Unable to obtain hosts from the {} slurm "
-    #                 "partition: {}".format(partiton_name, error))
-    #             result = None
-    #         if result:
-    #             output = result.stdout
-    #             try:
-    #                 hosts = list(
-    #                     NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
-    #             except (NodeSetParseError, IndexError):
-    #                 self.log.warning(
-    #                     "Unable to obtain hosts from the {} slurm partition "
-    #                     "output: {}".format(partiton_name, output))
-
-    #     if hosts:
-    #         return hosts, partiton_name
-    #     else:
-    #         return host_list, None
 
     def update_log_file_names(self, test_name=None):
         """Set unique log file names for agents, servers, and clients.

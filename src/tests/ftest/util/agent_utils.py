@@ -21,13 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from logging import getLogger
 import socket
 
 from command_utils import BasicParameter, FormattedParameter, YamlParameters
 from command_utils import YamlCommand, SubprocessManager, CommandFailure
 from command_utils import TransportCredentials
-from general_utils import pcmd
 
 
 def include_local_host(hosts):

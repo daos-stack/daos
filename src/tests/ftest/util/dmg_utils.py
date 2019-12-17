@@ -440,6 +440,7 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
 def pool_create(path, host_port, scm_size, insecure=True, group=None,
                 user=None, acl_file=None, nvme_size=None, ranks=None,
                 nsvc=None, sys=None):
+    # pylint: disable=too-many-arguments
     """Execute pool create command through dmg tool to servers provided.
 
     Args:

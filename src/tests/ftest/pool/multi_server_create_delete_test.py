@@ -27,10 +27,7 @@ import os
 import traceback
 from avocado.utils import process
 from apricot import TestWithServers, skipForTicket
-import agent_utils
-import server_utils
 import check_for_pool
-import write_host_file
 
 
 # pylint: disable=broad-except

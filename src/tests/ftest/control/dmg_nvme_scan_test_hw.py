@@ -25,6 +25,7 @@ from control_test_base import ControlTestBase
 
 
 class DmgNvmeScanTest(ControlTestBase):
+    # pylint disable=too-many-ancestors
     """Dmg command test.
 
     Test Class Description:

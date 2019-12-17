@@ -26,15 +26,13 @@ from __future__ import print_function
 import os
 import traceback
 import ctypes
-import agent_utils
-import server_utils
-import write_host_file
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 
 
 class BadExcludeTest(TestWithServers):
-    """
+    """Test pool target exclusion.
+
     Tests target exclude calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
 
@@ -42,8 +40,7 @@ class BadExcludeTest(TestWithServers):
     """
 
     def test_exclude(self):
-        """
-        Pass bad parameters to pool connect
+        """Pass bad parameters to pool connect.
 
         :avocado: tags=all,pool,full_regression,tiny,badexclude
         """

@@ -25,7 +25,6 @@ from __future__ import print_function
 import os
 import traceback
 import random
-import string
 from apricot import TestWithServers
 from general_utils import get_random_string
 from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
@@ -52,9 +51,7 @@ class Snapshot(TestWithServers):
     """
 
     def setUp(self):
-        """
-        set up method
-        """
+        """Set up each test case."""
         super(Snapshot, self).setUp()
         # get parameters from yaml file, set default
         createmode = self.params.get("mode",
@@ -341,6 +338,7 @@ class Snapshot(TestWithServers):
         return
 
     def test_snapshots(self):
+        # pylint: disable=too-many-locals
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots
@@ -472,16 +470,16 @@ class Snapshot(TestWithServers):
                           "still available", num_transactions)
 
         # (5)Verify the snapshots data
-        for ind in range(len(test_data)):
-            ss_number = ind + 1
+        for index, data in enumerate(test_data):
+            ss_number = index + 1
             self.log.info(
                 "=(5.%s)Verify the snapshot number %s:", ss_number, ss_number)
             self.display_snapshot_test_data(test_data, ss_number)
-            coh = test_data[ind]["coh"]
-            epoch = test_data[ind]["container_epoch"]
-            current_ss = test_data[ind]["snapshot"]
-            obj = test_data[ind]["tst_obj"]
-            tst_data = test_data[ind]["tst_data"]
+            coh = data["coh"]
+            epoch = data["container_epoch"]
+            current_ss = data["snapshot"]
+            obj = data["tst_obj"]
+            tst_data = data["tst_data"]
             datasize = len(tst_data) + 1
             try:
                 obj.open()
@@ -543,4 +541,3 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(8)Error on snapshot.destroy. {}".format(str(error)))
         self.log.info("===DAOS container Multiple snapshots test passed.")
-

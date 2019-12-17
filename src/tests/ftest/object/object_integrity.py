@@ -27,9 +27,6 @@ import ctypes
 import time
 import avocado
 import random
-import agent_utils
-import server_utils
-import write_host_file
 
 from pydaos.raw import (DaosPool, DaosContainer, IORequest,
                         DaosObj, DaosApiError)

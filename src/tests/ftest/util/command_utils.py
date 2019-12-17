@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 from logging import getLogger
 import time
 import os
@@ -29,7 +30,7 @@ import signal
 import yaml
 
 from avocado.utils import process
-from general_utils import pcmd, check_file_exists, stop_processes
+from general_utils import check_file_exists, stop_processes
 from write_host_file import write_host_file
 
 
@@ -1209,8 +1210,14 @@ class CommonConfig(YamlParameters):
         """
         yaml_data = super(CommonConfig, self).get_yaml_data()
         yaml_data.pop("pmix", None)
+
+        # For now only include the first host in the access point list
         if self.access_points.hosts:
-            yaml_data["access_points"] = self.access_points.hosts[:1]
+            yaml_data["access_points"] = [
+                ":".join([host, str(self.port.value)])
+                for host in self.access_points.hosts[:1]
+            ]
+
         return yaml_data
 
 

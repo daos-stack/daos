@@ -27,20 +27,23 @@ import os
 import sys
 import ctypes
 import avocado
-from apricot import Test, skipForTicket
 
-
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
 
-class CreateManyDkeys(Test):
-    """
+
+class CreateManyDkeys(TestWithServers):
+    """Create many dkeys test.
+
     Test Class Description:
         Tests that create large numbers of keys in objects/containers and then
         destroy the containers and verify the space has been reclaimed.
 
     :avocado: recursive
     """
+
     def setUp(self):
+        """Set up each test case."""
         super(CreateManyDkeys, self).setUp()
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -51,19 +54,15 @@ class CreateManyDkeys(Test):
                          None)
         self.pool.connect(1 << 1)
 
-    def tearDown(self):
-        try:
-            if self.pool:
-                self.pool.destroy(1)
-        finally:
-            super(CreateManyDkeys, self).tearDown()
-
     def write_a_bunch_of_values(self, how_many):
-        """
+        """Write a bunch of values.
+
         Write data to an object, each with a dkey and akey.  The how_many
         parameter determines how many key:value pairs are written.
-        """
 
+        Args:
+            how_many (int): number of values to write
+        """
         self.container = DaosContainer(self.context)
         self.container.create(self.pool.handle)
         self.container.open()
@@ -85,7 +84,7 @@ class CreateManyDkeys(Test):
                                 c_akey,
                                 c_value,
                                 c_size,
-                                c_epoch)
+                                epoch)
 
             if key > last_key:
                 print("written: {}".format(key))
@@ -126,20 +125,21 @@ class CreateManyDkeys(Test):
     @avocado.fail_on(DaosApiError)
     @skipForTicket("DAOS-1721")
     def test_many_dkeys(self):
-        """
-        Test ID: DAOS-1701
-        Test Description: Test many of dkeys in same object.
-        Use Cases: 1. large key counts
-                   2. space reclaimation after destroy
+        """Test ID: DAOS-1701.
+
+        Test Description:
+            Test many of dkeys in same object.
+
+        Use Cases:
+            1. large key counts
+            2. space reclaimation after destroy
+
         :avocado: tags=all,full,small,object,many_dkeys
-
         """
-
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
         # write a lot of individual data items, verify them, then destroy
         self.write_a_bunch_of_values(no_of_dkeys)
-
 
         # do it again, which should verify the first container
         # was truely destroyed because a second round won't fit otherwise
