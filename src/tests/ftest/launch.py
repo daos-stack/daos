@@ -163,7 +163,6 @@ def set_test_environment():
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
-    os.environ["DD_SUBSYS"] = "mgmt,io,md,epc,rebuild"
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(

@@ -194,7 +194,8 @@ class DaosServerConfig(ObjectWithParameters):
                  "CRT_CTX_SHARE_ADDR=0",
                  "CRT_TIMEOUT=30",
                  "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000"]
+                 "FI_SOCKETS_CONN_TIMEOUT=2000",
+                 "DD_SUBSYS=mgmt,io,md,epc,rebuild"]
             )
 
             # Storage definition parameters:
