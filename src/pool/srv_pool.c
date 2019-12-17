@@ -338,17 +338,16 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_FREE(entry_def->dpe_str);
-			entry_def->dpe_str = strndup(entry->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
 		case DAOS_PROP_PO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_FREE(entry_def->dpe_str);
-			entry_def->dpe_str =
-					strndup(entry->dpe_str,
-						DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
@@ -1350,8 +1349,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
-		prop->dpp_entries[idx].dpe_str =
-			strndup(value.iov_buf, value.iov_len);
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
 			return -DER_NOMEM;
 		idx++;
@@ -1417,8 +1416,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
-		prop->dpp_entries[idx].dpe_str =
-			strndup(value.iov_buf, value.iov_len);
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
 			return -DER_NOMEM;
 		idx++;
@@ -1437,8 +1436,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
-		prop->dpp_entries[idx].dpe_str =
-			strndup(value.iov_buf, value.iov_len);
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
 			return -DER_NOMEM;
 		idx++;
