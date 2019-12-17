@@ -115,6 +115,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
+Requires: hwloc
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 # ensure we get exactly the right cart RPM
