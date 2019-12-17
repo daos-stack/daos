@@ -33,7 +33,7 @@ import (
 
 // MembersToPB converts internal member structs to protobuf equivalents.
 func MembersToPB(members SystemMembers) (pbMembers []*ctlpb.SystemMember, err error) {
-	pbMembers = make([]*ctlpb.SystemMember, len(members))
+	pbMembers = make([]*ctlpb.SystemMember, 0, len(members))
 
 	for _, m := range members {
 		pbMembers = append(pbMembers, &ctlpb.SystemMember{
@@ -49,7 +49,7 @@ func MembersToPB(members SystemMembers) (pbMembers []*ctlpb.SystemMember, err er
 // Don't populate member Addr field if it can't be resolved.
 func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) (members SystemMembers, err error) {
 	var addr net.Addr
-	members = make(SystemMembers, len(pbMembers))
+	members = make(SystemMembers, 0, len(pbMembers))
 
 	for _, m := range pbMembers {
 		addr, err = net.ResolveTCPAddr("tcp", m.Addr)

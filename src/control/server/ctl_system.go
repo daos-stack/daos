@@ -58,7 +58,7 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 	}
 	resp.Members = membersPB
 
-	svc.log.Debug("responding to SystemMemberQuery RPC")
+	svc.log.Debugf("responding to SystemMemberQuery RPC; resp.Members: %+v", resp.Members)
 
 	return resp, nil
 }
@@ -167,8 +167,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 
 	svc.log.Debug("received SystemStop RPC; preparing to shutdown DAOS system")
 
-	mi.Lock() // prevent join attempts when performing controlled shutdown
-	defer mi.Unlock()
+	// TODO: consider locking to prevent join attempts when shutting down
 
 	// prepare system members for shutdown
 	prepResults := svc.prepShutdown(ctx, mi)
