@@ -35,13 +35,17 @@ class FioSmall(FioBase):
             Test Fio in small config.
         Use Cases:
             Aim of this test is to test different combinations
-            of following configs:
-            1/8 Clients
-            num of files/dirs: 100
-            with/without unique working dir for each task
-            write bytes: 0|4K
-            read bytes: 0|4K
-            depth of hierarchical directory structure: 0|5
+            of following fio configs:
+            1 Client
+            ioengine: 'libaio'
+            threads: 16
+            verify: 'crc64'
+            iodepth: 16
+            blocksize: 256B|1M
+            size: 1M|1G
+            read_write: rw|randrw
+            numjobs: 1
+
         :avocado: tags=all,pr,hw,fio,fiosmall
         """
         self.execute_fio()
