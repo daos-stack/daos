@@ -41,11 +41,11 @@ const (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare   storagePrepareCmd   `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan      storageScanCmd      `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format    storageFormatCmd    `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query     storageQueryCmd     `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	SetFaulty storageSetFaultyCmd `command:"setfaulty" alias:"sf" descrption:"Manually set the device state of an NVMe SSD to FAULTY."`
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -202,16 +202,21 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 	return nil
 }
 
-// storageSetFaultyCmd is the struct representing the set-faulty storage subcommand
-type storageSetFaultyCmd struct {
-	logCmd
-	connectedCmd
-	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
+// setFaultyCmd is the struct representing the set storage subcommand
+type setFaultyCmd struct {
+	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" alias:"n" description:"Set an NVMe SSD device state to FAULTY."`
 }
 
-// Execute is run when storageSetFaultyCmd activates
+// nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
+type nvmeSetFaultyCmd struct {
+	logCmd
+	connectedCmd
+	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to set" required:"1"`
+}
+
+// Execute is run when nvmeSetFaultyCmd activates
 // Set the SMD device state of the given device to "FAULTY"
-func (s *storageSetFaultyCmd) Execute(args []string) error {
+func (s *nvmeSetFaultyCmd) Execute(args []string) error {
 	// Devuuid is a required command parameter
 	req := &mgmtpb.DevStateReq{DevUuid: s.Devuuid}
 
