@@ -285,6 +285,10 @@ func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.PrepShutdownReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+	return &mgmtpb.DaosResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
 }
@@ -426,35 +430,4 @@ func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Ad
 	sort.Strings(addrs)
 
 	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
-}
-
-// NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
-// operation responses
-func NewClientNvmeResults(results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
-	cMap := make(ClientCtrlrMap)
-	for _, addr := range addrs {
-		cMap[addr] = CtrlrResults{Responses: results}
-	}
-	return cMap
-}
-
-// NewClientScmMount provides a mock ClientMountMap populated with scm mount details
-func NewClientScmMount(mounts ScmMounts, addrs Addresses) ClientMountMap {
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Mounts: mounts}
-	}
-	return cMap
-}
-
-// NewClientScmMountResults provides a mock ClientMountMap populated with scm mount
-// operation responses
-func NewClientScmMountResults(
-	results []*ctlpb.ScmMountResult, addrs Addresses) ClientMountMap {
-
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Responses: results}
-	}
-	return cMap
 }
