@@ -151,9 +151,16 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		orwo->orw_csum.ca_arrays,
 		orwo->orw_csum.ca_count);
 
-	for (i = 0; i < orw->orw_nr && rc == 0; i++)
-		rc = daos_csummer_verify(csummer, &iods[i],
-					 &sgls[i]);
+	for (i = 0; i < orw->orw_nr; i++) {
+		daos_iod_t *iod = &iods[i];
+
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
+
+		rc = daos_csummer_verify(csummer, iod, &sgls[i]);
+		if (rc != 0)
+			break;
+	}
 
 	/** Remove the extra link to the checksum memory to prevent duplicate
 	 * freeing
