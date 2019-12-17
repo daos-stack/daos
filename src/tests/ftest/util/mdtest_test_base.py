@@ -35,7 +35,6 @@ from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
 import write_host_file
 
-
 class MdtestBase(TestWithServers):
     """Base mdtest class.
 
@@ -139,8 +138,7 @@ class MdtestBase(TestWithServers):
         if self.pool is None:
             self._create_pool()
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(
-            self.manager.get_server_config_value("name"), self.pool)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":

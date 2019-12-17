@@ -62,7 +62,7 @@ class RebuildNoCap(TestWithServers):
         # Write enough data to the pool that will not be able to be rebuilt
         data = self.pool.scm_size.value * (targets - 1)
         self.pool.write_file(
-            self.orterun, len(self.hostlist_clients), self.hostlist_clients,
+            self.orterun, len(self.hostlist_clients), self.hostfile_clients,
             data)
 
         # Display pool size after write
