@@ -149,6 +149,19 @@ def scons():
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
+    nenv = denv.Clone()
+    prereqs.require(nenv, 'ofi', 'hwloc')
+
+    nenv.AppendENVPath("CGO_CFLAGS",
+                       nenv.subst("-I$HWLOC_PREFIX/include "
+                                  "-I$OFI_PREFIX/include"))
+    nenv.AppendENVPath("CGO_LDFLAGS",
+                       nenv.subst("-L$HWLOC_PREFIX/lib "
+		                  "-L$OFI_PREFIX/lib"))
+
+    install_go_bin(nenv, gosrc, gopath, None, "daos_net_config",
+                   "daos_net_config")
+
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
@@ -180,7 +193,8 @@ def scons():
                    "daos_server")
 
     serverbin = get_bin_path(gopath, "daos_server")
-    AlwaysBuild([serverbin,])
+    netbin = get_bin_path(gopath, "daos_net_config")
+    AlwaysBuild([serverbin,netbin,])
 
 if __name__ == "SCons.Script":
     scons()

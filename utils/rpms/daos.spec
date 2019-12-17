@@ -268,6 +268,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dfuse
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
+%{_bindir}/daos_net_config
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %if (0%{?suse_version} >= 1500)
