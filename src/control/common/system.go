@@ -39,10 +39,10 @@ import (
 type MemberState int
 
 const (
-	MemberStateStarted MemberState = iota
-	MemberStateStopping
-	MemberStateErrored
-	MemberStateUnresponsive
+	Started MemberState = iota
+	Stopping
+	Errored
+	Unresponsive
 )
 
 // SystemMember refers to a data-plane instance that is a member of this DAOS

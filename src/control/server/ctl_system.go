@@ -86,9 +86,9 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 				resp.GetStatus())
 		}
 
-		member.State = common.MemberStateStopping
+		member.State = common.Stopping
 		if result.Err != nil {
-			member.State = common.MemberStateErrored
+			member.State = common.Errored
 			svc.log.Errorf("MgmtSvc.prepShutdown error %s\n", result.Err)
 		}
 		svc.membership.Update(member)
@@ -117,7 +117,7 @@ func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInsta
 	if result.Err == nil {
 		svc.membership.Remove(member.Rank)
 	} else {
-		member.State = common.MemberStateErrored
+		member.State = common.Errored
 		svc.membership.Update(member)
 		svc.log.Errorf("MgmtSvc.stopMembers error %s\n", result.Err)
 	}
