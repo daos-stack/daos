@@ -1022,6 +1022,46 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 }
 
 int
+rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg)
+{
+	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
+	struct ds_pool			*pool;
+	d_iov_t				iov = { 0 };
+	d_sg_list_t			sgl;
+	int				rc;
+
+	if (rpc->cr_co_bulk_hdl == NULL) {
+		D_ERROR("No pool map in scan rpc\n");
+		return -DER_INVAL;
+	}
+
+	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR("Can not find pool.\n");
+		return -DER_NONEXIST;
+	}
+
+	/* update the pool map */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
+	if (rc != 0) {
+		D_ERROR("ds_pool_tgt_map_update failed for "DF_UUID", rc %d.\n",
+			DP_UUID(rsi->rsi_pool_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	ds_pool_put(pool);
+	return rc;
+}
+
+int
 rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg)
 {
 	struct rebuild_scan_out *out = crt_reply_get(rpc);

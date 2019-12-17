@@ -46,27 +46,35 @@ func TestFlattenAddrs(t *testing.T) {
 		},
 		"multiple nodesets": {
 			addrPatterns: "abc[1-5]:10000,abc[6-10]:10001,def[1-3]:10000",
-			expAddrs:     "abc1:10000,abc2:10000,abc3:10000,abc4:10000,abc5:10000,def1:10000,def2:10000,def3:10000,abc6:10001,abc7:10001,abc8:10001,abc9:10001,abc10:10001",
+			expAddrs:     "abc10:10001,abc1:10000,abc2:10000,abc3:10000,abc4:10000,abc5:10000,abc6:10001,abc7:10001,abc8:10001,abc9:10001,def1:10000,def2:10000,def3:10000",
+		},
+		"multiple nodeset ranges": {
+			addrPatterns: "abc[1-5,7-10],def[1-3,5,7-9]:10000",
+			expAddrs:     "abc10:9999,abc1:9999,abc2:9999,abc3:9999,abc4:9999,abc5:9999,abc7:9999,abc8:9999,abc9:9999,def1:10000,def2:10000,def3:10000,def5:10000,def7:10000,def8:10000,def9:10000",
 		},
 		"multiple ip sets": {
 			addrPatterns: "10.0.0.[1-5]:10000,10.0.0.[6-10]:10001,192.168.0.[1-3]:10000",
-			expAddrs:     "10.0.0.1:10000,10.0.0.2:10000,10.0.0.3:10000,10.0.0.4:10000,10.0.0.5:10000,192.168.0.1:10000,192.168.0.2:10000,192.168.0.3:10000,10.0.0.6:10001,10.0.0.7:10001,10.0.0.8:10001,10.0.0.9:10001,10.0.0.10:10001",
+			expAddrs:     "10.0.0.10:10001,10.0.0.1:10000,10.0.0.2:10000,10.0.0.3:10000,10.0.0.4:10000,10.0.0.5:10000,10.0.0.6:10001,10.0.0.7:10001,10.0.0.8:10001,10.0.0.9:10001,192.168.0.1:10000,192.168.0.2:10000,192.168.0.3:10000",
 		},
 		"missing port": {
 			addrPatterns: "localhost:10001,abc-[1-3]",
-			expAddrs:     "localhost:10001,abc-1:9999,abc-2:9999,abc-3:9999",
+			expAddrs:     "abc-1:9999,abc-2:9999,abc-3:9999,localhost:10001",
 		},
-		"too many colons":     {"bad:addr:here,:100", "", "cannot parse \"bad:addr:here\""},
-		"no host":             {"valid:10001,:100", "", "invalid host \"\""},
+		"too many colons":     {"bad:addr:here", "", "cannot parse \"bad:addr:here\""},
+		"no host":             {"valid:10001,:100", "", "invalid hostname \":100\""},
 		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
 		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
 		"bad port empty":      {"foo:", "", "invalid port \"\""},
-		"bad port zero":       {"foo:0", "", "invalid port \"0\""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			outAddrs, err := flattenHostAddrs(tc.addrPatterns, 9999)
-			ExpectError(t, err, tc.expErrMsg, name)
-			if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
+			if err != nil {
+				ExpectError(t, err, tc.expErrMsg, name)
+				return
+			}
+
+			if diff := cmp.Diff(strings.Split(tc.expAddrs, ","), outAddrs); diff != "" {
+				//if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
 		})

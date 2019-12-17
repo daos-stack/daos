@@ -7,7 +7,7 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.7.0
+Version:       0.8.0
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -335,8 +335,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Fri Dec 13 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.7.0-2
+* Fri Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
 - Remove openmpi, pmix, and hwloc builds, use hwloc and openmpi packages
+
+* Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1
+- Version bump up to 0.8.0
 
 * Thu Dec 05 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.7.0-1
 - Version bump up to 0.7.0
