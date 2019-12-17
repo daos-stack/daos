@@ -107,9 +107,9 @@ func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanR
 	return &client.StorageScanResp{}
 }
 
-func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return nil, nil
+	return client.StorageFormatResults{}
 }
 
 func (tc *testConn) KillRank(rank uint32) client.ResultMap {

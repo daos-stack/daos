@@ -142,8 +142,8 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
 		 struct dtx_leader_handle *dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
-	       struct ds_cont_child *cont, int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
+	       int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);
@@ -165,9 +165,9 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 int dtx_leader_exec_ops(struct dtx_leader_handle *dth, dtx_sub_func_t exec_func,
 			void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
+int dtx_batched_commit_register(struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
+void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 		 daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver);
