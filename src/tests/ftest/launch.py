@@ -161,11 +161,11 @@ def set_test_environment():
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
+    os.environ["OFI_DOMAIN"] = "hfi1_0"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
     provider = ""
     if interface == "ib0":
         provider = "ofi+verbs"
-        os.environ["OFI_DOMAIN"] = "hfi1_0"
     else:
         provider = "ofi+sockets"
     os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
