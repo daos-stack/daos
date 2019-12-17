@@ -45,6 +45,7 @@ class DmgCommand(CommandWithSubCommand):
         self.json = FormattedParameter("-j", False)
 
     def get_sub_command_class(self):
+        # pylint: disable=redefined-variable-type
         """Get the dmg sub command object based upon the sub-command."""
         if self.sub_command.value == "network":
             self.sub_command_class = self.NetworkSubCommand()
