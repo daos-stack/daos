@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -521,12 +521,15 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			    struct rebuild_global_pool_tracker *rgt)
 {
 	double		last_print = 0;
-	double		last_query = 0;
 	unsigned int	total;
 	int		rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
+		return;
+
+	rgt->rgt_ult = dss_sleep_ult_create();
+	if (rgt->rgt_ult == NULL)
 		return;
 
 	while (1) {
@@ -536,15 +539,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		unsigned int			failed_tgts_cnt;
 		double				now;
 		char				*str;
-
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_BCAST_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 
 		rc = pool_map_find_failed_tgts(pool->sp_map, &targets,
 					       &failed_tgts_cnt);
@@ -627,14 +621,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			break;
 		}
 
+		now = ABT_get_wtime();
 		/* print something at least for each 10 secons */
 		if (now - last_print > 10) {
 			last_print = now;
 			D_PRINT("%s", sbuf);
 		}
-
-		ABT_thread_yield();
+		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
 	}
+
+	dss_sleep_ult_destroy(rgt->rgt_ult);
+	rgt->rgt_ult = NULL;
 }
 
 static void
@@ -1550,23 +1547,19 @@ void
 rebuild_tgt_status_check(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
-	double				last_query = 0;
-	double				now;
 
 	D_ASSERT(rpt != NULL);
+	rpt->rt_ult = dss_sleep_ult_create();
+	if (rpt->rt_ult == NULL) {
+		D_ERROR("Can not start rebuild status check\n");
+		return;
+	}
+
 	while (1) {
 		struct rebuild_iv		iv;
 		struct rebuild_tgt_query_info	status;
 		int				rc;
 
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_CHECK_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 		memset(&status, 0, sizeof(status));
 		ABT_mutex_create(&status.lock);
 		rc = rebuild_tgt_query(rpt, &status);
@@ -1669,7 +1662,12 @@ rebuild_tgt_status_check(void *arg)
 
 		if (rpt->rt_global_done)
 			break;
+
+		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
 	}
+
+	dss_sleep_ult_destroy(rpt->rt_ult);
+	rpt->rt_ult = NULL;
 
 	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
@@ -1801,15 +1799,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	d_iov_t			iov = { 0 };
-	d_sg_list_t			sgl;
 	int				rc;
-
-	/* lookup create the ds_pool first */
-	if (rpc->cr_co_bulk_hdl == NULL) {
-		D_ERROR("No pool map in scan rpc\n");
-		return -DER_INVAL;
-	}
 
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d/%d\n",
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
@@ -1821,19 +1811,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		return -DER_NONEXIST;
 	}
 
-	/* update the pool map */
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Then check sp_group */
 	if (pool->sp_group == NULL) {
 		char id[DAOS_UUID_STR_SIZE];
 
@@ -1891,7 +1868,7 @@ out:
 
 static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
 	.co_aggregate	= rebuild_tgt_scan_aggregator,
-	.co_pre_forward	= NULL,
+	.co_pre_forward	= rebuild_tgt_scan_pre_forward,
 	.co_post_reply	= rebuild_tgt_scan_post_reply,
 };
 

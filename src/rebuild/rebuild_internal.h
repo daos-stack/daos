@@ -76,6 +76,7 @@ struct rebuild_obj_key {
 struct rebuild_tgt_pool_tracker {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rt_pool;
+	struct dss_sleep_ult	*rt_ult;
 	/** active rebuild pullers for each xstream */
 	struct rebuild_puller	*rt_pullers;
 	/** # xstreams */
@@ -129,6 +130,7 @@ struct rebuild_global_pool_tracker {
 	/* rebuild status */
 	struct daos_rebuild_status	rgt_status;
 
+	struct dss_sleep_ult		*rgt_ult;
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
@@ -275,6 +277,8 @@ struct rebuild_iv {
 	int		riv_status;
 };
 
+#define DEFAULT_YIELD_FREQ	128
+
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
 rebuild_tls_get()
@@ -295,6 +299,7 @@ void rebuild_obj_handler(crt_rpc_t *rpc);
 void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 int rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
+int rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg);
 int rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);

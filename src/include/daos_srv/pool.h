@@ -45,7 +45,7 @@
  */
 struct ds_pool {
 	struct daos_llink	sp_entry;
-	uuid_t			sp_uuid;
+	uuid_t			sp_uuid;	/* pool UUID */
 	bool			sp_stopping;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
@@ -84,9 +84,10 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  */
 struct ds_pool_child {
 	d_list_t	spc_list;
-	daos_handle_t	spc_hdl;
+	daos_handle_t	spc_hdl;	/* vos_pool handle */
 	struct ds_pool	*spc_pool;
-	uuid_t		spc_uuid;
+	uuid_t		spc_uuid;	/* pool UUID */
+	d_list_t	spc_cont_list;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 };
@@ -162,11 +163,6 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
  * a pool. If "handle_uuid" is NULL, all pool handles of the pool are evicted.
  */
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
-
-typedef int (*ds_iter_cb_t)(uuid_t cont_uuid, vos_iter_entry_t *ent,
-			     void *arg);
-int ds_pool_iter(uuid_t pool_uuid, ds_iter_cb_t callback, void *arg,
-		 uint32_t version, uint32_t intent);
 
 struct cont_svc;
 struct rsvc_hint;

@@ -81,8 +81,8 @@ struct daos_tree_overhead {
 
 /** Points to a byte in an iov, in an sgl */
 struct daos_sgl_idx {
-	uint32_t	iov_idx;
-	daos_off_t	iov_offset;
+	uint32_t	iov_idx; /** index of iov */
+	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
 /*
@@ -105,8 +105,10 @@ char *DP_UUID(const void *uuid);
 
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %s"
-#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+#define DF_KEY			"[%d] %.*s"
+#define DP_KEY(key)		(int)(key)->iov_len,	\
+		                (int)(key)->iov_len,	\
+		                daos_key2str(key)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -211,6 +213,69 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
+
+/** Move to next iov, it's caller's responsibility to ensure the idx boundary */
+#define daos_sgl_next_iov(iov_idx, iov_off)				\
+	do {								\
+		(iov_idx)++;						\
+		(iov_off) = 0;						\
+	} while (0)
+/** Get the leftover space in an iov of sgl */
+#define daos_iov_left(sgl, iov_idx, iov_off)				\
+	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/**
+ * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
+ * caller's responsibility to check the boundary.
+ */
+#define daos_sgl_move(sgl, iov_idx, iov_off, move_dist)			       \
+	do {								       \
+		uint64_t moved = 0, step, iov_left;			       \
+		if ((move_dist) <= 0)					       \
+			break;						       \
+		while (moved < (move_dist)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (move_dist) - moved);	       \
+			(iov_off) += step;				       \
+			moved += step;					       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		D_ASSERT(moved == (move_dist));				       \
+	} while (0)
+
+/**
+ * Consume buffer of length\a size for \a sgl with \a iov_idx and \a iov_off.
+ * The consumed buffer location will be returned by \a iovs and \a iov_nr.
+ */
+#define daos_sgl_consume(sgl, iov_idx, iov_off, size, iovs, iov_nr)	       \
+	do {								       \
+		uint64_t consumed = 0, step, iov_left;			       \
+		uint32_t consume_idx = 0;				       \
+		if ((size) <= 0)					       \
+			break;						       \
+		while (consumed < (size)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (size) - consumed);	       \
+			iovs[consume_idx].iov_buf =			       \
+				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
+			iovs[consume_idx].iov_len = step;		       \
+			iovs[consume_idx].iov_buf_len = step;		       \
+			consume_idx++;					       \
+			(iov_off) += step;				       \
+			consumed += step;				       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		(iov_nr) = consume_idx;					       \
+		D_ASSERT(consumed == (size));				       \
+	} while (0)
+
+#ifndef roundup
+#define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
+#endif
+#ifndef rounddown
+#define rounddown(x, y)		(((x) / (y)) * (y))
+#endif
 
 /**
  * Request a buffer of length \a bytes_needed from the sgl starting at
