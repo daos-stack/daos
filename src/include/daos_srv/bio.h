@@ -58,6 +58,14 @@ struct bio_iov {
 	/* Data length in bytes */
 	size_t		 bi_data_len;
 	bio_addr_t	 bi_addr;
+
+	/** can be used to fetch more than actual address. Useful if more
+	 * data is needed for processing (like checksums) than requested.
+	 * Prefix and suffix are needed because 'extra' needed data might
+	 * be before or after actual requested data.
+	 */
+	size_t		 bi_prefix_len; /** bytes before */
+	size_t		 bi_suffix_len; /** bytes after */
 };
 
 struct bio_sglist {
@@ -93,7 +101,7 @@ struct bio_blob_hdr {
  */
 struct bio_dev_state {
 	uint64_t	 bds_timestamp;
-	uint64_t	*bds_media_errors; /* supports 128-bit values */
+	uint64_t	 bds_media_errors[2]; /* supports 128-bit values */
 	uint64_t	 bds_error_count; /* error log page */
 	/* I/O error counters */
 	uint32_t	 bds_bio_read_errs;
@@ -128,10 +136,105 @@ bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 	addr->ba_hole = hole;
 }
 
+static inline void
+bio_iov_set(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len)
+{
+	biov->bi_addr = addr;
+	biov->bi_data_len = data_len;
+	biov->bi_buf = NULL;
+	biov->bi_prefix_len = 0;
+	biov->bi_suffix_len = 0;
+}
+
+static inline void
+bio_iov_set_extra(struct bio_iov *biov,	uint64_t prefix_len,
+		  uint64_t suffix_len)
+{
+	biov->bi_prefix_len = prefix_len;
+	biov->bi_suffix_len = suffix_len;
+	biov->bi_addr.ba_off -= prefix_len;
+	biov->bi_data_len += prefix_len + suffix_len;
+}
+
 static inline uint64_t
 bio_iov2off(struct bio_iov *biov)
 {
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_addr.ba_off;
+}
+
+static inline uint64_t
+bio_iov2len(struct bio_iov *biov)
+{
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	return biov->bi_data_len;
+}
+
+static inline void
+bio_iov_set_len(struct bio_iov *biov, uint64_t len)
+{
+	biov->bi_data_len = len;
+}
+
+static inline void *
+bio_iov2buf(struct bio_iov *biov)
+{
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	return biov->bi_buf;
+}
+
+static inline uint64_t
+bio_iov2raw_off(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_off;
+}
+
+static inline uint64_t
+bio_iov2raw_len(struct bio_iov *biov)
+{
+	return biov->bi_data_len;
+}
+
+static inline void *
+bio_iov2raw_buf(struct bio_iov *biov)
+{
+	return biov->bi_buf;
+}
+
+static inline void
+bio_iov_set_raw_buf(struct bio_iov *biov, void *val)
+{
+	biov->bi_buf = val;
+}
+
+static inline void
+bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
+{
+	D_ALLOC(biov->bi_buf, len);
+}
+
+static inline void *
+bio_iov2req_buf(struct bio_iov *biov)
+{
+	return biov->bi_buf + biov->bi_prefix_len;
+}
+
+static inline uint64_t
+bio_iov2req_off(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_off + biov->bi_prefix_len;
+}
+
+static inline uint64_t
+bio_iov2req_len(struct bio_iov *biov)
+{
+	return biov->bi_data_len - (biov->bi_prefix_len + biov->bi_suffix_len);
+}
+
+static inline
+uint16_t bio_iov2media(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_type;
 }
 
 static inline int
@@ -176,13 +279,26 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
-		iov->iov_buf = biov->bi_buf;
-		iov->iov_len = biov->bi_data_len;
-		iov->iov_buf_len = biov->bi_data_len;
+		iov->iov_buf = bio_iov2req_buf(biov);
+		iov->iov_len = bio_iov2req_len(biov);
+		iov->iov_buf_len = bio_iov2req_len(biov);
 	}
 
 	return 0;
 }
+
+/** Get a specific bio_iov from a bio_sglist if the idx exists. Otherwise
+ * return NULL
+ */
+static inline struct bio_iov *
+bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
+{
+	if (idx >= bsgl->bs_nr_out)
+		return NULL;
+
+	return &bsgl->bs_iovs[idx];
+}
+
 
 /**
  * Callbacks called on NVMe device state transition

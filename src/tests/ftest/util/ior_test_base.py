@@ -62,7 +62,7 @@ class IorTestBase(TestWithServers):
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
-            #self.hostlist_clients = [self.hostlist_clients[0]]
+            self.hostlist_clients = [self.hostlist_clients[0]]
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
@@ -161,6 +161,14 @@ class IorTestBase(TestWithServers):
 
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
+
+        if self.dfuse:
+            self.dfuse = None
+        if self.pool:
+            errors = self.destroy_pools(self.pool)
+            if errors:
+                self.log.error(errors)
+            self.pool = None
 
         return out
 

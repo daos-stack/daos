@@ -559,8 +559,7 @@ def storage_prepare(hosts, user, device_type):
     # with daos built binaries.
     dev_param = ""
     device_args = ""
-#    daos_srv_bin = get_file_path("bin/daos_server")
-    daos_srv_bin = ["/home/puspalog/source/daos/install/bin/daos_server"]
+    daos_srv_bin = get_file_path("bin/daos_server")
     if device_type == "dcpm":
         dev_param = "-s"
     elif device_type == "dcpm_nvme":
@@ -590,8 +589,7 @@ def storage_reset(hosts):
         ServerFailed: if server failed to reset storage
 
     """
-    #daos_srv_bin = get_file_path("bin/daos_server")
-    daos_srv_bin = ["/home/puspalog/source/daos/install/bin/daos_server"]
+    daos_srv_bin = get_file_path("bin/daos_server")
     cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
     result = pcmd(hosts, cmd)
     if len(result) > 1 or 0 not in result:

@@ -1255,10 +1255,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	bds = bio_health->mb_dev_state;
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
-	if (bds.bds_media_errors)
-		resp->media_errors = bds.bds_media_errors[0];
-	else
-		resp->media_errors = 0;
+	resp->media_errors = bds.bds_media_errors[0];
 	resp->read_errs = bds.bds_bio_read_errs;
 	resp->write_errs = bds.bds_bio_write_errs;
 	resp->unmap_errs = bds.bds_bio_unmap_errs;

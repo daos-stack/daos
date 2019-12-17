@@ -249,6 +249,10 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			size_t buf_len_req,
 			uint8_t **buf, size_t *buf_len)
 {
+	if (idx->iov_idx >= sgl->sg_nr)
+		return true; /** no data in sgl to get bytes from */
+
+	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
 	/** Point to current idx */
 	*buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
 
@@ -268,7 +272,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 		idx->iov_offset = 0;
 	}
 
-	return idx->iov_idx >= sgl->sg_nr;
+	return idx->iov_idx == sgl->sg_nr;
 }
 
 int
