@@ -93,6 +93,74 @@ out:
 	return rc;
 }
 
+/* Notify daos_server that there has been a I/O error. */
+int
+notify_bio_error(bool unmap, bool update, int tgt_id)
+{
+	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
+	Drpc__Call		*dreq;
+	Drpc__Response		*dresp;
+	uint8_t			*req;
+	size_t			 req_size;
+	int			 rc;
+
+	if (dss_drpc_ctx == NULL) {
+		D_ERROR("DRPC not connected\n");
+		return -DER_INVAL;
+	}
+
+	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
+	if (rc != 0)
+		return rc;
+
+	if (unmap)
+		bioerr_req.unmaperr = true;
+	else {
+		if (update)
+			bioerr_req.writeerr = true;
+		else
+			bioerr_req.readerr = true;
+	}
+	bioerr_req.tgtid = tgt_id;
+	bioerr_req.instanceidx = dss_instance_idx;
+	bioerr_req.drpclistenersock = drpc_listener_socket_path;
+
+	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
+	D_ALLOC(req, req_size);
+	if (req == NULL) {
+		D_ERROR("Unable to alloc bio error dRPC request\n");
+		return -DER_NOMEM;
+	}
+
+	srv__bio_error_req__pack(&bioerr_req, req);
+	dreq = drpc_call_create(dss_drpc_ctx, DRPC_MODULE_SRV,
+				DRPC_METHOD_SRV_BIO_ERR);
+
+	if (dreq == NULL) {
+		D_FREE(req);
+		return -DER_NOMEM;
+	}
+
+	dreq->body.len = req_size;
+	dreq->body.data = req;
+
+	rc = drpc_call(dss_drpc_ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0)
+		goto out_dreq;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n",
+			dresp->status);
+		rc = -DER_IO;
+	}
+
+	drpc_response_free(dresp);
+
+out_dreq:
+	drpc_call_free(dreq);
+
+	return rc;
+}
+
 int
 drpc_init(void)
 {

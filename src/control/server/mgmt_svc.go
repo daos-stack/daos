@@ -475,6 +475,80 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	return resp, nil
 }
 
+// DevStateQuery implements the method defined for the Management Service.
+func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+	}
+
+	return resp, nil
+}
+
+// StorageSetFaulty implements the method defined for the Management Service.
+func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
+	}
+
+	return resp, nil
+}
+
+// PrepShutdown implements the method defined for the Management Service.
+//
+// Prepare data-plane instance managed by control-plane for a controlled shutdown,
+// identified by unique rank.
+func (svc *mgmtSvc) PrepShutdown(ctx context.Context, req *mgmtpb.PrepShutdownReq) (*mgmtpb.DaosResp, error) {
+	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
+
+	var mi *IOServerInstance
+	for _, i := range svc.harness.Instances() {
+		if i.hasSuperblock() && i.getSuperblock().Rank.Equals(ioserver.NewRankPtr(req.Rank)) {
+			mi = i
+			break
+		}
+	}
+
+	if mi == nil {
+		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // KillRank implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
@@ -508,7 +582,8 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	return resp, nil
 }
 
-// ListPools implements the method defined for the Management Service.
+// ListPools forwards a gRPC request to the DAOS IO server to fetch a list of
+// all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 
@@ -530,4 +605,35 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq) (*mgmtpb.LeaderQueryResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	if len(svc.harness.Instances()) == 0 {
+		return nil, errors.New("no I/O servers configured; can't determine leader")
+	}
+
+	instance := svc.harness.Instances()[0]
+	sb := instance.getSuperblock()
+	if sb == nil {
+		return nil, errors.New("no I/O superblock found; can't determine leader")
+	}
+
+	if req.System != sb.System {
+		return nil, errors.Errorf("received leader query for wrong system (local: %q, req: %q)",
+			sb.System, req.System)
+	}
+
+	leaderAddr, err := instance.msClient.LeaderAddress()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to determine current leader address")
+	}
+
+	return &mgmtpb.LeaderQueryResp{
+		CurrentLeader: leaderAddr,
+		Replicas:      instance.msClient.cfg.AccessPoints,
+	}, nil
 }

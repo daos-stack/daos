@@ -37,30 +37,39 @@ const _ = grpc.SupportPackageIsVersion4
 type MgmtSvcClient interface {
 	// Join the server described by JoinReq to the system.
 	Join(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*JoinResp, error)
+	// LeaderQuery provides a mechanism for clients to discover
+	// the system's current Management Service leader
+	LeaderQuery(ctx context.Context, in *LeaderQueryReq, opts ...grpc.CallOption) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(ctx context.Context, in *PoolCreateReq, opts ...grpc.CallOption) (*PoolCreateResp, error)
-	// Destroy a DAOS pool allocated across a number of ranks
+	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(ctx context.Context, in *PoolDestroyReq, opts ...grpc.CallOption) (*PoolDestroyResp, error)
-	// Fetch the Access Control List for a DAOS pool
+	// Fetch the Access Control List for a DAOS pool.
 	PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Overwrite the Access Control List for a DAOS pool with a new one.
 	PoolOverwriteACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Update existing the Access Control List for a DAOS pool with new entries.
 	PoolUpdateACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error)
-	// Delete an entry from a DAOS pool's Access Control List
+	// Delete an entry from a DAOS pool's Access Control List.
 	PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
-	// Get BIO device health information
+	// Get BIO device health information.
 	BioHealthQuery(ctx context.Context, in *BioHealthReq, opts ...grpc.CallOption) (*BioHealthResp, error)
-	// Get SMD device list
+	// Get SMD device list.
 	SmdListDevs(ctx context.Context, in *SmdDevReq, opts ...grpc.CallOption) (*SmdDevResp, error)
-	// Get SMD pool list
+	// Get SMD pool list.
 	SmdListPools(ctx context.Context, in *SmdPoolReq, opts ...grpc.CallOption) (*SmdPoolResp, error)
+	// Prepare DAOS IO server identified by rank for controlled shutdown.
+	PrepShutdown(ctx context.Context, in *PrepShutdownReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Kill DAOS IO server identified by rank.
 	KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error)
-	// List all pools in a DAOS system: basic info: UUIDs, service ranks
+	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error)
+	// Get the current state of the device
+	DevStateQuery(ctx context.Context, in *DevStateReq, opts ...grpc.CallOption) (*DevStateResp, error)
+	// Set the device state of an NVMe SSD to FAULTY
+	StorageSetFaulty(ctx context.Context, in *DevStateReq, opts ...grpc.CallOption) (*DevStateResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -74,6 +83,15 @@ func NewMgmtSvcClient(cc *grpc.ClientConn) MgmtSvcClient {
 func (c *mgmtSvcClient) Join(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*JoinResp, error) {
 	out := new(JoinResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/Join", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) LeaderQuery(ctx context.Context, in *LeaderQueryReq, opts ...grpc.CallOption) (*LeaderQueryResp, error) {
+	out := new(LeaderQueryResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/LeaderQuery", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +188,15 @@ func (c *mgmtSvcClient) SmdListPools(ctx context.Context, in *SmdPoolReq, opts .
 	return out, nil
 }
 
+func (c *mgmtSvcClient) PrepShutdown(ctx context.Context, in *PrepShutdownReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PrepShutdown", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/KillRank", in, out, opts...)
@@ -188,34 +215,61 @@ func (c *mgmtSvcClient) ListPools(ctx context.Context, in *ListPoolsReq, opts ..
 	return out, nil
 }
 
+func (c *mgmtSvcClient) DevStateQuery(ctx context.Context, in *DevStateReq, opts ...grpc.CallOption) (*DevStateResp, error) {
+	out := new(DevStateResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/DevStateQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) StorageSetFaulty(ctx context.Context, in *DevStateReq, opts ...grpc.CallOption) (*DevStateResp, error) {
+	out := new(DevStateResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StorageSetFaulty", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtSvcServer is the server API for MgmtSvc service.
 type MgmtSvcServer interface {
 	// Join the server described by JoinReq to the system.
 	Join(context.Context, *JoinReq) (*JoinResp, error)
+	// LeaderQuery provides a mechanism for clients to discover
+	// the system's current Management Service leader
+	LeaderQuery(context.Context, *LeaderQueryReq) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(context.Context, *PoolCreateReq) (*PoolCreateResp, error)
-	// Destroy a DAOS pool allocated across a number of ranks
+	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error)
-	// Fetch the Access Control List for a DAOS pool
+	// Fetch the Access Control List for a DAOS pool.
 	PoolGetACL(context.Context, *GetACLReq) (*ACLResp, error)
 	// Overwrite the Access Control List for a DAOS pool with a new one.
 	PoolOverwriteACL(context.Context, *ModifyACLReq) (*ACLResp, error)
 	// Update existing the Access Control List for a DAOS pool with new entries.
 	PoolUpdateACL(context.Context, *ModifyACLReq) (*ACLResp, error)
-	// Delete an entry from a DAOS pool's Access Control List
+	// Delete an entry from a DAOS pool's Access Control List.
 	PoolDeleteACL(context.Context, *DeleteACLReq) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
-	// Get BIO device health information
+	// Get BIO device health information.
 	BioHealthQuery(context.Context, *BioHealthReq) (*BioHealthResp, error)
-	// Get SMD device list
+	// Get SMD device list.
 	SmdListDevs(context.Context, *SmdDevReq) (*SmdDevResp, error)
-	// Get SMD pool list
+	// Get SMD pool list.
 	SmdListPools(context.Context, *SmdPoolReq) (*SmdPoolResp, error)
+	// Prepare DAOS IO server identified by rank for controlled shutdown.
+	PrepShutdown(context.Context, *PrepShutdownReq) (*DaosResp, error)
 	// Kill DAOS IO server identified by rank.
 	KillRank(context.Context, *KillRankReq) (*DaosResp, error)
-	// List all pools in a DAOS system: basic info: UUIDs, service ranks
+	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error)
+	// Get the current state of the device
+	DevStateQuery(context.Context, *DevStateReq) (*DevStateResp, error)
+	// Set the device state of an NVMe SSD to FAULTY
+	StorageSetFaulty(context.Context, *DevStateReq) (*DevStateResp, error)
 }
 
 func RegisterMgmtSvcServer(s *grpc.Server, srv MgmtSvcServer) {
@@ -236,6 +290,24 @@ func _MgmtSvc_Join_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).Join(ctx, req.(*JoinReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_LeaderQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaderQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).LeaderQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/LeaderQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).LeaderQuery(ctx, req.(*LeaderQueryReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -420,6 +492,24 @@ func _MgmtSvc_SmdListPools_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_PrepShutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepShutdownReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PrepShutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PrepShutdown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PrepShutdown(ctx, req.(*PrepShutdownReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(KillRankReq)
 	if err := dec(in); err != nil {
@@ -456,6 +546,42 @@ func _MgmtSvc_ListPools_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_DevStateQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DevStateReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).DevStateQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/DevStateQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).DevStateQuery(ctx, req.(*DevStateReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_StorageSetFaulty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DevStateReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).StorageSetFaulty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/StorageSetFaulty",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).StorageSetFaulty(ctx, req.(*DevStateReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "mgmt.MgmtSvc",
 	HandlerType: (*MgmtSvcServer)(nil),
@@ -463,6 +589,10 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Join",
 			Handler:    _MgmtSvc_Join_Handler,
+		},
+		{
+			MethodName: "LeaderQuery",
+			Handler:    _MgmtSvc_LeaderQuery_Handler,
 		},
 		{
 			MethodName: "PoolCreate",
@@ -505,6 +635,10 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_SmdListPools_Handler,
 		},
 		{
+			MethodName: "PrepShutdown",
+			Handler:    _MgmtSvc_PrepShutdown_Handler,
+		},
+		{
 			MethodName: "KillRank",
 			Handler:    _MgmtSvc_KillRank_Handler,
 		},
@@ -512,36 +646,48 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			MethodName: "ListPools",
 			Handler:    _MgmtSvc_ListPools_Handler,
 		},
+		{
+			MethodName: "DevStateQuery",
+			Handler:    _MgmtSvc_DevStateQuery_Handler,
+		},
+		{
+			MethodName: "StorageSetFaulty",
+			Handler:    _MgmtSvc_StorageSetFaulty_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "mgmt.proto",
 }
 
-func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_1cc9d18a2569430d) }
+func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_6c17eff18c5a1219) }
 
-var fileDescriptor_mgmt_1cc9d18a2569430d = []byte{
-	// 359 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x92, 0xcb, 0x4f, 0xfa, 0x40,
-	0x10, 0xc7, 0x7f, 0x07, 0x7e, 0x2a, 0x83, 0x20, 0x2e, 0x3e, 0x12, 0x8e, 0x5e, 0xbc, 0x61, 0x82,
-	0xaf, 0x18, 0xbd, 0x08, 0x4d, 0x7c, 0x41, 0x54, 0x88, 0x67, 0xb3, 0xd2, 0x01, 0x1a, 0x5b, 0xb6,
-	0xec, 0xae, 0x35, 0xfc, 0xa1, 0xfe, 0x3f, 0x66, 0xb6, 0xdb, 0x07, 0x52, 0x0f, 0xde, 0x76, 0x3e,
-	0xfb, 0xfd, 0xcc, 0x30, 0x74, 0x01, 0x82, 0x49, 0xa0, 0x5b, 0xa1, 0x14, 0x5a, 0xb0, 0x12, 0x9d,
-	0x9b, 0x10, 0x0a, 0xe1, 0xc7, 0xa4, 0x59, 0x56, 0x32, 0xb2, 0xc7, 0x86, 0xd2, 0x42, 0xf2, 0x09,
-	0xbe, 0xce, 0x3f, 0x50, 0x2e, 0x92, 0x7b, 0x3e, 0xb2, 0xd1, 0xf6, 0xd7, 0x7f, 0x58, 0xef, 0x4f,
-	0x02, 0x3d, 0x8c, 0x46, 0xec, 0x10, 0x4a, 0xf7, 0xc2, 0x9b, 0xb1, 0x6a, 0xcb, 0x74, 0xa7, 0xf3,
-	0x00, 0xe7, 0xcd, 0x5a, 0xbe, 0x54, 0xe1, 0xc1, 0x3f, 0x76, 0x01, 0xf0, 0x24, 0x84, 0xdf, 0x95,
-	0xc8, 0x35, 0xb2, 0x46, 0x7c, 0x9f, 0x11, 0x92, 0x76, 0x56, 0xa1, 0x51, 0xaf, 0xa0, 0x42, 0xcc,
-	0x41, 0xa5, 0xa5, 0x58, 0xb0, 0x5c, 0xcc, 0x22, 0x92, 0x77, 0x0b, 0xa8, 0xb1, 0x5b, 0xf1, 0xe0,
-	0x1b, 0xd4, 0xd7, 0xdd, 0x1e, 0xdb, 0x8a, 0x63, 0x71, 0x45, 0x9e, 0xfd, 0xe1, 0xa6, 0x32, 0xf9,
-	0x73, 0xa8, 0x53, 0xfe, 0x31, 0x42, 0xf9, 0x29, 0x3d, 0x8d, 0x64, 0xb1, 0x38, 0xd4, 0x17, 0xae,
-	0x37, 0x5e, 0xfc, 0x26, 0x9e, 0x40, 0x95, 0xc4, 0x97, 0xd0, 0xe5, 0x7f, 0xb7, 0x1c, 0xf4, 0x71,
-	0xc9, 0x4a, 0x41, 0xa1, 0xd5, 0x81, 0x2a, 0xad, 0xa0, 0x35, 0x1f, 0x4d, 0xef, 0x66, 0x63, 0xc1,
-	0xf6, 0xb2, 0xbd, 0x52, 0x48, 0xe6, 0x7e, 0x21, 0x37, 0x3d, 0x2e, 0xa1, 0xd6, 0xf1, 0xc4, 0x2d,
-	0x72, 0x5f, 0x4f, 0x9f, 0xe9, 0x4b, 0x27, 0xa3, 0x53, 0x4a, 0x0d, 0x1a, 0x2b, 0xcc, 0xc8, 0x6d,
-	0xa8, 0x0c, 0x03, 0xb7, 0xe7, 0x29, 0xed, 0x60, 0xa4, 0x92, 0xbf, 0x75, 0x18, 0xb8, 0x0e, 0x46,
-	0xa4, 0xd5, 0x97, 0x81, 0x71, 0x4e, 0x61, 0xd3, 0x3a, 0xb4, 0xb1, 0x62, 0x59, 0x86, 0x6a, 0xb2,
-	0xb6, 0x7f, 0x10, 0xa3, 0x1d, 0xc1, 0xc6, 0x83, 0xe7, 0xfb, 0x03, 0x3e, 0x7b, 0x67, 0x36, 0x90,
-	0xd4, 0xb9, 0xa7, 0xe6, 0x70, 0xa1, 0xac, 0x70, 0x06, 0xe5, 0x6c, 0x88, 0xdd, 0x29, 0x05, 0xb9,
-	0x9d, 0x72, 0x8c, 0xbc, 0xb7, 0x35, 0xf3, 0xbc, 0x8f, 0xbf, 0x03, 0x00, 0x00, 0xff, 0xff, 0x30,
-	0xfc, 0x3e, 0xf8, 0x29, 0x03, 0x00, 0x00,
+var fileDescriptor_mgmt_6c17eff18c5a1219 = []byte{
+	// 427 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x93, 0xcd, 0x6e, 0xd3, 0x40,
+	0x10, 0x80, 0x39, 0x54, 0x94, 0x4e, 0xeb, 0x92, 0x6e, 0x0a, 0x48, 0x39, 0x72, 0xe1, 0x16, 0xa4,
+	0xf2, 0x2f, 0xb8, 0xd0, 0x5a, 0xfc, 0xa6, 0xa2, 0xd4, 0xe2, 0x8c, 0x96, 0x78, 0x9a, 0x58, 0xd8,
+	0x5e, 0x67, 0x77, 0xe2, 0x28, 0xcf, 0xc7, 0x8b, 0xa1, 0xd9, 0x5d, 0xdb, 0x9b, 0xc4, 0x48, 0xf4,
+	0xb6, 0xf3, 0x65, 0xbe, 0x99, 0xec, 0x8c, 0x17, 0xa0, 0x98, 0x15, 0x34, 0xae, 0xb4, 0x22, 0x25,
+	0xf6, 0xf8, 0x3c, 0x82, 0x4a, 0xa9, 0xdc, 0x91, 0xd1, 0x81, 0xd1, 0xb5, 0x3f, 0x0e, 0x0d, 0x29,
+	0x2d, 0x67, 0xf8, 0x73, 0xb1, 0x44, 0xbd, 0x6e, 0x7e, 0x97, 0x53, 0x9f, 0x7a, 0xf6, 0x67, 0x1f,
+	0xf6, 0x2f, 0x67, 0x05, 0x25, 0xf5, 0x54, 0x3c, 0x81, 0xbd, 0x2f, 0x2a, 0x2b, 0x45, 0x34, 0xb6,
+	0xd5, 0xf9, 0x7c, 0x8d, 0x8b, 0xd1, 0x71, 0x18, 0x9a, 0xea, 0xf1, 0x1d, 0xf1, 0x0e, 0x0e, 0x27,
+	0x28, 0x53, 0xd4, 0xdf, 0xb9, 0xa8, 0x38, 0x75, 0x09, 0x01, 0x62, 0xed, 0x41, 0x0f, 0xb5, 0xf6,
+	0x1b, 0x80, 0x2b, 0xa5, 0xf2, 0x0b, 0x8d, 0x92, 0x50, 0x0c, 0x5d, 0x5a, 0x47, 0xd8, 0x3d, 0xdd,
+	0x85, 0x4d, 0x63, 0x66, 0x31, 0x1a, 0xd2, 0xaa, 0x6d, 0x1c, 0xa0, 0xa0, 0xf1, 0x06, 0xb5, 0xf6,
+	0xd8, 0x35, 0xfe, 0x88, 0xf4, 0xfe, 0x62, 0x22, 0xee, 0xbb, 0x34, 0x17, 0xb1, 0xe7, 0xaf, 0x6d,
+	0x23, 0x9b, 0xff, 0x0a, 0x06, 0x9c, 0xff, 0xad, 0x46, 0xbd, 0xd2, 0x19, 0x21, 0x5b, 0xc2, 0x25,
+	0x5d, 0xaa, 0x34, 0xbb, 0x59, 0xff, 0x4b, 0x7c, 0x0e, 0x11, 0x8b, 0x3f, 0xaa, 0x54, 0xde, 0xde,
+	0x8a, 0x31, 0xc7, 0x0d, 0xab, 0x05, 0xbd, 0xd6, 0x39, 0x44, 0x7c, 0x05, 0x22, 0x39, 0x9d, 0x7f,
+	0x2e, 0x6f, 0x94, 0x78, 0xd8, 0xdd, 0xab, 0x85, 0x6c, 0x3e, 0xea, 0xe5, 0xb6, 0xc6, 0x5b, 0x38,
+	0x3e, 0xcf, 0xd4, 0x27, 0x94, 0x39, 0xcd, 0xdd, 0x4a, 0x7d, 0xeb, 0x96, 0x72, 0x81, 0xe1, 0x0e,
+	0xb3, 0xf2, 0x19, 0x1c, 0x26, 0x45, 0x3a, 0xc9, 0x0c, 0xc5, 0x58, 0x9b, 0x66, 0xac, 0x49, 0x91,
+	0xc6, 0x58, 0xb3, 0x36, 0xd8, 0x04, 0xd6, 0x79, 0x01, 0x47, 0xde, 0xe1, 0x1b, 0x1b, 0xd1, 0xe5,
+	0x70, 0xcc, 0xd6, 0xc9, 0x16, 0xf1, 0x0b, 0x39, 0xba, 0xd2, 0x58, 0x25, 0xf3, 0x25, 0xa5, 0x6a,
+	0x55, 0x8a, 0x66, 0xd3, 0x01, 0x0b, 0x3e, 0xd8, 0x58, 0x2a, 0xe3, 0xc5, 0xa7, 0x70, 0xef, 0x6b,
+	0x96, 0xe7, 0xd7, 0xb2, 0xfc, 0x2d, 0x7c, 0xe5, 0x26, 0xee, 0x17, 0x5e, 0xc2, 0x41, 0xf7, 0xef,
+	0xfc, 0x30, 0x5a, 0x10, 0x0c, 0x23, 0x60, 0xd6, 0x7b, 0x0d, 0x51, 0x8c, 0x75, 0x42, 0x92, 0xd0,
+	0x0d, 0xf2, 0xa4, 0xd9, 0xa1, 0x83, 0xac, 0x8a, 0x6d, 0xe4, 0x77, 0x30, 0x48, 0xdc, 0x53, 0x4d,
+	0x90, 0x3e, 0xc8, 0x65, 0x4e, 0xff, 0x2f, 0xff, 0xba, 0x6b, 0x1f, 0xf3, 0xb3, 0xbf, 0x01, 0x00,
+	0x00, 0xff, 0xff, 0x58, 0x7f, 0xc2, 0x66, 0x17, 0x04, 0x00, 0x00,
 }

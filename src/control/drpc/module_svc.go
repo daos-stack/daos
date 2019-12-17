@@ -112,7 +112,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 
 	err := proto.Unmarshal(msgBytes, msg)
 	if err != nil {
-		return marshalResponse(-1, Status_FAILURE, nil)
+		return marshalResponse(-1, Status_FAILED_UNMARSHAL_CALL, nil)
 	}
 	module, ok := r.GetModule(msg.GetModule())
 	if !ok {
@@ -122,7 +122,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	respBody, err := module.HandleCall(session, msg.GetMethod(), msg.GetBody())
 	if err != nil {
 		r.log.Errorf("HandleCall for %d:%d failed: %s\n", module.ID(), msg.GetMethod(), err)
-		return marshalResponse(msg.GetSequence(), Status_FAILURE, nil)
+		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 
 	return marshalResponse(msg.GetSequence(), Status_SUCCESS, respBody)
