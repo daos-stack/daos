@@ -39,8 +39,8 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos.h>
 #include <daos/checksum.h>
+#include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -60,6 +60,7 @@ obj_rpc_is_fetch(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
 }
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -468,7 +469,8 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 			nrs[i] = bsgl->bs_nr_out;
 			/* tail holes trimmed by ioc_trim_tail_holes() */
 			for (j = 0; j < bsgl->bs_nr_out; j++)
-				data_sizes[i] += bsgl->bs_iovs[j].bi_data_len;
+				data_sizes[i] += bio_iov2req_len(
+					&bsgl->bs_iovs[j]);
 		}
 	}
 
@@ -826,6 +828,32 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 }
 
 static int
+csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
+	      struct daos_csummer *csummer)
+{
+	int			 rc = 0;
+	uint32_t		 biov_dcbs_idx = 0;
+	size_t			 biov_dcbs_used = 0;
+	int			 i;
+
+	struct bio_desc *biod = vos_ioh2desc(ioh);
+	daos_csum_buf_t *dcbs = vos_ioh2dcbs(ioh);
+
+	for (i = 0; i < iods_nr; i++) {
+		rc = ds_csum_add2iod(
+			&iods[i], csummer,
+			bio_iod_sgl(biod, i),
+			&dcbs[biov_dcbs_idx],
+			&biov_dcbs_used);
+		if (rc != 0)
+			return rc;
+		biov_dcbs_idx += biov_dcbs_used;
+	}
+
+	return rc;
+}
+
+static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
 	     uint64_t *split_offs, struct dtx_handle *dth)
@@ -841,6 +869,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
+	bool			size_fetch = false;
 	daos_iod_t		*iods;
 	uint64_t		*offs;
 	int			err, rc = 0;
@@ -882,18 +911,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
-		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
 		bulk_op = CRT_BULK_PUT;
 
-		if (!size_fetch) {
-			/** don't need checksum if just fetching size */
-			obj_fetch_csum_init(cont_hdl, orw, orwo);
-			obj_fetch_csums_link(orw, orwo);
-		}
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
-		if (!size_fetch)
-			obj_fetch_csums_unlink(orw);
 
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
@@ -924,6 +946,22 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
 			DP_UOID(orw->orw_oid), rc);
 		goto out;
+	}
+
+	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
+		obj_fetch_csum_init(cont_hdl, orw, orwo);
+		obj_fetch_csums_link(orw, orwo);
+		rc = csum_add2iods(ioh,
+				   orw->orw_iod_array.oia_iods,
+				   orw->orw_iod_array.oia_iod_nr,
+				   cont_hdl->sch_csummer);
+		obj_fetch_csums_unlink(orw);
+
+		if (rc) {
+			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto post;
+		}
 	}
 
 	if (rma) {
