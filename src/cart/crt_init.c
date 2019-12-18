@@ -212,6 +212,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
+	D_INFO("libcart version %s initializing\n", CART_VERSION);
+
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
 	if (rc != DER_SUCCESS) {

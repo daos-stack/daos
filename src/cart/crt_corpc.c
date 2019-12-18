@@ -436,9 +436,9 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		}
 	}
 
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	grp_ver = grp_priv->gp_membs_ver;
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_filter_ranks,
 				 grp_ver /* grp_ver */, co_bulk_hdl, priv,

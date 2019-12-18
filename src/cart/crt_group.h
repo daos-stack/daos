@@ -51,8 +51,6 @@
 
 #define RANK_LIST_REALLOC_SIZE 32
 
-#define CRT_MAX_SEC_GRPS 10
-
 /* Node for keeping info about free index */
 struct free_index {
 	/* Index to store */
@@ -75,6 +73,11 @@ struct crt_grp_membs {
 	d_rank_list_t	*cgm_linear_list;
 };
 
+struct crt_grp_priv_sec {
+	struct crt_grp_priv	*gps_priv;
+	d_list_t		gps_link;
+};
+
 struct crt_grp_priv;
 
 struct crt_grp_priv {
@@ -85,7 +88,7 @@ struct crt_grp_priv {
 	struct crt_grp_priv	*gp_priv_prim;
 
 	/* List of secondary groups associated with this group */
-	struct crt_grp_priv	*gp_priv_sec[CRT_MAX_SEC_GRPS];
+	d_list_t		gp_sec_list;
 
 	/*
 	 * member ranks, should be unique and sorted, each member is the rank
@@ -103,10 +106,7 @@ struct crt_grp_priv {
 	 * correspond to members in gp_membs.
 	 */
 	struct crt_swim_membs	 gp_membs_swim;
-	/*
-	 * protects group modifications
-	 */
-	pthread_rwlock_t	 gp_rwlock_ft;
+
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
 	crt_context_t		 gp_ctx;
 
@@ -399,11 +399,11 @@ crt_rank_present(crt_group_t *grp, d_rank_t rank)
 
 	D_ASSERTF(priv != NULL, "group priv is NULL\n");
 
-	D_RWLOCK_RDLOCK(&priv->gp_rwlock_ft);
+	D_RWLOCK_RDLOCK(&priv->gp_rwlock);
 	membs = grp_priv_get_membs(priv);
 	if (membs)
 		ret = d_rank_in_rank_list(membs, rank);
-	D_RWLOCK_UNLOCK(&priv->gp_rwlock_ft);
+	D_RWLOCK_UNLOCK(&priv->gp_rwlock);
 
 	return ret;
 }
