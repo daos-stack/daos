@@ -118,8 +118,8 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		D_WARN("Open %s failed(%d), skip DAOS NVMe setup.\n",
-		       nvme_conf, daos_errno2der(errno));
+		D_WARN("Open %s failed("DF_RC"), skip DAOS NVMe setup.\n",
+		       nvme_conf, DP_RC(daos_errno2der(errno)));
 		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
 	}
