@@ -70,4 +70,6 @@ service MgmtSvc {
 	rpc DevStateQuery(DevStateReq) returns (DevStateResp) {}
 	// Set the device state of an NVMe SSD to FAULTY
 	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
+	// List all containers in a pool
+	rpc ListContainers(ListContReq) returns (ListContResp) {}
 }

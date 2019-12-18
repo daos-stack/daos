@@ -708,8 +708,8 @@ test_drpc_list_pools_svc_results_invalid(void **state)
 
 static void
 expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
-				       struct mgmt_list_pools_one *pools,
-				       size_t pools_len)
+				       struct mgmt_list_pools_one *exp_pools,
+				       size_t exp_pools_len)
 {
 	Mgmt__ListPoolsResp	*pool_resp = NULL;
 	size_t			i, j;
@@ -721,19 +721,19 @@ expect_drpc_list_pools_resp_with_pools(Drpc__Response *resp,
 						 resp->body.data);
 	assert_non_null(pool_resp);
 	assert_int_equal(pool_resp->status, 0);
-	assert_int_equal(pool_resp->n_pools, pools_len);
+	assert_int_equal(pool_resp->n_pools, exp_pools_len);
 
-	for (i = 0; i < pools_len; i++) {
+	for (i = 0; i < exp_pools_len; i++) {
 		char	exp_uuid[UUID_STR_LEN];
 
-		uuid_unparse(pools[i].lp_puuid, exp_uuid);
+		uuid_unparse(exp_pools[i].lp_puuid, exp_uuid);
 		assert_string_equal(pool_resp->pools[i]->uuid, exp_uuid);
 
 		assert_int_equal(pool_resp->pools[i]->n_svcreps,
-				 pools[i].lp_svc->rl_nr);
-		for (j = 0; j < pools[i].lp_svc->rl_nr; j++)
+				 exp_pools[i].lp_svc->rl_nr);
+		for (j = 0; j < exp_pools[i].lp_svc->rl_nr; j++)
 			assert_int_equal(pool_resp->pools[i]->svcreps[j],
-					 pools[i].lp_svc->rl_ranks[j]);
+					 exp_pools[i].lp_svc->rl_ranks[j]);
 	}
 
 	mgmt__list_pools_resp__free_unpacked(pool_resp, NULL);
@@ -786,6 +786,191 @@ test_drpc_list_pools_success_with_pools(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * dRPC List Containers setup/teardown
+ */
+
+static int
+drpc_list_cont_setup(void **state)
+{
+	mock_ds_mgmt_pool_list_cont_setup();
+
+	return 0;
+}
+
+static int
+drpc_list_cont_teardown(void **state)
+{
+	mock_ds_mgmt_pool_list_cont_teardown();
+
+	return 0;
+}
+
+/*
+ * dRPC List Containers tests
+ */
+static void
+pack_list_cont_req(Drpc__Call *call, Mgmt__ListContReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__list_cont_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__list_cont_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_list_cont_drpc_call(Drpc__Call *call, char *uuid)
+{
+	Mgmt__ListContReq lc_req = MGMT__LIST_CONT_REQ__INIT;
+
+	lc_req.uuid = uuid;
+	pack_list_cont_req(call, &lc_req);
+}
+
+static void
+expect_drpc_list_cont_resp_with_error(Drpc__Response *resp,
+				      int expected_err)
+{
+	Mgmt__ListContResp *lc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	lc_resp = mgmt__list_cont_resp__unpack(NULL, resp->body.len,
+					      resp->body.data);
+	assert_non_null(lc_resp);
+
+	assert_int_equal(lc_resp->status, expected_err);
+
+	mgmt__list_cont_resp__free_unpacked(lc_resp, NULL);
+}
+
+static void
+expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
+					   struct daos_pool_cont_info *exp_cont,
+					   uint64_t exp_cont_len)
+{
+	Mgmt__ListContResp	*cont_resp = NULL;
+	size_t			 i;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	cont_resp = mgmt__list_cont_resp__unpack(NULL, resp->body.len,
+						 resp->body.data);
+	assert_non_null(cont_resp);
+	assert_int_equal(cont_resp->status, 0);
+
+	/* number of containers in response list == expected value. */
+	assert_int_equal(cont_resp->n_containers, exp_cont_len);
+
+	for (i = 0; i < exp_cont_len; i++) {
+		char exp_uuid[DAOS_UUID_STR_SIZE];
+
+		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
+		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
+	}
+}
+
+static void
+test_drpc_list_cont_bad_request(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	uint8_t		bad_bytes[16];
+	size_t		i;
+
+	/* Fill out with junk that won't translate to a ListContReq */
+	for (i = 0; i < sizeof(bad_bytes); i++)
+		bad_bytes[i] = i;
+
+	call.body.data = bad_bytes;
+	call.body.len = sizeof(bad_bytes);
+
+	ds_mgmt_drpc_pool_list_cont(&call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+}
+
+static void
+test_drpc_pool_list_cont_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_list_cont_drpc_call(&call, "invalid UUID");
+
+	ds_mgmt_drpc_pool_list_cont(&call, &resp);
+
+	expect_drpc_list_cont_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_list_cont_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	 call = DRPC__CALL__INIT;
+	Drpc__Response	 resp = DRPC__RESPONSE__INIT;
+
+	setup_list_cont_drpc_call(&call, TEST_UUID);
+	ds_mgmt_pool_list_cont_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_list_cont(&call, &resp);
+
+	expect_drpc_list_cont_resp_with_error(&resp,
+					      ds_mgmt_pool_list_cont_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_list_cont_no_containers(void **state)
+{
+	Drpc__Call	 call = DRPC__CALL__INIT;
+	Drpc__Response	 resp = DRPC__RESPONSE__INIT;
+
+	setup_list_cont_drpc_call(&call, TEST_UUID);
+
+	ds_mgmt_drpc_pool_list_cont(&call, &resp);
+
+	expect_drpc_list_cont_resp_with_containers(&resp, NULL, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_list_cont_with_containers(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	const size_t	ncont = 64;
+
+	setup_list_cont_drpc_call(&call, TEST_UUID);
+	mock_ds_mgmt_list_cont_gen_cont(ncont);
+
+	ds_mgmt_drpc_pool_list_cont(&call, &resp);
+
+	expect_drpc_list_cont_resp_with_containers(&resp,
+						   ds_mgmt_pool_list_cont_out,
+						   ncont);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -793,6 +978,11 @@ test_drpc_list_pools_success_with_pools(void **state)
 #define LIST_POOLS_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_list_pools_setup, \
 						drpc_list_pools_teardown)
+
+#define LIST_CONT_TEST(x) cmocka_unit_test_setup_teardown(x, \
+						drpc_list_cont_setup, \
+						drpc_list_cont_teardown)
+
 int
 main(void)
 {
@@ -821,6 +1011,11 @@ main(void)
 		LIST_POOLS_TEST(test_drpc_list_pools_svc_results_invalid),
 		LIST_POOLS_TEST(test_drpc_list_pools_success_no_pools),
 		LIST_POOLS_TEST(test_drpc_list_pools_success_with_pools),
+		LIST_CONT_TEST(test_drpc_list_cont_bad_request),
+		LIST_CONT_TEST(test_drpc_pool_list_cont_bad_uuid),
+		LIST_CONT_TEST(test_drpc_pool_list_cont_mgmt_svc_fails),
+		LIST_CONT_TEST(test_drpc_pool_list_cont_no_containers),
+		LIST_CONT_TEST(test_drpc_pool_list_cont_with_containers),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
