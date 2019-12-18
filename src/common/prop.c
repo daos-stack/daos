@@ -273,7 +273,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_REDUN_RF0 &&
 			    val != DAOS_PROP_CO_REDUN_RF1 &&
-			    val != DAOS_PROP_CO_REDUN_RF3) {
+			    val != DAOS_PROP_CO_REDUN_RF2 &&
+			    val != DAOS_PROP_CO_REDUN_RF3 &&
+			    val != DAOS_PROP_CO_REDUN_RF4) {
 				D_ERROR("invalid redundancy factor "DF_U64".\n",
 					val);
 				return false;

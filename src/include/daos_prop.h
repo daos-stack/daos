@@ -136,9 +136,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 	/**
 	 * Redundancy factor:
-	 * RF0: Container I/O restricted after single fault.
-	 * RF1: no data protection. scratched data.
-	 * RF3: 3-way replication, EC 4+2, 8+2, 16+2
+	 * RF(n): Container I/O restricted after n faults.
 	 * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
 	 */
 	DAOS_PROP_CO_REDUN_FAC,

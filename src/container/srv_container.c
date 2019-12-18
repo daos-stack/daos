@@ -84,7 +84,8 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
 static int
 cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 {
-	int num_failed;
+	uint32_t num_failed;
+	uint32_t num_allowed_failures;
 	int rc = 0;
 	int redun_fac = daos_cont_prop2redunfac(props);
 	int redun_lvl = daos_cont_prop2redunlvl(props);
@@ -105,41 +106,35 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	if (rc < 0)
 		return rc;
 
+	/**
+	 * A pool with a redundancy factor of n can have at most n failures
+	 * before pool_open fails and an error is reported.
+	 */
 	num_failed = rc;
 	switch (redun_fac) {
-	/**
-	 * A pool with a redundancy factor of 0 can be created and an
-	 * error is reported as soon as one target fails
-	 */
 	case DAOS_PROP_CO_REDUN_RF0:
-		if (num_failed > 0)
-			rc = DER_INVAL;
+		num_allowed_failures = 0;
 		break;
-	/** RF1: no data protection. scratched data. */
 	case DAOS_PROP_CO_REDUN_RF1:
-		rc = 0;
+		num_allowed_failures = 1;
 		break;
-	/**
-	 * A pool with a RF of n can lose up to n simultaneous servers
-	 * without any errors reported.
-	 */
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (num_failed > 2)
-			rc = DER_INVAL;
+		num_allowed_failures = 2;
 		break;
 	case DAOS_PROP_CO_REDUN_RF3:
-		if (num_failed > 3)
-			rc = DER_INVAL;
+		num_allowed_failures = 3;
 		break;
 	case DAOS_PROP_CO_REDUN_RF4:
-		if (num_failed > 4)
-			rc = DER_INVAL;
+		num_allowed_failures = 4;
 		break;
 	default:
-		rc = -DER_INVAL;
+		return -DER_INVAL;
 	}
 
-	return rc;
+	if (num_allowed_failures <= num_failed)
+		return 0;
+	else
+		return -DER_INVAL;
 }
 
 static int
