@@ -611,12 +611,12 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 }
 
 static int
-prop_to_acl_response(daos_prop_t *acl_prop, Mgmt__ACLResp *resp)
+prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 {
 	struct daos_prop_entry	*entry;
 	int			rc = 0;
 
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_PO_ACL);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
 		rc = add_acl_to_response((struct daos_acl *)entry->dpe_val_ptr,
 					 resp);
@@ -624,13 +624,13 @@ prop_to_acl_response(daos_prop_t *acl_prop, Mgmt__ACLResp *resp)
 			return rc;
 	}
 
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_PO_OWNER);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
 	if (entry != NULL && entry->dpe_str != NULL) {
 		D_STRNDUP(resp->owneruser, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 	}
 
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_PO_OWNER_GROUP);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry != NULL && entry->dpe_str != NULL) {
 		D_STRNDUP(resp->ownergroup, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
@@ -664,7 +664,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
 	int		rc;
 	uuid_t		pool_uuid;
-	daos_prop_t	*acl = NULL;
+	daos_prop_t	*access_prop = NULL;
 
 	req = mgmt__get_aclreq__unpack(NULL, drpc_req->body.len,
 				       drpc_req->body.data);
@@ -682,18 +682,18 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_get_acl(pool_uuid, &acl);
+	rc = ds_mgmt_pool_get_acl(pool_uuid, &access_prop);
 	if (rc != 0) {
 		D_ERROR("Couldn't get pool ACL, rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = prop_to_acl_response(acl, &resp);
+	rc = prop_to_acl_response(access_prop, &resp);
 	if (rc != 0)
 		D_GOTO(out_acl, rc);
 
 out_acl:
-	daos_prop_free(acl);
+	daos_prop_free(access_prop);
 out:
 	resp.status = rc;
 

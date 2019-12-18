@@ -856,7 +856,7 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 }
 
 int
-ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **acl_prop)
+ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop)
 {
 	int			rc;
 	struct mgmt_svc		*svc;
@@ -873,7 +873,7 @@ ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **acl_prop)
 	if (rc != 0)
 		goto out_svc;
 
-	rc = get_access_props(pool_uuid, ranks, acl_prop);
+	rc = get_access_props(pool_uuid, ranks, access_prop);
 	if (rc != 0)
 		goto out_ranks;
 
