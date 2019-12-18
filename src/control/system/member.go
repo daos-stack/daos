@@ -62,34 +62,41 @@ func (sm *Member) String() string {
 	return fmt.Sprintf("%s/%d", sm.Addr, sm.Rank)
 }
 
+// State retrieves member state.
 func (sm *Member) State() MemberState {
 	return sm.state
 }
 
+// SetState sets member state.
 func (sm *Member) SetState(s MemberState) {
 	sm.state = s
 }
 
+// NewMember returns a reference to a new member struct.
 func NewMember(rank uint32, uuid string, addr net.Addr, state MemberState) *Member {
 	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
 }
 
+// Members is a type alias for a slice of member references
 type Members []*Member
 
-// MemberResult refers to the result of an action on a Member
-// identified by string representation "address/uuid/rank".
+// MemberResult refers to the result of an action on a Member identified
+// its string representation "address/rank".
 type MemberResult struct {
 	ID     string
 	Action string
 	Err    error
 }
 
+// NewMemberResult returns a reference to a new member result struct.
 func NewMemberResult(memberID, action string, err error) *MemberResult {
 	return &MemberResult{ID: memberID, Action: action, Err: err}
 }
 
+// MemberResults is a type alias for a slice of member result references.
 type MemberResults []*MemberResult
 
+// HasErrors returns true if any of the member results errored.
 func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
 		if res.Err != nil {
@@ -120,7 +127,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	return len(m.members), nil
 }
 
-// SetMemberState updates existing member state in membership, returns error.
+// SetMemberState updates existing member state in membership.
 func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	m.Lock()
 	defer m.Unlock()
@@ -142,7 +149,7 @@ func (m *Membership) Remove(rank uint32) {
 	delete(m.members, rank)
 }
 
-// Get retrieves member from membership based on UUID.
+// Get retrieves member reference from membership based on Rank.
 func (m *Membership) Get(rank uint32) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
@@ -155,7 +162,7 @@ func (m *Membership) Get(rank uint32) (*Member, error) {
 	return member, nil
 }
 
-// Ranks returns ordered member ranks.
+// Ranks returns slice of ordered member ranks.
 func (m *Membership) Ranks() (ranks []uint32) {
 	m.RLock()
 	defer m.RUnlock()
@@ -169,7 +176,7 @@ func (m *Membership) Ranks() (ranks []uint32) {
 	return
 }
 
-// Members returns all system members.
+// Members returns slice of references to all system members.
 func (m *Membership) Members() (ms Members) {
 	m.RLock()
 	defer m.RUnlock()
@@ -185,6 +192,7 @@ func (m *Membership) Members() (ms Members) {
 	return ms
 }
 
+// NewMembership returns a reference to a new DAOS system membership.
 func NewMembership(log logging.Logger) *Membership {
 	return &Membership{members: make(map[uint32]*Member), log: log}
 }

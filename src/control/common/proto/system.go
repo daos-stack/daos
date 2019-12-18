@@ -24,8 +24,9 @@
 package proto
 
 import (
-	"errors"
 	"net"
+
+	"github.com/pkg/errors"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -36,7 +37,11 @@ import (
 func MembersToPB(members system.Members) (pbMembers []*ctlpb.SystemMember, err error) {
 	pbMembers = make([]*ctlpb.SystemMember, 0, len(members))
 
-	for _, m := range members {
+	for i, m := range members {
+		if m == nil {
+			return nil, errors.Errorf("nil member at index %d", i)
+		}
+
 		pbMembers = append(pbMembers, &ctlpb.SystemMember{
 			Addr:  m.Addr.String(),
 			Uuid:  m.UUID,
