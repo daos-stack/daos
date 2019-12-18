@@ -70,7 +70,7 @@ fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 	fake_update_bytes_seen += buf_len;
 	strncpy(fake_update_buf, (char *)buf, buf_len);
 	fake_update_buf += buf_len;
-	strncpy(fake_update_buf, "|", 1);
+	fake_update_buf[0] = '|';
 	fake_update_buf++;
 	return 0;
 }

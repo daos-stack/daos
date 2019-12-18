@@ -475,6 +475,46 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	return resp, nil
 }
 
+// DevStateQuery implements the method defined for the Management Service.
+func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+	}
+
+	return resp, nil
+}
+
+// StorageSetFaulty implements the method defined for the Management Service.
+func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
+	}
+
+	return resp, nil
+}
+
 // PrepShutdown implements the method defined for the Management Service.
 //
 // Prepare data-plane instance managed by control-plane for a controlled shutdown,
