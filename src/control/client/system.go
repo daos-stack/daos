@@ -51,14 +51,14 @@ func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 
 	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill}
 
-	c.log.Debugf("DAOS system shutdown request: %s\n", rpcReq)
+	c.log.Debug("Sending DAOS system shutdown request\n")
 
 	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debugf("DAOS system shutdown response: %s\n", rpcResp)
+	c.log.Debug("Received DAOS system shutdown response\n")
 
 	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
@@ -74,14 +74,14 @@ func (c *connList) SystemMemberQuery() (system.Members, error) {
 
 	rpcReq := &ctlpb.SystemMemberQueryReq{}
 
-	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
+	c.log.Debug("Sending DAOS system member query request\n")
 
 	rpcResp, err := mc.getCtlClient().SystemMemberQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
+	c.log.Debug("Received DAOS system member query response\n")
 
 	return proto.MembersFromPB(c.log, rpcResp.Members)
 }

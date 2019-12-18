@@ -66,9 +66,6 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 
 // prepShutdown sends multicast PrepShutdown gRPC requests to system membership list.
 func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerInstance) system.MemberResults {
-	svc.membership.Lock()
-	defer svc.membership.Unlock()
-
 	members := svc.membership.Members()
 	results := make(system.MemberResults, 0, len(members))
 
