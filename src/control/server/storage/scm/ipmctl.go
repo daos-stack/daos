@@ -95,52 +95,53 @@ func (r *cmdRunner) checkNdctl() error {
 }
 
 func (r *cmdRunner) Discover() (storage.ScmModules, error) {
-	discovery, err := r.binding.Discover()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to discover SCM modules")
-	}
-	r.log.Debugf("discovered %d DCPM modules", len(discovery))
+	//	discovery, err := r.binding.Discover()
+	//	if err != nil {
+	//		return nil, errors.Wrap(err, "failed to discover SCM modules")
+	//	}
+	//	r.log.Debugf("discovered %d DCPM modules", len(discovery))
+	r.log.Debug("stubbing DCPM module discovery\n")
 
-	modules := make(storage.ScmModules, 0, len(discovery))
-	for _, d := range discovery {
-		modules = append(modules, storage.ScmModule{
-			ChannelID:       uint32(d.Channel_id),
-			ChannelPosition: uint32(d.Channel_pos),
-			ControllerID:    uint32(d.Memory_controller_id),
-			SocketID:        uint32(d.Socket_id),
-			PhysicalID:      uint32(d.Physical_id),
-			Capacity:        d.Capacity,
-		})
-	}
+	modules := make(storage.ScmModules, 0)
+	//	for _, d := range discovery {
+	//		modules = append(modules, storage.ScmModule{
+	//			ChannelID:       uint32(d.Channel_id),
+	//			ChannelPosition: uint32(d.Channel_pos),
+	//			ControllerID:    uint32(d.Memory_controller_id),
+	//			SocketID:        uint32(d.Socket_id),
+	//			PhysicalID:      uint32(d.Physical_id),
+	//			Capacity:        d.Capacity,
+	//		})
+	//	}
 
 	return modules, nil
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
 func (r *cmdRunner) GetState() (storage.ScmState, error) {
-	if err := r.checkNdctl(); err != nil {
-		return storage.ScmStateUnknown, err
-	}
-
-	// TODO: discovery should provide SCM region details
-	out, err := r.runCmd(cmdScmShowRegions)
-	if err != nil {
-		return storage.ScmStateUnknown, err
-	}
-
-	r.log.Debugf("show region output: %s\n", out)
-
-	if out == outScmNoRegions {
-		return storage.ScmStateNoRegions, nil
-	}
-
-	ok, err := hasFreeCapacity(out)
-	if err != nil {
-		return storage.ScmStateUnknown, err
-	}
-	if ok {
-		return storage.ScmStateFreeCapacity, nil
-	}
+	//	if err := r.checkNdctl(); err != nil {
+	//		return storage.ScmStateUnknown, err
+	//	}
+	//
+	//	// TODO: discovery should provide SCM region details
+	//	out, err := r.runCmd(cmdScmShowRegions)
+	//	if err != nil {
+	//		return storage.ScmStateUnknown, err
+	//	}
+	//
+	//	r.log.Debugf("show region output: %s\n", out)
+	//
+	//	if out == outScmNoRegions {
+	//		return storage.ScmStateNoRegions, nil
+	//	}
+	//
+	//	ok, err := hasFreeCapacity(out)
+	//	if err != nil {
+	//		return storage.ScmStateUnknown, err
+	//	}
+	//	if ok {
+	//		return storage.ScmStateFreeCapacity, nil
+	//	}
 
 	return storage.ScmStateNoCapacity, nil
 }
@@ -158,32 +159,32 @@ func (r *cmdRunner) GetState() (storage.ScmState, error) {
 //
 // Command output from external tools will be returned. State will be passed in.
 func (r *cmdRunner) Prep(state storage.ScmState) (needsReboot bool, pmemDevs storage.ScmNamespaces, err error) {
-	if err = r.checkNdctl(); err != nil {
-		return
-	}
-
-	r.log.Debugf("scm in state %s\n", state)
-
-	switch state {
-	case storage.ScmStateNoRegions:
-		// clear any pre-existing goals first
-		if _, err = r.runCmd(cmdScmDeleteGoal); err != nil {
-			err = errors.WithMessage(err, "clear goal")
-			return
-		}
-		// if successful, memory allocation change read on reboot
-		if _, err = r.runCmd(cmdScmCreateRegions); err == nil {
-			needsReboot = true
-		}
-	case storage.ScmStateFreeCapacity:
-		pmemDevs, err = r.createNamespaces()
-	case storage.ScmStateNoCapacity:
-		pmemDevs, err = r.GetNamespaces()
-	case storage.ScmStateUnknown:
-		err = errors.New("unknown scm state")
-	default:
-		err = errors.Errorf("unhandled scm state %q", state)
-	}
+	//	if err = r.checkNdctl(); err != nil {
+	//		return
+	//	}
+	//
+	//	r.log.Debugf("scm in state %s\n", state)
+	//
+	//	switch state {
+	//	case storage.ScmStateNoRegions:
+	//		// clear any pre-existing goals first
+	//		if _, err = r.runCmd(cmdScmDeleteGoal); err != nil {
+	//			err = errors.WithMessage(err, "clear goal")
+	//			return
+	//		}
+	//		// if successful, memory allocation change read on reboot
+	//		if _, err = r.runCmd(cmdScmCreateRegions); err == nil {
+	//			needsReboot = true
+	//		}
+	//	case storage.ScmStateFreeCapacity:
+	//		pmemDevs, err = r.createNamespaces()
+	//	case storage.ScmStateNoCapacity:
+	//		pmemDevs, err = r.GetNamespaces()
+	//	case storage.ScmStateUnknown:
+	//		err = errors.New("unknown scm state")
+	//	default:
+	//		err = errors.Errorf("unhandled scm state %q", state)
+	//	}
 
 	return
 }
@@ -193,43 +194,43 @@ func (r *cmdRunner) Prep(state storage.ScmState) (needsReboot bool, pmemDevs sto
 // Returns indication of whether a reboot is required alongside error.
 // Command output from external tools will be returned. State will be passed in.
 func (r *cmdRunner) PrepReset(state storage.ScmState) (bool, error) {
-	if err := r.checkNdctl(); err != nil {
-		return false, nil
-	}
-
-	r.log.Debugf("scm in state %s\n", state)
-
-	switch state {
-	case storage.ScmStateNoRegions:
-		r.log.Info("SCM is already reset\n")
-		return false, nil
-	case storage.ScmStateFreeCapacity, storage.ScmStateNoCapacity:
-	case storage.ScmStateUnknown:
-		return false, errors.New("unknown scm state")
-	default:
-		return false, errors.Errorf("unhandled scm state %q", state)
-	}
-
-	namespaces, err := r.GetNamespaces()
-	if err != nil {
-		return false, err
-	}
-
-	for _, dev := range namespaces {
-		if err := r.removeNamespace(dev.Name); err != nil {
-			return false, err
-		}
-	}
-
-	r.log.Infof("resetting SCM memory allocations\n")
-	// clear any pre-existing goals first
-	if _, err := r.runCmd(cmdScmDeleteGoal); err != nil {
-		return false, err
-	}
-	if out, err := r.runCmd(cmdScmRemoveRegions); err != nil {
-		r.log.Error(out)
-		return false, err
-	}
+	//	if err := r.checkNdctl(); err != nil {
+	//		return false, nil
+	//	}
+	//
+	//	r.log.Debugf("scm in state %s\n", state)
+	//
+	//	switch state {
+	//	case storage.ScmStateNoRegions:
+	//		r.log.Info("SCM is already reset\n")
+	//		return false, nil
+	//	case storage.ScmStateFreeCapacity, storage.ScmStateNoCapacity:
+	//	case storage.ScmStateUnknown:
+	//		return false, errors.New("unknown scm state")
+	//	default:
+	//		return false, errors.Errorf("unhandled scm state %q", state)
+	//	}
+	//
+	//	namespaces, err := r.GetNamespaces()
+	//	if err != nil {
+	//		return false, err
+	//	}
+	//
+	//	for _, dev := range namespaces {
+	//		if err := r.removeNamespace(dev.Name); err != nil {
+	//			return false, err
+	//		}
+	//	}
+	//
+	//	r.log.Infof("resetting SCM memory allocations\n")
+	//	// clear any pre-existing goals first
+	//	if _, err := r.runCmd(cmdScmDeleteGoal); err != nil {
+	//		return false, err
+	//	}
+	//	if out, err := r.runCmd(cmdScmRemoveRegions); err != nil {
+	//		r.log.Error(out)
+	//		return false, err
+	//	}
 
 	return true, nil // memory allocation reset requires a reboot
 }
@@ -332,22 +333,22 @@ func (r *cmdRunner) createNamespaces() (storage.ScmNamespaces, error) {
 }
 
 func (r *cmdRunner) GetNamespaces() (storage.ScmNamespaces, error) {
-	if err := r.checkNdctl(); err != nil {
-		return nil, err
-	}
-
-	out, err := r.runCmd(cmdScmListNamespaces)
-	if err != nil {
-		return nil, err
-	}
-
-	nss, err := parseNamespaces(out)
-	if err != nil {
-		return nil, err
-	}
-
-	r.log.Debugf("discovered %d DCPM namespaces", len(nss))
-	return nss, nil
+	//	if err := r.checkNdctl(); err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	out, err := r.runCmd(cmdScmListNamespaces)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	nss, err := parseNamespaces(out)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	r.log.Debugf("discovered %d DCPM namespaces", len(nss))
+	return storage.ScmNamespaces{}, nil
 }
 
 func parseNamespaces(jsonData string) (nss storage.ScmNamespaces, err error) {
