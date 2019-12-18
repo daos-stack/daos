@@ -37,7 +37,7 @@ type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
 func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
-	return nil, errors.New("mgmt module handler is not implemented")
+	return nil, drpc.UnknownMethodFailure()
 }
 
 // ID will return Mgmt module ID
@@ -56,8 +56,10 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
+	case drpc.MethodBIOError:
+		return nil, mod.handleBioErr(req)
 	default:
-		return nil, errors.Errorf("unknown dRPC %d", method)
+		return nil, drpc.UnknownMethodFailure()
 	}
 }
 
@@ -68,7 +70,7 @@ func (mod *srvModule) ID() int32 {
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	req := &srvpb.NotifyReadyReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return errors.Wrap(err, "unmarshal NotifyReady request")
+		return drpc.UnmarshalingPayloadFailure()
 	}
 
 	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
@@ -81,6 +83,26 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	}
 
 	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
+
+	return nil
+}
+
+func (mod *srvModule) handleBioErr(reqb []byte) error {
+	req := &srvpb.BioErrorReq{}
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return errors.Wrap(err, "unmarshal BioError request")
+	}
+
+	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+		return errors.Errorf("instance index %v is out of range (%v instances)",
+			req.InstanceIdx, len(mod.iosrvs))
+	}
+
+	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
+		return errors.Wrap(err, "check BioErr request socket path")
+	}
+
+	mod.iosrvs[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
 }

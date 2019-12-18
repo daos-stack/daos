@@ -540,15 +540,14 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	map	Optional, upper layers can simply pass in NULL.
+ * \param[out]	maps	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
- *			index layouts and their epoch validities. The returned
- *			layout covers the record extents as \a iods.
- *			However, the returned extents could be fragmented if
- *			these extents were partially updated in different
- *			epochs. Additionally, the returned extents should also
- *			allow to discriminate punched extents from punched
- *			holes.
+ *			layout of the iods used in fetch. It gives information
+ *			for every iod on the highest/lowest extent in that dkey,
+ *			in additional to the valid extents from the ones fetched
+ *			(if asked for). If the extents don't fit in the io_map,
+ *			the number required is set on the fetch in
+ *			\a maps[]::iom_nr for that particular iod.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.

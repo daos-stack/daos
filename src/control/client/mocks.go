@@ -243,37 +243,39 @@ func (m *mockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.Delet
 	return m.returnACLResult()
 }
 
-func (m *mockMgmtSvcClient) BioHealthQuery(
-	ctx context.Context,
-	req *mgmtpb.BioHealthReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.BioHealthResp, error) {
+func (m *mockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq, o ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
 
 	// return successful bio health results
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SmdListDevs(
-	ctx context.Context,
-	req *mgmtpb.SmdDevReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.SmdDevResp, error) {
+func (m *mockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
 
 	// return successful SMD device list
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdDevResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SmdListPools(
-	ctx context.Context,
-	req *mgmtpb.SmdPoolReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.SmdPoolResp, error) {
+func (m *mockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
 
 	// return successful SMD pool list
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdPoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return successful device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return suscessful FAULTY device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
@@ -283,6 +285,10 @@ func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...
 
 func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
 	return &mgmtpb.GetAttachInfoResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.PrepShutdownReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+	return &mgmtpb.DaosResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
@@ -301,6 +307,10 @@ func newMockMgmtSvcClient(getACLResult *mockACLResult, listPoolsResult *mockList
 		ACLRet:       getACLResult,
 		ListPoolsRet: listPoolsResult,
 	}
+}
+
+func (m *mockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq, _ ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
+	return &mgmtpb.LeaderQueryResp{}, nil
 }
 
 // implement mock/stub behaviour for Control
@@ -422,35 +432,4 @@ func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Ad
 	sort.Strings(addrs)
 
 	return &StorageScanResp{Servers: addrs, Nvme: nvmeResults, Scm: scmResults}
-}
-
-// NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
-// operation responses
-func NewClientNvmeResults(results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
-	cMap := make(ClientCtrlrMap)
-	for _, addr := range addrs {
-		cMap[addr] = CtrlrResults{Responses: results}
-	}
-	return cMap
-}
-
-// NewClientScmMount provides a mock ClientMountMap populated with scm mount details
-func NewClientScmMount(mounts ScmMounts, addrs Addresses) ClientMountMap {
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Mounts: mounts}
-	}
-	return cMap
-}
-
-// NewClientScmMountResults provides a mock ClientMountMap populated with scm mount
-// operation responses
-func NewClientScmMountResults(
-	results []*ctlpb.ScmMountResult, addrs Addresses) ClientMountMap {
-
-	cMap := make(ClientMountMap)
-	for _, addr := range addrs {
-		cMap[addr] = MountResults{Responses: results}
-	}
-	return cMap
 }

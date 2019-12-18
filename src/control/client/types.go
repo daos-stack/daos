@@ -204,10 +204,35 @@ func (cr ClientSmdResult) String() string {
 	return buf.String()
 }
 
+// ClientStateResult is a container for output of device state query requests
+type ClientStateResult struct {
+	Address string
+	Dev     *mgmtpb.DevStateResp
+	Err     error
+}
+
+func (cr ClientStateResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Dev.Status != 0 {
+		return fmt.Sprintf("error: %v\n", cr.Dev.Status)
+	}
+
+	fmt.Fprintf(&buf, "Device UUID: %v\n", cr.Dev.DevUuid)
+	fmt.Fprintf(&buf, "\tState: %v\n", cr.Dev.DevState)
+
+	return buf.String()
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
 type ResultQueryMap map[string]ClientBioResult
 type ResultSmdMap map[string]ClientSmdResult
+type ResultStateMap map[string]ClientStateResult
 
 func (rm ResultMap) String() string {
 	var buf bytes.Buffer
@@ -257,41 +282,17 @@ func (rm ResultSmdMap) String() string {
 	return buf.String()
 }
 
-// ClientCtrlrMap is an alias for query results of NVMe controllers (and
-// any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]proto.CtrlrResults
-
-func (ccm ClientCtrlrMap) String() string {
+func (rm ResultStateMap) String() string {
 	var buf bytes.Buffer
-	servers := make([]string, 0, len(ccm))
+	servers := make([]string, 0, len(rm))
 
-	for server := range ccm {
+	for server := range rm {
 		servers = append(servers, server)
 	}
 	sort.Strings(servers)
 
 	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientMountMap is an alias for query results of SCM regions mounted
-// on connected servers keyed on address.
-type ClientMountMap map[string]proto.MountResults
-
-func (cmm ClientMountMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
 	}
 
 	return buf.String()
@@ -414,11 +415,35 @@ func (ssr *StorageScanResp) StringHealthStats() string {
 	return buf.String()
 }
 
-// StorageFormatResult stores results of format operations on NVMe controllers
+// StorageFormatReq encapsulated subsystem format parameters.
+type StorageFormatReq struct {
+	Reformat bool
+}
+
+// StorageFormatResults stores results of format operations on NVMe controllers
 // and SCM mountpoints.
+type StorageFormatResults map[string]StorageFormatResult
+
+func (sfr StorageFormatResults) Keys() (keys []string) {
+	for key, _ := range sfr {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return keys
+}
+
 type StorageFormatResult struct {
-	nvmeCtrlr proto.CtrlrResults
-	scmMount  proto.MountResults
+	Nvme proto.NvmeControllerResults
+	Scm  proto.ScmMountResults
+	Err  error
+}
+
+func (sfr *StorageFormatResult) HasErrors() bool {
+	if sfr.Err != nil || sfr.Scm.HasErrors() || sfr.Nvme.HasErrors() {
+		return true
+	}
+	return false
 }
 
 // AccessControlList is a structure for the access control list.

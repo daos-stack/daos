@@ -7,7 +7,7 @@ def scons():
     Import('senv', 'prereqs')
 
     unit_env = senv.Clone()
-    prereqs.require(unit_env, 'pmdk', 'spdk', 'hwloc', 'cmocka')
+    prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
 
     # spdk/lib/nvme to expose normally opaque types during tests
     unit_env.AppendUnique(CPPPATH=["$SPDK_SRC/lib/nvme",
@@ -19,7 +19,7 @@ def scons():
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc],
-                                  LIBS=['spdk', 'spdk_env_dpdk', 'numa',
+                                  LIBS=['spdk', 'isal', 'spdk_env_dpdk', 'numa',
                                         'cmocka', 'pthread', 'dl'])
         unit_env.Install("$PREFIX/bin", testbin)
     else:
