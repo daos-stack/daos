@@ -107,9 +107,9 @@ func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanR
 	return &client.StorageScanResp{}
 }
 
-func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return nil, nil
+	return client.StorageFormatResults{}
 }
 
 func (tc *testConn) KillRank(rank uint32) client.ResultMap {
@@ -162,6 +162,16 @@ func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
 	return nil
 }
 
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
+	return nil
+}
+
 func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 	tc.appendInvocation("SystemMemberQuery")
 	return make(common.SystemMembers, 0), nil
@@ -170,6 +180,11 @@ func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	tc.appendInvocation("SystemStop")
 	return make(common.SystemMemberResults, 0), nil
+}
+
+func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", req.System))
+	return &client.LeaderQueryResp{}, nil
 }
 
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {

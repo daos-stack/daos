@@ -102,8 +102,9 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-				&cred->tc_dkey, 1, &cred->tc_iod,
-				&cred->tc_sgl);
+					   &cred->tc_dkey, 1,
+					   &cred->tc_iod,
+					   &cred->tc_sgl);
 	} else { /* zero-copy */
 		struct bio_sglist	*bsgl;
 		daos_handle_t		 ioh;
@@ -130,10 +131,10 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-			       bsgl->bs_iovs[0].bi_buf,
-			       bsgl->bs_iovs[0].bi_data_len);
+			       bio_iov2raw_buf(&bsgl->bs_iovs[0]),
+			       bio_iov2raw_len(&bsgl->bs_iovs[0]));
 		} else {
-			memcpy(bsgl->bs_iovs[0].bi_buf,
+			memcpy(bio_iov2req_buf(&bsgl->bs_iovs[0]),
 			       cred->tc_sgl.sg_iovs[0].iov_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}

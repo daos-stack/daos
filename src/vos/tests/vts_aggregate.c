@@ -269,11 +269,15 @@ generate_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_size_t		 view_len;
 	daos_recx_t		 recx = { 0 };
 
-	VERBOSE_MSG("Generate logcial view\n");
-
 	epr_u = &ds->td_upd_epr;
 	epr_a = &ds->td_agg_epr;
 	view_len = get_view_len(ds, &recx);
+
+	VERBOSE_MSG("Generate logcial view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
+		    "U_ERP:["DF_U64", "DF_U64"], A_EPR["DF_U64", "DF_U64"], "
+		    "discard:%d, expected_nr:%d\n", DP_UOID(oid), dkey, akey,
+		    epr_u->epr_lo, epr_u->epr_hi, epr_a->epr_lo, epr_a->epr_hi,
+		    ds->td_discard, ds->td_expected_recs);
 
 	/* Setup expected logical view from aggregate/discard epr_hi */
 	D_ALLOC(ds->td_expected_view, view_len);
@@ -433,7 +437,7 @@ get_ds_index(int oid_idx, int dkey_idx, int akey_idx, int nr)
 static void
 generate_or_verify(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 		   char *akey, struct agg_tst_dataset *ds_arr, int ds_idx,
-		   int key_nr, bool verify)
+		   bool verify)
 {
 	struct agg_tst_dataset	*ds = &ds_arr[ds_idx];
 
@@ -454,7 +458,7 @@ generate_or_verify(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 static void
 multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 	   char dkeys[][UPDATE_DKEY_SIZE], char akeys[][UPDATE_DKEY_SIZE],
-	   int nr, struct agg_tst_dataset *ds_arr, int key_nr, bool verify)
+	   int nr, struct agg_tst_dataset *ds_arr, bool verify)
 {
 	daos_unit_oid_t	oid;
 	char		*dkey, *akey;
@@ -472,8 +476,7 @@ multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 						      akey_idx, nr);
 
 				generate_or_verify(arg, oid, dkey, akey,
-						   ds_arr, ds_idx, key_nr,
-						   verify);
+						   ds_arr, ds_idx, verify);
 			}
 		}
 	}
@@ -497,7 +500,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	daos_size_t		 view_len;
 	daos_recx_t		 recx, *recx_p;
 	int			 oid_idx, dkey_idx, akey_idx;
-	int			 i, key_nr, ds_nr, ds_idx, rc;
+	int			 i, ds_nr, ds_idx, rc;
 
 	epr_u = &ds_sample->td_upd_epr;
 	epr_a = &ds_sample->td_agg_epr;
@@ -510,16 +513,17 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
 	assert_true(ds_sample->td_type == DAOS_IOD_SINGLE ||
 		    ds_sample->td_type == DAOS_IOD_ARRAY);
-	ds_nr = key_nr = AT_OBJ_KEY_NR * AT_OBJ_KEY_NR * AT_OBJ_KEY_NR;
+	ds_nr = AT_OBJ_KEY_NR * AT_OBJ_KEY_NR * AT_OBJ_KEY_NR;
 	D_ALLOC_ARRAY(ds_arr, ds_nr);
 	assert_non_null(ds_arr);
 
 	for (i = 0; i < ds_nr; i++) {
 		ds = &ds_arr[i];
 		*ds = *ds_sample;
-		/* Clear iod_type and update epr */
+		/* Clear iod_type, update epr and expected recs*/
 		ds->td_type = DAOS_IOD_NONE;
 		memset(&ds->td_upd_epr, 0, sizeof(*epr_u));
+		ds->td_expected_recs = 0;
 	}
 
 	/* Set maximum value for random iod_size */
@@ -554,17 +558,21 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
 		if (ds->td_type == DAOS_IOD_SINGLE) {
 			recx_p = NULL;
-			ds->td_expected_recs = ds->td_discard ? 0 : 1;
+			/*
+			 * Amend expected recs, set expected recs to 1 when it's
+			 * aggregation and any updates located in aggregate EPR.
+			 */
+			if (!ds->td_discard && epoch >= epr_a->epr_lo &&
+			    epoch <= epr_a->epr_hi)
+				ds->td_expected_recs = 1;
 		} else {
 			assert_true(ds->td_recx_nr == 1);
 			recx_p = &recx;
 			generate_recx(&ds->td_recx[0], recx_p);
 			ds->td_expected_recs = ds->td_discard ? 0 : -1;
 		}
-		/*
-		 * Amend update epr, it'll be used to setup correct expected
-		 * physical record nr and expected view.
-		 */
+
+		/* Amend update epr */
 		if (ds->td_upd_epr.epr_lo == 0)
 			ds->td_upd_epr.epr_lo = epoch;
 		ds->td_upd_epr.epr_hi = epoch;
@@ -576,23 +584,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	}
 	D_FREE(buf_u);
 
-	/*
-	 * Amend expected physical records nr when update epr has no
-	 * itersection with aggregate/discard epr.
-	 */
-	for (i = 0; i < ds_nr; i++) {
-		ds = &ds_arr[i];
-
-		if (ds->td_expected_recs <= 0)
-			continue;
-
-		if (ds->td_upd_epr.epr_hi < epr_a->epr_lo ||
-		    ds->td_upd_epr.epr_lo > epr_a->epr_hi)
-			ds->td_expected_recs = 0;
-	}
-
-	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, key_nr,
-		   false);
+	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, false);
 
 	VERBOSE_MSG("%s multiple objs/keys\n", ds_sample->td_discard ?
 		    "Discard" : "Aggregate");
@@ -603,8 +595,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
 	assert_int_equal(rc, 0);
 
-	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, key_nr,
-		   true);
+	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
 	D_FREE(ds_arr);
 }
 

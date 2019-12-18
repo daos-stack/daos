@@ -48,6 +48,8 @@ const (
 )
 
 const (
+	// MethodPrepShutdown is a ModuleMgmt method
+	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
 	// MethodKillRank is a ModuleMgmt method
 	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
 	// MethodSetRank is a ModuleMgmt method
@@ -82,11 +84,17 @@ const (
 	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	// MethodDevStateQuery is a ModuleMgmt method
+	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
+	// MethodSetFaultyState is a ModuleMgmt method
+	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 )
 
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	// MethodBIOError is a ModuleSrv method
+	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
 const (
