@@ -180,8 +180,9 @@ def run_agent(test, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
+    export_cmd = "export DD_SUBSYS=mgmt,io,md,epc,rebuild;"
     daos_agent_bin = os.path.join(test.prefix, "bin", "daos_agent")
-    daos_agent_cmd = " ".join((daos_agent_bin, "-o", agent_yaml))
+    daos_agent_cmd = " ".join((export_cmd, daos_agent_bin, "-o", agent_yaml))
     print("<AGENT> Agent command: ", daos_agent_cmd)
 
     for client in client_list:
