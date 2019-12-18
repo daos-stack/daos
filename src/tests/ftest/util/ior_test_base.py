@@ -162,14 +162,6 @@ class IorTestBase(TestWithServers):
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
 
-        if self.dfuse:
-            self.dfuse = None
-        if self.pool:
-            errors = self.destroy_pools(self.pool)
-            if errors:
-                self.log.error(errors)
-            self.pool = None
-
         return out
 
     def get_job_manager_command(self):
