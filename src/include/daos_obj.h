@@ -127,7 +127,7 @@ enum {
 	/* Conditional Op: Punch akey if it exists, fail otherwise */
 	DAOS_COND_AKEY_PUNCH	= (1 << 7),
 	/** Mask for convenience */
-	DAOS_OF_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
+	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
 
 /**

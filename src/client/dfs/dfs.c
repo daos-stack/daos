@@ -349,7 +349,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
 
-	rc = daos_obj_fetch(oh, th, &dkey, akeys_nr, iods, sgls, NULL, NULL);
+	rc = daos_obj_fetch(oh, th, 0, &dkey, akeys_nr, iods, sgls, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -391,7 +391,7 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 		if (rc)
 			return daos_der2errno(rc);
 
-		rc = daos_obj_punch(oh, th, NULL);
+		rc = daos_obj_punch(oh, th, 0, NULL);
 		if (rc) {
 			daos_obj_close(oh, NULL);
 			return daos_der2errno(rc);
@@ -403,7 +403,7 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 	}
 
 	d_iov_set(&dkey, (void *)name, strlen(name));
-	rc = daos_obj_punch_dkeys(parent_oh, th, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent_oh, th, 0, 1, &dkey, NULL);
 	return daos_der2errno(rc);
 }
 
@@ -483,7 +483,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
 
-	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
+	rc = daos_obj_update(oh, th, 0, &dkey, akeys_nr, iods, sgls, NULL);
 	if (rc) {
 		D_ERROR("Failed to insert entry %s (%d)\n", name, rc);
 		return daos_der2errno(rc);
@@ -986,8 +986,8 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		else
 			oclass = DFS_DEFAULT_OBJ_CLASS;
 
-		rc = daos_obj_update(*oh, DAOS_TX_NONE, &dkey, SB_AKEYS, iods,
-				     sgls, NULL);
+		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS,
+				     iods, sgls, NULL);
 		if (rc) {
 			D_ERROR("Failed to update SB info (%d)\n", rc);
 			D_GOTO(err, rc = daos_der2errno(rc));
@@ -997,7 +997,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	}
 
 	/* otherwise fetch the values and verify SB */
-	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, &dkey, SB_AKEYS, iods, sgls,
+	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
 			    NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch SB info (%d)\n", rc);
@@ -2637,7 +2637,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	rc = daos_obj_update(oh, th, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update mode (rc = %d)\n", rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -2750,7 +2750,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
 
-	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
+	rc = daos_obj_update(oh, th, 0, &dkey, akeys_nr, iods, sgls, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
@@ -3013,7 +3013,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, strlen(name));
-	rc = daos_obj_punch_dkeys(parent->oh, th, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent->oh, th, 0, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3088,7 +3088,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 
 	/** remove the first entry from parent1 (just the dkey) */
 	d_iov_set(&dkey, (void *)name1, strlen(name1));
-	rc = daos_obj_punch_dkeys(parent1->oh, th, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent1->oh, th, 0, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name1, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3096,7 +3096,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 
 	/** remove the second entry from parent2 (just the dkey) */
 	d_iov_set(&dkey, (void *)name2, strlen(name2));
-	rc = daos_obj_punch_dkeys(parent2->oh, th, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent2->oh, th, 0, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name2, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3206,7 +3206,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 		bool exists;
 
 		iod.iod_size	= DAOS_REC_ANY;
-		rc = daos_obj_fetch(oh, th, &dkey, 1, &iod, NULL, NULL, NULL);
+		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod,
+				    NULL, NULL, NULL);
 		if (rc) {
 			D_ERROR("Failed to get extended attribute %s\n", name);
 			D_GOTO(out, rc = daos_der2errno(rc));
@@ -3230,7 +3231,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	sgl.sg_iovs	= &sg_iov;
 
 	iod.iod_size	= size;
-	rc = daos_obj_update(oh, th, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to add extended attribute %s\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3294,12 +3295,12 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		sgl.sg_nr_out	= 0;
 		sgl.sg_iovs	= &sg_iov;
 
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				    NULL, NULL);
 	} else {
 		iod.iod_size	= DAOS_REC_ANY;
 
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, NULL,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, NULL,
 				    NULL, NULL);
 	}
 	if (rc) {
@@ -3354,7 +3355,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** set akey as the xattr name */
 	d_iov_set(&akey, xname, strlen(xname));
 
-	rc = daos_obj_punch_akeys(oh, th, &dkey, 1, &akey, NULL);
+	rc = daos_obj_punch_akeys(oh, th, 0, &dkey, 1, &akey, NULL);
 	if (rc) {
 		D_ERROR("Failed to punch extended attribute %s\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));

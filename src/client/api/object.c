@@ -100,6 +100,12 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	tse_task_t	*task;
 	int		rc;
 
+	if (nr != 1) {
+		/* TODO: create multiple tasks for punch of multiple dkeys */
+		D_ERROR("Can't punch multiple dkeys for now\n");
+		return -DER_INVAL;
+	}
+
 	rc = dc_obj_punch_dkeys_task_create(oh, th, flags, nr, dkeys, ev, NULL,
 					    &task);
 	if (rc)
