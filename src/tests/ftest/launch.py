@@ -162,16 +162,21 @@ def set_test_environment():
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-    # Update the default provider,domain based on the interface
+    # Update the default provider,domain based on the OFI_INTEFACE
+    print("Environment:")
+    for name in ("OFI_INTERFACE", "OFI_DOMAN", "CRT_PHY_ADDR_STR"):
+        print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
         default_provider = "ofi+verbs"
-    os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
-                                                    default_provider)
+    # os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
+    #                                                default_provider)
+    # Remove the above comments later after ofi+verbs testing.
+        os.environ["CRT_PHY_ADDR_STR"] = default_provider
     default_domain = os.environ.get("OFI_INTERFACE")
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if (os.environ["OFI_INTERFACE"].startswith("ib") and
-       provider != "ofi+sockets"):
+            provider != "ofi+sockets"):
         default_domain = "hfi1_0"
     os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", default_domain)
 
