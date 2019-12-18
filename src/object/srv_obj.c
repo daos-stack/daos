@@ -2134,16 +2134,16 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		return 0;
 	}
 
-	for (i = 0; i < iods_nr && rc == 0; i++) {
+	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		struct bio_sglist	*bsgl = bio_iod_sgl(biod, i);
 		d_sg_list_t		 sgl;
-		/** Currently only supporting array types */
-		bool			 type_is_supported =
-						iod->iod_type == DAOS_IOD_ARRAY;
 
-		if (!type_is_supported)
-			continue;
+		if (!ci_is_valid(iods_csums[i].ic_data)) {
+			D_ERROR("Checksums is enabled but the csum info is "
+				"invalid.");
+			return -DER_CSUM;
+		}
 
 		rc = bio_sgl_convert(bsgl, &sgl);
 
@@ -2152,6 +2152,11 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 						 &iods_csums[i]);
 
 		daos_sgl_fini(&sgl, false);
+
+		if (rc != 0) {
+			D_ERROR("Verify failed: %d\n", rc);
+			break;
+		}
 	}
 
 	ds_pool_put(pool);
