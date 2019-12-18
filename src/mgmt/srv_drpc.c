@@ -1255,10 +1255,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	bds = bio_health->mb_dev_state;
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
-	if (bds.bds_media_errors)
-		resp->media_errors = bds.bds_media_errors[0];
-	else
-		resp->media_errors = 0;
+	resp->media_errors = bds.bds_media_errors[0];
 	resp->read_errs = bds.bds_bio_read_errs;
 	resp->write_errs = bds.bds_bio_write_errs;
 	resp->unmap_errs = bds.bds_bio_unmap_errs;
@@ -1288,6 +1285,146 @@ out:
 
 	if (bio_health != NULL)
 		D_FREE(bio_health);
+}
+
+void
+ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DevStateReq	*req = NULL;
+	Mgmt__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__dev_state_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state query)\n");
+		return;
+	}
+
+	D_INFO("Received request to query device state\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__dev_state_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__dev_state_resp__init(resp);
+
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_state_query(uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to query device state :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__dev_state_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__dev_state_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__dev_state_req__free_unpacked(req, NULL);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	D_FREE(resp);
+}
+
+void
+ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DevStateReq	*req = NULL;
+	Mgmt__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__dev_state_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state set faulty)\n");
+		return;
+	}
+
+	D_INFO("Received request to set device state to FAULTY\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__dev_state_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__dev_state_resp__init(resp);
+
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_set_faulty(uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__dev_state_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__dev_state_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__dev_state_req__free_unpacked(req, NULL);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	D_FREE(resp);
 }
 
 void
