@@ -21,10 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from apricot import skipForTicket
 from rebuild_test_base import RebuildTestBase
 
 
 class RebuildDeleteObjects(RebuildTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:
@@ -33,7 +35,6 @@ class RebuildDeleteObjects(RebuildTestBase):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
@@ -83,7 +84,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         # Read objects from the last transaction
         super(RebuildDeleteObjects, self).verify_container_data(txn)
 
-    # @skipForTicket("DAOS-2922")
+    @skipForTicket("DAOS-3908")
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
 
@@ -101,6 +102,7 @@ class RebuildDeleteObjects(RebuildTestBase):
         self.punch_type = "object"
         self.execute_rebuild_test()
 
+    @skipForTicket("DAOS-3908")
     def test_rebuild_delete_records(self):
         """JIRA ID: DAOS-2574.
 
