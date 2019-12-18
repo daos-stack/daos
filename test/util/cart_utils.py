@@ -143,13 +143,12 @@ class CartUtils():
         host_cfg = cartobj.params.get("config", "/run/hosts/*/")
 
         if env_CCSA is not None:
-            log_dir = "{}-{}-{}-{}".format(test_name, host_cfg, cartobj.id(),
-                                           env_CCSA)
+            log_dir = "{}-{}".format(test_name, env_CCSA)
         else:
-            log_dir = "{}-{}-{}".format(test_name, host_cfg, cartobj.id())
+            log_dir = "{}".format(test_name)
 
         log_path = os.path.join("testLogs", log_dir)
-        log_file = os.path.join(log_path, "output.log")
+        log_file = os.path.join(log_path, "cart.log")
 
         log_mask = cartobj.params.get("D_LOG_MASK", "/run/defaultENV/")
         crt_phy_addr = cartobj.params.get("CRT_PHY_ADDR_STR",
@@ -161,6 +160,7 @@ class CartUtils():
         env = " --output-filename {!s}".format(log_path)
 
         env += " -x D_LOG_FILE={!s}".format(log_file)
+        env += " -x D_LOG_FILE_APPEND_PID=1"
 
         if log_mask is not None:
             env += " -x D_LOG_MASK={!s}".format(log_mask)

@@ -2581,6 +2581,8 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
+	D_DEBUG(DB_ALL, "Setting default group primary rank=%d\n", rank);
+
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");
 		return 0;
@@ -2593,7 +2595,6 @@ crt_rank_self_set(d_rank_t rank)
 	}
 
 	D_RWLOCK_WRLOCK(&default_grp_priv->gp_rwlock);
-
 	default_grp_priv->gp_self = rank;
 	rc = grp_add_to_membs_list(default_grp_priv, rank);
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);

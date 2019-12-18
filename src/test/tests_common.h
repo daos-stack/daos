@@ -47,6 +47,7 @@
 
 #define DBG_PRINT(x...)                                                 \
 	do {                                                            \
+		D_INFO(x);						\
 		if (opts.is_server)                                     \
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
 			opts.self_rank,                                 \
