@@ -28,7 +28,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -157,9 +156,9 @@ func NewConfig() *Config {
 
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
-	if err := c.Fabric.Validate(); err != nil {
-		return errors.Wrap(err, "fabric config validation failed")
-	}
+	//	if err := c.Fabric.Validate(); err != nil {
+	//		return errors.Wrap(err, "fabric config validation failed")
+	//	}
 
 	if err := c.Storage.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
@@ -190,14 +189,14 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 	// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
 	// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 	// specify the correct device for each.
-	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
-		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
-		if err != nil {
-			return nil, err
-		}
-		envVar := "OFI_DOMAIN=" + deviceAlias
-		tagEnv = append(tagEnv, envVar)
-	}
+	//	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
+	//		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
+	//		if err != nil {
+	//			return nil, err
+	//		}
+	//		envVar := "OFI_DOMAIN=" + deviceAlias
+	//		tagEnv = append(tagEnv, envVar)
+	//	}
 	return mergeEnvVars(c.EnvVars, tagEnv), nil
 }
 
