@@ -575,5 +575,15 @@ bio_yield(void)
 int bio_get_dev_state(struct bio_dev_state *dev_state,
 		      struct bio_xs_context *xs);
 
+/*
+ * Helper function to set the device health state to FAULTY, and trigger device
+ * state transition.
+ *
+ * \param xs		[IN]	xstream context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_dev_set_faulty(struct bio_xs_context *xs);
+
 
 #endif /* __BIO_API_H__ */

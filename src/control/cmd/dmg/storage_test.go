@@ -91,6 +91,18 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set FAULTY device status",
+			"storage setfaulty --devuuid abcd",
+			"ConnectClients StorageSetFaulty-dev_uuid:\"abcd\" ",
+			nil,
+		},
+		{
+			"Set FAULTY device status without device specified",
+			"storage setfaulty",
+			"ConnectClients StorageSetFaulty",
+			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
+		},
+		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",
