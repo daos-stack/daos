@@ -45,6 +45,7 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/security.h>
+#include <cart/api.h>
 #include <cart/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -2233,6 +2234,110 @@ out:
 	return rc;
 }
 
+/**
+ * Send CaRT RPC to pool svc to get container list.
+ *
+ * \param[in]	uuid		UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[out]	containers	Array of container information (allocated)
+ * \param[out]	ncontainers	Number of items in containers
+ *
+ * return	0		Success
+ *
+ */
+int
+ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
+		      struct daos_pool_cont_info **containers,
+		      uint64_t *ncontainers)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_list_cont_in	*in;
+	struct pool_list_cont_out	*out;
+	uint64_t			resp_ncont = 1024;
+	struct daos_pool_cont_info	*resp_cont = NULL;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Getting container list\n", DP_UUID(uuid));
+
+	*containers = NULL;
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+realloc_resp:
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_LIST_CONT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool list cont rpc: %d\n",
+			DP_UUID(uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	/* Allocate response buffer */
+	D_ALLOC_ARRAY(resp_cont, resp_ncont);
+	if (resp_cont == NULL)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->plci_op.pi_uuid, uuid);
+	uuid_clear(in->plci_op.pi_hdl);
+	in->plci_ncont = resp_ncont;
+	rc = list_cont_bulk_create(info->dmi_ctx, &in->plci_cont_bulk,
+				   resp_cont, in->plci_ncont);
+	if (rc != 0)
+		D_GOTO(out_resp_buf, rc);
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->plco_op.po_rc,
+				      &out->plco_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		/* To simplify logic, destroy bulk hdl and buffer each time */
+		list_cont_bulk_destroy(in->plci_cont_bulk);
+		D_FREE(resp_cont);
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->plco_op.po_rc;
+	if (rc == -DER_TRUNC) {
+		/* resp_ncont too small - realloc with server-provided ncont */
+		resp_ncont = out->plco_ncont;
+		list_cont_bulk_destroy(in->plci_cont_bulk);
+		D_FREE(resp_cont);
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(realloc_resp, rc);
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get container list for pool: %d\n",
+			DP_UUID(uuid), rc);
+	} else {
+		*containers = resp_cont;
+	}
+
+	list_cont_bulk_destroy(in->plci_cont_bulk);
+out_resp_buf:
+	if (rc != 0)
+		D_FREE(resp_cont);
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
 /* CaRT RPC handler for pool container listing
  * Requires a pool handle (except for rebuild).
  */
@@ -2248,6 +2353,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	d_iov_t				 key;
 	d_iov_t				 value;
 	struct pool_hdl			 hdl;
+	d_rank_t			 srcrank;
 	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
@@ -2258,29 +2364,35 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	ABT_rwlock_rdlock(svc->ps_lock);
-
-	/* Verify the pool handle. Note: since rebuild will not
-	 * connect the pool, so we only verify the non-rebuild
-	 * pool.
+	/* Verify pool handle only if RPC initiated by a client
+	 * (not for mgmt svc to pool svc RPCs that do not have a handle).
 	 */
-	if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
-		d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
-		d_iov_set(&value, &hdl, sizeof(hdl));
-		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-			/* defer goto out_svc until unlock/tx_end */
-	}
+	crt_req_src_rank_get(rpc, &srcrank);
+	if (srcrank == ((d_rank_t) -1)) {
+		rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
 
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		ABT_rwlock_rdlock(svc->ps_lock);
+
+		/* Verify the pool handle. Note: since rebuild will not
+		 * connect the pool, so we only verify the non-rebuild
+		 * pool.
+		 */
+		if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
+			d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
+			d_iov_set(&value, &hdl, sizeof(hdl));
+			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+			if (rc == -DER_NONEXIST)
+				rc = -DER_NO_HDL;
+				/* defer goto out_svc until unlock/tx_end */
+		}
+
+		ABT_rwlock_unlock(svc->ps_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+	}
 
 	/* Call container service to get the list */
 	rc = ds_cont_list(in->plci_op.pi_uuid, &cont_buf, &ncont);
@@ -2312,7 +2424,6 @@ out_free_cont_buf:
 		D_FREE(cont_buf);
 		cont_buf = NULL;
 	}
-
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->plco_op.po_hint);
 	pool_svc_put_leader(svc);

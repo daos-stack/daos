@@ -278,3 +278,26 @@ pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
 	if (addr_list->pta_addrs)
 		D_FREE(addr_list->pta_addrs);
 }
+
+int
+list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+void
+list_cont_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+

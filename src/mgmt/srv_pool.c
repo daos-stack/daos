@@ -41,7 +41,6 @@ struct list_pools_iter_args {
 	struct mgmt_list_pools_one	*pools;
 };
 
-
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 {
@@ -166,6 +165,48 @@ pool_rec_lookup(struct rdb_tx *tx, struct mgmt_svc *svc, uuid_t uuid,
 
 	*rec = value.iov_buf;
 	return 0;
+}
+
+/* Caller is responsible for freeing ranks */
+static int
+pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+{
+	struct rdb_tx	tx;
+	struct pool_rec	*rec;
+	int		rc;
+	uint32_t	i;
+	uint32_t	nr_ranks;
+	d_rank_list_t	*pool_ranks;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	ABT_rwlock_rdlock(svc->ms_lock);
+
+	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
+	if (rc != 0) {
+		D_GOTO(out_lock, rc);
+	} else if (rec->pr_state != POOL_READY) {
+		D_ERROR("Pool not ready\n");
+		D_GOTO(out_lock, rc = -DER_AGAIN);
+	}
+
+	nr_ranks = rec->pr_nreplicas;
+	pool_ranks = d_rank_list_alloc(nr_ranks);
+	if (pool_ranks == NULL)
+		D_GOTO(out_lock, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr_ranks; i++) {
+		pool_ranks->rl_ranks[i] = rec->pr_replicas[i];
+	}
+
+	*ranks = pool_ranks;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
 }
 
 static int
@@ -761,44 +802,32 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	ds_mgmt_free_pool_list(&pools, pools_len);
 }
 
-/* Caller is responsible for freeing ranks */
-static int
-pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+/* Get container list from the pool service for the specified pool */
+int
+ds_mgmt_pool_list_cont(uuid_t uuid, struct daos_pool_cont_info **containers,
+		       uint64_t *ncontainers)
 {
-	struct rdb_tx	tx;
-	struct pool_rec	*rec;
-	int		rc;
-	uint32_t	i;
-	uint32_t	nr_ranks;
-	d_rank_list_t	*pool_ranks;
+	int rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
 
-	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	D_DEBUG(DB_MGMT, "Getting container list for pool "DF_UUID"\n",
+		DP_UUID(uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
-		D_GOTO(out, rc);
-	ABT_rwlock_rdlock(svc->ms_lock);
+		goto out;
 
-	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
-	if (rc != 0) {
-		D_GOTO(out_lock, rc);
-	} else if (rec->pr_state != POOL_READY) {
-		D_ERROR("Pool not ready\n");
-		D_GOTO(out_lock, rc = -DER_AGAIN);
-	}
+	rc = pool_get_ranks(svc, uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
 
-	nr_ranks = rec->pr_nreplicas;
-	pool_ranks = d_rank_list_alloc(nr_ranks);
-	if (pool_ranks == NULL)
-		D_GOTO(out_lock, rc = -DER_NOMEM);
+	/* call pool service function to issue CaRT RPC to the pool service */
+	rc = ds_pool_svc_list_cont(uuid, ranks, containers, ncontainers);
 
-	for (i = 0; i < nr_ranks; i++) {
-		pool_ranks->rl_ranks[i] = rec->pr_replicas[i];
-	}
-
-	*ranks = pool_ranks;
-
-out_lock:
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }

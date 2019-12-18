@@ -1048,6 +1048,94 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ListContReq		*req = NULL;
+	Mgmt__ListContResp		 resp = MGMT__LIST_CONT_RESP__INIT;
+	uuid_t				 req_uuid;
+	uint8_t				*body;
+	size_t				 len;
+	struct daos_pool_cont_info	*containers = NULL;
+	uint64_t			 containers_len = 0;
+	int				 i;
+	int				 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__list_cont_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (list containers)\n");
+		mgmt__list_cont_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	D_INFO("Received request to list containers in DAOS pool %s\n",
+		req->uuid);
+
+	/* resp.containers, n_containers are NULL/0 */
+
+	if (uuid_parse(req->uuid, req_uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	rc = ds_mgmt_pool_list_cont(req_uuid, &containers, &containers_len);
+	if (rc != 0) {
+		D_ERROR("Failed to list containers in pool %s :%d\n",
+			req->uuid, rc);
+		D_GOTO(out, rc);
+	}
+
+	if (containers) {
+		D_ALLOC_ARRAY(resp.containers, containers_len);
+		if (resp.containers == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+	resp.n_containers = containers_len;
+
+	for (i = 0; i < containers_len; i++) {
+		D_ALLOC_PTR(resp.containers[i]);
+		if (resp.containers[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__list_cont_resp__cont__init(resp.containers[i]);
+
+		D_ALLOC(resp.containers[i]->uuid, DAOS_UUID_STR_SIZE);
+		if (resp.containers[i]->uuid == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		uuid_unparse(containers[i].pci_uuid, resp.containers[i]->uuid);
+	}
+
+out:
+	resp.status = rc;
+	len = mgmt__list_cont_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__list_cont_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__list_cont_req__free_unpacked(req, NULL);
+
+	if (resp.containers) {
+		for (i = 0; i < resp.n_containers; i++) {
+			if (resp.containers[i]) {
+				if (resp.containers[i]->uuid)
+					D_FREE(resp.containers[i]->uuid);
+				D_FREE(resp.containers[i]);
+			}
+		}
+		D_FREE(resp.containers);
+	}
+
+	D_FREE(containers);
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__SmdDevReq		*req = NULL;
