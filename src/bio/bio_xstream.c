@@ -707,8 +707,8 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
 			    &ctxt->bxc_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, "DF_RC"\n",
-			spdk_bdev_get_name(d_bdev->bb_bdev), DP_RC(rc));
+		D_ERROR("Failed to open bdev %s, %d\n",
+			spdk_bdev_get_name(d_bdev->bb_bdev), rc);
 		return daos_errno2der(-rc);
 	}
 
@@ -898,16 +898,16 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		rc = spdk_conf_read(config, nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
+			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
 			D_ERROR("failed to read %s, "DF_RC"\n",
 				nvme_glb.bd_nvme_conf, DP_RC(rc));
-			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
 			goto out;
 		}
 
 		if (spdk_conf_first_section(config) == NULL) {
+			rc = -DER_INVAL;
 			D_ERROR("invalid format %s, "DF_RC"\n",
 				nvme_glb.bd_nvme_conf, DP_RC(rc));
-			rc = -DER_INVAL;
 			goto out;
 		}
 
@@ -920,17 +920,17 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
+			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",
 				DP_RC(rc));
-			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			goto out;
 		}
 
 		rc = spdk_thread_lib_init(NULL, 0);
 		if (rc != 0) {
+			rc = -DER_INVAL;
 			D_ERROR("failed to init SPDK thread lib, "DF_RC"\n",
 				DP_RC(rc));
-			rc = -DER_INVAL;
 			spdk_env_fini();
 			goto out;
 		}
@@ -965,8 +965,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		/* The SPDK 'Malloc' device relies on copy engine. */
 		rc = spdk_copy_engine_initialize();
 		if (rc != 0) {
-			D_ERROR("failed to init SPDK copy engine, "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("failed to init SPDK copy engine, rc:%d\n", rc);
 			goto out;
 		}
 
@@ -977,7 +976,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
-			D_ERROR("failed to init bdevs, "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed to init bdevs, rc:%d\n", rc);
 			common_prep_arg(&cp_arg);
 			spdk_copy_engine_finish(common_fini_cb, &cp_arg);
 			xs_poll_completion(ctxt, &cp_arg.cca_inflights);

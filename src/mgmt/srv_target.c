@@ -434,8 +434,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 
 	rc = mkdir(newborn, 0700);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to created pool directory: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to created pool directory: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -454,8 +453,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	/** ready for prime time, move away from NEWBORNS dir */
 	rc = rename(newborn, path);
 	if (rc < 0) {
-		D_ERROR("failed to rename pool directory: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to rename pool directory: %d\n", rc);
 		D_GOTO(out_tree, rc = daos_errno2der(errno));
 	}
 
