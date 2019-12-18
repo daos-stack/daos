@@ -43,7 +43,7 @@ DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
 DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
 /* debug bit groups */
-#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 
 static void
 debug_fini_locked(void)

@@ -2343,6 +2343,7 @@ obj_null_csum(const daos_obj_update_t *args) {
 static void
 obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	daos_iod_t		*iod;
 	int			 i;
 
 	obj_null_csum(args);
@@ -2350,10 +2351,14 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 		return;
 
 	for (i = 0; i < args->nr; i++) {
+		iod = &args->iods[i];
+
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
 		daos_csummer_calc(csummer, &args->sgls[i],
-				  &args->iods[i], &args->iods[i].iod_csums);
+				  iod, &iod->iod_csums);
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-			((char *)args->iods[i].iod_csums->cs_csum)[0]++;
+			((char *) iod->iod_csums->cs_csum)[0]++;
 	}
 }
 
