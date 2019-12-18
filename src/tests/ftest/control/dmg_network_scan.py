@@ -24,6 +24,7 @@
 from __future__ import print_function
 
 import os
+import re
 
 from dmg_utils import DmgCommand, DmgFailure
 from apricot import TestWithServers
@@ -40,6 +41,86 @@ class DmgNetworkScanTest(TestWithServers):
         """Initialize a DmgNetworkScanTest object."""
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
+        self.setup_start_servers = False
+
+    def get_net_info(self, provider):
+        """Get expected values of domain with fi_info."""
+        fi_info = os.path.join(
+            self.bin, "fi_info -p {} | grep domain | sort -u".format(provider))
+        kwargs = {
+            "cmd": fi_info,
+            "allow_output_check": "combined",
+            "verbose": False,
+            "shell": True,
+        }
+        try:
+            output = process.run(**kwargs)
+        except process.CmdError as error:
+            # Command failed or possibly timed out
+            msg = "Error occurred running '{}': {}".format(fi_info, error)
+            self.fail(msg)
+
+        device = []
+        if (output.stdout != ""):
+            device = [line.split()[-1] for line in output.stdout.splitlines()]
+
+        return device
+
+    def get_numa_info(self):
+        """Get expected values of numa nodes with lstopo."""
+        lstopo = os.path.join(self.bin, "lstopo")
+        kwargs = {
+            "cmd": lstopo,
+            "allow_output_check": "combined",
+            "verbose": False,
+            "shell": True,
+        }
+        try:
+            output = process.run(**kwargs)
+        except process.CmdError as error:
+            # Command failed or possibly timed out
+            msg = "Error occurred running '{}': {}".format(lstopo, error)
+            self.fail(msg)
+
+        # Separate numa node info, pop first item as it has no useful info
+        numas = re.split("NUMANode", output.stdout)
+        numas.pop(0)
+
+        numas_devs = {}
+        for i, numa in enumerate(numas):
+            net_dev = []
+            split_numa = numa.split("\n")
+            for line in split_numa:
+                if "Net" in line or "OpenFabrics" in line:
+                    # Get the devices i.e. eth0, ib0, ib1
+                    net_dev.append("".join(line.strip().split('"')[1::2]))
+            numas_devs[i] = net_dev
+
+        return numas_devs
+
+    def get_dev_provider(self, device):
+        """Get expected values of provider with fi_info."""
+        fi_info = os.path.join(
+            self.bin, "fi_info -d {} | grep provider | sort -u".format(device))
+        kwargs = {
+            "cmd": fi_info,
+            "allow_output_check": "combined",
+            "verbose": False,
+            "shell": True,
+        }
+        try:
+            output = process.run(**kwargs)
+        except process.CmdError as error:
+            # Command failed or possibly timed out
+            msg = "Error occurred running '{}': {}".format(fi_info, error)
+            self.fail(msg)
+
+        # Clean up string
+        provider = "none"
+        if (output.stdout != ""):
+            provider = output.stdout.splitlines()[0].split()[-1]
+
+        return provider
 
     def test_dmg_network_scan_basic(self):
         """
@@ -73,22 +154,39 @@ class DmgNetworkScanTest(TestWithServers):
                     if item in line:
                         pout[i + j] = line.strip('\t')
 
-        dmg_dev = []
-        exp_dev = self.params.get("options", "/run/expected/")
-        dmg_dev_list = [list(pout.values())[i:i + len(exp_dev)]
-                        for i in range(0, len(pout.items()), len(exp_dev))]
+        # Get info from tools
+        exp_out = []
+        exp_devs = self.get_net_info("sockets") + self.get_net_info("psm2")
+        t_hfi = {"hfi1_0": "ib0", "hfi1_1": "ib1"}
+        for numa, devs in self.get_numa_info().items():
+            if devs:
+                n_devs = [dev for dev in devs if dev in exp_devs]
+                print("Numa devs: {}".format(n_devs))
+                numa = [numa] * len(n_devs)
+                dev_prov = {dev: self.get_dev_provider(dev) for dev in n_devs}
+                for n, d, p in zip(numa, dev_prov.keys(), dev_prov.values()):
+                    if d in t_hfi:
+                        d = t_hfi[d]
+                    net_obj = [
+                        'fabric_iface: ' + d,
+                        'provider: ofi+' + p,
+                        'pinned_numa_node: ' + str(n),
+                    ]
+                    exp_out.append(net_obj)
 
-        # Convert dmg list of string to list of tuples
-        for sub_list in dmg_dev_list:
-            dmg_dev.append([tuple(map(str, sub.split(': ')))
-                            for sub in sub_list])
+        # Format the dict of values into list pairs
+        # dmg_out = [list(pout.values())[i:(i + len(exp_out)-1)]
+        #                 for i in range(0, len(pout.items()), len(exp_out))]
+
+        print("dmg_out: {}".format(dmg_out))
+        print("exp_out: {}".format(exp_out))
 
         # Verify
         try:
-            for i, device in enumerate(exp_dev):
+            for i, device in enumerate(exp_out):
                 device.sort(key=lambda x: x[0])
-                dmg_dev[i].sort(key=lambda x: x[0])
-                if device not in dmg_dev:
+                dmg_out[i].sort(key=lambda x: x[0])
+                if device not in dmg_out:
                     self.fail("Could not find device information on dmg ouput.")
         except DmgFailure as error:
             self.log.error(str(error))
