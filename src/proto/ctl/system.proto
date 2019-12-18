@@ -33,6 +33,7 @@ message SystemMember {
 	string addr = 1;
 	string uuid = 2;
 	uint32 rank = 3;
+	uint32 state = 4;
 }
 
 // SystemStopReq supplies system shutdown parameters.

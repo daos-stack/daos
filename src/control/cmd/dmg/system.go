@@ -141,7 +141,7 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
 		row[uuidTitle] = m.UUID
 		row[addrTitle] = m.Addr.String()
-		row[stateTitle] = m.State.String()
+		row[stateTitle] = m.State().String()
 
 		table = append(table, row)
 	}

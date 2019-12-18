@@ -31,7 +31,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -40,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerStarter defines an interface for starting the actual
@@ -453,12 +453,12 @@ func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 // newMember returns reference to a new member struct if one can be retrieved
 // from superblock, error otherwise. Member populated with local reply address.
-func (srv *IOServerInstance) newMember() (*common.SystemMember, error) {
+func (srv *IOServerInstance) newMember() (*system.Member, error) {
 	if !srv.hasSuperblock() {
 		return nil, errors.New("missing superblock")
 	}
 	sb := srv.getSuperblock()
 
-	return common.NewSystemMember(sb.Rank.Uint32(), sb.UUID,
-		srv.msClient.cfg.ControlAddr), nil
+	return system.NewMember(sb.Rank.Uint32(), sb.UUID,
+		srv.msClient.cfg.ControlAddr, system.MemberStateStarted), nil
 }

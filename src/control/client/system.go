@@ -27,9 +27,10 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // SystemStopReq contains the inputs for the system stop command.
@@ -42,7 +43,7 @@ type SystemStopReq struct {
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop(req SystemStopReq) (common.SystemMemberResults, error) {
+func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -59,13 +60,13 @@ func (c *connList) SystemStop(req SystemStopReq) (common.SystemMemberResults, er
 
 	c.log.Debugf("DAOS system shutdown response: %s\n", rpcResp)
 
-	return common.MemberResultsFromPB(c.log, rpcResp.Results), nil
+	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
 
 // SystemMemberQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
+func (c *connList) SystemMemberQuery() (system.Members, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 
 	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
 
-	return common.MembersFromPB(c.log, rpcResp.Members)
+	return proto.MembersFromPB(c.log, rpcResp.Members)
 }
 
 // KillRank Will terminate server running at given rank on pool specified by

@@ -29,8 +29,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerHarness is responsible for managing IOServer instances
@@ -179,7 +179,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 
 // Start starts all configured instances and the management
 // service, then waits for them to exit.
-func (h *IOServerHarness) Start(parent context.Context, membership *common.Membership) error {
+func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}

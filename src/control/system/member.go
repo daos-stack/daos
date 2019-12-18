@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package common
+package system
 
 import (
 	"fmt"
@@ -35,50 +35,62 @@ import (
 )
 
 // MemberState represents the activity state of DAOS system members.
-//go:generate stringer -type=MemberState
 type MemberState int
 
 const (
-	Started MemberState = iota
-	Stopping
-	Errored
-	Unresponsive
+	MemberStateUnknown MemberState = iota
+	MemberStateStarted
+	MemberStateStopping
+	MemberStateErrored
+	MemberStateUnresponsive
 )
 
-// SystemMember refers to a data-plane instance that is a member of this DAOS
+func (ms MemberState) String() string {
+	return [...]string{"Unknown", "Started", "Stopping", "Errored", "Unresponsive"}[ms]
+}
+
+// Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
-type SystemMember struct {
+type Member struct {
 	Rank  uint32
 	UUID  string
 	Addr  net.Addr
-	State MemberState
+	state MemberState
 }
 
-func (sm SystemMember) String() string {
-	return fmt.Sprintf("%s/%s/%d", sm.Addr, sm.UUID, sm.Rank)
+func (sm *Member) String() string {
+	return fmt.Sprintf("%s/%d", sm.Addr, sm.Rank)
 }
 
-func NewSystemMember(rank uint32, uuid string, addr net.Addr) *SystemMember {
-	return &SystemMember{Rank: rank, UUID: uuid, Addr: addr}
+func (sm *Member) State() MemberState {
+	return sm.state
 }
 
-type SystemMembers []*SystemMember
+func (sm *Member) SetState(s MemberState) {
+	sm.state = s
+}
 
-// SystemMemberResult refers to the result of an action on a SystemMember
+func NewMember(rank uint32, uuid string, addr net.Addr, state MemberState) *Member {
+	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
+}
+
+type Members []*Member
+
+// MemberResult refers to the result of an action on a Member
 // identified by string representation "address/uuid/rank".
-type SystemMemberResult struct {
+type MemberResult struct {
 	ID     string
 	Action string
 	Err    error
 }
 
-func NewSystemMemberResult(memberID, action string) *SystemMemberResult {
-	return &SystemMemberResult{ID: memberID, Action: action}
+func NewMemberResult(memberID, action string, err error) *MemberResult {
+	return &MemberResult{ID: memberID, Action: action, Err: err}
 }
 
-type SystemMemberResults []*SystemMemberResult
+type MemberResults []*MemberResult
 
-func (smr SystemMemberResults) HasErrors() bool {
+func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
 		if res.Err != nil {
 			return true
@@ -91,11 +103,11 @@ func (smr SystemMemberResults) HasErrors() bool {
 type Membership struct {
 	sync.RWMutex
 	log     logging.Logger
-	members map[uint32]*SystemMember
+	members map[uint32]*Member
 }
 
 // Add adds member to membership, returns member count.
-func (m *Membership) Add(member *SystemMember) (int, error) {
+func (m *Membership) Add(member *Member) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -108,16 +120,16 @@ func (m *Membership) Add(member *SystemMember) (int, error) {
 	return len(m.members), nil
 }
 
-// Update updates existing member in membership, returns error.
-func (m *Membership) Update(member *SystemMember) error {
+// SetMemberState updates existing member state in membership, returns error.
+func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	m.Lock()
 	defer m.Unlock()
 
-	if _, found := m.members[member.Rank]; !found {
-		return errors.Errorf("member with rank %d not found", member.Rank)
+	if _, found := m.members[rank]; !found {
+		return errors.Errorf("member with rank %d not found", rank)
 	}
 
-	m.members[member.Rank] = member
+	m.members[rank].SetState(state)
 
 	return nil
 }
@@ -131,7 +143,7 @@ func (m *Membership) Remove(rank uint32) {
 }
 
 // Get retrieves member from membership based on UUID.
-func (m *Membership) Get(rank uint32) (member *SystemMember, err error) {
+func (m *Membership) Get(rank uint32) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -140,7 +152,7 @@ func (m *Membership) Get(rank uint32) (member *SystemMember, err error) {
 		return nil, errors.Errorf("member with rank %d not found", rank)
 	}
 
-	return
+	return member, nil
 }
 
 // Ranks returns ordered member ranks.
@@ -158,7 +170,7 @@ func (m *Membership) Ranks() (ranks []uint32) {
 }
 
 // Members returns all system members.
-func (m *Membership) Members() (ms SystemMembers) {
+func (m *Membership) Members() (ms Members) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -174,5 +186,5 @@ func (m *Membership) Members() (ms SystemMembers) {
 }
 
 func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[uint32]*SystemMember), log: log}
+	return &Membership{members: make(map[uint32]*Member), log: log}
 }

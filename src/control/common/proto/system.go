@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package common
+package proto
 
 import (
 	"errors"
@@ -29,15 +29,19 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // MembersToPB converts internal member structs to protobuf equivalents.
-func MembersToPB(members SystemMembers) (pbMembers []*ctlpb.SystemMember, err error) {
+func MembersToPB(members system.Members) (pbMembers []*ctlpb.SystemMember, err error) {
 	pbMembers = make([]*ctlpb.SystemMember, 0, len(members))
 
 	for _, m := range members {
 		pbMembers = append(pbMembers, &ctlpb.SystemMember{
-			Addr: m.Addr.String(), Uuid: m.UUID, Rank: m.Rank,
+			Addr:  m.Addr.String(),
+			Uuid:  m.UUID,
+			Rank:  m.Rank,
+			State: uint32(m.State()),
 		})
 	}
 
@@ -47,9 +51,9 @@ func MembersToPB(members SystemMembers) (pbMembers []*ctlpb.SystemMember, err er
 // MembersFromPB converts to member slice from protobuf format.
 //
 // Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) (members SystemMembers, err error) {
+func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) (members system.Members, err error) {
 	var addr net.Addr
-	members = make(SystemMembers, 0, len(pbMembers))
+	members = make(system.Members, 0, len(pbMembers))
 
 	for _, m := range pbMembers {
 		addr, err = net.ResolveTCPAddr("tcp", m.Addr)
@@ -57,16 +61,15 @@ func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) (members
 			return
 		}
 
-		members = append(members, &SystemMember{
-			Addr: addr, UUID: m.Uuid, Rank: m.Rank,
-		})
+		members = append(members, system.NewMember(m.Rank, m.Uuid, addr,
+			system.MemberState(m.State)))
 	}
 
 	return
 }
 
-// MemberResultsToPB converts SystemMemberResults to equivalent protobuf format.
-func MemberResultsToPB(results SystemMemberResults) []*ctlpb.SystemStopResp_Result {
+// MemberResultsToPB converts system.MemberResults to equivalent protobuf format.
+func MemberResultsToPB(results system.MemberResults) []*ctlpb.SystemStopResp_Result {
 	pbResults := make([]*ctlpb.SystemStopResp_Result, 0, len(results))
 
 	for _, r := range results {
@@ -82,9 +85,9 @@ func MemberResultsToPB(results SystemMemberResults) []*ctlpb.SystemStopResp_Resu
 }
 
 // MemberResultsFromPB converts results from member actions (protobuf format) to
-// SystemMemberResults.
-func MemberResultsFromPB(log logging.Logger, pbResults []*ctlpb.SystemStopResp_Result) SystemMemberResults {
-	results := make(SystemMemberResults, 0, len(pbResults))
+// system.MemberResults.
+func MemberResultsFromPB(log logging.Logger, pbResults []*ctlpb.SystemStopResp_Result) system.MemberResults {
+	results := make(system.MemberResults, 0, len(pbResults))
 
 	for _, mr := range pbResults {
 		var err error
@@ -92,9 +95,8 @@ func MemberResultsFromPB(log logging.Logger, pbResults []*ctlpb.SystemStopResp_R
 			err = errors.New(mr.Msg)
 		}
 
-		results = append(results, &SystemMemberResult{
-			ID: mr.Id, Action: mr.Action, Err: err,
-		})
+		results = append(results, system.NewMemberResult(mr.Id,
+			mr.Action, err))
 	}
 
 	return results

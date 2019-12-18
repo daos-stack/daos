@@ -27,9 +27,10 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -50,32 +51,33 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 		return nil, err
 	}
 
-	svc.log.Debugf("received SystemMemberQuery RPC; reporting DAOS system members (%+v)", svc.membership.Members())
+	svc.log.Debug("Received SystemMemberQuery RPC")
 
-	membersPB, err := common.MembersToPB(svc.membership.Members())
+	membersPB, err := proto.MembersToPB(svc.membership.Members())
 	if err != nil {
 		return nil, err
 	}
 	resp.Members = membersPB
 
-	svc.log.Debugf("responding to SystemMemberQuery RPC; resp.Members: %+v", resp.Members)
+	svc.log.Debug("Responding to SystemMemberQuery RPC")
 
 	return resp, nil
 }
 
 // prepShutdown sends multicast PrepShutdown gRPC requests to system membership list.
-func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerInstance) common.SystemMemberResults {
+func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerInstance) system.MemberResults {
+	svc.membership.Lock()
+	defer svc.membership.Unlock()
+
 	members := svc.membership.Members()
-	results := make(common.SystemMemberResults, 0, len(members))
+	results := make(system.MemberResults, 0, len(members))
 
 	// total retry timeout, allows for 10 retries
 	ctx, _ = context.WithTimeout(ctx, prepShutdownTimeout)
 
 	// TODO: parallelise and make async.
 	for _, member := range members {
-		svc.log.Debugf("MgmtSvc.prepShutdown member %+v\n", *member)
-
-		result := common.NewSystemMemberResult(member.String(), "prep shutdown")
+		result := system.NewMemberResult(member.String(), "prep shutdown", nil)
 
 		resp, err := leader.msClient.PrepShutdown(ctx, member.Addr.String(),
 			&mgmtpb.PrepShutdownReq{Rank: member.Rank})
@@ -86,12 +88,14 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 				resp.GetStatus())
 		}
 
-		member.State = common.Stopping
+		state := system.MemberStateStopping
 		if result.Err != nil {
-			member.State = common.Errored
+			state = system.MemberStateErrored
 			svc.log.Errorf("MgmtSvc.prepShutdown error %s\n", result.Err)
 		}
-		svc.membership.Update(member)
+		if err := svc.membership.SetMemberState(member.Rank, state); err != nil {
+			svc.log.Errorf("setting member state: %s", err)
+		}
 
 		results = append(results, result)
 	}
@@ -99,10 +103,8 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 	return results
 }
 
-func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInstance, member *common.SystemMember) *common.SystemMemberResult {
-	result := common.NewSystemMemberResult(member.String(), "stop")
-
-	svc.log.Debugf("MgmtSvc.stopMembers kill member %+v\n", *member)
+func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInstance, member *system.Member) *system.MemberResult {
+	result := system.NewMemberResult(member.String(), "stop", nil)
 
 	// TODO: force should be applied if a number of retries fail
 	resp, err := leader.msClient.Stop(ctx, member.Addr.String(),
@@ -114,21 +116,24 @@ func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInsta
 			resp.GetStatus())
 	}
 
-	if result.Err == nil {
-		svc.membership.Remove(member.Rank)
-	} else {
-		member.State = common.Errored
-		svc.membership.Update(member)
-		svc.log.Errorf("MgmtSvc.stopMembers error %s\n", result.Err)
+	if result.Err != nil {
+		if err := svc.membership.SetMemberState(member.Rank,
+			system.MemberStateErrored); err != nil {
+
+			svc.log.Errorf("setting member state: %s", err)
+		}
+		svc.log.Errorf("MgmtSvc.stopMember error %s\n", result.Err)
 	}
+
+	svc.membership.Remove(member.Rank)
 
 	return result
 }
 
 // stopMembers sends multicast KillRank gRPC requests to system membership list.
-func (svc *ControlService) stopMembers(ctx context.Context, leader *IOServerInstance) (common.SystemMemberResults, error) {
+func (svc *ControlService) stopMembers(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
 	members := svc.membership.Members()
-	results := make(common.SystemMemberResults, 0, len(members))
+	results := make(system.MemberResults, 0, len(members))
 
 	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
 	if err != nil {
@@ -174,7 +179,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 
 		// prepare system members for shutdown
 		prepResults := svc.prepShutdown(ctx, mi)
-		resp.Results = common.MemberResultsToPB(prepResults)
+		resp.Results = proto.MemberResultsToPB(prepResults)
 		if prepResults.HasErrors() {
 			return resp, errors.New("PrepShutdown HasErrors")
 		}
@@ -188,7 +193,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 		if err != nil {
 			return nil, err
 		}
-		resp.Results = common.MemberResultsToPB(results)
+		resp.Results = proto.MemberResultsToPB(results)
 	}
 
 	if resp.Results == nil {
