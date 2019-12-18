@@ -336,3 +336,15 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 {
 	return 0;
 }
+
+int
+ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
+{
+	return 0;
+}
