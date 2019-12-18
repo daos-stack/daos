@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2018-2019 Intel Corporation.
+"""
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,12 +20,12 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from pool_test_base import PoolTestBase
 
 
-class BadCreateTest(PoolTestBase):
-    """Test pool create calls.
+class BadCreate(PoolTestBase):
+    """Test pool creation with NVMe hardware.
 
     Test Class Description:
         Tests pool create API by passing NULL and otherwise inappropriate
@@ -35,12 +35,12 @@ class BadCreateTest(PoolTestBase):
     :avocado: recursive
     """
 
-    def test_create(self):
+    def test_bad_create_hw(self):
         """Test ID: DAOS-???.
 
         Test Description:
             Pass bad parameters to pool create.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        :avocado: tags=all,pool,full_regression,hw,tiny,badcreate
         """
         self.create_pool_test()

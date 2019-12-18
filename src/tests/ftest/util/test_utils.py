@@ -82,16 +82,18 @@ class TestDaosApiBase(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
     """A base class for functional testing of DaosPools objects."""
 
-    def __init__(self, namespace, cb_handler=None):
+    def __init__(self, namespace, cb_handler=None, debug=False):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            debug (bool, optional): log additional info. Defaults to False.
         """
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
+        self.debug = debug
         self.log = getLogger(__name__)
 
     def _call_method(self, method, kwargs):
@@ -104,6 +106,13 @@ class TestDaosApiBase(ObjectWithParameters):
         if self.cb_handler:
             kwargs["cb_func"] = self.cb_handler.callback
 
+        if self.debug:
+            self.log.debug(
+                "Calling %s.%s(%s)",
+                method.__module__, method.__name__,
+                ", ".join(
+                    ["{}={}".format(key, val) for key, val in kwargs.items()])
+            )
         try:
             method(**kwargs)
         except DaosApiError as error:
@@ -178,7 +187,7 @@ class TestDaosApiBase(ObjectWithParameters):
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, log=None, cb_handler=None):
+    def __init__(self, context, log=None, cb_handler=None, debug=False):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -189,18 +198,19 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            debug (bool, optional): log additional info. Defaults to False.
         """
-        super(TestPool, self).__init__("/run/pool/*", cb_handler)
+        super(TestPool, self).__init__("/run/pool/*", cb_handler, debug)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
 
         self.mode = BasicParameter(None)
         self.name = BasicParameter(None)            # server group name
-        self.svcn = BasicParameter(None)
+        self.svcn = BasicParameter(1, 1)
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
-        self.nvme_size = BasicParameter(None)
+        self.nvme_size = BasicParameter(0, 0)
 
         self.pool = None
         self.uuid = None
@@ -223,12 +233,15 @@ class TestPool(TestDaosApiBase):
             self.log.info("Creating a pool")
         self.pool = DaosPool(self.context)
         kwargs = {
-            "mode": self.mode.value, "uid": self.uid, "gid": self.gid,
-            "scm_size": self.scm_size.value, "group": self.name.value}
-        for key in ("target_list", "svcn", "nvme_size"):
-            value = getattr(self, key).value
-            if value:
-                kwargs[key] = value
+            "mode": self.mode.value,
+            "uid": self.uid,
+            "gid": self.gid,
+            "scm_size": self.scm_size.value,
+            "group": self.name.value,
+            "target_list": self.target_list.value,
+            "svcn": self.svcn.value,
+            "nvme_size": self.nvme_size.value,
+        }
         self._call_method(self.pool.create, kwargs)
         self.uuid = self.pool.get_uuid_str()
         self.svc_ranks = [
@@ -695,6 +708,7 @@ class TestContainerData(object):
 
         Returns:
             list: a list of all the used akeys
+
         """
         return [record["akey"] for record in self.records]
 
@@ -733,6 +747,7 @@ class TestContainerData(object):
 
         Raises:
             DaosTestError: if there was an error writing the record
+
         """
         self.records.append({"akey": akey, "dkey": dkey, "data": data})
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "rank": rank}
@@ -771,6 +786,7 @@ class TestContainerData(object):
 
         Raises:
             DaosTestError: if there was an error writing the object
+
         """
         for _ in range(record_qty):
             akey = get_random_string(akey_size, self.get_akeys())
@@ -806,6 +822,7 @@ class TestContainerData(object):
 
         Returns:
             str: the data read for the container
+
         """
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "txn": self.txn}
         try:
@@ -836,6 +853,7 @@ class TestContainerData(object):
         Returns:
             bool: True if ll the records where read successfully and matched
                 what was originally written; False otherwise
+
         """
         status = len(self.records) > 0
         for record_info in self.records:
@@ -1053,6 +1071,7 @@ class TestContainer(TestDaosApiBase):
 
         Raises:
             DaosTestError: if there was an error writing the object
+
         """
         self.open()
         self.log.info(
@@ -1078,7 +1097,8 @@ class TestContainer(TestDaosApiBase):
                 to False.
 
         Returns:
-            bool: True if
+            bool: True if all the objects were read correctly
+
         """
         self.open()
         self.log.info(

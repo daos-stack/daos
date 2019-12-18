@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from pool_test_base import PoolTestBase
 
 
@@ -35,12 +35,16 @@ class BadCreateTest(PoolTestBase):
     :avocado: recursive
     """
 
-    def test_create(self):
+    def test_create_basic(self):
         """Test ID: DAOS-???.
 
         Test Description:
-            Pass bad parameters to pool create.
+            The DaosPool.create() method converts some of the inputs into
+            c_types before calling the C function.  To reduce the number of
+            permutations test the null values for theses arguments separately
+            to verify the basic invalid argument handling of the python code.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        :avocado: tags=all,pool,full_regression,tiny,badcreate,basic
         """
-        self.create_pool_test()
+        namespace = self.params.get("pool_namespace", "/run/pool_namespaces/*")
+        self.create_pool_test(namespace)

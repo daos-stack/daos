@@ -46,6 +46,7 @@ DaosObjClass = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
 
+
 class DaosPool(object):
     """A python object representing a DAOS pool."""
 
@@ -71,17 +72,23 @@ class DaosPool(object):
         self.uuid = conversion.str_to_c_uuid(uuidstr)
 
     def set_group(self, group):
-        """Set group given a string"""
+        """Set group given a string."""
         self.group = ctypes.create_string_buffer(group)
 
     def create(self, mode, uid, gid, scm_size, group, target_list=None,
                cb_func=None, svcn=1, nvme_size=0):
         """Send a pool creation request to the daos server group."""
-        c_mode = ctypes.c_uint(mode)
-        c_uid = ctypes.c_uint(uid)
-        c_gid = ctypes.c_uint(gid)
-        c_scm_size = ctypes.c_longlong(scm_size)
-        c_nvme_size = ctypes.c_longlong(nvme_size)
+        c_mode = c_uid = c_gid = c_scm_size = c_nvme_size = None
+        for name in ("mode", "uid", "gid", "scm_size", "nvme_size"):
+            local_name = "_".join(["c", name])
+            try:
+                if name in ("scm_size", "nvme_size"):
+                    locals()[local_name] = ctypes.c_longlong(locals()[name])
+                else:
+                    locals()[local_name] = ctypes.c_int(locals()[name])
+            except TypeError as error:
+                raise DaosApiError(
+                    "Invalid '{}' argument: {}".format(name, error))
         if group:
             self.set_group(group)
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -2116,6 +2123,7 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
+
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2127,9 +2135,9 @@ class DaosContext(object):
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
 
-        self.libdaos = ctypes.CDLL(os.path.join(path,
-                                                'libdaos.so.{}'.format(daos_version)),
-                                   mode=ctypes.DEFAULT_MODE)
+        self.libdaos = ctypes.CDLL(
+            os.path.join(path, 'libdaos.so.{}'.format(daos_version)),
+            mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
@@ -2235,6 +2243,7 @@ class DaosLog:
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
+
 
 class DaosApiError(Exception):
     """DAOS API exception class."""
