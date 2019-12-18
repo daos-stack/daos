@@ -289,6 +289,96 @@ void   mgmt__smd_pool_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__smd_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__dev_state_req__init
+                     (Mgmt__DevStateReq         *message)
+{
+  static const Mgmt__DevStateReq init_value = MGMT__DEV_STATE_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__dev_state_req__get_packed_size
+                     (const Mgmt__DevStateReq *message)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__dev_state_req__pack
+                     (const Mgmt__DevStateReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__dev_state_req__pack_to_buffer
+                     (const Mgmt__DevStateReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__DevStateReq *
+       mgmt__dev_state_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__DevStateReq *)
+     protobuf_c_message_unpack (&mgmt__dev_state_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__dev_state_req__free_unpacked
+                     (Mgmt__DevStateReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__dev_state_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__dev_state_resp__init
+                     (Mgmt__DevStateResp         *message)
+{
+  static const Mgmt__DevStateResp init_value = MGMT__DEV_STATE_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__dev_state_resp__get_packed_size
+                     (const Mgmt__DevStateResp *message)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__dev_state_resp__pack
+                     (const Mgmt__DevStateResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__dev_state_resp__pack_to_buffer
+                     (const Mgmt__DevStateResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__dev_state_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__DevStateResp *
+       mgmt__dev_state_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__DevStateResp *)
+     protobuf_c_message_unpack (&mgmt__dev_state_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__dev_state_resp__free_unpacked
+                     (Mgmt__DevStateResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__dev_state_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__bio_health_req__field_descriptors[2] =
 {
   {
@@ -588,7 +678,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_dev_resp__device__field_descript
     offsetof(Mgmt__SmdDevResp__Device, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -708,7 +798,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -720,7 +810,7 @@ static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descripto
     offsetof(Mgmt__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -798,5 +888,107 @@ const ProtobufCMessageDescriptor mgmt__smd_pool_resp__descriptor =
   mgmt__smd_pool_resp__field_indices_by_name,
   1,  mgmt__smd_pool_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__smd_pool_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__dev_state_req__field_descriptors[1] =
+{
+  {
+    "dev_uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DevStateReq, dev_uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__dev_state_req__field_indices_by_name[] = {
+  0,   /* field[0] = dev_uuid */
+};
+static const ProtobufCIntRange mgmt__dev_state_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__dev_state_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.DevStateReq",
+  "DevStateReq",
+  "Mgmt__DevStateReq",
+  "mgmt",
+  sizeof(Mgmt__DevStateReq),
+  1,
+  mgmt__dev_state_req__field_descriptors,
+  mgmt__dev_state_req__field_indices_by_name,
+  1,  mgmt__dev_state_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__dev_state_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__dev_state_resp__field_descriptors[3] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DevStateResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "dev_uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DevStateResp, dev_uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "dev_state",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DevStateResp, dev_state),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__dev_state_resp__field_indices_by_name[] = {
+  2,   /* field[2] = dev_state */
+  1,   /* field[1] = dev_uuid */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__dev_state_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__dev_state_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.DevStateResp",
+  "DevStateResp",
+  "Mgmt__DevStateResp",
+  "mgmt",
+  sizeof(Mgmt__DevStateResp),
+  3,
+  mgmt__dev_state_resp__field_descriptors,
+  mgmt__dev_state_resp__field_indices_by_name,
+  1,  mgmt__dev_state_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__dev_state_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
