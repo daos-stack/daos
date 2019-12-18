@@ -139,8 +139,6 @@ class DaosPerfCommand(object):
         Returns:
             str: returns daos_perf command
         """
-        with open(os.path.join(basepath, ".build_vars.json")) as afile:
-            build_paths = json.load(afile)
         attach_info_path = os.path.join(basepath, "install/tmp")
 
         load_mpi('openmpi')

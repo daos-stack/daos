@@ -660,8 +660,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             raise ServerFailed("Can't find orterun")
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
-        if uri_path is not None:
-            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd.extend(["--mca", "btl", "self,sm,tcp"])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
 
         # Add any user supplied environment
