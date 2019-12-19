@@ -313,6 +313,34 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// PoolQuery forwards a pool query request to the I/O server.
+func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolQuery, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolQueryResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", *req)
