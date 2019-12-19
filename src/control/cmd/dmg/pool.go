@@ -163,7 +163,7 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -196,7 +196,7 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -242,7 +242,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -270,7 +270,7 @@ func (d *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }

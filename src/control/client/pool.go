@@ -251,7 +251,7 @@ func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -295,7 +295,7 @@ func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLR
 	}
 
 	return &PoolOverwriteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -341,7 +341,7 @@ func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, erro
 	}
 
 	return &PoolUpdateACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -386,6 +386,6 @@ func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, erro
 	}
 
 	return &PoolDeleteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
