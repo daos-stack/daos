@@ -698,13 +698,11 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 			break;
 		case 1:
 			/*
-			 * Some affected targets are still in DOWN, the NVMe
-			 * state needs to stick to BIO_BS_STATE_FAULTY.
+			 * All affected targets are in DOWN, it's safe to
+			 * transit NVMe state to BIO_BS_STATE_TEARDOWN now.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are in excluding.\n",
 				DP_UUID(pool_info->spi_id));
-			if (rc == 0)
-				rc = 1;
 			break;
 		case 2:
 			/*
