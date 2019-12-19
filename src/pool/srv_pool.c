@@ -1776,7 +1776,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
-	daos_prop_t		       *prop;
+	daos_prop_t		       *prop = NULL;
 	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
 	struct pool_owner		owner;
@@ -1857,7 +1857,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
 			in->pci_capas, rc);
-		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
+		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
 	/*
@@ -1872,27 +1872,27 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 	}
 	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
 			      &out->pco_map_buf_size);
 	if (rc != 0)
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 
 	if (skip_update)
-		D_GOTO(out_pool_prop, rc = 0);
+		D_GOTO(out_map_version, rc = 0);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 
 	/* Take care of exclusive handles. */
 	if (nhandles != 0) {
 		if (in->pci_capas & DAOS_PC_EX) {
 			D_DEBUG(DF_DSMS, DF_UUID": others already connected\n",
 				DP_UUID(in->pci_op.pi_uuid));
-			D_GOTO(out_pool_prop, rc = -DER_BUSY);
+			D_GOTO(out_map_version, rc = -DER_BUSY);
 		} else {
 			/*
 			 * If there is a non-exclusive handle, then all handles
@@ -1903,9 +1903,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 					  RDB_PROBE_FIRST, NULL /* key_in */,
 					  NULL /* key_out */, &value);
 			if (rc != 0)
-				D_GOTO(out_pool_prop, rc);
+				D_GOTO(out_map_version, rc);
 			if (hdl.ph_capas & DAOS_PC_EX)
-				D_GOTO(out_pool_prop, rc = -DER_BUSY);
+				D_GOTO(out_map_version, rc = -DER_BUSY);
 		}
 	}
 
@@ -1916,7 +1916,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 	}
 
 	hdl.ph_capas = in->pci_capas;
@@ -1925,37 +1925,40 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
 	if (rc != 0)
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 
 	rc = rdb_tx_commit(&tx);
 	if (rc)
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 
 	/* Update pool map by IV */
 	rc = pool_map_update(rpc->cr_ctx, svc, map_version, map_buf);
 	if (rc) {
 		D_ERROR("pool_map_update failed %d.\n", rc);
-		D_GOTO(out_pool_prop, rc);
+		D_GOTO(out_map_version, rc);
 	}
 
-	/* Update pool properties by IV */
-	rc = pool_iv_prop_update(svc->ps_pool, prop);
-	if (rc)
-		D_ERROR("pool_iv_prop_update failed %d.\n", rc);
-
-out_pool_prop:
-	daos_prop_free(prop);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	/*
+	 * TODO: Introduce prop version to avoid inconsistent prop over targets
+	 *	 caused by the out of order IV sync.
+	 */
+	if (!rc && prop != NULL) {
+		rc = pool_iv_prop_update(svc->ps_pool, prop);
+		if (rc)
+			D_ERROR("pool_iv_prop_update failed %d.\n", rc);
+	}
+	daos_prop_free(prop);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -2491,7 +2494,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 	out->pqo_prop = prop;
 
-	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY)) {
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL) {
 		daos_prop_t		*iv_prop = NULL;
 		struct daos_prop_entry	*entry, *iv_entry;
 		int			i;
@@ -2714,6 +2717,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	struct pool_prop_set_out	*out = crt_reply_get(rpc);
 	struct pool_svc			*svc;
 	struct rdb_tx			tx;
+	daos_prop_t			*prop = NULL;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -2741,9 +2745,29 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
+	/* Read all props & update prop IV */
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read prop for pool, rc=%d\n",
+			DP_UUID(in->psi_op.pi_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+	D_ASSERT(prop != NULL);
+
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	/*
+	 * TODO: Introduce prop version to avoid inconsistent prop over targets
+	 *	 caused by the out of order IV sync.
+	 */
+	if (!rc && prop != NULL) {
+		rc = pool_iv_prop_update(svc->ps_pool, prop);
+		if (rc)
+			D_ERROR(DF_UUID": failed to update prop IV for pool, "
+				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
+	}
+	daos_prop_free(prop);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
