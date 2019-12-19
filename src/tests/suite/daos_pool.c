@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -518,7 +518,7 @@ pool_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
-	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_SNAPSHOT) {
+	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_LAZY) {
 		print_message("reclaim verification filed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}

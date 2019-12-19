@@ -3,9 +3,11 @@
 
 package drpc
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,9 +18,9 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// *
+//*
 // Status represents the valid values for a response status.
 type Status int32
 
@@ -43,6 +45,7 @@ var Status_name = map[int32]string{
 	6: "FAILED_UNMARSHAL_PAYLOAD",
 	7: "FAILED_MARSHAL",
 }
+
 var Status_value = map[string]int32{
 	"SUCCESS":                  0,
 	"SUBMITTED":                1,
@@ -57,11 +60,12 @@ var Status_value = map[string]int32{
 func (x Status) String() string {
 	return proto.EnumName(Status_name, int32(x))
 }
+
 func (Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_c298b2ef89e88d66, []int{0}
+	return fileDescriptor_e4c8b3f839895dc3, []int{0}
 }
 
-// *
+//*
 // Call describes a function call to be executed over the dRPC channel.
 type Call struct {
 	Module               int32    `protobuf:"varint,1,opt,name=module,proto3" json:"module,omitempty"`
@@ -77,16 +81,17 @@ func (m *Call) Reset()         { *m = Call{} }
 func (m *Call) String() string { return proto.CompactTextString(m) }
 func (*Call) ProtoMessage()    {}
 func (*Call) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_c298b2ef89e88d66, []int{0}
+	return fileDescriptor_e4c8b3f839895dc3, []int{0}
 }
+
 func (m *Call) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Call.Unmarshal(m, b)
 }
 func (m *Call) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Call.Marshal(b, m, deterministic)
 }
-func (dst *Call) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Call.Merge(dst, src)
+func (m *Call) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Call.Merge(m, src)
 }
 func (m *Call) XXX_Size() int {
 	return xxx_messageInfo_Call.Size(m)
@@ -125,7 +130,7 @@ func (m *Call) GetBody() []byte {
 	return nil
 }
 
-// *
+//*
 // Response describes the result of a dRPC call.
 type Response struct {
 	Sequence             int64    `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
@@ -140,16 +145,17 @@ func (m *Response) Reset()         { *m = Response{} }
 func (m *Response) String() string { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()    {}
 func (*Response) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_c298b2ef89e88d66, []int{1}
+	return fileDescriptor_e4c8b3f839895dc3, []int{1}
 }
+
 func (m *Response) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Response.Unmarshal(m, b)
 }
 func (m *Response) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Response.Marshal(b, m, deterministic)
 }
-func (dst *Response) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Response.Merge(dst, src)
+func (m *Response) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Response.Merge(m, src)
 }
 func (m *Response) XXX_Size() int {
 	return xxx_messageInfo_Response.Size(m)
@@ -182,14 +188,14 @@ func (m *Response) GetBody() []byte {
 }
 
 func init() {
+	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 	proto.RegisterType((*Call)(nil), "drpc.Call")
 	proto.RegisterType((*Response)(nil), "drpc.Response")
-	proto.RegisterEnum("drpc.Status", Status_name, Status_value)
 }
 
-func init() { proto.RegisterFile("drpc.proto", fileDescriptor_drpc_c298b2ef89e88d66) }
+func init() { proto.RegisterFile("drpc.proto", fileDescriptor_e4c8b3f839895dc3) }
 
-var fileDescriptor_drpc_c298b2ef89e88d66 = []byte{
+var fileDescriptor_e4c8b3f839895dc3 = []byte{
 	// 285 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x90, 0xb1, 0x4e, 0xf3, 0x30,
 	0x1c, 0xc4, 0x3f, 0x37, 0x69, 0xda, 0xef, 0x4f, 0xa9, 0x2c, 0x4b, 0xa0, 0x80, 0x18, 0xaa, 0x8a,
