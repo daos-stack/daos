@@ -24,7 +24,7 @@ server_config:
     name: daos_server
     provider: ofi+sockets
     control_log_mask: INFO
-    control_log_file: /tmp/daos_control0.log  
+    control_log_file: /tmp/daos_control0.log
 #    socket_dir: /var/run/daos_server0
     transport_config:
         allow_insecure: true
@@ -96,8 +96,6 @@ smoke:
     test_timeout: 1200
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
-    # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
-    jobmanager: Sbatch
     nodesperjob: 1
     taskspernode:
       - 1
@@ -114,8 +112,6 @@ soak_stress:
     test_timeout: 7200
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
-    # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
-    jobmanager: Sbatch
     nodesperjob: -1
     # used for perfomance benchmarks
     taskspernode:
@@ -210,7 +206,7 @@ fio_stress:
     size:
         - '1M'
         - '1G'
-    rw: 
+    rw:
         - 'rw'
         - 'randrw'
   test:

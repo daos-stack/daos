@@ -50,17 +50,23 @@ class Soak(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a SoakBase object."""
         super(Soak, self).__init__(*args, **kwargs)
-        self.pool = None
         self.failed_job_id_list = None
         self.test_log_dir = None
         self.exclude_slurm_nodes = None
         self.loop = None
         self.log_dir = None
         self.outputsoakdir = None
-        self.test_log_dir = None
+        self.test_name = None
         self.local_pass_dir = None
-        self.job_id_list = None
         self.dfuse = None
+        self.test_timeout = None
+        self.job_timeout = None
+        self.nodesperjob = None
+        self.task_list = None
+        self.soak_results = None
+        self.srun_params = None
+        self.pool = None
+        self.container = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -172,7 +178,7 @@ class Soak(TestWithServers):
                             "<<IOR cmdline>>: %s \n", commands[-1].__str__())
         return commands
 
-    def _create_dfuse_cont(self, pool):
+    def create_dfuse_cont(self, pool):
         """Create a TestContainer object to be used to create container.
 
         Args:
@@ -195,7 +201,7 @@ class Soak(TestWithServers):
                 "<<FAILED: Dfuse container failed {}>>".format(error))
         return result.stdout.split()[3]
 
-    def _start_dfuse(self, pool):
+    def start_dfuse(self, pool):
         """Create a DfuseCommand object to start dfuse.
 
         Args:
@@ -208,7 +214,7 @@ class Soak(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(pool)
-        self.dfuse.set_dfuse_cont_param(self._create_dfuse_cont(pool))
+        self.dfuse.set_dfuse_cont_param(self.create_dfuse_cont(pool))
 
         # create dfuse mount point
         cmd = "mkdir -p {}".format(self.dfuse.mount_dir.value)
@@ -271,7 +277,7 @@ class Soak(TestWithServers):
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        self._start_dfuse(pool)
+                        self.start_dfuse(pool)
                         fio_cmd.directory.update(
                             self.dfuse.mount_dir.value)
                     # fio command
@@ -279,7 +285,7 @@ class Soak(TestWithServers):
                         "fio", ' ').replace(" POSIX", '')
                     commands.append(cmd)
                     self.log.info(
-                            "<<FIO cmdline>>: %s \n", commands[-1])
+                        "<<FIO cmdline>>: %s \n", commands[-1])
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):
@@ -326,7 +332,6 @@ class Soak(TestWithServers):
         Args:
             job(str): single job from test params list of jobs to run
             pool (obj): TestPool obj
-            job_manager (str): job manager user to create job cmdline
 
         Returns:
             job_cmdlist: list cmdline that can be launched
@@ -483,28 +488,22 @@ class Soak(TestWithServers):
         for index, job in enumerate(jobs):
             cmdlist.extend(self.job_setup(job, pools[index]))
 
-        # if Sbatch; cmdlist is a list of batch scripts
-        if self.job_manager == "Sbatch":
-            # Gather the job_ids
-            job_id_list = self.job_startup(cmdlist)
+        # Gather the job_ids
+        job_id_list = self.job_startup(cmdlist)
 
-            # Initialize the failed_job_list to job_list so that any
-            # unexpected failures will clear the squeue in tearDown
-            self.failed_job_id_list = job_id_list
+        # Initialize the failed_job_list to job_list so that any
+        # unexpected failures will clear the squeue in tearDown
+        self.failed_job_id_list = job_id_list
 
-            # Wait for jobs to finish and cancel/kill jobs if necessary
-            self.failed_job_id_list = self.job_completion(job_id_list)
+        # Wait for jobs to finish and cancel/kill jobs if necessary
+        self.failed_job_id_list = self.job_completion(job_id_list)
 
-            # Test fails on first error but could use continue on error here
-            if len(self.failed_job_id_list) > 0:
-                raise SoakTestError(
-                    "<<FAILED: The following jobs failed {} >>".format(
-                        " ,".join(
-                            str(j_id) for j_id in self.failed_job_id_list)))
-        else:
+        # Test fails on first error but could use continue on error here
+        if len(self.failed_job_id_list) > 0:
             raise SoakTestError(
-                "<<FAILED: Job manager {} is not supported. ".format(
-                    self.job_manager))
+                "<<FAILED: The following jobs failed {} >>".format(
+                    " ,".join(
+                        str(j_id) for j_id in self.failed_job_id_list)))
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
@@ -513,31 +512,31 @@ class Soak(TestWithServers):
             test_param (str): test_params from yaml file
 
         """
-        pool_list = self.params.get("poollist", test_param + "*")
+        self.soak_results = {}
+        self.pool = []
         self.test_timeout = self.params.get("test_timeout", test_param)
         self.job_timeout = self.params.get("job_timeout", test_param)
-        self.job_manager = self.params.get("jobmanager", test_param)
         self.test_name = self.params.get("name", test_param)
-        self.job_list = self.params.get("joblist", test_param + "*")
         self.nodesperjob = self.params.get("nodesperjob", test_param)
         self.test_iteration = self.params.get("iteration", test_param)
         self.task_list = self.params.get("taskspernode", test_param + "*")
-        self.soak_test_name = test_param.split("/")[2]
-        self.start_time = time.time()
-        self.end_time = self.start_time + self.test_timeout
-        self.soak_results = {}
-        self.pool = []
+
+        job_list = self.params.get("joblist", test_param + "*")
+        pool_list = self.params.get("poollist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
         obj_class = self.params.get(
             "object_class", "/run/container_reserved/*")
-        self.slurm_reservation = self.params.get(
+        slurm_reservation = self.params.get(
             "reservation", "/run/srun_params/*")
+
         # Srun params
-        self.srun_params = {
-            "partition": self.partition_clients,
-        }
-        if self.slurm_reservation is not None:
-            self.srun_params["reservation"] = self.slurm_reservation
+        if self.partition_clients is not None:
+            self.srun_params = {"partition": self.partition_clients}
+        if slurm_reservation is not None:
+            self.srun_params["reservation"] = slurm_reservation
+        # Initialize time
+        start_time = time.time()
+        end_time = start_time + self.test_timeout
         # Create the reserved pool with data
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
@@ -553,7 +552,7 @@ class Soak(TestWithServers):
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
-             NodeSet.fromlist(self.node_list), "rm -rf {}".format(
+            NodeSet.fromlist(self.node_list), "rm -rf {}".format(
                  self.log_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
@@ -561,11 +560,11 @@ class Soak(TestWithServers):
                 "from clients>>: {}".format(self.hostlist_clients))
 
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
-        while time.time() < self.end_time:
+        while time.time() < end_time:
             # Start new pass
             start_loop_time = time.time()
             self.log.info("<<Soak1 PASS %s: time until done %s>>", self.loop, (
-                self.end_time - time.time()))
+                end_time - time.time()))
 
             # Create all specified pools
             self.add_pools(pool_list)
@@ -573,7 +572,7 @@ class Soak(TestWithServers):
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
             try:
-                self.execute_jobs(self.job_list, self.pool[1:])
+                self.execute_jobs(job_list, self.pool[1:])
             except SoakTestError as error:
                 self.fail(error)
             errors = self.destroy_pools(self.pool[1:])
@@ -590,7 +589,7 @@ class Soak(TestWithServers):
             self.log.info(
                 "<<PASS %s completed in %s seconds>>", self.loop, loop_time)
             # if the time left if less than a loop exit now
-            if self.end_time - time.time() < loop_time:
+            if end_time - time.time() < loop_time:
                 break
             self.loop += 1
         # TODO: use IOR
