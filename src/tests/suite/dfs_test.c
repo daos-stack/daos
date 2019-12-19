@@ -29,7 +29,88 @@
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
-static dfs_t		*dfs;
+static dfs_t		*dfs_mt;
+
+static void
+dfs_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
+{
+	d_iov_t	ghdl = { NULL, 0, 0 };
+	int	rc;
+
+	if (rank == 0) {
+		/** fetch size of global handle */
+		rc = dfs_local2global(*dfs, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast size of global handle to all peers */
+	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	/** allocate buffer for global pool handle */
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	if (rank == 0) {
+		/** generate actual global handle to share with peer tasks */
+		rc = dfs_local2global(*dfs, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast global handle to all peers */
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	if (rank != 0) {
+		/** unpack global handle */
+		rc = dfs_global2local(poh, coh, 0, ghdl, dfs);
+		assert_int_equal(rc, 0);
+	}
+
+	D_FREE(ghdl.iov_buf);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+static void
+dfs_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
+{
+	d_iov_t	ghdl = { NULL, 0, 0 };
+	int	rc;
+
+	if (rank == 0) {
+		/** fetch size of global handle */
+		rc = dfs_obj_local2global(dfs, *obj, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast size of global handle to all peers */
+	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	/** allocate buffer for global pool handle */
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	if (rank == 0) {
+		/** generate actual global handle to share with peer tasks */
+		rc = dfs_obj_local2global(dfs, *obj, &ghdl);
+		assert_int_equal(rc, 0);
+	}
+
+	/** broadcast global handle to all peers */
+	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
+	assert_int_equal(rc, MPI_SUCCESS);
+
+	if (rank != 0) {
+		/** unpack global handle */
+		rc = dfs_obj_global2local(dfs, flags, ghdl, obj);
+		assert_int_equal(rc, 0);
+	}
+
+	D_FREE(ghdl.iov_buf);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
 
 static void
 dfs_test_mount(void **state)
@@ -38,8 +119,11 @@ dfs_test_mount(void **state)
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
-	dfs_t			*dfs1;
+	dfs_t			*dfs;
 	int			rc;
+
+	if (arg->myrank != 0)
+		return;
 
 	/** create & open a non-posix container */
 	uuid_generate(cuuid);
@@ -52,7 +136,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 
 	/** try to mount DFS on it, should fail. */
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs1);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
 
 	rc = daos_cont_close(coh, NULL);
@@ -70,10 +154,10 @@ dfs_test_mount(void **state)
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs1);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_umount(dfs1);
+	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
@@ -103,8 +187,8 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+	rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_S1, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
 
 	while (size < file_size) {
@@ -113,7 +197,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 
 		sgl.sg_iovs[0].iov_len = io_size;
 		dts_buf_render(buf, io_size);
-		rc = dfs_write(dfs, obj, &sgl, size, NULL);
+		rc = dfs_write(dfs_mt, obj, &sgl, size, NULL);
 		assert_int_equal(rc, 0);
 		size += io_size;
 	}
@@ -128,7 +212,7 @@ dfs_test_file_del(const char *name)
 {
 	int	rc;
 
-	rc = dfs_remove(dfs, NULL, name, 0, NULL);
+	rc = dfs_remove(dfs_mt, NULL, name, 0, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -169,7 +253,7 @@ dfs_test_read_thread(void *arg)
 	sgl.sg_iovs = &iov;
 
 	pthread_barrier_wait(targ->barrier);
-	rc = dfs_open(dfs, NULL, targ->name, S_IFREG, O_RDONLY, 0, 0, NULL,
+	rc = dfs_open(dfs_mt, NULL, targ->name, S_IFREG, O_RDONLY, 0, 0, NULL,
 		      &obj);
 	print_message("dfs_test_read_thread %d, dfs_open rc %d.\n",
 		      targ->thread_idx, rc);
@@ -180,17 +264,10 @@ dfs_test_read_thread(void *arg)
 		read_size = min(targ->total_size - off, targ->stride);
 		sgl.sg_iovs[0].iov_len = read_size;
 
-		/*
-		if (count % 10 == 0)
-		print_message("thread %d try to read off %d, size %d......\n",
-			      targ->thread_idx, (int)off, (int)read_size);
-		*/
-		rc = dfs_read(dfs, obj, &sgl, off, &got_size, NULL);
-		/*
-		if (count++ % 10 == 0)
-		print_message("thread %d read done rc %d, got_size %d.\n",
-			      targ->thread_idx, rc, (int)got_size);
-		*/
+		rc = dfs_read(dfs_mt, obj, &sgl, off, &got_size, NULL);
+		if (rc || read_size != got_size)
+			print_message("thread %d: rc %d, got_size %d.\n",
+				      targ->thread_idx, rc, (int)got_size);
 		assert_int_equal(rc, 0);
 		assert_int_equal(read_size, got_size);
 		off += targ->stride * dfs_test_thread_nr;
@@ -208,13 +285,17 @@ dfs_test_read_thread(void *arg)
 static void
 dfs_test_read_shared_file(void **state)
 {
+	test_arg_t		*arg = *state;
 	daos_size_t		chunk_size = 64;
 	daos_size_t		file_size = 256000;
 	pthread_barrier_t	barrier;
-	char			*name = "MTA_file";
+	char			name[16];
 	int			i;
 	int			rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	sprintf(name, "MTA_file_%d\n", arg->myrank);
 	rc = dfs_test_file_gen(name, chunk_size, file_size);
 	assert_int_equal(rc, 0);
 
@@ -240,6 +321,7 @@ dfs_test_read_shared_file(void **state)
 	}
 
 	dfs_test_file_del(name);
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 #define NUM_SEGS 10
@@ -247,6 +329,7 @@ dfs_test_read_shared_file(void **state)
 static void
 dfs_test_short_read(void **state)
 {
+	test_arg_t		*arg = *state;
 	dfs_obj_t		*obj;
 	daos_size_t		read_size;
 	daos_size_t		chunk_size = 2000;
@@ -257,6 +340,7 @@ dfs_test_short_read(void **state)
 	d_iov_t			iov;
 	int			i, rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	D_ALLOC(wbuf, buf_size);
 	assert_non_null(wbuf);
 	for (i = 0; i < buf_size/sizeof(int); i++)
@@ -278,61 +362,83 @@ dfs_test_short_read(void **state)
 	wsgl.sg_nr = 1;
 	wsgl.sg_iovs = &iov;
 
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
 
 	/** reading empty file should return 0 */
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
 
 	/** write strided pattern and check read size with segmented buffers */
-	rc = dfs_write(dfs, obj, &wsgl, 0, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);
 
-	rc = dfs_write(dfs, obj, &wsgl, 2 * buf_size, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 2 * buf_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 3);
 
-	rc = dfs_write(dfs, obj, &wsgl, 5 * buf_size, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 5 * buf_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 6);
 
 	/** truncate the buffer to a large size, read should return all */
-	rc = dfs_punch(dfs, obj, 1048576*2, 0);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 1048576*2, 0);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	/** punch all the data, read should return 0 */
-	rc = dfs_punch(dfs, obj, 0, DFS_MAX_FSIZE);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
 
 	/** write to 2 chunks with a large gap in the middle */
-	rc = dfs_write(dfs, obj, &wsgl, 0, NULL);
-	assert_int_equal(rc, 0);
-	rc = dfs_write(dfs, obj, &wsgl, 1048576*2, NULL);
-	assert_int_equal(rc, 0);
-
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576*2, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 	/** reading in between, even holes should not be a short read */
-	rc = dfs_read(dfs, obj, &rsgl, 1048576, &read_size, NULL);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 1048576, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
@@ -434,15 +540,22 @@ dfs_setup(void **state)
 	test_arg_t		*arg;
 	int			rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, false, DEFAULT_POOL_SIZE,
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
 			NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	if (arg->myrank == 0) {
+		uuid_generate(co_uuid);
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+				     &dfs_mt);
+		assert_int_equal(rc, 0);
+		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+	}
+
+	handle_share(&co_hdl, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
+	dfs_share(arg->pool.poh, co_hdl, arg->myrank, &dfs_mt);
 
 	return rc;
 }
@@ -453,14 +566,19 @@ dfs_teardown(void **state)
 	test_arg_t	*arg = *state;
 	int		rc;
 
-	rc = dfs_umount(dfs);
+	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(co_uuid));
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+		assert_int_equal(rc, 0);
+		printf("Destroyed DFS Container "DF_UUIDF"\n",
+		       DP_UUID(co_uuid));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	return test_teardown(state);
 }
@@ -471,10 +589,9 @@ run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-						 dfs_tests, dfs_setup,
-						 dfs_teardown);
+	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
+					 dfs_tests, dfs_setup,
+					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

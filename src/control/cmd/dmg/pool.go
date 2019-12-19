@@ -47,6 +47,7 @@ const (
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
@@ -86,6 +87,61 @@ type PoolDestroyCmd struct {
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (d *PoolDestroyCmd) Execute(args []string) error {
 	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
+}
+
+// PoolQueryCmd is the struct representing the command to destroy a DAOS pool.
+type PoolQueryCmd struct {
+	logCmd
+	connectedCmd
+	Uuid string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
+}
+
+// Execute is run when PoolQueryCmd subcommand is activated
+func (c *PoolQueryCmd) Execute(args []string) error {
+	req := client.PoolQueryReq{
+		UUID: c.Uuid,
+	}
+
+	resp, err := c.conns.PoolQuery(req)
+	if err != nil {
+		return errors.Wrap(err, "pool query failed")
+	}
+
+	formatBytes := func(size uint64) string {
+		return bytesize.ByteSize(size).Format("%.0f", "", false)
+	}
+
+	// Maintain output compability with the `daos pool query` output.
+	var bld strings.Builder
+	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%t\n",
+		resp.UUID, resp.TotalTargets, resp.Disabled)
+	bld.WriteString("Pool space info:\n")
+	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
+	if resp.Scm != nil {
+		bld.WriteString("- SCM:\n")
+		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Scm.Total))
+		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
+			formatBytes(resp.Scm.Free), formatBytes(resp.Scm.Min),
+			formatBytes(resp.Scm.Max), formatBytes(resp.Scm.Mean))
+	}
+	if resp.Nvme != nil {
+		bld.WriteString("- NVMe:\n")
+		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Nvme.Total))
+		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
+			formatBytes(resp.Nvme.Free), formatBytes(resp.Nvme.Min),
+			formatBytes(resp.Nvme.Max), formatBytes(resp.Nvme.Mean))
+	}
+	if resp.Rebuild != nil {
+		if resp.Rebuild.Status == 0 {
+			fmt.Fprintf(&bld, "Rebuild %s, %d objs, %d recs\n",
+				resp.Rebuild.State, resp.Rebuild.Objects, resp.Rebuild.Records)
+		} else {
+			fmt.Fprintf(&bld, "Rebuild failed, rc=%d, status=%d", resp.Status, resp.Rebuild.Status)
+		}
+	}
+
+	c.log.Info(bld.String())
+	return nil
 }
 
 // PoolGetACLCmd represents the command to fetch an Access Control List of a
