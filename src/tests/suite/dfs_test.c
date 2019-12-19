@@ -456,6 +456,7 @@ dfs_test_short_read(void **state)
 static void
 dfs_test_read_hole(void **state)
 {
+	test_arg_t		*arg = *state;
 	dfs_obj_t		*obj;
 	daos_size_t		read_size;
 	daos_size_t		chunk_size = 2000;
@@ -477,12 +478,16 @@ dfs_test_read_hole(void **state)
 	rsgl.sg_iovs = &iov;
 	d_iov_set(&iov, rbuf, NUM_INTS * sizeof(int));
 
-	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		rc = dfs_open(dfs_mt, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
 
 	/** reading empty file should return 0 */
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
 
@@ -494,20 +499,25 @@ dfs_test_read_hole(void **state)
 	rc = memcmp(rbuf, zbuf, NUM_INTS * sizeof(int));
 
 	/** write some data into the file */
-	d_iov_set(&iov, wbuf, 10 * sizeof(int));
-	wsgl.sg_nr = 1;
-	wsgl.sg_iovs = &iov;
-	/** write 10 integers to every 100th offset in the file */
-	for (i = 0; i < 10; i++) {
-		rc = dfs_write(dfs, obj, &wsgl, i * 100 * sizeof(int), NULL);
-		assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		d_iov_set(&iov, wbuf, 10 * sizeof(int));
+		wsgl.sg_nr = 1;
+		wsgl.sg_iovs = &iov;
+		/** write 10 integers to every 100th offset in the file */
+		for (i = 0; i < 10; i++) {
+			rc = dfs_write(dfs_mt, obj, &wsgl,
+				       i * 100 * sizeof(int), NULL);
+			assert_int_equal(rc, 0);
+		}
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	memset(rbuf, 1, NUM_INTS * sizeof(int));
 
 	/** read 1024 Ints starting at offset 0 again */
 	d_iov_set(&iov, rbuf, NUM_INTS * sizeof(int));
-	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 3640);
 
