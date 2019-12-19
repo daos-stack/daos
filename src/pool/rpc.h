@@ -431,4 +431,7 @@ pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
 void
 pool_target_addr_list_free(struct pool_target_addr_list *list);
 
+int list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+			  struct daos_pool_cont_info *buf, daos_size_t ncont);
+void list_cont_bulk_destroy(crt_bulk_t bulk);
 #endif /* __POOL_RPC_H__ */

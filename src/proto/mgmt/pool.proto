@@ -72,3 +72,18 @@ message ListPoolsResp {
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
 }
+
+// ListContainers
+// Initial implementation differs from C API
+// (numContainers not provided in request - get whole list)
+message ListContReq {
+	string uuid = 1; // uuid of pool
+}
+
+message ListContResp {
+	message Cont {
+		string uuid = 1; // uuid of container
+	}
+	int32 status = 1; // DAOS error code
+	repeated Cont containers = 2; // containers
+}

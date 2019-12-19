@@ -74,7 +74,6 @@ func TestFlattenAddrs(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(strings.Split(tc.expAddrs, ","), outAddrs); diff != "" {
-				//if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
 		})

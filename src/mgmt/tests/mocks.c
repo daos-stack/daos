@@ -264,6 +264,54 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 }
 
 /*
+ * Mock ds_mgmt_pool_list_cont
+ */
+int				 ds_mgmt_pool_list_cont_return;
+struct daos_pool_cont_info	*ds_mgmt_pool_list_cont_out;
+uint64_t			 ds_mgmt_pool_list_cont_nc_out;
+
+int ds_mgmt_pool_list_cont(uuid_t uuid,
+			   struct daos_pool_cont_info **containers,
+			   uint64_t *ncontainers)
+{
+	if (containers != NULL && ncontainers != NULL &&
+	    ds_mgmt_pool_list_cont_out != NULL) {
+		*ncontainers = ds_mgmt_pool_list_cont_nc_out;
+		D_ALLOC_ARRAY(*containers, *ncontainers);
+		memcpy(*containers, ds_mgmt_pool_list_cont_out,
+		       *ncontainers * sizeof(struct daos_pool_cont_info));
+	}
+
+	return ds_mgmt_pool_list_cont_return;
+}
+
+void
+mock_ds_mgmt_list_cont_gen_cont(size_t ncont) {
+	size_t i;
+
+	D_ALLOC_ARRAY(ds_mgmt_pool_list_cont_out, ncont);
+	ds_mgmt_pool_list_cont_nc_out = ncont;
+	for (i = 0; i < ncont; i++)
+		uuid_generate(ds_mgmt_pool_list_cont_out[i].pci_uuid);
+}
+
+void
+mock_ds_mgmt_pool_list_cont_setup(void)
+{
+	ds_mgmt_pool_list_cont_return = 0;
+	ds_mgmt_pool_list_cont_nc_out = 0;
+	ds_mgmt_pool_list_cont_out = NULL;
+}
+
+void mock_ds_mgmt_pool_list_cont_teardown(void)
+{
+	if (ds_mgmt_pool_list_cont_out != NULL) {
+		D_FREE(ds_mgmt_pool_list_cont_out);
+		ds_mgmt_pool_list_cont_out = NULL;
+	}
+}
+
+/*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
  */
@@ -333,6 +381,18 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 int
 ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
 {
 	return 0;
 }

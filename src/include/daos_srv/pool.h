@@ -50,6 +50,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
@@ -198,4 +199,9 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
+
+int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
+			  struct daos_pool_cont_info **containers,
+			  uint64_t *ncontainers);
+
 #endif /* __DAOS_SRV_POOL_H__ */

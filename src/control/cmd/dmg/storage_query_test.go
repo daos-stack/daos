@@ -85,6 +85,18 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"device state query",
+			"storage query device-state --devuuid abcd",
+			"ConnectClients DevStateQuery-dev_uuid:\"abcd\" ",
+			nil,
+		},
+		{
+			"device state query no device uuid specified",
+			"storage query device-state",
+			"ConnectClients DevStateQuery",
+			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
+		},
+		{
 			"Nonexistent subcommand",
 			"storage query quack",
 			"",

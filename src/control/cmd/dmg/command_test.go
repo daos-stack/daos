@@ -162,6 +162,16 @@ func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
 	return nil
 }
 
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
+	return nil
+}
+
 func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 	tc.appendInvocation("SystemMemberQuery")
 	return make(common.SystemMembers, 0), nil

@@ -243,37 +243,39 @@ func (m *mockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.Delet
 	return m.returnACLResult()
 }
 
-func (m *mockMgmtSvcClient) BioHealthQuery(
-	ctx context.Context,
-	req *mgmtpb.BioHealthReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.BioHealthResp, error) {
+func (m *mockMgmtSvcClient) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq, o ...grpc.CallOption) (*mgmtpb.BioHealthResp, error) {
 
 	// return successful bio health results
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SmdListDevs(
-	ctx context.Context,
-	req *mgmtpb.SmdDevReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.SmdDevResp, error) {
+func (m *mockMgmtSvcClient) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq, o ...grpc.CallOption) (*mgmtpb.SmdDevResp, error) {
 
 	// return successful SMD device list
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdDevResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SmdListPools(
-	ctx context.Context,
-	req *mgmtpb.SmdPoolReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.SmdPoolResp, error) {
+func (m *mockMgmtSvcClient) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq, o ...grpc.CallOption) (*mgmtpb.SmdPoolResp, error) {
 
 	// return successful SMD pool list
 	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdPoolResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return successful device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq, o ...grpc.CallOption) (*mgmtpb.DevStateResp, error) {
+
+	// return suscessful FAULTY device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.DevStateResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
@@ -309,6 +311,11 @@ func newMockMgmtSvcClient(getACLResult *mockACLResult, listPoolsResult *mockList
 
 func (m *mockMgmtSvcClient) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq, _ ...grpc.CallOption) (*mgmtpb.LeaderQueryResp, error) {
 	return &mgmtpb.LeaderQueryResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) ListContainers(ctx context.Context, req *mgmtpb.ListContReq, o ...grpc.CallOption) (*mgmtpb.ListContResp, error) {
+	// return successful list containers results
+	return &mgmtpb.ListContResp{}, nil
 }
 
 // implement mock/stub behaviour for Control

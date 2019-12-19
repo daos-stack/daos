@@ -204,10 +204,35 @@ func (cr ClientSmdResult) String() string {
 	return buf.String()
 }
 
+// ClientStateResult is a container for output of device state query requests
+type ClientStateResult struct {
+	Address string
+	Dev     *mgmtpb.DevStateResp
+	Err     error
+}
+
+func (cr ClientStateResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Dev.Status != 0 {
+		return fmt.Sprintf("error: %v\n", cr.Dev.Status)
+	}
+
+	fmt.Fprintf(&buf, "Device UUID: %v\n", cr.Dev.DevUuid)
+	fmt.Fprintf(&buf, "\tState: %v\n", cr.Dev.DevState)
+
+	return buf.String()
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
 type ResultQueryMap map[string]ClientBioResult
 type ResultSmdMap map[string]ClientSmdResult
+type ResultStateMap map[string]ClientStateResult
 
 func (rm ResultMap) String() string {
 	var buf bytes.Buffer
@@ -242,6 +267,22 @@ func (rm ResultQueryMap) String() string {
 }
 
 func (rm ResultSmdMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+func (rm ResultStateMap) String() string {
 	var buf bytes.Buffer
 	servers := make([]string, 0, len(rm))
 

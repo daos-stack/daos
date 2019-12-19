@@ -22,6 +22,9 @@ typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
+typedef struct _Mgmt__ListContReq Mgmt__ListContReq;
+typedef struct _Mgmt__ListContResp Mgmt__ListContResp;
+typedef struct _Mgmt__ListContResp__Cont Mgmt__ListContResp__Cont;
 
 
 /* --- enums --- */
@@ -195,6 +198,55 @@ struct  _Mgmt__ListPoolsResp
     , 0, 0,NULL }
 
 
+/*
+ * ListContainers
+ * Initial implementation differs from C API
+ * (numContainers not provided in request - get whole list)
+ */
+struct  _Mgmt__ListContReq
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of pool
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp__Cont
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of container
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_RESP__CONT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__cont__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * containers
+   */
+  size_t n_containers;
+  Mgmt__ListContResp__Cont **containers;
+};
+#define MGMT__LIST_CONT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message);
@@ -312,6 +364,47 @@ Mgmt__ListPoolsResp *
 void   mgmt__list_pools_resp__free_unpacked
                      (Mgmt__ListPoolsResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__ListContReq methods */
+void   mgmt__list_cont_req__init
+                     (Mgmt__ListContReq         *message);
+size_t mgmt__list_cont_req__get_packed_size
+                     (const Mgmt__ListContReq   *message);
+size_t mgmt__list_cont_req__pack
+                     (const Mgmt__ListContReq   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_req__pack_to_buffer
+                     (const Mgmt__ListContReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContReq *
+       mgmt__list_cont_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_req__free_unpacked
+                     (Mgmt__ListContReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ListContResp__Cont methods */
+void   mgmt__list_cont_resp__cont__init
+                     (Mgmt__ListContResp__Cont         *message);
+/* Mgmt__ListContResp methods */
+void   mgmt__list_cont_resp__init
+                     (Mgmt__ListContResp         *message);
+size_t mgmt__list_cont_resp__get_packed_size
+                     (const Mgmt__ListContResp   *message);
+size_t mgmt__list_cont_resp__pack
+                     (const Mgmt__ListContResp   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_resp__pack_to_buffer
+                     (const Mgmt__ListContResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContResp *
+       mgmt__list_cont_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_resp__free_unpacked
+                     (Mgmt__ListContResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -335,6 +428,15 @@ typedef void (*Mgmt__ListPoolsResp__Pool_Closure)
 typedef void (*Mgmt__ListPoolsResp_Closure)
                  (const Mgmt__ListPoolsResp *message,
                   void *closure_data);
+typedef void (*Mgmt__ListContReq_Closure)
+                 (const Mgmt__ListContReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp__Cont_Closure)
+                 (const Mgmt__ListContResp__Cont *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp_Closure)
+                 (const Mgmt__ListContResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -348,6 +450,9 @@ extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor;
 
 PROTOBUF_C__END_DECLS
 
