@@ -30,6 +30,7 @@
 
 #include <gurt/types.h>
 #include <daos_security.h>
+#include "../rpc.h"
 
 /*
  * Mock ds_mgmt_pool_get_acl
@@ -77,5 +78,32 @@ extern void		*ds_mgmt_pool_delete_acl_result_ptr;
 
 void mock_ds_mgmt_pool_delete_acl_setup(void);
 void mock_ds_mgmt_pool_delete_acl_teardown(void);
+
+/*
+ * Mock ds_mgmt_list_pools
+ */
+extern int				ds_mgmt_list_pools_return;
+extern char				ds_mgmt_list_pools_group[];
+extern void				*ds_mgmt_list_pools_npools_ptr;
+extern uint64_t				ds_mgmt_list_pools_npools;
+extern void				*ds_mgmt_list_pools_poolsp_ptr;
+extern struct mgmt_list_pools_one	*ds_mgmt_list_pools_poolsp_out;
+extern void				*ds_mgmt_list_pools_len_ptr;
+extern size_t				ds_mgmt_list_pools_len_out;
+
+void mock_ds_mgmt_list_pools_setup(void);
+void mock_ds_mgmt_list_pools_teardown(void);
+void mock_ds_mgmt_list_pools_gen_pools(size_t num_pools);
+
+/*
+ * Mock ds_mgmt_pool_list_cont
+ */
+extern int				 ds_mgmt_pool_list_cont_return;
+extern struct daos_pool_cont_info	*ds_mgmt_pool_list_cont_out;
+extern uint64_t				 ds_mgmt_pool_list_cont_nc_out;
+
+void mock_ds_mgmt_list_cont_gen_cont(size_t ncont);
+void mock_ds_mgmt_pool_list_cont_setup(void);
+void mock_ds_mgmt_pool_list_cont_teardown(void);
 
 #endif /* __MGMT_TESTS_MOCKS_H__ */

@@ -22,6 +22,9 @@ typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
+typedef struct _Mgmt__ListContReq Mgmt__ListContReq;
+typedef struct _Mgmt__ListContResp Mgmt__ListContResp;
+typedef struct _Mgmt__ListContResp__Cont Mgmt__ListContResp__Cont;
 
 
 /* --- enums --- */
@@ -35,12 +38,19 @@ typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
 struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
+  /*
+   * SCM size in bytes
+   */
   uint64_t scmbytes;
+  /*
+   * NVMe size in bytes
+   */
   uint64_t nvmebytes;
   /*
-   * comma separated integers
+   * target ranks
    */
-  char *ranks;
+  size_t n_ranks;
+  uint32_t *ranks;
   /*
    * desired number of pool service replicas
    */
@@ -69,7 +79,7 @@ struct  _Mgmt__PoolCreateReq
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -83,13 +93,14 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * comma separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, 0,NULL }
 
 
 /*
@@ -132,6 +143,9 @@ struct  _Mgmt__PoolDestroyResp
     , 0 }
 
 
+/*
+ * ListPoolsReq represents a request to list pools on a given DAOS system.
+ */
 struct  _Mgmt__ListPoolsReq
 {
   ProtobufCMessage base;
@@ -139,14 +153,10 @@ struct  _Mgmt__ListPoolsReq
    * DAOS system identifier
    */
   char *sys;
-  /*
-   * Client response buffer capacity in number of pools
-   */
-  uint64_t numpools;
 };
 #define MGMT__LIST_POOLS_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__ListPoolsResp__Pool
@@ -157,15 +167,19 @@ struct  _Mgmt__ListPoolsResp__Pool
    */
   char *uuid;
   /*
-   * pool service replicas, comma-separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL }
 
 
+/*
+ * ListPoolsResp returns the list of pools in the system.
+ */
 struct  _Mgmt__ListPoolsResp
 {
   ProtobufCMessage base;
@@ -174,18 +188,63 @@ struct  _Mgmt__ListPoolsResp
    */
   int32_t status;
   /*
-   * pools list (max length ListPoolsReq.numPools)
+   * pools list
    */
   size_t n_pools;
   Mgmt__ListPoolsResp__Pool **pools;
-  /*
-   * number of pools in system
-   */
-  uint64_t numpools;
 };
 #define MGMT__LIST_POOLS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__descriptor) \
-    , 0, 0,NULL, 0 }
+    , 0, 0,NULL }
+
+
+/*
+ * ListContainers
+ * Initial implementation differs from C API
+ * (numContainers not provided in request - get whole list)
+ */
+struct  _Mgmt__ListContReq
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of pool
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp__Cont
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of container
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_RESP__CONT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__cont__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * containers
+   */
+  size_t n_containers;
+  Mgmt__ListContResp__Cont **containers;
+};
+#define MGMT__LIST_CONT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__descriptor) \
+    , 0, 0,NULL }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -305,6 +364,47 @@ Mgmt__ListPoolsResp *
 void   mgmt__list_pools_resp__free_unpacked
                      (Mgmt__ListPoolsResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__ListContReq methods */
+void   mgmt__list_cont_req__init
+                     (Mgmt__ListContReq         *message);
+size_t mgmt__list_cont_req__get_packed_size
+                     (const Mgmt__ListContReq   *message);
+size_t mgmt__list_cont_req__pack
+                     (const Mgmt__ListContReq   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_req__pack_to_buffer
+                     (const Mgmt__ListContReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContReq *
+       mgmt__list_cont_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_req__free_unpacked
+                     (Mgmt__ListContReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ListContResp__Cont methods */
+void   mgmt__list_cont_resp__cont__init
+                     (Mgmt__ListContResp__Cont         *message);
+/* Mgmt__ListContResp methods */
+void   mgmt__list_cont_resp__init
+                     (Mgmt__ListContResp         *message);
+size_t mgmt__list_cont_resp__get_packed_size
+                     (const Mgmt__ListContResp   *message);
+size_t mgmt__list_cont_resp__pack
+                     (const Mgmt__ListContResp   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_resp__pack_to_buffer
+                     (const Mgmt__ListContResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContResp *
+       mgmt__list_cont_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_resp__free_unpacked
+                     (Mgmt__ListContResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -328,6 +428,15 @@ typedef void (*Mgmt__ListPoolsResp__Pool_Closure)
 typedef void (*Mgmt__ListPoolsResp_Closure)
                  (const Mgmt__ListPoolsResp *message,
                   void *closure_data);
+typedef void (*Mgmt__ListContReq_Closure)
+                 (const Mgmt__ListContReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp__Cont_Closure)
+                 (const Mgmt__ListContResp__Cont *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp_Closure)
+                 (const Mgmt__ListContResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -341,6 +450,9 @@ extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor;
 
 PROTOBUF_C__END_DECLS
 

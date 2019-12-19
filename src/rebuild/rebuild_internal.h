@@ -299,6 +299,7 @@ void rebuild_obj_handler(crt_rpc_t *rpc);
 void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 int rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
+int rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg);
 int rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);

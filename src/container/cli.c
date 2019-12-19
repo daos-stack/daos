@@ -341,7 +341,7 @@ dc_cont_alloc(const uuid_t uuid)
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
 	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0) {
-		free(dc);
+		D_FREE(dc);
 		dc = NULL;
 	}
 
@@ -2116,10 +2116,15 @@ struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {
 	struct dc_cont	*dc;
+	struct daos_csummer *csum;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return NULL;
 
-	return dc->dc_csummer;
+	csum = dc->dc_csummer;
+	dc_cont_put(dc);
+
+	return csum;
+
 }

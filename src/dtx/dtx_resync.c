@@ -345,7 +345,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		resynced = true;
 	}
 	if (resynced || /* Someone just did the DTX resync*/
-	    cont->sc_destroying) { /* pool is being destroyed */
+	    cont->sc_stopping) {
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}

@@ -81,8 +81,8 @@ struct daos_tree_overhead {
 
 /** Points to a byte in an iov, in an sgl */
 struct daos_sgl_idx {
-	uint32_t	iov_idx;
-	daos_off_t	iov_offset;
+	uint32_t	iov_idx; /** index of iov */
+	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
 /*
@@ -105,8 +105,10 @@ char *DP_UUID(const void *uuid);
 
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %s"
-#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+#define DF_KEY			"[%d] %.*s"
+#define DP_KEY(key)		(int)(key)->iov_len,	\
+		                (int)(key)->iov_len,	\
+		                daos_key2str(key)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)

@@ -793,9 +793,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
-		bsgl.bs_iovs[biov_idx].bi_buf = NULL;
-		bsgl.bs_iovs[biov_idx].bi_addr = addr_src;
-		bsgl.bs_iovs[biov_idx].bi_data_len = copy_size;
+		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 		biov_idx++;
 
 		D_ASSERT(iov.iov_buf_len >= copy_size);
@@ -1560,7 +1558,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
-		cont->vc_abort_aggregation = 0;
 		return 1;
 	}
 
@@ -1593,6 +1590,7 @@ aggregate_enter(struct vos_container *cont, bool discard)
 	}
 
 	cont->vc_in_aggregation = 1;
+	cont->vc_abort_aggregation = 0;
 	return 0;
 }
 

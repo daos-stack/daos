@@ -294,3 +294,46 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 
 	return (rc < 0) ? rc : 0;
 }
+
+/*
+ * MEDIA ERROR event.
+ * Store BIO I/O error in in-memory device state. Called from device owner
+ * xstream only.
+ */
+void
+bio_media_error(void *msg_arg)
+{
+	struct media_error_msg	*mem = msg_arg;
+	struct bio_dev_state	*dev_state;
+	int			 rc;
+
+	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
+
+	if (mem->mem_unmap) {
+		/* Update unmap error counter */
+		dev_state->bds_bio_unmap_errs++;
+		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
+	} else {
+		/* Update read/write I/O error counters */
+		if (mem->mem_update)
+			dev_state->bds_bio_write_errs++;
+		else
+			dev_state->bds_bio_read_errs++;
+		D_ERROR("%s error logged from xs_id:%d\n",
+			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
+	}
+
+	/* TODO Implement checksum error counter */
+	dev_state->bds_checksum_errs = 0;
+
+	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
+		goto out;
+	/* Notify admin through Control Plane of BIO error callback */
+	rc = ract_ops->ioerr_reaction(mem->mem_unmap, mem->mem_update,
+				      mem->mem_tgt_id);
+	if (rc < 0)
+		D_ERROR("Blobstore I/O error notification error. %d\n", rc);
+
+out:
+	D_FREE(mem);
+}

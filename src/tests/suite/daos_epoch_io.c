@@ -1364,7 +1364,8 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	D_ASSERT(lvl == TEST_LVL_DAOS || lvl == TEST_LVL_VOS);
 
 	/* for modification OP, just go through DAOS stack and return */
-	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY)
+	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY ||
+	    op == TEST_OP_ADD || op == TEST_OP_EXCLUDE)
 		return op_dict[op].op_cb[lvl](arg, op_rec, NULL, 0);
 
 	/* for verification OP, firstly retrieve it through DAOS stack */

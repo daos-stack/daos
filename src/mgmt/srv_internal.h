@@ -104,6 +104,9 @@ int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
 			    struct daos_acl **result);
 int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 			    struct daos_acl **result);
+int ds_mgmt_pool_list_cont(uuid_t uuid,
+			   struct daos_pool_cont_info **containers,
+			   uint64_t *ncontainers);
 
 /** srv_query.c */
 
@@ -117,6 +120,8 @@ int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
 int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
+int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);

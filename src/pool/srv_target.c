@@ -85,6 +85,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
+		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 	}
@@ -100,6 +101,7 @@ ds_pool_child_purge(struct pool_tls *tls)
 		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
 			  DP_UUID(child->spc_uuid), child->spc_ref);
 		d_list_del_init(&child->spc_list);
+		ds_cont_child_stop_all(child);
 		ds_pool_child_put(child);
 	}
 }
@@ -156,6 +158,17 @@ pool_child_add_one(void *varg)
 	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
 	child->spc_pool = arg->pla_pool;
+	D_INIT_LIST_HEAD(&child->spc_list);
+	D_INIT_LIST_HEAD(&child->spc_cont_list);
+
+	/* Load all containers */
+	rc = ds_cont_child_start_all(child);
+	if (rc) {
+		ds_cont_child_stop_all(child);
+		vos_pool_close(child->spc_hdl);
+		D_FREE(child);
+		return rc;
+	}
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
@@ -177,6 +190,7 @@ pool_child_delete_one(void *uuid)
 		return 0;
 
 	d_list_del_init(&child->spc_list);
+	ds_cont_child_stop_all(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -233,6 +247,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
+	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
@@ -1067,5 +1082,13 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		return 0;
 
 	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
+	return 0;
+}
+
+int
+ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	pool->sp_reclaim = iv_prop->pip_reclaim;
 	return 0;
 }

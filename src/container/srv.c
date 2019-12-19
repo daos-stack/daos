@@ -42,22 +42,13 @@ init(void)
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = ds_cont_cache_init();
-	if (rc)
-		D_GOTO(err_oid_iv, rc);
-
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err_cont_cache, rc);
+		D_GOTO(err, rc);
 
 	return 0;
-
-err_cont_cache:
-	ds_cont_cache_fini();
-
-err_oid_iv:
-	ds_oid_iv_fini();
 err:
+	ds_oid_iv_fini();
 	return rc;
 }
 
@@ -65,7 +56,6 @@ static int
 fini(void)
 {
 	ds_cont_iv_fini();
-	ds_cont_cache_fini();
 	ds_oid_iv_fini();
 	return 0;
 }
