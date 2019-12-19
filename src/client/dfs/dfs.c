@@ -29,6 +29,7 @@
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/container.h>
 #include <daos/array.h>
 
 #include "daos.h"
@@ -57,7 +58,12 @@
 #define DFS_LAYOUT_VERSION	1
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
+/** default object class for files & dirs */
 #define DFS_DEFAULT_OBJ_CLASS	OC_SX
+/** Magic value for serializing / deserializing a DFS handle */
+#define DFS_GLOB_MAGIC		0xda05df50
+/** Magic value for serializing / deserializing a DFS object handle */
+#define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
 #define INODE_AKEYS	7
@@ -92,6 +98,8 @@ struct dfs_obj {
 	daos_handle_t		oh;
 	/** mode_t containing permissions & type */
 	mode_t			mode;
+	/** open access flags */
+	int			flags;
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
@@ -1027,7 +1035,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	entry.oid.lo = RESERVED_LO;
 	entry.oid.hi = ROOT_HI;
 	daos_obj_generate_id(&entry.oid, 0, dattr.da_oclass_id, 0);
-	entry.mode = S_IFDIR | 0777;
+	entry.mode = S_IFDIR | 0755;
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
 
@@ -1114,12 +1122,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
-		return daos_der2errno(rc);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
 		D_ERROR("Failed to allocate prop.");
-		return ENOMEM;
+		D_GOTO(err_dfs, rc = ENOMEM);
 	}
 
 	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
@@ -1213,6 +1221,204 @@ dfs_umount(dfs_t *dfs)
 	D_FREE(dfs);
 
 	return 0;
+}
+
+/* Structure of global buffer for dfs */
+struct dfs_glob {
+	uint32_t		magic;
+	int32_t			amode;
+	uid_t			uid;
+	gid_t			gid;
+	uint64_t		id;
+	daos_size_t		chunk_size;
+	daos_oclass_id_t	oclass;
+	uuid_t			cont_uuid;
+	uuid_t			coh_uuid;
+};
+
+static inline void
+swap_dfs_glob(struct dfs_glob *dfs_params)
+{
+	D_ASSERT(dfs_params != NULL);
+
+	D_SWAP32S(&dfs_params->magic);
+	D_SWAP32S(&dfs_params->amode);
+	D_SWAP32S(&dfs_params->uid);
+	D_SWAP32S(&dfs_params->gid);
+	D_SWAP64S(&dfs_params->id);
+	D_SWAP64S(&dfs_params->chunk_size);
+	D_SWAP16S(&dfs_params->oclass);
+	/* skip cont_uuid */
+	/* skip coh_uuid */
+}
+static inline daos_size_t
+dfs_glob_buf_size()
+{
+	return sizeof(struct dfs_glob);
+}
+
+int
+dfs_local2global(dfs_t *dfs, d_iov_t *glob)
+{
+	struct dfs_glob		*dfs_params;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	daos_size_t		glob_buf_size;
+	int			rc = 0;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		return EINVAL;
+	}
+
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_buf_len < glob->iov_len)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		return EINVAL;
+	}
+
+	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		return daos_der2errno(rc);
+
+	glob_buf_size = dfs_glob_buf_size();
+
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = glob_buf_size;
+		return 0;
+	}
+
+	if (glob->iov_buf_len < glob_buf_size) {
+		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+			"provided, "DF_U64" required).\n", glob->iov_buf_len,
+			glob_buf_size);
+		glob->iov_buf_len = glob_buf_size;
+		return ENOBUFS;
+	}
+	glob->iov_len = glob_buf_size;
+
+	/* init global handle */
+	dfs_params = (struct dfs_glob *)glob->iov_buf;
+	dfs_params->magic	= DFS_GLOB_MAGIC;
+	dfs_params->amode	= dfs->amode;
+	dfs_params->uid		= dfs->uid;
+	dfs_params->gid		= dfs->gid;
+	dfs_params->id		= dfs->attr.da_id;
+	dfs_params->chunk_size	= dfs->attr.da_chunk_size;
+	dfs_params->oclass	= dfs->attr.da_oclass_id;
+	uuid_copy(dfs_params->coh_uuid, coh_uuid);
+	uuid_copy(dfs_params->cont_uuid, cont_uuid);
+
+	return 0;
+}
+
+int
+dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
+		 dfs_t **_dfs)
+{
+	dfs_t		*dfs;
+	struct dfs_glob	*dfs_params;
+	int		obj_mode;
+	daos_obj_id_t	super_oid;
+	uuid_t		coh_uuid;
+	uuid_t		cont_uuid;
+	int		rc = 0;
+
+	if (_dfs == NULL)
+		return EINVAL;
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
+	    glob.iov_len != dfs_glob_buf_size()) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		return EINVAL;
+	}
+
+	dfs_params = (struct dfs_glob *)glob.iov_buf;
+	if (dfs_params->magic == D_SWAP32(DFS_GLOB_MAGIC)) {
+		swap_dfs_glob(dfs_params);
+		D_ASSERT(dfs_params->magic == DFS_GLOB_MAGIC);
+
+	} else if (dfs_params->magic != DFS_GLOB_MAGIC) {
+		D_ERROR("Bad magic value: 0x%x.\n", dfs_params->magic);
+		return EINVAL;
+	}
+
+	D_ASSERT(dfs_params != NULL);
+
+	/** Check container uuid mismatch */
+	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		return daos_der2errno(rc);
+	if (uuid_compare(cont_uuid, dfs_params->cont_uuid) != 0) {
+		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
+			"in dfs_params:" DF_UUID"\n", DP_UUID(cont_uuid),
+			DP_UUID(dfs_params->cont_uuid));
+		return EINVAL;
+	}
+
+	/** Create the DFS handle with no RPCs */
+	D_ALLOC_PTR(dfs);
+	if (dfs == NULL)
+		return ENOMEM;
+
+	dfs->poh = poh;
+	dfs->coh = coh;
+	dfs->amode = (flags == 0) ? dfs_params->amode : (flags & O_ACCMODE);
+	dfs->uid = dfs_params->uid;
+	dfs->uid = dfs_params->gid;
+	dfs->attr.da_id = dfs_params->id;
+	dfs->attr.da_chunk_size = dfs_params->chunk_size;
+	dfs->attr.da_oclass_id = dfs_params->oclass;
+	/** allocate a new oid on the next file or dir creation */
+	dfs->oid.lo = 0;
+	dfs->oid.hi = MAX_OID_HI;
+
+	rc = D_MUTEX_INIT(&dfs->lock, NULL);
+	if (rc != 0) {
+		D_FREE(dfs);
+		return daos_der2errno(rc);
+	}
+
+	/** Open SB object */
+	super_oid.lo = RESERVED_LO;
+	super_oid.hi = SB_HI;
+	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
+
+	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
+
+	/* Open Root Object */
+	strcpy(dfs->root.name, "/");
+	dfs->root.parent_oid.lo = super_oid.lo;
+	dfs->root.parent_oid.hi = super_oid.hi;
+	dfs->root.oid.lo = RESERVED_LO;
+	dfs->root.oid.hi = ROOT_HI;
+	daos_obj_generate_id(&dfs->root.oid, 0, dfs->attr.da_oclass_id, 0);
+	dfs->root.mode = S_IFDIR | 0755;
+
+	obj_mode = get_daos_obj_mode(flags);
+	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+		daos_obj_close(dfs->super_oh, NULL);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
+
+	dfs->mounted = true;
+	*_dfs = dfs;
+
+	return rc;
+err_dfs:
+	D_MUTEX_DESTROY(&dfs->lock);
+	D_FREE(dfs);
+	return rc;
 }
 
 int
@@ -1656,6 +1862,8 @@ dfs_lookup_loop:
 		stbuf->st_ctim.tv_sec = entry.ctime;
 	}
 
+	obj->flags = flags;
+
 out:
 	D_FREE(rem);
 	*_obj = obj;
@@ -1929,6 +2137,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_ctim.tv_sec = entry.ctime;
 	}
 
+	obj->flags = flags;
 	*_obj = obj;
 
 	return rc;
@@ -1974,6 +2183,7 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	strncpy(obj->name, name, DFS_MAX_PATH);
 	obj->name[DFS_MAX_PATH] = '\0';
 	obj->mode = mode;
+	obj->flags = flags;
 	oid_cp(&obj->parent_oid, parent->oid);
 
 	switch (mode & S_IFMT) {
@@ -2072,6 +2282,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 
 	strncpy(new_obj->name, obj->name, DFS_MAX_PATH + 1);
 	new_obj->mode = obj->mode;
+	new_obj->flags = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
 
@@ -2080,6 +2291,170 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 
 err:
 	D_FREE(new_obj);
+	return rc;
+}
+
+/* Structure of global buffer for dfs_obj */
+struct dfs_obj_glob {
+	uint32_t	magic;
+	uint32_t	flags;
+	mode_t		mode;
+	daos_obj_id_t	oid;
+	daos_obj_id_t	parent_oid;
+	daos_size_t	chunk_size;
+	uuid_t		cont_uuid;
+	uuid_t		coh_uuid;
+	char		name[DFS_MAX_PATH + 1];
+};
+
+static inline daos_size_t
+dfs_obj_glob_buf_size()
+{
+	return sizeof(struct dfs_obj_glob);
+}
+
+static inline void
+swap_obj_glob(struct dfs_obj_glob *array_glob)
+{
+	D_ASSERT(array_glob != NULL);
+
+	D_SWAP32S(&array_glob->magic);
+	D_SWAP32S(&array_glob->mode);
+	D_SWAP32S(&array_glob->flags);
+	D_SWAP64S(&array_glob->oid.hi);
+	D_SWAP64S(&array_glob->oid.lo);
+	D_SWAP64S(&array_glob->parent_oid.hi);
+	D_SWAP64S(&array_glob->parent_oid.lo);
+	D_SWAP64S(&array_glob->chunk_size);
+	/* skip cont_uuid */
+	/* skip coh_uuid */
+}
+
+int
+dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
+{
+	struct dfs_obj_glob	*obj_glob;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	daos_size_t		glob_buf_size;
+	int			rc = 0;
+
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		return EINVAL;
+	}
+
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_buf_len < glob->iov_len)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		return EINVAL;
+	}
+
+	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		return daos_der2errno(rc);
+
+	glob_buf_size = dfs_obj_glob_buf_size();
+
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = glob_buf_size;
+		return 0;
+	}
+
+	if (glob->iov_buf_len < glob_buf_size) {
+		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+			"provided, "DF_U64" required).\n", glob->iov_buf_len,
+			glob_buf_size);
+		glob->iov_buf_len = glob_buf_size;
+		return ENOBUFS;
+	}
+	glob->iov_len = glob_buf_size;
+
+	/* init global handle */
+	obj_glob = (struct dfs_obj_glob *)glob->iov_buf;
+	obj_glob->magic		= DFS_OBJ_GLOB_MAGIC;
+	obj_glob->mode		= obj->mode;
+	obj_glob->flags		= obj->flags;
+	oid_cp(&obj_glob->oid, obj->oid);
+	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
+	uuid_copy(obj_glob->coh_uuid, coh_uuid);
+	uuid_copy(obj_glob->cont_uuid, cont_uuid);
+	strncpy(obj_glob->name, obj->name, DFS_MAX_PATH + 1);
+	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
+	if (rc)
+		return rc;
+
+	return rc;
+}
+
+int
+dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
+{
+	struct dfs_obj_glob	*obj_glob;
+	dfs_obj_t		*obj;
+	uuid_t			coh_uuid;
+	uuid_t			cont_uuid;
+	int			daos_mode;
+	int			rc = 0;
+
+	if (dfs == NULL || !dfs->mounted || _obj == NULL)
+		return EINVAL;
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
+	    glob.iov_len != dfs_obj_glob_buf_size()) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		return EINVAL;
+	}
+
+	obj_glob = (struct dfs_obj_glob *)glob.iov_buf;
+	if (obj_glob->magic == D_SWAP32(DFS_OBJ_GLOB_MAGIC)) {
+		swap_obj_glob(obj_glob);
+		D_ASSERT(obj_glob->magic == DFS_OBJ_GLOB_MAGIC);
+	} else if (obj_glob->magic != DFS_OBJ_GLOB_MAGIC) {
+		D_ERROR("Bad magic value: 0x%x.\n", obj_glob->magic);
+		return EINVAL;
+	}
+
+	/** Check container uuid mismatch */
+	rc = dc_cont_hdl2uuid(dfs->coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (uuid_compare(cont_uuid, obj_glob->cont_uuid) != 0) {
+		D_ERROR("Container uuid mismatch, in coh: "DF_UUID", "
+			"in obj_glob:" DF_UUID"\n", DP_UUID(cont_uuid),
+			DP_UUID(obj_glob->cont_uuid));
+		return EINVAL;
+	}
+
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return ENOMEM;
+
+	oid_cp(&obj->oid, obj_glob->oid);
+	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
+	strncpy(obj->name, obj_glob->name, DFS_MAX_PATH + 1);
+	obj->mode = obj_glob->mode;
+	obj->flags = flags ? flags : obj_glob->flags;
+
+	daos_mode = get_daos_obj_mode(obj->flags);
+	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE,
+				       daos_mode, 1, obj_glob->chunk_size,
+				       &obj->oh, NULL);
+	if (rc) {
+		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
+		D_FREE(obj);
+		return daos_der2errno(rc);
+	}
+
+	*_obj = obj;
+out:
 	return rc;
 }
 
@@ -2266,6 +2641,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_WRONLY)
+		return EPERM;
 
 	buf_size = 0;
 	for (i = 0; i < sgl->sg_nr; i++)
@@ -2312,6 +2689,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 		return EPERM;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
 
 	buf_size = 0;
 	for (i = 0; i < sgl->sg_nr; i++)
@@ -2614,6 +2993,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
 		return EPERM;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
 
 	euid = geteuid();
 	/** only root or owner can change mode */
@@ -2735,6 +3116,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return EPERM;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
 
 	rc = check_access(dfs, geteuid(), getegid(), obj->mode, W_OK);
 	if (rc)
