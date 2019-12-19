@@ -26,31 +26,18 @@ server_config:
     control_log_mask: INFO
     control_log_file: /tmp/daos_control0.log
 #    socket_dir: /var/run/daos_server0
-    transport_config:
-        allow_insecure: true
     servers:
         log_mask: ERR
-        env_vars:
-          - ABT_ENV_MAX_NUM_XSTREAMS=100
-          - ABT_MAX_NUM_XSTREAMS=100
-          - DAOS_MD_CAP=1024
-          - CRT_CTX_SHARE_ADDR=0
-          - CRT_TIMEOUT=2000
-          - FI_SOCKETS_MAX_CONN_RETRY=1
-          - FI_SOCKETS_CONN_TIMEOUT=2000
-        targets: 16
-        first_core: 1
-        nr_xs_helpers: 0
         fabric_iface: ib0
         fabric_iface_port: 31416
         log_mask: ERR
         log_file: /tmp/daos_io0.log
         # Storage definitions for AEP and NVMe
-        # scm_mount: /mnt/daos0
-        # scm_class: dcpm
-        # scm_list: [/dev/pmem0]
+        scm_mount: /mnt/daos0
+        scm_class: dcpm
+        scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0"]
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146

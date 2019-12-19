@@ -67,6 +67,7 @@ class Soak(TestWithServers):
         self.srun_params = None
         self.pool = None
         self.container = None
+        self.test_iteration = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -222,7 +223,7 @@ class Soak(TestWithServers):
         params["export"] = "all"
         params["ntasks-per-node"] = 1
         result = slurm_utils.srun(
-             NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Dfuse mountpoint {} not created>>".format(
@@ -230,7 +231,7 @@ class Soak(TestWithServers):
 
         cmd = self.dfuse.__str__()
         result = slurm_utils.srun(
-             NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Dfuse failed to start>>")
@@ -551,7 +552,7 @@ class Soak(TestWithServers):
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
             NodeSet.fromlist(self.node_list), "rm -rf {}".format(
-                 self.log_dir), self.srun_params)
+                self.log_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
