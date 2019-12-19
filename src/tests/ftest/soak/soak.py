@@ -60,6 +60,7 @@ class Soak(TestWithServers):
         self.test_log_dir = None
         self.local_pass_dir = None
         self.job_id_list = None
+        self.dfuse = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -94,7 +95,7 @@ class Soak(TestWithServers):
 
         """
         # copy the files from the remote
-        # TODO change scp
+        # TODO: change scp
         this_host = socket.gethostname()
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients),
@@ -305,7 +306,8 @@ class Soak(TestWithServers):
         # Create the sbatch script for each cmdline
         for cmd in commands:
             output = os.path.join(self.test_log_dir, "%N_" +
-            self.test_name + "_" + job + "_%j_%t_" + str(ppn) + "_")
+                                  self.test_name + "_" + job + "_%j_%t_" +
+                                  str(ppn) + "_")
             sbatch = {
                 "time": str(self.job_timeout) + ":00",
                 "exclude": NodeSet.fromlist(self.exclude_slurm_nodes)
@@ -464,7 +466,7 @@ class Soak(TestWithServers):
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
-                    self.test_log_dir), self.srun_params)
+                self.test_log_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: logfile directory not"
@@ -591,7 +593,7 @@ class Soak(TestWithServers):
             if self.end_time - time.time() < loop_time:
                 break
             self.loop += 1
-        # TODO use IOR
+        # TODO: use IOR
         self.assertTrue(
                 self.container.read_objects(),
                 "Data verification error on reserved pool"
