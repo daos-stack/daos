@@ -102,7 +102,7 @@ class Soak(TestWithServers):
 
         """
         # copy the files from the remote
-        # TODO: change scp
+        # TO-DO: change scp
         this_host = socket.gethostname()
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients),
@@ -190,8 +190,9 @@ class Soak(TestWithServers):
             cuuid: container uuid
 
         """
-        # TODO: use daos tool when available
+        # TO-DO: use daos tool when available
         # This method assumes that doas agent is running on test node
+        
         cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
@@ -200,6 +201,8 @@ class Soak(TestWithServers):
         except process.CmdError as error:
             raise SoakTestError(
                 "<<FAILED: Dfuse container failed {}>>".format(error))
+        self.log.info(
+            "Dfuse Container UUID = {}".format(result.stdout.split()[3]))
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
@@ -302,7 +305,7 @@ class Soak(TestWithServers):
         self.log.info("<<Build Script>> at %s", time.ctime())
         script_list = []
         # Start the daos_agent in the batch script for now
-        # TODO:  daos_agents start with systemd
+        # TO-DO:  daos_agents start with systemd
         added_cmd_list = [
             "srun -l --mpi=pmi2 --ntasks-per-node=1 "
             "--export=ALL {} -o {} &".format(os.path.join(
@@ -542,7 +545,7 @@ class Soak(TestWithServers):
         self.add_pools(["pool_reserved"])
         self.pool[0].connect()
         # Create the container and populate with a known data
-        # TODO: use IOR to write and later read verify the data
+        # TO-DO: use IOR to write and later read verify the data
         self.container = TestContainer(self.pool[0])
         self.container.namespace = "/run/container_reserved"
         self.container.get_params(self)
@@ -591,11 +594,10 @@ class Soak(TestWithServers):
             if end_time - time.time() < loop_time:
                 break
             self.loop += 1
-        # TODO: use IOR
+        # TO-DO: use IOR
         self.assertTrue(
-                self.container.read_objects(),
-                "Data verification error on reserved pool"
-                "after SOAK completed")
+            self.container.read_objects(),
+            "Data verification error on reserved pool after SOAK completed")
 
     def setUp(self):
         """Define test setup to be done."""
@@ -630,7 +632,7 @@ class Soak(TestWithServers):
                 self.hostlist_clients.remove(host_server)
                 self.exclude_slurm_nodes.append(host_server)
         self.log.info(
-                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+            "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
         test_node = [socket.gethostname().split('.', 1)[0]]
         if test_node[0] in self.hostlist_clients:
