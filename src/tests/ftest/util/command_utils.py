@@ -250,6 +250,7 @@ class ExecutableCommand(CommandWithParameters):
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
+        self.exit_status_exception = True
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -283,6 +284,7 @@ class ExecutableCommand(CommandWithParameters):
             "cmd": command,
             "timeout": self.timeout,
             "verbose": self.verbose,
+            "ignore_status": not self.exit_status_exception,
             "allow_output_check": "combined",
             "shell": True,
             "env": self.env,
