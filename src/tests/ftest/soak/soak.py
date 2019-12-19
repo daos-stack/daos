@@ -235,7 +235,7 @@ class Soak(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Dfuse failed to start>>")
 
-    def create_fio_cmdline(self, job_spec, pool, ppn):
+    def create_fio_cmdline(self, job_spec, pool):
         """Create the FOI commandline.
 
         Args:
@@ -265,8 +265,6 @@ class Soak(TestWithServers):
         for blocksize in bs_list:
             for size in size_list:
                 for rw in rw_list:
-                    # FIO runs on a single node
-                    self.nodesperjob = 1
                     # Get the parameters for Fio
                     fio_cmd = Fio(namespace, self)
                     # update fio params
@@ -362,7 +360,7 @@ class Soak(TestWithServers):
                     commands, job, ppn, self.nodesperjob)
                 job_cmdlist.extend(scripts)
         elif "fio" in job:
-            commands = self.create_fio_cmdline(job, pool, 1)
+            commands = self.create_fio_cmdline(job, pool)
             # scripts are single cmdline
             scripts = self.build_job_script(commands, job, 1, 1)
             job_cmdlist.extend(scripts)
