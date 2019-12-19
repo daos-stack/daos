@@ -600,6 +600,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 	daos_size_t		*buf_size;
 	void			*buf;
@@ -608,6 +609,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 	daos_size_t		buf_size;
 	const void		*buf;
@@ -616,6 +618,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 } daos_kv_remove_t;
 
