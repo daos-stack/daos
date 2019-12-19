@@ -345,12 +345,86 @@ dfs_test_short_read(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
+#define NUM_INTS 1024
+
+static void
+dfs_test_read_hole(void **state)
+{
+	dfs_obj_t		*obj;
+	daos_size_t		read_size;
+	daos_size_t		chunk_size = 2000;
+	int			wbuf[10], rbuf[NUM_INTS], zbuf[NUM_INTS];
+	char			*name = "read_hole_file";
+	d_sg_list_t		wsgl, rsgl;
+	d_iov_t			iov;
+	int			i, rc;
+
+	for (i = 0; i < NUM_INTS; i++) {
+		if (i < 10)
+			wbuf[i] = i;
+		rbuf[i] = 1;
+		zbuf[i] = 0;
+	}
+
+	/** set memory location */
+	rsgl.sg_nr = 1;
+	rsgl.sg_iovs = &iov;
+	d_iov_set(&iov, rbuf, NUM_INTS * sizeof(int));
+
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	/** reading empty file should return 0 */
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+
+	/*
+	 * For now read buffer will be memset to 0 even for read beyond
+	 * EOF. this breaks POSIX and the correct result would be that the read
+	 * buffer is unchanged.
+	 */
+	rc = memcmp(rbuf, zbuf, NUM_INTS * sizeof(int));
+
+	/** write some data into the file */
+	d_iov_set(&iov, wbuf, 10 * sizeof(int));
+	wsgl.sg_nr = 1;
+	wsgl.sg_iovs = &iov;
+	/** write 10 integers to every 100th offset in the file */
+	for (i = 0; i < 10; i++) {
+		rc = dfs_write(dfs, obj, &wsgl, i * 100 * sizeof(int), NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	memset(rbuf, 1, NUM_INTS * sizeof(int));
+
+	/** read 1024 Ints starting at offset 0 again */
+	d_iov_set(&iov, rbuf, NUM_INTS * sizeof(int));
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 3640);
+
+	for (i = 0; i < NUM_INTS; i++) {
+		if (i < 1000 && i%100 < 10) {
+			assert_int_equal(rbuf[i], wbuf[i%100]);
+			continue;
+		}
+		assert_int_equal(rbuf[i], 0);
+	}
+	
+	rc = dfs_release(obj);
+	dfs_test_file_del(name);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
 	{ "DFS_TEST2: DFS short reads",
 	  dfs_test_short_read, async_disable, test_case_teardown},
-	{ "DFS_TEST3: multi-threads read shared file",
+	{ "DFS_TEST3: DFS reading holes",
+	  dfs_test_read_hole, async_disable, test_case_teardown},
+	{ "DFS_TEST4: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 };
 
