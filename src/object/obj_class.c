@@ -387,7 +387,7 @@ daos_oclass_names_list(size_t size, char *str)
 	*str = '\0';
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_name == NULL)
-			break;
+			continue;
 		len += strlen(oc->oc_name) + 2;
 		if (len < size) {
 			strcat(str, oc->oc_name);

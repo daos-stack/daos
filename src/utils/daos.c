@@ -796,17 +796,23 @@ print_oclass_names_list(FILE *stream)
 
 again:
 	str = malloc(size);
-	if (str == NULL)
+	if (str == NULL) {
+		fprintf(stderr, "failed to malloc %zu bytes to gather oclass names list\n",
+			size);
 		return;
+	}
 	len = daos_oclass_names_list(size, str);
 	if (len <= 0)
-		return;
+		goto out;
 	if (len < size)
 		fprintf(stream, "%s", str);
 	else {
 		size = len + 1;
+		free(str);
 		goto again;
 	}
+out:
+	free(str);
 }
 
 static int
