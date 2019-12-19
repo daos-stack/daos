@@ -266,40 +266,25 @@ func TestDeviceAlias(t *testing.T) {
 			topology: "testdata/wolf-133.xml",
 			expected: "hfi1_1",
 		},
-		"i40iw1 alias reverse lookup (boro 84 system topology)": {
-			device:   "i40iw1",
-			topology: "testdata/boro-84.xml",
-			expected: "eth0",
+		"ib0 alias lookup (multiport-hfi system topology)": {
+			device:   "ib0",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_0",
 		},
-		"i40iw0 alias reverse lookup (boro 84 system topology)": {
-			device:   "i40iw0",
-			topology: "testdata/boro-84.xml",
-			expected: "eth1",
+		"enp2s0 alias lookup (multiport-hfi system topology)": {
+			device:   "enp2s0",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_0",
 		},
-		"hfi1_0 alias reverse lookup (boro 84 system topology)": {
-			device:   "hfi1_0",
-			topology: "testdata/boro-84.xml",
-			expected: "ib0",
+		"ib1 alias lookup (multiport-hfi system topology": {
+			device:   "ib1",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_1",
 		},
-		"i40iw1 alias reverse lookup (wolf 133 system topology)": {
-			device:   "i40iw1",
-			topology: "testdata/wolf-133.xml",
-			expected: "eth0",
-		},
-		"i40iw0 alias reverse lookup (wolf 133 system topology)": {
-			device:   "i40iw0",
-			topology: "testdata/wolf-133.xml",
-			expected: "eth1",
-		},
-		"hfi1_0 alias reverse lookup (wolf 133 system topology)": {
-			device:   "hfi1_0",
-			topology: "testdata/wolf-133.xml",
-			expected: "ib0",
-		},
-		"hfi1_1 alias reverse lookup (wolf 133 system topology)": {
-			device:   "hfi1_1",
-			topology: "testdata/wolf-133.xml",
-			expected: "ib1",
+		"ib2 alias lookup (multiport-hfi system topology)": {
+			device:   "ib2",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_1",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

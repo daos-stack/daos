@@ -318,7 +318,9 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 }
 
 // getNodeAlias finds a node object that is the sibling of the device being matched.
-//
+// This function is now tuned to search in one direction, from a system device to a sibling
+// that is not also a system device.  This allows differentiating between multiple devices
+// "ib0, ib1 ..." and the interface adapter they are connected to "hfi1_0, mlx4_0 ..."
 func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
@@ -326,8 +328,7 @@ func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	}
 	// This node will have a sibling if its parent has more than one child (arity > 0)
 	// Search for the first sibling node that has a different name than the search node name
-	// and is not found on the systemDeviceNames map.  This allows differentiating between
-	// multiple devices "ib0, ib1 ..." and the interface adapter they are connected to "hfi1_0, mlx4_0 ..."
+	// and is not found on the systemDeviceNames map.
 	if node.parent.arity > 0 {
 		count := C.uint(node.parent.arity)
 		log.Debugf("There are %d children of this parent node.", int(count))
