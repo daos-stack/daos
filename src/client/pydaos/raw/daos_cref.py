@@ -99,6 +99,30 @@ class PoolInfo(ctypes.Structure):
                 ("pi_space", PoolSpace),
                 ("pi_rebuild_st", RebuildStatus)]
 
+
+class DaosPropertyEntry(ctypes.Structure):
+    _fields_ = [("dpe_type", ctypes.c_uint32),
+                ("dpe_reserv", ctypes.c_uint32),
+                ("dpe_val", ctypes.c_uint64)]
+
+
+class DaosProperty(ctypes.Structure):
+    _fields_ = [("dpp_nr", ctypes.c_uint32),
+                ("dpp_reserv", ctypes.c_uint32),
+                ("dpp_entries", ctypes.POINTER(DaosPropertyEntry))]
+
+    def __init__(self, num_structs):
+        total_prop_entries = (DaosPropertyEntry * num_structs)()
+        self.dpp_entries = ctypes.cast(total_prop_entries,
+                                       ctypes.POINTER(DaosPropertyEntry))
+        self.dpp_nr = num_structs
+        self.dpp_reserv = 0
+        for num in range(0, num_structs):
+            self.dpp_entries[num].dpe_type = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_reserv = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_val = ctypes.c_uint64(0)
+
+
 class ContInfo(ctypes.Structure):
     """ Structure to represent information about a container """
     _fields_ = [("ci_uuid", ctypes.c_ubyte * 16),
@@ -275,3 +299,9 @@ class Logfac:
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+class CheckSumFlag:
+    CSUM_ENABLE = 4100
+    CSUM_CHUNK_SIZE = 4101
+    CSUM_SRV_VERIFY = 4102
+

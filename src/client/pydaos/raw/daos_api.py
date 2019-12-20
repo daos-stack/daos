@@ -46,6 +46,7 @@ DaosObjClass = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
 
+
 class DaosPool(object):
     """A python object representing a DAOS pool."""
 
@@ -1379,7 +1380,8 @@ class DaosContainer(object):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def create(self, poh, con_uuid=None, cb_func=None):
+    def create(self, poh, con_uuid=None, enable_chksum=False, srv_verify=False,
+               chksum_type=None, chunk_size=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -1389,15 +1391,45 @@ class DaosContainer(object):
             self.uuid = None
         else:
             conversion.c_uuid(con_uuid, self.uuid)
-
         self.poh = poh
+        # We will support only basic properties. Full
+        # container properties will not be exposed.
+        if enable_chksum is True:
+            # Create DaosProperty for checksum
+            # 1. Enable checksum, 2. Server Verfiy
+            # 3. Chunk Size Allocation.
+            num_prop = 3
+            self.cont_prop = daos_cref.DaosProperty(num_prop)
+            self.flag = daos_cref.CheckSumFlag()
+            self.cont_prop.dpp_entries[0].dpe_type = ctypes.c_uint32(
+                self.flag.CSUM_ENABLE)
+            if chksum_type is None:
+                self.cont_prop.dpp_entries[0].dpe_val = ctypes.c_uint64(1)
+            else:
+                self.cont_prop.dpp_entries[0].dpe_val = ctypes.c_uint64(
+                    chksum_type)
+            self.cont_prop.dpp_entries[2].dpe_type = ctypes.c_uint32(
+                self.flag.CSUM_CHUNK_SIZE)
+            if chunk_size is None:
+                self.cont_prop.dpp_entries[2].dpe_val = ctypes.c_uint64(16384)
+            else:
+                self.cont_prop.dpp_entries[2].dpe_val = ctypes.c_uint64(
+                    chunk_size)
+            self.cont_prop.dpp_entries[1].dpe_type = ctypes.c_uint32(
+                self.flag.CSUM_SRV_VERIFY)
+            if srv_verify is True:
+                self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(1)
+            else:
+                self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(0)
+        else:
+            self.cont_prop = None
 
         func = self.context.get_function('create-cont')
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, None, None)
+            ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop), None)
             if ret != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError(
@@ -1406,7 +1438,8 @@ class DaosContainer(object):
                 self.attached = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, None, event]
+            params = [self.poh, self.uuid, ctypes.byref(self.cont_prop), None,
+                      event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -2116,6 +2149,7 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
+
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2235,6 +2269,7 @@ class DaosLog:
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
+
 
 class DaosApiError(Exception):
     """DAOS API exception class."""
