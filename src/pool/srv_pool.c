@@ -2589,17 +2589,17 @@ out:
 }
 
 /**
- * Query a pool's ACL property without having a handle for the pool
+ * Query a pool's properties without having a handle for the pool
  */
 void
-ds_pool_get_acl_handler(crt_rpc_t *rpc)
+ds_pool_prop_get_handler(crt_rpc_t *rpc)
 {
-	struct pool_get_acl_in	*in = crt_req_get(rpc);
-	struct pool_get_acl_out	*out = crt_reply_get(rpc);
-	struct pool_svc		*svc;
-	struct rdb_tx		tx;
-	int			rc;
-	daos_prop_t		*prop = NULL;
+	struct pool_prop_get_in		*in = crt_req_get(rpc);
+	struct pool_prop_get_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+	daos_prop_t			*prop = NULL;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pgi_op.pi_uuid), rpc);
@@ -2615,8 +2615,7 @@ ds_pool_get_acl_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_rdlock(svc->ps_lock);
 
-	/* read ACL prop only */
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	rc = pool_prop_read(&tx, svc, in->pgi_query_bits, &prop);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 	out->pgo_prop = prop;
@@ -2638,26 +2637,27 @@ out:
 /**
  * Send a CaRT message to the pool svc to get the ACL pool property.
  *
- * \param[in]	pool_uuid	UUID of the pool
- * \param[in]	ranks		Pool service replicas
- * \param[out]	prop		ACL pool prop
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		ranks		Pool service replicas
+ * \param[in][out]	prop		Prop with requested properties, to be
+ *					filled out and returned.
  *
  * \return	0		Success
  *
  */
 int
-ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
-			 daos_prop_t **prop)
+ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+		     daos_prop_t *prop)
 {
-	int			rc;
-	struct rsvc_client	client;
-	crt_endpoint_t		ep;
-	struct dss_module_info	*info = dss_get_module_info();
-	crt_rpc_t		*rpc;
-	struct pool_get_acl_in	*in;
-	struct pool_get_acl_out	*out;
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_prop_get_in		*in;
+	struct pool_prop_get_out	*out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": Getting ACL prop\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": Getting prop\n", DP_UUID(pool_uuid));
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
@@ -2667,9 +2667,9 @@ rechoose:
 	ep.ep_grp = NULL; /* primary group */
 	rsvc_client_choose(&client, &ep);
 
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_GET_ACL, &rpc);
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_GET, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool get ACL rpc: %d\n",
+		D_ERROR(DF_UUID": failed to create pool get prop rpc: %d\n",
 			DP_UUID(pool_uuid), rc);
 		D_GOTO(out_client, rc);
 	}
@@ -2677,6 +2677,7 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pgi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pgi_op.pi_hdl);
+	in->pgi_query_bits = pool_query_bits(NULL, prop);
 
 	rc = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
@@ -2693,12 +2694,13 @@ rechoose:
 
 	rc = out->pgo_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get ACL for pool: %d\n",
+		D_ERROR(DF_UUID": failed to get prop for pool: %d\n",
 			DP_UUID(pool_uuid), rc);
 		D_GOTO(out_rpc, rc);
 	}
 
-	*prop = daos_prop_dup(out->pgo_prop, true);
+	rc = daos_prop_copy(prop, out->pgo_prop);
+
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
