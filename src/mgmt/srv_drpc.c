@@ -597,6 +597,9 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 	size_t	ace_nr = 0;
 	int	rc;
 
+	if (acl == NULL)
+		return 0; /* nothing to do */
+
 	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
 	if (rc != 0) {
 		D_ERROR("Couldn't convert ACL to string list, rc="DF_RC"",
@@ -606,6 +609,35 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 
 	resp->n_acl = ace_nr;
 	resp->acl = ace_list;
+
+	return 0;
+}
+
+static int
+prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
+{
+	struct daos_prop_entry	*entry;
+	int			rc = 0;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry != NULL) {
+		rc = add_acl_to_response((struct daos_acl *)entry->dpe_val_ptr,
+					 resp);
+		if (rc != 0)
+			return rc;
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	if (entry != NULL && entry->dpe_str != NULL) {
+		D_STRNDUP(resp->owneruser, entry->dpe_str,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	if (entry != NULL && entry->dpe_str != NULL) {
+		D_STRNDUP(resp->ownergroup, entry->dpe_str,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	}
 
 	return 0;
 }
@@ -631,11 +663,11 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__GetACLReq		*req = NULL;
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
+	Mgmt__GetACLReq	*req = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc;
+	uuid_t		pool_uuid;
+	daos_prop_t	*access_prop = NULL;
 
 	req = mgmt__get_aclreq__unpack(NULL, drpc_req->body.len,
 				       drpc_req->body.data);
@@ -653,18 +685,18 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_get_acl(pool_uuid, &acl);
+	rc = ds_mgmt_pool_get_acl(pool_uuid, &access_prop);
 	if (rc != 0) {
 		D_ERROR("Couldn't get pool ACL, rc="DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	rc = add_acl_to_response(acl, &resp);
+	rc = prop_to_acl_response(access_prop, &resp);
 	if (rc != 0)
 		D_GOTO(out_acl, rc);
 
 out_acl:
-	daos_acl_free(acl);
+	daos_prop_free(access_prop);
 out:
 	resp.status = rc;
 
@@ -711,11 +743,11 @@ out:
 void
 ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc = 0;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
-	struct daos_acl		*result = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc = 0;
+	uuid_t		pool_uuid;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*result = NULL;
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
@@ -731,8 +763,8 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_acl, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out_acl:
 	daos_acl_free(acl);
@@ -746,11 +778,11 @@ out:
 void
 ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc = 0;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
-	struct daos_acl		*result = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc = 0;
+	uuid_t		pool_uuid;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*result = NULL;
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
@@ -766,8 +798,8 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_acl, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out_acl:
 	daos_acl_free(acl);
@@ -785,7 +817,7 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
 	int			rc = 0;
 	uuid_t			pool_uuid;
-	struct daos_acl		*result = NULL;
+	daos_prop_t		*result = NULL;
 
 	req = mgmt__delete_aclreq__unpack(NULL, drpc_req->body.len,
 					  drpc_req->body.data);
@@ -806,8 +838,8 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out:
 	resp.status = rc;
