@@ -24,6 +24,7 @@
 package server
 
 import (
+	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -40,6 +41,10 @@ import (
 )
 
 const (
+	defaultRuntimeDir        = "/var/run/daos_server"
+	defaultConfigPath        = "etc/daos_server.yml"
+	defaultSystemName        = "daos_server"
+	defaultPort              = 10001
 	configOut                = ".daos_server.active.yml"
 	relConfExamplesPath      = "utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
@@ -75,7 +80,6 @@ type Configuration struct {
 	SocketDir  string                `yaml:"socket_dir"`
 	Fabric     ioserver.FabricConfig `yaml:",inline"`
 	Modules    string
-	Attach     string
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -160,16 +164,6 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 	return c
 }
 
-// WithAttach sets attachment info path.
-func (c *Configuration) WithAttachInfo(aip string) *Configuration {
-	c.Attach = aip
-	// TODO: Should all instances share this? Thinking probably not...
-	for _, srv := range c.Servers {
-		srv.WithAttachInfoPath(aip)
-	}
-	return c
-}
-
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	c.Fabric.Provider = provider
@@ -189,7 +183,6 @@ func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 	srvCfg.WithShmID(c.NvmeShmID)
 	srvCfg.SocketDir = c.SocketDir
 	srvCfg.Modules = c.Modules
-	srvCfg.AttachInfoPath = c.Attach // TODO: Is this correct?
 }
 
 // WithServers sets the list of IOServer configurations.
@@ -312,14 +305,14 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         "daos_server",
-		SocketDir:          "/var/run/daos_server",
-		AccessPoints:       []string{"localhost"},
-		ControlPort:        10000,
+		SystemName:         defaultSystemName,
+		SocketDir:          defaultRuntimeDir,
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
+		ControlPort:        defaultPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		NrHugepages:        1024,
-		Path:               "etc/daos_server.yml",
+		Path:               defaultConfigPath,
 		NvmeShmID:          0,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
 		ext:                ext,

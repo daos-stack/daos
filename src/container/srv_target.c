@@ -33,7 +33,7 @@
  *         Global  ds_pool
  *                 ds_pool_hdl
  *
- *   Thread-local  ds_pool_child  ds_cont
+ *   Thread-local  ds_pool_child  ds_cont_child
  *                                ds_cont_hdl
  */
 #define D_LOGFAC	DD_FAC(container)
@@ -48,6 +48,347 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
+/* Per VOS container aggregation ULT ***************************************/
+
+/*
+ * DTX batched commit may delay the commit for at most 60 seconds,
+ * so we have to use a larger threshold to ensure that all transactions
+ * within the aggregation epoch range are either committed or to be
+ * aborted.
+ */
+#define DAOS_AGG_THRESHOLD	90 /* seconds */
+
+static inline int
+cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
+{
+	/*
+	 * Avoid calling into vos_aggregate() when aborting aggregation
+	 * on ds_cont_child purging.
+	 */
+	if (cont->sc_abort_vos_aggregating)
+		return 1;
+	return vos_aggregate(cont->sc_hdl, epr);
+}
+
+static int
+cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
+{
+	daos_epoch_t		epoch_max, epoch_min;
+	daos_epoch_range_t	epoch_range;
+	vos_cont_info_t		cinfo;
+	uint64_t		hlc = crt_hlc_get();
+	uint64_t		change_hlc;
+	uint64_t		interval;
+	uint64_t		*snapshots;
+	int			snapshots_nr;
+	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
+	int			i, rc;
+
+	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
+	*sleep = interval;
+
+	if (dss_aggregation_disabled())
+		return 0;
+
+	/* snapshot list isn't fetched yet */
+	if (cont->sc_aggregation_max == 0)
+		return 0;
+
+	/*
+	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
+	 * in vos_aggregate()
+	 */
+	rc = vos_cont_query(cont->sc_hdl, &cinfo);
+	if (rc)
+		return rc;
+
+	change_hlc = max(cont->sc_snapshot_delete_hlc,
+			 cont->sc_pool->spc_rebuild_end_hlc);
+	if (cont->sc_aggregation_full_scan_hlc < change_hlc) {
+		/* Snapshot has been deleted or rebuild happens since the last
+		 * aggregation, let's restart from 0.
+		 */
+		epoch_min = 0;
+		D_DEBUG(DB_TRACE, "change hlc "DF_U64" > full "DF_U64"\n",
+			change_hlc, cont->sc_aggregation_full_scan_hlc);
+	} else {
+		epoch_min = cinfo.ci_hae;
+	}
+
+	D_ASSERT(hlc > (interval * 2));
+	/*
+	 * Assume 'current hlc - interval' as the highest stable view (all
+	 * transactions under this epoch is either committed or aborted).
+	 */
+	epoch_max = hlc - interval;
+	/* Throttle the aggregation a bit */
+	if (epoch_min > epoch_max - interval) {
+		*sleep = (epoch_min - (epoch_max - interval));
+		return 0;
+	}
+	*sleep = 0;
+
+	/* Cap the aggregation upper bound to the snapshot in creating */
+	if (epoch_max >= cont->sc_aggregation_max)
+		epoch_max = cont->sc_aggregation_max - 1;
+
+	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_U64", Max "DF_U64"\n",
+		  epoch_min, epoch_max);
+
+	if (cont->sc_pool->spc_rebuild_fence != 0) {
+		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
+		int	j;
+		int	k;
+
+		D_DEBUG(DB_TRACE, "rebuild fence "DF_U64"\n", rebuild_fence);
+		/* Insert the rebuild_epoch into snapshots */
+		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
+			sizeof(daos_epoch_t));
+		if (snapshots == NULL)
+			return -DER_NOMEM;
+
+		for (j = 0, k = 0; j < cont->sc_snapshots_nr; j++) {
+			if (cont->sc_snapshots[j] > rebuild_fence) {
+				snapshots[j] = cont->sc_snapshots[j];
+				k++;
+			} else {
+				snapshots[j+1] = cont->sc_snapshots[j];
+			}
+		}
+		snapshots[k] = rebuild_fence;
+		snapshots_nr = cont->sc_snapshots_nr + 1;
+	} else {
+		snapshots = cont->sc_snapshots;
+		snapshots_nr = cont->sc_snapshots_nr;
+	}
+
+	/*
+	 * Find highest snapshot less than last aggregated epoch.
+	 * TODO: Rebuild epoch needs be taken into account as well.
+	 */
+	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
+		;
+
+	if (i == 0)
+		epoch_range.epr_lo = 0;
+	else
+		epoch_range.epr_lo = snapshots[i-1] + 1;
+
+
+	if (epoch_range.epr_lo >= epoch_max)
+		return 0;
+
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		tgt_id, epoch_min, hlc);
+
+	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
+		epoch_range.epr_hi = snapshots[i];
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
+		rc = cont_aggregate_epr(cont, &epoch_range);
+		if (rc)
+			return rc;
+		epoch_range.epr_lo = epoch_range.epr_hi + 1;
+	}
+
+	D_ASSERT(epoch_range.epr_lo <= epoch_max);
+	if (epoch_range.epr_lo == epoch_max)
+		goto out;
+
+	epoch_range.epr_hi = epoch_max;
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+
+	rc = cont_aggregate_epr(cont, &epoch_range);
+out:
+	if (rc == 0 && epoch_min == 0)
+		cont->sc_aggregation_full_scan_hlc = hlc;
+
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
+
+	return rc;
+}
+
+static void
+cont_aggregate_ult(void *arg)
+{
+	struct ds_cont_child		*cont	= arg;
+	struct dss_module_info		*dmi	= dss_get_module_info();
+	int				 rc	= 0;
+
+	cont->sc_agg_ult = dss_sleep_ult_create();
+	if (cont->sc_agg_ult == NULL) {
+		D_CRIT(DF_CONT"[%d]: Failed to start aggregation ULT\n",
+		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		       dmi->dmi_tgt_id);
+		return;
+	}
+
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT started\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		dmi->dmi_tgt_id);
+
+	while (!cont->sc_abort_vos_aggregating &&
+	       !dss_xstream_exiting(dmi->dmi_xstream)) {
+		uint64_t sleep; /* nano secs */
+
+		rc = cont_child_aggregate(cont, &sleep);
+		if (rc == -DER_SHUTDOWN) {
+			break;	/* pool destroyed */
+		} else if (rc < 0) {
+			D_ERROR(DF_CONT": VOS aggregate failed. %d\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				rc);
+		}
+
+		if (dss_xstream_exiting(dmi->dmi_xstream) ||
+		    cont->sc_abort_vos_aggregating)
+			break;
+
+		sleep /= NSEC_PER_SEC; /* Convert to seconds */
+		if (sleep > 0)
+			dss_ult_sleep(cont->sc_agg_ult, sleep);
+		else
+			ABT_thread_yield();
+	}
+
+	cont->sc_vos_aggregating = 0;
+
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		dmi->dmi_tgt_id);
+}
+
+static int
+cont_start_agg_ult(struct ds_cont_child *cont)
+{
+	int rc;
+
+	D_ASSERT(cont != NULL);
+	if (cont->sc_abort_vos_aggregating || cont->sc_vos_aggregating)
+		return 0;
+
+	cont->sc_vos_aggregating = 1;
+	rc = dss_ult_create(cont_aggregate_ult, cont,
+			    DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		D_ERROR(DF_CONT": Failed to create aggregation ULT; rc %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), rc);
+		cont->sc_vos_aggregating = 0;
+	}
+	return rc;
+}
+
+static void
+cont_stop_agg_ult(struct ds_cont_child *cont)
+{
+	int rc;
+
+	if (cont->sc_agg_ult) {
+		dss_ult_wakeup(cont->sc_agg_ult);
+		dss_sleep_ult_destroy(cont->sc_agg_ult);
+		cont->sc_agg_ult = NULL;
+	}
+
+	if (!cont->sc_vos_aggregating)
+		return;
+
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping aggregation ULT\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		dss_get_module_info()->dmi_tgt_id);
+
+	cont->sc_abort_vos_aggregating = 1;
+	rc = vos_cont_ctl(cont->sc_hdl, VOS_CO_CTL_ABORT_AGG);
+	if (rc)
+		D_ERROR(DF_UUID": Abort aggregation failed. %d\n",
+			DP_UUID(cont->sc_uuid), rc);
+
+	while (cont->sc_vos_aggregating)
+		ABT_thread_yield();
+}
+
+/* Per VOS container DTX re-index ULT ***************************************/
+
+void
+ds_cont_dtx_reindex_ult(void *arg)
+{
+	struct ds_cont_child		*cont	= arg;
+	struct dss_module_info		*dmi	= dss_get_module_info();
+	uint64_t			 hint	= 0;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": starting DTX reindex ULT on xstream %d\n",
+		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+
+	while (!cont->sc_dtx_reindex_abort &&
+	       !dss_xstream_exiting(dmi->dmi_xstream)) {
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+		if (rc < 0) {
+			D_ERROR(DF_UUID": DTX reindex failed: rc = %d\n",
+				DP_UUID(cont->sc_uuid), rc);
+			goto out;
+		}
+
+		if (rc > 0) {
+			D_DEBUG(DF_DSMS, DF_CONT": DTX reindex done\n",
+				DP_CONT(NULL, cont->sc_uuid));
+			goto out;
+		}
+
+		ABT_thread_yield();
+	}
+
+	D_DEBUG(DF_DSMS, DF_CONT": stopping DTX reindex ULT on stream %d\n",
+		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+
+out:
+	cont->sc_dtx_reindex = 0;
+	ds_cont_child_put(cont);
+}
+
+static int
+cont_start_dtx_reindex_ult(struct ds_cont_child *cont)
+{
+	int rc;
+
+	D_ASSERT(cont != NULL);
+
+	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
+		return 0;
+
+	ds_cont_child_get(cont);
+	cont->sc_dtx_reindex = 1;
+	rc = dss_ult_create(ds_cont_dtx_reindex_ult, cont,
+			    DSS_ULT_DTX_RESYNC, DSS_TGT_SELF, 0, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: rc %d\n",
+			DP_UUID(cont->sc_uuid), rc);
+		cont->sc_dtx_reindex = 0;
+		ds_cont_child_put(cont);
+	}
+
+	return rc;
+}
+
+static void
+cont_stop_dtx_reindex_ult(struct ds_cont_child *cont)
+{
+	if (!cont->sc_dtx_reindex)
+		return;
+
+	cont->sc_dtx_reindex_abort = 1;
+
+	while (cont->sc_dtx_reindex)
+		ABT_thread_yield();
+
+	cont->sc_dtx_reindex_abort = 0;
+}
+
 /* ds_cont_child *******************************************************/
 
 static inline struct ds_cont_child *
@@ -57,14 +398,14 @@ cont_child_obj(struct daos_llink *llink)
 }
 
 static int
-cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
-	       struct daos_llink **link)
+cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
+		     struct daos_llink **link)
 {
-	struct ds_pool_child	*pool = varg;
 	struct ds_cont_child	*cont;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": opening\n", DP_CONT(pool->spc_uuid, key));
+	D_ASSERT(po_uuid != NULL);
+	D_DEBUG(DF_DSMS, DF_CONT": opening\n", DP_CONT(po_uuid, co_uuid));
 
 	D_ALLOC_PTR(cont);
 	if (cont == NULL)
@@ -82,78 +423,38 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto out_mutex;
 	}
 
-	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
-	if (rc != 0)
+	cont->sc_pool = ds_pool_child_lookup(po_uuid);
+	if (cont->sc_pool == NULL) {
+		rc = -DER_NO_HDL;
 		goto out_cond;
+	}
 
-	uuid_copy(cont->sc_uuid, key);
-	cont->sc_dtx_resync_time = crt_hlc_get();
-	cont->sc_aggregation_min = DAOS_EPOCH_MAX;
+	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
+	if (rc != 0)
+		goto out_pool;
+
+	uuid_copy(cont->sc_uuid, co_uuid);
+	cont->sc_aggregation_full_scan_hlc = 0;
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
 	cont->sc_snapshots_nr = 0;
 	cont->sc_snapshots = NULL;
 	cont->sc_vos_aggregating = 0;
 	cont->sc_abort_vos_aggregating = 0;
-	*link = &cont->sc_list;
+	D_INIT_LIST_HEAD(&cont->sc_link);
 
+	*link = &cont->sc_list;
 	return 0;
- out_cond:
+
+out_pool:
+	ds_pool_child_put(cont->sc_pool);
+out_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
- out_mutex:
+out_mutex:
 	ABT_mutex_free(&cont->sc_mutex);
- out:
+out:
 	D_FREE(cont);
 	return rc;
-}
-
-static int
-cont_start_agg_ult(struct ds_cont_child *cont)
-{
-	int rc;
-
-	D_ASSERT(cont != NULL);
-	if (cont->sc_abort_vos_aggregating || cont->sc_vos_aggregating)
-		return 0;
-
-	cont->sc_vos_aggregating = 1;
-	ds_cont_child_get(cont);
-	rc = dss_ult_create(ds_cont_aggregate_ult, cont,
-			    DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
-	if (rc) {
-		D_ERROR(DF_UUID": Failed to create aggregation ULT; rc %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-		cont->sc_vos_aggregating = 0;
-		ds_cont_child_put(cont);
-	}
-	return rc;
-}
-
-static void
-cont_stop_agg_ult(struct ds_cont_child *cont)
-{
-	int rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": Stopping aggregation ULT\n",
-		DP_CONT(NULL, cont->sc_uuid));
-
-	if (cont->sc_agg_ult) {
-		dss_ult_wakeup(cont->sc_agg_ult);
-		dss_sleep_ult_destroy(cont->sc_agg_ult);
-		cont->sc_agg_ult = NULL;
-	}
-
-	cont->sc_abort_vos_aggregating = 1;
-	rc = vos_cont_ctl(cont->sc_hdl, VOS_CO_CTL_ABORT_AGG);
-	if (rc)
-		D_ERROR(DF_UUID": Abort aggregation failed. %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-
-	while (cont->sc_vos_aggregating)
-		ABT_thread_yield();
-
-	D_DEBUG(DF_DSMS, DF_CONT": Aggregation ULT stopped\n",
-		DP_CONT(NULL, cont->sc_uuid));
 }
 
 static void
@@ -161,8 +462,14 @@ cont_child_free_ref(struct daos_llink *llink)
 {
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
-	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
+	D_ASSERT(cont->sc_pool != NULL);
+	D_ASSERT(!daos_handle_is_inval(cont->sc_hdl));
+
+	D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+
 	vos_cont_close(cont->sc_hdl);
+	ds_pool_child_put(cont->sc_pool);
 
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_mutex_free(&cont->sc_mutex);
@@ -178,7 +485,7 @@ cont_child_cmp_keys(const void *key, unsigned int ksize,
 	return uuid_compare(key, cont->sc_uuid) == 0;
 }
 
-static struct daos_llink_ops ds_cont_child_cache_ops = {
+static struct daos_llink_ops cont_child_cache_ops = {
 	.lop_alloc_ref	= cont_child_alloc_ref,
 	.lop_free_ref	= cont_child_free_ref,
 	.lop_cmp_keys	= cont_child_cmp_keys
@@ -188,11 +495,11 @@ int
 ds_cont_child_cache_create(struct daos_lru_cache **cache)
 {
 	/*
-	 * Since there's currently no way to evict an idle object, we don't
-	 * really cache any idle objects.
+	 * ds_cont_child isn't cached in LRU, it'll be removed from hash table
+	 * then freed on last user putting reference count.
 	 */
-	return daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /*feats*/,
-				     &ds_cont_child_cache_ops, cache);
+	return daos_lru_cache_create(-1 /* no lru cache */, D_HASH_FT_NOLOCK,
+				     &cont_child_cache_ops, cache);
 }
 
 void
@@ -202,27 +509,27 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 }
 
 /*
- * If "pool == NULL", then this is assumed to be a pure lookup. In this case,
+ * If "po_uuid == NULL", then this is assumed to be a pure lookup. In this case,
  * -DER_NONEXIST is returned if the ds_cont_child object does not exist.
  */
 static int
-cont_child_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
-		  struct ds_pool_child *pool, struct ds_cont_child **cont)
+cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
+		  const uuid_t po_uuid, struct ds_cont_child **cont)
 {
 	struct daos_llink      *llink;
 	int			rc;
 
-	rc = daos_lru_ref_hold(cache, (void *)uuid, sizeof(uuid_t), pool,
-			       &llink);
+	rc = daos_lru_ref_hold(cache, (void *)co_uuid, sizeof(uuid_t),
+			       (void *)po_uuid, &llink);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
-				"container: %d\n", DP_CONT(NULL, uuid),
-				pool == NULL ? "" : "/create", rc);
+				"container: %d\n", DP_CONT(po_uuid, co_uuid),
+				po_uuid == NULL ? "" : "/create", rc);
 		else
 			D_ERROR(DF_CONT": failed to lookup%s container: %d\n",
-				DP_CONT(NULL, uuid),
-				pool == NULL ? "" : "/create", rc);
+				DP_CONT(po_uuid, co_uuid),
+				po_uuid == NULL ? "" : "/create", rc);
 		return rc;
 	}
 
@@ -234,6 +541,131 @@ static void
 cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
 {
 	daos_lru_ref_release(cache, &cont->sc_list);
+}
+
+static inline bool
+cont_child_started(struct ds_cont_child *cont_child)
+{
+	/* Started container is linked in spc_cont_list */
+	return !d_list_empty(&cont_child->sc_link);
+}
+
+static void
+cont_child_stop(struct ds_cont_child *cont_child)
+{
+	if (!cont_child->sc_stopping) {
+		D_DEBUG(DF_DSMS, DF_CONT"[%d]: Stopping container\n",
+			DP_CONT(cont_child->sc_pool->spc_uuid,
+				cont_child->sc_uuid),
+			dss_get_module_info()->dmi_tgt_id);
+
+		cont_child->sc_stopping = 1;
+		d_list_del_init(&cont_child->sc_link);
+
+		/* cont_stop_agg_ult() may yield */
+		cont_stop_agg_ult(cont_child);
+		ds_cont_child_put(cont_child);
+	} else {
+		D_ASSERT(!cont_child_started(cont_child));
+	}
+}
+
+void
+ds_cont_child_stop_all(struct ds_pool_child *pool_child)
+{
+	d_list_t		*cont_list;
+	struct ds_cont_child	*cont_child;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping all containers\n",
+		DP_UUID(pool_child->spc_uuid),
+		dss_get_module_info()->dmi_tgt_id);
+
+	D_ASSERT(d_list_empty(&pool_child->spc_list));
+
+	cont_list = &pool_child->spc_cont_list;
+	while (!d_list_empty(cont_list)) {
+		cont_child = d_list_entry(cont_list->next,
+					  struct ds_cont_child, sc_link);
+		cont_child_stop(cont_child);
+	}
+}
+
+static int
+cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
+		 struct ds_cont_child **cont_out)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_cont_child	*cont_child;
+	int			 tgt_id = dss_get_module_info()->dmi_tgt_id;
+	int			 rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT"[%d]: Starting container\n",
+		DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+
+	rc = cont_child_lookup(tls->dt_cont_cache, co_uuid,
+			       pool_child->spc_uuid, &cont_child);
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DF_DSMS,
+			 DF_CONT"[%d]: Load container error:%d\n",
+			 DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, rc);
+		return rc;
+	}
+
+	/*
+	 * The container is in stopping because:
+	 * 1. Container is going to be destroyed, or;
+	 * 2. Pool is going to be destroyed, or;
+	 * 3. Pool service is going to be stopped;
+	 */
+	if (cont_child->sc_stopping) {
+		D_ERROR(DF_CONT"[%d]: Container is in stopping\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+		rc = -DER_SHUTDOWN;
+	} else if (!cont_child_started(cont_child)) {
+		rc = cont_start_agg_ult(cont_child);
+		if (!rc) {
+			d_list_add_tail(&cont_child->sc_link,
+					&pool_child->spc_cont_list);
+			ds_cont_child_get(cont_child);
+		}
+	}
+
+	if (!rc && cont_out != NULL) {
+		*cont_out = cont_child;
+		ds_cont_child_get(cont_child);
+	}
+
+	/* Put the ref from cont_child_lookup() */
+	ds_cont_child_put(cont_child);
+	return rc;
+}
+
+static int
+cont_child_start_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		    vos_iter_type_t type, vos_iter_param_t *iter_param,
+		    void *data, unsigned *acts)
+{
+	struct ds_pool_child	*pool_child = data;
+
+	return cont_child_start(pool_child, entry->ie_couuid, NULL);
+}
+
+int
+ds_cont_child_start_all(struct ds_pool_child *pool_child)
+{
+	vos_iter_param_t	iter_param = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
+	int			rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Starting all containers\n",
+		DP_UUID(pool_child->spc_uuid),
+		dss_get_module_info()->dmi_tgt_id);
+
+	iter_param.ip_hdl = pool_child->spc_hdl;
+	/* The quantity of container is small, no need to yield */
+	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
+			 cont_child_start_cb, (void *)pool_child);
+	return rc;
 }
 
 /* ds_cont_hdl ****************************************************************/
@@ -278,14 +710,13 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sch_entry));
 	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
 	D_DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
+	/* The sch_cont is NULL for global rebuild cont handle */
 	if (hdl->sch_cont != NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
-			DP_CONT(hdl->sch_pool->spc_uuid,
+			DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
 			hdl->sch_cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 	}
-	if (hdl->sch_pool)
-		ds_pool_child_put(hdl->sch_pool);
 	D_FREE(hdl);
 }
 
@@ -381,12 +812,14 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	cont_hdl_put_internal(hash, hdl);
 }
 
-int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
+static int
+cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 {
 	daos_prop_t	*props;
 	uint32_t	 csum_val;
 	int		 rc;
 
+	D_ASSERT(hdl->sch_cont != NULL);
 	/** Get the container csum related properties
 	 * Need the pool for the IV namespace
 	 */
@@ -397,7 +830,7 @@ int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	}
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
-	rc = cont_iv_prop_fetch(hdl->sch_pool->spc_pool->sp_iv_ns,
+	rc = cont_iv_prop_fetch(hdl->sch_cont->sc_pool->spc_pool->sp_iv_ns,
 				hdl->sch_uuid, props);
 	if (rc != 0)
 		goto done;
@@ -427,121 +860,6 @@ ds_cont_hdl_get(struct ds_cont_hdl *hdl)
 	cont_hdl_get_internal(hash, hdl);
 }
 
-/* ds cont cache */
-static struct daos_lru_cache   *ds_cont_cache;
-static ABT_mutex		cont_cache_lock;
-
-static inline struct ds_cont *
-cont_obj(struct daos_llink *llink)
-{
-	return container_of(llink, struct ds_cont, sc_list);
-}
-
-static int
-cont_alloc_ref(void *key, unsigned int ksize, void *varg,
-	       struct daos_llink **link)
-{
-	struct ds_cont	*cont;
-	uuid_t		*uuid = varg;
-
-	D_ALLOC_PTR(cont);
-	uuid_copy(cont->sc_uuid, *uuid);
-	*link = &cont->sc_list;
-	return 0;
-}
-
-static void
-cont_free_ref(struct daos_llink *llink)
-{
-	struct ds_cont *cont = cont_obj(llink);
-
-	D_FREE(cont);
-}
-
-static bool
-cont_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
-{
-	struct ds_cont *cont = cont_obj(llink);
-
-	return uuid_compare(key, cont->sc_uuid) == 0;
-}
-
-static struct daos_llink_ops ds_cont_cache_ops = {
-	.lop_alloc_ref	= cont_alloc_ref,
-	.lop_free_ref	= cont_free_ref,
-	.lop_cmp_keys	= cont_cmp_keys
-};
-
-int
-ds_cont_lookup_create(const uuid_t uuid, void *arg, struct ds_cont **cont_p)
-{
-	struct daos_llink	*llink;
-	int			rc;
-
-	ABT_mutex_lock(cont_cache_lock);
-	rc = daos_lru_ref_hold(ds_cont_cache, (void *)uuid, sizeof(uuid_t),
-			       arg, &llink);
-	ABT_mutex_unlock(cont_cache_lock);
-	if (rc != 0) {
-		if (arg == NULL && rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: %d\n",
-				DP_UUID(uuid), rc);
-		else
-			D_ERROR(DF_UUID": failed to lookup%s: %d\n",
-				DP_UUID(uuid), arg == NULL ? "" : "/create",
-				rc);
-		return rc;
-	}
-
-	*cont_p = cont_obj(llink);
-	return 0;
-}
-
-struct ds_cont *
-ds_cont_lookup(const uuid_t uuid)
-{
-	struct ds_cont *cont;
-	int		rc;
-
-	rc = ds_cont_lookup_create(uuid, NULL, &cont);
-	if (rc != 0)
-		cont = NULL;
-
-	return cont;
-}
-
-void
-ds_cont_put(struct ds_cont *cont)
-{
-	ABT_mutex_lock(cont_cache_lock);
-	daos_lru_ref_release(ds_cont_cache, &cont->sc_list);
-	ABT_mutex_unlock(cont_cache_lock);
-}
-
-int
-ds_cont_cache_init(void)
-{
-	int rc;
-
-	rc = ABT_mutex_create(&cont_cache_lock);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-	rc = daos_lru_cache_create(-1 /* bits */, D_HASH_FT_NOLOCK /* feats */,
-				   &ds_cont_cache_ops, &ds_cont_cache);
-	if (rc != 0)
-		ABT_mutex_free(&cont_cache_lock);
-	return rc;
-}
-
-void
-ds_cont_cache_fini(void)
-{
-	ABT_mutex_lock(cont_cache_lock);
-	daos_lru_cache_destroy(ds_cont_cache);
-	ABT_mutex_unlock(cont_cache_lock);
-	ABT_mutex_free(&cont_cache_lock);
-}
-
 /*
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
@@ -569,14 +887,16 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc);
 		/* found it */
 
-		cont_stop_agg_ult(cont);
+		cont_child_stop(cont);
 
 		ABT_mutex_lock(cont->sc_mutex);
-		cont->sc_destroying = 1;
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
-		/* Should evict if idle, but no such interface at the moment. */
+		/*
+		 * If this is the last user, ds_cont_child will be removed from
+		 * hash & freed on put.
+		 */
 		cont_child_put(tls->dt_cont_cache, cont);
 
 		retry_cnt++;
@@ -645,58 +965,54 @@ ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 }
 
 /**
- * sert container lookup by pool/container uuid.
+ * lookup ds_cont_child by pool/container uuid.
  **/
 int
 ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
-	struct ds_pool_child	*ds_pool;
-	int			rc;
 
-	ds_pool = ds_pool_child_lookup(pool_uuid);
-	if (ds_pool == NULL)
-		return -DER_NO_HDL;
-
-	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, ds_pool,
-			       ds_cont);
-	ds_pool_child_put(ds_pool);
-
-	return rc;
+	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
+				 ds_cont);
 }
 
 /**
- * server container lookup and create. If the container is created,
+ * ds_cont_child create and start. If the container is created,
  * it will return 1, otherwise return 0 or error code.
  **/
 static int
-ds_cont_child_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid)
+cont_child_create_start(struct ds_cont_hdl *hdl, uuid_t pool_uuid,
+			uuid_t cont_uuid)
 {
-	struct dsm_tls	*tls = dsm_tls_get();
+	struct ds_pool_child	*pool_child;
 	int rc;
 
-	D_ASSERT(hdl->sch_cont == NULL);
-	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, hdl->sch_pool,
-			       &hdl->sch_cont);
-	if (rc != -DER_NONEXIST)
-		return rc;
+	pool_child = ds_pool_child_lookup(pool_uuid);
+	if (pool_child == NULL) {
+		D_ERROR(DF_CONT" : failed to find pool child\n",
+			DP_CONT(pool_uuid, cont_uuid));
+		return -DER_NO_HDL;
+	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
-
-	rc = vos_cont_create(hdl->sch_pool->spc_hdl, cont_uuid);
-	if (rc != 0)
-		return rc;
-
-	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid,
-			       hdl->sch_pool, &hdl->sch_cont);
-	if (rc != 0) {
-		vos_cont_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+	rc = cont_child_start(pool_child, cont_uuid, &hdl->sch_cont);
+	if (rc != -DER_NONEXIST) {
+		ds_pool_child_put(pool_child);
 		return rc;
 	}
 
-	return 1;
+	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
+		DP_CONT(pool_uuid, cont_uuid));
+
+	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
+	if (!rc) {
+		rc = cont_child_start(pool_child, cont_uuid, &hdl->sch_cont);
+		if (rc != 0)
+			vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
+	}
+
+	ds_pool_child_put(pool_child);
+	return rc == 0 ? 1 : rc;
 }
 
 int
@@ -758,7 +1074,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
-	int			vos_co_created = 0;
+	daos_handle_t		poh = DAOS_HDL_INVAL;
 	int			rc = 0;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
@@ -779,9 +1095,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			}
 		}
 
-		if (rc == 0)
-			hdl->sch_deleted = 0;
-
 		if (cont_hdl != NULL && rc == 0)
 			*cont_hdl = hdl;
 		else
@@ -791,23 +1104,21 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
-	if (pool_uuid != NULL) {
-		hdl->sch_pool = ds_pool_child_lookup(pool_uuid);
-		if (hdl->sch_pool == NULL)
-			D_GOTO(err_hdl, rc = -DER_NO_HDL);
-	}
+	D_ASSERT(pool_uuid != NULL);
 
+	/* cont_uuid is NULL when open rebuild global cont handle */
 	if (cont_uuid != NULL) {
-		rc = ds_cont_child_lookup_or_create(hdl, cont_uuid);
+		rc = cont_child_create_start(hdl, pool_uuid, cont_uuid);
 		if (rc == 1) {
-			vos_co_created = 1;
+			poh = hdl->sch_cont->sc_pool->spc_hdl;
 			rc = 0;
 		} else if (rc != 0) {
-			D_GOTO(err_pool, rc);
+			D_GOTO(err_hdl, rc);
 		}
 	}
+
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 	hdl->sch_capas = capas;
 
@@ -849,11 +1160,11 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (cont_uuid != NULL) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
-		rc = cont_start_agg_ult(hdl->sch_cont);
-		if (rc)
+		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
+		if (rc != 0)
 			goto err_cont;
 
-		rc = dtx_batched_commit_register(hdl);
+		rc = dtx_batched_commit_register(hdl->sch_cont);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
 				" to the DTX batched commit list: rc = %d\n",
@@ -863,43 +1174,44 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		D_ALLOC_PTR(ddra);
 		if (ddra == NULL)
-			D_GOTO(err_cont, rc = -DER_NOMEM);
+			D_GOTO(err_register, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_get(hdl->sch_pool);
+		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_ULT_DTX_RESYNC,
 				    DSS_TGT_SELF, 0, NULL);
 		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_pool);
+			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
-			D_GOTO(err_cont, rc);
+			D_GOTO(err_register, rc);
 		}
 
 		rc = cont_hdl_csummer_init(hdl);
 		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_pool);
+			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
-			D_GOTO(err_cont, rc);
+			D_GOTO(err_register, rc);
 		}
 	}
 
 	return 0;
 
+err_register:
+	dtx_batched_commit_deregister(hdl->sch_cont);
 err_cont:
-	dtx_batched_commit_deregister(hdl);
+	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 	if (hdl->sch_cont)
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 
-	if (vos_co_created) {
+	if (!daos_handle_is_inval(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
-			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
-		vos_cont_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+			DP_CONT(pool_uuid, cont_uuid));
+		D_ASSERT(hdl->sch_cont != NULL);
+		cont_child_stop(hdl->sch_cont);
+		vos_cont_destroy(poh, cont_uuid);
 	}
-err_pool:
-	ds_pool_child_put(hdl->sch_pool);
 err_hdl:
 	D_FREE(hdl);
-err:
 	return rc;
 }
 
@@ -928,7 +1240,6 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 uuid_t cont_uuid, uint64_t capas)
 {
 	struct ds_pool		*pool = NULL;
-	struct ds_cont		*cont = NULL;
 	struct cont_tgt_open_arg arg;
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
@@ -974,59 +1285,39 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 
 	pool = ds_pool_lookup(pool_uuid);
 	D_ASSERT(pool != NULL);
-	rc = ds_cont_lookup_create(cont_uuid, &cont_uuid, &cont);
-	if (rc)
-		D_GOTO(out, rc);
-	cont->sc_iv_ns = pool->sp_iv_ns;
-
 	ds_cont_tgt_snapshots_refresh(pool_uuid, cont_uuid);
-out:
-	if (pool)
-		ds_pool_put(pool);
-	if (cont)
-		ds_cont_put(cont);
+	ds_pool_put(pool);
 
 	return rc;
 }
 
-/* Close a single record (i.e., handle). */
+/* Close a single per-thread open container handle */
 static int
-cont_close_one_rec(struct cont_tgt_close_rec *rec)
+cont_close_hdl(uuid_t cont_hdl_uuid)
 {
 	struct dsm_tls	       *tls = dsm_tls_get();
 	struct ds_cont_hdl     *hdl;
 
-	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
 
 	if (hdl == NULL) {
-		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
-			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),
-			rec->tcr_hce);
+		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID"\n",
+			DP_CONT(NULL, NULL), DP_UUID(cont_hdl_uuid));
 		return 0;
 	}
 
 	D_ASSERT(hdl->sch_cont != NULL);
 
-	D_DEBUG(DF_DSMS, DF_CONT": closing (%s): hdl="DF_UUID" hce="DF_U64"\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+	D_DEBUG(DF_DSMS, DF_CONT": closing (%s): hdl="DF_UUID"\n",
+		DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
+			hdl->sch_cont->sc_uuid),
 		hdl->sch_cont->sc_closing ? "resent" : "new",
-		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
+		DP_UUID(cont_hdl_uuid));
 
-	/*
-	 * FIXME: aggregation shouldn't be tied with container open/close,
-	 * let's revise this once we cleanup the pool/container cache code.
-	 * Same to DTX batched commit & resync ULTs.
-	 */
-	cont_stop_agg_ult(hdl->sch_cont);
-
-	dtx_batched_commit_deregister(hdl);
-	if (!hdl->sch_deleted) {
-		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-		hdl->sch_deleted = 1;
-	}
-
+	dtx_batched_commit_deregister(hdl->sch_cont);
 	daos_csummer_destroy(&hdl->sch_csummer);
 
+	ds_cont_local_close(cont_hdl_uuid);
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
 }
@@ -1043,7 +1334,7 @@ cont_close_one(void *vin)
 	for (i = 0; i < in->tci_recs.ca_count; i++) {
 		int rc_tmp;
 
-		rc_tmp = cont_close_one_rec(&recs[i]);
+		rc_tmp = cont_close_hdl(recs[i].tcr_hdl);
 		if (rc_tmp != 0 && rc == 0)
 			rc = rc_tmp;
 	}
@@ -1263,7 +1554,8 @@ cont_epoch_discard_one(void *vin)
 		rc = -DER_CANCELED;
 
 	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": %d\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+		DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
+			hdl->sch_cont->sc_uuid),
 		in->tii_epoch, DP_UUID(in->tii_hdl), rc);
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
@@ -1347,7 +1639,7 @@ cont_snap_update_one(void *vin)
 
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
-		cont->sc_aggregation_min = 0;
+		cont->sc_snapshot_delete_hlc = crt_hlc_get();
 		D_DEBUG(DF_DSMS, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
@@ -1411,172 +1703,6 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	if (rc != 0)
 		D_FREE(args);
 	return rc;
-}
-
-/*
- * DTX batched commit may delay the commit for at most 60 seconds,
- * so we have to use a larger threshold to ensure that all transactions
- * within the aggregation epoch range are either committed or to be
- * aborted.
- */
-#define DAOS_AGG_THRESHOLD	90 /* seconds */
-
-int
-cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
-{
-	daos_epoch_t		 epoch_max, epoch_min;
-	daos_epoch_range_t	 epoch_range;
-	vos_cont_info_t		 cinfo;
-	uint64_t		 hlc = crt_hlc_get();
-	uint64_t		 interval;
-	int			 i, rc;
-
-	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
-	*sleep = interval;
-	if (dss_aggregation_disabled())
-		return 0;
-
-	/* snapshot list isn't fetched yet */
-	if (cont->sc_aggregation_max == 0)
-		return 0;
-
-	/*
-	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
-	 * in vos_aggregate()
-	 */
-	rc = vos_cont_query(cont->sc_hdl, &cinfo);
-	if (rc)
-		return rc;
-
-	/*
-	 * sc_aggregation_min != DAOS_EPOCH_MAX means we need to aggregate
-	 * from epoch 0 because some snapshot was deleted.
-	 */
-	if (cont->sc_aggregation_min != DAOS_EPOCH_MAX) {
-		epoch_min = 0;
-		/*
-		 * Set sc_aggregation_min to non-zero so that we can tell
-		 * if another snapshot deletion happened when this round of
-		 * aggregation done.
-		 */
-		cont->sc_aggregation_min = hlc;
-	} else {
-		epoch_min = cinfo.ci_hae;
-	}
-
-	D_ASSERT(hlc > (interval * 2));
-	/*
-	 * Assume 'current hlc - interval' as the highest stable view (all
-	 * transactions under this epoch is either committed or aborted).
-	 */
-	epoch_max = hlc - interval;
-	/* Throttle the aggregation a bit */
-	if (epoch_min > epoch_max - interval) {
-		*sleep = (epoch_min - (epoch_max - interval));
-		return 0;
-	}
-	*sleep = 0;
-
-	/* Cap the aggregation upper bound to the snapshot in creating */
-	if (epoch_max >= cont->sc_aggregation_max)
-		epoch_max = cont->sc_aggregation_max - 1;
-
-	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_U64", Max "DF_U64"\n",
-		  epoch_min, epoch_max);
-
-	/*
-	 * Find highest snapshot less than last aggregated epoch.
-	 * TODO: Rebuild epoch needs be taken into account as well.
-	 */
-	for (i = 0; i < cont->sc_snapshots_nr &&
-			cont->sc_snapshots[i] < epoch_min; ++i)
-		;
-
-	if (i == 0)
-		epoch_range.epr_lo = 0;
-	else
-		epoch_range.epr_lo = cont->sc_snapshots[i-1] + 1;
-
-
-	if (epoch_range.epr_lo >= epoch_max)
-		return 0;
-
-	D_DEBUG(DB_EPC, DF_UUID"[%d]: MIN: %lu; HLC: %lu",
-		DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id,
-		epoch_min, hlc);
-
-	for ( ; i < cont->sc_snapshots_nr &&
-		cont->sc_snapshots[i] < epoch_max; ++i) {
-		epoch_range.epr_hi = cont->sc_snapshots[i];
-		D_DEBUG(DB_EPC, DF_UUID"[%d]: Aggregating {%lu -> %lu}\n",
-			DP_UUID(cont->sc_uuid),
-			dss_get_module_info()->dmi_tgt_id,
-			epoch_range.epr_lo, epoch_range.epr_hi);
-		rc = vos_aggregate(cont->sc_hdl, &epoch_range);
-		if (rc)
-			return rc;
-		epoch_range.epr_lo = epoch_range.epr_hi + 1;
-	}
-
-	D_ASSERT(epoch_range.epr_lo <= epoch_max);
-	if (epoch_range.epr_lo == epoch_max)
-		goto out;
-
-	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_UUID"[%d]: Aggregating {%lu -> %lu}\n",
-		DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id,
-		epoch_range.epr_lo, epoch_range.epr_hi);
-	rc = vos_aggregate(cont->sc_hdl, &epoch_range);
-out:
-	/* No snapshot deletion happened in this round of aggregation */
-	if (cont->sc_aggregation_min != 0)
-		cont->sc_aggregation_min = DAOS_EPOCH_MAX;
-
-	D_DEBUG(DB_EPC, DF_UUID"[%d]: Aggregating finished\n",
-		DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id);
-
-	return rc;
-}
-
-void
-ds_cont_aggregate_ult(void *arg)
-{
-	struct ds_cont_child		*cont	= arg;
-	struct dss_module_info		*dmi	= dss_get_module_info();
-	int				 rc	= 0;
-
-	D_DEBUG(DB_EPC, DF_UUID": starting aggregation ULT on xstream %d\n",
-		DP_UUID(cont->sc_uuid), dmi->dmi_tgt_id);
-
-	cont->sc_agg_ult = dss_sleep_ult_create();
-	if (cont->sc_agg_ult == NULL)
-		return;
-
-	while (!cont->sc_abort_vos_aggregating) {
-		uint64_t sleep; /* nano secs */
-
-		rc = cont_child_aggregate(cont, &sleep);
-		if (rc > 0 || rc == -DER_SHUTDOWN) {
-			break;	/* aggregation aborted */
-		} else if (rc) {
-			D_ERROR(DF_UUID": VOS aggregate failed. %d\n",
-				DP_UUID(cont->sc_uuid), rc);
-		}
-
-		if (dss_xstream_exiting(dmi->dmi_xstream))
-			break;
-
-		sleep /= NSEC_PER_SEC; /* Convert to seconds */
-		if (sleep > 0)
-			dss_ult_sleep(cont->sc_agg_ult, sleep);
-		else
-			ABT_thread_yield();
-	}
-
-	D_DEBUG(DB_EPC, DF_UUID": stopping aggregation ULT on stream %d\n",
-		DP_UUID(cont->sc_uuid), dmi->dmi_tgt_id);
-	cont->sc_vos_aggregating = 0;
-	ds_cont_child_put(cont);
 }
 
 static int
@@ -1673,7 +1799,7 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 /* iterate all of objects or uncommitted DTXs of the container. */
 int
-ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
+ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	     void *arg, uint32_t type)
 {
 	vos_iter_param_t param;

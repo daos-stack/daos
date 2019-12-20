@@ -61,7 +61,7 @@ class ObjectDataValidation(TestWithoutServers):
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
-        self.hostlist = self.params.get("test_machines", '/run/hosts/*')
+        self.hostlist = self.params.get("test_servers", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]

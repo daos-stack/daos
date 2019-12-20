@@ -1,0 +1,14 @@
+"""Build daos iosrv tests"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('denv', 'common_test_utils')
+
+    unit_env = denv.Clone()
+    daos_build.test(unit_env, 'srv_checksum_tests',
+                    ['srv_checksum_tests.c', '../srv_csum.c'],
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
+
+if __name__ == "SCons.Script":
+    scons()

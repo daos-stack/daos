@@ -170,7 +170,7 @@ fini_free(struct ds_rsvc *svc)
 	rsvc_class(svc->s_class)->sc_free(svc);
 }
 
-static void
+void
 ds_rsvc_get(struct ds_rsvc *svc)
 {
 	svc->s_ref++;
@@ -442,6 +442,7 @@ static int
 rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 {
 	struct ds_rsvc *svc = arg;
+	bool		map_distd_initialized = false;
 	int		rc;
 
 	ABT_mutex_lock(svc->s_mutex);
@@ -460,6 +461,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = init_map_distd(svc);
 		if (rc != 0)
 			goto out_mutex;
+		map_distd_initialized = true;
 	}
 
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
@@ -470,14 +472,16 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	} else if (rc != 0) {
 		D_ERROR("%s: failed to step up as leader "DF_U64": %d\n",
 			svc->s_name, term, rc);
-		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-			fini_map_distd(svc);
+		if (map_distd_initialized)
+			drain_map_distd(svc);
 		goto out_mutex;
 	}
 
 	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
+	if (rc != 0 && map_distd_initialized)
+		fini_map_distd(svc);
 	return rc;
 }
 

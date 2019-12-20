@@ -39,6 +39,7 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
 #include <daos_security.h>
+#include <daos_prop.h>
 
 #include "srv.pb-c.h"
 #include "storage_query.pb-c.h"
@@ -97,13 +98,16 @@ void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
 int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
 void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
-int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			       struct daos_acl **result);
+			       daos_prop_t **result);
 int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
 int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
+int ds_mgmt_pool_list_cont(uuid_t uuid,
+			   struct daos_pool_cont_info **containers,
+			   uint64_t *ncontainers);
 
 /** srv_query.c */
 
@@ -117,6 +121,8 @@ int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
 int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
+int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);
@@ -131,5 +137,9 @@ void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
+
+/** srv_util.c */
+int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
+			 int nservers, uint32_t version);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

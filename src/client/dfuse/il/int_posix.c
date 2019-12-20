@@ -245,7 +245,9 @@ fetch_daos_handles(int fd)
 
 	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
-		DFUSE_LOG_INFO("ioctl returned %d", rc);
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
 		return rc;
 	}
 

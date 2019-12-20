@@ -20,33 +20,35 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+/**
+ * This file is part of daos
+ *
+ * common/errno.c
+ *
+ */
+#include <daos/common.h>
 
+/** Define the string constants for errno */
+D_DEFINE_RANGE_ERRSTR(DAOS)
 
-#ifndef __CSUM_TESTS_H__
-#define __CSUM_TESTS_H__
+int
+daos_errno_init(void)
+{
+	int	rc;
+
+	rc = D_REGISTER_RANGE(DAOS);
+	if (rc != 0) {
+		D_ERROR("Unable to register error range for DAOS: rc = "
+			DF_RC"\n", DP_RC(rc));
+	}
+
+	return rc;
+}
 
 void
-csum_multiple_extents_tests(void **state);
+daos_errno_fini(void)
+{
+	D_DEREGISTER_RANGE(DAOS);
+}
 
-void
-csum_test_csum_buffer_of_0_during_fetch(void **state);
 
-void
-csum_test_holes(void **state);
-
-void
-csum_extent_not_starting_at_0(void **state);
-
-void
-csum_extent_not_chunk_aligned(void **state);
-
-void
-evt_csum_helper_functions_tests(void **state);
-
-void
-csum_invalid_input_tests(void **state);
-
-void
-csum_fault_injection_multiple_extents_tests(void **state);
-
-#endif
