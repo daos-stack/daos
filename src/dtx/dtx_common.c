@@ -37,7 +37,7 @@
 struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
 	struct ds_cont_child	*dbca_cont;
-	uint32_t		 dbca_shares;
+	void			*dbca_deregistering;
 };
 
 void
@@ -55,7 +55,7 @@ dtx_aggregate(void *arg)
 
 		ABT_thread_yield();
 
-		if (cont->sc_closing)
+		if (cont->sc_open == 0)
 			break;
 
 		vos_dtx_stat(cont->sc_hdl, &stat);
@@ -91,13 +91,15 @@ dtx_free_dbca(struct dtx_batched_commit_args *dbca)
 }
 
 static void
-dtx_flush_committable(struct dss_module_info *dmi,
-		      struct dtx_batched_commit_args *dbca)
+dtx_flush_on_deregister(struct dss_module_info *dmi,
+			struct dtx_batched_commit_args *dbca)
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct ds_pool_child	*pool = cont->sc_pool;
+	ABT_future		 future = dbca->dbca_deregistering;
 	int			 rc;
 
+	D_ASSERT(dbca->dbca_deregistering != NULL);
 	do {
 		struct dtx_entry	*dtes = NULL;
 
@@ -110,28 +112,20 @@ dtx_flush_committable(struct dss_module_info *dmi,
 		rc = dtx_commit(pool->spc_uuid, cont->sc_uuid,
 				dtes, rc, pool->spc_map_version);
 		dtx_free_committable(dtes);
-	} while (rc >= 0 && cont->sc_closing);
+	} while (rc >= 0);
 
 	if (rc < 0)
 		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
 			DP_UUID(cont->sc_uuid), rc);
 
-	if (cont->sc_dtx_flush_cbdata != NULL) {
-		ABT_future	future = cont->sc_dtx_flush_cbdata;
-
-		rc = ABT_future_set(future, NULL);
-		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
-			  "flush on "DF_UUID": rc = %d\n",
-			  DP_UUID(cont->sc_uuid), rc);
-	}
-
-	if (dbca->dbca_shares == 0) {
-		D_ASSERT(cont->sc_closing);
-
-		dtx_free_dbca(dbca);
-	} else {
-		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
-	}
+	/*
+	 * dtx_batched_commit_deregister() set force flush and wait for
+	 * flush done, then free the dbca.
+	 */
+	d_list_del_init(&dbca->dbca_link);
+	rc = ABT_future_set(future, NULL);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
+		  "flush on "DF_UUID": rc = %d\n", DP_UUID(cont->sc_uuid), rc);
 }
 
 void
@@ -152,8 +146,8 @@ dtx_batched_commit(void *arg)
 		dbca = d_list_entry(dmi->dmi_dtx_batched_list.next,
 				    struct dtx_batched_commit_args, dbca_link);
 		cont = dbca->dbca_cont;
-		if (cont->sc_closing) {
-			dtx_flush_committable(dmi, dbca);
+		if (dbca->dbca_deregistering != NULL) {
+			dtx_flush_on_deregister(dmi, dbca);
 			goto check;
 		}
 
@@ -173,8 +167,8 @@ dtx_batched_commit(void *arg)
 					cont->sc_pool->spc_map_version);
 				dtx_free_committable(dtes);
 
-				if (cont->sc_closing) {
-					dtx_flush_committable(dmi, dbca);
+				if (dbca->dbca_deregistering) {
+					dtx_flush_on_deregister(dmi, dbca);
 					goto check;
 				}
 
@@ -755,9 +749,12 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
+		if (dbca->dbca_deregistering != NULL)
+			continue;
+
 		if (uuid_compare(dbca->dbca_cont->sc_uuid,
 				 cont->sc_uuid) == 0)
-			goto out;
+			return 0;
 	}
 
 	D_ALLOC_PTR(dbca);
@@ -767,11 +764,6 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 	ds_cont_child_get(cont);
 	dbca->dbca_cont = cont;
 	d_list_add_tail(&dbca->dbca_link, head);
-
-out:
-	cont->sc_closing = 0;
-	dbca->dbca_shares++;
-
 	return 0;
 }
 
@@ -784,12 +776,7 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 	int				 rc;
 
 	D_ASSERT(cont != NULL);
-	if (cont->sc_closing) {
-		D_ASSERT(cont->sc_dtx_flush_cbdata != NULL);
-
-		future = cont->sc_dtx_flush_cbdata;
-		goto wait;
-	}
+	D_ASSERT(cont->sc_open == 0);
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
@@ -797,43 +784,32 @@ dtx_batched_commit_deregister(struct ds_cont_child *cont)
 				 cont->sc_uuid) != 0)
 			continue;
 
-		if (--(dbca->dbca_shares) > 0)
-			return;
-
-		/* Notify the dtx_batched_commit ULT to flush the
-		 * committable DTXs via setting @sc_closing as 1.
+		/*
+		 * Notify the dtx_batched_commit ULT to flush the
+		 * committable DTXs.
 		 *
 		 * Then current ULT will wait here until the DTXs
 		 * have been committed by dtx_batched_commit ULT
 		 * that will wakeup current ULT.
 		 */
-		D_ASSERT(cont->sc_dtx_flush_cbdata == NULL);
-		D_ASSERT(cont->sc_dtx_flush_wait_count == 0);
-
+		D_ASSERT(dbca->dbca_deregistering == NULL);
 		rc = ABT_future_create(1, NULL, &future);
-		cont->sc_closing = 1;
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("ABT_future_create failed for DTX flush on "
 				DF_UUID" %d\n", DP_UUID(cont->sc_uuid), rc);
 			return;
 		}
 
-		cont->sc_dtx_flush_cbdata = future;
-		goto wait;
-	}
+		dbca->dbca_deregistering = future;
+		rc = ABT_future_wait(future);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed "
+			  "for DTX flush (2) on "DF_UUID": rc = %d\n",
+			  DP_UUID(cont->sc_uuid), rc);
 
-	D_ASSERT(0);
-
-wait:
-	cont->sc_dtx_flush_wait_count++;
-	rc = ABT_future_wait(future);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed "
-		  "for DTX flush (2) on "DF_UUID": rc = %d\n",
-		  DP_UUID(cont->sc_uuid), rc);
-
-	if (--(cont->sc_dtx_flush_wait_count) == 0) {
-		cont->sc_dtx_flush_cbdata = NULL;
+		D_ASSERT(d_list_empty(&dbca->dbca_link));
+		dtx_free_dbca(dbca);
 		ABT_future_free(&future);
+		break;
 	}
 }
 
