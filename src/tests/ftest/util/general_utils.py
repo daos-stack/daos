@@ -92,7 +92,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         # Display any errors or requested output
         if retcode != expect_rc or verbose:
             msg = "failure running" if retcode != expect_rc else "output from"
-            if len(list(task.iter_buffers(rc_nodes))) == 0:
+            if not list(task.iter_buffers(rc_nodes)):
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
@@ -264,17 +264,3 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
-
-def exports_cmd(env):
-    """ Given a dictionary of environment variables and values, return
-        a shell command exporting them all
-
-    Args:
-        env (dict): dictionary of env. variables and values
-
-    Returns:
-        string: a shell command to export the variables
-    """
-
-    assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-    return "export {}; ".format("; export ".join(assign_env))
