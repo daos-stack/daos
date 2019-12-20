@@ -128,7 +128,7 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 	return convertControllers(b.binding.controllers)
 }
 
-func getFormattedController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
+func getController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
 	var spdkController *spdk.Controller
 	for _, bc := range bcs {
 		if bc.PCIAddr == pciAddr {
@@ -166,7 +166,7 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		return nil, err
 	}
 
-	return getFormattedController(pciAddr, b.binding.controllers)
+	return getController(pciAddr, b.binding.controllers)
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {
