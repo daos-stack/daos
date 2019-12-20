@@ -27,7 +27,7 @@ dkeys: !mux
 akeys: !mux
   single:
     no_of_akeys:
-    - 1
+    - 10
 record: !mux
   1Byte:
     length:
