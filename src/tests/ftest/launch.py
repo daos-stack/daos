@@ -166,6 +166,13 @@ def set_test_environment():
     print("Before Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
+    print("Daos Server : ")
+    out = get_output("command -v daos_server")
+    print(out)
+    print("fi_info : ")
+    out = get_output("command -v fi_info")
+    print(out)
+
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
         default_provider = "ofi+verbs"
@@ -182,7 +189,12 @@ def set_test_environment():
     print("After Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
-
+    print("Daos Server : ")
+    out = get_output("command -v daos_server")
+    print(out)
+    print("fi_info : ")
+    out = get_output("command -v fi_info")
+    print(out)
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
