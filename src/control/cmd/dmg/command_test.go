@@ -107,9 +107,9 @@ func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanR
 	return &client.StorageScanResp{}
 }
 
-func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return nil, nil
+	return client.StorageFormatResults{}
 }
 
 func (tc *testConn) KillRank(rank uint32) client.ResultMap {
@@ -125,6 +125,11 @@ func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateRes
 func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
 	return nil
+}
+
+func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
+	return nil, nil
 }
 
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
@@ -159,6 +164,16 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 
 func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
 	tc.appendInvocation(fmt.Sprintf("SmdListPools-%s", req))
+	return nil
+}
+
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
 	return nil
 }
 

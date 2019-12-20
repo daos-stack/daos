@@ -74,3 +74,13 @@ message SmdPoolResp {
 	int32 status = 1;
 	repeated Pool pools = 2;
 }
+
+message DevStateReq {
+	string dev_uuid = 1; // UUID of blobstore
+}
+
+message DevStateResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of blobstore
+	string dev_state=3; //NORMAL or FAULTY
+}

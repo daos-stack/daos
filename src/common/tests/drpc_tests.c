@@ -743,7 +743,17 @@ test_drpc_call_free_null(void **state)
 static void
 test_drpc_response_create_null_call(void **state)
 {
-	assert_null(drpc_response_create(NULL));
+	Drpc__Response	*resp;
+
+	resp = drpc_response_create(NULL);
+
+	assert_non_null(resp);
+	assert_memory_equal(resp->base.descriptor, &drpc__response__descriptor,
+			sizeof(ProtobufCMessageDescriptor));
+	assert_int_equal(resp->sequence, -1);
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+
+	drpc_response_free(resp);
 }
 
 static void

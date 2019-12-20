@@ -354,7 +354,7 @@ nv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	uint32_t       *hkey = (uint32_t *)rec->rec_hkey;
 
 	if (leaf)
-		snprintf(buf, buf_len, "\"%s\":%p+"DF_U64"("DF_U64")",
+		snprintf(buf, buf_len, "\"%p\":%p+"DF_U64"("DF_U64")",
 			 r->nr_name, value, r->nr_value_size,
 			 r->nr_value_buf_size);
 	else
