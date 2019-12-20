@@ -446,10 +446,13 @@ vos_dtx_get(void);
  * \param entry		[IN]	The DTX entry address (offset).
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
+ * \param type		[IN]	The record type, see vos_dtx_record_types.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
-			  umem_off_t entry, umem_off_t record);
+			  umem_off_t entry, umem_off_t record, uint32_t type);
 
 /**
  * Mark the DTX as prepared locally.

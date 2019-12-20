@@ -598,12 +598,15 @@ svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
 	bio_addr_t	   *addr = &irec->ir_ex_addr;
+	int		    rc;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
-	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, rec->rec_off);
+	rc = vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
+				       irec->ir_dtx, rec->rec_off, DTX_RT_SVT);
+	if (rc != 0)
+		return rc;
 
 	/* SCM value is stored together with vos_irec_df */
 	if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -753,9 +756,8 @@ evt_dop_log_del(struct umem_instance *umm, struct evt_desc *desc, void *args)
 	daos_handle_t	coh;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, desc->dc_dtx,
-				  umem_ptr2off(umm, desc));
-	return 0;
+	return vos_dtx_deregister_record(umm, coh, desc->dc_dtx,
+					 umem_ptr2off(umm, desc), DTX_RT_EVT);
 }
 
 void

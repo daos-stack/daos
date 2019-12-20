@@ -118,7 +118,7 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 			int	flags = 0;
 
 			if (dre->dre_intent == DAOS_INTENT_PUNCH)
-				flags |= DCF_FOR_PUNCH;
+				flags |= DCF_FOR_PUNCH | DCF_HAS_ILOG;
 			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
 				&dre->dre_xid, dre->dre_hash, dre->dre_epoch, 0,
 				flags);

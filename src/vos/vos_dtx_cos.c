@@ -153,6 +153,8 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	cont->vc_dtx_committable_count++;
 
 	if (rbund->flags & DCF_FOR_PUNCH) {
+		D_ASSERT(rbund->flags & DCF_HAS_ILOG);
+
 		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_punch_list);
 		dcr->dcr_punch_count = 1;
 	} else if (rbund->flags & DCF_HAS_ILOG) {
@@ -607,9 +609,8 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 			continue;
 
 		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
-			"key %llu, intent %s, has not ilog entry\n",
-			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
-			punch ? "Punch" : "Update");
+			"key %llu, intent Update, has not ilog entry\n",
+			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash);
 
 		d_list_del(&dcrc->dcrc_committable);
 		d_list_del(&dcrc->dcrc_link);

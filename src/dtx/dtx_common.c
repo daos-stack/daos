@@ -230,14 +230,17 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
-	dth->dth_leader = leader ? 1 : 0;
-	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_count;
 	dth->dth_conflict = conflict;
 	dth->dth_ent = NULL;
 	dth->dth_obj = UMOFF_NULL;
 	dth->dth_sync = 0;
+	dth->dth_leader = leader ? 1 : 0;
+	dth->dth_solo = solo ? 1 : 0;
+	dth->dth_dti_cos_done = 0;
+	dth->dth_has_ilog = 0;
+	dth->dth_renew = 0;
 }
 
 /**
@@ -581,6 +584,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 				DP_DTI(&dth->dth_xid));
 			return -DER_AGAIN;
 		}
+	} else if (rc == -DER_AGAIN) {
+		dth->dth_renew = 1;
 	}
 
 	if (result < 0 || rc < 0)
@@ -633,8 +638,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 out:
 	if (result < 0) {
 		if (dlh->dlh_sub_cnt == 0)
-			vos_dtx_abort(cont->sc_hdl, dth->dth_epoch,
-				      &dth->dth_xid, 1);
+			vos_dtx_abort(cont->sc_hdl, 0, &dth->dth_xid, 1);
 		else
 			dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
 				  dth->dth_epoch, &dth->dth_dte, 1,
@@ -728,7 +732,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 					DP_UUID(cont->sc_uuid), rc);
 		}
 
-		vos_dtx_abort(cont->sc_hdl, dth->dth_epoch, &dth->dth_xid, 1);
+		vos_dtx_abort(cont->sc_hdl, 0, &dth->dth_xid, 1);
 	}
 
 	D_DEBUG(DB_TRACE,
@@ -936,6 +940,9 @@ dtx_leader_exec_ops_ult(void *arg)
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
 		struct dtx_sub_status *sub = &dlh->dlh_subs[i];
 
+		sub->dss_result = 0;
+		memset(&sub->dss_dce, 0, sizeof(sub->dss_dce));
+
 		if (sub->dss_tgt.st_rank == TGTS_IGNORE) {
 			int ret;
 
@@ -945,8 +952,6 @@ dtx_leader_exec_ops_ult(void *arg)
 			continue;
 		}
 
-		sub->dss_result = 0;
-		memset(&sub->dss_dce, 0, sizeof(sub->dss_dce));
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i,
 				   dtx_sub_comp_cb);
 		if (rc) {
