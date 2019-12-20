@@ -41,6 +41,7 @@
 #define DEFAULT_FAIL_TGT 0
 #define REBUILD_POOL_SIZE	(4ULL << 30)
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
+#define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
 static void
 rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		    int tgt_idx, bool kill)
@@ -115,14 +116,14 @@ rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false);
 }
 
-static void
+void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			   int failed_tgt)
 {
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false);
 }
 
-static void
+void
 rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 		      int nr)
 {
@@ -274,7 +275,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 	return 0;
 }
 
-static void
+void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
@@ -297,7 +298,7 @@ rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	}
 }
 
-static void
+void
 rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 		    bool discard)
 {
@@ -358,221 +359,6 @@ rebuild_pool_destroy(test_arg_t *arg)
 	 * otherwise rebuild test might run into ENOSPACE
 	 */
 	sleep(1);
-}
-
-static void
-rebuild_dkeys(void **state)
-{
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			tgt = DEFAULT_FAIL_TGT;
-	int			i;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	/** Insert 1000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      KEY_NR, DP_OID(oid));
-	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
-
-		sprintf(key, "dkey_0_%d", i);
-		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
-	}
-	ioreq_fini(&req);
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
-}
-
-static void
-rebuild_akeys(void **state)
-{
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			tgt = DEFAULT_FAIL_TGT;
-	int			i;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	/** Insert 1000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      KEY_NR, DP_OID(oid));
-	for (i = 0; i < KEY_NR; i++) {
-		char	akey[16];
-
-		sprintf(akey, "%d", i);
-		insert_single("dkey_1_0", akey, 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
-	}
-	ioreq_fini(&req);
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
-}
-
-static void
-rebuild_indexes(void **state)
-{
-	test_arg_t		*arg = *state;
-	test_arg_t		*new_arg = NULL;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			tgt = DEFAULT_FAIL_TGT;
-	int			i;
-	int			j;
-	int			rc;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	/* create/connect another pool */
-	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
-	if (rc)
-		return;
-
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, new_arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, new_arg->coh, oid, DAOS_IOD_ARRAY, new_arg);
-
-	/** Insert 2000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      2000, DP_OID(oid));
-	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
-
-		sprintf(key, "dkey_2_%d", i);
-		for (j = 0; j < 20; j++)
-			insert_single(key, "a_key", j, "data",
-				      strlen("data") + 1, DAOS_TX_NONE, &req);
-	}
-	ioreq_fini(&req);
-
-	/* Rebuild rank 1 */
-	rebuild_single_pool_target(new_arg, ranks_to_kill[0], tgt);
-
-	rebuild_pool_destroy(new_arg);
-}
-
-static void
-rebuild_multiple(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	struct ioreq	req;
-	int		tgt = DEFAULT_FAIL_TGT;
-	int		i;
-	int		j;
-	int		k;
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	/** Insert 1000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      1000, DP_OID(oid));
-	for (i = 0; i < 10; i++) {
-		char	dkey[16];
-
-		sprintf(dkey, "dkey_3_%d", i);
-		for (j = 0; j < 10; j++) {
-			char	akey[16];
-
-			sprintf(akey, "akey_%d", j);
-			for (k = 0; k < 10; k++)
-				insert_single(dkey, akey, k, "data",
-					      strlen("data") + 1,
-					      DAOS_TX_NONE, &req);
-		}
-	}
-	ioreq_fini(&req);
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
-}
-
-static void
-rebuild_large_rec(void **state)
-{
-	test_arg_t		*arg = *state;
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			tgt = DEFAULT_FAIL_TGT;
-	int			i;
-	char			buffer[5000];
-
-	if (!test_runable(arg, 4))
-		return;
-
-	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
-	oid = dts_oid_set_tgt(oid, tgt);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-
-	/** Insert 1000 records */
-	print_message("Insert %d kv record in object "DF_OID"\n",
-		      KEY_NR, DP_OID(oid));
-	memset(buffer, 'a', 5000);
-	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
-
-		sprintf(key, "dkey_4_%d", i);
-		insert_single(key, "a_key", 0, buffer, 5000, DAOS_TX_NONE,
-			      &req);
-	}
-	ioreq_fini(&req);
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
-}
-
-static void
-rebuild_objects(void **state)
-{
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	int		tgt = DEFAULT_FAIL_TGT;
-	int		i;
-
-	if (!test_runable(arg, 6))
-		return;
-
-	for (i = 0; i < OBJ_NR; i++) {
-		oids[i] = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
-		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
-		oids[i] = dts_oid_set_tgt(oids[i], DEFAULT_FAIL_TGT);
-	}
-
-	rebuild_io(arg, oids, OBJ_NR);
-
-	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
-	rebuild_io_validate(arg, oids, OBJ_NR, false);
-
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
 }
 
 static void
@@ -1028,18 +814,11 @@ static void
 rebuild_tgt_start_fail(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	d_rank_t	exclude_rank = 0;
-	int		rc;
 	int		i;
 
 	if (!test_runable(arg, 6))
-		return;
-
-	/* create/connect another pool */
-	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
-	if (rc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1047,20 +826,19 @@ rebuild_tgt_start_fail(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(new_arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* failed to start rebuild on rank 0 */
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(new_arg->group, exclude_rank,
+		daos_mgmt_set_params(arg->group, exclude_rank,
 				     DSS_KEY_FAIL_LOC,
 				  DAOS_REBUILD_TGT_START_FAIL | DAOS_FAIL_ONCE,
 				  0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* Rebuild rank 1 */
-	rebuild_single_pool_rank(new_arg, ranks_to_kill[0]);
-	rebuild_io_validate(new_arg, oids, OBJ_NR, true);
-	rebuild_pool_destroy(new_arg);
+	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1288,7 +1066,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, false);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1329,7 +1107,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
-	rebuild_io_validate(arg, oids, OBJ_NR, false);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1843,114 +1621,84 @@ multi_pools_rebuild_concurrently(void **state)
 	}
 }
 
-static int
+int
 rebuild_sub_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true,
 			  REBUILD_SUBTEST_POOL_SIZE, NULL);
 }
 
+int
+rebuild_small_sub_setup(void **state)
+{
+	return test_setup(state, SETUP_CONT_CONNECT, true,
+			  REBUILD_SMALL_POOL_SIZE, NULL);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD1: rebuild small rec mulitple dkeys",
-	 rebuild_dkeys, NULL, test_case_teardown},
-	{"REBUILD2: rebuild small rec multiple akeys",
-	 rebuild_akeys, NULL, test_case_teardown},
-	{"REBUILD3: rebuild small rec multiple indexes",
-	 rebuild_indexes, NULL, test_case_teardown},
-	{"REBUILD4: rebuild small rec multiple keys/indexes",
-	 rebuild_multiple, NULL, test_case_teardown},
-	{"REBUILD5: rebuild large rec single index",
-	 rebuild_large_rec, NULL, test_case_teardown},
-	{"REBUILD6: rebuild multiple objects",
-	 rebuild_objects, NULL, test_case_teardown},
-	{"REBUILD7: drop rebuild scan reply",
-	rebuild_drop_scan, NULL, test_case_teardown},
-	{"REBUILD8: retry rebuild for not ready",
-	rebuild_retry_rebuild, NULL, test_case_teardown},
-	{"REBUILD9: drop rebuild obj reply",
-	rebuild_drop_obj, NULL, test_case_teardown},
-	{"REBUILD10: rebuild multiple pools",
-	rebuild_multiple_pools, NULL, test_case_teardown},
-	{"REBUILD11: rebuild update failed",
-	rebuild_update_failed, NULL, test_case_teardown},
-	{"REBUILD12: retry rebuild for pool stale",
-	rebuild_retry_for_stale_pool, NULL, test_case_teardown},
-	{"REBUILD13: rebuild with container destroy",
-	rebuild_destroy_container, NULL, test_case_teardown},
-	{"REBUILD14: rebuild with container close",
-	rebuild_close_container, NULL, test_case_teardown},
-	{"REBUILD15: rebuild with pool destroy during scan",
-	rebuild_destroy_pool_during_scan, NULL, test_case_teardown},
-	{"REBUILD16: rebuild with pool destroy during rebuild",
-	rebuild_destroy_pool_during_rebuild, NULL, test_case_teardown},
-	{"REBUILD17: rebuild iv tgt fail",
-	rebuild_iv_tgt_fail, NULL, test_case_teardown},
-	{"REBUILD18: rebuild tgt start fail",
-	rebuild_tgt_start_fail, NULL, test_case_teardown},
-	{"REBUILD19: rebuild send objects failed",
-	 rebuild_send_objects_fail, NULL, test_case_teardown},
-	{"REBUILD20: rebuild empty pool offline",
-	rebuild_offline_empty, NULL, test_case_teardown},
-	{"REBUILD21: rebuild no space failure",
-	rebuild_nospace, NULL, test_case_teardown},
-	{"REBUILD22: rebuild multiple tgts",
-	rebuild_multiple_tgts, NULL, test_case_teardown},
-	{"REBUILD23: disconnect pool during scan",
-	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
-	{"REBUILD24: disconnect pool during rebuild",
-	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_teardown},
-	{"REBUILD25: multi-pools rebuild concurrently",
+	{"REBUILD0: drop rebuild scan reply",
+	rebuild_drop_scan, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD1: retry rebuild for not ready",
+	rebuild_retry_rebuild, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD2: drop rebuild obj reply",
+	rebuild_drop_obj, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD3: rebuild multiple pools",
+	rebuild_multiple_pools, rebuild_sub_setup, test_teardown},
+	{"REBUILD4: rebuild update failed",
+	rebuild_update_failed, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD5: retry rebuild for pool stale",
+	rebuild_retry_for_stale_pool, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD6: rebuild with container destroy",
+	rebuild_destroy_container, rebuild_sub_setup, test_teardown},
+	{"REBUILD7: rebuild with container close",
+	rebuild_close_container, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD8: rebuild with pool destroy during scan",
+	rebuild_destroy_pool_during_scan, rebuild_sub_setup, test_teardown},
+	{"REBUILD9: rebuild with pool destroy during rebuild",
+	rebuild_destroy_pool_during_rebuild, rebuild_sub_setup, test_teardown},
+	{"REBUILD10: rebuild iv tgt fail",
+	rebuild_iv_tgt_fail, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD11: rebuild tgt start fail",
+	rebuild_tgt_start_fail, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD12: rebuild send objects failed",
+	 rebuild_send_objects_fail, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD13: rebuild empty pool offline",
+	rebuild_offline_empty, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD14: rebuild no space failure",
+	rebuild_nospace, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD15: rebuild multiple tgts",
+	rebuild_multiple_tgts, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD16: disconnect pool during scan",
+	 rebuild_tgt_pool_disconnect_in_scan, rebuild_small_sub_setup,
+	 test_teardown},
+	{"REBUILD17: disconnect pool during rebuild",
+	 rebuild_tgt_pool_disconnect_in_rebuild, rebuild_small_sub_setup,
+	test_teardown},
+	{"REBUILD18: multi-pools rebuild concurrently",
 	 multi_pools_rebuild_concurrently, rebuild_sub_setup, test_teardown},
-	{"REBUILD26: rebuild with master change during scan",
+	{"REBUILD19: rebuild with master change during scan",
 	rebuild_master_change_during_scan, rebuild_sub_setup, test_teardown},
-	{"REBUILD27: rebuild with master change during rebuild",
+	{"REBUILD20: rebuild with master change during rebuild",
 	rebuild_master_change_during_rebuild, rebuild_sub_setup, test_teardown},
-	{"REBUILD28: rebuild with master failure",
+	{"REBUILD21: rebuild with master failure",
 	 rebuild_master_failure, rebuild_sub_setup, test_teardown},
-	{"REBUILD29: connect pool during scan for offline rebuild",
+	{"REBUILD22: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, rebuild_sub_setup,
 	 test_teardown},
-	{"REBUILD30: connect pool during rebuild for offline rebuild",
+	{"REBUILD23: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, rebuild_sub_setup,
 	 test_teardown},
-	{"REBUILD31: offline rebuild",
+	{"REBUILD24: offline rebuild",
 	rebuild_offline, rebuild_sub_setup, test_teardown},
-	{"REBUILD32: rebuild with two failures",
+	{"REBUILD25: rebuild with two failures",
 	 rebuild_multiple_failures, rebuild_sub_setup, test_teardown},
-	{"REBUILD33: rebuild fail all replicas before rebuild",
+	{"REBUILD26: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_setup,
 	 test_teardown},
-	{"REBUILD34: rebuild fail all replicas",
+	{"REBUILD27: rebuild fail all replicas",
 	 rebuild_fail_all_replicas, rebuild_sub_setup, test_case_teardown},
 };
-
-/* TODO: Enable aggregation once stable view rebuild is done. */
-int
-rebuild_test_setup(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	if (arg && arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
-				     1, 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
-	return 0;
-}
-
-int
-rebuild_test_teardown(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	if (arg && arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
-				     0, 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	test_teardown(state);
-	return 0;
-}
 
 int
 run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
@@ -1965,7 +1713,7 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),
 				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
-				rebuild_test_setup, rebuild_test_teardown);
+				NULL, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

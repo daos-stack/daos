@@ -16,38 +16,21 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. B609815.
+// provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package convert
 
-syntax = "proto3";
-package mgmt;
+import "encoding/json"
 
-// Access Control List related protobuf structures
+// Types attempts an automatic conversion between the in/out types
+// using JSON as an intermediate representation.
+func Types(in interface{}, out interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
 
-// Response to ACL-related requests includes the command status and current ACL
-message ACLResp {
-	int32 status = 1; // DAOS error code
-	repeated string ACL = 2; // List of ACEs in short string format
-	string ownerUser = 3; // Name of user that owns the resource
-	string ownerGroup = 4; // Name of group that owns the resource
-}
-
-// Request to fetch an ACL
-message GetACLReq {
-	string uuid = 1; // Target UUID
-}
-
-// Request to modify an ACL
-// Results depend on the specific modification command.
-message ModifyACLReq {
-	string uuid = 1; // Target UUID
-	repeated string ACL = 2; // List of ACEs to overwrite ACL with
-}
-
-// Delete a principal's entry from the ACL
-message DeleteACLReq {
-	string uuid = 1; // Target UUID
-	string principal = 2; // Principal whose entry is to be deleted
+	return json.Unmarshal(data, out)
 }

@@ -247,6 +247,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
+	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
@@ -1079,5 +1080,13 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		return 0;
 
 	aggregate_pool_space(&out_result->tqo_space, &out_source->tqo_space);
+	return 0;
+}
+
+int
+ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	pool->sp_reclaim = iv_prop->pip_reclaim;
 	return 0;
 }
