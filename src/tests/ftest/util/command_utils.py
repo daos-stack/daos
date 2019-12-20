@@ -32,7 +32,6 @@ from avocado.utils import process
 class CommandFailure(Exception):
     """Base exception for this module."""
 
-
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
