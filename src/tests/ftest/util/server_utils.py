@@ -250,7 +250,7 @@ class DaosServerConfig(ObjectWithParameters):
         super(DaosServerConfig, self).__init__("/run/server_config/*")
 
         # Parameters
-        if (os.environ["OFI_INTERFACE"].startswith("ib")):
+        if os.environ["OFI_INTERFACE"].startswith("ib"):
             default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+verbs")
         else:
             default_provider = os.environ.get("CRT_PHY_ADDR_STR",
