@@ -47,6 +47,9 @@ void ds_cont_svc_fini(struct cont_svc **svcp);
 void ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
 
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
+
 /*
  * Per-thread container (memory) object
  *
@@ -59,6 +62,7 @@ struct ds_cont_child {
 	uuid_t			 sc_uuid;	/* container UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
@@ -74,15 +78,20 @@ struct ds_cont_child {
 
 	/* Aggregate ULT */
 	struct dss_sleep_ult	 *sc_agg_ult;
+
 	/*
-	 * Lower bound of aggregation epoch, it can be:
-	 *
-	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
-	 *			  round of aggregation
-	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
-	 *			  aggregation
+	 * Snapshot delete HLC (0 means no change), which is used
+	 * to compare with the aggregation HLC, so it knows whether the
+	 * aggregation needs to be restart from 0.
 	 */
-	uint64_t		 sc_aggregation_min;
+	uint64_t		sc_snapshot_delete_hlc;
+
+	/* HLC when the full scan aggregation start, if it is smaller than
+	 * snapshot_delete_hlc(or rebuild), then aggregation needs to restart
+	 * from 0.
+	 */
+	uint64_t		sc_aggregation_full_scan_hlc;
+
 	/* Upper bound of aggregation epoch, it can be:
 	 *
 	 * 0			: When snapshot list isn't retrieved yet
@@ -115,8 +124,6 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
