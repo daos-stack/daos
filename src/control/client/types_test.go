@@ -32,43 +32,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-func TestAccessControlList_String(t *testing.T) {
-	for name, tc := range map[string]struct {
-		acl    *AccessControlList
-		expStr string
-	}{
-		"nil": {
-			expStr: "# Entries:\n#   None\n",
-		},
-		"empty": {
-			acl:    &AccessControlList{},
-			expStr: "# Entries:\n#   None\n",
-		},
-		"single": {
-			acl: &AccessControlList{
-				Entries: []string{
-					"A::user@:rw",
-				},
-			},
-			expStr: "# Entries:\nA::user@:rw\n",
-		},
-		"multiple": {
-			acl: &AccessControlList{
-				Entries: []string{
-					"A::OWNER@:rw",
-					"A:G:GROUP@:rw",
-					"A:G:readers@:r",
-				},
-			},
-			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.acl.String(), tc.expStr, "string output didn't match")
-		})
-	}
-}
-
 func TestAccessControlList_Empty(t *testing.T) {
 	for name, tc := range map[string]struct {
 		acl       *AccessControlList
@@ -99,9 +62,191 @@ func TestAccessControlList_Empty(t *testing.T) {
 			},
 			expResult: false,
 		},
+		"owner/group but no entries": {
+			acl: &AccessControlList{
+				Owner:      "foo@",
+				OwnerGroup: "bar@",
+			},
+			expResult: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			common.AssertEqual(t, tc.acl.Empty(), tc.expResult, "result didn't match")
+		})
+	}
+}
+
+func TestAccessControlList_HasOwner(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl       *AccessControlList
+		expResult bool
+	}{
+		"nil": {
+			expResult: false,
+		},
+		"empty": {
+			acl:       &AccessControlList{},
+			expResult: false,
+		},
+		"owner with entries": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				Owner: "foo@",
+			},
+			expResult: true,
+		},
+		"no owner with entries": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expResult: false,
+		},
+		"owner with empty list": {
+			acl: &AccessControlList{
+				Owner: "bar@",
+			},
+			expResult: true,
+		},
+		"group but no owner": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				OwnerGroup: "admins@",
+			},
+			expResult: false,
+		},
+		"owner and group": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				Owner:      "admin@",
+				OwnerGroup: "admins@",
+			},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.acl.HasOwner(), tc.expResult, "result didn't match")
+		})
+	}
+}
+
+func TestAccessControlList_HasOwnerGroup(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl       *AccessControlList
+		expResult bool
+	}{
+		"nil": {
+			expResult: false,
+		},
+		"empty": {
+			acl:       &AccessControlList{},
+			expResult: false,
+		},
+		"group with entries": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				OwnerGroup: "foo@",
+			},
+			expResult: true,
+		},
+		"no group with entries": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expResult: false,
+		},
+		"group with empty list": {
+			acl: &AccessControlList{
+				OwnerGroup: "bar@",
+			},
+			expResult: true,
+		},
+		"owner but no group": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				Owner: "bob@",
+			},
+			expResult: false,
+		},
+		"owner and group": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+				Owner:      "admin@",
+				OwnerGroup: "admins@",
+			},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.acl.HasOwnerGroup(), tc.expResult, "result didn't match")
+		})
+	}
+}
+
+func TestAccessControlListFromPB(t *testing.T) {
+	testEntries := []string{
+		"A::OWNER@:rw",
+		"A:G:GROUP@:rw",
+		"A::bob@:r",
+	}
+
+	for name, tc := range map[string]struct {
+		pbACL     *mgmtpb.ACLResp
+		expResult *AccessControlList
+	}{
+		"nil": {
+			expResult: &AccessControlList{},
+		},
+		"empty": {
+			pbACL:     &mgmtpb.ACLResp{},
+			expResult: &AccessControlList{},
+		},
+		"owner": {
+			pbACL:     &mgmtpb.ACLResp{OwnerUser: "bob@"},
+			expResult: &AccessControlList{Owner: "bob@"},
+		},
+		"group": {
+			pbACL:     &mgmtpb.ACLResp{OwnerGroup: "owners@"},
+			expResult: &AccessControlList{OwnerGroup: "owners@"},
+		},
+		"entries": {
+			pbACL:     &mgmtpb.ACLResp{ACL: testEntries},
+			expResult: &AccessControlList{Entries: testEntries},
+		},
+		"fully populated": {
+			pbACL: &mgmtpb.ACLResp{
+				ACL:        testEntries,
+				OwnerUser:  "owner@",
+				OwnerGroup: "group@",
+			},
+			expResult: &AccessControlList{
+				Entries:    testEntries,
+				Owner:      "owner@",
+				OwnerGroup: "group@",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := accessControlListFromPB(tc.pbACL)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

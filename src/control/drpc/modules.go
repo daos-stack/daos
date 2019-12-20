@@ -88,6 +88,10 @@ const (
 	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	// MethodListContainers is a ModuleMgmt method
+	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	// MethodPoolQuery defines a method for querying a pool
+	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
 )
 
 const (

@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // NvmeController represents an NVMe Controller (SSD).
 type NvmeController struct {
@@ -38,14 +40,15 @@ func (*NvmeController) ProtoMessage()    {}
 func (*NvmeController) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0}
 }
+
 func (m *NvmeController) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController.Unmarshal(m, b)
 }
 func (m *NvmeController) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController.Merge(dst, src)
+func (m *NvmeController) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController.Merge(m, src)
 }
 func (m *NvmeController) XXX_Size() int {
 	return xxx_messageInfo_NvmeController.Size(m)
@@ -121,14 +124,15 @@ func (*NvmeController_Namespace) ProtoMessage()    {}
 func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0, 0}
 }
+
 func (m *NvmeController_Namespace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Namespace.Unmarshal(m, b)
 }
 func (m *NvmeController_Namespace) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController_Namespace.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController_Namespace) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController_Namespace.Merge(dst, src)
+func (m *NvmeController_Namespace) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController_Namespace.Merge(m, src)
 }
 func (m *NvmeController_Namespace) XXX_Size() int {
 	return xxx_messageInfo_NvmeController_Namespace.Size(m)
@@ -188,14 +192,15 @@ func (*NvmeController_Health) ProtoMessage()    {}
 func (*NvmeController_Health) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0, 1}
 }
+
 func (m *NvmeController_Health) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Health.Unmarshal(m, b)
 }
 func (m *NvmeController_Health) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeController_Health.Marshal(b, m, deterministic)
 }
-func (dst *NvmeController_Health) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeController_Health.Merge(dst, src)
+func (m *NvmeController_Health) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController_Health.Merge(m, src)
 }
 func (m *NvmeController_Health) XXX_Size() int {
 	return xxx_messageInfo_NvmeController_Health.Size(m)
@@ -326,14 +331,15 @@ func (*NvmeControllerResult) ProtoMessage()    {}
 func (*NvmeControllerResult) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{1}
 }
+
 func (m *NvmeControllerResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeControllerResult.Unmarshal(m, b)
 }
 func (m *NvmeControllerResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NvmeControllerResult.Marshal(b, m, deterministic)
 }
-func (dst *NvmeControllerResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NvmeControllerResult.Merge(dst, src)
+func (m *NvmeControllerResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeControllerResult.Merge(m, src)
 }
 func (m *NvmeControllerResult) XXX_Size() int {
 	return xxx_messageInfo_NvmeControllerResult.Size(m)
@@ -374,14 +380,15 @@ func (*PrepareNvmeReq) ProtoMessage()    {}
 func (*PrepareNvmeReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{2}
 }
+
 func (m *PrepareNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeReq.Unmarshal(m, b)
 }
 func (m *PrepareNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *PrepareNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareNvmeReq.Merge(dst, src)
+func (m *PrepareNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeReq.Merge(m, src)
 }
 func (m *PrepareNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_PrepareNvmeReq.Size(m)
@@ -433,14 +440,15 @@ func (*PrepareNvmeResp) ProtoMessage()    {}
 func (*PrepareNvmeResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{3}
 }
+
 func (m *PrepareNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeResp.Unmarshal(m, b)
 }
 func (m *PrepareNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareNvmeResp.Marshal(b, m, deterministic)
 }
-func (dst *PrepareNvmeResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareNvmeResp.Merge(dst, src)
+func (m *PrepareNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeResp.Merge(m, src)
 }
 func (m *PrepareNvmeResp) XXX_Size() int {
 	return xxx_messageInfo_PrepareNvmeResp.Size(m)
@@ -470,14 +478,15 @@ func (*ScanNvmeReq) ProtoMessage()    {}
 func (*ScanNvmeReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{4}
 }
+
 func (m *ScanNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeReq.Unmarshal(m, b)
 }
 func (m *ScanNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *ScanNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanNvmeReq.Merge(dst, src)
+func (m *ScanNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanNvmeReq.Merge(m, src)
 }
 func (m *ScanNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_ScanNvmeReq.Size(m)
@@ -502,14 +511,15 @@ func (*ScanNvmeResp) ProtoMessage()    {}
 func (*ScanNvmeResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{5}
 }
+
 func (m *ScanNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeResp.Unmarshal(m, b)
 }
 func (m *ScanNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanNvmeResp.Marshal(b, m, deterministic)
 }
-func (dst *ScanNvmeResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanNvmeResp.Merge(dst, src)
+func (m *ScanNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanNvmeResp.Merge(m, src)
 }
 func (m *ScanNvmeResp) XXX_Size() int {
 	return xxx_messageInfo_ScanNvmeResp.Size(m)
@@ -546,14 +556,15 @@ func (*FormatNvmeReq) ProtoMessage()    {}
 func (*FormatNvmeReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{6}
 }
+
 func (m *FormatNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatNvmeReq.Unmarshal(m, b)
 }
 func (m *FormatNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FormatNvmeReq.Marshal(b, m, deterministic)
 }
-func (dst *FormatNvmeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FormatNvmeReq.Merge(dst, src)
+func (m *FormatNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FormatNvmeReq.Merge(m, src)
 }
 func (m *FormatNvmeReq) XXX_Size() int {
 	return xxx_messageInfo_FormatNvmeReq.Size(m)

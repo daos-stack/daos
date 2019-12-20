@@ -73,13 +73,16 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 static int
 cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 {
-	daos_epoch_t		 epoch_max, epoch_min;
-	daos_epoch_range_t	 epoch_range;
-	vos_cont_info_t		 cinfo;
-	uint64_t		 hlc = crt_hlc_get();
-	uint64_t		 interval;
-	int			 tgt_id = dss_get_module_info()->dmi_tgt_id;
-	int			 i, rc;
+	daos_epoch_t		epoch_max, epoch_min;
+	daos_epoch_range_t	epoch_range;
+	vos_cont_info_t		cinfo;
+	uint64_t		hlc = crt_hlc_get();
+	uint64_t		change_hlc;
+	uint64_t		interval;
+	uint64_t		*snapshots;
+	int			snapshots_nr;
+	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
+	int			i, rc;
 
 	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
 	*sleep = interval;
@@ -99,18 +102,15 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	if (rc)
 		return rc;
 
-	/*
-	 * sc_aggregation_min != DAOS_EPOCH_MAX means we need to aggregate
-	 * from epoch 0 because some snapshot was deleted.
-	 */
-	if (cont->sc_aggregation_min != DAOS_EPOCH_MAX) {
-		epoch_min = 0;
-		/*
-		 * Set sc_aggregation_min to non-zero so that we can tell
-		 * if another snapshot deletion happened when this round of
-		 * aggregation done.
+	change_hlc = max(cont->sc_snapshot_delete_hlc,
+			 cont->sc_pool->spc_rebuild_end_hlc);
+	if (cont->sc_aggregation_full_scan_hlc < change_hlc) {
+		/* Snapshot has been deleted or rebuild happens since the last
+		 * aggregation, let's restart from 0.
 		 */
-		cont->sc_aggregation_min = hlc;
+		epoch_min = 0;
+		D_DEBUG(DB_TRACE, "change hlc "DF_U64" > full "DF_U64"\n",
+			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
 		epoch_min = cinfo.ci_hae;
 	}
@@ -135,18 +135,44 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	D_ASSERTF(epoch_min <= epoch_max, "Min "DF_U64", Max "DF_U64"\n",
 		  epoch_min, epoch_max);
 
+	if (cont->sc_pool->spc_rebuild_fence != 0) {
+		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
+		int	j;
+		int	k;
+
+		D_DEBUG(DB_TRACE, "rebuild fence "DF_U64"\n", rebuild_fence);
+		/* Insert the rebuild_epoch into snapshots */
+		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
+			sizeof(daos_epoch_t));
+		if (snapshots == NULL)
+			return -DER_NOMEM;
+
+		for (j = 0, k = 0; j < cont->sc_snapshots_nr; j++) {
+			if (cont->sc_snapshots[j] > rebuild_fence) {
+				snapshots[j] = cont->sc_snapshots[j];
+				k++;
+			} else {
+				snapshots[j+1] = cont->sc_snapshots[j];
+			}
+		}
+		snapshots[k] = rebuild_fence;
+		snapshots_nr = cont->sc_snapshots_nr + 1;
+	} else {
+		snapshots = cont->sc_snapshots;
+		snapshots_nr = cont->sc_snapshots_nr;
+	}
+
 	/*
 	 * Find highest snapshot less than last aggregated epoch.
 	 * TODO: Rebuild epoch needs be taken into account as well.
 	 */
-	for (i = 0; i < cont->sc_snapshots_nr &&
-			cont->sc_snapshots[i] < epoch_min; ++i)
+	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
 		;
 
 	if (i == 0)
 		epoch_range.epr_lo = 0;
 	else
-		epoch_range.epr_lo = cont->sc_snapshots[i-1] + 1;
+		epoch_range.epr_lo = snapshots[i-1] + 1;
 
 
 	if (epoch_range.epr_lo >= epoch_max)
@@ -156,9 +182,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
-	for ( ; i < cont->sc_snapshots_nr &&
-		cont->sc_snapshots[i] < epoch_max; ++i) {
-		epoch_range.epr_hi = cont->sc_snapshots[i];
+	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
+		epoch_range.epr_hi = snapshots[i];
 		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
@@ -180,9 +205,8 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 
 	rc = cont_aggregate_epr(cont, &epoch_range);
 out:
-	/* No snapshot deletion happened in this round of aggregation */
-	if (cont->sc_aggregation_min != 0)
-		cont->sc_aggregation_min = DAOS_EPOCH_MAX;
+	if (rc == 0 && epoch_min == 0)
+		cont->sc_aggregation_full_scan_hlc = hlc;
 
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
@@ -410,7 +434,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_pool;
 
 	uuid_copy(cont->sc_uuid, co_uuid);
-	cont->sc_aggregation_min = DAOS_EPOCH_MAX;
+	cont->sc_aggregation_full_scan_hlc = 0;
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
 	cont->sc_snapshots_nr = 0;
@@ -1615,7 +1639,7 @@ cont_snap_update_one(void *vin)
 
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
-		cont->sc_aggregation_min = 0;
+		cont->sc_snapshot_delete_hlc = crt_hlc_get();
 		D_DEBUG(DF_DSMS, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
