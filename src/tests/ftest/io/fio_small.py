@@ -1,6 +1,6 @@
 #!/usr/bin/python
-"""
-  (C) Copyright 2018-2019 Intel Corporation.
+'''
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,26 +20,32 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-"""
-from ior_test_base import IorTestBase
+'''
 
+from fio_test_base import FioBase
 
-class IorFourServers(IorTestBase):
-    """Test class Description: Runs IOR with 4 servers.
-
+class FioSmall(FioBase):
+    """Test class Description: Runs Fio with in small config.
     :avocado: recursive
     """
 
-    def test_fourservers(self):
-        """Jira ID: DAOS-1263.
-
+    def test_fio_small(self):
+        """Jira ID: DAOS-2493.
         Test Description:
-            Test IOR with four servers.
-
+            Test Fio in small config.
         Use Cases:
-            Different combinations of 1/64/128 Clients,
-            1K/4K/32K/128K/512K/1M transfer size.
+            Aim of this test is to test different combinations
+            of following fio configs:
+            1 Client
+            ioengine: 'libaio'
+            thread: 1
+            verify: 'crc64'
+            iodepth: 16
+            blocksize: 256B|1M
+            size: 1M|1G
+            read_write: rw|randrw
+            numjobs: 1
 
-        :avocado: tags=ior,fourservers
+        :avocado: tags=all,pr,hw,fio,fiosmall
         """
-        self.run_ior_with_pool()
+        self.execute_fio()

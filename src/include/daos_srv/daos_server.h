@@ -462,9 +462,6 @@ dss_abterr2der(int abt_errno)
 }
 
 int dss_rpc_send(crt_rpc_t *rpc);
-int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
-		     crt_group_t **group);
-int dss_group_destroy(crt_group_t *group);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
@@ -522,10 +519,11 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int nr,
 		daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_iom_t *maps);
-int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
+int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
+		daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
+		uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
+		daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
+		daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
@@ -608,13 +606,10 @@ unsigned int dss_ctx_nr_get(void);
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
-	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
 void dss_init_state_set(enum dss_init_state state);
-
-bool dss_pmixless(void);
 
 /* default credits */
 #define	DSS_GC_CREDS	256
@@ -625,5 +620,7 @@ bool dss_pmixless(void);
 void dss_gc_run(daos_handle_t poh, int credits);
 
 bool dss_aggregation_disabled(void);
+
+int notify_bio_error(bool unmap, bool update, int tgt_id);
 
 #endif /* __DSS_API_H__ */

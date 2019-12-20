@@ -25,6 +25,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -70,4 +71,29 @@ func parseACL(reader io.Reader) (*client.AccessControlList, error) {
 	}
 
 	return &client.AccessControlList{Entries: aceList}, nil
+}
+
+// formatACL converts the AccessControlList to a human-readable string.
+func formatACL(acl *client.AccessControlList) string {
+	var builder strings.Builder
+
+	if acl.HasOwner() {
+		fmt.Fprintf(&builder, "# Owner: %s\n", acl.Owner)
+	}
+
+	if acl.HasOwnerGroup() {
+		fmt.Fprintf(&builder, "# Owner Group: %s\n", acl.OwnerGroup)
+	}
+
+	builder.WriteString("# Entries:\n")
+	if acl.Empty() {
+		builder.WriteString("#   None\n")
+		return builder.String()
+	}
+
+	for _, ace := range acl.Entries {
+		fmt.Fprintf(&builder, "%s\n", ace)
+	}
+
+	return builder.String()
 }

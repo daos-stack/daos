@@ -1048,7 +1048,7 @@ enumerate_dkey(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 	return rc;
 }
 
-static int
+int
 enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
 	       daos_size_t len, struct ioreq *req)

@@ -1,15 +1,15 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_machines:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
-    - boro-F
-    - boro-G
-    - boro-H
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+    - server-H
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
@@ -69,7 +69,15 @@ daos_tests:
     test_R:
       daos_test: R
       test_name: DAOS MD replication tests
+    test_v:
+      daos_test: v
+      test_name: DAOS rebuild simple tests
+      test_timeout: 1500
     test_O:
       daos_test: O
       test_name: OID Allocator tests
       test_timeout: 1350
+    test_z:
+      daos_test: z
+      test_name: Checksum tests
+      test_timeout: 900
