@@ -64,7 +64,7 @@ again:
 	dova->list_iov.iov_buf = dova->list_buf;
 	dova->list_iov.iov_buf_len = dova->list_buf_len;
 
-	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL,
+	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL, NULL,
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor,

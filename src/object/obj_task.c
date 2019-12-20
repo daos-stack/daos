@@ -368,6 +368,7 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_handle_t th,
 
 int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
+			    daos_epoch_range_t *epr,
 			    daos_key_t *dkey, daos_key_t *akey,
 			    daos_size_t *size, uint32_t *nr,
 			    daos_key_desc_t *kds,
@@ -393,6 +394,7 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->nr	= nr;
 	args->kds	= kds;
 	args->sgl	= sgl;
+	args->eprs	= epr;
 	args->anchor	= anchor;
 	args->dkey_anchor = dkey_anchor;
 	args->akey_anchor = akey_anchor;

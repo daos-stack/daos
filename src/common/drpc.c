@@ -93,17 +93,15 @@ drpc_response_create(Drpc__Call *call)
 {
 	Drpc__Response *resp;
 
-	if (call == NULL) {
-		D_ERROR("Can't build a response from a NULL call\n");
-		return NULL;
-	}
-
 	D_ALLOC_PTR(resp);
 	if (resp == NULL)
 		return NULL;
 
 	drpc__response__init(resp);
-	resp->sequence = call->sequence;
+	if (call == NULL)
+		resp->sequence = -1;
+	else
+		resp->sequence = call->sequence;
 
 	return resp;
 }
@@ -171,8 +169,8 @@ unixcomm_connect(char *sockaddr, int flags)
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
-		D_ERROR("Failed to connect to socket fd %d, errno=%d\n",
-			handle->fd, errno);
+		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
+			address.sun_path, errno, strerror(errno));
 		unixcomm_close(handle);
 		return NULL;
 	}
