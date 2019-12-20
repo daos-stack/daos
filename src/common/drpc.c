@@ -188,8 +188,8 @@ unixcomm_connect(char *sockaddr, int flags)
 	ret = connect(handle->fd, (struct sockaddr *) &address,
 			sizeof(address));
 	if (ret < 0) {
-		D_ERROR("Failed to connect to socket fd %d, errno=%d\n",
-			handle->fd, errno);
+		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
+			address.sun_path, errno, strerror(errno));
 		unixcomm_close(handle);
 		return NULL;
 	}
