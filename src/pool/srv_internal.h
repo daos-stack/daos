@@ -93,7 +93,7 @@ void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler(crt_rpc_t *rpc);
-void ds_pool_get_acl_handler(crt_rpc_t *rpc);
+void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
 void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
@@ -104,6 +104,7 @@ void ds_pool_attr_list_handler(crt_rpc_t *rpc);
 void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
+int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 
 /*
  * srv_target.c
