@@ -187,7 +187,7 @@ void   mgmt__delete_aclreq__free_unpacked
   assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
 {
   {
     "status",
@@ -213,15 +213,41 @@ static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[2] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "ownerUser",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ACLResp, owneruser),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ownerGroup",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ACLResp, ownergroup),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__aclresp__field_indices_by_name[] = {
   1,   /* field[1] = ACL */
+  3,   /* field[3] = ownerGroup */
+  2,   /* field[2] = ownerUser */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__aclresp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
 {
@@ -231,7 +257,7 @@ const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
   "Mgmt__ACLResp",
   "mgmt",
   sizeof(Mgmt__ACLResp),
-  2,
+  4,
   mgmt__aclresp__field_descriptors,
   mgmt__aclresp__field_indices_by_name,
   1,  mgmt__aclresp__number_ranges,

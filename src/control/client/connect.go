@@ -67,6 +67,7 @@ type Connect interface {
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)

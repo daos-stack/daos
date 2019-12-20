@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -131,6 +132,91 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	return nil
 }
 
+type (
+	// PoolQueryReq contains pool query parameters.
+	PoolQueryReq struct {
+		UUID string
+	}
+
+	// StorageUsageStats represents DAOS storage usage statistics.
+	StorageUsageStats struct {
+		Total uint64
+		Free  uint64
+		Min   uint64
+		Max   uint64
+		Mean  uint64
+	}
+
+	// PoolRebuildState indicates the current state of the pool rebuild process.
+	PoolRebuildState uint
+
+	// PoolRebuildStatus contains detailed information about the pool rebuild process.
+	PoolRebuildStatus struct {
+		Status  int32
+		State   PoolRebuildState
+		Objects uint64
+		Records uint64
+	}
+
+	// PoolQueryResp contains the pool query response.
+	PoolQueryResp struct {
+		Status        int32
+		UUID          string
+		TotalTargets  uint32
+		ActiveTargets uint32
+		Disabled      bool
+		Rebuild       *PoolRebuildStatus
+		Scm           *StorageUsageStats
+		Nvme          *StorageUsageStats
+	}
+)
+
+const (
+	// PoolRebuildStateIdle indicates that the rebuild process is idle.
+	PoolRebuildStateIdle PoolRebuildState = iota
+	// PoolRebuildStateDone indicates that the rebuild process has completed.
+	PoolRebuildStateDone
+	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
+	PoolRebuildStateBusy
+)
+
+func (prs PoolRebuildState) String() string {
+	return [...]string{"idle", "done", "busy"}[prs]
+}
+
+// PoolQuery performs a query against the pool service.
+func (c *connList) PoolQuery(req PoolQueryReq) (*PoolQueryResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcReq := &mgmtpb.PoolQueryReq{
+		Uuid: req.UUID,
+	}
+
+	c.log.Debugf("DAOS pool query request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolQuery(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("DAOS pool query response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	resp := new(PoolQueryResp)
+	if err := convert.Types(rpcResp, resp); err != nil {
+		return nil, errors.Wrap(err, "failed to convert from proto to native")
+	}
+
+	return resp, nil
+}
+
 // PoolGetACLReq contains the input parameters for PoolGetACL
 type PoolGetACLReq struct {
 	UUID string // pool UUID
@@ -165,7 +251,7 @@ func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -209,7 +295,7 @@ func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLR
 	}
 
 	return &PoolOverwriteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -255,7 +341,7 @@ func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, erro
 	}
 
 	return &PoolUpdateACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -300,6 +386,6 @@ func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, erro
 	}
 
 	return &PoolDeleteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
