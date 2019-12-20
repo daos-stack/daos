@@ -177,6 +177,25 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 	return ctx.Err()
 }
 
+func registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
+	m, err := instance.newMember()
+	if err != nil {
+		return errors.Wrap(err, "failed to get member from instance")
+	}
+
+	count, err := membership.Add(m)
+	if err != nil {
+		return errors.Wrap(err, "failed to add MS replica to membership")
+	}
+
+	if count != 1 {
+		return errors.Errorf("expected MS replica to be first member "+
+			"(want 1, got %d)", count)
+	}
+
+	return nil
+}
+
 // Start starts all configured instances and the management
 // service, then waits for them to exit.
 func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership) error {
@@ -199,6 +218,12 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	for _, instance := range instances {
 		if err := instance.Start(ctx, errChan); err != nil {
 			return err
+		}
+		// If this instance is a MS replica, register membership
+		if instance.IsMSReplica() {
+			if err := registerNewMember(membership, instance); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -223,19 +248,6 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 		if instance.IsMSReplica() {
 			if err := instance.StartManagementService(); err != nil {
 				return errors.Wrap(err, "failed to start management service")
-			}
-			// registered instance with system membership
-			m, err := instance.newMember()
-			if err != nil {
-				return errors.Wrap(err, "failed to get member from instance")
-			}
-			count, err := membership.Add(m)
-			if err != nil {
-				return errors.Wrap(err, "failed to add MS replica to membership")
-			}
-			if count != 1 {
-				return errors.Errorf("expected MS replica to be first member "+
-					"(want 1, got %d)", count)
 			}
 		}
 
