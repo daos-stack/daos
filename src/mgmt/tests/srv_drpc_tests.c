@@ -39,6 +39,8 @@
 #include "mocks.h"
 
 #define TEST_UUID	"12345678-1234-1234-1234-123456789abc"
+#define TEST_OWNER	"test_root@"
+#define TEST_GROUP	"test_admins@"
 #define TEST_ACES_NR	(3)
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN	37
@@ -47,6 +49,71 @@
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
+
+static daos_prop_t *
+new_access_prop(struct daos_acl *acl, const char *owner, const char *group)
+{
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry = NULL;
+	size_t			num_entries = 0;
+
+	if (acl != NULL)
+		num_entries++;
+
+	if (owner != NULL)
+		num_entries++;
+
+	if (group != NULL)
+		num_entries++;
+
+	if (num_entries == 0)
+		return NULL;
+
+	prop = daos_prop_alloc(num_entries);
+	entry = &(prop->dpp_entries[0]);
+
+	if (acl != NULL) {
+		entry->dpe_type = DAOS_PROP_PO_ACL;
+		entry->dpe_val_ptr = daos_acl_dup(acl);
+		entry++;
+	}
+
+	if (owner != NULL) {
+		entry->dpe_type = DAOS_PROP_PO_OWNER;
+		D_STRNDUP(entry->dpe_str, owner, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		entry++;
+	}
+
+	if (group != NULL) {
+		entry->dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+		D_STRNDUP(entry->dpe_str, group, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		entry++;
+	}
+
+	return prop;
+}
+
+static struct daos_acl *
+get_valid_acl(void)
+{
+	struct daos_acl	*acl = NULL;
+
+	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
+
+	return acl;
+}
+
+static daos_prop_t *
+default_access_prop(void)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+
+	acl = get_valid_acl();
+	prop = new_access_prop(acl, TEST_OWNER, TEST_GROUP);
+	daos_acl_free(acl);
+	return prop;
+}
 
 /*
  * dRPC setup/teardown for ACL related tests
@@ -194,34 +261,29 @@ test_drpc_pool_get_acl_mgmt_svc_fails(void **state)
 	D_FREE(resp.body.data);
 }
 
-static struct daos_acl *
-get_valid_acl(void)
-{
-	struct daos_acl	*acl = NULL;
-
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR, &acl), 0);
-
-	return acl;
-}
-
 static void
 test_drpc_pool_get_acl_cant_translate_acl(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	struct daos_acl	*acl;
 	struct daos_ace	*ace;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
 
 	/* Mangle an ACE so it can't be translated to a string */
-	ace = daos_acl_get_next_ace(ds_mgmt_pool_get_acl_return_acl, NULL);
+	acl = get_valid_acl();
+	ace = daos_acl_get_next_ace(acl, NULL);
 	ace->dae_access_types = 0xff; /* invalid bits */
+
+	ds_mgmt_pool_get_acl_return_acl = new_access_prop(acl, TEST_OWNER,
+							  TEST_GROUP);
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
 	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
 
+	daos_acl_free(acl);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -256,7 +318,7 @@ test_drpc_pool_get_acl_success(void **state)
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
+	ds_mgmt_pool_get_acl_return_acl = default_access_prop();
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
@@ -265,6 +327,10 @@ test_drpc_pool_get_acl_success(void **state)
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
+
+/*
+ * TODO: Add owner/group results
+ */
 
 /*
  * dRPC overwrite ACL tests
@@ -381,8 +447,7 @@ test_drpc_pool_overwrite_acl_success(void **state)
 	 * Set up the mgmt svc overwrite function to return the same ACEs
 	 * we passed in as its result.
 	 */
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR,
-			 &ds_mgmt_pool_overwrite_acl_result), 0);
+	ds_mgmt_pool_overwrite_acl_result = default_access_prop();
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
@@ -477,8 +542,7 @@ test_drpc_pool_update_acl_success(void **state)
 	 * Set up the mgmt svc update function to return the same ACEs
 	 * we passed in as its result. Arbitrary.
 	 */
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR,
-			 &ds_mgmt_pool_update_acl_result), 0);
+	ds_mgmt_pool_update_acl_result = default_access_prop();
 
 	ds_mgmt_drpc_pool_update_acl(&call, &resp);
 
@@ -576,8 +640,7 @@ test_drpc_pool_delete_acl_success(void **state)
 
 	setup_delete_acl_drpc_call(&call, TEST_UUID, "OWNER@");
 
-	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR,
-			 &ds_mgmt_pool_delete_acl_result), 0);
+	ds_mgmt_pool_delete_acl_result = default_access_prop();
 
 	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
 
