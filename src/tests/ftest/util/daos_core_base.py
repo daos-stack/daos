@@ -63,7 +63,7 @@ class DaosCoreBase(TestWithServers):
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
-            self.orterun, self.force_tcp, num_clients, self.client_log,
+            self.orterun, self.client_mca, num_clients, self.client_log,
             self.daos_test, num_replicas, subtest, args)
 
         env = {}
