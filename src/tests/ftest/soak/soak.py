@@ -192,7 +192,7 @@ class Soak(TestWithServers):
         """
         # TO-DO: use daos tool when available
         # This method assumes that doas agent is running on test node
-        
+
         cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
@@ -201,8 +201,7 @@ class Soak(TestWithServers):
         except process.CmdError as error:
             raise SoakTestError(
                 "<<FAILED: Dfuse container failed {}>>".format(error))
-        self.log.info(
-            "Dfuse Container UUID = {}".format(result.stdout.split()[3]))
+        self.log.info("Dfuse Container UUID = %s", result.stdout.split()[3])
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
@@ -554,12 +553,20 @@ class Soak(TestWithServers):
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.node_list), "rm -rf {}".format(
+            NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
                 self.log_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
+        # cleanup test_node /tmp/soak
+        cmd = "rm -rf {}".format(self.log_dir)
+        try:
+            result = process.run(cmd, shell=True, timeout=30)
+        except process.CmdError as error:
+            raise SoakTestError(
+                "<<FAILED: Soak directory on testnode not removed {}>>".format(
+                    error))
 
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
         while time.time() < end_time:
