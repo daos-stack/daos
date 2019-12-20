@@ -89,6 +89,8 @@ enum daos_pool_props {
 
 /** DAOS space reclaim strategy */
 enum {
+	DAOS_RECLAIM_DISABLED = 0,
+	DAOS_RECLAIM_LAZY,
 	DAOS_RECLAIM_SNAPSHOT,
 	DAOS_RECLAIM_BATCH,
 	DAOS_RECLAIM_TIME,
