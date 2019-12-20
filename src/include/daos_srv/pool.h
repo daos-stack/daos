@@ -89,6 +89,17 @@ struct ds_pool_child {
 	struct ds_pool	*spc_pool;
 	uuid_t		spc_uuid;	/* pool UUID */
 	d_list_t	spc_cont_list;
+
+	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
+	 * vos aggregation can not cross this epoch during rebuild to avoid
+	 * interferring rebuild process.
+	 */
+	uint64_t	spc_rebuild_fence;
+
+	/* The HLC when current rebuild ends, which will be used to compare
+	 * with the aggregation full scan start HLC to know whether the 
+	 * aggregation needs to be restarted from 0. */
+	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 };
