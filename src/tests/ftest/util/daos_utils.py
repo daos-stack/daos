@@ -26,7 +26,7 @@ from __future__ import print_function
 from command_utils import CommandWithParameters
 from command_utils import DaosCommand as CommandWithSubCommand
 
-class DaosCommand(CommandWithSubCommand ):
+class DaosCommand(CommandWithSubCommand):
     """Defines a object representing a daos command."""
 
     def __init__(self, path):
