@@ -541,6 +541,42 @@ func GetDeviceAlias(device string) (string, error) {
 	return C.GoString(node.name), nil
 }
 
+// mockGetDeviceAlias is a complete method to find an alias for the device name provided.
+// Because this function uses the system device list to rule out proper matching siblings,
+// a mock system devices list is provided so that the testing environment can simulate
+// the topology under test.
+func mockGetDeviceAlias(device string, mockSystemDevices []string) (string, error) {
+	var node C.hwloc_obj_t
+
+	log.Debugf("Searching for a device alias for: %s", device)
+
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return "", errors.Errorf("unable to initialize device scan:  Error: %v", err)
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	deviceScanCfg.targetDevice = device
+
+	// The loopback device isn't a physical device that hwloc will find in the topology
+	// If "lo" is specified, it is treated specially.
+	if deviceScanCfg.targetDevice == "lo" {
+		return "lo", nil
+	}
+
+	// Add the mock system devices to the map
+	for _, deviceName := range mockSystemDevices {
+		deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
+	}
+
+	node = getNodeAlias(deviceScanCfg)
+	if node == nil {
+		return "", errors.Errorf("unable to find an alias for: %s", deviceScanCfg.targetDevice)
+	}
+	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
+	return C.GoString(node.name), nil
+}
+
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
 // name, cpuset, nodeset, and NUMA node ID information.

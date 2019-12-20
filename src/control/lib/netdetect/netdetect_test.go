@@ -221,6 +221,7 @@ func TestDeviceAliasErrors(t *testing.T) {
 // This particular test verifies the expected lookup path that uses a device found
 // on the system device list, and expected to find the related sibling.
 func TestDeviceAlias(t *testing.T) {
+	mockSystemDevices := []string{"ib0", "ib1", "ib2", "enp2s0", "eth0", "eth1"}
 	for name, tc := range map[string]struct {
 		device   string
 		topology string
@@ -292,7 +293,7 @@ func TestDeviceAlias(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := GetDeviceAlias(tc.device)
+			deviceAlias, err := mockGetDeviceAlias(tc.device, mockSystemDevices)
 			if err != nil {
 				t.Fatal(err)
 			}
