@@ -109,14 +109,10 @@ class PoolSecurityTest(TestWithServers):
             elif line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:
-                    username = found_user.group(1)
-                    userpermission = found_user.group(2)
                     pool_permission_list.append(line)
             elif line.startswith("A:G:"):
                 found_group = re.search(r"A:G:(.+)@:(.*)", line)
                 if found_group:
-                    groupname = found_group.group(1)
-                    grouppermission = found_group.group(2)
                     pool_permission_list.append(line)
         return pool_permission_list
 
@@ -134,18 +130,18 @@ class PoolSecurityTest(TestWithServers):
         '''
         if expect.lower() == 'pass':
             if result.exit_status != 0 or result.stderr != "":
-                self.fail("##Test Fail on verify_daos_pool {}, "
-                          "expected Pass, but Failed.".format(action))
+                self.fail("##Test Fail on verify_daos_pool %s, "
+                          "expected Pass, but Failed.", action)
             else:
-                self.log.info(" =Test Passed on verify_daos_pool {}, "
-                              "Succeed.\n".format(action))
+                self.log.info(" =Test Passed on verify_daos_pool %s, "
+                              "Succeed.\n", action)
         elif err_code not in result.stderr:
-            self.fail("##Test Fail on verify_daos_pool {},"
-                      " expected Failure of {}, but Passed.".format(
-                          action, expect))
+            self.fail("##Test Fail on verify_daos_pool %s,"
+                      " expected Failure of %s, but Passed.",
+                      action, expect)
         else:
-            self.log.info(" =Test Passed on verify_daos_pool {},"
-                          " expected error of {}.\n".format(action, expect))
+            self.log.info(" =Test Passed on verify_daos_pool %s"
+                          " expected error of %s.\n", action, expect)
 
     def verify_pool_readwrite(self, svc, uuid, action, expect='Pass'):
         '''
@@ -164,18 +160,18 @@ class PoolSecurityTest(TestWithServers):
         if action.lower() == "write":
             daos_cmd.request.value = "container"
             daos_cmd.action.value = "create --svc={} --pool={}".format(
-                                        svc, uuid)
+                svc, uuid)
         elif action.lower() == "read":
             daos_cmd.request.value = "pool"
             daos_cmd.action.value = "query --svc={} --pool={}".format(
-                                        svc, uuid)
+                svc, uuid)
         else:
             self.fail("##In verify_pool_readwrite, invalid action: "
-                      "{}".format(action))
+                      "%s", action)
         daos_cmd.exit_status_exception = False
         result = daos_cmd.run()
-        self.log.info("  In verify_pool_readwrite {}.\n =daos_cmd.run()"
-                      " result:\n{}".format(action, result))
+        self.log.info("  In verify_pool_readwrite %s.\n =daos_cmd.run()"
+                      " result:\n%s", action, result)
         self.verify_daos_pool_result(result, action, expect, deny_access)
 
     def create_pool_acl(self, num_user, num_group, current_user_acl, acl_file):
@@ -261,7 +257,7 @@ class PoolSecurityTest(TestWithServers):
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        self.log.info("  (1)dmg= {}".format(dmg))
+        self.log.info("  (1)dmg= %s", dmg)
 
         # (2)Generate acl file with permissions
         self.log.info("  (2)Generate acl file with user/group permissions")
@@ -277,7 +273,7 @@ class PoolSecurityTest(TestWithServers):
         result = dmg.run()
 
         # (4)Verify the pool create status
-        self.log.info("  (4)dmg.run() result=\n{}".format(result))
+        self.log.info("  (4)dmg.run() result=\n%s", result)
         if result.stderr == "":
             uuid, svc = dmg_utils.get_pool_uuid_from_stdout(result.stdout)
         else:
@@ -289,9 +285,9 @@ class PoolSecurityTest(TestWithServers):
                       "dmg pool get-acl --pool --hostlist")
         pool_acl_list = self.get_pool_acl_list(uuid)
         self.log.info(
-            "   pool original permission_list: {}".format(permission_list))
+            "   pool original permission_list: %s", permission_list)
         self.log.info(
-            "   pool get_acl  permission_list: {}".format(pool_acl_list))
+            "   pool get_acl  permission_list: %s", pool_acl_list)
 
         # (6)Verify pool read operation
         #    daos pool query --pool <uuid>
@@ -349,16 +345,16 @@ class PoolSecurityTest(TestWithServers):
         if permission.lower() == "none":
             permission = ""
         if permission not in PERMISSIONS:
-            self.fail("##permission {} is invalid, valid permissions are:"
-                      "'none', 'r', w', 'rw'".format(permission))
+            self.fail("##permission %s is invalid, valid permissions are:"
+                      "'none', 'r', w', 'rw'", permission)
         if user_type not in user_types:
-            self.fail("##user_type {} is invalid, valid user_types are: "
-                      "{}".format(user_type, user_types))
+            self.fail("##user_type %s is invalid, valid user_types are: "
+                      "%s", user_type, user_types)
         user_type_ind = user_types.index(user_type)
         self.log.info("===>Start DAOS pool acl enforcement order Testcase: "
-                      " user_type: {}, permission: {}, expect_read: {},"
+                      " user_type: %s, permission: %s, expect_read: %s,"
                       " expect_write: "
-                      "{}.".format(user_type, permission, read, write))
+                      "%s.", user_type, permission, read, write)
         #take care of the user_type which have higher priviledge
         for ind in range(5):
             if ind < user_type_ind:
@@ -399,5 +395,5 @@ class PoolSecurityTest(TestWithServers):
         self.pool_acl_verification(test_acl_entries, read, write)
         self.log.info(
             "--->Testcase Passed. "
-            " user_type: {}, permission: {}, expect_read: {},"
-            " expect_write: {}.\n".format(user_type, permission, read, write))
+            " user_type: %s, permission: %s, expect_read: %s,"
+            " expect_write: %s.\n", user_type, permission, read, write)
