@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import re
 
-from dmg_utils import DmgCommand, DmgFailure
+from dmg_utils import DmgCommand
 from apricot import TestWithServers
 from avocado.utils import process
 
@@ -61,7 +61,7 @@ class DmgNetworkScanTest(TestWithServers):
             self.fail(msg)
 
         device = []
-        if (output.stdout != ""):
+        if output.stdout != "":
             device = [line.split()[-1] for line in output.stdout.splitlines()]
 
         return device
@@ -117,7 +117,7 @@ class DmgNetworkScanTest(TestWithServers):
 
         # Clean up string
         provider = "none"
-        if (output.stdout != ""):
+        if output.stdout != "":
             provider = output.stdout.splitlines()[0].split()[-1]
 
         return provider
@@ -161,7 +161,8 @@ class DmgNetworkScanTest(TestWithServers):
         for numa, devs in self.get_numa_info().items():
             if devs:
                 n_devs = [dev for dev in devs if dev in exp_devs]
-                n_devs.append("lo") if numa == 0 else None
+                if numa == 0:
+                    n_devs.append("lo")
                 numa = [numa] * len(n_devs)
                 dev_prov = {dev: self.get_dev_provider(dev) for dev in n_devs}
                 for n, d, p in zip(numa, dev_prov.keys(), dev_prov.values()):
