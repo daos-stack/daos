@@ -2676,8 +2676,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_GET, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool get prop rpc: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": failed to create pool get prop rpc: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 
