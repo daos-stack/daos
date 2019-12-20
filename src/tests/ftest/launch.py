@@ -163,7 +163,7 @@ def set_test_environment():
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
     # Update the default provider,domain based on the OFI_INTEFACE
-    print("Environment:")
+    print("Before Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
     default_provider = "ofi+sockets"
@@ -179,6 +179,9 @@ def set_test_environment():
             provider != "ofi+sockets"):
         default_domain = "hfi1_0"
     os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", default_domain)
+    print("After Environment:")
+    for name in ("OFI_INTERFACE", "OFI_DOMAN", "CRT_PHY_ADDR_STR"):
+        print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
 
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
