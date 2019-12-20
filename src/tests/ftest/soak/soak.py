@@ -293,8 +293,7 @@ class Soak(TestWithServers):
                     datasize, dkey, akey, obj, snap_handle.value)
             except (RuntimeError, TestFail, DaosApiError) as error:
                 self.log.error(
-                    "Error when retrieving the snapshot data.{0}".format(
-                        error))
+                    "Error when retrieving the snapshot data %s", error)
                 status &= False
             if status:
                 # Compare the snapshot to the original written data.
@@ -306,7 +305,7 @@ class Soak(TestWithServers):
         try:
             snapshot.destroy(container.container.coh)
         except (RuntimeError, TestFail, DaosApiError) as error:
-            self.log.error("Failed to destroy snapshot.{0}".format(error))
+            self.log.error("Failed to destroy snapshot %s", error)
             status &= False
         # cleanup
         container.close()
@@ -394,6 +393,7 @@ class Soak(TestWithServers):
         except process.CmdError as error:
             raise SoakTestError(
                 "<<FAILED: Dfuse container failed {}>>".format(error))
+        self.log.info("Dfuse Container UUID = %s", result.stdout.split()[3])
         return result.stdout.split()[3]
 
     def start_dfuse(self, pool):
@@ -765,12 +765,21 @@ class Soak(TestWithServers):
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.node_list), "rm -rf {}".format(
+            NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
                 self.log_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
+        # cleanup test_node /tmp/soak
+        cmd = "rm -rf {}".format(self.log_dir)
+        try:
+            result = process.run(cmd, shell=True, timeout=30)
+        except process.CmdError as error:
+            raise SoakTestError(
+                "<<FAILED: Soak directory on testnode not removed {}>>".format(
+                    error))
+
 
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
         while time.time() < end_time:

@@ -222,7 +222,7 @@ dfuse:
   mount_dir: "/tmp/daos_dfuse"
 rebuild:
     rebuild_timeout: 30
-    ranks_to_kill: 
+    ranks_to_kill:
         - 2
     svcl: 1
     daos_oclass:
