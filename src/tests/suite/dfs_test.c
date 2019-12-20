@@ -528,7 +528,7 @@ dfs_test_read_hole(void **state)
 		}
 		assert_int_equal(rbuf[i], 0);
 	}
-	
+
 	rc = dfs_release(obj);
 	dfs_test_file_del(name);
 }
