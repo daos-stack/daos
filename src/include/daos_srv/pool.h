@@ -50,6 +50,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
@@ -140,8 +141,8 @@ int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
-int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
-			     daos_prop_t **prop);
+int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
 int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
 int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
