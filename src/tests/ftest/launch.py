@@ -556,10 +556,14 @@ def get_log_files(config_yaml, daos_files=None):
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
             "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
+            "test_variant_agent_logs":
+                "{}/*_agent_daos.log".format(daos_core_test_dir),
+            "test_variant_control_logs":
+                "{}/*_control_daos.log".format(daos_core_test_dir),
             "test_variant_client_logs":
                 "{}/*_client_daos.log".format(daos_core_test_dir),
             "test_variant_server_logs":
-                "{}/*_server_daos.log".format(daos_core_test_dir),
+                "{}/*_server_daos*.log".format(daos_core_test_dir),
         }
 
     # Determine the log file locations defined by the last run test

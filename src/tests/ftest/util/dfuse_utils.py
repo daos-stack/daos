@@ -23,7 +23,7 @@ import general_utils
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet
-from server_utils import AVOCADO_FILE
+# from server_utils import AVOCADO_FILE
 
 
 class DfuseCommand(ExecutableCommand):
@@ -84,8 +84,16 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand"""
 
-    def __init__(self, hosts, tmp, dfuse_env=False):
-        """Create a dfuse object"""
+    def __init__(self, hosts, tmp, dfuse_env=None):
+        """Create a dfuse object.
+
+        Args:
+            hosts (list): list of hosts on which to run the dfuse command
+            tmp ([type]): [description]
+            dfuse_env (EnvironmentVariables, optional): dictionary of
+                environmental variable names and values to export to the dfuse
+                command. Defaults to None.
+        """
         super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
 
         # set params
@@ -155,10 +163,10 @@ class Dfuse(DfuseCommand):
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env()
+        if isinstance(self.env, EnvironmentVariables):
+            self._pre_command = self.env.get_export_str()
         # run dfuse command
-        ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
-                                      timeout=30)
+        ret_code = general_utils.pcmd(self.hosts, self.__str__(), timeout=30)
         # check for any failures
         if 0 not in ret_code:
             error_hosts = NodeSet(
@@ -188,34 +196,3 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
                     error_hosts))
-
-    def get_default_env(self):
-
-        """Get the default enviroment settings for running Dfuse.
-        Returns:
-            (str):  a single string of all env vars to be
-                                  exported
-        """
-
-        # obtain any env variables to be exported
-        env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = self.tmp
-        env["DAOS_SINGLETON_CLI"] = 1
-
-        if self.dfuse_env:
-            try:
-                with open('{}/{}'.format(self.tmp, AVOCADO_FILE),
-                          'r') as read_file:
-                    for line in read_file:
-                        if ("provider" in line) or ("fabric_iface" in line):
-                            items = line.split()
-                            key, values = items[0][:-1], items[1]
-                            env[key] = values
-
-                env['OFI_INTERFACE'] = env.pop('fabric_iface')
-                env['OFI_PORT'] = env.pop('fabric_iface_port')
-                env['CRT_PHY_ADDR_STR'] = env.pop('provider')
-            except Exception as err:
-                raise CommandFailure("Failed to read yaml file:{}".format(err))
-
-        return env.get_export_str()

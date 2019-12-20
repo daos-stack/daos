@@ -29,7 +29,7 @@ import getpass
 from command_utils import YamlParameters, BasicParameter, FormattedParameter
 from command_utils import YamlCommand, SubprocessManager, CommandWithSubCommand
 from command_utils import CommandWithParameters, TransportCredentials
-from command_utils import CommandFailure
+from command_utils import CommandFailure, EnvironmentVariables
 from general_utils import pcmd
 from dmg_utils import storage_format
 
@@ -215,11 +215,58 @@ class DaosServerYamlParameters(YamlParameters):
         """Update the daos server log file parameter.
 
         Args:
-            names (str): list of new server log file names
+            names (list|str): list of new server log file names.  A single
+                string is also supported, where if needed, the string will be
+                used to auto-generate a unique log file for each individual
+                server parameter section.
         """
+        # Support specifying a single log file name as a template
+        if not isinstance(names, list):
+            if len(self.server_params) == 1:
+                # If there is only one set of server parameters, use the string
+                names = [names]
+            else:
+                # For multiple server parameters create a list of unique log
+                # file names for each set of server parameters, e.g.
+                #   Convert '/path/to/file/log_file_name.log' into:
+                #       /path/to/file/log_file_name_0.log,
+                #       /path/to/file/log_file_name_1.log,
+                #       etc.
+                file_split = list(os.path.splitext(names))
+                names = [
+                    "".join(file_split.copy().insert("_{}".format(index)))
+                    for index, _ in enumerate(self.server_params)]
+
+        # Assign the log file names for each set of server parameters
         for index, name in enumerate(names):
             if name is not None and index < len(self.server_params):
                 self.server_params[index].update_log_file(name)
+
+    def get_interface_envs(self, index=0):
+        """Get the environment variable names and values for the interfaces.
+
+        Args:
+            index (int, optional): server index from which to obtain the
+                environment variable values. Defaults to 0.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names
+                and their values extracted from the daos_server yaml
+                configuration file.
+
+        """
+        env = EnvironmentVariables()
+        mapping = {
+            "OFI_INTERFACE": "fabric_iface",
+            "OFI_PORT": "fabric_iface_port",
+            "CRT_PHY_ADDR_STR": "provider",
+        }
+        for key, name in mapping.items():
+            value = self.server_params[index].get_value(name)
+            if value is not None:
+                env[key] = value
+
+        return env
 
     class PerServerYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
@@ -490,16 +537,20 @@ class DaosServerCommand(YamlCommand):
             mode = "format"
         return mode
 
-    def update_log_files(self, control_log, server_logs):
-        """Update the daos server log file parameters.
+    def get_interface_envs(self, index=0):
+        """Get the environment variable names and values for the interfaces.
 
         Args:
-            control_log (str): new control log file name
-            server_logs (list): list of new server log file names
+            index (int, optional): server index from which to obtain the
+                environment variable values. Defaults to 0.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names
+                and their values extracted from the daos_server yaml
+                configuration file.
+
         """
-        if isinstance(self.yaml, YamlParameters):
-            self.yaml.update_control_log_file(control_log)
-            self.yaml.update_server_log_files(server_logs)
+        return self.yaml.get_interface_envs(index)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -641,6 +692,21 @@ class DaosServerManager(SubprocessManager):
             "/run/server_config", server_command, ompi_path)
         self.job.sub_command_override = "start"
         self._exe_names.append("daos_io_server")
+
+    def get_interface_envs(self, index=0):
+        """Get the environment variable names and values for the interfaces.
+
+        Args:
+            index (int, optional): server index from which to obtain the
+                environment variable values. Defaults to 0.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names
+                and their values extracted from the daos_server yaml
+                configuration file.
+
+        """
+        return self.job.get_interface_envs(index)
 
     def prepare(self):
         """Prepare the host to run the server."""

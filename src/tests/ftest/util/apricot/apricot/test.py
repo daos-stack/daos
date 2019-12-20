@@ -192,6 +192,7 @@ class TestWithServers(TestWithoutServers):
         self.uri_file = None
         self.agent_log = None
         self.server_log = None
+        self.control_log = None
         self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
@@ -444,7 +445,12 @@ class TestWithServers(TestWithoutServers):
             self.log.info(
                 "Using a test-specific daos_server log file: %s",
                 self.server_log)
-            server_cfg.server_params[0].log_file.value = self.server_log
+            server_cfg.update_server_log_files(self.server_log)
+        if self.control_log is not None:
+            self.log.info(
+                "Using a test-specific daos_server control log file: %s",
+                self.control_log)
+            server_cfg.update_control_log_file(self.control_log)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
         self.server_managers.append(
             DaosServerManager(self.ompi_bin, server_cmd))
@@ -651,5 +657,7 @@ class TestWithServers(TestWithoutServers):
             self.log_dir, "{}_agent_daos.log".format(self.test_id))
         self.server_log = os.path.join(
             self.log_dir, "{}_server_daos.log".format(self.test_id))
+        self.control_log = os.path.join(
+            self.log_dir, "{}_control_daos.log".format(self.test_id))
         self.client_log = os.path.join(
             self.log_dir, "{}_client_daos.log".format(self.test_id))

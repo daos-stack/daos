@@ -33,7 +33,9 @@ from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
+from daos_utils import create_container
 import write_host_file
+
 
 class MdtestBase(TestWithServers):
     """Base mdtest class.
@@ -93,30 +95,36 @@ class MdtestBase(TestWithServers):
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
         # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        # self.container = TestContainer(self.pool)
+        # self.container.get_params(self)
 
         # create container
         # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.mdtest_cmd.dfs_pool_uuid.value, self.mdtest_cmd.dfs_svcl.value)
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
 
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
-
-        return output.split()[3]
+        # Create a POSIX-type container
+        result = create_container(
+            self.bin,
+            self.mdtest_cmd.dfs_pool_uuid.value,
+            self.mdtest_cmd.dfs_svcl.value,
+            "POSIX",
+            self.server_managers[0].get_interface_envs())
+        if result is not None:
+            cont_uuid = result.stdout.split()[3]
+            self.log.debug(
+                "daos cont create stdout:\n  %s", result.stdout)
+            self.log.debug(
+                "daos cont create stdot_text:\n  %s", result.stdout_text)
+            self.log.info("Container created with UUID %s", cont_uuid)
+            return cont_uuid
+        else:
+            self.fail("Container create failed")
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+        self.dfuse = Dfuse(
+            self.hostlist_clients, self.tmp,
+            self.server_managers[0].get_interface_envs())
         self.dfuse.get_params(self)
 
         # update dfuse params
