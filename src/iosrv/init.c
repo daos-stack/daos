@@ -72,7 +72,7 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-int			dss_nvme_mem_size;
+int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** IO server instance index */
 unsigned int		dss_instance_idx;
