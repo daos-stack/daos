@@ -28,10 +28,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -235,6 +237,132 @@ func TestKillRank(t *testing.T) {
 		resultMap := cc.KillRank(0)
 
 		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
+	}
+}
+
+func newMockConnectCfg(log logging.Logger, cfg *mockConnectConfig) *connList {
+	if cfg == nil {
+		cfg = &mockConnectConfig{}
+	}
+
+	cl := &connList{
+		log: log,
+		factory: &mockControllerFactory{
+			log:          log,
+			controlCfg:   cfg.controlConfig,
+			ctlClientCfg: cfg.ctlClientCfg,
+			svcClientCfg: cfg.svcClientCfg,
+		},
+	}
+
+	_ = cl.ConnectClients(cfg.addresses)
+
+	return cl
+}
+
+func TestPoolQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mc      *mockConnectConfig
+		req     PoolQueryReq
+		expResp *PoolQueryResp
+		expErr  error
+	}{
+		"no active connections": {
+			expErr: errors.New("no active connections"),
+		},
+		"query fails": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolQueryErr: errors.New("query failed"),
+				},
+			},
+			expErr: errors.New("query failed"),
+		},
+		"nonzero resp status": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolQueryResult: &mgmtpb.PoolQueryResp{
+						Status: -42,
+					},
+				},
+			},
+			expErr: errors.New("DAOS returned error code: -42"),
+		},
+		"query succeeds": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolQueryResult: &mgmtpb.PoolQueryResp{
+						Uuid:          MockUUID,
+						Totaltargets:  42,
+						Activetargets: 16,
+						Disabled:      true,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildState_BUSY,
+							Objects: 1,
+							Records: 2,
+						},
+						Scm: &mgmtpb.StorageUsageStats{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
+						Nvme: &mgmtpb.StorageUsageStats{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
+					},
+				},
+			},
+			expResp: &PoolQueryResp{
+				UUID:          MockUUID,
+				TotalTargets:  42,
+				ActiveTargets: 16,
+				Disabled:      true,
+				Rebuild: &PoolRebuildStatus{
+					State:   PoolRebuildStateBusy,
+					Objects: 1,
+					Records: 2,
+				},
+				Scm: &StorageUsageStats{
+					Total: 123456,
+					Free:  0,
+					Min:   1,
+					Max:   2,
+					Mean:  3,
+				},
+				Nvme: &StorageUsageStats{
+					Total: 123456,
+					Free:  0,
+					Min:   1,
+					Max:   2,
+					Mean:  3,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			c := newMockConnectCfg(log, tc.mc)
+			gotResp, gotErr := c.PoolQuery(tc.req)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 

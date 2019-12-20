@@ -547,15 +547,10 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
 	d_iov_t			*dst_iov;
-	struct daos_csummer	*csummer;
 	daos_handle_t		 ioh;
 	unsigned int		 off;
 	int			 i;
 	int			 rc;
-
-	daos_csummer_init(&csummer,
-			  daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL),
-			  1024*1024);
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
@@ -1706,8 +1701,7 @@ io_sgl_update(void **state)
 	assert_int_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1,
-			   &iod,
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 			   &sgl);
 	if (rc) {
 		print_error("Failed to fetch: %d\n", rc);
@@ -1790,8 +1784,7 @@ io_sgl_fetch(void **state)
 			SGL_TEST_BUF_SIZE);
 	}
 	/* Now fetch */
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1,
-			   &iod,
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 			   &sgl);
 	if (rc)
 		goto exit;
@@ -1864,8 +1857,7 @@ io_fetch_hole(void **state)
 
 	/* Fetch */
 	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1,
-			   &iod,
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 			   &sgl);
 	assert_int_equal(rc, 0);
 
@@ -1897,8 +1889,7 @@ io_fetch_hole(void **state)
 	memset(fetch_buf, 0, 3 * 1024);
 	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
 	/* Fetch using epoch 2 */
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 2, &dkey, 1,
-			   &iod,
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 2, &dkey, 1, &iod,
 			   &sgl);
 	assert_int_equal(rc, 0);
 
