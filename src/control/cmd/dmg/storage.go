@@ -45,7 +45,7 @@ type storageCmd struct {
 	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state of an NVMe SSD to FAULTY."`
+	Set     setFaultyCmd      `command:"set" alias:"s" description:"Manually set the device state."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -204,7 +204,7 @@ func (cmd *storageFormatCmd) Execute(args []string) error {
 
 // setFaultyCmd is the struct representing the set storage subcommand
 type setFaultyCmd struct {
-	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" alias:"n" description:"Set an NVMe SSD device state to FAULTY."`
+	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" alias:"n" description:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
 // nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
