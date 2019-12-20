@@ -161,7 +161,7 @@ class DmgNetworkScanTest(TestWithServers):
         for numa, devs in self.get_numa_info().items():
             if devs:
                 n_devs = [dev for dev in devs if dev in exp_devs]
-                print("Numa devs: {}".format(n_devs))
+                n_devs.append("lo") if numa == 0 else None
                 numa = [numa] * len(n_devs)
                 dev_prov = {dev: self.get_dev_provider(dev) for dev in n_devs}
                 for n, d, p in zip(numa, dev_prov.keys(), dev_prov.values()):
@@ -175,19 +175,13 @@ class DmgNetworkScanTest(TestWithServers):
                     exp_out.append(net_obj)
 
         # Format the dict of values into list pairs
-        # dmg_out = [list(pout.values())[i:(i + len(exp_out)-1)]
-        #                 for i in range(0, len(pout.items()), len(exp_out))]
-
-        print("dmg_out: {}".format(dmg_out))
-        print("exp_out: {}".format(exp_out))
+        dmg_out = [list(pout.values())[i:(i + (len(pout) / 3) - 1)]
+                   for i in range(0, len(pout.items()), (len(pout) / 3) - 1)]
 
         # Verify
-        try:
-            for i, device in enumerate(exp_out):
-                device.sort(key=lambda x: x[0])
-                dmg_out[i].sort(key=lambda x: x[0])
-                if device not in dmg_out:
-                    self.fail("Could not find device information on dmg ouput.")
-        except DmgFailure as error:
-            self.log.error(str(error))
-            self.fail("Test failed during dmg output verification.")
+        _ = [dev.sort() for dev in dmg_out]
+        _ = [dev.sort() for dev in exp_out]
+        for dev in dmg_out:
+            if dev not in exp_out:
+                self.fail(
+                    "Can't find device: {} info on dmg ouput".format(dev))
