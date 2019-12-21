@@ -31,7 +31,7 @@ import write_host_file
 class IorInterceptMultiClient(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with and without interception
-       library on a multi server and multi client settings with
+       library on a single server and multi client settings with
        basic parameters.
 
     :avocado: recursive
