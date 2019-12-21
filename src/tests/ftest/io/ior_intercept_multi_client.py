@@ -1,0 +1,101 @@
+#!/usr/bin/python
+"""
+  (C) Copyright 2019 Intel Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+  The Government's rights to use, modify, reproduce, release, perform, display,
+  or disclose this software are subject to the terms of the Apache License as
+  provided in Contract No. B609815.
+  Any reproduction of computer software, computer software documentation, or
+  portions thereof marked with this legend must also reproduce the markings.
+"""
+
+import os
+from ior_test_base import IorTestBase
+from ior_utils import IorCommand, IorMetrics
+import write_host_file
+
+
+class IorInterceptMultiClient(IorTestBase):
+    # pylint: disable=too-many-ancestors
+    """Test class Description: Runs IOR with and without interception
+       library on a multi server and multi client settings with
+       basic parameters.
+
+    :avocado: recursive
+    """
+
+    def setUp(self):
+        """Set up each test case."""
+        super(IorInterceptMultiClient, self).setUp()
+        # Running ior on multi client for transfer size under 4K has issues
+        # The IorTestBase filters the test clients and uses only 1 client
+        # for all the test variants. Since this test is going to run
+        # both under and over 4K, removing that constraint and allowing all the
+        # clients to run ior. This set up can be removed once the constraint
+        # in IorTestBase is removed. # DAOS-3320
+        if self.ior_cmd.api.value == "POSIX":
+            self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
+            self.hostfile_clients = write_host_file.write_host_file(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+
+    def test_ior_intercept_multi_client(self):
+        """Jira ID: DAOS-3499.
+
+        Test Description:
+            Purpose of this test is to run ior through dfuse in multiple
+            clients for 3 minutes and capture the metrics and use the
+            intercepiton library by exporting LD_PRELOAD to the libioil.so
+            path and rerun the above ior and capture the metrics and
+            compare the performance difference and check using interception
+            library make significant performance improvement.
+
+        Use case:
+            Run ior with read, write for 3 minutes
+            Run ior with read, write for 3 minutes with interception library
+            Compare the results and check whether using interception
+                library provides better performance.
+
+        :avocado: tags=all,daosio,hw,full_regression,iorinterceptmulticlient
+        """
+        out = self.run_ior_with_pool()
+        without_intercept = IorCommand.get_ior_metrics(out)
+        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+        out = self.run_ior_with_pool(intercept)
+        with_intercept = IorCommand.get_ior_metrics(out)
+        max_mib = int(IorMetrics.Max_MiB)
+        min_mib = int(IorMetrics.Min_MiB)
+        mean_mib = int(IorMetrics.Mean_MiB)
+
+        write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
+        read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
+
+        # Verifying write performance
+        self.assertTrue(float(with_intercept[0][max_mib]) >
+                        write_x * float(without_intercept[0][max_mib]))
+        self.assertTrue(float(with_intercept[0][min_mib]) >
+                        write_x * float(without_intercept[0][min_mib]))
+        self.assertTrue(float(with_intercept[0][mean_mib]) >
+                        write_x * float(without_intercept[0][mean_mib]))
+
+        # Verifying read performance
+        self.assertTrue(float(with_intercept[1][max_mib]) >
+                        read_x * float(without_intercept[1][max_mib]))
+        self.assertTrue(float(with_intercept[1][min_mib]) >
+                        read_x * float(without_intercept[1][min_mib]))
+        self.assertTrue(float(with_intercept[1][mean_mib]) >
+                        read_x * float(without_intercept[1][mean_mib]))
+
