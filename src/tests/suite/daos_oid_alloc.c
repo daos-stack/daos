@@ -213,6 +213,7 @@ out:
 }
 
 #define NUM_RGS 1000
+#define SKIP_RC (-30000)
 
 static void
 oid_allocator_checker(void **state)
@@ -233,6 +234,12 @@ oid_allocator_checker(void **state)
 		num_oids[i] = rand() % 256 + 1;
 		rc = daos_cont_alloc_oids(arg->coh, num_oids[i], &oids[i],
 					  NULL);
+		if (rc == -DER_EVICTED) {
+			fprintf(stderr, "\nSuspected instance of CART-765\n");
+			rc = SKIP_RC;
+			goto check;
+		}
+
 		if (rc) {
 			fprintf(stderr, "%d: %d oids alloc failed (%d)\n",
 				i, num_oids[i], rc);
@@ -267,6 +274,8 @@ check:
 			      MPI_COMM_WORLD);
 		rc = rc_reduce;
 	}
+	if (rc == SKIP_RC)
+		skip();
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0)
 		print_message("Allocation done. Verifying no overlaps...\n");
