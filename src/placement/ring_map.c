@@ -1094,7 +1094,8 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		grp_start += grp_dist;
 	}
 
-	ring_obj_remap_shards(rimap, md, layout, rop, remap_list, for_reint);
+	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list,
+			for_reint);
 
 	if (rc == 0)
 		obj_layout_dump(md->omd_id, layout);
@@ -1182,8 +1183,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	shards_count = rop.rop_grp_size * rop.rop_grp_nr;
 	if (shards_count > SHARDS_ON_STACK_COUNT) {
-		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
-				&layout);
+		rc = pl_obj_layout_alloc(rop.rop_grp_size,
+				rop.rop_grp_nr, &layout);
 		if (rc)
 			return rc;
 	} else {
@@ -1212,25 +1213,25 @@ out:
 /** see \a dsr_obj_find_reint */
 int
 ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
-		    struct daos_obj_shard_md *shard_md,
-		    uint32_t reint_ver, uint32_t *tgt_id,
-		    uint32_t *shard_idx, unsigned int array_size,
-		    int myrank)
+			struct daos_obj_shard_md *shard_md,
+			uint32_t reint_ver, uint32_t *tgt_rank,
+			uint32_t *shard_id, unsigned int array_size,
+			int myrank)
 {
-	uint32_t                reint_stack_shards = SHARDS_ON_STACK_COUNT / 2;
+	uint32_t                   reint_shard_cnt = SHARDS_ON_STACK_COUNT / 2;
 	struct ring_obj_placement  rop;
 	struct pl_ring_map        *rimap = pl_map2rimap(map);
 	struct pl_obj_layout      *layout;
 	struct pl_obj_layout      *reint_layout;
 	struct pl_obj_layout       layout_on_stack;
 	struct pl_obj_layout       reint_layout_on_stack;
-	struct pl_obj_shard        shards_on_stack[reint_stack_shards];
-	struct pl_obj_shard        reint_shards_on_stack[reint_stack_shards];
+	struct pl_obj_shard        shards_on_stack[reint_shard_cnt];
+	struct pl_obj_shard        reint_shards_on_stack[reint_shard_cnt];
 	d_list_t                   remap_list;
 	d_list_t                   reint_list;
 	unsigned int               shards_count;
 	int                        idx = 0;
-	int                             index = 0;
+	int                        index = 0;
 	int                        rc;
 
 	/* Caller should guarantee the pl_map is uptodate */
@@ -1251,7 +1252,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	shards_count = rop.rop_grp_size * rop.rop_grp_nr;
-	if (shards_count > reint_stack_shards) {
+	if (shards_count > reint_shard_cnt) {
 		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
 				&layout);
 		if (rc)
@@ -1263,10 +1264,13 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	} else {
 		layout = &layout_on_stack;
 		reint_layout = &reint_layout_on_stack;
+
 		layout->ol_nr = shards_count;
 		reint_layout->ol_nr = shards_count;
+
 		layout->ol_shards = shards_on_stack;
 		reint_layout->ol_shards = reint_shards_on_stack;
+
 		memset(layout->ol_shards, 0,
 		       sizeof(*layout->ol_shards) * layout->ol_nr);
 		memset(reint_layout->ol_shards, 0,
@@ -1306,12 +1310,13 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		}
 	}
 
-	remap_list_fill(map, md, shard_md, reint_ver, tgt_id, shard_idx,
+	remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			array_size, myrank, &idx, layout, &reint_list);
 out:
 	remap_list_free_all(&remap_list);
 	remap_list_free_all(&reint_list);
-	if (shards_count > reint_stack_shards) {
+
+	if (shards_count > reint_shard_cnt) {
 		pl_obj_layout_free(layout);
 		pl_obj_layout_free(reint_layout);
 	}

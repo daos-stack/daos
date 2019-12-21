@@ -552,10 +552,9 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		setbit(tgts_used, target->ta_comp.co_id);
 
 		if (pool_target_unavail(target, for_reint)) {
-			rc = remap_alloc_one(remap_list, 0, target, for_reint);
+			rc = remap_alloc_one(remap_list, 0, target, false);
 			if (rc)
 				D_GOTO(out, rc);
-
 		}
 
 		/** skip the first shard because it's been
@@ -594,8 +593,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			layout->ol_shards[k].po_fseq = fseq;
 
 			/** If target is failed queue it for remap*/
-			if (pool_target_unavail(target, for_reint))  {
-
+			if (pool_target_unavail(target, for_reint)) {
 				rc = remap_alloc_one(remap_list, k, target,
 						false);
 				if (rc)
@@ -679,7 +677,6 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	jmap->min_redundant_dom = mia->ia_jump_map.domain;
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
 			mia->ia_jump_map.domain, PO_COMP_ID_ALL, &doms);
-
 	if (rc <= 0) {
 		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
@@ -741,7 +738,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(jmop.jmop_grp_nr, jmop.jmop_grp_size,
+	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
 	if (rc != 0) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
@@ -751,7 +748,6 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	/* Get root node of pool map */
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list, false, md);
-
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
 		pl_obj_layout_free(layout);
@@ -859,8 +855,8 @@ out:
 static int
 jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
-			uint32_t reint_ver, uint32_t *tgt_id,
-			uint32_t *shard_idx, unsigned int array_size,
+			uint32_t reint_ver, uint32_t *tgt_rank,
+			uint32_t *shard_id, unsigned int array_size,
 			int myrank)
 {
 	struct pl_jump_map              *jmap;
@@ -937,7 +933,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		}
 	}
 
-	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_id, shard_idx,
+	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, myrank, &idx, layout, &reint_list);
 
 out:

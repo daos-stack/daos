@@ -221,11 +221,11 @@ main(int argc, char **argv)
 			SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
 	D_PRINT("reintegrated target %d and %d. expected target "
 		"%d and %d\n", reint_tgts[0], reint_tgts[1],
-		lo_3->ol_shards[0].po_target, spare_tgt_ranks[1]);
+		lo_3->ol_shards[0].po_target, spare_tgt_ranks[0]);
 	D_ASSERT(spare_cnt == 2);
-	D_ASSERT(shard_ids[0] == 0);
-	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
-	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[0]);
+	D_ASSERT(shard_ids[1] == 0);
+	D_ASSERT(spare_tgt_ranks[1] == lo_3->ol_shards[0].po_target);
+	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[0]);
 
 	failed_tgts[0] = spare_tgt_candidate[0];
 	failed_tgts[1] = spare_tgt_candidate[1];

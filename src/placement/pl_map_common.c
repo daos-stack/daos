@@ -65,25 +65,6 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	d_list_add(&f_new->fs_list, remap_list);
 }
 
-int
-alloc_f_shard(struct failed_shard **f_new,  unsigned int shard_idx,
-	      struct pool_target *tgt)
-{
-	struct failed_shard *f_new_temp;
-
-	D_ALLOC_PTR(f_new_temp);
-	if (f_new == NULL)
-		return -DER_NOMEM;
-
-	D_INIT_LIST_HEAD(&f_new_temp->fs_list);
-	f_new_temp->fs_shard_idx = shard_idx;
-	f_new_temp->fs_fseq = tgt->ta_comp.co_fseq;
-	f_new_temp->fs_status = tgt->ta_comp.co_status;
-
-	*f_new = f_new_temp;
-	return 0;
-}
-
 /**
    * Allocate a new failed shard then add it into remap list
    *
@@ -97,21 +78,25 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint)
 {
 	struct failed_shard *f_new;
-	int rc;
 
-	rc = alloc_f_shard(&f_new, shard_idx, tgt);
+	D_ALLOC_PTR(f_new);
+	if (f_new == NULL)
+		return -DER_NOMEM;
 
-	if (rc != 0)
-		return rc;
+	D_INIT_LIST_HEAD(&f_new->fs_list);
+	f_new->fs_shard_idx = shard_idx;
+	f_new->fs_fseq = tgt->ta_comp.co_fseq;
+	f_new->fs_status = tgt->ta_comp.co_status;
 
-	if (!for_reint)
+	if (!for_reint) {
 		f_new->fs_tgt_id = -1;
-	else
+		remap_add_one(remap_list, f_new);
+	} else {
 		f_new->fs_tgt_id = tgt->ta_comp.co_id;
+		d_list_add(&f_new->fs_list, remap_list);
+	}
 
-	remap_add_one(remap_list, f_new);
-
-	return rc;
+	return 0;
 }
 
 /**
@@ -212,14 +197,13 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
-		struct pl_obj_layout *layout, d_list_t *r_list)
+		struct pl_obj_layout *layout, d_list_t *remap_list)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
 	int                     rc = 0;
 
-	d_list_for_each_entry(f_shard, r_list, fs_list) {
-
+	d_list_for_each_entry(f_shard, remap_list, fs_list) {
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
 		if (f_shard->fs_fseq > r_ver)
@@ -317,7 +301,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 	if (!spare_avail)
 		goto next_fail;
-
 
 	/* The selected spare target is down as well */
 	if (pool_target_unavail(spare_tgt, for_reint)) {

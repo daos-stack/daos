@@ -94,7 +94,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool is_reint);
+		struct pool_target *tgt, bool for_reint);
 
 void
 remap_list_free_all(d_list_t *remap_list);
@@ -117,7 +117,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
-		       d_list_t *remap_list, bool ignore_up,
+		       d_list_t *remap_list, bool for_reint,
 		       struct failed_shard *f_shard,
 		       struct pl_obj_shard *l_shard);
 

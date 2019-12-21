@@ -177,14 +177,6 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					       myrank);
 }
 
-/**
- * Check if the provided object shard needs to be built on the reintegrated
- * targets @tgp_reint.
- *
- * \return      1       Build the object on the returned target @tgt_reint.
- *              0       Skip this object.
- *              -ve     error code.
- */
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
