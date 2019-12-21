@@ -30,7 +30,7 @@ from ior_utils import IorCommand, IorMetrics
 from command_utils import CommandFailure
 
 
-class IorInterceptMultiClient(IorTestBase):
+class IorInterceptDfuseMix(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR only with dfuse and with mix of
        dfuse and interception library on a single server and multi
@@ -41,7 +41,7 @@ class IorInterceptMultiClient(IorTestBase):
 
     def setUp(self):
         """Set up each test case."""
-        super(IorInterceptMultiClient, self).setUp()
+        super(IorInterceptDfuseMix, self).setUp()
         # Running ior on multi client for transfer size under 4K has issues
         # The IorTestBase filters the test clients and uses only 1 client
         # for all the test variants. Since this test is going to run
@@ -52,7 +52,7 @@ class IorInterceptMultiClient(IorTestBase):
             self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
         self.lock = threading.Lock()
 
-    def test_ior_intercept_multi_client(self):
+    def test_ior_intercept_dfuse_mix(self):
         """Jira ID: DAOS-3500.
 
         Test Description:
