@@ -49,7 +49,8 @@ class IorInterceptDfuseMix(IorTestBase):
         # clients to run ior. This set up can be removed once the constraint
         # in IorTestBase is removed. # DAOS-3320
         if self.ior_cmd.api.value == "POSIX":
-            self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
+            self.hostlist_clients = self.params.get(
+                "test_clients", "/run/hosts/*")
         self.lock = threading.Lock()
 
     def test_ior_intercept_dfuse_mix(self):
@@ -81,7 +82,7 @@ class IorInterceptDfuseMix(IorTestBase):
         self.run_ior_with_pool(without_intercept)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()
-        self.run_ior_with_pool(with_intercept, intercept)
+        self.run_multiple_ior_with_pool(with_intercept, intercept)
         self.log_metrics(without_intercept, with_intercept)
 
         max_mib = int(IorMetrics.Max_MiB)
@@ -151,7 +152,7 @@ class IorInterceptDfuseMix(IorTestBase):
         IorCommand.log_metrics(self.log, "1 clients - without " +
                                "interception library", with_intercept[2])
 
-    def run_ior_with_pool(self, results, intercept=None):
+    def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -204,11 +205,12 @@ class IorInterceptDfuseMix(IorTestBase):
         """
         hostfile = write_host_file.write_host_file(
             clients, self.workdir, self.hostfile_clients_slots)
-        job = threading.Thread(target=self.run_ior, args=(
+        job = threading.Thread(target=self.run_multiple_ior, args=(
             hostfile, len(clients), results, job_num, intercept))
         return job
 
-    def run_ior(self, hostfile, num_clients, results, job_num, intercept=None):
+    def run_multiple_ior(self, hostfile, num_clients,
+                         results, job_num, intercept=None):
         #pylint: disable=too-many-arguments
         """Run the IOR command.
 
