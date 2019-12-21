@@ -156,14 +156,16 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
-		return nil
-	} else if uintOpt != nil {
+		return err
+	}
+	if uintOpt != nil {
 		opts = append(opts, uintOpt)
 	}
 	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
-		return nil
-	} else if sintOpt != nil {
+		return err
+	}
+	if sintOpt != nil {
 		opts = append(opts, sintOpt)
 	}
 

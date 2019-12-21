@@ -33,10 +33,10 @@ func TestCommonNameToComponent(t *testing.T) {
 		commonname string
 		expected   Component
 	}{
-		{"AdminCN", "admin", Dmg},
-		{"AgentCN", "agent", Agent},
-		{"ServerCN", "server", Server},
-		{"UnknownCN", "knownbadvalue", Undefined},
+		{"AdminCN", "admin", ComponentAdmin},
+		{"AgentCN", "agent", ComponentAgent},
+		{"ServerCN", "server", ComponentServer},
+		{"UnknownCN", "knownbadvalue", ComponentUndefined},
 	}
 
 	for _, tc := range testCases {
@@ -50,18 +50,37 @@ func TestCommonNameToComponent(t *testing.T) {
 }
 
 func TestHasAccess(t *testing.T) {
+	var negativeCases = 1
 	testCases := []struct {
 		testname string
 		comp     Component
 		method   string
 		expected bool
 	}{
-		{"Admin", Dmg, "/ctl.MgmtCtl/StorageScan", true},
-		{"Agent", Agent, "/mgmt.MgmtSvc/GetAttachInfo", true},
-		{"Server", Server, "/mgmt.MgmtSvc/Join", true},
-		{"WrongComponent", Dmg, "/mgmt.MgmtSvc/Join", false},
+		{"/ctl.MgmtCtl/StoragePrepare", ComponentAdmin, "/ctl.MgmtCtl/StoragePrepare", true},
+		{"/ctl.MgmtCtl/StorageScan", ComponentAdmin, "/ctl.MgmtCtl/StorageScan", true},
+		{"/ctl.MgmtCtl/SystemMemberQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemMemberQuery", true},
+		{"/ctl.MgmtCtl/SystemStop", ComponentAdmin, "/ctl.MgmtCtl/SystemStop", true},
+		{"/ctl.MgmtCtl/NetworkListProviders", ComponentAdmin, "/ctl.MgmtCtl/NetworkListProviders", true},
+		{"/ctl.MgmtCtl/StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat", true},
+		{"/ctl.MgmtCtl/NetworkScanDevices", ComponentAdmin, "/ctl.MgmtCtl/NetworkScanDevices", true},
+		{"/mgmt.MgmtSvc/Join", ComponentServer, "/mgmt.MgmtSvc/Join", true},
+		{"/mgmt.MgmtSvc/PoolCreate", ComponentAdmin, "/mgmt.MgmtSvc/PoolCreate", true},
+		{"/mgmt.MgmtSvc/PoolDestroy", ComponentAdmin, "/mgmt.MgmtSvc/PoolDestroy", true},
+		{"/mgmt.MgmtSvc/PoolGetACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolGetACL", true},
+		{"/mgmt.MgmtSvc/PoolOverwriteACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolOverwriteACL", true},
+		{"/mgmt.MgmtSvc/GetAttachInfo", ComponentAgent, "/mgmt.MgmtSvc/GetAttachInfo", true},
+		{"/mgmt.MgmtSvc/BioHealthQuery", ComponentAdmin, "/mgmt.MgmtSvc/BioHealthQuery", true},
+		{"/mgmt.MgmtSvc/SmdListDevs", ComponentAdmin, "/mgmt.MgmtSvc/SmdListDevs", true},
+		{"/mgmt.MgmtSvc/SmdListPools", ComponentAdmin, "/mgmt.MgmtSvc/SmdListPools", true},
+		{"/mgmt.MgmtSvc/KillRank", ComponentAdmin, "/mgmt.MgmtSvc/KillRank", true},
+		{"/mgmt.MgmtSvc/ListPools", ComponentAdmin, "/mgmt.MgmtSvc/ListPools", true},
+		{"WrongComponent", ComponentAdmin, "/mgmt.MgmtSvc/Join", false},
 	}
 
+	if len(testCases) != (len(methodAuthorizations) + negativeCases) {
+		t.Errorf("component access tests is missing a case for a newly added method")
+	}
 	for _, tc := range testCases {
 		t.Run(tc.testname, func(t *testing.T) {
 			result := tc.comp.HasAccess(tc.method)

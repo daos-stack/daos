@@ -25,43 +25,43 @@ package security
 
 import "strings"
 
-//Component represents the DAOS component being granted authorization
+// Component represents the DAOS component being granted authorization.
 type Component int
 
 const (
-	Dmg = iota
-	Agent
-	Server
-	Undefined
+	ComponentUndefined Component = iota
+	ComponentAdmin
+	ComponentAgent
+	ComponentServer
 )
 
 func (c Component) String() string {
-	return [...]string{"admin", "agent", "server", "undefined"}[c]
+	return [...]string{"undefined", "admin", "agent", "server"}[c]
 }
 
-//methodAuthorizations is the map for checking which components are authorized to make the specific method call.
+// methodAuthorizations is the map for checking which components are authorized to make the specific method call.
 var methodAuthorizations = map[string]Component{
-	"/ctl.MgmtCtl/StoragePrepare":       Dmg,
-	"/ctl.MgmtCtl/StorageScan":          Dmg,
-	"/ctl.MgmtCtl/SystemMemberQuery":    Dmg,
-	"/ctl.MgmtCtl/SystemStop":           Dmg,
-	"/ctl.MgmtCtl/NetworkListProviders": Dmg,
-	"/ctl.MgmtCtl/StorageFormat":        Dmg,
-	"/ctl.MgmtCtl/NetworkScanDevices":   Dmg,
-	"/mgmt.MgmtSvc/Join":                Server,
-	"/mgmt.MgmtSvc/PoolCreate":          Dmg,
-	"/mgmt.MgmtSvc/PoolDestroy":         Dmg,
-	"/mgmt.MgmtSvc/PoolGetACL":          Dmg,
-	"/mgmt.MgmtSvc/PoolOverwriteACL":    Dmg,
-	"/mgmt.MgmtSvc/GetAttachInfo":       Agent,
-	"/mgmt.MgmtSvc/BioHealthQuery":      Dmg,
-	"/mgmt.MgmtSvc/SmdListDevs":         Dmg,
-	"/mgmt.MgmtSvc/SmdListPools":        Dmg,
-	"/mgmt.MgmtSvc/KillRank":            Dmg,
-	"/mgmt.MgmtSvc/ListPools":           Dmg,
+	"/ctl.MgmtCtl/StoragePrepare":       ComponentAdmin,
+	"/ctl.MgmtCtl/StorageScan":          ComponentAdmin,
+	"/ctl.MgmtCtl/SystemMemberQuery":    ComponentAdmin,
+	"/ctl.MgmtCtl/SystemStop":           ComponentAdmin,
+	"/ctl.MgmtCtl/NetworkListProviders": ComponentAdmin,
+	"/ctl.MgmtCtl/StorageFormat":        ComponentAdmin,
+	"/ctl.MgmtCtl/NetworkScanDevices":   ComponentAdmin,
+	"/mgmt.MgmtSvc/Join":                ComponentServer,
+	"/mgmt.MgmtSvc/PoolCreate":          ComponentAdmin,
+	"/mgmt.MgmtSvc/PoolDestroy":         ComponentAdmin,
+	"/mgmt.MgmtSvc/PoolGetACL":          ComponentAdmin,
+	"/mgmt.MgmtSvc/PoolOverwriteACL":    ComponentAdmin,
+	"/mgmt.MgmtSvc/GetAttachInfo":       ComponentAgent,
+	"/mgmt.MgmtSvc/BioHealthQuery":      ComponentAdmin,
+	"/mgmt.MgmtSvc/SmdListDevs":         ComponentAdmin,
+	"/mgmt.MgmtSvc/SmdListPools":        ComponentAdmin,
+	"/mgmt.MgmtSvc/KillRank":            ComponentAdmin,
+	"/mgmt.MgmtSvc/ListPools":           ComponentAdmin,
 }
 
-//HasAccess check if the given component has access to method given in FullMethod
+// HasAccess check if the given component has access to method given in FullMethod
 func (c Component) HasAccess(FullMethod string) bool {
 	comp, ok := methodAuthorizations[FullMethod]
 
@@ -76,17 +76,17 @@ func (c Component) HasAccess(FullMethod string) bool {
 	return false
 }
 
-//CommonNameToComponent returns the correct component based on the CommonName
+// CommonNameToComponent returns the correct component based on the CommonName
 func CommonNameToComponent(commonname string) Component {
 
-	if strings.HasPrefix(commonname, Component(Dmg).String()) {
-		return Dmg
-	}
-	if commonname == Component(Agent).String() {
-		return Agent
-	} else if commonname == Component(Server).String() {
-		return Server
-	} else {
-		return Undefined
+	switch {
+	case strings.HasPrefix(commonname, ComponentAdmin.String()):
+		return ComponentAdmin
+	case commonname == ComponentAgent.String():
+		return ComponentAgent
+	case commonname == ComponentServer.String():
+		return ComponentServer
+	default:
+		return ComponentUndefined
 	}
 }

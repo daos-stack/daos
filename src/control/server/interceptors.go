@@ -26,15 +26,15 @@ package server
 import (
 	"fmt"
 
-	"golang.org/x/net/context"
-
-	"github.com/daos-stack/daos/src/control/security"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 func checkAccess(ctx context.Context, FullMethod string) error {
@@ -44,10 +44,10 @@ func checkAccess(ctx context.Context, FullMethod string) error {
 		return err
 	}
 
-	access := component.HasAccess(FullMethod)
+	hasAccess := component.HasAccess(FullMethod)
 
-	if !access {
-		errMsg := fmt.Sprintf("%s does not have permission to call %s", component.String(), FullMethod)
+	if !hasAccess {
+		errMsg := fmt.Sprintf("%s does not have permission to call %s", component, FullMethod)
 		return status.Error(codes.PermissionDenied, errMsg)
 	}
 
@@ -61,13 +61,13 @@ func componentFromContext(ctx context.Context) (comp *security.Component, err er
 
 	authInfo, ok := clientPeer.AuthInfo.(credentials.TLSInfo)
 	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "Unable to obtain TLS info where it should be available")
+		return nil, status.Error(codes.Unauthenticated, "unable to obtain TLS info where it should be available")
 	}
 
 	certs := authInfo.State.VerifiedChains
 	if len(certs) == 0 || len(certs[0]) == 0 {
 		//This should never happen since we require it on the TLS handshake and don't allow skipping.
-		return nil, status.Error(codes.Unauthenticated, "Unable to verify client certificates")
+		return nil, status.Error(codes.Unauthenticated, "unable to verify client certificates")
 	}
 
 	peerCert := certs[0][0]
@@ -89,7 +89,6 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 }
 
 func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-
 	ctx := ss.Context()
 	err := checkAccess(ctx, info.FullMethod)
 
