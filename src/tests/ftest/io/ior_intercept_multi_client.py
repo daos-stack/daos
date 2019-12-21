@@ -47,7 +47,8 @@ class IorInterceptMultiClient(IorTestBase):
         # clients to run ior. This set up can be removed once the constraint
         # in IorTestBase is removed. # DAOS-3320
         if self.ior_cmd.api.value == "POSIX":
-            self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
+            self.hostlist_clients = self.params.get(
+                "test_clients", "/run/hosts/*")
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
@@ -98,4 +99,3 @@ class IorInterceptMultiClient(IorTestBase):
                         read_x * float(without_intercept[1][min_mib]))
         self.assertTrue(float(with_intercept[1][mean_mib]) >
                         read_x * float(without_intercept[1][mean_mib]))
-
