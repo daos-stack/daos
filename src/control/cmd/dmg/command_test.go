@@ -127,6 +127,11 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
+func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
+	return nil, nil
+}
+
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
@@ -159,6 +164,16 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 
 func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
 	tc.appendInvocation(fmt.Sprintf("SmdListPools-%s", req))
+	return nil
+}
+
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
 	return nil
 }
 

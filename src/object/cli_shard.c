@@ -768,7 +768,13 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	oei->oei_epoch		= args->la_auxi.epoch;
+	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
+		oei->oei_epr = *obj_args->eprs;
+	} else {
+		oei->oei_epr.epr_lo = 0;
+		oei->oei_epr.epr_hi = args->la_auxi.epoch;
+	}
+
 	oei->oei_nr		= *obj_args->nr;
 	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
