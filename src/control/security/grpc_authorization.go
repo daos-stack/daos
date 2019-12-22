@@ -23,8 +23,6 @@
 
 package security
 
-import "strings"
-
 // Component represents the DAOS component being granted authorization.
 type Component int
 
@@ -80,7 +78,7 @@ func (c Component) HasAccess(FullMethod string) bool {
 func CommonNameToComponent(commonname string) Component {
 
 	switch {
-	case strings.HasPrefix(commonname, ComponentAdmin.String()):
+	case commonname == ComponentAdmin.String():
 		return ComponentAdmin
 	case commonname == ComponentAgent.String():
 		return ComponentAgent

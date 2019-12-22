@@ -24,7 +24,10 @@
 package security
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestCommonNameToComponent(t *testing.T) {
@@ -34,6 +37,7 @@ func TestCommonNameToComponent(t *testing.T) {
 		expected   Component
 	}{
 		{"AdminCN", "admin", ComponentAdmin},
+		{"AdminPrefix", "administrator", ComponentUndefined},
 		{"AgentCN", "agent", ComponentAgent},
 		{"ServerCN", "server", ComponentServer},
 		{"UnknownCN", "knownbadvalue", ComponentUndefined},
@@ -50,42 +54,43 @@ func TestCommonNameToComponent(t *testing.T) {
 }
 
 func TestHasAccess(t *testing.T) {
-	var negativeCases = 1
+	allComponents := [4]Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := []struct {
-		testname string
-		comp     Component
-		method   string
-		expected bool
+		testname         string
+		correctComponent Component
+		method           string
 	}{
-		{"/ctl.MgmtCtl/StoragePrepare", ComponentAdmin, "/ctl.MgmtCtl/StoragePrepare", true},
-		{"/ctl.MgmtCtl/StorageScan", ComponentAdmin, "/ctl.MgmtCtl/StorageScan", true},
-		{"/ctl.MgmtCtl/SystemMemberQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemMemberQuery", true},
-		{"/ctl.MgmtCtl/SystemStop", ComponentAdmin, "/ctl.MgmtCtl/SystemStop", true},
-		{"/ctl.MgmtCtl/NetworkListProviders", ComponentAdmin, "/ctl.MgmtCtl/NetworkListProviders", true},
-		{"/ctl.MgmtCtl/StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat", true},
-		{"/ctl.MgmtCtl/NetworkScanDevices", ComponentAdmin, "/ctl.MgmtCtl/NetworkScanDevices", true},
-		{"/mgmt.MgmtSvc/Join", ComponentServer, "/mgmt.MgmtSvc/Join", true},
-		{"/mgmt.MgmtSvc/PoolCreate", ComponentAdmin, "/mgmt.MgmtSvc/PoolCreate", true},
-		{"/mgmt.MgmtSvc/PoolDestroy", ComponentAdmin, "/mgmt.MgmtSvc/PoolDestroy", true},
-		{"/mgmt.MgmtSvc/PoolGetACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolGetACL", true},
-		{"/mgmt.MgmtSvc/PoolOverwriteACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolOverwriteACL", true},
-		{"/mgmt.MgmtSvc/GetAttachInfo", ComponentAgent, "/mgmt.MgmtSvc/GetAttachInfo", true},
-		{"/mgmt.MgmtSvc/BioHealthQuery", ComponentAdmin, "/mgmt.MgmtSvc/BioHealthQuery", true},
-		{"/mgmt.MgmtSvc/SmdListDevs", ComponentAdmin, "/mgmt.MgmtSvc/SmdListDevs", true},
-		{"/mgmt.MgmtSvc/SmdListPools", ComponentAdmin, "/mgmt.MgmtSvc/SmdListPools", true},
-		{"/mgmt.MgmtSvc/KillRank", ComponentAdmin, "/mgmt.MgmtSvc/KillRank", true},
-		{"/mgmt.MgmtSvc/ListPools", ComponentAdmin, "/mgmt.MgmtSvc/ListPools", true},
-		{"WrongComponent", ComponentAdmin, "/mgmt.MgmtSvc/Join", false},
+		{"StoragePrepare", ComponentAdmin, "/ctl.MgmtCtl/StoragePrepare"},
+		{"StorageScan", ComponentAdmin, "/ctl.MgmtCtl/StorageScan"},
+		{"SystemMemberQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemMemberQuery"},
+		{"SystemStop", ComponentAdmin, "/ctl.MgmtCtl/SystemStop"},
+		{"NetworkListProviders", ComponentAdmin, "/ctl.MgmtCtl/NetworkListProviders"},
+		{"StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat"},
+		{"NetworkScanDevices", ComponentAdmin, "/ctl.MgmtCtl/NetworkScanDevices"},
+		{"Join", ComponentServer, "/mgmt.MgmtSvc/Join"},
+		{"PoolCreate", ComponentAdmin, "/mgmt.MgmtSvc/PoolCreate"},
+		{"PoolDestroy", ComponentAdmin, "/mgmt.MgmtSvc/PoolDestroy"},
+		{"PoolGetACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolGetACL"},
+		{"PoolOverwriteACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolOverwriteACL"},
+		{"GetAttachInfo", ComponentAgent, "/mgmt.MgmtSvc/GetAttachInfo"},
+		{"BioHealthQuery", ComponentAdmin, "/mgmt.MgmtSvc/BioHealthQuery"},
+		{"SmdListDevs", ComponentAdmin, "/mgmt.MgmtSvc/SmdListDevs"},
+		{"SmdListPools", ComponentAdmin, "/mgmt.MgmtSvc/SmdListPools"},
+		{"KillRank", ComponentAdmin, "/mgmt.MgmtSvc/KillRank"},
+		{"ListPools", ComponentAdmin, "/mgmt.MgmtSvc/ListPools"},
 	}
 
-	if len(testCases) != (len(methodAuthorizations) + negativeCases) {
+	if len(testCases) != len(methodAuthorizations) {
 		t.Errorf("component access tests is missing a case for a newly added method")
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testname, func(t *testing.T) {
-			result := tc.comp.HasAccess(tc.method)
-			if result != tc.expected {
-				t.Errorf("result %t; expected %t", result, tc.expected)
+			for _, comp := range allComponents {
+				if comp == tc.correctComponent {
+					common.AssertTrue(t, comp.HasAccess(tc.method), fmt.Sprintf("%s should have access to %s but does not", comp, tc.method))
+				} else {
+					common.AssertFalse(t, comp.HasAccess(tc.method), fmt.Sprintf("%s should not have access to %s but does", comp, tc.method))
+				}
 			}
 		})
 	}
