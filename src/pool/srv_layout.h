@@ -57,16 +57,17 @@ extern d_iov_t ds_pool_prop_uid;		/* uint32_t */
 extern d_iov_t ds_pool_prop_gid;		/* uint32_t */
 extern d_iov_t ds_pool_prop_mode;		/* uint32_t */
 extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
-extern d_iov_t ds_pool_prop_map_buffer;	/* pool_buf */
-extern d_iov_t ds_pool_prop_map_uuids;	/* uuid_t[] (unused now) */
+extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
+extern d_iov_t ds_pool_prop_map_uuids;		/* uuid_t[] (unused now) */
 extern d_iov_t ds_pool_prop_label;		/* string */
 extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
-extern d_iov_t ds_pool_prop_space_rb;	/* uint64_t */
-extern d_iov_t ds_pool_prop_self_heal;	/* uint64_t */
-extern d_iov_t ds_pool_prop_reclaim;		/*  uint64_t */
+extern d_iov_t ds_pool_prop_space_rb;		/* uint64_t */
+extern d_iov_t ds_pool_prop_self_heal;		/* uint64_t */
+extern d_iov_t ds_pool_prop_reclaim;		/* uint64_t */
 extern d_iov_t ds_pool_prop_owner;		/* string */
 extern d_iov_t ds_pool_prop_owner_group;	/* string */
-extern d_iov_t ds_pool_prop_nhandles;	/* uint32_t */
+extern d_iov_t ds_pool_prop_accept_connections;	/* uint32_t */
+extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 
 /** pool handle KVS */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */

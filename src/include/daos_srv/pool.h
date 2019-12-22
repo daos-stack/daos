@@ -203,4 +203,7 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);
 
+int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			    uint32_t force);
+
 #endif /* __DAOS_SRV_POOL_H__ */

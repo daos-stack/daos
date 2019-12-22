@@ -464,6 +464,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
+	uint32_t		accept_connections;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
 	d_iov_t		value;
@@ -553,6 +554,13 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop);
+	if (rc != 0)
+		D_GOTO(out_uuids, rc);
+
+	/* Write accept_connections property */
+	accept_connections = 1;
+	d_iov_set(&value, &accept_connections, sizeof(accept_connections));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_accept_connections, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
 
@@ -1769,6 +1777,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
+	uint32_t			accept_connections;
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -1802,6 +1811,19 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_svc, rc);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
+
+	/* Check if pool is being destroyed and not accepting connections */
+	d_iov_set(&value, &accept_connections, sizeof(accept_connections));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root,
+			   &ds_pool_prop_accept_connections, &value);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	D_DEBUG(DF_DSMS, "pool "DF_UUID": accept_connections=%u\n",
+		DP_UUID(in->pci_op.pi_uuid), accept_connections);
+	if (accept_connections == 0) {
+		D_ERROR("pool being destroyed, not accepting connections\n");
+		D_GOTO(out_lock, rc = -DER_BUSY);
+	}
 
 	/* Check existing pool handles. */
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
@@ -3583,9 +3605,35 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	if (n_hdl_uuids > 0)
-		rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
-					  rpc->cr_ctx);
+	if (n_hdl_uuids > 0) {
+		/* If pool destroy but not forcibly, error: the pool is busy */
+
+		if ((in->pvi_pool_destroy) &&
+		    (in->pvi_pool_destroy_force == 0)) {
+			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
+				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
+			D_GOTO(out_lock, rc = -DER_BUSY);
+		} else {
+			/* Pool evict, or pool destroy with force=true */
+			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
+						  n_hdl_uuids, rpc->cr_ctx);
+		}
+	}
+
+	/* If pool destroy and not error case, disable new connections */
+	if (in->pvi_pool_destroy) {
+		uint32_t	accept_connections = 0;
+		d_iov_t		value;
+
+		d_iov_set(&value, &accept_connections,
+			  sizeof(accept_connections));
+		rc = rdb_tx_update(&tx, &svc->ps_root,
+				&ds_pool_prop_accept_connections, &value);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
+			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
+	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
@@ -3601,6 +3649,82 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc during pool destroy to test and
+ * (if applicable based on force option) evict all open handles on a pool.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	force		If true request all handles be forcibly evicted
+ *
+ * \return	0		Success
+ *		-DER_BUSY	Open pool handles exist and no force requested
+ *
+ */
+int
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+{
+	int			 rc;
+	struct rsvc_client	 client;
+	crt_endpoint_t		 ep;
+	struct dss_module_info	*info = dss_get_module_info();
+	crt_rpc_t		*rpc;
+	struct pool_evict_in	*in;
+	struct pool_evict_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
+		DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pvi_op.pi_hdl);
+
+	/* Pool destroy (force=false): assert no open handles / do not evict.
+	 * Pool destroy (force=true): evict any/all open handles on the pool.
+	 */
+	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy_force = force;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pvo_op.po_rc,
+				      &out->pvo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pvo_op.po_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
+			"rc: %d\n", DP_UUID(pool_uuid), rc);
+
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
 }
 
 /* This RPC could be implemented by ds_rsvc. */
