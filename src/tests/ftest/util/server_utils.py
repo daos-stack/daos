@@ -662,6 +662,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_cmd = [orterun_bin, "--np", str(server_count)]
         server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
         server_cmd.extend(["--mca", "btl", "tcp,self"])
+        server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
 
