@@ -48,7 +48,7 @@ class IorInterceptDfuseMix(IorTestBase):
             "test_clients", "/run/hosts/*")
         self.lock = threading.Lock()
 
-    def test_ior_intercept_dfuse_mix(self):
+    def test_ior_intercept_verify_data_integrity(self):
         """Jira ID: DAOS-3502.
 
         Test Description:
