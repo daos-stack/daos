@@ -41,14 +41,14 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
 
     def setUp(self):
         """Set up each test case."""
-        super(IorInterceptDfuseMix, self).setUp()
+        super(IorInterceptVerifyDataIntegrity, self).setUp()
         # Following line can be removed once the constraint in the
         # IorTestBase is resolved. #DAOS-3320
         self.hostlist_clients = self.params.get(
             "test_clients", "/run/hosts/*")
         self.lock = threading.Lock()
 
-    def test_ior_intercept_verify_data_integrity(self):
+    def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.
 
         Test Description:
