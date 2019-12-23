@@ -30,9 +30,9 @@ from ior_utils import IorCommand
 from command_utils import CommandFailure
 
 
-class IorInterceptDfuseMix(IorTestBase):
+class IorInterceptVerifyDataIntegrity(IorTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Runs IOR with mix of dfuse and 
+    """Test class Description: Runs IOR with mix of dfuse and
        interception library on a single server and multi client
        settings with basic parameters.
 
@@ -42,7 +42,7 @@ class IorInterceptDfuseMix(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super(IorInterceptDfuseMix, self).setUp()
-        # Following line can be removed once the constraint in the 
+        # Following line can be removed once the constraint in the
         # IorTestBase is resolved. #DAOS-3320
         self.hostlist_clients = self.params.get(
             "test_clients", "/run/hosts/*")
@@ -69,7 +69,6 @@ class IorInterceptDfuseMix(IorTestBase):
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()
         self.run_multiple_ior_with_pool(with_intercept, intercept)
-        self.log_metrics(with_intercept)
 
         IorCommand.log_metrics(self.log, "5 clients - with " +
                                "interception library", with_intercept[1])
