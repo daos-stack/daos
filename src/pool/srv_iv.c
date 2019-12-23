@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,6 +203,9 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 			&src_iv->piv_map.piv_pool_buf : NULL,
 			src_iv->piv_pool_map_ver);
+	else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
+
 	ds_pool_put(pool);
 
 	return pool_iv_ent_copy(entry->iv_class->iv_class_id,
@@ -214,7 +217,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	struct pool_iv_entry	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
-	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
+	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool;
 	int			rc;
 
@@ -228,9 +231,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	if (entry->iv_class->iv_class_id == IV_POOL_PROP)
-		return rc;
-
+	D_ASSERTF(src_iv != NULL, "%d\n", entry->iv_class->iv_class_id);
 	/* Update pool map version or pool map */
 	pool = ds_pool_lookup(src_iv->piv_pool_uuid);
 	if (pool == NULL) {
@@ -238,10 +239,13 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		return 0;
 	}
 
-	rc = ds_pool_tgt_map_update(pool,
-		src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
-		&src_iv->piv_map.piv_pool_buf : NULL,
-		src_iv->piv_pool_map_ver);
+	if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
+	else
+		rc = ds_pool_tgt_map_update(pool,
+				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
+				&src_iv->piv_map.piv_pool_buf : NULL,
+				src_iv->piv_pool_map_ver);
 	ds_pool_put(pool);
 
 	return rc;

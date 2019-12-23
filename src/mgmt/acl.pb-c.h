@@ -41,10 +41,18 @@ struct  _Mgmt__ACLResp
    */
   size_t n_acl;
   char **acl;
+  /*
+   * Name of user that owns the resource
+   */
+  char *owneruser;
+  /*
+   * Name of group that owns the resource
+   */
+  char *ownergroup;
 };
 #define MGMT__ACLRESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__aclresp__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*

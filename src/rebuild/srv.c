@@ -569,14 +569,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			D_FREE(targets);
 		}
 
-		if (!is_rebuild_global_pull_done(rgt) &&
-		    is_rebuild_global_scan_done(rgt)) {
+		if ((!is_rebuild_global_pull_done(rgt) &&
+		     is_rebuild_global_scan_done(rgt)) ||
+		     !rgt->rgt_notify_stable_epoch) {
 			struct rebuild_iv iv;
 
+			D_ASSERT(rgt->rgt_stable_epoch != 0);
 			memset(&iv, 0, sizeof(iv));
 			uuid_copy(iv.riv_pool_uuid, rgt->rgt_pool_uuid);
 			iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
-			iv.riv_global_scan_done = 1;
+			iv.riv_global_scan_done =
+					is_rebuild_global_scan_done(rgt);
+			iv.riv_stable_epoch = rgt->rgt_stable_epoch;
 			iv.riv_ver = rgt->rgt_rebuild_ver;
 			iv.riv_leader_term = rgt->rgt_leader_term;
 
@@ -586,9 +590,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			rc = rebuild_iv_update(pool->sp_iv_ns,
 					       &iv, CRT_IV_SHORTCUT_NONE,
 					       CRT_IV_SYNC_LAZY);
-			if (rc)
+			if (rc) {
 				D_WARN("rebuild master iv update failed: %d\n",
 				       rc);
+			} else {
+				/* Each server uses IV to notify the leader
+				 * its rebuild stable epoch, then the leader
+				 * will choose the largest epoch as the global
+				 * stable epoch to rebuild.
+				 */
+				rgt->rgt_notify_stable_epoch = 1;
+			}
 		}
 
 		/* query the current rebuild status */
@@ -608,8 +620,8 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			(d_timeus_secdiff(0) - rgt->rgt_time_start) / 1e6;
 		snprintf(sbuf, RBLD_SBUF_LEN,
 			"Rebuild [%s] (pool "DF_UUID" ver=%u, toberb_obj="
-			DF_U64", rb_obj="DF_U64", rec= "DF_U64", size= "DF_U64
-			"done %d status %d/%d duration=%d secs)\n",
+			DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
+			" done %d status %d/%d duration=%d secs)\n",
 			str, DP_UUID(pool->sp_uuid), map_ver,
 			rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
 			rs->rs_size, rs->rs_done, rs->rs_errno,
@@ -627,6 +639,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			last_print = now;
 			D_PRINT("%s", sbuf);
 		}
+
 		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
 	}
 
@@ -868,6 +881,7 @@ retry:
 		}
 	}
 
+	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 	rc = rso->rso_status;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start pool rebuild: %d\n",
@@ -1442,6 +1456,7 @@ rebuild_fini_one(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 	struct rebuild_pool_tls		*pool_tls;
+	struct ds_pool_child		*dpc;
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
 					   rpt->rt_rebuild_ver);
@@ -1461,6 +1476,26 @@ rebuild_fini_one(void *arg)
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	ds_cont_local_close(rpt->rt_coh_uuid);
+
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	D_ASSERT(dpc != NULL);
+
+	/* Reset rebuild epoch, then reset the aggregation epoch, so
+	 * it can aggregate the rebuild epoch.
+	 */
+	D_ASSERT(rpt->rt_rebuild_fence != 0);
+	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
+		dpc->spc_rebuild_fence = 0;
+		dpc->spc_rebuild_end_hlc = crt_hlc_get();
+		D_DEBUG(DB_REBUILD, DF_UUID": Reset aggregation end hlc "
+			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
+			dpc->spc_rebuild_end_hlc);
+	} else {
+		D_DEBUG(DB_REBUILD, DF_UUID": pool is still being rebuilt"
+			" rt_rebuild_fence "DF_U64" spc_rebuild_fence "
+			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
+			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
+	}
 
 	return 0;
 }
@@ -1685,6 +1720,7 @@ rebuild_prepare_one(void *data)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = data;
 	struct rebuild_pool_tls		*pool_tls;
+	struct ds_pool_child		*dpc;
 	int				 rc = 0;
 
 	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
@@ -1693,6 +1729,9 @@ rebuild_prepare_one(void *data)
 	if (pool_tls == NULL)
 		return -DER_NOMEM;
 
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	D_ASSERT(dpc != NULL);
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	/* Create ds_container locally on main XS */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
@@ -1700,8 +1739,14 @@ rebuild_prepare_one(void *data)
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID" rc %d\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_UUID(rpt->rt_coh_uuid), rc);
+	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
+	 * cross the epoch to cause problem.
+	 */
+	D_ASSERT(rpt->rt_rebuild_fence != 0);
+	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
+	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID
+		" rebuild eph "DF_U64" rc %d\n", DP_UUID(rpt->rt_pool_uuid),
+		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, rc);
 	return rc;
 }
 
@@ -1799,15 +1844,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	d_iov_t			iov = { 0 };
-	d_sg_list_t			sgl;
 	int				rc;
-
-	/* lookup create the ds_pool first */
-	if (rpc->cr_co_bulk_hdl == NULL) {
-		D_ERROR("No pool map in scan rpc\n");
-		return -DER_INVAL;
-	}
 
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d/%d\n",
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
@@ -1819,19 +1856,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		return -DER_NONEXIST;
 	}
 
-	/* update the pool map */
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Then check sp_group */
 	if (pool->sp_group == NULL) {
 		char id[DAOS_UUID_STR_SIZE];
 
@@ -1842,6 +1866,22 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 				DP_UUID(pool->sp_uuid));
 			D_GOTO(out, rc = -DER_INVAL);
 		}
+	}
+
+	if (pool->sp_iv_ns) {
+		uuid_t	cont_uuid;
+
+		uuid_clear(cont_uuid);
+		/* Let's invalidate local snapshot cache before
+		 * rebuild, so to make sure rebuild will use the updated
+		 * snapshot during rebuild fetch, otherwise it may cause
+		 * corruption.
+		 */
+		rc = cont_iv_snapshot_invalidate(pool->sp_iv_ns, cont_uuid,
+						 CRT_IV_SHORTCUT_NONE,
+						 CRT_IV_SYNC_NONE);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 	/* Create rpt for the target */
@@ -1863,8 +1903,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 					   rpt->rt_rebuild_ver);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	rpt->rt_rebuild_fence = crt_hlc_get();
 	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
+		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}
@@ -1889,8 +1932,7 @@ out:
 
 static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
 	.co_aggregate	= rebuild_tgt_scan_aggregator,
-	.co_pre_forward	= NULL,
-	.co_post_reply	= rebuild_tgt_scan_post_reply,
+	.co_pre_forward	= rebuild_tgt_scan_pre_forward,
 };
 
 /* Define for cont_rpcs[] array population below.
