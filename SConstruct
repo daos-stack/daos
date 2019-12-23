@@ -17,7 +17,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wframe-larger-than=4096']
 
-# Compiler flags to prevent optimizing out security checks 
+# Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
                       '-fwrapv'])
 
@@ -88,6 +88,11 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+
+    compiler = env.subst("$COMPILER")
+    if compiler == "clang":
+        env.Append(CCFLAGS=['-Wno-unused-command-line-agument'])
+
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
