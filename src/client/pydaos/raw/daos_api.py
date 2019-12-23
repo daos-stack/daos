@@ -1429,17 +1429,25 @@ class DaosContainer(object):
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop), None)
-            if ret != 0:
-                self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise DaosApiError(
-                    "Container create returned non-zero. RC: {0}".format(ret))
+            if self.cont_prop is None:
+                ret = func(self.poh, self.uuid, None, None)
             else:
-                self.attached = 1
+                ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                           None)
+                if ret != 0:
+                    self.uuid = (ctypes.c_ubyte * 1)(0)
+                    raise DaosApiError(
+                        "Container create returned non-zero. RC: {0}".format(
+                            ret))
+                else:
+                    self.attached = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, ctypes.byref(self.cont_prop), None,
-                      event]
+            if self.cont_prop is None:
+                params = [self.poh, self.uuid, None, None, event]
+            else:
+                params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                          None, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
