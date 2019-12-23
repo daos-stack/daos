@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__    import print_function
-from mpio_base import LlnlMpi4pyHdf5
+from mpio_test_base import LlnlMpi4pyHdf5
 
 
 # pylint: disable=too-many-ancestors
