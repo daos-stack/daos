@@ -206,10 +206,4 @@ dtx_hlc_age2sec(uint64_t hlc)
 	return (crt_hlc_get() - hlc) / NSEC_PER_SEC;
 }
 
-static inline bool
-dtx_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
-}
-
 #endif /* __DAOS_DTX_SRV_H__ */
