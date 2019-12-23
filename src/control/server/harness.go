@@ -47,8 +47,8 @@ type IOServerHarness struct {
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:       log,
-		instances: make([]*IOServerInstance, 0, 2),
-		errChan:   make(chan error, 2),
+		instances: make([]*IOServerInstance, 0, maxIoServers),
+		errChan:   make(chan error, maxIoServers),
 	}
 }
 
