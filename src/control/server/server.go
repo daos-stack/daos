@@ -231,5 +231,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return nil
 	}
 
-	return errors.Wrap(harness.Start(ctx, membership), "DAOS I/O Server exited with error")
+	return errors.Wrap(harness.Start(ctx, membership), "DAOS I/O Server harness exited with error")
 }
