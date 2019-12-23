@@ -301,7 +301,8 @@ class Logfac:
     ERROR = 3
 
 class CheckSumFlag:
+    """Checksum Flags: Few checksum enums are exported.
+    """
     CSUM_ENABLE = 4100
     CSUM_CHUNK_SIZE = 4101
     CSUM_SRV_VERIFY = 4102
-
