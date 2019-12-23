@@ -1292,8 +1292,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE);
-
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -1336,14 +1334,6 @@ out:
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, cont, rc);
 	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			orw->orw_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
-
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}
@@ -1842,25 +1832,6 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (rc)
 		goto out;
 
-	if (opi->opi_dkeys.ca_count == 0)
-		D_DEBUG(DB_TRACE,
-			"punch obj %p oid "DF_UOID" tag/xs %d/%d epc "
-			DF_U64", pmv %u/%u dti "DF_DTI".\n",
-			rpc, DP_UOID(opi->opi_oid),
-			dss_get_module_info()->dmi_tgt_id,
-			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
-			opi->opi_map_ver, map_version, DP_DTI(&opi->opi_dti));
-	else
-		D_DEBUG(DB_TRACE,
-			"punch key %p oid "DF_UOID" dkey "
-			DF_KEY" tag/xs %d/%d epc "
-			DF_U64", pmv %u/%u dti "DF_DTI".\n",
-			rpc, DP_UOID(opi->opi_oid),
-			DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
-			dss_get_module_info()->dmi_tgt_id,
-			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
-			opi->opi_map_ver, map_version, DP_DTI(&opi->opi_dti));
-
 	/* FIXME: until distributed transaction. */
 	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
 		opi->opi_epoch = crt_hlc_get();
@@ -1903,7 +1874,6 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		goto cleanup;
 	}
 
-renew:
 	/*
 	 * Since we do not know if other replicas execute the
 	 * operation, so even the operation has been execute
@@ -1944,14 +1914,6 @@ out:
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, cont, rc);
 	if (rc == -DER_AGAIN) {
-		if (dlh.dlh_handle.dth_renew) {
-			/* epoch conflict, renew it and retry. */
-			opi->opi_epoch = crt_hlc_get();
-			flags &= ~ORF_RESEND;
-			memset(&dlh, 0, sizeof(dlh));
-			D_GOTO(renew, rc);
-		}
-
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}

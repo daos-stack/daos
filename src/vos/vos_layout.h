@@ -365,11 +365,6 @@ struct vos_irec_df {
 	umem_off_t			ir_dtx;
 	/** length of value */
 	uint64_t			ir_size;
-	/**
-	 * global length of value, it is needed for single value of EC object
-	 * class that the data will be distributed to multiple data cells.
-	 */
-	uint64_t			ir_gsize;
 	/** external payload address */
 	bio_addr_t			ir_ex_addr;
 	/** placeholder for the key checksum & internal value */
