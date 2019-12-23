@@ -298,6 +298,8 @@ def scons():
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
+                ['scons_local/env_modules.py'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
