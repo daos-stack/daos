@@ -213,6 +213,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
 
+	if err := srv.logScmStorage(); err != nil {
+		srv.log.Errorf("unable to log SCM storage stats: %s", err)
+	}
+
 	return srv.runner.Start(ctx, errChan)
 }
 
