@@ -6,7 +6,7 @@ hosts:
         - client-B
         - client-C
         - client-D
-timeout: 4800
+timeout: 7200
 server_config:
     name: daos_server
     servers:
@@ -57,11 +57,6 @@ ior:
               block_size: '64M'
               write_x: 2
               read_x: 1
-            128K:
-              transfer_size: '128K'
-              block_size: '256M'
-              write_x: 3
-              read_x: 2
             1M:
               transfer_size: '1M'
               block_size: '4G'
