@@ -305,6 +305,7 @@ class PoolSecurityTest(TestWithServers):
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.request.value = "pool"
         dmg.action.value = "destroy --pool={}".format(uuid)
+        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
         result = dmg.run()
         return
 
