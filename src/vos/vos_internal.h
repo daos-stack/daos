@@ -570,8 +570,6 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
-	/** global record size, needed for EC singv record */
-	daos_size_t		 rb_gsize;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */

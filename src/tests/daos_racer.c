@@ -452,7 +452,6 @@ main(int argc, char **argv)
 			rc = uuid_parse(optarg, ts_ctx.tsc_cont_uuid);
 			if (rc)
 				return rc;
-			break;
 		case 't':
 			duration = strtoul(optarg, &endp, 0);
 			break;
@@ -465,17 +464,17 @@ main(int argc, char **argv)
 	}
 	srand(seed);
 
+	if (ts_ctx.tsc_mpi_rank == 0 && uuid_is_null(ts_ctx.tsc_pool_uuid))
+		uuid_generate(ts_ctx.tsc_pool_uuid);
+	if (ts_ctx.tsc_mpi_rank == 0 && uuid_is_null(ts_ctx.tsc_cont_uuid))
+		uuid_generate(ts_ctx.tsc_cont_uuid);
+
 	ts_ctx.tsc_svc.rl_nr = 1;
 	ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
-		if (uuid_is_null(ts_ctx.tsc_pool_uuid))
-			uuid_generate(ts_ctx.tsc_pool_uuid);
-		if (uuid_is_null(ts_ctx.tsc_cont_uuid))
-			uuid_generate(ts_ctx.tsc_cont_uuid);
-
 		fprintf(stdout,
 			"racer start with %d threads duration %u secs\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n",
