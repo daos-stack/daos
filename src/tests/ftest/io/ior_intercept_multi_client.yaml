@@ -37,7 +37,7 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-e -v -D 120 -w -r"
+          flags: "-e -v -D 300 -w -r"
           ior_api:
             posix:
               api: POSIX
