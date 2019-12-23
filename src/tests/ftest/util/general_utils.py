@@ -30,12 +30,35 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
+from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+def run_cmd(cmd, verbose=False, sudo=False):
+    """Launch a shell command on the local host.
+
+    Args:
+        cmd (str): Command to be executed
+        verbose (bool): Show command output to stdout
+        sudo (bool): Run the command under sudo
+
+    Returns:
+        CmdResult: Avocado command object.
+
+    """
+    kwargs = {
+        "cmd": cmd,
+        "allow_output_check": "combined",
+        "verbose": False,
+        "sudo": False,
+        "shell": True,
+    }
+    return process.run(**kwargs)
 
 
 def run_task(hosts, command, timeout=None):

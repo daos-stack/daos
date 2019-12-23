@@ -27,8 +27,9 @@ import os
 import re
 
 from dmg_utils import DmgCommand
-from apricot import TestWithServers
+from general_utils import run_cmd
 from avocado.utils import process
+from apricot import TestWithServers
 
 
 class DmgNetworkScanTest(TestWithServers):
@@ -47,14 +48,8 @@ class DmgNetworkScanTest(TestWithServers):
         """Get expected values of domain with fi_info."""
         fi_info = os.path.join(
             self.bin, "fi_info -p {} | grep domain | sort -u".format(provider))
-        kwargs = {
-            "cmd": fi_info,
-            "allow_output_check": "combined",
-            "verbose": False,
-            "shell": True,
-        }
         try:
-            output = process.run(**kwargs)
+            output = run_cmd(fi_info)
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(fi_info, error)
@@ -69,14 +64,8 @@ class DmgNetworkScanTest(TestWithServers):
     def get_numa_info(self):
         """Get expected values of numa nodes with lstopo."""
         lstopo = os.path.join(self.bin, "lstopo")
-        kwargs = {
-            "cmd": lstopo,
-            "allow_output_check": "combined",
-            "verbose": False,
-            "shell": True,
-        }
         try:
-            output = process.run(**kwargs)
+            output = run_cmd(lstopo)
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(lstopo, error)
@@ -102,14 +91,8 @@ class DmgNetworkScanTest(TestWithServers):
         """Get expected values of provider with fi_info."""
         fi_info = os.path.join(
             self.bin, "fi_info -d {} | grep provider | sort -u".format(device))
-        kwargs = {
-            "cmd": fi_info,
-            "allow_output_check": "combined",
-            "verbose": False,
-            "shell": True,
-        }
         try:
-            output = process.run(**kwargs)
+            output = process.run(fi_info)
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(fi_info, error)
@@ -159,12 +142,16 @@ class DmgNetworkScanTest(TestWithServers):
         exp_devs = self.get_net_info("sockets") + self.get_net_info("psm2")
         t_hfi = {"hfi1_0": "ib0", "hfi1_1": "ib1"}
         for numa, devs in self.get_numa_info().items():
+            # If numa node has net devices, check which devices are expected
             if devs:
                 n_devs = [dev for dev in devs if dev in exp_devs]
+                # lo device will always be on numa node 0
                 if numa == 0:
                     n_devs.append("lo")
                 numa = [numa] * len(n_devs)
                 dev_prov = {dev: self.get_dev_provider(dev) for dev in n_devs}
+                # Unpack expected numa node, devices, providers into a string
+                # similar to dmg
                 for n, d, p in zip(numa, dev_prov.keys(), dev_prov.values()):
                     if d in t_hfi:
                         d = t_hfi[d]
