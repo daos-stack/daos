@@ -68,6 +68,11 @@ func TestMergeEnvVars(t *testing.T) {
 			mergeVars: []string{"C=D"},
 			wantVars:  []string{"A=B", "C=D"},
 		},
+		"complex value": {
+			baseVars:  []string{"SIMPLE=OK"},
+			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
+			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
+		},
 		"append no base": {
 			baseVars:  []string{},
 			mergeVars: []string{"C=D"},
@@ -81,7 +86,7 @@ func TestMergeEnvVars(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(gotVars, tc.wantVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
