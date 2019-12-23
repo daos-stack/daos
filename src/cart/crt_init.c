@@ -46,6 +46,24 @@ struct crt_gdata crt_gdata;
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
+static void
+dump_envariables(void)
+{
+	int	i;
+	char	*val;
+	char	*envars[] = {"CRT_PHY_ADDR_STR", "D_LOG_FILE",
+		"D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
+		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
+		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
+		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG"};
+
+	D_DEBUG(DB_ALL, "-- ENVARS: --\n");
+	for (i = 0; i < ARRAY_SIZE(envars); i++) {
+		val = getenv(envars[i]);
+		D_DEBUG(DB_ALL, "%s = %s\n", envars[i], val);
+	}
+}
+
 /* first step init - for initializing crt_gdata */
 static int data_init(crt_init_options_t *opt)
 {
@@ -56,6 +74,8 @@ static int data_init(crt_init_options_t *opt)
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
+
+	dump_envariables();
 
 	/*
 	 * avoid size mis-matching between client/server side
