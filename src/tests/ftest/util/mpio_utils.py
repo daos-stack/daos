@@ -67,8 +67,6 @@ class MpioUtils():
         """
 
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = "{}/install/tmp/".format(basepath)
-        env["DAOS_SINGLETON_CLI"] = 1
         env["D_LOG_FILE"] = os.environ.get("D_LOG_FILE", "")
         env["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
 
@@ -110,7 +108,6 @@ class MpioUtils():
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = "{}/install/tmp/".format(basepath)
         env["MPIO_USER_PATH"] = "daos:"
         env["DAOS_POOL"] = "{}".format(pool_uuid)
         env["DAOS_SVCL"] = "{}".format(0)
