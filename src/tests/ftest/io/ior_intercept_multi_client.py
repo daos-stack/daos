@@ -58,15 +58,15 @@ class IorInterceptMultiClient(IorTestBase):
 
         Test Description:
             Purpose of this test is to run ior through dfuse in multiple
-            clients for 3 minutes and capture the metrics and use the
+            clients for 5 minutes and capture the metrics and use the
             intercepiton library by exporting LD_PRELOAD to the libioil.so
             path and rerun the above ior and capture the metrics and
             compare the performance difference and check using interception
             library make significant performance improvement.
 
         Use case:
-            Run ior with read, write for 3 minutes
-            Run ior with read, write for 3 minutes with interception library
+            Run ior with read, write for 5 minutes
+            Run ior with read, write for 5 minutes with interception library
             Compare the results and check whether using interception
                 library provides better performance.
 

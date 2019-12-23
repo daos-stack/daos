@@ -6,7 +6,7 @@ hosts:
         - client-B
         - client-C
         - client-D
-timeout: 7200
+timeout: 8000
 server_config:
     name: daos_server
     servers:
@@ -22,15 +22,14 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 300 G
+        # 320 G
         scm_size: 30000000000
         nvme_size: 320000000000
     createsvc:
         svcn: 1
 ior:
     client_processes:
-        np_16:
-            np: 32
+      np: 32
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
@@ -38,9 +37,8 @@ ior:
     iorflags:
         ssf:
           flags: "-e -v -D 300 -w -r"
-          ior_api:
-            posix:
-              api: POSIX
+          api: POSIX
+          daos_oclass: "SX"
           transfersize_blocksize: !mux
             512B:
               transfer_size: '512B'
@@ -59,11 +57,8 @@ ior:
               read_x: 1
             1M:
               transfer_size: '1M'
-              block_size: '4G'
+              block_size: '8G'
               write_x: 2
               read_x: 1
-          objectclass:
-            oclass_SX:
-              daos_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
