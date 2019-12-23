@@ -40,11 +40,7 @@ class IorInterceptMultiClient(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super(IorInterceptMultiClient, self).setUp()
-        # Running ior on multi client for transfer size under 4K has issues
-        # The IorTestBase filters the test clients and uses only 1 client
-        # for all the test variants. Since this test is going to run
-        # both under and over 4K, removing that constraint and allowing all the
-        # clients to run ior. This set up can be removed once the constraint
+        # This set up can be removed once the constraint
         # in IorTestBase is removed. # DAOS-3320
         if self.ior_cmd.api.value == "POSIX":
             self.hostlist_clients = self.params.get(
