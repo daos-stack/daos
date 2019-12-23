@@ -29,8 +29,7 @@ pool:
         svcn: 1
 ior:
     client_processes:
-        np_32:
-            np: 32
+      np: 32
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
@@ -38,17 +37,11 @@ ior:
     iorflags:
         ssf:
           flags: "-k -D 300 -v -w -r"
-          ior_api:
-            posix:
-              api: POSIX
-          transfersize_blocksize: !mux
-            4K:
-              transfer_size: '4K'
-              block_size: '128M'
-              write_x: 3
-              read_x: 1
-          objectclass:
-            oclass_SX:
-              daos_oclass: "SX"
+          api: POSIX
+          transfer_size: '4K'
+          block_size: '128M'
+          write_x: 3
+          read_x: 1
+          daos_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
