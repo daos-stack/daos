@@ -1,23 +1,20 @@
 hosts:
     test_servers:
-        - wolf-70
-#        - server-A
+        - server-A
     test_clients:
-        - wolf-14
-        - wolf-15
-        - wolf-37
-        - wolf-70
-#        - client-A
+        - client-A
+        - client-B
+        - client-C
+        - client-D
 timeout: 4800
 server_config:
     name: daos_server
     servers:
         bdev_class: nvme
-#        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        bdev_list: ["0000:05:00.0"]
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
         scm_size: 15
-#        scm_class: dcpm
-#        scm_list: ["/dev/pmem0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -32,15 +29,15 @@ pool:
         svcn: 1
 ior:
     client_processes:
-        np_16:
-            np: 24
+        np_32:
+            np: 32
     test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-k -D 120 -v -w -r"
+          flags: "-k -D 300 -v -w -r"
           ior_api:
             posix:
               api: POSIX
