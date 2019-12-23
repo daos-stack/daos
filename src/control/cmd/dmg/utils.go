@@ -137,8 +137,8 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	return
 }
 
-// formatHostGroupResults adds group title header per group results.
-func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	for _, res := range groups.Keys() {
 		hostset := groups[res].RangedString()
 		lineBreak := strings.Repeat("-", len(hostset))
@@ -148,20 +148,24 @@ func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) strin
 	return buf.String()
 }
 
-// groupSummaryTable is a helper function that prints hostgroups with 2 column entries
-func groupSummaryTable(firstTitle, secondTitle, thirdTitle string, groups hostlist.HostGroups) (string, error) {
-	formatter := NewTableFormatter([]string{firstTitle, secondTitle, thirdTitle})
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groupTitle string, columnTitles []string, groups hostlist.HostGroups) (string, error) {
+	titles := []string{groupTitle}
+	titles = append(titles, columnTitles...)
+
+	formatter := NewTableFormatter(titles)
 	var table []TableRow
 
 	for _, result := range groups.Keys() {
-		row := TableRow{firstTitle: groups[result].RangedString()}
+		row := TableRow{groupTitle: groups[result].RangedString()}
 
 		summary := strings.Split(result, rowFieldSep)
-		if len(summary) != 2 {
+		if len(summary) != len(columnTitles) {
 			return "", errors.New("unexpected summary format")
 		}
-		row[secondTitle] = summary[0]
-		row[thirdTitle] = summary[1]
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
 
 		table = append(table, row)
 	}

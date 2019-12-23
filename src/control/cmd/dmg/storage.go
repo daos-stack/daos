@@ -122,10 +122,10 @@ func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error
 		if len(groups) == 0 {
 			return "no hosts found", nil
 		}
-		return groupSummaryTable("Hosts", "SCM Total", "NVMe Total", groups)
+		return tabulateHostGroups("Hosts", []string{"SCM Total", "NVMe Total"}, groups)
 	}
 
-	formatHostGroupResults(out, groups)
+	formatHostGroups(out, groups)
 
 	return out.String(), nil
 }
@@ -234,7 +234,7 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 		fmt.Fprintf(out, "\n%s\n", groups)
 	}
 
-	return formatHostGroupResults(out, mixedGroups), nil
+	return formatHostGroups(out, mixedGroups), nil
 }
 
 // groupFormatResults collects identical output keyed on hostset from

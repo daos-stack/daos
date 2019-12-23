@@ -100,7 +100,7 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 		}
 	}
 
-	out, err := groupSummaryTable("Ranks", "Operation", "Result", groups)
+	out, err := tabulateHostGroups("Ranks", []string{"Operation", "Result"}, groups)
 	if err != nil {
 		return errors.Wrap(err, "printing result table")
 	}
