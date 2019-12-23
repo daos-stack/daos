@@ -37,20 +37,18 @@ import (
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex
-	log              logging.Logger
-	instances        []*IOServerInstance
-	started          bool
-	restartInstances chan struct{}
-	errChan          chan error
+	log       logging.Logger
+	instances []*IOServerInstance
+	started   bool
+	errChan   chan error
 }
 
 // NewHarness returns an initialized *IOServerHarness
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		log:              log,
-		instances:        make([]*IOServerInstance, 0, 2),
-		restartInstances: make(chan struct{}, 1),
-		errChan:          make(chan error, 2),
+		log:       log,
+		instances: make([]*IOServerInstance, 0, 2),
+		errChan:   make(chan error, 2),
 	}
 }
 
@@ -275,12 +273,6 @@ func (h *IOServerHarness) monitorInstances(ctx context.Context) error {
 				msg += ", all instances stopped!"
 			}
 			h.log.Info(msg)
-		case <-h.restartInstances: // trigger harness to restart instances
-			h.log.Debug("restart instances")
-			if h.HasStartedInstances() {
-				return errors.New("cannot restart when instances are running")
-			}
-			return nil
 		}
 	}
 
@@ -331,20 +323,6 @@ func (h *IOServerHarness) HasStartedInstances() bool {
 	}
 
 	return false
-}
-
-// RestartInstances will signal the harness to restart configured instances.
-func (h *IOServerHarness) RestartInstances() error {
-	if !h.IsStarted() {
-		return errors.New("can't start instances: harness not started")
-	}
-	if h.HasStartedInstances() {
-		return errors.New("can't start instances: already started")
-	}
-
-	h.restartInstances <- struct{}{} // trigger harness to restart its instances
-
-	return nil
 }
 
 // StartManagementService starts the DAOS management service on this node.
