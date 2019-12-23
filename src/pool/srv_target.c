@@ -928,6 +928,13 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				D_GOTO(out, rc);
 			}
 
+			rc = pool_map_update_failed_cnt(map);
+			if (rc != 0) {
+				D_ERROR(DF_UUID": failed fail-cnt update pl_map: %d\n",
+					DP_UUID(pool->sp_uuid), rc);
+				D_GOTO(out, rc);
+			}
+
 			pool->sp_map = map;
 			map = tmp;
 		}
@@ -958,6 +965,13 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = pool_map_update_failed_cnt(map);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed fail-cnt update pl_map: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
 			D_GOTO(out, rc);
 		}
