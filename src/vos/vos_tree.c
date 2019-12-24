@@ -668,8 +668,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, UMOFF_NULL, intent,
-					  DTX_RT_SVT);
+					  svt->ir_dtx, intent, DTX_RT_SVT);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -735,7 +734,7 @@ evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
 	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
-					  UMOFF_NULL, intent, DTX_RT_EVT);
+					  intent, DTX_RT_EVT);
 }
 
 int
