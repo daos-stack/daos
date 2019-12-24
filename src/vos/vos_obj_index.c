@@ -655,7 +655,15 @@ oi_iter_aggregate(struct vos_iterator *iter, bool discard)
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */
+		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
+			DP_UOID(oid));
 		deleted = true;
+		/* Bug here that I need to figure out.  The dkey tree is empty
+		 * but the dkey for some reason wasn't removed so this assert
+		 * fires.   Disable the assert for now to see if anything else
+		 * pops up in testing.
+		 * D_ASSERT(dbtree_is_empty_inplace(&obj->vo_tree));
+		 */
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	}

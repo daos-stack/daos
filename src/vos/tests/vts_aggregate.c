@@ -194,7 +194,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 		VOS_ITER_SINGLE : VOS_ITER_RECX;
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
-			 counting_cb, &nr);
+			 counting_cb, NULL, &nr);
 	assert_int_equal(rc, 0);
 
 	return nr;
@@ -1867,6 +1867,8 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
+	{ "VOS415: Aggregate many object/key punches",
+	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -1895,8 +1897,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
 	  aggregate_14, NULL, agg_tst_teardown },
-	{ "VOS415: Aggregate many object/key punches",
-	  aggregate_15, NULL, agg_tst_teardown },
 };
 
 int

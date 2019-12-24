@@ -384,7 +384,8 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	D_ASSERT(!arg->fill_recxs ||
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
-	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, arg);
+	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, NULL,
+			 arg);
 
 	D_DEBUG(DB_IO, "enum type %d tag %d rc %d\n", type,
 		dss_get_module_info()->dmi_tgt_id, rc);
