@@ -438,12 +438,13 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
 
-	if (biov->bi_data_len != rbund->rb_rsize)
+	if (bio_iov2len(biov) != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = biov->bi_data_len;
+	irec->ir_size	 = bio_iov2len(biov);
+	irec->ir_gsize	 = rbund->rb_gsize;
 	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
@@ -486,7 +487,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 		kbund->kb_epoch = skey->sv_epoch;
 
 	/* NB: return record address, caller should copy/rma data for it */
-	biov->bi_data_len = irec->ir_size;
+	bio_iov_set_len(biov, irec->ir_size);
 	biov->bi_addr = irec->ir_ex_addr;
 	biov->bi_buf = NULL;
 
@@ -502,6 +503,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
+	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	return 0;
 }

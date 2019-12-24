@@ -333,11 +333,12 @@ handle_incoming_call(struct drpc *session_ctx)
 {
 	int			rc;
 	Drpc__Call		*call = NULL;
-	Drpc__Response		*resp;
+	Drpc__Response		*resp = NULL;
 	struct drpc_call_ctx	*call_ctx;
 
 	rc = drpc_recv_call(session_ctx, &call);
-	if (rc != 0)
+	/* Need to respond even if it was a bad call */
+	if (rc != 0 && rc != -DER_PROTO)
 		return rc;
 
 	resp = drpc_response_create(call);
@@ -345,6 +346,14 @@ handle_incoming_call(struct drpc *session_ctx)
 		D_ERROR("Could not allocate Drpc__Response\n");
 		drpc_call_free(call);
 		return -DER_NOMEM;
+	}
+
+	/* Incoming message was garbage */
+	if (rc == -DER_PROTO) {
+		resp->status = DRPC__STATUS__FAILED_UNMARSHAL_CALL;
+		drpc_send_response(session_ctx, resp);
+		drpc_response_free(resp);
+		return rc;
 	}
 
 	/*

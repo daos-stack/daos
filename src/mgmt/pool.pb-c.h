@@ -22,10 +22,26 @@ typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
+typedef struct _Mgmt__ListContReq Mgmt__ListContReq;
+typedef struct _Mgmt__ListContResp Mgmt__ListContResp;
+typedef struct _Mgmt__ListContResp__Cont Mgmt__ListContResp__Cont;
+typedef struct _Mgmt__PoolQueryReq Mgmt__PoolQueryReq;
+typedef struct _Mgmt__StorageUsageStats Mgmt__StorageUsageStats;
+typedef struct _Mgmt__PoolRebuildStatus Mgmt__PoolRebuildStatus;
+typedef struct _Mgmt__PoolQueryResp Mgmt__PoolQueryResp;
 
 
 /* --- enums --- */
 
+/*
+ * PoolRebuildState indicates the pool's rebuild state.
+ */
+typedef enum _Mgmt__PoolRebuildState {
+  MGMT__POOL_REBUILD_STATE__IDLE = 0,
+  MGMT__POOL_REBUILD_STATE__DONE = 1,
+  MGMT__POOL_REBUILD_STATE__BUSY = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATE)
+} Mgmt__PoolRebuildState;
 
 /* --- messages --- */
 
@@ -35,12 +51,19 @@ typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
 struct  _Mgmt__PoolCreateReq
 {
   ProtobufCMessage base;
+  /*
+   * SCM size in bytes
+   */
   uint64_t scmbytes;
+  /*
+   * NVMe size in bytes
+   */
   uint64_t nvmebytes;
   /*
-   * comma separated integers
+   * target ranks
    */
-  char *ranks;
+  size_t n_ranks;
+  uint32_t *ranks;
   /*
    * desired number of pool service replicas
    */
@@ -69,7 +92,7 @@ struct  _Mgmt__PoolCreateReq
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , 0, 0, 0,NULL, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*
@@ -83,13 +106,14 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
-   * comma separated integers
+   * pool service replica ranks
    */
-  char *svcreps;
+  size_t n_svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, 0,NULL }
 
 
 /*
@@ -159,7 +183,7 @@ struct  _Mgmt__ListPoolsResp__Pool
    * pool service replica ranks
    */
   size_t n_svcreps;
-  int32_t *svcreps;
+  uint32_t *svcreps;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
@@ -185,6 +209,148 @@ struct  _Mgmt__ListPoolsResp
 #define MGMT__LIST_POOLS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__descriptor) \
     , 0, 0,NULL }
+
+
+/*
+ * ListContainers
+ * Initial implementation differs from C API
+ * (numContainers not provided in request - get whole list)
+ */
+struct  _Mgmt__ListContReq
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of pool
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp__Cont
+{
+  ProtobufCMessage base;
+  /*
+   * uuid of container
+   */
+  char *uuid;
+};
+#define MGMT__LIST_CONT_RESP__CONT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__cont__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ListContResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * containers
+   */
+  size_t n_containers;
+  Mgmt__ListContResp__Cont **containers;
+};
+#define MGMT__LIST_CONT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_cont_resp__descriptor) \
+    , 0, 0,NULL }
+
+
+/*
+ * PoolQueryReq represents a pool query request.
+ */
+struct  _Mgmt__PoolQueryReq
+{
+  ProtobufCMessage base;
+  char *uuid;
+};
+#define MGMT__POOL_QUERY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+/*
+ * StorageUsageStats represents usage statistics for a storage subsystem.
+ */
+struct  _Mgmt__StorageUsageStats
+{
+  ProtobufCMessage base;
+  uint64_t total;
+  uint64_t free;
+  uint64_t min;
+  uint64_t max;
+  uint64_t mean;
+};
+#define MGMT__STORAGE_USAGE_STATS__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__storage_usage_stats__descriptor) \
+    , 0, 0, 0, 0, 0 }
+
+
+/*
+ * PoolRebuildStatus represents a pool's rebuild status.
+ */
+struct  _Mgmt__PoolRebuildStatus
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  Mgmt__PoolRebuildState state;
+  uint64_t objects;
+  uint64_t records;
+};
+#define MGMT__POOL_REBUILD_STATUS__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
+    , 0, MGMT__POOL_REBUILD_STATE__IDLE, 0, 0 }
+
+
+/*
+ * PoolQueryResp represents a pool query response.
+ */
+struct  _Mgmt__PoolQueryResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * pool uuid
+   */
+  char *uuid;
+  /*
+   * total targets in pool
+   */
+  uint32_t totaltargets;
+  /*
+   * active targets in pool
+   */
+  uint32_t activetargets;
+  /*
+   * indicates pool disabled status
+   */
+  protobuf_c_boolean disabled;
+  /*
+   * pool rebuild status
+   */
+  Mgmt__PoolRebuildStatus *rebuild;
+  /*
+   * SCM storage usage stats
+   */
+  Mgmt__StorageUsageStats *scm;
+  /*
+   * NVMe storage usage stats
+   */
+  Mgmt__StorageUsageStats *nvme;
+};
+#define MGMT__POOL_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -304,6 +470,123 @@ Mgmt__ListPoolsResp *
 void   mgmt__list_pools_resp__free_unpacked
                      (Mgmt__ListPoolsResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__ListContReq methods */
+void   mgmt__list_cont_req__init
+                     (Mgmt__ListContReq         *message);
+size_t mgmt__list_cont_req__get_packed_size
+                     (const Mgmt__ListContReq   *message);
+size_t mgmt__list_cont_req__pack
+                     (const Mgmt__ListContReq   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_req__pack_to_buffer
+                     (const Mgmt__ListContReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContReq *
+       mgmt__list_cont_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_req__free_unpacked
+                     (Mgmt__ListContReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ListContResp__Cont methods */
+void   mgmt__list_cont_resp__cont__init
+                     (Mgmt__ListContResp__Cont         *message);
+/* Mgmt__ListContResp methods */
+void   mgmt__list_cont_resp__init
+                     (Mgmt__ListContResp         *message);
+size_t mgmt__list_cont_resp__get_packed_size
+                     (const Mgmt__ListContResp   *message);
+size_t mgmt__list_cont_resp__pack
+                     (const Mgmt__ListContResp   *message,
+                      uint8_t             *out);
+size_t mgmt__list_cont_resp__pack_to_buffer
+                     (const Mgmt__ListContResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ListContResp *
+       mgmt__list_cont_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__list_cont_resp__free_unpacked
+                     (Mgmt__ListContResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryReq methods */
+void   mgmt__pool_query_req__init
+                     (Mgmt__PoolQueryReq         *message);
+size_t mgmt__pool_query_req__get_packed_size
+                     (const Mgmt__PoolQueryReq   *message);
+size_t mgmt__pool_query_req__pack
+                     (const Mgmt__PoolQueryReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_req__pack_to_buffer
+                     (const Mgmt__PoolQueryReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryReq *
+       mgmt__pool_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_req__free_unpacked
+                     (Mgmt__PoolQueryReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__StorageUsageStats methods */
+void   mgmt__storage_usage_stats__init
+                     (Mgmt__StorageUsageStats         *message);
+size_t mgmt__storage_usage_stats__get_packed_size
+                     (const Mgmt__StorageUsageStats   *message);
+size_t mgmt__storage_usage_stats__pack
+                     (const Mgmt__StorageUsageStats   *message,
+                      uint8_t             *out);
+size_t mgmt__storage_usage_stats__pack_to_buffer
+                     (const Mgmt__StorageUsageStats   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__StorageUsageStats *
+       mgmt__storage_usage_stats__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__storage_usage_stats__free_unpacked
+                     (Mgmt__StorageUsageStats *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolRebuildStatus methods */
+void   mgmt__pool_rebuild_status__init
+                     (Mgmt__PoolRebuildStatus         *message);
+size_t mgmt__pool_rebuild_status__get_packed_size
+                     (const Mgmt__PoolRebuildStatus   *message);
+size_t mgmt__pool_rebuild_status__pack
+                     (const Mgmt__PoolRebuildStatus   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_rebuild_status__pack_to_buffer
+                     (const Mgmt__PoolRebuildStatus   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolRebuildStatus *
+       mgmt__pool_rebuild_status__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_rebuild_status__free_unpacked
+                     (Mgmt__PoolRebuildStatus *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryResp methods */
+void   mgmt__pool_query_resp__init
+                     (Mgmt__PoolQueryResp         *message);
+size_t mgmt__pool_query_resp__get_packed_size
+                     (const Mgmt__PoolQueryResp   *message);
+size_t mgmt__pool_query_resp__pack
+                     (const Mgmt__PoolQueryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_resp__pack_to_buffer
+                     (const Mgmt__PoolQueryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryResp *
+       mgmt__pool_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_resp__free_unpacked
+                     (Mgmt__PoolQueryResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -327,12 +610,34 @@ typedef void (*Mgmt__ListPoolsResp__Pool_Closure)
 typedef void (*Mgmt__ListPoolsResp_Closure)
                  (const Mgmt__ListPoolsResp *message,
                   void *closure_data);
+typedef void (*Mgmt__ListContReq_Closure)
+                 (const Mgmt__ListContReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp__Cont_Closure)
+                 (const Mgmt__ListContResp__Cont *message,
+                  void *closure_data);
+typedef void (*Mgmt__ListContResp_Closure)
+                 (const Mgmt__ListContResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolQueryReq_Closure)
+                 (const Mgmt__PoolQueryReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__StorageUsageStats_Closure)
+                 (const Mgmt__StorageUsageStats *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolRebuildStatus_Closure)
+                 (const Mgmt__PoolRebuildStatus *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolQueryResp_Closure)
+                 (const Mgmt__PoolQueryResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
 
 /* --- descriptors --- */
 
+extern const ProtobufCEnumDescriptor    mgmt__pool_rebuild_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
@@ -340,6 +645,13 @@ extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

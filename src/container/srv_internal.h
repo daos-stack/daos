@@ -93,16 +93,6 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 };
 
-/**
- * per-node container (memory) object
- */
-struct ds_cont {
-	struct daos_llink	sc_list;
-	uuid_t			sc_uuid;
-	uuid_t			sp_uuid;
-	struct ds_iv_ns		*sc_iv_ns;
-};
-
 /* Container IV structure */
 struct cont_iv_snapshot {
 	int snap_cnt;
@@ -216,14 +206,6 @@ void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
-
-int ds_cont_lookup_create(const uuid_t uuid, void *arg,
-			  struct ds_cont **cont_p);
-struct ds_cont *ds_cont_lookup(const uuid_t uuid);
-void ds_cont_put(struct ds_cont *cont);
-int ds_cont_cache_init(void);
-void ds_cont_cache_fini(void);
-void ds_cont_aggregate_ult(void *arg);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t capas);

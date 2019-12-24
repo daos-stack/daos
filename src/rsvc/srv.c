@@ -170,7 +170,7 @@ fini_free(struct ds_rsvc *svc)
 	rsvc_class(svc->s_class)->sc_free(svc);
 }
 
-static void
+void
 ds_rsvc_get(struct ds_rsvc *svc)
 {
 	svc->s_ref++;
