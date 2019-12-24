@@ -173,6 +173,10 @@ def set_test_environment():
     out = get_output("command -v fi_info")
     print(out)
 
+    print("fi_info : ")
+    out = get_output("fi_info")
+    print(out)
+
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
         default_provider = "ofi+verbs;ofi_rxm"
