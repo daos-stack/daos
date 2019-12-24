@@ -25,7 +25,6 @@
 import os
 import ctypes
 import time
-import avocado
 import agent_utils
 import server_utils
 import write_host_file

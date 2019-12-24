@@ -112,6 +112,7 @@ class DaosProperty(ctypes.Structure):
                 ("dpp_entries", ctypes.POINTER(DaosPropertyEntry))]
 
     def __init__(self, num_structs):
+        super(DaosProperty, self).__init__()
         total_prop_entries = (DaosPropertyEntry * num_structs)()
         self.dpp_entries = ctypes.cast(total_prop_entries,
                                        ctypes.POINTER(DaosPropertyEntry))

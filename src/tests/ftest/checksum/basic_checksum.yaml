@@ -5,13 +5,13 @@ hosts:
   - server-A
  test_clients:
   - client-B
-timeout: 300
+timeout: 240
 server_config:
  name: daos_server
 pool:
     createmode:
         mode_RW:
-             mode: 511 
+             mode: 511
     createset:
         group: daos_server
     createsize:

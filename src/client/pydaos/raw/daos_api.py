@@ -1375,6 +1375,8 @@ class DaosContainer(object):
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
+        self.cont_prop = None
+        self.flag = None
 
     def get_uuid_str(self):
         """Return C representation of Python string."""
@@ -1421,8 +1423,6 @@ class DaosContainer(object):
                 self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(1)
             else:
                 self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(0)
-        else:
-            self.cont_prop = None
 
         func = self.context.get_function('create-cont')
 
