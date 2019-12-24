@@ -75,7 +75,7 @@ class IorInterceptDfuseMix(IorTestBase):
         :avocado: tags=all,daosio,hw,full_regression,iorinterceptmix
         """
         without_intercept = dict()
-        self.run_ior_with_pool(without_intercept)
+        self.run_multiple_ior_with_pool(without_intercept)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         with_intercept = dict()
         self.run_multiple_ior_with_pool(with_intercept, intercept)
