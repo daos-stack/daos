@@ -39,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerStarter defines an interface for starting the actual
@@ -269,7 +270,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 	if !superblock.ValidRank || !superblock.MS {
 		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
 			Uuid:  superblock.UUID,
-			Rank:  uint32(r),
+			Rank:  r.Uint32(),
 			Uri:   ready.Uri,
 			Nctxs: ready.Nctxs,
 			// Addr member populated in msClient
@@ -300,7 +301,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -448,4 +449,16 @@ func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
 		srv.Index(), bio.TgtId, bio)
+}
+
+// newMember returns reference to a new member struct if one can be retrieved
+// from superblock, error otherwise. Member populated with local reply address.
+func (srv *IOServerInstance) newMember() (*system.Member, error) {
+	if !srv.hasSuperblock() {
+		return nil, errors.New("missing superblock")
+	}
+	sb := srv.getSuperblock()
+
+	return system.NewMember(sb.Rank.Uint32(), sb.UUID,
+		srv.msClient.cfg.ControlAddr, system.MemberStateStarted), nil
 }
