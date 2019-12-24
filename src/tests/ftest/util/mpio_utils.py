@@ -56,12 +56,10 @@ class MpioUtils():
             return False
 
     @staticmethod
-    def run_romio(basepath, hostlist, romio_test_repo):
+    def run_romio(hostlist, romio_test_repo):
         """
             Running ROMIO testsuite under mpich
             Function Arguments:
-                basepath --path where all daos and it's dependencies can be
-                           fetched from
                 hostlist --list of client hosts
                 romio_test_repo --built romio test directory
         """
@@ -93,13 +91,11 @@ class MpioUtils():
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
     # pylint: disable=R0913
-    def run_llnl_mpi4py_hdf5(self, basepath, hostfile, pool_uuid, test_repo,
+    def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
                              test_name, client_processes):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
-                basepath          --path where all daos and it's dependencies
-                                    can be fetched from
                 hostfile          --client hostfile
                 pool_uuid         --Pool UUID
                 test_repo         --test repo location

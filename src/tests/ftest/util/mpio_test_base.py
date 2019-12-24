@@ -85,8 +85,8 @@ class LlnlMpi4pyHdf5(TestWithServers):
             svc_list = svc_list[:-1]
 
             # running tests
-            self.mpio.run_llnl_mpi4py_hdf5(self.basepath, self.hostfile_clients,
-                                           pool_uuid, test_repo, test_name,
+            self.mpio.run_llnl_mpi4py_hdf5(self.hostfile_clients, pool_uuid,
+                                           test_repo, test_name,
                                            client_processes)
 
             # Parsing output to look for failures

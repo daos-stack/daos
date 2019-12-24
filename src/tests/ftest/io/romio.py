@@ -57,8 +57,7 @@ class Romio(TestWithServers):
 
         try:
             # running romio
-            self.mpio.run_romio(self.basepath, self.hostlist_clients,
-                                romio_test_repo)
+            self.mpio.run_romio(self.hostlist_clients, romio_test_repo)
 
             # Parsing output to look for failures
             # stderr directed to stdout
