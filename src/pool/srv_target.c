@@ -906,51 +906,11 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	}
 
 	ABT_rwlock_wrlock(pool->sp_lock);
-	if (pool->sp_map_version < map_version ||
-	    (pool->sp_map_version == map_version &&
-	     (map != NULL && pool->sp_map == NULL))) {
-		if (map != NULL) {
-			struct pool_map *tmp = pool->sp_map;
 
-			rc = update_pool_group(pool, map);
-			if (rc != 0) {
-				ABT_rwlock_unlock(pool->sp_lock);
-				goto out;
-			}
-
-			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true,
-					   DEFAULT_PL_TYPE);
-			if (rc != 0) {
-				ABT_rwlock_unlock(pool->sp_lock);
-				D_ERROR(DF_UUID": failed update pl_map: %d\n",
-					DP_UUID(pool->sp_uuid), rc);
-				D_GOTO(out, rc);
-			}
-
-			rc = pool_map_update_failed_cnt(map);
-			if (rc != 0) {
-				D_ERROR(DF_UUID": failed fail-cnt update pl_map"
-					": %d\n", DP_UUID(pool->sp_uuid), rc);
-				D_GOTO(out, rc);
-			}
-
-			pool->sp_map = map;
-			map = tmp;
-		}
-
-		D_DEBUG(DF_DSMS, DF_UUID
-			": changed cached map version: %u -> %u pool %p"
-			" map %p map_ver %u\n", DP_UUID(pool->sp_uuid),
-			pool->sp_map_version, map_version, pool, pool->sp_map,
-			pool_map_get_version(pool->sp_map));
-
-		pool->sp_map_version = map_version;
-		rc = dss_task_collective(update_child_map, pool, 0);
-		D_ASSERT(rc == 0);
-	} else if (pool->sp_map != NULL &&
-		   pool_map_get_version(pool->sp_map) < map_version &&
-		   map != NULL) {
+	if ((map != NULL && pool->sp_map == NULL) &&
+	   ((pool->sp_map_version == map_version ||
+	     pool->sp_map_version < map_version) ||
+	    (pool_map_get_version(pool->sp_map) < map_version))) {
 		struct pool_map *tmp = pool->sp_map;
 
 		rc = update_pool_group(pool, map);
@@ -964,21 +924,36 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				   DEFAULT_PL_TYPE);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
-			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
+			D_ERROR(DF_UUID": failed update pl_map: %d\n",
 				DP_UUID(pool->sp_uuid), rc);
 			D_GOTO(out, rc);
 		}
 
 		rc = pool_map_update_failed_cnt(map);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed fail-cnt update pl_map: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_ERROR(DF_UUID": failed fail-cnt update pl_map"
+				": %d\n", DP_UUID(pool->sp_uuid), rc);
 			D_GOTO(out, rc);
 		}
 
 		/* drop the stale map */
 		pool->sp_map = map;
 		map = tmp;
+
+		if (pool->sp_map_version == map_version ||
+		    pool->sp_map_version < map_version) {
+			D_DEBUG(DF_DSMS, DF_UUID
+				": changed cached map version: %u -> %u pool %p"
+				" map %p map_ver %u\n", DP_UUID(pool->sp_uuid),
+				pool->sp_map_version, map_version,
+				pool, pool->sp_map,
+				pool_map_get_version(pool->sp_map));
+
+			pool->sp_map_version = map_version;
+			rc = dss_task_collective(update_child_map, pool, 0);
+			D_ASSERT(rc == 0);
+		}
 	} else {
 		D_WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
 		       pool->sp_map_version, map_version, pool);
