@@ -158,10 +158,7 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-build: true"',
-                       returnStatus: true
-                }
+                expression { ! commitPragma(pragma: 'Skip-build').contains('true') }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -198,7 +195,7 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
@@ -275,7 +272,7 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/sles12.3/)
@@ -352,7 +349,7 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap42.3/)
@@ -428,7 +425,7 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap15/)
                                           createrepo artifacts/leap15/'''
@@ -1106,13 +1103,14 @@ pipeline {
                 beforeAgent true
                 // expression { skipTest != true }
                 expression { env.NO_CI_TESTING != 'true' }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                       returnStatus: true
-                }
+                expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
             }
             parallel {
                 stage('Single-node') {
+                    when {
+                        beforeAgent true
+                        expression { ! commitPragma(pragma: 'Skip-test-single-node').contains('true') }
+                    }
                     agent {
                         label 'ci_vm1'
                     }
@@ -1171,6 +1169,10 @@ pipeline {
                     }
                 }
                 stage('Single-node-valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! commitPragma(pragma: 'Skip-test-single-node-valgrind').contains('true') }
+                    }
                     agent {
                         label 'ci_vm1'
                     }
@@ -1243,6 +1245,10 @@ pipeline {
                     }
                 }
                 stage('Two-node') {
+                    when {
+                        beforeAgent true
+                        expression { ! commitPragma(pragma: 'Skip-test-two-node').contains('true') }
+                    }
                     agent {
                         label 'ci_vm2'
                     }
@@ -1301,6 +1307,10 @@ pipeline {
                     }
                 }
                 stage('Three-node') {
+                    when {
+                        beforeAgent true
+                        expression { ! commitPragma(pragma: 'Skip-test-three-node').contains('true') }
+                    }
                     agent {
                         label 'ci_vm3'
                     }
@@ -1359,6 +1369,10 @@ pipeline {
                     }
                 }
                 stage('Five-node') {
+                    when {
+                        beforeAgent true
+                        expression { ! commitPragma(pragma: 'Skip-test-five-node').contains('true') }
+                    }
                     agent {
                         label 'ci_vm5'
                     }
