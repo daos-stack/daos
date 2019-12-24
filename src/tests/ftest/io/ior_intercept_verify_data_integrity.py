@@ -33,8 +33,8 @@ from command_utils import CommandFailure
 class IorInterceptVerifyDataIntegrity(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with mix of dfuse and
-       interception library on a single server and multi client
-       settings with basic parameters.
+       interception library on a multi server and multi client
+       settings and verify read/write.
 
     :avocado: recursive
     """
