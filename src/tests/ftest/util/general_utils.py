@@ -54,8 +54,8 @@ def run_cmd(cmd, verbose=False, sudo=False):
     kwargs = {
         "cmd": cmd,
         "allow_output_check": "combined",
-        "verbose": False,
-        "sudo": False,
+        "verbose": verbose,
+        "sudo": sudo,
         "shell": True,
     }
     return process.run(**kwargs)
