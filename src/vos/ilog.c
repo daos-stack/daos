@@ -1440,6 +1440,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 
 	D_ASSERT(epr != NULL);
+	D_ASSERT(punched <= epr->epr_hi);
 
 	D_DEBUG(DB_IO, "%s incarnation log: epr: "DF_U64"-"DF_U64" punched="
 		DF_U64"\n", discard ? "Discard" : "Aggregate", epr->epr_lo,

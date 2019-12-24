@@ -1112,58 +1112,75 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 			     sizeof(last_val), NULL, &last_val);
 	}
 
-	if (discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
-	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+	/* Set upper bound for aggregation */
+	epr.epr_hi = epoch++;
 
-	assert_int_equal(rc, 0);
+	for (i = 0; i < 2; i++) {
+		if (discard)
+			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
+		else
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
 
-	if (first != AGG_NONE) {
-		/* regardless of aggregate or discard, the first entry should
-		 * exist because it's outside of the epr.
-		 */
-		fetch_val = 0;
-		fetch_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
-			    sizeof(first_val), NULL, &fetch_val);
-		assert_int_equal(fetch_val, first_val);
-		/* Reading at "snapshot" should also work except for punch, it
-		 * will be gone.
-		 */
-		fetch_val = 0;
-		fetch_value(arg, oid, epr.epr_lo, dkey, akey, DAOS_IOD_SINGLE,
-			    sizeof(first_val), NULL, &fetch_val);
-		assert_int_equal(fetch_val,
-				 (first == AGG_PUNCH) ? 0 : first_val);
-	}
+		assert_int_equal(rc, 0);
 
-	/* Intermediate value should be gone regardless but fetch will get
-	 * first_val if it's a discard
-	 */
-	expected = 0;
-	fetch_val = 0;
-	if (first == AGG_UPDATE && discard)
-		expected = first_val;
-	fetch_value(arg, oid, middle_epoch, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(middle_val), NULL, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/* Final value should be present for aggregation but not discard */
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(last_val), NULL, &fetch_val);
-	expected = last_val;
-	if (discard) {
-		expected = 0;
-		if (first == AGG_UPDATE) {
-			/** Old value should still be there */
-			expected = first_val;
+		if (first != AGG_NONE) {
+			/* regardless of aggregate or discard, the first entry
+			 * should exist because it's outside of the epr.
+			 */
+			fetch_val = 0;
+			fetch_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
+				    sizeof(first_val), NULL, &fetch_val);
+			assert_int_equal(fetch_val, first_val);
+			/* Reading at "snapshot" should also work except for
+			 * punch, it will be gone.
+			 */
+			fetch_val = 0;
+			fetch_value(arg, oid, epr.epr_lo, dkey, akey,
+				    DAOS_IOD_SINGLE, sizeof(first_val), NULL,
+				    &fetch_val);
+			assert_int_equal(fetch_val,
+					 (first == AGG_PUNCH) ? 0 : first_val);
 		}
-	} else if (last != AGG_UPDATE) {
-		expected = 0;
-	}
 
-	assert_int_equal(fetch_val, expected);
+		/* Intermediate value should be gone regardless but fetch will
+		 * get first_val if it's a discard
+		 */
+		expected = 0;
+		fetch_val = 0;
+		if (first == AGG_UPDATE && discard)
+			expected = first_val;
+		fetch_value(arg, oid, middle_epoch, dkey, akey, DAOS_IOD_SINGLE,
+			    sizeof(middle_val), NULL, &fetch_val);
+		assert_int_equal(fetch_val, expected);
+
+		/* Final value should be present for aggregation but not
+		 * discard
+		 */
+		fetch_val = 0;
+		fetch_value(arg, oid, epr.epr_hi, dkey, akey, DAOS_IOD_SINGLE,
+			    sizeof(last_val), NULL, &fetch_val);
+		expected = last_val;
+		if (discard) {
+			expected = 0;
+			if (first == AGG_UPDATE) {
+				/** Old value should still be there */
+				expected = first_val;
+			}
+		} else if (last != AGG_UPDATE) {
+			expected = 0;
+		}
+
+		assert_int_equal(fetch_val, expected);
+
+		/* One more test.  Punch the object at higher epoch, then
+		 * aggregate same epoch should get same results as the punch
+		 * is out of range.  Test is pointless for discard.
+		 */
+		if (discard)
+			break;
+
+		do_punch(arg, AGG_OBJ_TYPE, oid, epoch++, dkey, akey);
+	}
 
 	arg->ta_flags = old_flags;
 }
@@ -1175,6 +1192,7 @@ agg_punches_test(void **state, bool discard)
 	int	first, last, type;
 	int	lstart;
 
+	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	for (first = AGG_NONE; first <= AGG_UPDATE; first++) {
 		lstart = first == AGG_NONE ? AGG_PUNCH : AGG_NONE;
 		for (last = lstart; last <= AGG_UPDATE; last++) {

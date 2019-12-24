@@ -135,7 +135,6 @@ struct vos_agg_param {
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_sub_tree_empty:1,
-				ap_sub_tree_done:1,
 				ap_discard:1;
 	struct umem_instance	*ap_umm;
 	/* SV tree: Max epoch in specified iterate epoch range */

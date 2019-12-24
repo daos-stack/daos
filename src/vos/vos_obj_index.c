@@ -629,6 +629,7 @@ oi_iter_aggregate(struct vos_iterator *iter, bool discard)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
+	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 deleted = false;
 	int			 rc;
@@ -643,12 +644,7 @@ oi_iter_aggregate(struct vos_iterator *iter, bool discard)
 		return rc;
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
-
-	/* Evict the object from cache before we remove it */
-	rc = vos_obj_evict_by_oid(vos_obj_cache_current(), oiter->oit_cont,
-				  obj->vo_id);
-	if (rc != 0)
-		return rc;
+	oid = obj->vo_id;
 
 	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
 	if (rc != 0)
@@ -666,8 +662,16 @@ oi_iter_aggregate(struct vos_iterator *iter, bool discard)
 
 	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && deleted)
+	if (rc == 0 && deleted) {
+		/* Evict the object from cache */
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+					  oiter->oit_cont, oid);
+		if (rc != 0)
+			D_ERROR("Could not evict object "DF_UOID"\n",
+				DP_UOID(oid));
+
 		return -DER_NONEXIST;
+	}
 
 	return rc;
 }
