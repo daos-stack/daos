@@ -175,7 +175,7 @@ def set_test_environment():
 
     default_provider = "ofi+sockets"
     if os.environ["OFI_INTERFACE"].startswith("ib"):
-        default_provider = "ofi+verbs"
+        default_provider = "ofi+verbs;ofi_rxm"
     # os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
     #                                                default_provider)
     # Remove the above comments later after ofi+verbs testing.
@@ -183,7 +183,7 @@ def set_test_environment():
     default_domain = os.environ.get("OFI_INTERFACE")
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if (os.environ["OFI_INTERFACE"].startswith("ib") and
-            provider == "ofi+verbs"):
+            provider == "ofi+verbs;ofi_rxm"):
         default_domain = "hfi1_0"
     os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", default_domain)
     print("After Environment:")
