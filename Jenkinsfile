@@ -48,7 +48,7 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def functional_rpms  = "ior-hpc mpich-autoload romio-tests hdf5-tests mpi4py-tests testmpio"
+def functional_rpms  = "ior-hpc-3.3.0-7.572.g83b2502.el7 mpich-autoload-3.3-4.el7 romio-tests hdf5-tests mpi4py-tests testmpio"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
