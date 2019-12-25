@@ -1387,8 +1387,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
 out:
-	if (err != 0)
+	if (err != 0) {
+		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
+	}
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
