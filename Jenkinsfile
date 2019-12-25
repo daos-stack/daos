@@ -48,7 +48,7 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos_adio-rpm ior-hpc@PR-48"
+def functional_rpms  = "ior-hpc-3.3.0-7.572.g83b2502.el7 mpich-autoload-3.3-4.el7"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -156,7 +156,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
+                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
                     }
                     post {
                         always {
@@ -1026,9 +1026,9 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1102,16 +1102,16 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  functional_rpms + ' ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1183,7 +1183,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos
+                                       inst_repos: el7_daos_repos
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo yum -y install daos-client

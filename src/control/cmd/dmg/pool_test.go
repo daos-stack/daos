@@ -129,7 +129,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(acl.String())
+	_, err = file.WriteString(formatACL(acl))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}

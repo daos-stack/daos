@@ -398,8 +398,6 @@ vos_dtx_table_register(void);
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	Address (offset) of the DTX to be checked.
- * \param record	[IN]	Address (offset) of the record modified via
- *				the DTX.
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -415,8 +413,7 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, umem_off_t record, uint32_t intent,
-			   uint32_t type);
+			   umem_off_t entry, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -570,6 +567,8 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
+	/** global record size, needed for EC singv record */
+	daos_size_t		 rb_gsize;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */
