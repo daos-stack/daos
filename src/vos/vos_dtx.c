@@ -80,76 +80,6 @@ dtx_inprogress(struct dtx_handle *dth, struct vos_dtx_act_ent *dae, int pos)
 	return -DER_INPROGRESS;
 }
 
-static struct dtx_batched_cleanup_blob *
-dtx_bcb_alloc(struct vos_container *cont, struct vos_dtx_blob_df *dbd)
-{
-	struct dtx_batched_cleanup_blob	*bcb;
-
-	D_ALLOC(bcb, sizeof(*bcb) + sizeof(umem_off_t) * dbd->dbd_cap);
-	if (bcb != NULL) {
-		D_INIT_LIST_HEAD(&bcb->bcb_dce_list);
-		bcb->bcb_dbd_off = umem_ptr2off(vos_cont2umm(cont), dbd);
-		d_list_add_tail(&bcb->bcb_cont_link,
-				&cont->vc_batched_cleanup_list);
-	}
-
-	return bcb;
-}
-
-static void
-dtx_batched_cleanup(struct vos_container *cont,
-		    struct dtx_batched_cleanup_blob *bcb, umem_off_t *next_dbd)
-{
-	struct umem_instance	*umm = vos_cont2umm(cont);
-	struct vos_cont_df	*cont_df = cont->vc_cont_df;
-	struct vos_dtx_blob_df	*dbd;
-	struct vos_dtx_blob_df	*tmp;
-	struct vos_dtx_cmt_ent	*dce;
-	int			 i;
-
-	dbd = umem_off2ptr(umm, bcb->bcb_dbd_off);
-	for (i = 0; i < dbd->dbd_index; i++) {
-		if (!umoff_is_null(bcb->bcb_recs[i]))
-			umem_free(umm, bcb->bcb_recs[i]);
-	}
-
-	if (next_dbd != NULL)
-		*next_dbd = dbd->dbd_next;
-
-	tmp = umem_off2ptr(umm, dbd->dbd_prev);
-	if (tmp != NULL) {
-		umem_tx_add_ptr(umm, &tmp->dbd_next, sizeof(tmp->dbd_next));
-		tmp->dbd_next = dbd->dbd_next;
-	}
-
-	tmp = umem_off2ptr(umm, dbd->dbd_next);
-	if (tmp != NULL) {
-		umem_tx_add_ptr(umm, &tmp->dbd_prev, sizeof(tmp->dbd_prev));
-		tmp->dbd_prev = dbd->dbd_prev;
-	}
-
-	if (cont_df->cd_dtx_active_head == bcb->bcb_dbd_off) {
-		umem_tx_add_ptr(umm, &cont_df->cd_dtx_active_head,
-				sizeof(cont_df->cd_dtx_active_head));
-		cont_df->cd_dtx_active_head = dbd->dbd_next;
-	}
-
-	if (cont_df->cd_dtx_active_tail == bcb->bcb_dbd_off) {
-		umem_tx_add_ptr(umm, &cont_df->cd_dtx_active_tail,
-				sizeof(cont_df->cd_dtx_active_tail));
-		cont_df->cd_dtx_active_tail = dbd->dbd_prev;
-	}
-
-	while ((dce = d_list_pop_entry(&bcb->bcb_dce_list,
-				       struct vos_dtx_cmt_ent,
-				       dce_bcb_link)) != NULL)
-		; /* NOP */
-
-	d_list_del(&bcb->bcb_cont_link);
-	umem_free(umm, bcb->bcb_dbd_off);
-	D_FREE(bcb);
-}
-
 static int
 dtx_hkey_size(void)
 {
@@ -270,7 +200,6 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_cmt_ent	*dce;
-	int			 rc = 0;
 
 	dce = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	D_ASSERT(dce != NULL);
@@ -281,56 +210,9 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		cont->vc_dtx_committed_count--;
 	else
 		cont->vc_dtx_committed_tmp_count--;
-
-	/* The committed DTX entry may be in aggregation now, if related
-	 * active DTX entry is waitting for batched cleanup, then cleanup
-	 * it by force before destroy the committed DTX entry (mainly for
-	 * DTX aggregation).
-	 */
-	if (!d_list_empty(&dce->dce_bcb_link)) {
-		struct umem_instance		*umm = vos_cont2umm(cont);
-		struct dtx_batched_cleanup_blob	*bcb = dce->dce_bcb;
-		struct vos_dtx_blob_df		*dbd;
-		int				 idx;
-
-		D_ASSERT(bcb != NULL);
-
-		idx = dce->dce_index;
-		D_ASSERT(idx >= 0);
-
-		dbd = umem_off2ptr(umm, bcb->bcb_dbd_off);
-
-		if (dbd->dbd_active_data[idx].dae_flags != DTX_EF_INVALID) {
-			struct vos_dtx_act_ent_df	*dae_df;
-
-			rc = vos_tx_begin(umm);
-			if (rc != 0)
-				return rc;
-
-			dae_df = &dbd->dbd_active_data[idx];
-			umem_tx_add_ptr(umm, &dae_df->dae_flags,
-					sizeof(dae_df->dae_flags));
-			dae_df->dae_flags = DTX_EF_INVALID;
-
-			D_ASSERT(dbd->dbd_count > bcb->bcb_dae_count);
-			umem_tx_add_ptr(umm, &dbd->dbd_count,
-					sizeof(dbd->dbd_count));
-			dbd->dbd_count--;
-
-			if (!umoff_is_null(bcb->bcb_recs[idx])) {
-				umem_free(umm, bcb->bcb_recs[idx]);
-				bcb->bcb_recs[idx] = UMOFF_NULL;
-			}
-
-			rc = vos_tx_end(umm, 0);
-		}
-
-		d_list_del(&dce->dce_bcb_link);
-	}
-
 	D_FREE_PTR(dce);
 
-	return rc;
+	return 0;
 }
 
 static int
@@ -458,8 +340,7 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 static void
 do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		   struct vos_dtx_act_ent *dae, struct vos_dtx_record_df *rec,
-		   struct vos_dtx_record_df *rec_df, int index, bool abort,
-		   bool *sync)
+		   struct vos_dtx_record_df *rec_df, int index, bool abort)
 {
 	if (umoff_is_null(rec->dr_record))
 		return;
@@ -485,7 +366,6 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		} else {
 			umem_tx_add_ptr(umm, &svt->ir_dtx, sizeof(svt->ir_dtx));
 			svt->ir_dtx = UMOFF_NULL;
-			*sync = false;
 		}
 		break;
 	}
@@ -501,7 +381,6 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		} else {
 			umem_tx_add_ptr(umm, &evt->dc_dtx, sizeof(evt->dc_dtx));
 			evt->dc_dtx = UMOFF_NULL;
-			*sync = false;
 		}
 		break;
 	}
@@ -515,44 +394,39 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 
 static void
 dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		bool abort, struct dtx_batched_cleanup_blob **bcb_p)
+		bool abort, umem_off_t *p_offset)
 {
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_dtx_act_ent_df	*dae_df;
 	struct vos_dtx_record_df	*rec_df = NULL;
 	struct vos_dtx_blob_df		*dbd;
-	struct dtx_batched_cleanup_blob	*bcb;
 	int				 count;
 	int				 i;
-	bool				 sync = false;
 
-	/* XXX: To avoid complex ilog related status check, for pure ilog
-	 *	touched DTX case, we do NOT handle it via batched cleanup.
-	 *
-	 *	For abort case, cleanup DTX entry synchronously.
-	 */
+	D_ASSERT(DAE_INDEX(dae) >= 0);
+
+	dbd = dae->dae_dbd;
+	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
+
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
-	if ((DAE_REC_CNT(dae) > 0 &&
-	     DAE_REC_INLINE(dae)[0].dr_type == DTX_RT_ILOG) || abort)
-		sync = true;
+	D_ASSERT(dae_df != NULL);
 
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
-		if (dae_df != NULL &&
-		    dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
+		if (dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
 			rec_df = umem_off2ptr(umm, dae_df->dae_rec_off);
 
 		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--)
 			do_dtx_rec_release(umm, cont, dae, &dae->dae_records[i],
-					   rec_df, i, abort, &sync);
+					   rec_df, i, abort);
 
 		D_FREE(dae->dae_records);
 		dae->dae_records = NULL;
 		dae->dae_rec_cap = 0;
 	}
 
-	if (dae_df != NULL && dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
+	if (dae_df->dae_layout_gen != DAE_LAYOUT_GEN(dae))
 		rec_df = dae_df->dae_rec_inline;
 
 	if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
@@ -562,60 +436,55 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 	for (i = count - 1; i >= 0; i--)
 		do_dtx_rec_release(umm, cont, dae, &DAE_REC_INLINE(dae)[i],
-				   rec_df, i, abort, &sync);
+				   rec_df, i, abort);
 
-	bcb = dae->dae_bcb;
-	D_ASSERT(bcb != NULL);
+	if (!umoff_is_null(dae_df->dae_rec_off))
+		umem_free(umm, dae_df->dae_rec_off);
 
-	/* Non-prepared case, not need to change on-disk things. */
-	if (DAE_INDEX(dae) == -1) {
-		D_ASSERT(abort);
+	if (dbd->dbd_count > 1 || dbd->dbd_index < dbd->dbd_cap) {
+		umem_tx_add_ptr(umm, &dae_df->dae_flags,
+				sizeof(dae_df->dae_flags));
+		/* Mark the DTX entry as invalid in SCM. */
+		dae_df->dae_flags = DTX_EF_INVALID;
 
-		/* New dtx_batched_cleanup_blob in related PMDK transaction. */
-		if (dae->dae_df_off == bcb->bcb_dbd_off) {
-			D_ASSERT(d_list_empty(&bcb->bcb_dce_list));
-			D_ASSERTF(bcb->bcb_dae_count == 0,
-				  "More unexpected active DTX entries %d\n",
-				  bcb->bcb_dae_count);
-
-			d_list_del(&bcb->bcb_cont_link);
-			D_FREE(bcb);
-		}
-
-		D_FREE_PTR(dae);
-		return;
-	}
-
-	dbd = dae->dae_dbd;
-	D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
-	D_ASSERT(bcb->bcb_dae_count > 0);
-	D_ASSERT(dae_df != NULL);
-
-	if (sync) {
-		if (bcb->bcb_dae_count > 1 || dbd->dbd_index < dbd->dbd_cap) {
-			umem_tx_add_ptr(umm, &dae_df->dae_flags,
-					sizeof(dae_df->dae_flags));
-			/* Mark the DTX entry as invalid in SCM. */
-			dae_df->dae_flags = DTX_EF_INVALID;
-
-			umem_tx_add_ptr(umm, &dbd->dbd_count,
-					sizeof(dbd->dbd_count));
-			dbd->dbd_count--;
-		}
-
-		if (!umoff_is_null(dae_df->dae_rec_off))
-			umem_free(umm, dae_df->dae_rec_off);
+		umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
+		dbd->dbd_count--;
 	} else {
-		bcb->bcb_recs[DAE_INDEX(dae)] = DAE_REC_OFF(dae);
-	}
+		struct vos_cont_df	*cont_df = cont->vc_cont_df;
+		umem_off_t		 dbd_off;
+		struct vos_dtx_blob_df	*tmp;
 
-	bcb->bcb_dae_count--;
-	if (bcb->bcb_dae_count == 0 && dbd->dbd_index >= dbd->dbd_cap) {
-		dtx_batched_cleanup(cont, bcb, NULL);
-	} else if (!sync) {
-		D_ASSERT(bcb_p != NULL);
+		dbd_off = umem_ptr2off(umm, dbd);
+		tmp = umem_off2ptr(umm, dbd->dbd_prev);
+		if (tmp != NULL) {
+			umem_tx_add_ptr(umm, &tmp->dbd_next,
+					sizeof(tmp->dbd_next));
+			tmp->dbd_next = dbd->dbd_next;
+		}
 
-		*bcb_p = bcb;
+		tmp = umem_off2ptr(umm, dbd->dbd_next);
+		if (tmp != NULL) {
+			umem_tx_add_ptr(umm, &tmp->dbd_prev,
+					sizeof(tmp->dbd_prev));
+			tmp->dbd_prev = dbd->dbd_prev;
+		}
+
+		if (cont_df->cd_dtx_active_head == dbd_off) {
+			umem_tx_add_ptr(umm, &cont_df->cd_dtx_active_head,
+					sizeof(cont_df->cd_dtx_active_head));
+			cont_df->cd_dtx_active_head = dbd->dbd_next;
+		}
+
+		if (cont_df->cd_dtx_active_tail == dbd_off) {
+			umem_tx_add_ptr(umm, &cont_df->cd_dtx_active_tail,
+					sizeof(cont_df->cd_dtx_active_tail));
+			cont_df->cd_dtx_active_tail = dbd->dbd_prev;
+		}
+
+		if (p_offset != NULL)
+			*p_offset = dbd_off;
+		else
+			umem_free(umm, dbd_off);
 	}
 
 	if (abort)
@@ -630,6 +499,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	struct vos_dtx_cmt_ent		*dce = NULL;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
+	umem_off_t			 offset = UMOFF_NULL;
 	int				 rc = 0;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
@@ -658,10 +528,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_INIT_LIST_HEAD(&dce->dce_bcb_link);
 	DCE_XID(dce) = *dti;
 	DCE_EPOCH(dce) = epoch != 0 ? epoch : DAE_EPOCH(dae);
-	dce->dce_index = epoch != 0 ? -1 : DAE_INDEX(dae);
 	dce->dce_reindex = 0;
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -670,11 +538,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (rc != 0 || epoch != 0)
 		goto out;
 
-	dtx_rec_release(cont, dae, false, &dce->dce_bcb);
-	if (dce->dce_bcb != NULL)
-		d_list_add_tail(&dce->dce_bcb_link,
-				&dce->dce_bcb->bcb_dce_list);
-
+	dtx_rec_release(cont, dae, false, &offset);
 	vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
 			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
 
@@ -682,6 +546,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	 * table until close the container. It is harmless but waste some DRAM.
 	 */
 	dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, NULL);
+
+	if (!umoff_is_null(offset))
+		umem_free(vos_cont2umm(cont), offset);
 
 out:
 	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = %d\n",
@@ -742,7 +609,6 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 {
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_cont_df		*cont_df = cont->vc_cont_df;
-	struct dtx_batched_cleanup_blob	*bcb;
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*tmp;
 	umem_off_t			 dbd_off;
@@ -757,10 +623,6 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 	dbd->dbd_magic = DTX_ACT_BLOB_MAGIC;
 	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
 			sizeof(struct vos_dtx_act_ent_df);
-
-	bcb = dtx_bcb_alloc(cont, dbd);
-	if (bcb == NULL)
-		return -DER_NOMEM;
 
 	tmp = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
 	if (tmp == NULL) {
@@ -789,14 +651,12 @@ static int
 vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
-	struct dtx_batched_cleanup_blob	*bcb = NULL;
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct vos_dtx_blob_df		*dbd;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
 	int				 rc = 0;
-	bool				 allocated = false;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
@@ -814,12 +674,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 		if (rc != 0)
 			goto out;
 
-		allocated = true;
 		dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
 	}
-
-	bcb = d_list_entry(cont->vc_batched_cleanup_list.prev,
-			   struct dtx_batched_cleanup_blob, bcb_cont_link);
 
 	DAE_XID(dae) = dth->dth_xid;
 	DAE_OID(dae) = dth->dth_oid;
@@ -833,27 +689,23 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	/* Will be set as dbd::dbd_index via vos_dtx_prepared(). */
 	DAE_INDEX(dae) = -1;
 
-	dae->dae_df_off = bcb->bcb_dbd_off +
+	dae->dae_df_off = cont_df->cd_dtx_active_tail +
 			offsetof(struct vos_dtx_blob_df, dbd_active_data) +
 			sizeof(struct vos_dtx_act_ent_df) * dbd->dbd_index;
 	dae->dae_dbd = dbd;
-	dae->dae_bcb = bcb;
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
-	if (rc == 0)
+	if (rc == 0) {
 		dth->dth_ent = dae;
+		dth->dth_actived = 1;
+	}
 
 out:
-	if (rc != 0) {
+	if (rc != 0)
 		D_FREE_PTR(dae);
-		if (allocated) {
-			d_list_del(&bcb->bcb_cont_link);
-			D_FREE_PTR(bcb);
-		}
-	}
 
 	return rc;
 }
@@ -1271,8 +1123,6 @@ vos_dtx_prepared(struct dtx_handle *dth)
 
 	dbd->dbd_count++;
 	dbd->dbd_index++;
-
-	dae->dae_bcb->bcb_dae_count++;
 
 	return 0;
 }
@@ -1692,116 +1542,6 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	return 0;
 }
 
-/*
- * To avoid frequent SCM modfication, we introduce batched cleanup mechanism
- * for DTX commit: when commit DTX, we do NOT modify related active DTX entry
- * in SCM immediately, instead, we keep related committed DTX entries in DRAM
- * and postpone to modify the active DTX table until the DTX entries in one
- * DTX entry blob all have been committed, then we directly release such DTX
- * entry blob via single umem_free(). Before the batched cleanup, the DTX in
- * the active DTX table is still valid although it has already been committed.
- *
- * If the server resetart, we need to re-establish the index active DTX table
- * in DRAM, under such case, those committed DTX entries but still valid in
- * the active DTX table should be filtered out. This function will check the
- * targets (that are modified via the DTX) whether have been committed or not.
- *
- * \return	+2 if current DTX blob is batched cleanup.
- *		+1 if current DTX entry has ever been committed.
- *		Zero if the DTX entry is not committed.
- *		Negative value if error.
- */
-static int
-dtx_act_handle_batched_cleanup(struct vos_container *cont,
-			       struct dtx_batched_cleanup_blob *bcb,
-			       struct vos_dtx_act_ent_df *dae_df,
-			       umem_off_t *next_dbd)
-{
-	struct umem_instance		*umm;
-	struct vos_dtx_blob_df		*dbd;
-	struct vos_dtx_record_df	*rec_df;
-	int				 idx = 0;
-	int				 rc;
-
-	if (daos_is_zero_dti(&dae_df->dae_xid) ||
-	    dae_df->dae_flags & DTX_EF_INVALID)
-		return 1;
-
-	if (dae_df->dae_rec_cnt == 0) {
-		D_ERROR(DF_UOID" invalid DTX rec cound (0) for DTX "DF_DTI"\n",
-			DP_UOID(dae_df->dae_oid), DP_DTI(&dae_df->dae_xid));
-		return -DER_IO;
-	}
-
-	umm = vos_cont2umm(cont);
-	rec_df = &dae_df->dae_rec_inline[0];
-
-again:
-	switch (rec_df->dr_type) {
-	case DTX_RT_ILOG:
-		/* XXX: To avoid complex ilog related status check, let's
-		 *	check next record. For pure ilog touched DTX case,
-		 *	we do NOT handle it via batched cleanup.
-		 */
-		idx++;
-		if (idx >= dae_df->dae_rec_cnt)
-			return 0;
-
-		if (idx < DTX_INLINE_REC_CNT) {
-			rec_df = &dae_df->dae_rec_inline[idx];
-		} else {
-			rec_df = umem_off2ptr(umm, dae_df->dae_rec_off);
-			rec_df = rec_df + idx - DTX_INLINE_REC_CNT;
-		}
-
-		goto again;
-	case DTX_RT_SVT: {
-		struct vos_irec_df	*svt;
-
-		svt = umem_off2ptr(umm, rec_df->dr_record);
-		if (!umoff_is_null(svt->ir_dtx))
-			return 0;
-		break;
-	}
-	case DTX_RT_EVT: {
-		struct evt_desc		*evt;
-
-		evt = umem_off2ptr(umm, rec_df->dr_record);
-		if (!umoff_is_null(evt->dc_dtx))
-			return 0;
-		break;
-	}
-	default:
-		D_ERROR(DF_UOID" invalid DTX record type %d for DTX "DF_DTI"\n",
-			DP_UOID(dae_df->dae_oid), rec_df->dr_type,
-			DP_DTI(&dae_df->dae_xid));
-		return -DER_IO;
-	}
-
-	rc = vos_tx_begin(umm);
-	if (rc != 0)
-		return rc;
-
-	if (!umoff_is_null(dae_df->dae_rec_off))
-		umem_free(umm, dae_df->dae_rec_off);
-
-	bcb->bcb_dae_count--;
-	dbd = umem_off2ptr(umm, bcb->bcb_dbd_off);
-	if (bcb->bcb_dae_count > 0 || dbd->dbd_index < dbd->dbd_cap) {
-		umem_tx_add_ptr(umm, &dae_df->dae_flags,
-				sizeof(dae_df->dae_flags));
-		dae_df->dae_flags = DTX_EF_INVALID;
-		umem_tx_add_ptr(umm, &dbd->dbd_count, sizeof(dbd->dbd_count));
-		dbd->dbd_count--;
-		rc = 1;
-	} else {
-		dtx_batched_cleanup(cont, bcb, next_dbd);
-		rc = 2;
-	}
-
-	return vos_tx_end(umm, 0);
-}
-
 int
 vos_dtx_act_reindex(struct vos_container *cont)
 {
@@ -1815,31 +1555,11 @@ vos_dtx_act_reindex(struct vos_container *cont)
 	int				 i;
 
 	while (1) {
-		struct dtx_batched_cleanup_blob	*bcb;
-
-next:
 		dbd = umem_off2ptr(umm, dbd_off);
 		if (dbd == NULL)
 			break;
 
 		D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
-
-		bcb = dtx_bcb_alloc(cont, dbd);
-		if (bcb == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		bcb->bcb_dae_count = dbd->dbd_count;
-		if (bcb->bcb_dae_count == 0) {
-			if (cont_df->cd_dtx_active_tail != dbd_off ||
-			    dbd->dbd_index >= dbd->dbd_cap) {
-				D_ERROR("Invalid active DTX blob: "UMOFF_PF
-					", idx %d, cap %d\n", UMOFF_P(dbd_off),
-					dbd->dbd_index, dbd->dbd_cap);
-				rc = -DER_IO;
-			}
-
-			D_GOTO(out, rc);
-		}
 
 		for (i = 0; i < dbd->dbd_index; i++) {
 			struct vos_dtx_act_ent_df	*dae_df;
@@ -1847,17 +1567,6 @@ next:
 			int				 count;
 
 			dae_df = &dbd->dbd_active_data[i];
-			rc = dtx_act_handle_batched_cleanup(cont, bcb, dae_df,
-							    &dbd_off);
-			if (rc > 1)
-				goto next;
-
-			if (rc == 1)
-				continue;
-
-			if (rc < 0)
-				D_GOTO(out, rc);
-
 			D_ALLOC_PTR(dae);
 			if (dae == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1865,7 +1574,6 @@ next:
 			memcpy(&dae->dae_base, dae_df, sizeof(dae->dae_base));
 			dae->dae_df_off = umem_ptr2off(umm, dae_df);
 			dae->dae_dbd = dbd;
-			dae->dae_bcb = bcb;
 
 			if (DAE_REC_CNT(dae) <= DTX_INLINE_REC_CNT)
 				goto insert;
@@ -1947,7 +1655,6 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 		if (dce == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_INIT_LIST_HEAD(&dce->dce_bcb_link);
 		memcpy(&dce->dce_base, &dbd->dbd_commmitted_data[i],
 		       sizeof(dce->dce_base));
 		dce->dce_reindex = 1;
@@ -1982,4 +1689,23 @@ out:
 	}
 
 	return rc;
+}
+
+void
+vos_dtx_cleanup_dth(struct dtx_handle *dth)
+{
+	d_iov_t	kiov;
+	int	rc;
+
+	if (dth == NULL || !dth->dth_actived)
+		return;
+
+	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
+			   BTR_PROBE_EQ, &kiov, NULL);
+	if (rc != 0)
+		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
+			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
+	else
+		dth->dth_actived = 0;
 }
