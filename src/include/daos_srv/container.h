@@ -65,17 +65,13 @@ struct ds_cont_child {
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
-	void			*sc_dtx_flush_cbdata;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
-				 sc_closing:1,
 				 sc_stopping:1;
-	uint32_t		 sc_dtx_flush_wait_count;
-
 	/* Aggregate ULT */
 	struct dss_sleep_ult	 *sc_agg_ult;
 
@@ -101,6 +97,7 @@ struct ds_cont_child {
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
+	uint32_t		 sc_open;
 };
 
 /*
