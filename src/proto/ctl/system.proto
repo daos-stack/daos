@@ -33,10 +33,14 @@ message SystemMember {
 	string addr = 1;
 	string uuid = 2;
 	uint32 rank = 3;
+	uint32 state = 4;
 }
 
 // SystemStopReq supplies system shutdown parameters.
-message SystemStopReq {}
+message SystemStopReq {
+	bool prep = 1; // indicates that the prep stage should be performed
+	bool kill = 2; // indicates that the kill stage should be performed
+}
 
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.

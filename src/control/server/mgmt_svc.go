@@ -34,11 +34,11 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/peer"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
@@ -151,10 +151,10 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 type mgmtSvc struct {
 	log        logging.Logger
 	harness    *IOServerHarness
-	membership *common.Membership // if MS leader, system membership list
+	membership *system.Membership // if MS leader, system membership list
 }
 
-func newMgmtSvc(h *IOServerHarness, m *common.Membership) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership) *mgmtSvc {
 	return &mgmtSvc{
 		log:        h.log,
 		harness:    h,
@@ -230,9 +230,8 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		newMember := common.SystemMember{
-			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
-		}
+		newMember := system.NewMember(resp.GetRank(), req.GetUuid(),
+			replyAddr, system.MemberStateStarted)
 
 		count, err := svc.membership.Add(newMember)
 		if err != nil {
