@@ -24,6 +24,7 @@ cont:
     cont_count: 10
 dfuse:
     mount_dir: /tmp/
+    foreground: True
 bashcmd:
   dirname: test
   filename1: testfile1.txt
