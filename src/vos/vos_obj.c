@@ -1454,10 +1454,13 @@ vos_obj_iter_aggregate(struct vos_iterator *iter, bool discard)
 		deleted = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		D_ASSERT(!((krec->kr_bmap & KREC_BF_BTR) &&
-			   !dbtree_is_empty_inplace(&krec->kr_btr)) &&
-			 !((krec->kr_bmap & KREC_BF_EVT) &&
-			   !evtree_is_empty_inplace(&krec->kr_evt)));
+		if (((krec->kr_bmap & KREC_BF_BTR) &&
+		     !dbtree_is_empty_inplace(&krec->kr_btr)) ||
+		    ((krec->kr_bmap & KREC_BF_EVT) &&
+		     !evtree_is_empty_inplace(&krec->kr_evt))) {
+			/* Keys/records in subtree are inaccessible */
+			D_DEBUG(DB_IO, "Deleting orphaned subtree\n");
+		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	}
