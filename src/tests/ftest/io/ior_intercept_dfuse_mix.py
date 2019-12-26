@@ -24,6 +24,7 @@
 
 import os
 import threading
+import time
 import write_host_file
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
@@ -172,8 +173,6 @@ class IorInterceptDfuseMix(IorTestBase):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-            if self.ior_cmd.transfer_size.value == "256B":
-                self.cancelForTicket("DAOS-3449")
             self.start_dfuse()
 
         # Create two jobs and run in parallel.
@@ -186,6 +185,10 @@ class IorInterceptDfuseMix(IorTestBase):
                                 results, None)
 
         job1.start()
+        # Since same ior_cmd is used to trigger the MPIRUN
+        # with different parameters, pausing for 5 seconds to
+        # avoid data collisions.
+        time.sleep(5)
         job2.start()
         job1.join()
         job2.join()
@@ -201,8 +204,8 @@ class IorInterceptDfuseMix(IorTestBase):
         """
         hostfile = write_host_file.write_host_file(
             clients, self.workdir, self.hostfile_clients_slots)
-        job = threading.Thread(target=self.run_multiple_ior, args=(
-            hostfile, len(clients), results, job_num, intercept))
+        job = threading.Thread(target=self.run_multiple_ior, args=[
+            hostfile, len(clients), results, job_num, intercept])
         return job
 
     def run_multiple_ior(self, hostfile, num_clients,
