@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,9 @@ func TestMain(m *testing.M) {
 		// remove this once we're running so that it doesn't pollute test results
 		os.Unsetenv("LD_LIBRARY_PATH")
 		os.Unsetenv(testModeVar)
-		fmt.Printf("%s%s%s\n", testEnvStr, testSep, strings.Join(os.Environ(), " "))
+		env := os.Environ()
+		sort.Strings(env)
+		fmt.Printf("%s%s%s\n", testEnvStr, testSep, strings.Join(env, " "))
 		fmt.Printf("%s%s%s\n", testArgsStr, testSep, strings.Join(os.Args[1:], " "))
 		os.Exit(0)
 	case "RunnerContextExit":
@@ -159,7 +162,12 @@ func TestRunnerNormalExit(t *testing.T) {
 	// Light integration testing of arg/env generation; unit tests elsewhere.
 	wantArgs := "-t 42 -x 1 -p 1 -I 0"
 	var gotArgs string
-	wantEnv := "OFI_INTERFACE=qib0 D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR"
+	env := []string{
+		"OFI_INTERFACE=qib0",
+		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+	}
+	sort.Strings(env)
+	wantEnv := strings.Join(env, " ")
 	var gotEnv string
 
 	splitLine := func(line, marker string, dest *string) {
