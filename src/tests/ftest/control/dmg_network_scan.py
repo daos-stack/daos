@@ -42,7 +42,6 @@ class DmgNetworkScanTest(TestWithServers):
         """Initialize a DmgNetworkScanTest object."""
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
-        self.setup_start_servers = False
 
     def get_net_info(self, provider):
         """Get expected values of domain with fi_info."""
