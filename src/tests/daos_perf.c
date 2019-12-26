@@ -676,11 +676,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
@@ -694,7 +694,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }

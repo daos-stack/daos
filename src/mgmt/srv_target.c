@@ -35,6 +35,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_mgmt.h>
 
 #include "srv_internal.h"
 #include "srv_layout.h"		/* for a couple of constants only */
@@ -736,8 +737,8 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
-		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC)
+		rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 					in->tps_value_extra);
 	if (rc)
 		D_ERROR("Set parameter failed key_id %d: rc %d\n",
