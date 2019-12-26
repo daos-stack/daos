@@ -176,11 +176,9 @@ CRT_RPC_DEFINE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
 		DAOS_OSEQ_POOL_TGT_CONNECT)
 CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
-CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
-		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
-CRT_RPC_DEFINE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
+CRT_RPC_DEFINE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET, DAOS_OSEQ_POOL_PROP_GET)
 CRT_RPC_DEFINE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 		DAOS_OSEQ_POOL_ACL_UPDATE)
@@ -278,3 +276,81 @@ pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
 	if (addr_list->pta_addrs)
 		D_FREE(addr_list->pta_addrs);
 }
+
+uint64_t
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (po_info != NULL) {
+		if (po_info->pi_bits & DPI_SPACE)
+			bits |= DAOS_PO_QUERY_SPACE;
+		if (po_info->pi_bits & DPI_REBUILD_STATUS)
+			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
+	}
+
+	if (prop == NULL)
+		goto out;
+	if (prop->dpp_entries == NULL) {
+		bits |= DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	}
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			bits |= DAOS_PO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
+			break;
+		case DAOS_PROP_PO_ACL:
+			bits |= DAOS_PO_QUERY_PROP_ACL;
+			break;
+		case DAOS_PROP_PO_OWNER:
+			bits |= DAOS_PO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+
+out:
+	return bits;
+}
+
+int
+list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+void
+list_cont_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+

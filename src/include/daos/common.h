@@ -646,6 +646,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
+#define DAOS_NVME_MEM_PRIMARY	0
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 

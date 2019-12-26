@@ -142,6 +142,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
+		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
@@ -158,7 +159,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	// Light integration testing of arg/env generation; unit tests elsewhere.
 	wantArgs := "-t 42 -x 1 -p 1 -I 0"
 	var gotArgs string
-	wantEnv := "OFI_INTERFACE=qib0"
+	wantEnv := "OFI_INTERFACE=qib0 D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR"
 	var gotEnv string
 
 	splitLine := func(line, marker string, dest *string) {

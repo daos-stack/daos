@@ -63,21 +63,49 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
+	Prep bool `long:"prep" description:"Perform prep phase of controlled shutdown."`
+	Kill bool `long:"kill" description:"Perform kill phase of controlled shutdown."`
 }
 
 // Execute is run when systemStopCmd activates
 func (cmd *systemStopCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
+	if !cmd.Prep && !cmd.Kill {
+		cmd.Prep = true
+		cmd.Kill = true
+	}
 
-	members, err := cmd.conns.SystemStop()
+	req := client.SystemStopReq{Prep: cmd.Prep, Kill: cmd.Kill}
+	results, err := cmd.conns.SystemStop(req)
 	if err != nil {
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	}
-	if len(members) > 0 {
-		msg += fmt.Sprintf(": still %d active members", len(members))
+		return errors.Wrap(err, "System-Stop command failed")
 	}
 
-	cmd.log.Infof("System-stop command %s\n", msg)
+	if len(results) == 0 {
+		cmd.log.Debug("System-Stop no member results returned\n")
+		return nil
+	}
+	cmd.log.Debug("System-Stop command succeeded\n")
+
+	idTitle := "Member ID"
+	operationTitle := "Operation"
+	resultTitle := "Result"
+
+	formatter := NewTableFormatter([]string{idTitle, operationTitle, resultTitle})
+	var table []TableRow
+
+	for _, r := range results {
+		row := TableRow{idTitle: r.ID}
+		row[operationTitle] = r.Action
+		msg := "OK"
+		if r.Err != nil {
+			msg = r.Err.Error()
+		}
+		row[resultTitle] = msg
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
 
 	return nil
 }
@@ -90,19 +118,35 @@ type systemMemberQueryCmd struct {
 
 // Execute is run when systemMemberQueryCmd activates
 func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
-
 	members, err := cmd.conns.SystemMemberQuery()
-	switch {
-	case err != nil:
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	case len(members) > 0:
-		msg += members.String()
-	default:
-		msg += "no joined members"
+	if err != nil {
+		return errors.Wrap(err, "System-Member-Query command failed")
 	}
 
-	cmd.log.Infof("System-member-query command %s\n", msg)
+	cmd.log.Debug("System-Member-Query command succeeded\n")
+	if len(members) == 0 {
+		cmd.log.Info("No members in system\n")
+		return nil
+	}
+
+	rankTitle := "Member Rank"
+	uuidTitle := "Member UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := NewTableFormatter([]string{rankTitle, uuidTitle, addrTitle, stateTitle})
+	var table []TableRow
+
+	for _, m := range members {
+		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
 
 	return nil
 }
