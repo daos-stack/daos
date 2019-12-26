@@ -105,5 +105,5 @@ class DaosAdminPrivTest(TestWithServers):
         # Stop server
         try:
             server.stop()
-        except ServerFailed as error:
+        except ServerFailed as err:
             self.fail("Failed to stop server: {}".format(err))
