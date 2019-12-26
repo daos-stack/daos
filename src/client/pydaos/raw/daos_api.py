@@ -1415,9 +1415,9 @@ class DaosContainer(object):
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if layer_type != "Unknown":
+        if layer_type != "NULL":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                    self.flag.DAOS_PROP_CO_LAYOUT_TYPE)
+                self.flag.DAOS_PROP_CO_LAYOUT_TYPE)
             if layer_type == "posix":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     self.cont_type.CONT_POSIX)
