@@ -1376,14 +1376,17 @@ class DaosContainer(object):
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
         self.cont_prop = None
+        self.cont_type = None
         self.flag = None
 
     def get_uuid_str(self):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def create(self, poh, con_uuid=None, enable_chksum=False, srv_verify=False,
-               chksum_type=None, chunk_size=None, cb_func=None):
+    def create(self, poh, con_uuid=None, layer_type="NULL",
+               enable_chksum=False, srv_verify=False,
+               chksum_type=None, chunk_size=None,
+               cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -1396,33 +1399,60 @@ class DaosContainer(object):
         self.poh = poh
         # We will support only basic properties. Full
         # container properties will not be exposed.
-        if enable_chksum is True:
-            # Create DaosProperty for checksum
-            # 1. Enable checksum, 2. Server Verfiy
-            # 3. Chunk Size Allocation.
-            num_prop = 3
+        # Create DaosProperty for checksum
+        # 1. Layer Type.
+        # 2. Enable checksum,
+        # 3. Server Verfiy
+        # 4. Chunk Size Allocation.
+        if (layer_type != "NULL") or (enable_chksum is True):
+            num_prop = 4
             self.cont_prop = daos_cref.DaosProperty(num_prop)
-            self.flag = daos_cref.CheckSumFlag()
-            self.cont_prop.dpp_entries[0].dpe_type = ctypes.c_uint32(
-                self.flag.CSUM_ENABLE)
+            self.cont_type = daos_cref.ContainerLayer()
+            self.flag = daos_cref.ContainerProp()
+        # idx index is used to increment the dpp_entried array
+        # value. If layer_type is None and checksum is enabled
+        # the index will vary. [eg: layer is none, checksum
+        # dpp_entries will start with idx=0. If layer is not
+        # none, checksum dpp_entries will start at idx=1.]
+        idx = 0
+        if layer_type != "Unknown":
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                    self.flag.DAOS_PROP_CO_LAYOUT_TYPE)
+            if layer_type == "posix":
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_type.CONT_POSIX)
+            elif layer_type == "hdf5":
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_type.CONT_HDF5)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_type.CONT_UNKNOWN)
+            idx = idx + 1
+        # If checksum flag is enabled.
+        if enable_chksum is True:
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                self.flag.DAOS_PROP_CO_CSUM)
             if chksum_type is None:
-                self.cont_prop.dpp_entries[0].dpe_val = ctypes.c_uint64(1)
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
-                self.cont_prop.dpp_entries[0].dpe_val = ctypes.c_uint64(
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     chksum_type)
-            self.cont_prop.dpp_entries[2].dpe_type = ctypes.c_uint32(
-                self.flag.CSUM_CHUNK_SIZE)
-            if chunk_size is None:
-                self.cont_prop.dpp_entries[2].dpe_val = ctypes.c_uint64(16384)
-            else:
-                self.cont_prop.dpp_entries[2].dpe_val = ctypes.c_uint64(
-                    chunk_size)
-            self.cont_prop.dpp_entries[1].dpe_type = ctypes.c_uint32(
-                self.flag.CSUM_SRV_VERIFY)
+            idx = idx + 1
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                self.flag.DAOS_PROP_CO_CSUM_SERVER_VERIFY)
             if srv_verify is True:
-                self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(1)
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
-                self.cont_prop.dpp_entries[1].dpe_val = ctypes.c_uint64(0)
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(0)
+            idx = idx + 1
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                self.flag.DAOS_PROP_CO_CSUM_CHUNK_SIZE)
+            if chunk_size is None:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    16384)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    chunk_size)
 
         func = self.context.get_function('create-cont')
 
