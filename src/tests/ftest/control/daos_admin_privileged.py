@@ -24,10 +24,15 @@
 from __future__ import print_function
 
 import os
+import getpass
 
-from dmg_utils import DmgCommand, storage_format, storage_prep
+from dmg_utils import DmgCommand, storage_format
+from server_utils import ServerManager, ServerFailed, storage_prepare
+from command_utils import CommandFailure
 from apricot import TestWithServers
 from avocado.utils import process
+from general_utils import pcmd
+
 
 class DaosAdminPrivTest(TestWithServers):
     """Test Class Description:
@@ -40,21 +45,53 @@ class DaosAdminPrivTest(TestWithServers):
         """Initialize a DaosAdminPrivTest object."""
         super(DaosAdminPrivTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
+        self.setup_start_servers = False
 
-    def test_daos_admin_format(self):
+    def test_daos_admin_scm_format(self):
         """
         JIRA ID: DAOS-2895
         Test Description: Test daso_admin functionality to perform format
         privileged operations while daos_server is run as normal user.
         :avocado: tags=all,tiny,pr,daos_admin,basic
         """
-        # Check the the server is being run as non-root user
-        if self.server_managers[-1].runner.process.is_sudo_enabled():
-            self.fail("The server was started under sudo.\n")
-
         # Verify that daos_admin has the correct permissions
-        daos_admin = "/usr/bin/daos_admin"
-        os.stat(daos_admin)
+        self.log.info("Checking daos_admin binary permissions")
+        file_stats = os.stat("/usr/bin/daos_admin")
+        file_perms = oct(file_stats.st_mode)[-4:]
+        if file_perms != '4755':
+            self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
+        
+        # Start server as non-root
+        self.log.info("Starting server as non-root")
+        server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
+        server.get_params(self)
+        server.hosts = (
+            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
+
+        if self.prefix != "/usr":
+            if server.runner.export.value is None:
+                server.runner.export.value = []
+            server.runner.export.value.extend(["PATH"])
+
+        yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+        server.runner.job.set_config(yamlfile)
+        server.server_clean()
+
+        # Prep server for format, run command under non-root user
+        self.log.info("Performing SCM storage prepare")
+        user = getpass.getuser()
+        try:
+            storage_prepare(self.hostlist_servers, user, "dcpm")
+        except ServerFailed as err:
+            self.fail("Failed preparing SCM as non-root user: {}".format(err))
+
+        # Start server
+        try:
+            server.run()
+        except CommandFailure as err:
+            # Kill the subprocess, anything that might have started
+            server.kill()
+            self.fail("Failed to start server under non-root user".format(err))
 
         # Update hostlist value for dmg command
         port = self.params.get("port", "/run/server_config/*")
@@ -62,23 +99,7 @@ class DaosAdminPrivTest(TestWithServers):
             "{}:{}".format(host, port) for host in self.hostlist_servers]
 
         # Run format command under non-root user
+        self.log.info("Performing SCM format")
         format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
-
-    def test_daos_admin_prepare(self):
-        """
-        JIRA ID: DAOS-2895
-        Test Description: Test daso_admin functionality to perform prepare
-        privileged operations while daos_server is run as normal user.
-        :avocado: tags=all,tiny,pr,daos_admin,basic
-        """
-        # Verify that daos_admin has the correct permissions
-
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-
-        # Run format command under non-root user
-        format_res = storage_format(
-            os.path.join(self.prefix, "bin"), servers_with_ports, sudo=False)
+        if format_res == None:
+            self.fail("Failed to format storage")

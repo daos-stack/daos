@@ -6,7 +6,6 @@ hosts:
 server_config:
   name: daos_server
   port: 10001
-dmg:
-  request: storage
-  action: format
-  insecure: True
+  servers:
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
