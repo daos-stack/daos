@@ -28,7 +28,6 @@ import subprocess
 import paramiko
 import socket
 from env_modules import load_mpi
-from command_utils import EnvironmentVariables
 
 class MpioFailed(Exception):
     """Raise if MPIO failed"""
@@ -51,31 +50,37 @@ class MpioUtils():
                 ["ssh", hostlist[0],
                  "command -v mpichversion"]).rstrip()[:-len('bin/mpichversion')]
 
+            # Obtaning the location where mpich is installed by executing
+            # "which mpichversion", which should return
+            # /some_path/bin/mpichversion, hence removing 17 characters
+            # to obtain just the installed location
+            print(self.mpichinstall)
+
             return True
 
         except subprocess.CalledProcessError as excep:
             print("Mpich not installed \n {}".format(excep))
             return False
 
-    @staticmethod
-    def run_romio(hostlist, romio_test_repo):
+    def run_romio(self, basepath, hostlist, romio_test_repo):
         """
             Running ROMIO testsuite under mpich
             Function Arguments:
+                basepath --path where all daos and it's dependencies can be
+                           fetched from
                 hostlist --list of client hosts
                 romio_test_repo --built romio test directory
         """
 
-        env = EnvironmentVariables()
-        env["D_LOG_FILE"] = os.environ.get("D_LOG_FILE", "")
-        env["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
+        # environment variables only to be set on client node
+        env_variables = ["export CRT_ATTACH_INFO_PATH={}/install/tmp/" \
+                             .format(basepath),
+                         "export MPI_LIB=''", "export DAOS_SINGLETON_CLI=1"]
 
-        test_cmd = [env.get_export_str(),
-                    os.path.join(romio_test_repo, 'runtests'),
-                    '-fname=daos:test1',
-                    '-subset',
-                    '-daos']
-        run_cmd = " ".join(test_cmd)
+        # setting attributes
+        cd_cmd = 'cd ' + romio_test_repo
+        test_cmd = './runtests -fname=daos:test1 -subset -daos'
+        run_cmd = cd_cmd + ' && ' + test_cmd
         print("Romio test run command: {}".format(run_cmd))
 
         try:
@@ -86,18 +91,26 @@ class MpioUtils():
             ssh.load_system_host_keys()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostlist[0])
-            _, ssh_stdout, ssh_stderr = ssh.exec_command(run_cmd)
+            _ssh_stdin, ssh_stdout, ssh_stderr = (
+                ssh.exec_command(env_variables[0] + " && " +
+                                 env_variables[1] + " && " +
+                                 env_variables[2] + " && " +
+                                 env_variables[3] + " && " +
+                                 env_variables[4] + " && " +
+                                 run_cmd))
             print(ssh_stdout.read())
             print(ssh_stderr.read())
         except (IOError, OSError, paramiko.SSHException, socket.error) as excep:
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
     # pylint: disable=R0913
-    def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
+    def run_llnl_mpi4py_hdf5(self, basepath, hostfile, pool_uuid, test_repo,
                              test_name, client_processes):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
+                basepath          --path where all daos and it's dependencies
+                                    can be fetched from
                 hostfile          --client hostfile
                 pool_uuid         --Pool UUID
                 test_repo         --test repo location
@@ -105,58 +118,44 @@ class MpioUtils():
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
-        env = EnvironmentVariables()
-        env["MPIO_USER_PATH"] = "daos:"
-        env["DAOS_POOL"] = "{}".format(pool_uuid)
-        env["DAOS_SVCL"] = "{}".format(0)
-        env["HDF5_PARAPREFIX"] = "daos:"
-        mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
+        env_variables = {"CRT_ATTACH_INFO_PATH": "{}/install/tmp/"\
+                             .format(basepath),
+                         "MPI_LIB": '',
+                         "MPIO_USER_PATH": "daos:",
+                         "DAOS_POOL": "{}".format(pool_uuid),
+                         "DAOS_SVCL": "{}".format(0),
+                         "HDF5_PARAPREFIX": "daos:"}
+        # setting attributes
+        cd_cmd = 'cd ' + test_repo
         # running 8 client processes
-        if test_name == "llnl" and os.path.isfile(
-                os.path.join(test_repo, "testmpio_daos")):
-            test_cmd = [env.get_export_str(),
-                        mpirun,
-                        '-np',
-                        str(client_processes),
-                        '--hostfile',
-                        hostfile,
-                        os.path.join(test_repo, 'testmpio_daos'),
-                        '1']
-            cmd = " ".join(test_cmd)
-        elif test_name == "mpi4py" and \
-             os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
-            test_cmd = [env.get_export_str(),
-                        mpirun,
-                        '-np',
-                        str(client_processes),
-                        '--hostfile',
-                        hostfile,
-                        'python',
-                        os.path.join(test_repo, 'test_io_daos.py')]
-            cmd = " ".join(test_cmd)
-        elif test_name == "hdf5" and \
-             (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
-              os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
-            cmd = ''
-            for test in ["testphdf5", "t_shapesame"]:
-                fqtp = os.path.join(test_repo, test)
-                test_cmd = [env.get_export_str(),
-                            'echo ***Running {}*** ;'.format(fqtp),
-                            mpirun,
-                            '-np',
-                            str(client_processes),
-                            '--hostfile',
-                            hostfile,
-                            fqtp + ';']
-                cmd += " ".join(test_cmd)
+        if test_name == "llnl" and os.path.isfile(test_repo + "/testmpio_daos"):
+            test_cmd = "mpirun -np {} --hostfile {} ./testmpio_daos 1"\
+                           .format(client_processes, hostfile)
+        elif test_name == "mpi4py" and os.path.isfile(test_repo +
+                                                      "/test_io_daos.py"):
+            test_cmd = "mpiexec -n {} --hostfile {} python test_io_daos.py"\
+                           .format(client_processes, hostfile)
+        elif test_name == "hdf5" and (os.path.isfile(test_repo + "/testphdf5")
+                                      and os.path.isfile(test_repo
+                                                         + "/t_shapesame")):
+            test_cmd = ("echo ***Running testhdf5*** ;" +
+                        " mpirun -np {} --hostfile {} ./testphdf5 ;"\
+                        .format(client_processes, hostfile) +
+                        "echo ***Running t_shapesame*** ;" +
+                        "mpirun -np {} --hostfile {} ./t_shapesame"\
+                        .format(client_processes, hostfile))
         else:
-            raise MpioFailed("Wrong test name ({}) or test repo location ({}) "
-                             "specified".format(test_name, test_repo))
+            raise MpioFailed("Wrong test name or test repo location specified")
 
-        print("run command: {}".format(cmd))
+        # final run command
+        run_cmd = ";".join([cd_cmd, ";".join(["export {}={}".format(key, val)
+                                              for key, val in
+                                              env_variables.items()]),
+                            test_cmd])
+        print("run command: {}".format(run_cmd))
 
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+            process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, shell=True)
             while True:
                 output = process.stdout.readline()

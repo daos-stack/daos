@@ -13,10 +13,14 @@ pool:
     createset:
         setname: daos_server
     createsize:
-        size: 25000000000
+        size: 60000000000
     createsvc:
         svcn: 1
 client_processes:
     np: 8
+# below mentioned path should be replaced by path of
+# LLNL and Mpi4py test suite directory in CI nodes when available.
 test_repo:
-    hdf5: "/usr/lib64/hdf5/tests"
+    llnl: "/home/standan/mpiio/Testmpio"
+    mpi4py: "/home/standan/mpiio/mpi4py_latest/test"
+    hdf5: "/home/standan/mpiio/hdf5/build/testpar"
