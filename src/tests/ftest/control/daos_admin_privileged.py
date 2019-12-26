@@ -103,3 +103,9 @@ class DaosAdminPrivTest(TestWithServers):
         format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
         if format_res == None:
             self.fail("Failed to format storage")
+
+        # Stop server
+        try:
+            server.stop()
+        except ServerFailed as error:
+            self.fail("Failed to stop server")
