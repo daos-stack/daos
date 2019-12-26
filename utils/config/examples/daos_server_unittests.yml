@@ -1,7 +1,7 @@
 # Example configuration file using sockets
 
 name: daos_server           # map to -g daos_server
-access_points: ['example:10001']
+access_points: ['example:10001'] # management service replicas
 port: 10001                 # mgmt port
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 socket_dir: /tmp/daos_sockets

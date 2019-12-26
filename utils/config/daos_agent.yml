@@ -19,10 +19,9 @@
 # Must have the same value for all agents and servers in a system.
 # default: hostname of this node at port 10001 for local testing
 #access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#access_points: [hostname1,hostname2,hostname3]
 
 # Force different port number to connect to access points.
-# default: 10000
+# default: 10001
 #port: 10001
 
 # Hostlist

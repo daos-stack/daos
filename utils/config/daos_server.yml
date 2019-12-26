@@ -19,7 +19,7 @@
 ## Hosts can be specified with or without port, default port below
 ## assumed if not specified.
 #
-## default: hostname of this node at port 10000 for local testing
+## default: hostname of this node at port 10001 for local testing
 #access_points: ['hostname1:10001']
 #
 #
@@ -28,7 +28,7 @@
 ## Force different port number to bind daos_server to, this will also
 ## be used when connecting to access points if no port is specified.
 #
-## default: 10000
+## default: 10001
 #port: 10001
 #
 ## Transport Credentials Specifying certificates to secure communications

@@ -1,20 +1,13 @@
 # Example configuration file using sockets
 
 name: daos_server           # map to -g daos_server
-access_points: ['example:10001']
+access_points: ['example:10001'] # management service replicas
 port: 10001                 # mgmt port
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 socket_dir: /tmp/daos_sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
-## uncomment to manually assign management service leader, if left unset
-## this will be the first daos_server instance to start
-#access_points: ['hostname1:10001']
-## uncomment to drop privileges before starting data plane
-## (if started as root to perform hardware provisioning)
-# user_name: daosuser
-# group_name: daosgroup # (optional)
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
