@@ -219,7 +219,7 @@ struct vos_dtx_act_ent_df {
 	/** The intent of related modification. */
 	uint32_t			dae_intent;
 	/** The index in the current vos_dtx_blob_df. */
-	uint32_t			dae_index;
+	int32_t				dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
@@ -365,6 +365,11 @@ struct vos_irec_df {
 	umem_off_t			ir_dtx;
 	/** length of value */
 	uint64_t			ir_size;
+	/**
+	 * global length of value, it is needed for single value of EC object
+	 * class that the data will be distributed to multiple data cells.
+	 */
+	uint64_t			ir_gsize;
 	/** external payload address */
 	bio_addr_t			ir_ex_addr;
 	/** placeholder for the key checksum & internal value */

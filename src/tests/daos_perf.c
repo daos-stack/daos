@@ -102,8 +102,9 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-				&cred->tc_dkey, 1, &cred->tc_iod,
-				&cred->tc_sgl);
+					   &cred->tc_dkey, 1,
+					   &cred->tc_iod,
+					   &cred->tc_sgl);
 	} else { /* zero-copy */
 		struct bio_sglist	*bsgl;
 		daos_handle_t		 ioh;
@@ -130,10 +131,10 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-			       bsgl->bs_iovs[0].bi_buf,
-			       bsgl->bs_iovs[0].bi_data_len);
+			       bio_iov2raw_buf(&bsgl->bs_iovs[0]),
+			       bio_iov2raw_len(&bsgl->bs_iovs[0]));
 		} else {
-			memcpy(bsgl->bs_iovs[0].bi_buf,
+			memcpy(bio_iov2req_buf(&bsgl->bs_iovs[0]),
 			       cred->tc_sgl.sg_iovs[0].iov_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
@@ -675,11 +676,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
@@ -693,7 +694,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }

@@ -33,7 +33,7 @@ the default location that daos_server uses for its runtime directory,
 either uncomment and set the socket_dir configuration value in
 install/etc/daos_server.yml, or pass the location to daos_server on
 the command line using the -d flag. For the daos_agent, an alternate
-location can be passed on the command line using the -runtime_dir flag.
+location can be passed on the command line using the --runtime_dir flag.
 
 #### Default Directory (non-persistent)
 
