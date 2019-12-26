@@ -145,16 +145,9 @@ if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
         fi
     fi
 
-    tmpfs_size=16777216
-    memsize=\"\$(sed -ne '/MemTotal:/s/.* \([0-9][0-9]*\) kB/\1/p' \
-               /proc/meminfo)\"
-    if [ \$memsize -gt 32000000 ]; then
-        # make it twice as big on the hardware cluster
-        tmpfs_size=\$((tmpfs_size*2))
-    fi
     sudo ed <<EOF /etc/fstab
 \\\$a
-tmpfs /mnt/daos tmpfs rw,relatime,size=\${tmpfs_size}k 0 0 # added by ftest.sh
+tmpfs /mnt/daos tmpfs rw,relatime,size=16777216k 0 0 # added by ftest.sh
 .
 wq
 EOF

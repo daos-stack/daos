@@ -92,7 +92,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         # Display any errors or requested output
         if retcode != expect_rc or verbose:
             msg = "failure running" if retcode != expect_rc else "output from"
-            if not list(task.iter_buffers(rc_nodes)):
+            if len(list(task.iter_buffers(rc_nodes))) == 0:
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
