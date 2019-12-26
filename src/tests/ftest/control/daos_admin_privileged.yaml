@@ -1,0 +1,12 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+server_config:
+  name: daos_server
+  port: 10001
+dmg:
+  request: storage
+  action: format
+  insecure: True

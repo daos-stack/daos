@@ -473,7 +473,7 @@ class ServerManager(ExecutableCommand):
 
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.daosbinpath, ",".join(servers_with_ports))
+            storage_format(self.daosbinpath, ",".join(servers_with_ports), True)
             self.runner.job.mode = "normal"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
