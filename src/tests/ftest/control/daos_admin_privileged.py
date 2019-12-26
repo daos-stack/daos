@@ -26,12 +26,10 @@ from __future__ import print_function
 import os
 import getpass
 
-from dmg_utils import DmgCommand, storage_format
+from dmg_utils import storage_format
 from server_utils import ServerManager, ServerFailed, storage_prepare
 from command_utils import CommandFailure
 from apricot import TestWithServers
-from avocado.utils import process
-from general_utils import pcmd
 
 
 class DaosAdminPrivTest(TestWithServers):
@@ -60,7 +58,7 @@ class DaosAdminPrivTest(TestWithServers):
         file_perms = oct(file_stats.st_mode)[-4:]
         if file_perms != '4755':
             self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
-        
+
         # Start server as non-root
         self.log.info("Starting server as non-root")
         server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
@@ -91,7 +89,7 @@ class DaosAdminPrivTest(TestWithServers):
         except CommandFailure as err:
             # Kill the subprocess, anything that might have started
             server.kill()
-            self.fail("Failed to start server under non-root user".format(err))
+            self.fail("Failed starting server as non-root user: {}".format(err))
 
         # Update hostlist value for dmg command
         port = self.params.get("port", "/run/server_config/*")
@@ -101,11 +99,11 @@ class DaosAdminPrivTest(TestWithServers):
         # Run format command under non-root user
         self.log.info("Performing SCM format")
         format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
-        if format_res == None:
+        if format_res is None:
             self.fail("Failed to format storage")
 
         # Stop server
         try:
             server.stop()
         except ServerFailed as error:
-            self.fail("Failed to stop server")
+            self.fail("Failed to stop server: {}".format(err))
