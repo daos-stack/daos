@@ -68,10 +68,12 @@ class IorInterceptMultiClient(IorTestBase):
 
         :avocado: tags=all,daosio,hw,full_regression,iorinterceptmulticlient
         """
-        out = self.run_ior_with_pool()
+        suffix = self.ior_cmd.transfer_size.value
+        out = self.run_ior_with_pool(test_file_suffix=suffix)
         without_intercept = IorCommand.get_ior_metrics(out)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        out = self.run_ior_with_pool(intercept)
+        suffix = suffix + "intercept"
+        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)

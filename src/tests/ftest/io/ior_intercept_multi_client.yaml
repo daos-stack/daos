@@ -36,19 +36,19 @@ ior:
     daos_destroy: False
     iorflags:
         ssf:
-          flags: "-v -D 300 -w -r"
+          flags: "-k -v -D 120 -w -r"
           api: POSIX
           daos_oclass: "SX"
           transfersize_blocksize: !mux
             512B:
               transfer_size: '512B'
               block_size: '8M'
-              write_x: 5
+              write_x: 2
               read_x: 1
             1K:
               transfer_size: '1K'
               block_size: '16M'
-              write_x: 5
+              write_x: 2
               read_x: 1
             4K:
               transfer_size: '4K'
@@ -57,8 +57,8 @@ ior:
               read_x: 1
             1M:
               transfer_size: '1M'
-              block_size: '8G'
-              write_x: 3
+              block_size: '4G'
+              write_x: 2
               read_x: 1
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
