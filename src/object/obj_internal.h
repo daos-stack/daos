@@ -49,13 +49,6 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
-/* EC parity is stored in a private address range that is selected by setting
- * the most-significant bit of the offset (an unsigned long). This effectively
- * limits the addressing of user extents to the lower 63 bits of the offset
- * range. The client stack should enforce this limitation.
- */
-#define PARITY_INDICATOR (1UL << 63)
-
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.

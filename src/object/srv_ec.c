@@ -43,18 +43,20 @@ int
 obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 {
 	daos_iod_t		*iod, *iods = orw->orw_iod_array.oia_iods;
-	struct obj_io_desc	*oiods = orw->orw_iod_array.oia_oiods;
+	struct obj_io_desc	*oiod, *oiods = orw->orw_iod_array.oia_oiods;
 	struct daos_shard_tgt	*fw_tgts = orw->orw_shard_tgts.ca_arrays;
 	struct obj_ec_split_req	*req;
 	daos_iod_t		*split_iod, *split_iods;
 	struct obj_shard_iod	*siod;
 	struct obj_tgt_oiod	*tgt_oiod, *tgt_oiods = NULL;
 	uint32_t		 tgt_nr = orw->orw_shard_tgts.ca_count;
+	uint32_t		 data_tgt_nr = 0;
 	uint32_t		 iod_nr = orw->orw_nr;
 	uint32_t		 start_shard = orw->orw_start_shard;
 	uint32_t		 i, tgt_idx, tgt_max_idx;
 	daos_size_t		 req_size, iods_size;
 	uint8_t			 tgt_bit_map[OBJ_TGT_BITMAP_LEN] = {0};
+	bool			 even_dist = false;
 	void			*buf = NULL;
 	int			 rc = 0;
 
@@ -65,7 +67,22 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 	 * there must be a siod (the last siod) for leader.
 	 */
 	D_ASSERT(oiods[0].oiod_nr >= 2);
-	tgt_max_idx = oiods[0].oiod_siods[oiods[0].oiod_nr - 1].siod_tgt_idx;
+	for (i = 0; i < iod_nr; i++) {
+		struct daos_oclass_attr	*oca;
+
+		oiod = &oiods[i];
+		if ((oiod->oiod_flags & OBJ_SIOD_EVEN_DIST) != 0) {
+			D_ASSERTF(daos_oclass_is_ec(orw->orw_oid.id_pub, &oca),
+				  "OBJ_SIOD_EVEN_DIST invalid for EC obj.\n");
+			even_dist = true;
+			tgt_max_idx = obj_ec_tgt_nr(oca) - 1;
+			data_tgt_nr = obj_ec_data_tgt_nr(oca);
+		}
+	}
+
+	if (!even_dist)
+		tgt_max_idx =
+			oiods[0].oiod_siods[oiods[0].oiod_nr - 1].siod_tgt_idx;
 
 	req_size = roundup(sizeof(struct obj_ec_split_req), 8);
 	iods_size = roundup(sizeof(daos_iod_t) * iod_nr, 8);
@@ -83,8 +100,8 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 	}
 	setbit(tgt_bit_map, tgt_max_idx);
 
-	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,
-					 tgt_max_idx, tgt_nr + 1);
+	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iods, iod_nr, tgt_bit_map,
+					 tgt_max_idx, tgt_nr + 1, data_tgt_nr);
 	if (tgt_oiods == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	req->osr_tgt_oiods = tgt_oiods;
@@ -100,6 +117,14 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 		split_iod->iod_kcsum = iod->iod_kcsum;
 		split_iod->iod_type = iod->iod_type;
 		split_iod->iod_size = iod->iod_size;
+		if (tgt_oiod->oto_oiods[i].oiod_siods == NULL) {
+			D_ASSERT(even_dist);
+			split_iod->iod_nr = iod->iod_nr;
+			split_iod->iod_recxs = iod->iod_recxs;
+			split_iod->iod_csums = iod->iod_csums;
+			split_iod->iod_eprs = iod->iod_eprs;
+			continue;
+		}
 		siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
 		split_iod->iod_nr = siod->siod_nr;
 		if (iod->iod_recxs != NULL)
