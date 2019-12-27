@@ -81,7 +81,9 @@ struct dtx_handle {
 					 /* XXX: touch ilog entry. */
 					 dth_has_ilog:1,
 					 /* epoch conflict, need to renew. */
-					 dth_renew:1;
+					 dth_renew:1,
+					 /* The DTX entry is in active table. */
+					 dth_actived:1;
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */

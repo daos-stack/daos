@@ -235,6 +235,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dti_cos_done = 0;
 	dth->dth_has_ilog = 0;
 	dth->dth_renew = 0;
+	dth->dth_actived = 0;
 }
 
 /**
@@ -630,15 +631,10 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	}
 
 out:
-	if (result < 0) {
-		if (dlh->dlh_sub_cnt == 0)
-			vos_dtx_abort(cont->sc_hdl, dth->dth_epoch,
-				      &dth->dth_xid, 1);
-		else
-			dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
-				  dth->dth_epoch, &dth->dth_dte, 1,
-				  cont->sc_pool->spc_map_version);
-	}
+	if (result < 0 && dlh->dlh_sub_cnt > 0)
+		dtx_abort(cont->sc_pool->spc_uuid, cont->sc_uuid,
+			  dth->dth_epoch, &dth->dth_dte, 1,
+			  cont->sc_pool->spc_map_version);
 
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
@@ -726,8 +722,6 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
 					DP_UUID(cont->sc_uuid), rc);
 		}
-
-		vos_dtx_abort(cont->sc_hdl, dth->dth_epoch, &dth->dth_xid, 1);
 	}
 
 	D_DEBUG(DB_TRACE,
