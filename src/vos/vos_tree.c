@@ -444,6 +444,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
 	irec->ir_size	 = bio_iov2len(biov);
+	irec->ir_gsize	 = rbund->rb_gsize;
 	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
@@ -502,6 +503,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
+	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	return 0;
 }
