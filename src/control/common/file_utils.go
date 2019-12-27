@@ -233,7 +233,7 @@ func Run(cmd string) error {
 // invoking the current process.
 func GetWorkingPath(relPath string) (string, error) {
 	if path.IsAbs(relPath) {
-		return "", FaultUnexpectedAbsPath
+		return relPath, nil
 	}
 
 	workingDir, err := os.Getwd()
@@ -248,7 +248,7 @@ func GetWorkingPath(relPath string) (string, error) {
 // currently running process.
 func GetAdjacentPath(relPath string) (string, error) {
 	if path.IsAbs(relPath) {
-		return "", FaultUnexpectedAbsPath
+		return relPath, nil
 	}
 
 	selfPath, err := os.Readlink("/proc/self/exe")

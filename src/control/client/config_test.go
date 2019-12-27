@@ -37,17 +37,30 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func getDefaultConfig(t *testing.T) *client.Configuration {
+func getDefaultConfig(t *testing.T, log logging.Logger) (*client.Configuration, *os.File, func()) {
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	absPath, err := common.GetAdjacentPath(defaultConfig.Path)
+	newPath, err := common.GetAdjacentPath(defaultConfig.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaultConfig.Path = absPath
+	defaultConfig.Path = newPath
 
-	return defaultConfig
+	// create default config file
+	if err := os.MkdirAll(path.Dir(defaultConfig.Path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(defaultConfig.Path)
+	if err != nil {
+		os.RemoveAll(path.Dir(defaultConfig.Path))
+		t.Fatal(err)
+	}
+	closure := func() {
+		os.RemoveAll(path.Dir(defaultConfig.Path))
+	}
+
+	return defaultConfig, f, closure
 }
 
 func getTestFile(t *testing.T) *os.File {
@@ -65,8 +78,9 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig := getDefaultConfig(t)
-	defaultConfig.Path = ""
+	defaultConfig, f, closure := getDefaultConfig(t, log)
+	f.Close()
+	defer closure()
 
 	cfg, err := client.GetConfig(log, "")
 	if err != nil {
@@ -84,18 +98,12 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig := getDefaultConfig(t)
-	if err := os.MkdirAll(path.Dir(defaultConfig.Path), 0755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(defaultConfig.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path.Dir(defaultConfig.Path))
+	defaultConfig, f, closure := getDefaultConfig(t, log)
+	defer closure()
+
 	defaultConfig.SystemName = t.Name()
 
-	_, err = f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
+	_, err := f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
 	if err != nil {
 		t.Fatal(err)
 	}

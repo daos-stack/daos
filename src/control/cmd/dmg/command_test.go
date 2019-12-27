@@ -25,6 +25,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -226,6 +228,30 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
+func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, func()) {
+	t.Helper()
+
+	defaultConfig := client.NewConfiguration()
+	if err := defaultConfig.SetPath(log, path); err != nil {
+		t.Fatal(err)
+	}
+
+	// create default config file
+	if err := os.MkdirAll(filepath.Dir(defaultConfig.Path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(defaultConfig.Path)
+	if err != nil {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+		t.Fatal(err)
+	}
+	closure := func() {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+	}
+
+	return f, closure
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -234,6 +260,10 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			t.Helper()
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
+
+			f, closure := createTestConfig(t, log, "")
+			f.Close()
+			defer closure()
 
 			var opts cliOptions
 			conn := newTestConn(t)
