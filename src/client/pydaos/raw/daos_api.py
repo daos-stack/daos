@@ -1383,7 +1383,7 @@ class DaosContainer(object):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def create(self, poh, con_uuid=None, layer_type="NULL",
+    def create(self, poh, con_uuid=None, layer_type=None,
                enable_chksum=False, srv_verify=False,
                chksum_type=None, chunk_size=None,
                cb_func=None):
@@ -1404,8 +1404,17 @@ class DaosContainer(object):
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
-        if (layer_type != "NULL") or (enable_chksum is True):
+        if (layer_type is not None) and (enable_chksum is False):
+            # Only layer_type like posix, hdf5 defined.
+            num_prop = 1
+        elif (layer_type is None) and (enable_chksum is True):
+            # Obly checksum enabled.
+            num_prop = 3
+        elif (layer_type is not None) and (enable_chksum is True):
+            # Both layer and checksum properties define
             num_prop = 4
+
+        if (layer_type is not None) or (enable_chksum is True):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
             self.cont_type = daos_cref.ContainerLayer()
             self.flag = daos_cref.ContainerProp()
@@ -1415,7 +1424,7 @@ class DaosContainer(object):
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if layer_type != "NULL":
+        if layer_type is not None:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
                 self.flag.DAOS_PROP_CO_LAYOUT_TYPE)
             if layer_type == "posix":

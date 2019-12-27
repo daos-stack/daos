@@ -18,7 +18,7 @@ pool:
         size: 3000000000
     createsvc:
         svcn: 1
-container:
+container: !mux
    properties:
        enable_checksum: True
 dkeys: !mux
