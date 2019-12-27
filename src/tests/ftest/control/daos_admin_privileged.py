@@ -50,7 +50,7 @@ class DaosAdminPrivTest(TestWithServers):
         JIRA ID: DAOS-2895
         Test Description: Test daso_admin functionality to perform format
         privileged operations while daos_server is run as normal user.
-        :avocado: tags=all,tiny,pr,daos_admin,basic
+        :avocado: tags=all,tiny,pr,hw,daos_admin,basic
         """
         # Verify that daos_admin has the correct permissions
         self.log.info("Checking daos_admin binary permissions")
@@ -59,8 +59,7 @@ class DaosAdminPrivTest(TestWithServers):
         if file_perms != '4755':
             self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
 
-        # Start server as non-root
-        self.log.info("Starting server as non-root")
+        # Setup server as non-root
         server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
         server.get_params(self)
         server.hosts = (
@@ -85,6 +84,7 @@ class DaosAdminPrivTest(TestWithServers):
 
         # Start server
         try:
+            self.log.info("Starting server as non-root")
             server.run()
         except CommandFailure as err:
             # Kill the subprocess, anything that might have started
