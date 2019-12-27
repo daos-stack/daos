@@ -157,11 +157,11 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	int	rc;
 
 	if (op_type == TS_DO_UPDATE) {
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl,
 				     cred->tc_evp);
 	} else {
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL,
 				    cred->tc_evp);
 	}
@@ -676,11 +676,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
@@ -694,7 +694,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }
