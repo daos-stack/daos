@@ -158,7 +158,7 @@ class IorTestBase(TestWithServers):
             self.start_dfuse()
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile{}".format(
-                                          test_file_suffix))
+                                              test_file_suffix))
 
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
