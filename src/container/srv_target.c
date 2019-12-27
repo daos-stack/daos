@@ -70,6 +70,18 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	return vos_aggregate(cont->sc_hdl, epr);
 }
 
+static bool
+cont_aggregate_runnable(struct ds_cont_child *cont)
+{
+	struct ds_pool	*pool = cont->sc_pool->spc_pool;
+
+	if ((pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ||
+	    (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy()))
+		return false;
+
+	return true;
+}
+
 static int
 cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 {
@@ -84,12 +96,12 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
 
-	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
-	*sleep = interval;
-
-	if (dss_aggregation_disabled())
+	if (!cont_aggregate_runnable(cont)) {
+		*sleep = NSEC_PER_SEC << 2;
 		return 0;
+	}
 
+	*sleep = NSEC_PER_SEC;
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0)
 		return 0;
@@ -115,6 +127,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		epoch_min = cinfo.ci_hae;
 	}
 
+	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -126,7 +139,6 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		*sleep = (epoch_min - (epoch_max - interval));
 		return 0;
 	}
-	*sleep = 0;
 
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
@@ -172,12 +184,12 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	if (i == 0)
 		epoch_range.epr_lo = 0;
 	else
-		epoch_range.epr_lo = snapshots[i-1] + 1;
-
+		epoch_range.epr_lo = snapshots[i - 1] + 1;
 
 	if (epoch_range.epr_lo >= epoch_max)
 		return 0;
 
+	*sleep = 0;
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
@@ -885,7 +897,15 @@ cont_child_destroy_one(void *vin)
 			break;
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
-		/* found it */
+
+		if (cont->sc_open > 0) {
+			D_ERROR(DF_CONT": Container is still in open(%d)\n",
+				DP_CONT(cont->sc_pool->spc_uuid,
+					cont->sc_uuid), cont->sc_open);
+			cont_child_put(tls->dt_cont_cache, cont);
+			rc = -DER_BUSY;
+			goto out_pool;
+		}
 
 		cont_child_stop(cont);
 
@@ -1126,11 +1146,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	if (cont_hdl != NULL) {
-		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
-		*cont_hdl = hdl;
-	}
-
 	/* It is possible to sync DTX status before destroy the CoS for close
 	 * the container. But that may be not enough. Because the server may
 	 * crashed before closing the container. Then the DTXs' status in the
@@ -1160,15 +1175,24 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (cont_uuid != NULL) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
+		/*
+		 * NB: When cont_uuid == NULL, it's not a real container open
+		 *     but for creating rebuild global container handle.
+		 */
+		hdl->sch_cont->sc_open++;
+
 		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
-		if (rc != 0)
+		if (rc != 0) {
+			hdl->sch_cont->sc_open--;
 			goto err_cont;
+		}
 
 		rc = dtx_batched_commit_register(hdl->sch_cont);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
 				" to the DTX batched commit list: rc = %d\n",
 				DP_UUID(cont_uuid), rc);
+			hdl->sch_cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
 
@@ -1192,12 +1216,21 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_FREE(ddra);
 			D_GOTO(err_register, rc);
 		}
+
+	}
+
+	if (cont_hdl != NULL) {
+		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
+		*cont_hdl = hdl;
 	}
 
 	return 0;
 
 err_register:
-	dtx_batched_commit_deregister(hdl->sch_cont);
+	D_ASSERT(hdl->sch_cont->sc_open > 0);
+	hdl->sch_cont->sc_open--;
+	if (hdl->sch_cont->sc_open == 0)
+		dtx_batched_commit_deregister(hdl->sch_cont);
 err_cont:
 	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 	if (hdl->sch_cont)
@@ -1295,8 +1328,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 static int
 cont_close_hdl(uuid_t cont_hdl_uuid)
 {
-	struct dsm_tls	       *tls = dsm_tls_get();
-	struct ds_cont_hdl     *hdl;
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_cont_hdl	*hdl;
+	struct ds_cont_child	*cont_child;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
 
@@ -1306,18 +1340,24 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		return 0;
 	}
 
-	D_ASSERT(hdl->sch_cont != NULL);
+	cont_child = hdl->sch_cont;
+	D_ASSERT(cont_child != NULL);
 
-	D_DEBUG(DF_DSMS, DF_CONT": closing (%s): hdl="DF_UUID"\n",
-		DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
-			hdl->sch_cont->sc_uuid),
-		hdl->sch_cont->sc_closing ? "resent" : "new",
-		DP_UUID(cont_hdl_uuid));
+	D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
+		DP_CONT(cont_child->sc_pool->spc_uuid,
+			cont_child->sc_uuid),
+		cont_child->sc_open, DP_UUID(cont_hdl_uuid));
 
-	dtx_batched_commit_deregister(hdl->sch_cont);
+	/* Remove the handle from hash first, following steps may yield */
+	ds_cont_local_close(cont_hdl_uuid);
+
 	daos_csummer_destroy(&hdl->sch_csummer);
 
-	ds_cont_local_close(cont_hdl_uuid);
+	D_ASSERT(cont_child->sc_open > 0);
+	cont_child->sc_open--;
+	if (cont_child->sc_open == 0)
+		dtx_batched_commit_deregister(cont_child);
+
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
 }

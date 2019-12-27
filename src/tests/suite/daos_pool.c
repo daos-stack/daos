@@ -488,7 +488,7 @@ pool_properties(void **state)
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_int_equal(rc, 0);
 		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
-			DSS_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
+			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -553,7 +553,7 @@ pool_properties(void **state)
 	}
 
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -574,7 +574,7 @@ pool_op_retry(void **state)
 		return;
 
 	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -591,7 +591,7 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -606,7 +606,7 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
 				  DAOS_FAIL_ONCE, 0, NULL);
 	assert_int_equal(rc, 0);

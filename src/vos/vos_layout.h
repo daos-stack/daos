@@ -219,7 +219,7 @@ struct vos_dtx_act_ent_df {
 	/** The intent of related modification. */
 	uint32_t			dae_intent;
 	/** The index in the current vos_dtx_blob_df. */
-	uint32_t			dae_index;
+	int32_t				dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
