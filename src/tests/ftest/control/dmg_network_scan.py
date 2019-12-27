@@ -45,8 +45,7 @@ class DmgNetworkScanTest(TestWithServers):
 
     def get_net_info(self, provider):
         """Get expected values of domain with fi_info."""
-        fi_info = os.path.join(
-            self.bin, "fi_info -p {} | grep domain | sort -u".format(provider))
+        fi_info = os.path.join(self.bin, "fi_info -p {}".format(provider))
         try:
             output = run_cmd(fi_info)
         except process.CmdError as error:
@@ -54,11 +53,14 @@ class DmgNetworkScanTest(TestWithServers):
             msg = "Error occurred running '{}': {}".format(fi_info, error)
             self.fail(msg)
 
-        device = []
-        if output.stdout != "":
-            device = [line.split()[-1] for line in output.stdout.splitlines()]
+        devices = []
+        for line in output.stdout.splitlines():
+            if 'domain' in line:
+                dev = line.strip().split()[-1]
+                if dev not in devices:
+                    devices.append(dev)
 
-        return device
+        return devices
 
     def get_numa_info(self):
         """Get expected values of numa nodes with lstopo."""
@@ -88,8 +90,7 @@ class DmgNetworkScanTest(TestWithServers):
 
     def get_dev_provider(self, device):
         """Get expected values of provider with fi_info."""
-        fi_info = os.path.join(
-            self.bin, "fi_info -d {} | grep provider | sort -u".format(device))
+        fi_info = os.path.join(self.bin, "fi_info -d {}".format(device))
         try:
             output = process.run(fi_info)
         except process.CmdError as error:
@@ -98,11 +99,14 @@ class DmgNetworkScanTest(TestWithServers):
             self.fail(msg)
 
         # Clean up string
-        provider = "none"
-        if output.stdout != "":
-            provider = output.stdout.splitlines()[0].split()[-1]
+        providers = []
+        for line in output.stdout.splitlines():
+            if "provider" in line:
+                prov = line.strip().split()[-1]
+                if prov not in providers:
+                    providers.append(prov)
 
-        return provider
+        return providers[0]
 
     def test_dmg_network_scan_basic(self):
         """
