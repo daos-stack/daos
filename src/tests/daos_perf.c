@@ -157,11 +157,11 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	int	rc;
 
 	if (op_type == TS_DO_UPDATE) {
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl,
 				     cred->tc_evp);
 	} else {
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL,
 				    cred->tc_evp);
 	}
