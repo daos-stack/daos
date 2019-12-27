@@ -122,7 +122,7 @@ simple_put_get(void **state)
 	/** Insert Keys */
 	for (i = 0; i < NUM_KEYS; i++) {
 		sprintf(key, key_fmt, i);
-		rc = daos_kv_put(oh, DAOS_TX_NONE, key, buf_size, buf,
+		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key, buf_size, buf,
 				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
@@ -141,7 +141,7 @@ simple_put_get(void **state)
 		int value = NUM_KEYS;
 
 		sprintf(key, key_fmt, NUM_KEYS-1);
-		rc = daos_kv_put(oh, DAOS_TX_NONE, key, sizeof(int), &value,
+		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key, sizeof(int), &value,
 				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
@@ -166,7 +166,7 @@ simple_put_get(void **state)
 		sprintf(key, key_fmt, i);
 
 		size = DAOS_REC_ANY;
-		rc = daos_kv_get(oh, DAOS_TX_NONE, key, &size, NULL,
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, NULL,
 				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
@@ -182,7 +182,7 @@ simple_put_get(void **state)
 		else
 			assert_int_equal(size, sizeof(int));
 
-		rc = daos_kv_get(oh, DAOS_TX_NONE, key, &size, buf_out,
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, key, &size, buf_out,
 				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
@@ -206,7 +206,7 @@ simple_put_get(void **state)
 	print_message("Remove 10 Keys\n");
 	for (i = 0; i < 10; i++) {
 		sprintf(key, key_fmt, i);
-		rc = daos_kv_remove(oh, DAOS_TX_NONE, key, NULL);
+		rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, key, NULL);
 		assert_int_equal(rc, 0);
 	}
 

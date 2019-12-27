@@ -276,7 +276,7 @@ array(void)
 			req->recx.rx_idx = sid * SLICE_SIZE;
 
 			/** submit I/O operation */
-			rc = daos_obj_update(oh, DAOS_TX_NONE, &req->dkey, 1,
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &req->dkey, 1,
 					    &req->iod, &req->sg,
 					    &req->ev);
 			ASSERT(rc == 0, "object update failed with %d", rc);
