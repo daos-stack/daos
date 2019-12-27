@@ -229,6 +229,21 @@ func Run(cmd string) error {
 	return err
 }
 
+// GetWorkingPath retrieves path relative to the current working directory when
+// invoking the current process.
+func GetWorkingPath(relPath string) (string, error) {
+	if path.IsAbs(relPath) {
+		return "", FaultUnexpectedAbsPath
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine working directory")
+	}
+
+	return path.Join(path.Dir(workingDir), relPath), nil
+}
+
 // GetAdjacentPath retrieves path relative to the binary used to launch the
 // currently running process.
 func GetAdjacentPath(relPath string) (string, error) {
@@ -244,18 +259,32 @@ func GetAdjacentPath(relPath string) (string, error) {
 	return path.Join(path.Dir(selfPath), relPath), nil
 }
 
+func resolveRelative(relPath string) (string, error) {
+	absPath, err := GetAdjacentPath(relPath)
+	if err == nil {
+		return absPath, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	return GetWorkingPath(relPath)
+}
+
 // FindFile looks for a file path. If the path is not absolute, look in the
-// directory containing the binary for the running process.
+// directory containing the binary as well as the working directory for the
+// running process.
 func FindFile(filePath string) (string, error) {
+	var err error
+
 	if !path.IsAbs(filePath) {
-		absPath, err := GetAdjacentPath(filePath)
+		filePath, err = resolveRelative(filePath)
 		if err != nil {
 			return "", err
 		}
-		filePath = absPath
 	}
 
-	if _, err := os.Stat(filePath); err != nil {
+	if _, err = os.Stat(filePath); err != nil {
 		return "", err
 	}
 
@@ -263,8 +292,8 @@ func FindFile(filePath string) (string, error) {
 }
 
 // FindBinary attempts to locate the named binary by checking $PATH first.
-// If the binary is not found in $PATH, then look in the directory of
-// the running process.
+// If the binary is not found in $PATH, directory containing the binary as
+// well as the working directory.
 func FindBinary(binName string) (string, error) {
 	binPath, err := exec.LookPath(binName)
 	if err == nil {
