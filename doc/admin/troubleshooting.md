@@ -50,7 +50,7 @@ logging. By default all subsystems are enabled ("DD_SUBSYS=all").
     MISC, MEM
 
 -   CaRT Facilities:
-    RPC, BULK, CORPC, GRP, LM, HG, PMIX, ST, IV
+    RPC, BULK, CORPC, GRP, LM, HG, ST, IV
 
 ### Priority Logging
 
