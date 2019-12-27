@@ -1034,9 +1034,8 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 
 		sgl->sg_nr++;
 		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
-		if (new_sg_iovs == NULL) {
+		if (new_sg_iovs == NULL)
 			return -DER_NOMEM;
-		}
 		sgl->sg_iovs = new_sg_iovs;
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +

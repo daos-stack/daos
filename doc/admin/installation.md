@@ -64,6 +64,10 @@ the Docker files by removing the "RUN" command, which is specific to Docker.
 Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
+Some DAOS tests use MPI.   The DAOS build process
+uses the environment modules package to detect the presence of MPI.  If none
+is found, the build will skip building those tests.
+
 ### DAOS Source Code
 
 To check out the DAOS source code, run the following command:
@@ -265,20 +269,17 @@ ARGOBOTS=${daos_prefix_path}/opt/argobots
 CART=${daos_prefix_path}/opt/cart
 FIO=${daos_prefix_path}/opt/fio
 FUSE=${daos_prefix_path}/opt/fuse
-HWLOC=${daos_prefix_path}/opt/hwloc
 ISAL=${daos_prefix_path}/opt/isal
 MERCURY=${daos_prefix_path}/opt/mercury
 OFI=${daos_prefix_path}/opt/ofi
-OMPI=${daos_prefix_path}/opt/ompi
 OPENPA=${daos_prefix_path}/opt/openpa
 PMDK=${daos_prefix_path}/opt/pmdk
-PMIX=${daos_prefix_path}/opt/pmix
 PROTOBUFC=${daos_prefix_path}/opt/protobufc
 SPDK=${daos_prefix_path}/opt/spdk
 
 
-LD_LIBRARY_PATH=${daos_prefix_path}/opt/spdk/lib:${daos_prefix_path}/opt/protobufc/lib:${daos_prefix_path}/opt/pmix/lib:${daos_prefix_path}/opt/pmdk/lib:${daos_prefix_path}/opt/openpa/lib:${daos_prefix_path}/opt/ompi/lib:${daos_prefix_path}/opt/ofi/lib:${daos_prefix_path}/opt/mercury/lib:${daos_prefix_path}/opt/isal/lib:${daos_prefix_path}/opt/hwloc/lib:${daos_prefix_path}/opt/fuse/lib64:${daos_prefix_path}/opt/cart/lib:${daos_prefix_path}/opt/argobots/lib
-PATH=${daos_prefix_path}/opt/spdk/bin:${daos_prefix_path}/opt/pmdk/bin:${daos_prefix_path}/opt/ompi/bin:${daos_prefix_path}/opt/ofi/bin:${daos_prefix_path}/opt/isal/bin:${daos_prefix_path}/opt/hwloc/bin:${daos_prefix_path}/opt/fio/bin:${daos_prefix_path}/opt/cart/bin
+LD_LIBRARY_PATH=${daos_prefix_path}/opt/spdk/lib:${daos_prefix_path}/opt/protobufc/lib:${daos_prefix_path}/opt/pmdk/lib:${daos_prefix_path}/opt/openpa/lib:${daos_prefix_path}/opt/ofi/lib:${daos_prefix_path}/opt/mercury/lib:${daos_prefix_path}/opt/isal/lib:${daos_prefix_path}/opt/fuse/lib64:${daos_prefix_path}/opt/cart/lib:${daos_prefix_path}/opt/argobots/lib
+PATH=${daos_prefix_path}/opt/spdk/bin:${daos_prefix_path}/opt/pmdk/bin:${daos_prefix_path}/opt/ofi/bin:${daos_prefix_path}/opt/isal/bin:${daos_prefix_path}/opt/fio/bin:${daos_prefix_path}/opt/cart/bin
 
 ```
 
