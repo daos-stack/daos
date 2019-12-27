@@ -279,7 +279,7 @@ insert_internal_nowait(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, th, dkey, nr, iods, sgls, NULL);
+	rc = daos_obj_update(req->oh, th, 0, dkey, nr, iods, sgls, NULL);
 
 	return rc;
 }
@@ -293,7 +293,7 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, th, dkey, nr, iods, sgls, NULL, NULL);
+	rc = daos_obj_fetch(req->oh, th, 0, dkey, nr, iods, sgls, NULL, NULL);
 	if (rc != 0) {
 		printf("object fetch failed with %i\n", rc);
 		exit(1);
