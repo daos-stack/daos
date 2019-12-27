@@ -235,14 +235,14 @@ io_with_server_side_verify(void **state)
 	 */
 	/** 1. Server verify disabled, no corruption */
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 2. Server verify enabled, no corruption */
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
@@ -250,14 +250,14 @@ io_with_server_side_verify(void **state)
 	/** 3. Server verify disabled, corruption occurs, update should work */
 	set_update_csum_fi();
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	cleanup_cont_obj(&ctx);
@@ -297,10 +297,10 @@ test_fetch_array(void **state)
 	 */
 
 	/** 1. Simple success case */
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Update/Fetch data matches */
@@ -311,7 +311,7 @@ test_fetch_array(void **state)
 	/** 2. Detect corruption - fetch again with fault injection enabled */
 
 	set_fetch_csum_fi();
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	unset_csum_fi();
@@ -319,11 +319,11 @@ test_fetch_array(void **state)
 
 	/** 3. Complicated data success case */
 	setup_multiple_extent_data(&ctx);
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Update/Fetch data matches */
@@ -333,7 +333,7 @@ test_fetch_array(void **state)
 
 	/** 4. Complicated data with corruption */
 	set_fetch_csum_fi();
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	unset_csum_fi();
@@ -470,7 +470,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 		iov_update_fill(&ctx.update_sgl.sg_iovs[0],
 				args->recx_cfgs[i].data,
 				args->recx_cfgs[i].nr * rec_size);
-		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+		rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 				     &ctx.update_iod, &ctx.update_sgl,
 				     NULL);
 		if (rc != 0) {
@@ -479,7 +479,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 		}
 	}
 
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, &ctx.dkey, 1,
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	if (rc != 0) {
 		fail_msg("%s:%d daos_obj_fetch failed with %d",
