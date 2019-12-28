@@ -40,19 +40,35 @@ ior:
           api: POSIX
           daos_oclass: "SX"
           transfersize_blocksize: !mux
-            512B:
-              transfer_size: '512B'
-              block_size: '128M'
-              write_x: 1
-              read_x: 1
-            1K:
-              transfer_size: '1K'
-              block_size: '512M'
+#         DAOS-3499
+#            512B:
+#              transfer_size: '512B'
+#              block_size: '128M'
+#              write_x: 1
+#              read_x: 1
+#            1K:
+#              transfer_size: '1K'
+#              block_size: '512M'
+#              write_x: 2
+#              read_x: 1
+#            4K:
+#              transfer_size: '4K'
+#              block_size: '1G'
+#              write_x: 1
+#              read_x: 1
+            8K:
+              transfer_size: '8K'
+              block_size: '1G'
               write_x: 2
               read_x: 1
-            4K:
-              transfer_size: '4K'
+            16K:
+              transfer_size: '16K'
               block_size: '2G'
+              write_x: 2
+              read_x: 1
+            128K:
+              transfer_size: '128K'
+              block_size: '4G'
               write_x: 2
               read_x: 1
             1M:
