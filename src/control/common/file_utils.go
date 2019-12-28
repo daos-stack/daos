@@ -241,7 +241,7 @@ func GetWorkingPath(inPath string) (string, error) {
 		return "", errors.Wrap(err, "unable to determine working directory")
 	}
 
-	return path.Join(path.Dir(workingDir), inPath), nil
+	return path.Join(workingDir, inPath), nil
 }
 
 // GetAdjacentPath retrieves path relative to the binary used to launch the

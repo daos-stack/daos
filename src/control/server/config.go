@@ -345,26 +345,27 @@ func (c *Configuration) SaveToFile(filename string) error {
 }
 
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(path string) (err error) {
-	var newPath string
+func (c *Configuration) SetPath(inPath string) (err error) {
+	var outPath string
 
-	if path == "" {
+	fmt.Printf("SetPath in: %s\n", inPath)
+	if inPath == "" {
 		// no custom path specified, look up adjacent
-		newPath, err = common.GetAdjacentPath(c.Path)
+		outPath, err = common.GetAdjacentPath(c.Path)
 	} else {
 		// custom path specified, look up relative to cwd
-		newPath, err = common.GetWorkingPath(path)
+		outPath, err = common.GetWorkingPath(inPath)
 	}
 
 	if err != nil {
 		return
 	}
+	c.Path = outPath
 
-	if _, err = os.Stat(newPath); err != nil {
+	fmt.Printf("SetPath out: %s\n", outPath)
+	if _, err = os.Stat(outPath); err != nil {
 		return
 	}
-
-	c.Path = newPath
 
 	return
 }
