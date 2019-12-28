@@ -209,23 +209,6 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev);
 
 /**
- * Set parameter on servers.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
- * \param key_id [IN]	key ID of the parameter.
- * \param value [IN]	value of the parameter.
- * \param value [IN]	optional extra value to set the fail value when
- *			\a key_id is DSS_KEY_FAIL_LOC and \a value is in
- *			DAOS_FAIL_VALUE mode.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
-
-/**
  * Exclude completely a set of storage targets from a pool. Compared with
  * daos_pool_tgt_exclude(), this API will mark the targets to be DOWNOUT, i.e.
  * the rebuilding for this target is done, while daos_pool_tgt_exclude() only
@@ -348,6 +331,35 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 int
 daos_mgmt_list_pools(const char *group, daos_size_t *npools,
 		     daos_mgmt_pool_info_t *pools, daos_event_t *ev);
+
+/**
+ * The operation code for DAOS client to set different parameters globally
+ * on all servers.
+ */
+enum {
+	DMG_KEY_FAIL_LOC	 = 0,
+	DMG_KEY_FAIL_VALUE,
+	DMG_KEY_FAIL_NUM,
+	DMG_KEY_REBUILD_THROTTLING,
+	DMG_KEY_NUM,
+};
+
+/**
+ * Set parameter on servers.
+ *
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
+ * \param key_id [IN]	key ID of the parameter.
+ * \param value [IN]	value of the parameter.
+ * \param value [IN]	optional extra value to set the fail value when
+ *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
+ *			DAOS_FAIL_VALUE mode.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
+		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Add mark to servers.
