@@ -231,9 +231,9 @@ func Run(cmd string) error {
 
 // GetWorkingPath retrieves path relative to the current working directory when
 // invoking the current process.
-func GetWorkingPath(relPath string) (string, error) {
-	if path.IsAbs(relPath) {
-		return relPath, nil
+func GetWorkingPath(inPath string) (string, error) {
+	if path.IsAbs(inPath) {
+		return inPath, nil
 	}
 
 	workingDir, err := os.Getwd()
@@ -241,14 +241,14 @@ func GetWorkingPath(relPath string) (string, error) {
 		return "", errors.Wrap(err, "unable to determine working directory")
 	}
 
-	return path.Join(path.Dir(workingDir), relPath), nil
+	return path.Join(path.Dir(workingDir), inPath), nil
 }
 
 // GetAdjacentPath retrieves path relative to the binary used to launch the
 // currently running process.
-func GetAdjacentPath(relPath string) (string, error) {
-	if path.IsAbs(relPath) {
-		return relPath, nil
+func GetAdjacentPath(inPath string) (string, error) {
+	if path.IsAbs(inPath) {
+		return inPath, nil
 	}
 
 	selfPath, err := os.Readlink("/proc/self/exe")
@@ -256,49 +256,26 @@ func GetAdjacentPath(relPath string) (string, error) {
 		return "", errors.Wrap(err, "unable to determine path to self")
 	}
 
-	return path.Join(path.Dir(selfPath), relPath), nil
-}
-
-func resolveRelative(relPath string) (string, error) {
-	absPath, err := GetAdjacentPath(relPath)
-	if err == nil {
-		return absPath, nil
-	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-
-	return GetWorkingPath(relPath)
-}
-
-// FindFile looks for a file path. If the path is not absolute, look in the
-// directory containing the binary as well as the working directory for the
-// running process.
-func FindFile(filePath string) (string, error) {
-	var err error
-
-	if !path.IsAbs(filePath) {
-		filePath, err = resolveRelative(filePath)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	if _, err = os.Stat(filePath); err != nil {
-		return "", err
-	}
-
-	return filePath, nil
+	return path.Join(path.Dir(selfPath), inPath), nil
 }
 
 // FindBinary attempts to locate the named binary by checking $PATH first.
-// If the binary is not found in $PATH, directory containing the binary as
-// well as the working directory.
+// If the binary is not found in $PATH, look in the directory containing the
+// running process' binary as well as the working directory.
 func FindBinary(binName string) (string, error) {
 	binPath, err := exec.LookPath(binName)
 	if err == nil {
 		return binPath, nil
 	}
 
-	return FindFile(binName)
+	adjPath, err := GetAdjacentPath(binName)
+	if err != nil {
+		return "", nil
+	}
+
+	if _, err = os.Stat(adjPath); err != nil {
+		return "", err
+	}
+
+	return adjPath, nil
 }

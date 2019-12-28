@@ -50,10 +50,6 @@ const (
 	BdevFormatFailure
 	BdevFormatBadPciAddress
 
-	// common fault codes
-	CommonUnknown Code = iota + 400
-	CommonBadPath
-
 	// security fault codes
 	SecurityUnknown Code = iota + 900
 )
