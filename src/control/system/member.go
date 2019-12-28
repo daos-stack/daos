@@ -40,13 +40,16 @@ type MemberState int
 const (
 	MemberStateUnknown MemberState = iota
 	MemberStateStarted
-	MemberStateStopping
-	MemberStateErrored
-	MemberStateUnresponsive
+	MemberStateStopping     // prep-shutdown successfully run
+	MemberStateStopped      // process cleanly stopped
+	MemberStateErrored      // process stopped with errors
+	MemberStateUnresponsive // e.g. zombie process
 )
 
 func (ms MemberState) String() string {
-	return [...]string{"Unknown", "Started", "Stopping", "Errored", "Unresponsive"}[ms]
+	return [...]string{
+		"Unknown", "Started", "Stopping", "Stopped", "Errored", "Unresponsive",
+	}[ms]
 }
 
 // Member refers to a data-plane instance that is a member of this DAOS

@@ -113,16 +113,14 @@ func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInsta
 			resp.GetStatus())
 	}
 
+	state := system.MemberStateStopped
 	if result.Err != nil {
-		if err := svc.membership.SetMemberState(member.Rank,
-			system.MemberStateErrored); err != nil {
-
-			svc.log.Errorf("setting member state: %s", err)
-		}
+		state = system.MemberStateErrored
 		svc.log.Errorf("MgmtSvc.stopMember error %s\n", result.Err)
 	}
-
-	svc.membership.Remove(member.Rank)
+	if err := svc.membership.SetMemberState(member.Rank, state); err != nil {
+		svc.log.Errorf("setting member state: %s", err)
+	}
 
 	return result
 }
