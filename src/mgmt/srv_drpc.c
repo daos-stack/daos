@@ -650,27 +650,27 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_result, rc = -DER_INVAL);
 	}
 
-	if (result->dpp_entries[0].dpe_type != req->number) {
+	if (entry->dpe_type != req->number) {
 		D_ERROR("Property req/resp mismatch (%d != %d)",
-			result->dpp_entries[0].dpe_type, req->number);
+			entry->dpe_type, req->number);
 		D_GOTO(out_result, rc = -DER_INVAL);
 	}
 
 	resp.property_case = MGMT__POOL_SET_PROP_RESP__PROPERTY_NUMBER;
-	resp.number = result->dpp_entries[0].dpe_type;
+	resp.number = entry->dpe_type;
 
 	switch (req->value_case) {
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
-		if (result->dpp_entries[0].dpe_str == NULL)
+		if (entry->dpe_str == NULL)
 			D_GOTO(out_result, rc = -DER_INVAL);
 		D_ASPRINTF(resp.strval, "%s",
-			   result->dpp_entries[0].dpe_str);
+			   entry->dpe_str);
 		if (resp.strval == NULL)
 			D_GOTO(out_result, rc = -DER_NOMEM);
 		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_STRVAL;
 		break;
 	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
-		resp.numval = result->dpp_entries[0].dpe_val;
+		resp.numval = entry->dpe_val;
 		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_NUMVAL;
 		break;
 	default:

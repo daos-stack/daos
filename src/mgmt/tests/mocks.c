@@ -295,8 +295,6 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 			prop->dpp_entries[i].dpe_type;
 		res_prop->dpp_entries[i].dpe_val =
 			prop->dpp_entries[i].dpe_val;
-		res_prop->dpp_entries[i].dpe_str =
-			prop->dpp_entries[i].dpe_str;
 	}
 
 	*result = res_prop;
