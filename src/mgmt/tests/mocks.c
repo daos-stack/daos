@@ -275,9 +275,32 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 int				ds_mgmt_set_prop_return;
 int
 ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
-					  daos_prop_t **result)
+		      daos_prop_t **result)
 {
-	return ds_mgmt_set_prop_return;
+	daos_prop_t *res_prop;
+	size_t i;
+
+	if (prop == NULL)
+		return -DER_INVAL;
+
+	if (ds_mgmt_set_prop_return != 0)
+		return ds_mgmt_set_prop_return;
+
+	res_prop = daos_prop_alloc(prop->dpp_nr);
+	if (res_prop == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		res_prop->dpp_entries[i].dpe_type =
+			prop->dpp_entries[i].dpe_type;
+		res_prop->dpp_entries[i].dpe_val =
+			prop->dpp_entries[i].dpe_val;
+		res_prop->dpp_entries[i].dpe_str =
+			prop->dpp_entries[i].dpe_str;
+	}
+
+	*result = res_prop;
+	return 0;
 }
 
 void

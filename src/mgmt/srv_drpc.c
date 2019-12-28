@@ -574,15 +574,16 @@ out:
 
 void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__PoolSetPropReq *req         = NULL;
-	Mgmt__PoolSetPropResp resp        = MGMT__POOL_SET_PROP_RESP__INIT;
-	daos_prop_t          *new_prop    = NULL;
-	daos_prop_t          *result      = NULL;
-	char                 *out_str_val = NULL;
-	uuid_t                uuid;
-	uint8_t              *body;
-	size_t                len;
-	int                   rc;
+	Mgmt__PoolSetPropReq	*req         = NULL;
+	Mgmt__PoolSetPropResp	 resp        = MGMT__POOL_SET_PROP_RESP__INIT;
+	daos_prop_t		*new_prop    = NULL;
+	daos_prop_t		*result      = NULL;
+	char			*out_str_val = NULL;
+	struct daos_prop_entry	*entry;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_set_prop_req__unpack(NULL, drpc_req->body.len,
@@ -617,9 +618,8 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	switch (req->value_case) {
 	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
 		D_ASPRINTF(out_str_val, "%s", req->strval);
-		if (out_str_val == NULL) {
+		if (out_str_val == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		new_prop->dpp_entries[0].dpe_str = out_str_val;
 		break;
 	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
@@ -643,9 +643,10 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	if (result->dpp_nr != 1) {
-		D_ERROR("Expected 1 property in response (got %d)\n",
-			result->dpp_nr);
+	entry = daos_prop_entry_get(result, req->number);
+	if (entry == NULL) {
+		D_ERROR("Did not receive property %d in result\n",
+			req->number);
 		D_GOTO(out_result, rc = -DER_INVAL);
 	}
 
@@ -686,7 +687,7 @@ out:
 	D_FREE(out_str_val);
 
 	resp.status = rc;
-	len         = mgmt__pool_set_prop_resp__get_packed_size(&resp);
+	len = mgmt__pool_set_prop_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
@@ -697,6 +698,8 @@ out:
 		drpc_resp->body.data = body;
 	}
 
+	if (req->value_case == MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL)
+		D_FREE(resp.strval);
 	mgmt__pool_set_prop_req__free_unpacked(req, NULL);
 }
 

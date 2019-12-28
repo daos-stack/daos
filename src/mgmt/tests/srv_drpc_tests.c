@@ -870,26 +870,6 @@ drpc_list_cont_teardown(void **state)
 }
 
 /*
- * dRPC Pool SetProp setup/teardown
- */
-
-static int
-drpc_pool_set_prop_setup(void **state)
-{
-	mock_ds_mgmt_pool_set_prop_setup();
-
-	return 0;
-}
-
-static int
-drpc_pool_set_prop_teardown(void **state)
-{
-	mock_ds_mgmt_pool_set_prop_teardown();
-
-	return 0;
-}
-
-/*
  * dRPC List Containers tests
  */
 static void
@@ -1056,6 +1036,26 @@ test_drpc_pool_list_cont_with_containers(void **state)
 }
 
 /*
+ * dRPC Pool SetProp setup/teardown
+ */
+
+static int
+drpc_pool_set_prop_setup(void **state)
+{
+	mock_ds_mgmt_pool_set_prop_setup();
+
+	return 0;
+}
+
+static int
+drpc_pool_set_prop_teardown(void **state)
+{
+	mock_ds_mgmt_pool_set_prop_teardown();
+
+	return 0;
+}
+
+/*
  * dRPC Pool SetProp tests
  */
 static void
@@ -1175,6 +1175,49 @@ test_drpc_pool_set_prop_bad_uuid(void **state)
 	D_FREE(resp.body.data);
 }
 
+static void
+expect_drpc_pool_set_prop_resp_success(Drpc__Response *resp,
+				       int prop_number, int val_number)
+{
+	Mgmt__PoolSetPropResp	*setprop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	setprop_resp = mgmt__pool_set_prop_resp__unpack(NULL, resp->body.len,
+					 resp->body.data);
+	assert_non_null(setprop_resp);
+	assert_int_equal(setprop_resp->status, 0);
+	assert_int_equal(setprop_resp->number, prop_number);
+	assert_int_equal(setprop_resp->numval, val_number);
+
+	mgmt__pool_set_prop_resp__free_unpacked(setprop_resp, NULL);
+}
+
+static void
+test_drpc_pool_set_prop_success(void **state)
+{
+	Drpc__Call call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq req = MGMT__POOL_SET_PROP_REQ__INIT;
+	int prop_number = DAOS_PROP_PO_MAX; /* no special handling */
+	int val_number = 1;
+
+	req.uuid = TEST_UUID;
+	req.number = prop_number;
+	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	req.numval = val_number;
+	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_success(&resp, prop_number, val_number);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -1230,6 +1273,7 @@ main(void)
 		POOL_SET_PROP_TEST(
 			test_drpc_pool_set_prop_invalid_value_type),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
+		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

@@ -1045,14 +1045,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 			prop->dpp_entries[i].dpe_type;
 
 	rc = ds_pool_svc_get_prop(pool_uuid, ranks, res_prop);
-	if (rc != 0)
-		goto out_resprop;
+	if (rc != 0) {
+		daos_prop_free(res_prop);
+		goto out_ranks;
+	}
 
 	*result = res_prop;
-	goto out_ranks;
 
-out_resprop:
-	daos_prop_free(res_prop);
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
