@@ -348,7 +348,6 @@ func (c *Configuration) SaveToFile(filename string) error {
 func (c *Configuration) SetPath(inPath string) (err error) {
 	var outPath string
 
-	fmt.Printf("SetPath in: %s\n", inPath)
 	if inPath == "" {
 		// no custom path specified, look up adjacent
 		outPath, err = common.GetAdjacentPath(c.Path)
@@ -362,7 +361,6 @@ func (c *Configuration) SetPath(inPath string) (err error) {
 	}
 	c.Path = outPath
 
-	fmt.Printf("SetPath out: %s\n", outPath)
 	if _, err = os.Stat(outPath); err != nil {
 		return
 	}
