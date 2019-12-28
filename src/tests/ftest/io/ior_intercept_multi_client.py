@@ -80,7 +80,6 @@ class IorInterceptMultiClient(IorTestBase):
         mean_mib = int(IorMetrics.Mean_MiB)
 
         write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
-        read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
 
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
@@ -92,13 +91,13 @@ class IorInterceptMultiClient(IorTestBase):
 
         # Verifying read performance
         # The read performance is almost same with or without intercept
-        # library. Particularly when transfer size is of 512B, 1K or 4K
-        # the read performance is even less intermittently. So, checking
-        # read performance where it is consistently better.
-        if self.ior_cmd.transfer_size.value == '1M':
-            self.assertTrue(float(with_intercept[1][max_mib]) >
-                            read_x * float(without_intercept[1][max_mib]))
-            self.assertTrue(float(with_intercept[1][min_mib]) >
-                            read_x * float(without_intercept[1][min_mib]))
-            self.assertTrue(float(with_intercept[1][mean_mib]) >
-                            read_x * float(without_intercept[1][mean_mib]))
+        # library. But arbitarily the read performance with interception
+        # library can be bit lower than without it. Verifying that it is
+        # not drastically lower by checking it is at least  60% or above.
+        read_x = 0.6
+        self.assertTrue(float(with_intercept[1][max_mib]) >
+                        read_x * float(without_intercept[1][max_mib]))
+        self.assertTrue(float(with_intercept[1][min_mib]) >
+                        read_x * float(without_intercept[1][min_mib]))
+        self.assertTrue(float(with_intercept[1][mean_mib]) >
+                        read_x * float(without_intercept[1][mean_mib]))
