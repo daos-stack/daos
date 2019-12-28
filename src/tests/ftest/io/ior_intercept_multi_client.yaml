@@ -12,7 +12,7 @@ server_config:
     servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        scm_size: 35
+        scm_size: 55
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
@@ -22,9 +22,9 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 320 G
-        scm_size: 30000000000
-        nvme_size: 320000000000
+        # 500 G
+        scm_size: 50000000000
+        nvme_size: 500000000000
     createsvc:
         svcn: 1
 ior:
@@ -42,23 +42,23 @@ ior:
           transfersize_blocksize: !mux
             512B:
               transfer_size: '512B'
-              block_size: '8M'
+              block_size: '128M'
               write_x: 1
               read_x: 1
             1K:
               transfer_size: '1K'
-              block_size: '16M'
+              block_size: '512M'
               write_x: 2
               read_x: 1
-#            4K:
-#              transfer_size: '4K'
-#              block_size: '64M'
-#              write_x: 2
-#              read_x: 1
+            4K:
+              transfer_size: '4K'
+              block_size: '2G'
+              write_x: 2
+              read_x: 1
             1M:
               transfer_size: '1M'
               block_size: '8G'
-              write_x: 2
+              write_x: 3
               read_x: 1
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
