@@ -663,6 +663,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
 	# Removing the following --mca options. openmpi3
 	# doesn't seem to accept these commands.
 	# TODO: Needs further investigation.
+	# 
         # server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
         # server_cmd.extend(["--mca", "btl", "tcp,self"])
         # server_cmd.extend(["--mca", "oob", "tcp"])

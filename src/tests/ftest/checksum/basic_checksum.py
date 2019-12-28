@@ -125,7 +125,7 @@ class ChecksumContainerValidation(TestWithServers):
         Test ID: DAOS-3927
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,pr,hw,basic_checksum_object
+        :avocado: tags=all,full_regression,pr,basic_checksum_object
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
