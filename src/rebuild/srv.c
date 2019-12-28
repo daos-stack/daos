@@ -34,6 +34,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rebuild.h>
+#include <daos_mgmt.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -1448,7 +1449,7 @@ void
 rebuild_hang(void)
 {
 	D_DEBUG(DB_REBUILD, "Hang current rebuild process.\n");
-	dss_parameters_set(DSS_REBUILD_RES_PERCENTAGE, 0);
+	dss_parameters_set(DMG_KEY_REBUILD_THROTTLING, 0);
 }
 
 static int

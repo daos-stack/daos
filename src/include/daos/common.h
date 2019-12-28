@@ -476,18 +476,6 @@ daos_crt_network_error(int err)
 #define daos_rank_in_rank_list		d_rank_in_rank_list
 #define daos_rank_list_append		d_rank_list_append
 
-/* the key of various type of parameters, used by DAOS client to set
- * different parameters globally on all servers.
- */
-enum {
-	DSS_KEY_FAIL_LOC = 0,
-	DSS_KEY_FAIL_VALUE,
-	DSS_KEY_FAIL_NUM,
-	DSS_REBUILD_RES_PERCENTAGE,
-	DSS_DISABLE_AGGREGATION,
-	DSS_KEY_NUM,
-};
-
 void
 daos_fail_loc_set(uint64_t id);
 void
