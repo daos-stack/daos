@@ -261,31 +261,32 @@ func TestFormatHostGroups(t *testing.T) {
 }
 
 func TestTabulateHostGroups(t *testing.T) {
-	mockGroupTitle := "Hosts"
-	mockColumnTitles := []string{"SCM", "NVME"}
+	mockColumnTitles := []string{"Hosts", "SCM", "NVME"}
 
 	for name, tt := range map[string]struct {
 		g         hostlist.HostGroups
-		gTitle    string
 		cTitles   []string
 		out       string
 		expErrMsg string
 	}{
 		"formatted results": {
 			g:       mockHostGroups(t),
-			gTitle:  mockGroupTitle,
 			cTitles: mockColumnTitles,
 			out:     "Hosts\t\tSCM\t\tNVME\t\t\t\n-----\t\t---\t\t----\t\t\t\nhost5\t\t10GB (2 devices)200TB (1 devices)\t\nhost[1-2]\t13GB (3 devices)200TB (4 devices)\t\nhost[3-4]\t13GB (3 devices)400TB (4 devices)\t\n",
 		},
 		"column number mismatch": {
 			g:         mockHostGroups(t),
-			gTitle:    mockGroupTitle,
-			cTitles:   []string{"SCM", "NVME", "???"},
+			cTitles:   []string{"Hosts", "SCM", "NVME", "???"},
 			expErrMsg: "unexpected summary format",
+		},
+		"too few columns": {
+			g:         mockHostGroups(t),
+			cTitles:   []string{"Hosts"},
+			expErrMsg: "insufficient number of column titles",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			table, err := tabulateHostGroups(tt.gTitle, tt.cTitles, tt.g)
+			table, err := tabulateHostGroups(tt.g, tt.cTitles...)
 			ExpectError(t, err, tt.expErrMsg, name)
 			if diff := cmp.Diff(tt.out, table); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)

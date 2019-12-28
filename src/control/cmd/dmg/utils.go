@@ -149,9 +149,12 @@ func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 }
 
 // tabulateHostGroups is a helper function representing hostgroups in a tabular form.
-func tabulateHostGroups(groupTitle string, columnTitles []string, groups hostlist.HostGroups) (string, error) {
-	titles := []string{groupTitle}
-	titles = append(titles, columnTitles...)
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
 
 	formatter := NewTableFormatter(titles)
 	var table []TableRow
