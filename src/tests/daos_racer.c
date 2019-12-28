@@ -182,10 +182,10 @@ update_or_fetch(bool update)
 		pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods, recxs, sgls,
 				  sgl_iovs, sgl_bufs, iod_nr);
 		if (update)
-			daos_obj_update(oh, DAOS_TX_NONE, &dkey_iov, iod_nr,
+			daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
 					iods, sgls, NULL);
 		else
-			daos_obj_fetch(oh, DAOS_TX_NONE, &dkey_iov, iod_nr,
+			daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
 				       iods, sgls, NULL, NULL);
 	}
 
@@ -298,17 +298,17 @@ punch_internal(int op)
 		return;
 
 	if (op == PUNCH_OBJ) {
-		daos_obj_punch(oh, DAOS_TX_NONE, NULL);
+		daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
 	} else {
 		sprintf(dkey, "%d", rand() % dkey_cnt);
 		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 		if (op == PUNCH_DKEY) {
-			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 1, &dkey_iov,
+			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 0, 1, &dkey_iov,
 					     NULL);
 		} else {
 			sprintf(akey, "%d", rand() % max_akey_per_dkey);
 			d_iov_set(&akey_iov, akey, strlen(akey));
-			daos_obj_punch_akeys(oh, DAOS_TX_NONE, &dkey_iov, 1,
+			daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey_iov, 1,
 					     &akey_iov, NULL);
 		}
 	}

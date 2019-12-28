@@ -398,7 +398,7 @@ pool_create_and_destroy_retry(void **state)
 		return;
 
 	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
@@ -414,7 +414,7 @@ pool_create_and_destroy_retry(void **state)
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
-	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);

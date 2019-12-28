@@ -70,7 +70,6 @@ if [ -d "/mnt/daos" ]; then
         # fix up paths so they are relative to $PWD since we might not
         # be in the same path as the software was built
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-        SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
     fi
 
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
