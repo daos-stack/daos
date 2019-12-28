@@ -49,8 +49,8 @@ def acl_entry(usergroup, name, permission):
     Return:
         entry: daos acl entry.
     '''
-    if PERMISSIONS == "random":
-        permission = PERMISSIONS[random.randint(0, 3)]
+    if permission == "random":
+        permission = random.choice(PERMISSIONS)
     if permission == "nonexist":
         return ""
     if "group" in usergroup:
@@ -216,11 +216,12 @@ class PoolSecurityTest(TestWithServers):
         Return:
             none.
         '''
-        for user in range(num_user):
-            username = "daos_ci_tester_" + str(user + 1)
+        user_prefix = self.params.get("user_prefix", "/run/pool_acl/*")
+        for uid in range(num_user):
+            username = user_prefix + "_tester_" + str(uid + 1)
             add_del_user(self.hostlist_clients, "userdel", username)
-        for group in range(num_group):
-            groupname = "daos_ci_testGrp_" + str(group + 1)
+        for gid in range(num_group):
+            groupname = user_prefix + "_testGrp_" + str(gid + 1)
             add_del_user(self.hostlist_clients, "groupdel", groupname)
 
     def pool_acl_verification(self, current_user_acl, read, write):
