@@ -270,7 +270,7 @@ func FindBinary(binName string) (string, error) {
 
 	adjPath, err := GetAdjacentPath(binName)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	if _, err = os.Stat(adjPath); err != nil {
