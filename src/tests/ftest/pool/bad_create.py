@@ -129,4 +129,5 @@ class BadCreateTest(TestWithServers):
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
             if pool is not None and pool.attached:
+                pool.disconnect()   
                 pool.destroy(1)

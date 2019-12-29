@@ -140,4 +140,5 @@ class BadEvictTest(TestWithServers):
                         pool.uuid[item] = saveduuid[item]
                 if savedsvc is not None:
                     pool.svc = savedsvc
+                pool.disconnect()
                 pool.destroy(1)

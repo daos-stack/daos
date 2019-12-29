@@ -63,17 +63,17 @@ class ArrayObjTest(TestWithServers):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
+            self.pool = DaosPool(self.context)
+            self.pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
-            self.plog.info("Pool %s created.", pool.get_uuid_str())
+            self.plog.info("Pool %s created.", self.pool.get_uuid_str())
 
             # need a connection to create container
-            pool.connect(1 << 1)
+            self.pool.connect(1 << 1)
 
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -121,9 +121,6 @@ class ArrayObjTest(TestWithServers):
             time.sleep(5)
             container.destroy()
 
-            # cleanup the pool
-            pool.disconnect()
-            pool.destroy(1)
             self.plog.info("Test Complete")
 
         except DaosApiError as excep:

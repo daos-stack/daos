@@ -95,8 +95,7 @@ class NvmeIo(IorTestBase):
 
                 try:
                     if self.pool:
-                        self.pool.disconnect()
-                        self.pool.destroy(1)
+                        self.destroy_pools(self.pool)
                 except DaosApiError as error:
                     self.log.error(
                         "Pool disconnect/destroy error: %s", str(error))

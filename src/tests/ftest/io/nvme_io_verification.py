@@ -102,4 +102,4 @@ class NvmeIoVerification(IorTestBase):
                 self.verify_pool_size(size_before_ior, self.processes)
 
             # destroy pool
-            self.pool.destroy()
+            self.destroy_pools(self.pool)

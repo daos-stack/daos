@@ -61,7 +61,6 @@ class ContainerAsync(TestWithServers):
         super(ContainerAsync, self).__init__(*args, **kwargs)
         self.container1 = None
         self.container2 = None
-        self.pool = None
 
     def test_createasync(self):
         """
@@ -107,6 +106,7 @@ class ContainerAsync(TestWithServers):
 
             # Try to recreate container after destroying pool,
             # this should fail. Checking rc after failure.
+            self.pool.disconnect()
             self.pool.destroy(1)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
@@ -177,12 +177,6 @@ class ContainerAsync(TestWithServers):
             if GLOB_RC != -1003:
                 self.fail("RC not as expected in async test")
             print("RC after container destroy failed:", GLOB_RC)
-
-            # cleanup the pool and container
-            self.pool.disconnect()
-            self.pool.destroy(1)
-            self.pool = None
-
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -244,13 +238,9 @@ class ContainerAsync(TestWithServers):
                 self.fail("RC not as expected in async test")
             print("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the pool and container
+            # cleanup the container
             self.container1.close()
             self.container1.destroy()
-            self.pool.disconnect()
-            self.pool.destroy(1)
-            self.pool = None
-
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -317,12 +307,8 @@ class ContainerAsync(TestWithServers):
                           "{0}".format(GLOB_RC))
             print("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the pool and container
+            # cleanup the container
             self.container1.destroy()
-            self.pool.disconnect()
-            self.pool.destroy(1)
-            self.pool = None
-
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -391,12 +377,8 @@ class ContainerAsync(TestWithServers):
                           "{0}".format(GLOB_RC))
             print("RC after container destroy failed:", GLOB_RC)
 
-            # cleanup the pool and container
+            # cleanup the container
             self.container1.destroy()
-            self.pool.disconnect()
-            self.pool.destroy(1)
-            self.pool = None
-
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
