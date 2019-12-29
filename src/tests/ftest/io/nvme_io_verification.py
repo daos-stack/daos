@@ -30,6 +30,7 @@ from test_utils import TestPool
 from ior_test_base import IorTestBase
 
 class NvmeIoVerification(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:

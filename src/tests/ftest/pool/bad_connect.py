@@ -28,7 +28,7 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 from apricot import TestWithoutServers, skipForTicket
 
 class BadConnectTest(TestWithoutServers):

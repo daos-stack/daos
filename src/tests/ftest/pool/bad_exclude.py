@@ -30,7 +30,7 @@ import agent_utils
 import server_utils
 import write_host_file
 from apricot import TestWithoutServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 
 class BadExcludeTest(TestWithoutServers):
     """

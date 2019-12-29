@@ -64,7 +64,7 @@ class BasicTxTest(TestWithServers):
             # daos storage
             self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+                             createsize, createsetid, None)
 
             # need a connection to create container
             self.pool.connect(1 << 1)

@@ -54,7 +54,7 @@ class CreateManyDkeys(Test):
     def tearDown(self):
         try:
             if self.pool:
-                self.disconnect()
+                self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
             super(CreateManyDkeys, self).tearDown()

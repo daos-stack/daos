@@ -65,7 +65,7 @@ class ArrayObjTest(TestWithServers):
             # daos storage
             self.pool = DaosPool(self.context)
             self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+                             createsize, createsetid, None)
             self.plog.info("Pool %s created.", self.pool.get_uuid_str())
 
             # need a connection to create container
