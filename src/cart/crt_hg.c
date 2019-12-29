@@ -60,6 +60,7 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_port_bind	= true,
 	}, {
+	/* verbs is not supported. Keep entry in order to print warning */
 		.nad_type	= CRT_NA_OFI_VERBS,
 		.nad_str	= "ofi+verbs",
 		.nad_port_bind	= true,
