@@ -87,7 +87,7 @@ class PoolSecurityTest(TestWithServers):
     def get_pool_acl_list(self, uuid):
         '''
         Deascription:
-            Get daos pool acl list by dmg get-acl
+            Get daos pool acl list by dmg get-acl.
         Args:
             uuid: pool uuid number.
         Return:
