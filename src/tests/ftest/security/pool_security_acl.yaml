@@ -2,9 +2,9 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - boro-A
+    - server-A
   test_clients:
-    - boro-A
+    - client-A   #server client same host
   transport_config:
     - allow_insecure: False
     - ca_cert: ~/.daos/daosCA.crt
@@ -47,8 +47,8 @@ pool_acl:
     permission_none:
       name:
          - none
-         - deny
-         - deny
+         - deny   #read
+         - deny   #write
     permission_r:
       name:
          - r
