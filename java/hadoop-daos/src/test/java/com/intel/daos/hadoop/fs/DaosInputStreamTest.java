@@ -5,8 +5,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
@@ -14,8 +12,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.mockito.Answers.RETURNS_SMART_NULLS;
 import static org.mockito.Mockito.*;
 
 public class DaosInputStreamTest {
