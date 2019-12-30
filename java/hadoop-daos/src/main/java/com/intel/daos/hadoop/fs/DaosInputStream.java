@@ -165,7 +165,6 @@ public class DaosInputStream extends FSInputStream {
   @Override
   public synchronized int read(byte[] buf, int off, int len)
           throws IOException {
-    int actualLen = 0;
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosInputStream : read from daos , contentLength = " + this.fileLen + " ;  currentPos = " +
               getPos() + "; filePos = " + this.nextReadPos);
@@ -187,30 +186,35 @@ public class DaosInputStream extends FSInputStream {
     // check buffer overlay
     long start = lastFilePos;
     long end = lastFilePos + buffer.limit();
-    // Copy requested data from internal buffer to result array if possible
-    if (nextReadPos >= start && nextReadPos < end) {
+    if (nextReadPos >= start && nextReadPos < end) { // some requested data in buffer
       buffer.position((int) (nextReadPos - start));
-      int remaining = (int) (end - nextReadPos);
-
-      // Want to read len bytes, and there is remaining bytes left in buffer, pick the smaller one
-      actualLen = Math.min(remaining, len);
-      buffer.get(buf, off, actualLen);
-      nextReadPos += actualLen;
-      off += actualLen;
-      len -= actualLen;
+      long remaining = end - nextReadPos;
+      if (remaining >= len) {// all requested data in buffer
+        buffer.get(buf, off, len);
+        nextReadPos += len;
+        return len;
+      }
+      // part of data in buffer
+      buffer.get(buf, off, (int) remaining);
+      nextReadPos += remaining;
+      off += remaining;
+      // read more from file
+      long moreLen = readFromDaos(buf, off, (int) (len - remaining));
+      long actualLen = remaining + moreLen;
+      return (int) actualLen;
     }
-    // Read data from DAOS to result array
-    actualLen += readFromDaos(buf, off, len);
+    // data not in buffer
+    long actualLen = readFromDaos(buf, off, len);
     if (actualLen == 0) {
-      actualLen = -1; //reach end of file
+      return -1; // reach end of file
     }
-    return actualLen;
+    return (int) actualLen;
   }
 
-  private int readFromDaos(byte[] buf, int off, int len) throws IOException {
-    int numBytes = 0;
+  private long readFromDaos(byte[] buf, int off, int len) throws IOException {
+    long numBytes = 0;
     while (len > 0 && (nextReadPos < fileLen)) {
-      int actualLen = readFromDaos(len);
+      long actualLen = readFromDaos(len);
       if (actualLen == 0) {
         break;
       }
@@ -228,7 +232,7 @@ public class DaosInputStream extends FSInputStream {
   /**
    * Read data from DAOS and put into cache buffer.
    */
-  private int readFromDaos(int length) throws IOException {
+  private long readFromDaos(long length) throws IOException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosInputStream : read from daos ,filePos = {}", this.nextReadPos);
     }
@@ -244,7 +248,7 @@ public class DaosInputStream extends FSInputStream {
       currentTime = System.currentTimeMillis();
     }
 
-    int actualLen = (int)this.daosFile.read(this.buffer, 0, this.nextReadPos, length);
+    long actualLen = this.daosFile.read(this.buffer, 0, this.nextReadPos, length);
     lastFilePos = nextReadPos;
     buffer.limit((int) actualLen);
     stats.incrementReadOps(1);
