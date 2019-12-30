@@ -170,4 +170,30 @@
       </plugin>
     </plugins>
   </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.0.0</version>
+        <configuration>
+          <configLocation>../dev/checkstyle/checkstyle.xml</configLocation>
+          <headerLocation>../dev/checkstyle/checkstyle.license</headerLocation>
+          <suppressionsLocation>../dev/checkstyle/suppressions.xml</suppressionsLocation>
+          <encoding>UTF-8</encoding>
+          <failsOnError>false</failsOnError>
+          <linkXRef>false</linkXRef>
+          <includeTestSourceDirectory>false</includeTestSourceDirectory>
+        </configuration>
+        <reportSets>
+          <reportSet>
+            <reports>
+              <report>checkstyle</report>
+            </reports>
+          </reportSet>
+        </reportSets>
+      </plugin>
+    </plugins>
+  </reporting>
 </project>

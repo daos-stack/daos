@@ -23,15 +23,18 @@
 
 package com.intel.daos.hadoop.fs;
 
-import com.intel.daos.client.DaosFile;
-import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sun.nio.ch.DirectBuffer;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+
+import com.intel.daos.client.DaosFile;
+
+import org.apache.hadoop.fs.FileSystem;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import sun.nio.ch.DirectBuffer;
 
 /**
  * The output stream for Daos system.
@@ -52,6 +55,17 @@ public class DaosOutputStream extends OutputStream {
     this(daosFile, path, ByteBuffer.allocateDirect(writeBufferSize), stats);
   }
 
+  /**
+   * Constructor with daosFile, file path, direct byte buffer and Hadoop file system statistics.
+   * @param daosFile
+   * DAOS file object
+   * @param path
+   * file path
+   * @param buffer
+   * direct byte buffer
+   * @param stats
+   * Hadoop file system statistics
+   */
   public DaosOutputStream(DaosFile daosFile,
                           String path,
                           ByteBuffer buffer, FileSystem.Statistics stats) {
@@ -61,7 +75,7 @@ public class DaosOutputStream extends OutputStream {
     this.buffer = buffer;
     this.stats = stats;
     if (!(buffer instanceof DirectBuffer)) {
-      throw new IllegalArgumentException("need instance of direct buffer, but "+buffer.getClass().getName());
+      throw new IllegalArgumentException("need instance of direct buffer, but " + buffer.getClass().getName());
     }
   }
 
@@ -74,7 +88,7 @@ public class DaosOutputStream extends OutputStream {
       LOG.debug("DaosOutputStream : write single byte into daos");
     }
     checkNotClose();
-    this.buffer.put((byte)b);
+    this.buffer.put((byte) b);
     if (!this.buffer.hasRemaining()) {
       daosWrite();
     }
@@ -82,7 +96,7 @@ public class DaosOutputStream extends OutputStream {
 
   @Override
   public synchronized void write(byte[] buf, int off, int len)
-      throws IOException {
+          throws IOException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosOutputStream : write byte array into daos , len = " + len);
     }
@@ -92,19 +106,19 @@ public class DaosOutputStream extends OutputStream {
     if (off < 0 || len < 0) {
       throw new IllegalArgumentException("offset/length is negative , offset = " + off + ", length = " + len);
     }
-    if(len > (buf.length - off)){
-      throw new IndexOutOfBoundsException("requested more bytes than destination buffer size "
-              +" : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off ));
+    if (len > (buf.length - off)) {
+      throw new IndexOutOfBoundsException("requested more bytes than destination buffer size " +
+              " : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off));
     }
 
-    if(this.buffer.remaining() >= len){
+    if (this.buffer.remaining() >= len) {
       this.buffer.put(buf, off, len);
       if (!this.buffer.hasRemaining()) {
         daosWrite();
       }
       return;
     }
-    while (len > 0){
+    while (len > 0) {
       int length = Math.min(len, this.buffer.remaining());
       this.buffer.put(buf, off, length);
       if (!this.buffer.hasRemaining()) {
@@ -123,17 +137,16 @@ public class DaosOutputStream extends OutputStream {
       LOG.debug("DaosOutputStream : Write into this.path == " + this.path);
     }
     long currentTime = 0;
-    if(LOG.isDebugEnabled()){
+    if (LOG.isDebugEnabled()) {
       currentTime = System.currentTimeMillis();
     }
     long writeSize = this.daosFile.write(
-      this.buffer, 0, this.fileOffset,
-      this.buffer.position());
+            this.buffer, 0, this.fileOffset,
+            this.buffer.position());
     stats.incrementWriteOps(1);
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosOutputStream : writing by daos_api spend time is : "
-          + (System.currentTimeMillis() - currentTime)
-          + " ; writing data size : " + writeSize + ".");
+      LOG.debug("DaosOutputStream : writing by daos_api spend time is : " +
+              (System.currentTimeMillis() - currentTime) + " ; writing data size : " + writeSize + ".");
     }
     this.fileOffset += writeSize;
     this.buffer.clear();
@@ -153,8 +166,8 @@ public class DaosOutputStream extends OutputStream {
     if (this.daosFile != null) {
       this.daosFile.release();
     }
-    if(this.buffer != null){
-      ((sun.nio.ch.DirectBuffer)this.buffer).cleaner().clean();
+    if (this.buffer != null) {
+      ((sun.nio.ch.DirectBuffer) this.buffer).cleaner().clean();
       this.buffer = null;
     }
     super.close();

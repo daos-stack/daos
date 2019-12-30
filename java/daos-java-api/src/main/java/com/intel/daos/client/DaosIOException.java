@@ -23,14 +23,14 @@
 
 package com.intel.daos.client;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Exception class for remote DAOS operations. The <code>errorCode</code> is passed and defined by DAOS system.
@@ -48,71 +48,105 @@ public class DaosIOException extends IOException {
 
   private static final Logger log = LoggerFactory.getLogger(DaosIOException.class);
 
-  static{
+  static {
     errorMap = Collections.unmodifiableMap(loadErrorCode());
   }
 
-  private static final Map<Integer, String> loadErrorCode(){
+  private static Map<Integer, String> loadErrorCode() {
     Map<Integer, String> map = new HashMap<>();
     Field[] fields = Constants.class.getDeclaredFields();
     try {
       for (Field f : fields) {
         if (f.getName().startsWith(Constants.ERROR_NAME_PREFIX)) {
           Object o = f.get(null);
-          if(o instanceof ErrorCode) {
+          if (o instanceof ErrorCode) {
             ErrorCode ec = (ErrorCode) o;
             map.put(ec.getCode(), ec.getMsg());
           }
         }
       }
-    }catch (Exception e){
+    } catch (Exception e) {
       log.error("failed to load error code", e);
       return null;
     }
     return map;
   }
 
-  public DaosIOException(String msg){
+  public DaosIOException(String msg) {
     super(msg);
   }
 
-  public DaosIOException(Throwable cause){
+  public DaosIOException(Throwable cause) {
     super(cause);
   }
 
-  public DaosIOException(String msg, int errorCode, String daosMsg){
+  /**
+   * Constructor with msg, errorCode and daosMsg.
+   * @param msg
+   * error message
+   * @param errorCode
+   * error code
+   * @param daosMsg
+   * message from native code
+   */
+  public DaosIOException(String msg, int errorCode, String daosMsg) {
     super(msg);
     this.errorCode = errorCode;
     this.daosMsg = daosMsg;
   }
 
-  public DaosIOException(String msg, int errorCode, Throwable cause){
+  /**
+   * Constructor with msg, errorCode and cause.
+   * @param msg
+   * error message
+   * @param errorCode
+   * error code
+   * @param cause
+   * cause
+   */
+  public DaosIOException(String msg, int errorCode, Throwable cause) {
     super(msg, cause);
     this.errorCode = errorCode;
   }
 
+  /**
+   * get error code.
+   * @return
+   */
   public int getErrorCode() {
     return errorCode;
   }
 
+  /**
+   * get message.
+   * @return
+   */
   @Override
-  public String getMessage(){
+  public String getMessage() {
     return toString();
   }
 
+  /**
+   * get localized message.
+   * @return
+   */
   @Override
-  public String getLocalizedMessage(){
+  public String getLocalizedMessage() {
     return toString();
   }
 
-
-  public String toString(){
-    if(parsedMsg != null){
+  /**
+   * exception in string.
+   * @return string
+   */
+  @Override
+  public String toString() {
+    if (parsedMsg != null) {
       return parsedMsg;
     }
     StringBuilder sb = new StringBuilder(super.getMessage());
     sb.append(" error code: ");
-    if (errorCode == Integer.MIN_VALUE){
+    if (errorCode == Integer.MIN_VALUE) {
       sb.append("unknown.");
     } else {
       sb.append(errorCode);
@@ -120,7 +154,7 @@ public class DaosIOException extends IOException {
         daosMsg = errorMap.get(errorCode);
       }
     }
-    sb.append(" error msg: ").append(daosMsg==null ? "":daosMsg);
+    sb.append(" error msg: ").append(daosMsg == null ? "" : daosMsg);
     parsedMsg = sb.toString();
     return parsedMsg;
   }

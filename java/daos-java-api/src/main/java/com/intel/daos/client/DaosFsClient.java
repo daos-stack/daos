@@ -23,10 +23,6 @@
 
 package com.intel.daos.client;
 
-import org.apache.commons.lang.ObjectUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,11 +30,19 @@ import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.commons.lang.ObjectUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Java DAOS FS Client for all local/remote DAOS operations which is indirectly invoked via JNI.
  *
+ * <p>
  * Before any operation, there is some preparation work to be done in this class.
  * <li>load dynamic library, libdaos-jni.so</li>
  * <li>load error code</li>
@@ -47,32 +51,39 @@ import java.util.concurrent.*;
  * <li>create/open pool and container</li>
  * <li>mount DAOS FS on container</li>
  *
+ * <p>
  * If you have <code>poolId</code> specified, but no <code>containerId</code>, DAOS FS will be mounted on
  * non-readonly root container with UUID {@link #ROOT_CONT_UUID}. Thus, you need to make sure the pool
  * doesn't have root container yet.
  *
- * User cannot instantiate this class directly since we need to make sure single instance of {@linkplain DaosFsClient client}
- * per pool and container. User should get this object from {@link DaosFsClientBuilder}.
+ * <p>
+ * User cannot instantiate this class directly since we need to make sure single instance of
+ * {@linkplain DaosFsClient client}  per pool and container. User should get this object from
+ * {@link DaosFsClientBuilder}.
  *
- * After getting {@linkplain DaosFsClient client}, user usually get {@link DaosFile} object via {@linkplain #getFile} methods.
+ * <p>
+ * After getting {@linkplain DaosFsClient client}, user usually get {@link DaosFile} object via {@linkplain #getFile}
+ * methods.
  *
+ * <p>
  * For example, user can simply create {@linkplain DaosFsClient client} and {@link DaosFile} with all default values
  * by following code.
  * <code>
- *   DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
- *   builder.poolId(poolId).containerId(contId);
- *   DaosFsClient client = builder.build();
+ * DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+ * builder.poolId(poolId).containerId(contId);
+ * DaosFsClient client = builder.build();
  *
- *   DaosFile daosFile = client.getFile("/path");
- *   if (!daosFile.exists()){
- *     daosFile.mkdir();
- *   }
+ * DaosFile daosFile = client.getFile("/path");
+ * if (!daosFile.exists()){
+ * daosFile.mkdir();
+ * }
  * </code>
  *
- * User can also call some utility methods directly in this object for convenience without creating new {@link DaosFile}.
- * User should prefer these utility methods to {@link DaosFile} if it's only one-shot DAOS file operation. Whilst
- * {@link DaosFile} should be created for multiple DAOS file operations because DAOS FS object is cached inside. We
- * don't need to query/open DAOS FS object for each DAOS operation.
+ * <p>
+ * User can also call some utility methods directly in this object for convenience without creating new
+ * {@link DaosFile}. User should prefer these utility methods to {@link DaosFile} if it's only one-shot DAOS file
+ * operation. Whilst {@link DaosFile} should be created for multiple DAOS file operations because DAOS FS object is
+ * cached inside. We don't need to query/open DAOS FS object for each DAOS operation.
  *
  * @see DaosFsClientBuilder
  * @see DaosFile
@@ -115,9 +126,9 @@ public final class DaosFsClient {
   static {
     loadLib();
     ShutdownHookManager.addHook(() -> {
-      try{
+      try {
         daosFinalize();
-      }catch (IOException e){
+      } catch (IOException e) {
         log.error("failed to finalize DAOS", e);
       }
     });
@@ -145,7 +156,7 @@ public final class DaosFsClient {
       if (tempDir != null) {
         tempDir.delete();
       }
-      throw new RuntimeException("failed to load lib from jar, "+LIB_NAME, e);
+      throw new RuntimeException("failed to load lib from jar, " + LIB_NAME, e);
     }
   }
 
@@ -154,12 +165,12 @@ public final class DaosFsClient {
     String[] fields = path.split("/");
     String name = fields[fields.length - 1];
 
-    try (InputStream is = DaosFsClient.class.getResourceAsStream(path)){
+    try (InputStream is = DaosFsClient.class.getResourceAsStream(path)) {
       tempFile = new File(tempDir, name);
       tempFile.deleteOnExit();
       Files.copy(is, tempFile.toPath(), new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
       System.load(tempFile.getAbsolutePath());
-    } catch (IOException e){
+    } catch (IOException e) {
       if (tempFile != null) {
         tempFile.delete();
       }
@@ -180,8 +191,8 @@ public final class DaosFsClient {
     this(null, null, builder);
   }
 
-  private synchronized void init() throws IOException{
-    if(inited){
+  private synchronized void init() throws IOException {
+    if (inited) {
       return;
     }
     if (poolId == null) {
@@ -198,7 +209,7 @@ public final class DaosFsClient {
       log.info("opened container {}", contPtr);
       dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
       log.info("mounted FS {}", dfsPtr);
-    }else{
+    } else {
       contId = ROOT_CONT_UUID;
       contPtr = -1;
       dfsPtr = mountFileSystem(poolPtr, -1, builder.readOnlyFs);
@@ -209,9 +220,9 @@ public final class DaosFsClient {
     log.info("cleaner task running");
 
     ShutdownHookManager.addHook(() -> {
-      try{
+      try {
         disconnect(true);
-      }catch (IOException e){
+      } catch (IOException e) {
         log.error("failed to disconnect FS client", e);
       }
     });
@@ -233,22 +244,24 @@ public final class DaosFsClient {
   }
 
   /**
-   * create pool based on information from {@link DaosFsClientBuilder}
+   * create pool based on information from {@link DaosFsClientBuilder}.
    *
    * @param builder
+   * cloned builder instance
    * @return pool id
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public static String createPool(DaosFsClientBuilder builder)throws IOException {
+  public static String createPool(DaosFsClientBuilder builder) throws IOException {
     String poolInfo = daosCreatePool(builder.serverGroup,
-                          builder.poolSvcReplics,
-                          builder.poolMode,
-                          builder.poolScmSize,
-                          builder.poolNvmeSize);
+            builder.poolSvcReplics,
+            builder.poolMode,
+            builder.poolScmSize,
+            builder.poolNvmeSize);
     log.info("opened pool: {}", poolInfo);
     String[] fields = poolInfo.split(" ");
     String pooId = fields[0];
-    if (fields.length > 1){
+    if (fields.length > 1) {
       builder.ranks = fields[1];
       builder.poolId = pooId;
     }
@@ -256,40 +269,47 @@ public final class DaosFsClient {
   }
 
   /**
-   * mount DAOS FS on specific pool and container
+   * mount DAOS FS on specific pool and container.
    *
    * @param poolPtr
+   * pointer to pool object
    * @param contPtr
+   * pointer to container object
    * @param readOnly
+   * is read only file system
    * @return pointer of native mounted DAOS FS object.
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public static synchronized long mountFileSystem(long poolPtr, long contPtr, boolean readOnly) throws IOException{
-    if(contPtr != -1){
+  public static synchronized long mountFileSystem(long poolPtr, long contPtr, boolean readOnly) throws IOException {
+    if (contPtr != -1) {
       return dfsMountFs(poolPtr, contPtr, readOnly);
     }
     return dfsMountFsOnRoot(poolPtr);
   }
 
   /**
-   * Decrement reference first. If there is no more reference, then disconnect this client from DAOS server. After actual
-   * disconnect,
+   * Decrement reference first. If there is no more reference, then disconnect this client from DAOS server.
+   * After actual disconnect,
    * - DAOS FS is unmounted
    * - container is closed
    * - pool is closed
    * - cleaner task is stopped
    * - this instance is removed from cache
    *
+   * <p>
    * User should call this method before application exiting to release resources. It's <B>synchronized</B> method
    * so that the two <B>synchronized</B> methods, {@link #incrementRef()} and {@link #decrementRef()}, for maintaining
    * references can be safely called.
    *
-   * If there are still references to this object, no actual disconnect will be called. User can call {@link #getRefCnt()}
-   * method to double-check the reference count of this object.
+   * <p>
+   * If there are still references to this object, no actual disconnect will be called. User can call
+   * {@link #getRefCnt()} method to double-check the reference count of this object.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public synchronized void disconnect() throws IOException{
+  public synchronized void disconnect() throws IOException {
     disconnect(false);
   }
 
@@ -325,9 +345,10 @@ public final class DaosFsClient {
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>path</code>
+   * Get {@link DaosFile} denoted by <code>path</code>.
    *
    * @param path
+   * path of file
    * @return DaosFile
    */
   public DaosFile getFile(String path) {
@@ -335,10 +356,12 @@ public final class DaosFsClient {
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>path</code> with giving <code>accessFlags</code>
+   * Get {@link DaosFile} denoted by <code>path</code> with giving <code>accessFlags</code>.
    *
    * @param path
+   * path of file
    * @param accessFlags
+   * file access flags, see {@link DaosFsClientBuilder#defaultFileAccessFlags(int)} for its possible values
    * @return DaosFile
    */
   public DaosFile getFile(String path, int accessFlags) {
@@ -346,20 +369,27 @@ public final class DaosFsClient {
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>parent</code> and <code>path</code>
+   * Get {@link DaosFile} denoted by <code>parent</code> and <code>path</code>.
+   *
    * @param parent
+   * parent path of file
    * @param path
+   * path of file
    * @return DaosFile
    */
-  public DaosFile getFile(String parent, String path){
+  public DaosFile getFile(String parent, String path) {
     return getFile(parent, path, builder.defaultFileAccessFlags);
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>parent</code> and <code>path</code> with giving <code>accessFlags</code>
+   * Get {@link DaosFile} denoted by <code>parent</code> and <code>path</code> with giving <code>accessFlags</code>.
+   *
    * @param parent
+   * parent path of file
    * @param path
+   * path of file
    * @param accessFlags
+   * file access flags, see {@link DaosFsClientBuilder#defaultFileAccessFlags(int)} for its possible values
    * @return DaosFile
    */
   public DaosFile getFile(String parent, String path, int accessFlags) {
@@ -367,22 +397,28 @@ public final class DaosFsClient {
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>parent</code> object and <code>path</code>
+   * Get {@link DaosFile} denoted by <code>parent</code> object and <code>path</code>.
    *
    * @param parent
+   * parent file object
    * @param path
+   * path of file
    * @return DaosFile
    */
-  public DaosFile getFile(DaosFile parent, String path){
+  public DaosFile getFile(DaosFile parent, String path) {
     return getFile(parent, path, builder.defaultFileAccessFlags);
   }
 
   /**
-   * Get {@link DaosFile} denoted by <code>parent</code> object and <code>path</code> with giving <code>accessFlags</code>
+   * Get {@link DaosFile} denoted by <code>parent</code> object and <code>path</code> with giving
+   * <code>accessFlags</code>.
    *
    * @param parent
+   * parent file object
    * @param path
+   * path of file
    * @param accessFlags
+   * file access flags, see {@link DaosFsClientBuilder#defaultFileAccessFlags(int)} for its possible values
    * @return DaosFile
    */
   public DaosFile getFile(DaosFile parent, String path, int accessFlags) {
@@ -390,13 +426,16 @@ public final class DaosFsClient {
   }
 
   /**
-   * move file from <code>srcPath</code> to <code>destPath</code>
+   * move file from <code>srcPath</code> to <code>destPath</code>.
    *
    * @param srcPath
+   * source path
    * @param destPath
+   * destination path
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public void move(String srcPath, String destPath)throws IOException {
+  public void move(String srcPath, String destPath) throws IOException {
     move(dfsPtr, DaosUtils.normalize(srcPath), DaosUtils.normalize(destPath));
   }
 
@@ -405,38 +444,44 @@ public final class DaosFsClient {
    * if <code>force</code> is true.
    *
    * @param path
+   * path of file to be deleted
    * @param force
-   * @throws IOException
-   *
+   * force delete if directory is not empty
    * @return true for deleted successfully, false for other cases, like not existed or failed to delete
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  public boolean delete(String path, boolean force)throws IOException{
+  public boolean delete(String path, boolean force) throws IOException {
     path = DaosUtils.normalize(path);
     String[] pc = DaosUtils.parsePath(path);
-    return delete(dfsPtr, pc.length==2 ? pc[0]:null, pc[1], force);
+    return delete(dfsPtr, pc.length == 2 ? pc[0] : null, pc[1], force);
   }
 
   /**
    * delete file or directory denoted by <code>path</code> without force deletion.
    *
    * @param path
-   * @throws IOException
-   *
+   * path of file to be deleted
    * @return true for deleted successfully, false for other cases, like not existed or failed to delete
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  public boolean delete(String path)throws IOException{
+  public boolean delete(String path) throws IOException {
     return delete(DaosUtils.normalize(path), false);
   }
 
   /**
-   * create directory denoted by <code>path</code>
+   * create directory denoted by <code>path</code>.
    * If <code>recursive</code> is true, ancestor path will be created if they don't exist.
    *
    * @param path
+   * path of directory
    * @param recursive
+   * create directories recursively
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public void mkdir(String path, boolean recursive)throws IOException{
+  public void mkdir(String path, boolean recursive) throws IOException {
     mkdir(DaosUtils.normalize(path), builder.defaultFileMode, recursive);
   }
 
@@ -445,16 +490,20 @@ public final class DaosFsClient {
    * If <code>recursive</code> is true, ancestor path will be created if they don't exist.
    *
    * @param path
+   * path of directory
    * @param mode
+   * file mode, see {@link DaosFsClientBuilder#defaultFileMode(int)} for its possible values
    * @param recursive
+   * create directories recursively
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public void mkdir(String path, int mode, boolean recursive)throws IOException{
+  public void mkdir(String path, int mode, boolean recursive) throws IOException {
     try {
       mkdir(dfsPtr, DaosUtils.normalize(path), mode, recursive);
     } catch (IOException e) {
       if (recursive && (e instanceof DaosIOException)) {
-        if (((DaosIOException)e).getErrorCode() == Constants.ERROR_CODE_FILE_EXIST) {
+        if (((DaosIOException) e).getErrorCode() == Constants.ERROR_CODE_FILE_EXIST) {
           return;
         }
       }
@@ -463,19 +512,21 @@ public final class DaosFsClient {
   }
 
   /**
-   * check existence of file denoted by <code>path</code>
+   * check existence of file denoted by <code>path</code>.
    *
    * @param path
+   * path of file
    * @return true if exists. false otherwise
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public boolean exists(String path) throws IOException{
+  public boolean exists(String path) throws IOException {
     long objId = 0;
     try {
       objId = dfsLookup(dfsPtr, DaosUtils.normalize(path), builder.defaultFileAccessFlags, -1);
       return true;
-    }catch (Exception e) {
-      if (!(e instanceof DaosIOException)) {//unexpected exception
+    } catch (Exception e) {
+      if (!(e instanceof DaosIOException)) { //unexpected exception
         throw new DaosIOException(e);
       }
       //verify error code to determine existence, if it's other error code, throw it anyway.
@@ -484,8 +535,8 @@ public final class DaosFsClient {
         throw de;
       }
       return false;
-    }finally {
-      if (objId > 0){
+    } finally {
+      if (objId > 0) {
         dfsRelease(objId);
       }
     }
@@ -494,394 +545,500 @@ public final class DaosFsClient {
   //------------------native methods------------------
 
   /**
-   * move file object denoted by <code>srcPath</code> to new path denoted by <code>destPath</code>
+   * move file object denoted by <code>srcPath</code> to new path denoted by <code>destPath</code>.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param srcPath
    * full path of source
    * @param destPath
    * full path of destination
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native void move(long dfsPtr, String srcPath, String destPath)throws IOException;
+  native void move(long dfsPtr, String srcPath, String destPath) throws IOException;
 
   /**
-   * make directory denoted by <code>path</code>
+   * make directory denoted by <code>path</code>.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param path
    * full path
    * @param mode
+   * file mode, see {@link DaosFsClientBuilder#defaultFileMode(int)} for possible values
    * @param recursive
    * true to create all ancestors, false to create just itself
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native void mkdir(long dfsPtr, String path, int mode, boolean recursive)throws IOException;
+  native void mkdir(long dfsPtr, String path, int mode, boolean recursive) throws IOException;
 
   /**
-   * create new file
+   * create new file.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param parentPath
    * null for root
    * @param name
+   * file name
    * @param mode
+   * file mode, see {@link DaosFsClientBuilder#defaultFileMode(int)} for possible values
    * @param accessFlags
-   * @param objectId
+   * file access flags, see {@link DaosFsClientBuilder#defaultFileAccessFlags(int)} for its possible values
+   * @param objectType
+   * object type, see {@link DaosFsClientBuilder#defaultFileObjType} for its possible values
    * @param chunkSize
+   * file chunk size
    * @param createParent
-   * @throws IOException
-   *
+   * if create directory if parent doesn't exist
    * @return DAOS FS object id
+   * @throws IOException
+   * {@link DaosIOException}
    */
   native long createNewFile(long dfsPtr, String parentPath, String name, int mode, int accessFlags,
-                                      int objectId, int chunkSize, boolean createParent)throws IOException;
+                            int objectType, int chunkSize, boolean createParent) throws IOException;
 
   /**
-   * delete file with <code>name</code> from <code>parentPath</code>
+   * delete file with <code>name</code> from <code>parentPath</code>.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param parentPath
    * null for root
    * @param name
+   * file name
    * @param force
    * true to delete directory if it's not empty
-   * @throws IOException
-   *
    * @return true for deleted successfully, false for other cases, like not existed or failed to delete
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native boolean delete(long dfsPtr, String parentPath, String name, boolean force)throws IOException;
+  native boolean delete(long dfsPtr, String parentPath, String name, boolean force) throws IOException;
 
 
   //DAOS corresponding methods
 
   /**
-   * create DAOS pool
+   * create DAOS pool.
    *
    * @param serverGroup
+   * DAOS server group
    * @param poolSvcReplics
+   * pool service replications
    * @param mode
+   * pool mode, see {@link DaosFsClientBuilder#poolMode(int)}
    * @param scmSize
+   * scm size
    * @param nvmeSize
-   * @throws IOException
-   *
+   * nvme size
    * @return poold id
+   * @throws IOException
+   * {@link DaosIOException}
    */
   static native String daosCreatePool(String serverGroup, int poolSvcReplics, int mode, long scmSize,
-                                      long nvmeSize)throws IOException;
+                                      long nvmeSize) throws IOException;
 
   /**
-   * destroy pool
+   * destroy pool.
+   *
    * @param serverGroup
+   * DAOS server group
    * @param poolId
+   * pool id
    * @param force
+   * force to destroy pool
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void destroyPool(String serverGroup, String poolId, boolean force)throws IOException;
+  static native void destroyPool(String serverGroup, String poolId, boolean force) throws IOException;
 
   /**
-   * open pool
+   * open pool.
    *
    * @param poolId
+   * pool id
    * @param serverGroup
+   * DAOS server group
    * @param ranks
+   * pool ranks
    * @param flags
-   * @throws IOException
-   *
+   * see {@link DaosFsClientBuilder#poolFlags(int)}
    * @return pool pointer or pool handle
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags)throws IOException;
+  static native long daosOpenPool(String poolId, String serverGroup, String ranks, int flags) throws IOException;
 
   /**
-   * open container
+   * open container.
    *
    * @param poolPtr
+   * pointer to pool
    * @param contId
-   * @param mode
-   * @throws IOException
-   *
+   * container id
+   * @param flags
+   * see {@link DaosFsClientBuilder#containerFlags(int)}
    * @return container pointer or container handle
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  static native long daosOpenCont(long poolPtr, String contId, int mode)throws IOException;
+  static native long daosOpenCont(long poolPtr, String contId, int flags) throws IOException;
 
   /**
-   * close container
+   * close container.
    *
    * @param contPtr
+   * pointer to container
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void daosCloseContainer(long contPtr)throws IOException;
+  static native void daosCloseContainer(long contPtr) throws IOException;
 
   /**
-   * close pool
+   * close pool.
+   *
    * @param poolPtr
+   * pointer to pool
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void daosClosePool(long poolPtr)throws IOException;
+  static native void daosClosePool(long poolPtr) throws IOException;
 
 
   //DAOS FS corresponding methods
 
   /**
-   * set prefix
-   * @param dfsPtr
-   * @param prefix
-   * @throws IOException
+   * set prefix.
    *
+   * @param dfsPtr
+   * pointer to dfs object
+   * @param prefix
+   * path prefix
    * @return 0 for success, others for failure
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native int dfsSetPrefix(long dfsPtr, String prefix)throws IOException;
+  native int dfsSetPrefix(long dfsPtr, String prefix) throws IOException;
 
   /**
-   * open a file with opened parent specified by <code>parentObjId</code>
+   * open a file with opened parent specified by <code>parentObjId</code>.
    *
+ * <p>
    * TODO: make sure buffer is set in the same order as StatAttributes instantiation
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param parentObjId
+   * parent object id
    * @param name
+   * file name
    * @param flags
+   * file flags
    * @param bufferAddress address of direct {@link java.nio.ByteBuffer} for holding all information of
    *                      {@link StatAttributes}, -1 if you don't want to get {@link StatAttributes}
-   * @throws IOException
-   *
    * @return DAOS FS object id
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native long dfsLookup(long dfsPtr, long parentObjId, String name, int flags, long bufferAddress)throws IOException;
+  native long dfsLookup(long dfsPtr, long parentObjId, String name, int flags, long bufferAddress) throws IOException;
 
   /**
    * Same as {@link #dfsLookup(long, long, String, int, long)} except parent file is not opened.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param path
+   * file path
    * @param flags
+   * file flags
    * @param bufferAddress address of direct {@link java.nio.ByteBuffer} for holding all information of
    *                      {@link StatAttributes}
-   * @throws IOException
-   *
    * @return DAOS FS object id
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native long dfsLookup(long dfsPtr, String path, int flags, long bufferAddress)throws IOException;
+  native long dfsLookup(long dfsPtr, String path, int flags, long bufferAddress) throws IOException;
 
   /**
-   * get file length for opened FS object
+   * get file length for opened FS object.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
-   * @throws IOException
-   *
+   * object id
    * @return file length
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native long dfsGetSize(long dfsPtr, long objId)throws IOException;
+  native long dfsGetSize(long dfsPtr, long objId) throws IOException;
 
   /**
-   * duplicate opened FS object
+   * duplicate opened FS object.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param flags
-   * @throws IOException
-   *
+   * file flags
    * @return FS object id of duplication
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native long dfsDup(long dfsPtr, long objId, int flags)throws IOException;
+  native long dfsDup(long dfsPtr, long objId, int flags) throws IOException;
 
   /**
-   * release opened FS object
+   * release opened FS object.
    *
    * @param objId
+   * object id
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native void dfsRelease(long objId)throws IOException;
+  native void dfsRelease(long objId) throws IOException;
 
   /**
-   * read data from file to buffer
+   * read data from file to buffer.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param bufferAddress
+   * address of direct buffer
    * @param offset
+   * file offset
    * @param len
+   * length in byte to read from file
    * @param eventNo
-   * @throws IOException
-   *
+   * event no.
    * @return number of bytes actual read
+   * @throws IOException
+   * {@link DaosIOException}
    */
-  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len, int eventNo)throws IOException;
+  native long dfsRead(long dfsPtr, long objId, long bufferAddress, long offset, long len, int eventNo)
+          throws IOException;
 
   /**
-   * write data from buffer to file
+   * write data from buffer to file.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param bufferAddress
+   * address of direct buffer
    * @param offset
+   * file offset
    * @param len
+   * length in byte to write to file
    * @param eventNo
-   * @throws IOException
-   *
+   * event no.
    * @return number of bytes actual written
+   * @throws IOException
+   * {@link DaosIOException}
    */
   native long dfsWrite(long dfsPtr, long objId, long bufferAddress, long offset, long len,
-                              int eventNo)throws IOException;
+                       int eventNo) throws IOException;
 
   /**
-   * read children
+   * read children.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param maxEntries
    * -1 for no limit
    * @return file names separated by ','
    */
-  native String dfsReadDir(long dfsPtr, long objId, int maxEntries)throws IOException;
+  native String dfsReadDir(long dfsPtr, long objId, int maxEntries) throws IOException;
 
   /**
-   * get FS object status attribute into direct {@link java.nio.ByteBuffer}
+   * get FS object status attribute into direct {@link java.nio.ByteBuffer}.
    * Order of fields to be read.
-   *     objId = buffer.getLong();
-   *     mode = buffer.getInt();
-   *     uid = buffer.getInt();
-   *     gid = buffer.getInt();
-   *     blockCnt = buffer.getLong();
-   *     blockSize = buffer.getLong();
-   *     length = buffer.getLong();
-   *     accessTime = buffer.getLong() buffer.getLong();
-   *     modifyTime = buffer.getLong() buffer.getLong();
-   *     createTime = buffer.getLong() buffer.getLong();
-   *     file = buffer.get() > 0;
-   * @param dfsPtr
-   * @param objId
-   * @param bufferAddress
-   * memory address of direct buffer. -1 if you don't want to retrieve stat actually. It's usually
-   * for checking file existence.
-   * @throws IOException
-   */
-  native void dfsOpenedObjStat(long dfsPtr, long objId, long bufferAddress)throws IOException;
-
-  /**
-   * set extended attribute
+   * objId = buffer.getLong();
+   * mode = buffer.getInt();
+   * uid = buffer.getInt();
+   * gid = buffer.getInt();
+   * blockCnt = buffer.getLong();
+   * blockSize = buffer.getLong();
+   * length = buffer.getLong();
+   * accessTime = buffer.getLong() buffer.getLong();
+   * modifyTime = buffer.getLong() buffer.getLong();
+   * createTime = buffer.getLong() buffer.getLong();
+   * file = buffer.get() > 0;
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
+   * @param bufferAddress memory address of direct buffer. -1 if you don't want to retrieve stat actually. It's usually
+   *                      for checking file existence.
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  native void dfsOpenedObjStat(long dfsPtr, long objId, long bufferAddress) throws IOException;
+
+  /**
+   * set extended attribute.
+   *
+   * @param dfsPtr
+   * pointer of dfs object
+   * @param objId
+   * object id
    * @param name
+   * attribute name
    * @param value
+   * attribute value
    * @param flags
+   * attribute flags
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native void dfsSetExtAttr(long dfsPtr, long objId, String name, String value, int flags)throws IOException;
+  native void dfsSetExtAttr(long dfsPtr, long objId, String name, String value, int flags) throws IOException;
 
   /**
-   * get extended attribute
+   * get extended attribute.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param name
+   * attribute name
    * @param expectedValueLen
-   * @return
+   * expected value length
+   * @return attribute value
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native String dfsGetExtAttr(long dfsPtr, long objId, String name, int expectedValueLen)throws IOException;
+  native String dfsGetExtAttr(long dfsPtr, long objId, String name, int expectedValueLen) throws IOException;
 
   /**
-   * remove extended attribute
+   * remove extended attribute.
    *
    * @param dfsPtr
+   * pointer of dfs object
    * @param objId
+   * object id
    * @param name
-   *
+   * attribute name
    * @throws IOException
+   * {@link DaosIOException}
    */
-  native void dfsRemoveExtAttr(long dfsPtr, long objId, String name)throws IOException;
+  native void dfsRemoveExtAttr(long dfsPtr, long objId, String name) throws IOException;
 
   /**
-   * get chunk size
-   *
-   * @param objId
-   * @return
-   * @throws IOException
-   */
-  static native long dfsGetChunkSize(long objId)throws IOException;
-
-  /**
-   * get mode
+   * get chunk size.
    *
    * @param objId
-   * @return
+   * object id
+   * @return chunk size
    * @throws IOException
+   * {@link DaosIOException}
    */
-   static native int dfsGetMode(long objId)throws IOException;
+  static native long dfsGetChunkSize(long objId) throws IOException;
 
   /**
-   * check if it's directory by providing mode
+   * get mode.
+   *
+   * @param objId
+   * object id
+   * @return file mode
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  static native int dfsGetMode(long objId) throws IOException;
+
+  /**
+   * check if it's directory by providing mode.
+   *
    * @param mode
-   * @return
+   * file mode
+   * @return true if directory. false otherwise
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native boolean dfsIsDirectory(int mode)throws IOException;
+  static native boolean dfsIsDirectory(int mode) throws IOException;
 
   /**
-   * mount FS on container
+   * mount FS on container.
    *
    * @param poolPtr
+   * pointer to pool
    * @param contPtr
+   * pointer to container
    * @param readOnly
+   * read only filesystem
    * @return FS client pointer
    */
-  static native long dfsMountFs(long poolPtr, long contPtr, boolean readOnly)throws IOException;
+  static native long dfsMountFs(long poolPtr, long contPtr, boolean readOnly) throws IOException;
 
   /**
-   * mount FS on non-readonly root container
+   * mount FS on non-readonly root container.
+   *
    * @param poolPtr
-   * @return
+   * pointer to pool
+   * @return pointer to dfs object
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native long dfsMountFsOnRoot(long poolPtr)throws IOException;
+  static native long dfsMountFsOnRoot(long poolPtr) throws IOException;
 
   /**
-   * unmount FS from root container
+   * unmount FS from root container.
+   *
    * @param poolPtr
+   * pointer to pool
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void dfsUnmountFsOnRoot(long poolPtr)throws IOException;
+  static native void dfsUnmountFsOnRoot(long poolPtr) throws IOException;
 
   /**
-   * unmount FS
+   * unmount FS.
+   *
    * @param dfsPtr
+   * pointer to dfs object
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void dfsUnmountFs(long dfsPtr)throws IOException;
+  static native void dfsUnmountFs(long dfsPtr) throws IOException;
 
   /**
-   * finalize DAOS client
+   * finalize DAOS client.
+   *
    * @throws IOException
+   * {@link DaosIOException}
    */
-  static native void daosFinalize()throws IOException;
+  static native void daosFinalize() throws IOException;
 
   //------------------native methods end------------------
 
 
-  int getDefaultFileAccessFlags(){
+  int getDefaultFileAccessFlags() {
     return builder.defaultFileAccessFlags;
   }
 
-  int getDefaultFileMode(){
+  int getDefaultFileMode() {
     return builder.defaultFileMode;
   }
 
-  DaosObjectType getDefaultFileObjType(){
+  DaosObjectType getDefaultFileObjType() {
     return builder.defaultFileObjType;
   }
 
-  int getDefaultFileChunkSize(){
+  int getDefaultFileChunkSize() {
     return builder.defaultFileChunkSize;
   }
 
   /**
-   * increase reference count by one
+   * increase reference count by one.
    *
-   * @throws IllegalStateException
-   * if this client is disconnected.
+   * @throws IllegalStateException if this client is disconnected.
    */
   public synchronized void incrementRef() {
     if (!inited) {
@@ -891,14 +1048,14 @@ public final class DaosFsClient {
   }
 
   /**
-   * decrease reference count by one
+   * decrease reference count by one.
    */
   public synchronized void decrementRef() {
     refCnt--;
   }
 
   /**
-   * get reference count
+   * get reference count.
    *
    * @return reference count
    */
@@ -910,9 +1067,10 @@ public final class DaosFsClient {
    * A builder for constructing Java DAOS FS Client. All parameters should be specified here. This builder
    * makes sure single instance of {@link DaosFsClient} per pool and container.
    *
+ * <p>
    * Please note that new pool and new container will be created if their ids (poolId and containerId) are {@code null}.
    */
-  public static class DaosFsClientBuilder implements Cloneable{
+  public static class DaosFsClientBuilder implements Cloneable {
     private String poolId;
     private String contId;
     private String ranks = Constants.POOL_DEFAULT_RANKS;
@@ -920,8 +1078,8 @@ public final class DaosFsClient {
     private int poolSvcReplics = Constants.POOL_DEFAULT_SVC_REPLICS;
     private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
     private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
-    private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE
-            | Constants.MODE_POOL_USER_READWRITE;
+    private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE |
+            Constants.MODE_POOL_USER_READWRITE;
     private long poolScmSize;
     private long poolNvmeSize;
     private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE; //8k
@@ -931,132 +1089,136 @@ public final class DaosFsClient {
     private boolean readOnlyFs = false;
     private boolean shareFsClient = true;
 
-    public DaosFsClientBuilder poolId(String poolId){
+    public DaosFsClientBuilder poolId(String poolId) {
       this.poolId = poolId;
       return this;
     }
 
-    public DaosFsClientBuilder containerId(String contId){
+    public DaosFsClientBuilder containerId(String contId) {
       this.contId = contId;
       return this;
     }
 
     /**
-     * one or more ranks separated by ":"
+     * one or more ranks separated by ":".
+     *
      * @param ranks
      * default is "0"
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder ranks(String ranks){
+    public DaosFsClientBuilder ranks(String ranks) {
       this.ranks = ranks;
       return this;
     }
 
     /**
      * set group name of server.
+     *
      * @param serverGroup
      * default is 'daos_server'
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder serverGroup(String serverGroup){
+    public DaosFsClientBuilder serverGroup(String serverGroup) {
       this.serverGroup = serverGroup;
       return this;
     }
 
     /**
-     * number of service replics when create pool
+     * number of service replics when create pool.
+     *
      * @param poolSvcReplics
      * default is 1
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder poolSvcReplics(int poolSvcReplics){
+    public DaosFsClientBuilder poolSvcReplics(int poolSvcReplics) {
       this.poolSvcReplics = poolSvcReplics;
       return this;
     }
 
     /**
      * set container mode when open container.
-     * @param containerFlags
-     * should be one of {@link Constants#ACCESS_FLAG_CONTAINER_READONLY},
-     *                        {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE} and
-     *                        {@link Constants#ACCESS_FLAG_CONTAINER_NOSLIP}
-     *        Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
+     *
+     * @param containerFlags should be one of {@link Constants#ACCESS_FLAG_CONTAINER_READONLY},
+     *                       {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE} and
+     *                       {@link Constants#ACCESS_FLAG_CONTAINER_NOSLIP}
+     *                       Default value is {@link Constants#ACCESS_FLAG_CONTAINER_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder containerFlags(int containerFlags){
+    public DaosFsClientBuilder containerFlags(int containerFlags) {
       this.containerFlags = containerFlags;
       return this;
     }
 
     /**
      * set pool mode for creating pool
-     * @param poolMode
-     * should be one or combination of below three groups.
-     *        <li>
-     *                   user:
-     *                   {@link Constants#MODE_POOL_USER_READONLY}
-     *                   {@link Constants#MODE_POOL_USER_READWRITE}
-     *                   {@link Constants#MODE_POOL_USER_EXECUTE}
-     *        </li>
-     *        <li>
-     *                   group:
-     *                   {@link Constants#MODE_POOL_GROUP_READONLY}
-     *                   {@link Constants#MODE_POOL_GROUP_READWRITE}
-     *                   {@link Constants#MODE_POOL_GROUP_EXECUTE}
-     *        </li>
-     *        <li>
-     *                   other:
-     *                   {@link Constants#MODE_POOL_OTHER_READONLY}
-     *                   {@link Constants#MODE_POOL_OTHER_READWRITE}
-     *                   {@link Constants#MODE_POOL_OTHER_EXECUTE}
-     *        </li>
      *
+     * @param poolMode should be one or combination of below three groups.
+     *                 <li>
+     *                 user:
+     *                 {@link Constants#MODE_POOL_USER_READONLY}
+     *                 {@link Constants#MODE_POOL_USER_READWRITE}
+     *                 {@link Constants#MODE_POOL_USER_EXECUTE}
+     *                 </li>
+     *                 <li>
+     *                 group:
+     *                 {@link Constants#MODE_POOL_GROUP_READONLY}
+     *                 {@link Constants#MODE_POOL_GROUP_READWRITE}
+     *                 {@link Constants#MODE_POOL_GROUP_EXECUTE}
+     *                 </li>
+     *                 <li>
+     *                 other:
+     *                 {@link Constants#MODE_POOL_OTHER_READONLY}
+     *                 {@link Constants#MODE_POOL_OTHER_READWRITE}
+     *                 {@link Constants#MODE_POOL_OTHER_EXECUTE}
+     *                 </li>
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder poolMode(int poolMode){
+    public DaosFsClientBuilder poolMode(int poolMode) {
       this.poolMode = poolMode;
       return this;
     }
 
     /**
-     * set pool flags for opening pool
-     * @param poolFlags
-     * should be one of
-     * {@link Constants#ACCESS_FLAG_POOL_READONLY}
-     * {@link Constants#ACCESS_FLAG_POOL_READWRITE}
-     * {@link Constants#ACCESS_FLAG_POOL_EXECUTE}
+     * set pool flags for opening pool.
      *
-     * Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
+     * @param poolFlags should be one of
+     *                  {@link Constants#ACCESS_FLAG_POOL_READONLY}
+     *                  {@link Constants#ACCESS_FLAG_POOL_READWRITE}
+     *                  {@link Constants#ACCESS_FLAG_POOL_EXECUTE}
+     *
+     * <p>
+     *                  Default is {@link Constants#ACCESS_FLAG_POOL_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder poolFlags(int poolFlags){
+    public DaosFsClientBuilder poolFlags(int poolFlags) {
       this.poolFlags = poolFlags;
       return this;
     }
 
-    public DaosFsClientBuilder poolScmSize(long poolScmSize){
+    public DaosFsClientBuilder poolScmSize(long poolScmSize) {
       this.poolScmSize = poolScmSize;
       return this;
     }
 
-    public DaosFsClientBuilder poolNvmeSize(long poolNvmeSize){
+    public DaosFsClientBuilder poolNvmeSize(long poolNvmeSize) {
       this.poolNvmeSize = poolNvmeSize;
       return this;
     }
 
     /**
      * set default file access flag.
-     * @param defaultFileAccessFlags
-     * should be one of
-     * {@link Constants#ACCESS_FLAG_FILE_CREATE}
-     * {@link Constants#ACCESS_FLAG_FILE_READONLY}
-     * {@link Constants#ACCESS_FLAG_FILE_READWRITE}
-     * {@link Constants#ACCESS_FLAG_FILE_EXCL}
      *
+     * @param defaultFileAccessFlags should be one of
+     *                               {@link Constants#ACCESS_FLAG_FILE_CREATE}
+     *                               {@link Constants#ACCESS_FLAG_FILE_READONLY}
+     *                               {@link Constants#ACCESS_FLAG_FILE_READWRITE}
+     *                               {@link Constants#ACCESS_FLAG_FILE_EXCL}
+     *
+     * <p>
      * default is {@link Constants#ACCESS_FLAG_FILE_READWRITE}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileAccessFlags(int defaultFileAccessFlags){
+    public DaosFsClientBuilder defaultFileAccessFlags(int defaultFileAccessFlags) {
       this.defaultFileAccessFlags = defaultFileAccessFlags;
       return this;
     }
@@ -1064,11 +1226,12 @@ public final class DaosFsClient {
     /**
      * set default file mode. You can override this value when create new file by
      * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     *
      * @param defaultFileMode
      * should be octal value. Default is 0755
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileMode(int defaultFileMode){
+    public DaosFsClientBuilder defaultFileMode(int defaultFileMode) {
       this.defaultFileMode = defaultFileMode;
       return this;
     }
@@ -1076,11 +1239,12 @@ public final class DaosFsClient {
     /**
      * set default file type. You can override this value when create new file by
      * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     *
      * @param defaultFileObjType
      * default is {@link DaosObjectType#OC_SX}
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileType(DaosObjectType defaultFileObjType){
+    public DaosFsClientBuilder defaultFileType(DaosObjectType defaultFileObjType) {
       this.defaultFileObjType = defaultFileObjType;
       return this;
     }
@@ -1088,54 +1252,59 @@ public final class DaosFsClient {
     /**
      * set default file chunk size. You can override this value when create new file by
      * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
+     *
      * @param defaultFileChunkSize
      * default is 8k
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder defaultFileChunkSize(int defaultFileChunkSize){
+    public DaosFsClientBuilder defaultFileChunkSize(int defaultFileChunkSize) {
       this.defaultFileChunkSize = defaultFileChunkSize;
       return this;
     }
 
     /**
-     * set FS readonly
+     * set FS readonly.
+     *
      * @param readOnlyFs
      * default is false
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder readOnlyFs(boolean readOnlyFs){
+    public DaosFsClientBuilder readOnlyFs(boolean readOnlyFs) {
       this.readOnlyFs = readOnlyFs;
       return this;
     }
 
     /**
-     * share {@link DaosFsClient} instance or not
+     * share {@link DaosFsClient} instance or not.
+     *
      * @param shareFsClient
      * default is true
      * @return DaosFsClientBuilder
      */
-    public DaosFsClientBuilder shareFsClient(boolean shareFsClient){
+    public DaosFsClientBuilder shareFsClient(boolean shareFsClient) {
       this.shareFsClient = shareFsClient;
       return this;
     }
 
     @Override
-    public DaosFsClientBuilder clone()throws CloneNotSupportedException{
-      return (DaosFsClientBuilder)super.clone();
+    public DaosFsClientBuilder clone() throws CloneNotSupportedException {
+      return (DaosFsClientBuilder) super.clone();
     }
 
     /**
      * Either return existing {@link DaosFsClient} instance or create new instance. Reference count of returned client
      * is increased by one.
+     *
      * @return DaosFsClient
      * @throws IOException
+     * {@link DaosIOException}
      */
-    public DaosFsClient build()throws IOException{
-      DaosFsClientBuilder copied = (DaosFsClientBuilder)ObjectUtils.clone(this);
+    public DaosFsClient build() throws IOException {
+      DaosFsClientBuilder copied = (DaosFsClientBuilder) ObjectUtils.clone(this);
       DaosFsClient client;
-      if(poolId != null){
+      if (poolId != null) {
         client = getClientForCont(copied);
-      }else {
+      } else {
         client = new DaosFsClient(copied);
       }
       client.init();
@@ -1145,16 +1314,16 @@ public final class DaosFsClient {
 
     private DaosFsClient getClientForCont(DaosFsClientBuilder builder) {
       DaosFsClient client;
-      if(!builder.shareFsClient){
+      if (!builder.shareFsClient) {
         return new DaosFsClient(poolId, contId, builder);
       }
       //check existing client
-      if(contId == null){
+      if (contId == null) {
         contId = ROOT_CONT_UUID;
       }
       String key = poolId + contId;
       client = pcFsMap.get(key);
-      if(client == null) {
+      if (client == null) {
         client = new DaosFsClient(poolId, contId, builder);
         pcFsMap.putIfAbsent(key, client);
       }

@@ -1,6 +1,6 @@
 <!DOCTYPE module PUBLIC
           "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
-          "https://checkstyle.org/dtds/configuration_1_3.dtd">
+          "../../dev/checkstyle/configuration_1_3.dtd">
 
 <!--
     Checkstyle configuration that checks the Google coding conventions from Google Java Style
@@ -204,7 +204,9 @@
         <module name="SummaryJavadoc">
             <property name="forbiddenSummaryFragments" value="^@return the *|^This method returns |^A [{]@code [a-zA-Z0-9]+[}]( is a )"/>
         </module>
-        <module name="JavadocParagraph"/>
+        <module name="JavadocParagraph">
+            <property name="allowNewlineParagraph" value="false"/>
+        </module>
         <module name="AtclauseOrder">
             <property name="tagOrder" value="@param, @return, @throws, @deprecated"/>
             <property name="target" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, METHOD_DEF, CTOR_DEF, VARIABLE_DEF"/>

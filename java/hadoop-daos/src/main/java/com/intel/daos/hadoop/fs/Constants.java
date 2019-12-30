@@ -24,7 +24,7 @@
 package com.intel.daos.hadoop.fs;
 
 /**
- * ALL configuration constants
+ * ALL configuration and value constants.
  */
 public final class Constants {
 

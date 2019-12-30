@@ -23,18 +23,21 @@
 
 package com.intel.daos.client;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sun.nio.ch.DirectBuffer;
-
-import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+
+import javax.annotation.concurrent.NotThreadSafe;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import sun.nio.ch.DirectBuffer;
 
 /**
  * This class mimics {@link java.io.File} class to represent DAOS FS object and provide similar methods, like
  * {@link #delete()}, {@link #createNewFile()}, {@link #exists()}, {@link #length()}. The creation of this object
  * doesn't involve any remote operation which is delayed and invoked on-demand.
+ *
  * <p>
  * For each instance of {@link DaosFile}, its parent path, file name and path (parent path + / + file name) are
  * generated for later DAOS access convenience.
@@ -124,6 +127,7 @@ public class DaosFile {
    * Parent directory should exist.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void createNewFile() throws IOException {
     createNewFile(false);
@@ -134,7 +138,9 @@ public class DaosFile {
    * This operation will fail if parent directory doesn't exist and <code>createParent</code> is false.
    *
    * @param createParent
+   * create directory if parent doesn't exist
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void createNewFile(boolean createParent) throws IOException {
     createNewFile(mode, objectType, chunkSize, createParent);
@@ -143,29 +149,39 @@ public class DaosFile {
   /**
    * create new file with mode, object type and chunk size as well as createParent.
    *
-   * @param mode         should be octal number, like 0775
+   * @param mode
+   * should be octal number, like 0775
    * @param objectType
+   * object type, see {@link com.intel.daos.client.DaosFsClient.DaosFsClientBuilder#defaultFileType}
    * @param chunkSize
+   * file chunk size
    * @param createParent
+   * create directory if parent doesn't exist
    * @throws IOException
+   * {@link DaosIOException}
    */
-  public void createNewFile(int mode, DaosObjectType objectType, int chunkSize, boolean createParent) throws IOException {
+  public void createNewFile(int mode, DaosObjectType objectType, int chunkSize, boolean createParent)
+          throws IOException {
     if (objId != 0) {
       throw new IOException("file existed already");
     }
     //parse path to get parent and name.
     //dfs lookup parent and then dfs open
-    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.getValue(), chunkSize, createParent);
+    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.getValue(), chunkSize,
+            createParent);
     createCleaner();
   }
 
   /**
    * open FS object if hasn't opened yet.
+   *
    * <p>
    * cleaner is created only open at the first time
    *
-   * @param throwException throw exception if true, otherwise, keep exception and return immediately
+   * @param throwException
+   * throw exception if true, otherwise, keep exception and return immediately
    * @throws DaosIOException
+   * DaosIOException
    */
   private void open(boolean throwException) throws DaosIOException {
     if (objId != 0) {
@@ -178,12 +194,12 @@ public class DaosFile {
         objId = client.dfsLookup(dfsPtr, path, accessFlags, -1);
       }
     } catch (Exception e) {
-      if (!(e instanceof DaosIOException)) {//unexpected exception
+      if (!(e instanceof DaosIOException)) { //unexpected exception
         throw new DaosIOException(e);
       }
       if (throwException) {
         throw (DaosIOException) e;
-      } else {//verify error code to determine existence, if it's other error code, throw it anyway.
+      } else { //verify error code to determine existence, if it's other error code, throw it anyway.
         DaosIOException de = (DaosIOException) e;
         if (de.getErrorCode() != Constants.ERROR_CODE_NOT_EXIST) {
           throw de;
@@ -196,7 +212,7 @@ public class DaosFile {
   }
 
   /**
-   * check if file is opened from Daos
+   * check if file is opened from Daos.
    *
    * @return true if file is opened, false otherwise
    */
@@ -207,6 +223,7 @@ public class DaosFile {
   /**
    * create cleaner for each opened {@link DaosFile} object. Cleaner calls {@link DaosFsClient#dfsRelease(long)}
    * to release opened FS object.
+   *
    * <p>
    * If object is deleted in advance, no {@link DaosFsClient#dfsRelease(long)} will be called.
    */
@@ -234,6 +251,7 @@ public class DaosFile {
    * delete FS object.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
   public boolean delete() throws IOException {
     return delete(false);
@@ -241,11 +259,13 @@ public class DaosFile {
 
   /**
    * delete FS object. Non-empty directory will be deleted if
-   * <code>force</code> set to true
+   * <code>force</code> set to true.
    *
    * @param force
+   * force deletion if directory is not empty
    * @return true if FS object is deleted. False otherwise
    * @throws IOException
+   * {@link DaosIOException}
    */
   public boolean delete(boolean force) throws IOException {
     boolean deleted = client.delete(dfsPtr, parentPath, name, force);
@@ -256,10 +276,11 @@ public class DaosFile {
   }
 
   /**
-   * length of FS object
+   * length of FS object.
    *
    * @return length in bytes
    * @throws IOException
+   * {@link DaosIOException}
    */
   public long length() throws IOException {
     open(true);
@@ -268,11 +289,11 @@ public class DaosFile {
   }
 
   /**
-   * list all children of this directory
+   * list all children of this directory.
    *
-   * @return String array of file name.
-   * Empty string array is returned for empty directory
+   * @return String array of file name. Empty string array is returned for empty directory
    * @throws IOException
+   * {@link DaosIOException}
    */
   public String[] listChildren() throws IOException {
     open(true);
@@ -283,15 +304,18 @@ public class DaosFile {
   }
 
   /**
-   * set extended attribute
+   * set extended attribute.
    *
    * @param name
+   * attribute name
    * @param value
+   * attribute value
    * @param flags should be one of below value
    *              {@link Constants#SET_XATTRIBUTE_NO_CHECK} : no attribute name check
    *              {@link Constants#SET_XATTRIBUTE_CREATE}   : create or fail if attribute exits
    *              {@link Constants#SET_XATTRIBUTE_REPLACE}  : replace or fail if attribute doesn't exist
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void setExtAttribute(String name, String value, int flags) throws IOException {
     open(true);
@@ -299,13 +323,16 @@ public class DaosFile {
   }
 
   /**
-   * get extended attribute
+   * get extended attribute.
    *
    * @param name
-   * @param expectedValueLen expected value length. Make sure you give enough length so that actual value is not truncated.
-   * @return value in string
-   * value may be truncated if parameter <code>expectedValueLen</code> is less than actual value length
+   * attribute name
+   * @param expectedValueLen expected value length. Make sure you give enough length so that actual value
+   *                         is not truncated.
+   * @return value in string value may be truncated if parameter <code>expectedValueLen</code> is less than
+    actual value length
    * @throws IOException
+   * {@link DaosIOException}
    */
   public String getExtAttribute(String name, int expectedValueLen) throws IOException {
     open(true);
@@ -313,10 +340,12 @@ public class DaosFile {
   }
 
   /**
-   * remove extended attribute
+   * remove extended attribute.
    *
    * @param name
+   * attribute name
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void remoteExtAttribute(String name) throws IOException {
     open(true);
@@ -324,9 +353,10 @@ public class DaosFile {
   }
 
   /**
-   * get chunk size of this file
+   * get chunk size of this file.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
   public long getChunkSize() throws IOException {
     open(true);
@@ -336,6 +366,7 @@ public class DaosFile {
   /**
    * read <code>len</code> of data from file at <code>fileOffset</code> to <code>buffer</code> starting from
    * <code>bufferOffset</code>.
+   *
    * <p>
    * Be note, caller should set <code>buffer</code> indices, like position, limit or marker, by itself based on
    * return value of this method.
@@ -346,6 +377,7 @@ public class DaosFile {
    * @param len          expected length in bytes read from file to buffer
    * @return actual read bytes
    * @throws IOException
+   * {@link DaosIOException}
    */
   public long read(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
@@ -359,15 +391,16 @@ public class DaosFile {
 
   /**
    * write <code>len</code> bytes to file starting at <code>fileOffset</code> from <code>buffer</code> at
-   * <code>bufferOffset</code>
+   * <code>bufferOffset</code>.
    *
    * @param buffer       Must be instance of {@link DirectBuffer}
    * @param bufferOffset buffer offset
    * @param fileOffset   file offset
    * @param len          length in bytes of data to write
    * @return it's same as the parameter <code>len</code> since underlying DAOS FS doesn't give length of actual
-   * written data
+    written data
    * @throws IOException
+   * {@link DaosIOException}
    */
   public long write(ByteBuffer buffer, long bufferOffset, long fileOffset, long len) throws IOException {
     open(true);
@@ -380,28 +413,32 @@ public class DaosFile {
   }
 
   /**
-   * create directory
+   * create directory.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void mkdir() throws IOException {
     mkdir(mode);
   }
 
   /**
-   * create directory with file <code>mode</code> specified. It should be octal value like 0755
+   * create directory with file <code>mode</code> specified. It should be octal value like 0755.
    *
    * @param mode
+   * directory mode
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void mkdir(int mode) throws IOException {
     client.mkdir(path, mode, false);
   }
 
   /**
-   * create this directory or all its ancestors if they are not existed
+   * create this directory or all its ancestors if they are not existed.
    *
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void mkdirs() throws IOException {
     mkdirs(mode);
@@ -409,21 +446,25 @@ public class DaosFile {
 
   /**
    * same as {@link #mkdirs()} with file <code>mode</code> specified.
+   *
    * <p>
    * check {@link #mkdir(int)} for <code>mode</code>
    *
    * @param mode
+   * directory mode
    * @throws IOException
+   * {@link DaosIOException}
    */
   public void mkdirs(int mode) throws IOException {
     client.mkdir(path, mode, true);
   }
 
   /**
-   * check existence of file
+   * check existence of file.
    *
    * @return true if file exists. false otherwise
    * @throws IOException
+   * {@link DaosIOException}
    */
   public boolean exists() throws IOException {
     open(false);
@@ -446,11 +487,13 @@ public class DaosFile {
   }
 
   /**
-   * rename this file to another file denoted by <code>destPath</code>
+   * rename this file to another file denoted by <code>destPath</code>.
    *
    * @param destPath
+   * destination path
    * @return new DaosFile denoted by <code>destPath</code>
    * @throws IOException
+   * {@link DaosIOException}
    */
   public DaosFile rename(String destPath) throws IOException {
     destPath = DaosUtils.normalize(destPath);
@@ -471,17 +514,18 @@ public class DaosFile {
   }
 
   /**
-   * check if this file is a directory
+   * check if this file is a directory.
    *
    * @return true if it's directory. false otherwise
    * @throws IOException
+   * {@link DaosIOException}
    */
   public boolean isDirectory() throws IOException {
     return client.dfsIsDirectory(getMode());
   }
 
   /**
-   * release DAOS FS object actively
+   * release DAOS FS object actively.
    */
   public void release() {
     if (cleaner != null) {
@@ -491,10 +535,11 @@ public class DaosFile {
   }
 
   /**
-   * get mode of this file
+   * get mode of this file.
    *
    * @return file mode
    * @throws IOException
+   * {@link DaosIOException}
    */
   public int getMode() throws IOException {
     open(true);
@@ -502,11 +547,12 @@ public class DaosFile {
   }
 
   /**
-   * get stat attributes of this file. It's also used for checking existence of opened FS object
+   * get stat attributes of this file. It's also used for checking existence of opened FS object.
    *
    * @param retrieve true if you want to retrieve attributes info back. false if you want to just check file existence.
    * @return StatAttributes
    * @throws IOException
+   * {@link DaosIOException}
    * @see StatAttributes
    */
   StatAttributes getStatAttributes(boolean retrieve) throws IOException {
@@ -520,10 +566,11 @@ public class DaosFile {
   }
 
   /**
-   * retrieve stat attributes of this file
+   * retrieve stat attributes of this file.
    *
    * @return StatAttributes
    * @throws IOException
+   * {@link DaosIOException}
    * @see StatAttributes
    */
   public StatAttributes getStatAttributes() throws IOException {
@@ -531,7 +578,7 @@ public class DaosFile {
   }
 
   /**
-   * parent {@link DaosFile}
+   * parent {@link DaosFile}.
    *
    * @return parent file
    */
@@ -540,7 +587,7 @@ public class DaosFile {
   }
 
   /**
-   * parent path of this file
+   * parent path of this file.
    *
    * @return parent path
    */
@@ -549,7 +596,7 @@ public class DaosFile {
   }
 
   /**
-   * full path of this file
+   * full path of this file.
    *
    * @return file path
    */
@@ -558,7 +605,7 @@ public class DaosFile {
   }
 
   /**
-   * name part of this file
+   * name part of this file.
    *
    * @return file name
    */
@@ -567,10 +614,11 @@ public class DaosFile {
   }
 
   /**
-   * get DAOS object id of this file
+   * get DAOS object id of this file.
    *
    * @return DAOS object id
    * @throws IOException
+   * {@link DaosIOException}
    */
   protected long getObjId() throws IOException {
     open(true);

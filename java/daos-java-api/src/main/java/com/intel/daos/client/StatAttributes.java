@@ -28,16 +28,17 @@ import java.nio.ByteOrder;
 
 /**
  * Java attributes representing DAOS <code>struct stat</code> which has below information
- *  * mode_t    st_mode;
- *  * uid_t     st_uid;
- *  * gid_t     st_gid;
- *  * off_t     st_size;
- *  * blkcnt_t  st_blocks
- *  * blksize_t st_blocksize
- *  * struct timespec st_atim;
- *  * struct timespec st_mtim;
- *  * struct timespec st_ctim;
+ * * mode_t    st_mode;
+ * * uid_t     st_uid;
+ * * gid_t     st_gid;
+ * * off_t     st_size;
+ * * blkcnt_t  st_blocks
+ * * blksize_t st_blocksize
+ * * struct timespec st_atim;
+ * * struct timespec st_mtim;
+ * * struct timespec st_ctim;
  *
+ * <p>
  * This Java representative adds two more fields, object id and file (is file).
  */
 public class StatAttributes {
@@ -66,7 +67,7 @@ public class StatAttributes {
 
   private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
 
-  protected StatAttributes(ByteBuffer buffer){
+  protected StatAttributes(ByteBuffer buffer) {
     buffer.order(DEFAULT_ORDER);
     objId = buffer.getLong();
     mode = buffer.getInt();
@@ -125,15 +126,18 @@ public class StatAttributes {
     return file;
   }
 
-  public static int objectSize(){
-    return 4*8 + 3*4 + 3*16 + 1; //93
+  public static int objectSize() {
+    return 4 * 8 + 3 * 4 + 3 * 16 + 1; //93
   }
 
-  public static class TimeSpec{
+  /**
+   * Java corresponding to C TimeSpec.
+   */
+  public static class TimeSpec {
     private final long seconds;
     private final long nano;
 
-    public TimeSpec(long seconds, long nano){
+    public TimeSpec(long seconds, long nano) {
       this.seconds = seconds;
       this.nano = nano;
     }

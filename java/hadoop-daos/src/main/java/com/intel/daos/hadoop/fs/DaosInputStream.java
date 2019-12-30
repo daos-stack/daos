@@ -23,26 +23,32 @@
 
 package com.intel.daos.hadoop.fs;
 
-import com.intel.daos.client.DaosFile;
-import org.apache.hadoop.fs.FSInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sun.nio.ch.DirectBuffer;
-
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.intel.daos.client.DaosFile;
+
+import org.apache.hadoop.fs.FSInputStream;
+import org.apache.hadoop.fs.FileSystem;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import sun.nio.ch.DirectBuffer;
+
 /**
  * The input stream for {@link DaosFile}
  *
+ * <p>
  * Data is first read into internal direct buffer from DAOS FS. Then data is copied from the internal buffer
  * to destination byte array. The internal buffer data is kept as data cache until cache miss on {@linkplain #read read}
  * next time. The buffer capacity is controlled by constructor parameter <code>bufferCap</code>.
  *
+ * <p>
  * The internal buffer and buffer copy may be eliminated later for performance after bench-mark on some workloads.
  *
+ * <p>
  * There is a construct parameter <code>preLoadSize</code> for pre-reading more data into the internal buffer for
  * caching purpose.
  */
@@ -72,9 +78,25 @@ public class DaosInputStream extends FSInputStream {
     this(daosFile, stats, ByteBuffer.allocateDirect(bufferCap), preLoadSize, bufferedReadEnabled);
   }
 
+  /**
+   * Constructor with daosFile, Hadoop file system statistics, direct byte buffer, preload size and
+   * enabling buffered read.
+   * @param daosFile
+   * DAOS file object
+   * @param stats
+   * Hadoop file system statistics
+   * @param buffer
+   * direct byte buffer
+   * @param preLoadSize
+   * preload size
+   * @param bufferedReadEnabled
+   * enabling buffered read or not
+   * @throws IOException
+   * DaosIOException
+   */
   public DaosInputStream(DaosFile daosFile,
                          FileSystem.Statistics stats,
-                         ByteBuffer buffer, int preLoadSize,  boolean bufferedReadEnabled) throws IOException {
+                         ByteBuffer buffer, int preLoadSize, boolean bufferedReadEnabled) throws IOException {
     this.daosFile = daosFile;
     this.stats = stats;
     this.buffer = buffer;
@@ -87,16 +109,16 @@ public class DaosInputStream extends FSInputStream {
     this.preLoadSize = preLoadSize;
     this.bufferedReadEnabled = bufferedReadEnabled;
     if (bufferCapacity < preLoadSize) {
-      throw new IllegalArgumentException("preLoadSize " + preLoadSize + " should be not greater than buffer capacity " + bufferCapacity);
+      throw new IllegalArgumentException("preLoadSize " + preLoadSize +
+              " should be not greater than buffer capacity " + bufferCapacity);
     }
   }
-
 
   @Override
   public synchronized void seek(long targetPos) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosInputStream : Seek targetPos = " + targetPos
-              + "; current position = " + getPos() + "; next read position= " + this.nextReadPos);
+      LOG.debug("DaosInputStream : Seek targetPos = " + targetPos +
+              "; current position = " + getPos() + "; next read position= " + this.nextReadPos);
     }
     checkNotClose();
 
@@ -126,9 +148,6 @@ public class DaosInputStream extends FSInputStream {
     return 0;
   }
 
-  /**
-   * @throws IOException
-   */
   private synchronized void checkNotClose() throws IOException {
     if (this.closed) {
       throw new IOException("Stream is closed!");
@@ -160,7 +179,16 @@ public class DaosInputStream extends FSInputStream {
   }
 
   /**
-   *
+   * read <code>len</code> data into <code>buf</code> starting from <code>off</code>.
+   * @param buf
+   * byte array
+   * @param off
+   * buffer offset
+   * @param len
+   * length of bytes requested
+   * @return number of bytes being read
+   * @throws IOException
+   * DaosIOException
    */
   @Override
   public synchronized int read(byte[] buf, int off, int len)
@@ -175,8 +203,8 @@ public class DaosInputStream extends FSInputStream {
       throw new IllegalArgumentException("offset/length is negative , offset = " + off + ", length = " + len);
     }
     if (len > buf.length - off) {
-      throw new IndexOutOfBoundsException("requested more bytes than destination buffer size "
-              + " : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off));
+      throw new IndexOutOfBoundsException("requested more bytes than destination buffer size " +
+              " : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off));
     }
 
     if (len == 0) {
@@ -189,7 +217,7 @@ public class DaosInputStream extends FSInputStream {
     if (nextReadPos >= start && nextReadPos < end) { // some requested data in buffer
       buffer.position((int) (nextReadPos - start));
       long remaining = end - nextReadPos;
-      if (remaining >= len) {// all requested data in buffer
+      if (remaining >= len) { // all requested data in buffer
         buffer.get(buf, off, len);
         nextReadPos += len;
         return len;
@@ -219,7 +247,7 @@ public class DaosInputStream extends FSInputStream {
         break;
       }
       // If we read 3 bytes but need 1, put 1; if we read 1 byte but need 3, put 1
-      int lengthToPutInBuffer = Math.min(len, (int)actualLen);
+      int lengthToPutInBuffer = Math.min(len, (int) actualLen);
       buffer.get(buf, off, lengthToPutInBuffer);
       numBytes += lengthToPutInBuffer;
       nextReadPos += lengthToPutInBuffer;
@@ -254,9 +282,8 @@ public class DaosInputStream extends FSInputStream {
     stats.incrementReadOps(1);
     this.stats.incrementBytesRead(actualLen);
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosInputStream :reading from daos_api spend time is :  "
-              + (System.currentTimeMillis() - currentTime)
-              + " ; read data size : " + actualLen);
+      LOG.debug("DaosInputStream :reading from daos_api spend time is :  " +
+              (System.currentTimeMillis() - currentTime) + " ; read data size : " + actualLen);
     }
     return actualLen;
   }

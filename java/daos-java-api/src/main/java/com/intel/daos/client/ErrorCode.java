@@ -23,11 +23,14 @@
 
 package com.intel.daos.client;
 
+/**
+ * error code to message.
+ */
 public class ErrorCode {
   private final int code;
   private final String msg;
 
-  public ErrorCode(int code, String msg){
+  public ErrorCode(int code, String msg) {
     this.code = code;
     this.msg = msg;
   }

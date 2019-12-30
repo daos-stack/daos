@@ -24,12 +24,12 @@
 package com.intel.daos.client;
 
 /**
- * Type of DAOS object
+ * Type of DAOS object.
  */
 public enum DaosObjectType {
   OC_UNKNOWN(0),
   /**
-   * Object classes with no data protection
+   * Object classes with no data protection.
    * NB: The first 50 IDs are reserved for backward compatibility.
    */
   OC_BACK_COMPAT(50),
@@ -61,7 +61,7 @@ public enum DaosObjectType {
    */
 
   /**
-   * Tiny object protected by replication
+   * Tiny object protected by replication.
    * This object class has one redundancy group.
    */
   OC_RP_TINY(60),
@@ -85,14 +85,14 @@ public enum DaosObjectType {
   OC_RP_MAX(63),
 
   /**
-   * Object classes protected by replication which supports Scalable
+   * Object classes protected by replication which supports Scalable.
    * Fetch (SF)
    * SF classes have more replicas, so they are slower on update, but more
    * scalable on fetch because they have more replicas to serve fetches.
    */
 
   /**
-   * Tiny object protected by replication
+   * Tiny object protected by replication.
    * This object class has one redundancy group.
    */
   OC_RP_SF_TINY(70),
@@ -150,11 +150,11 @@ public enum DaosObjectType {
   OC_EC_MAX(103),
 
   /**
-   * Object classes with explicit layout
+   * Object classes with explicit layout.
    */
 
   /**
-   * Object classes with explicit layout but no data protection
+   * Object classes with explicit layout but no data protection.
    * Examples:
    * S1 : shards=1, S2 means shards=2, ...
    * SX : spreading across all targets within the pool.
@@ -176,7 +176,7 @@ public enum DaosObjectType {
   OC_SX(214),
 
   /**
-   * Replicated object with explicit layout
+   * Replicated object with explicit layout.
    * The first number is number of replicas, the number after G stands
    * for number of redundancy Groups.
    *
@@ -257,7 +257,7 @@ public enum DaosObjectType {
    */
 
   /**
-   *  EC 2+1 object classes.
+   * EC 2+1 object classes.
    */
   OC_EC_2P1G1(280),
   OC_EC_2P1G2(281),
@@ -296,7 +296,7 @@ public enum DaosObjectType {
 
   /**
    * EC 4+1 object classes.
-   * */
+   */
   OC_EC_4P1G1(320),
   OC_EC_4P1G2(321),
   OC_EC_4P1G4(322),
@@ -315,7 +315,7 @@ public enum DaosObjectType {
 
   /**
    * EC 4+2 object classes.
-   *  */
+   */
   OC_EC_4P2G1(340),
   OC_EC_4P2G2(341),
   OC_EC_4P2G4(342),
@@ -333,7 +333,7 @@ public enum DaosObjectType {
   OC_EC_4P2GX(354),
 
   /**
-   *  EC 8+1 object classes.
+   * EC 8+1 object classes.
    */
   OC_EC_8P1G1(360),
   OC_EC_8P1G2(361),
@@ -415,11 +415,11 @@ public enum DaosObjectType {
 
   private int value;
 
-  DaosObjectType(int value){
+  DaosObjectType(int value) {
     this.value = value;
   }
 
-  public int getValue(){
+  public int getValue() {
     return this.value;
   }
 }

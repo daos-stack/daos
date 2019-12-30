@@ -28,11 +28,12 @@ import java.nio.ByteBuffer;
 /**
  * Entry point for getting buffer.
  *
+ * <p>
  * TODO: buffer cache logic to be implemented
  */
 public class BufferAllocator {
 
-  public static ByteBuffer directBuffer(int size){
+  public static ByteBuffer directBuffer(int size) {
     return ByteBuffer.allocateDirect(size);
   }
 }

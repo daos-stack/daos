@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  * 1, DAOS client environment setup
  * 2, DAOS FS client mount
  *
+ * <p>
  * When shutdown, resource releasing order is,
  * 1, DAOS FS client unmount
  * 2, DAOS client environment finalize
@@ -41,8 +42,8 @@ public final class ShutdownHookManager {
 
   private static final Deque<Runnable> hookStack = new ConcurrentLinkedDeque<>();
 
-  static{
-    Runtime.getRuntime().addShutdownHook(new Thread( () -> {
+  static {
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       Runnable hook;
       while ((hook = hookStack.pollLast()) != null) {
         hook.run();
@@ -50,7 +51,7 @@ public final class ShutdownHookManager {
     }));
   }
 
-  public static void addHook(Runnable runnable){
+  public static void addHook(Runnable runnable) {
     hookStack.add(runnable);
   }
 }

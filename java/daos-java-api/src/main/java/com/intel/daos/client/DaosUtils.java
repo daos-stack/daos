@@ -28,55 +28,70 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Utility class
+ * Utility class.
  */
 public final class DaosUtils {
 
   public static final Pattern PAT_PATH = Pattern.compile("^(/|(/[a-zA-Z0-9_\\.-]+)|[a-zA-Z0-9_\\.-]+)+$");
 
-  private DaosUtils(){}
+  private DaosUtils() {
+  }
 
   /**
-   * normalize path to make sure it's valid path
+   * normalize path to make sure it's valid path.
+   *
    * @param path
+   * path string
    * @return String
    */
-  public static String normalize(String path){
-    if(path == null || (path=path.trim()).length() == 0){
+  public static String normalize(String path) {
+    if (path == null || (path = path.trim()).length() == 0) {
       return "";
     }
     path = path.replaceAll("\\\\{1,}", "/");
     path = path.replaceAll("/{2,}", "/");
     Matcher m = PAT_PATH.matcher(path);
-    if(!m.matches()){
+    if (!m.matches()) {
       throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - . are valid");
     }
-    if(path.length() > 1 && path.endsWith("/")){
-      path = path.substring(0, path.length()-1);
+    if (path.length() > 1 && path.endsWith("/")) {
+      path = path.substring(0, path.length() - 1);
     }
     return path;
   }
 
   /**
-   * split parent and name
+   * split parent and name.
+   *
    * @param path
+   * path string
    * @return String[]
    */
   public static String[] parsePath(String path) {
     int slash = path.lastIndexOf('/');
-    if(slash >= 0 && path.length()>1){
-      return new String[] {path.substring(0, slash), path.substring(slash+1)};
+    if (slash >= 0 && path.length() > 1) {
+      return new String[]{path.substring(0, slash), path.substring(slash + 1)};
     }
-    return new String[] {path};
+    return new String[]{path};
   }
 
+  /**
+   * random UUID.
+   * @return UUID in string
+   */
   public static String randomUUID() {
     String id = UUID.randomUUID().toString();
     return id.substring(0, 16);
   }
 
-  public static long toMilliSeconds(StatAttributes.TimeSpec modifyTime) {
-    long ms = modifyTime.getSeconds() * 1000;
-    return ms + modifyTime.getNano()/(1000*1000);
+  /**
+   * convert C TimeSpec to time in milliseconds.
+   * @param timeSpec
+   * C TimeSpec
+   * @return time in milliseconds
+   */
+  public static long toMilliSeconds(StatAttributes.TimeSpec timeSpec) {
+    long ms = timeSpec.getSeconds() * 1000;
+    return ms + timeSpec.getNano() / (1000 * 1000);
   }
 }

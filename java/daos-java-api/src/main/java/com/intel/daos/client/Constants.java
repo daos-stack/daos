@@ -23,9 +23,13 @@
 
 package com.intel.daos.client;
 
+/**
+ * value constants.
+ */
 public final class Constants {
 
-  private Constants() {}
+  private Constants() {
+  }
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
