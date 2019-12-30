@@ -200,20 +200,71 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 	return resp, nil
 }
 
+// restartHarness restarts ranks managed by harness running on remote host.
+// TODO: specify specific rank(s) to restart in request
+func (svc *ControlService) restartHarness(ctx context.Context, leader *IOServerInstance, addr string) error {
+	_, err := leader.msClient.Restart(ctx, addr, &mgmtpb.RestartRanksReq{})
+
+	return err
+}
+
+// restartMembers sends multicast RestartRanks gRPC requests to host addresses in
+// system membership list. Each host address represents a gRPC server associated
+// with a harness managing one or more data-plane instances (DAOS system members).
+func (svc *ControlService) restartMembers(ctx context.Context, leader *IOServerInstance) (map[string]error, error) {
+	members := svc.membership.Members()
+	results := make(map[string]error)
+
+	msAddr, err := leader.msClient.LeaderAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	// first restart harness managing MS leader
+	if err := svc.restartHarness(ctx, leader, msAddr); err != nil {
+		return nil, errors.Wrapf(err,
+			"couldn't restart harness managing MS leader at %s", msAddr)
+	}
+	results[msAddr] = nil
+
+	// TODO: do we need to wait for the MS to be up before we start the rest?
+
+	// build list of harnesses to restart
+	for _, member := range members {
+		if _, exists := results[member.Addr.String()]; exists {
+			continue
+		}
+
+		results[msAddr] = svc.restartHarness(ctx, leader, member.Addr.String())
+	}
+
+	return results, nil
+}
+
 // SystemRestart implements the method defined for the Management Service.
 //
 // Initiate controlled restart of DAOS system.
 func (svc *ControlService) SystemRestart(ctx context.Context, req *ctlpb.SystemRestartReq) (*ctlpb.SystemRestartResp, error) {
 	resp := &ctlpb.SystemRestartResp{}
 
-	svc.log.Debug("received SystemRestart RPC; proceeding to restart DAOS system")
-
-	// perform controlled restart and populate response with results
-	if err := svc.harness.RestartInstances(); err != nil {
+	// verify we are running on a host with the MS leader and therefore will
+	// have membership list.
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
 		return nil, err
 	}
 
-	svc.log.Debug("responding to SystemRestart RPC")
+	svc.log.Debug("Received SystemRestart RPC; restarting system members")
+
+	// restart stopped system members
+	_, err = svc.restartMembers(ctx, mi)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: meaningfully populate response
+
+	svc.log.Debug("Responding to SystemRestart RPC")
 
 	return resp, nil
 }

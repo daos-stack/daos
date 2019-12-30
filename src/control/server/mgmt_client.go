@@ -198,6 +198,10 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 	return
 }
 
+// Stop calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues KillRank requests using MgmtSvcClient over dRPC to
+// terminates given rank.
 func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
@@ -229,6 +233,26 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 
 				return nil
 			}
+		})
+
+	return
+}
+
+// Restart calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues RestartRanks requests using MgmtSvcClient to
+// restart the designated ranks as configured in persistent superblock.
+func (msc *mgmtSvcClient) Restart(ctx context.Context, destAddr string, req *mgmtpb.RestartRanksReq) (resp *mgmtpb.RestartRanksResp, restartErr error) {
+	restartErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+
+			prefix := fmt.Sprintf("restart(%s, %+v)", destAddr, *req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			_, err := pbClient.RestartRanks(ctx, req)
+
+			return err
 		})
 
 	return

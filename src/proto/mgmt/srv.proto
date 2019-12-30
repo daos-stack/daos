@@ -85,6 +85,10 @@ message KillRankReq {
 
 // KillRankResp is identical to DaosResp.
 
+message RestartRanksReq {}
+
+message RestartRanksResp {}
+
 message SetRankReq {
 	uint32 rank = 1;	// DAOS IO server unique identifier.
 }

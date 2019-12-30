@@ -230,15 +230,20 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		newMember := system.NewMember(resp.GetRank(), req.GetUuid(),
+		created, oldState, err := svc.membership.AddOrUpdate(resp.GetRank(), req.GetUuid(),
 			replyAddr, system.MemberStateStarted)
 
-		count, err := svc.membership.Add(newMember)
 		if err != nil {
-			return nil, errors.WithMessage(err, "adding to membership")
+			return nil, errors.WithMessage(err, "adding or updating membership")
 		}
 
-		svc.log.Debugf("new system member: %s (total %d)\n", newMember, count)
+		if created {
+			svc.log.Debugf("new system member: rank %d, addr %s\n",
+				resp.GetRank(), replyAddr)
+		} else {
+			svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s\n",
+				resp.GetRank(), replyAddr, *oldState, system.MemberStateStarted)
+		}
 	}
 
 	return resp, nil
@@ -605,6 +610,32 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// RestartRanks implements the method defined for the Management Service.
+//
+// Restart data-plane instances (DAOS system members) managed by harness.
+//
+// TODO: Current implementation sends restart signal to harness, restarting all
+//       ranks managed by harness, future implementations will allow individual
+//       ranks to be restarted.
+func (svc *mgmtSvc) RestartRanks(ctx context.Context, req *mgmtpb.RestartRanksReq) (*mgmtpb.RestartRanksResp, error) {
+	svc.log.Debugf("MgmtSvc.RestartRanks dispatch, req:%+v\n", *req)
+
+	if _, err := svc.harness.GetMSLeaderInstance(); err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.RestartRanksResp{}
+
+	// perform controlled restart of I/O Server harness
+	if err := svc.harness.RestartInstances(); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.RestartRanks dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

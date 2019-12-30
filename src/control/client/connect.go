@@ -152,7 +152,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 	controllers := c.controllers[:0]
 	for _, mc := range c.controllers {
 		address := mc.getAddress()
-		if common.Include(addresses, address) {
+		if common.Includes(addresses, address) {
 			continue // ignore duplicate
 		}
 

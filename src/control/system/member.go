@@ -144,6 +144,39 @@ func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	return nil
 }
 
+// AddOrUpdate adds member to membership or updates member state if member
+// already exists in membership. Returns flag for whether member was created and
+// the previous state if updated.
+func (m *Membership) AddOrUpdate(member *Member) (created bool, oldState *MemberState, err error) {
+	var oldMember *Member
+
+	m.RLock()
+	defer m.RUnlock()
+
+	_, err = m.Add(member)
+	if err == nil {
+		created = true
+		return
+	}
+
+	if !FaultMemberExists.Equals(err) {
+		return
+	}
+
+	oldMember, err = m.Get(member.Rank)
+	if err != nil {
+		return
+	}
+	os := oldMember.State()
+
+	if err = m.SetMemberState(member.Rank, member.State()); err != nil {
+		return
+	}
+	oldState = &os
+
+	return
+}
+
 // Remove removes member from membership, idempotent.
 func (m *Membership) Remove(rank uint32) {
 	m.Lock()

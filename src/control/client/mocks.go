@@ -305,6 +305,10 @@ func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankRe
 	return &mgmtpb.DaosResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) RestartRanks(ctx context.Context, req *mgmtpb.RestartRanksReq, o ...grpc.CallOption) (*mgmtpb.RestartRanksResp, error) {
+	return &mgmtpb.RestartRanksResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
 	if m.cfg.ListPoolsRet.err != nil {
 		return nil, m.cfg.ListPoolsRet.err
