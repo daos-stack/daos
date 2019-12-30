@@ -12,6 +12,7 @@ import org.mockito.stubbing.Answer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.mockito.Answers.RETURNS_SMART_NULLS;
@@ -460,4 +461,47 @@ public class DaosInputStreamTest {
     }
   }
 
+  @Test
+  public void testCallingInputStreamReadMultiTimes() throws IOException {
+    DaosFile file = mock(DaosFile.class);
+    FileSystem.Statistics stats = new FileSystem.Statistics("daos:///");
+
+    byte[] data = new byte[]{19, 49, 89, 64, 20, 19, 1, 2, 3};
+    int bufferSize = data.length;
+    ByteBuffer internalBuffer = ByteBuffer.allocateDirect(bufferSize);
+    AtomicInteger timesReadFromDaos = new AtomicInteger(0);
+
+    doAnswer(
+      invocationOnMock -> {
+        ByteBuffer buffer = (ByteBuffer) invocationOnMock.getArguments()[0];
+        int times = timesReadFromDaos.incrementAndGet();
+        Assert.assertTrue("Read to internal buffer more than once!", times <= 1);
+        long bufferOffset = (long) invocationOnMock.getArguments()[1];
+        long fileOffset = (long) invocationOnMock.getArguments()[2];
+        long len = (long) invocationOnMock.getArguments()[3];
+        if (len > buffer.capacity() - bufferOffset) {
+          throw new IOException(
+            String.format("buffer (%d) has no enough space start at %d for reading %d bytes from file",
+              buffer.capacity(), bufferOffset, len));
+        }
+        long actualRead = 0;
+        for (long i = bufferOffset; i < bufferOffset + len &&
+                (i - bufferOffset + fileOffset) < data.length; i++) {
+          buffer.put((int) i, data[(int) (i - bufferOffset + fileOffset)]);
+          actualRead ++;
+        }
+        return actualRead;
+      })
+      .when(file)
+      .read(any(ByteBuffer.class), anyLong(), anyLong(), anyLong());
+    doReturn((long)data.length).when(file).length();
+
+    DaosInputStream input = new DaosInputStream(file, stats, internalBuffer, bufferSize, true);
+    int readSize = 3;
+    byte[] answer = new byte[bufferSize];
+    input.read(answer, 0, readSize);
+    input.read(answer, readSize, bufferSize-readSize);
+    byte[] expect = data;
+    Assert.assertArrayEquals(expect, answer);
+  }
 }
