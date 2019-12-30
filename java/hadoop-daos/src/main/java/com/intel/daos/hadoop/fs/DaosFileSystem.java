@@ -1,27 +1,31 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+/*
+ * (C) Copyright 2018-2019 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 
 package com.intel.daos.hadoop.fs;
 
 import com.google.common.collect.Lists;
-import com.intel.daos.client.DaosFile;
-import com.intel.daos.client.DaosFsClient;
-import com.intel.daos.client.DaosObjectType;
+import com.intel.daos.client.*;
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -35,19 +39,74 @@ import java.net.URI;
 import java.util.List;
 
 /**
- * Implementation of {@link FileSystem} for DaosFileSystem,
- * used to access DAOS blob system in a filesystem style.
+ * Implementation of {@link FileSystem} for DAOS file system.
+ *
+ *
+ * Before instantiating this class, we need to do some configuration visible to
+ *  Hadoop. See below table for all mandatory and optional configuration items.
+ *
+ * <table>
+ *   <th><td>Item</td><td>Default</td><td>Range</td><td>Mandatory</td><td>Description</td></th>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_READ_BUFFER_SIZE}</td>
+ *     <td>{@link Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
+ *     <td>{@link Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
+ *     <td>false</td>
+ *     <td>size of direct buffer for reading data from DAOS</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_WRITE_BUFFER_SIZE}</td>
+ *     <td>{@link Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
+ *     <td>{@link Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
+ *     <td>false</td>
+ *     <td>size of direct buffer for writing data to DAOS</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_BLOCK_SIZE}</td>
+ *     <td>{@link Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
+ *     <td>{@link Constants#MINIMUM_DAOS_BLOCK_SIZE} - {@link Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
+ *     <td>size for splitting large file into blocks when read by Hadoop</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_CHUNK_SIZE}</td>
+ *     <td>{@link Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
+ *     <td>{@link Constants#MINIMUM_DAOS_CHUNK_SIZE} - {@link Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
+ *     <td>size of DAOS file chunk</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_PRELOAD_SIZE}</td>
+ *     <td>{@link Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
+ *     <td>{@link Constants#MINIMUM_DAOS_PRELOAD_SIZE} - {@link Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ *     <td>size for pre-loading more than requested data from DAOS into internal buffer when read</td>
+ *   </tr>
+ *   <tr>
+ *     <td>{@link Constants#DAOS_BUFFERED_READ_ENABLED}</td>
+ *     <td>true</td>
+ *     <td>true or false</td>
+ *     <td>true for pre-loading more than requested data. false for loading exactly requested data</td>
+ *   </tr>
+ * </table>
+ *
+ * User can use below statement to make their configuration visible to Hadoop.
+ * <code>
+ *   Configuration cfg = new Configuration();
+ *   cfg.addResource("path to your configuration file");
+ * </code>
+ *
+ * To get instance of this class via Hadoop FileSystem, please refer to the package description.
+ *
  */
 public class DaosFileSystem extends FileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(DaosFileSystem.class);
   private Path workingDir;
   private URI uri;
-  private DaosFsClient daos = null;
-  private int readSize;
-  private int writeSize;
+  private DaosFsClient daos;
+  private int readBufferSize;
+  private int preLoadBufferSize;
+  private boolean bufferedReadEnabled;
+  private int writeBufferSize;
   private int blockSize;
-  private int chunksize;
-
+  private int chunkSize;
 
   @Override
   public void initialize(URI name, Configuration conf)
@@ -55,41 +114,86 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem initialize");
     }
+    if (!getScheme().equals(name.getScheme())){
+      throw new IllegalArgumentException("schema should be "+getScheme());
+    }
+    if (StringUtils.isEmpty(name.getAuthority())) {
+      throw new IllegalArgumentException("authority (ip:port) cannot be empty. we need it to identify a unique DAOS File System");
+    }
+
     super.initialize(name, conf);
+
     try {
 
-      // get conf from hdfs-site.xml
-      this.readSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULE_DAOS_READ_BUFFER_SIZE);
-      this.writeSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
+      this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
+      this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
-      this.chunksize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
-      String pooluuid = conf.get(Constants.DAOS_POOL_UUID);
-      if(pooluuid==null) throw new IOException(Constants.DAOS_POOL_UUID + " is null , need to set up " + Constants.DAOS_POOL_UUID +" in hdfs.xml .");
-      String contuuid = conf.get(Constants.DAOS_CONTAINER_UUID);
-      if(contuuid==null) throw new IOException(Constants.DAOS_CONTAINER_UUID + " is null, need to set up " + Constants.DAOS_CONTAINER_UUID +" in hdfs.xml .");
+      this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
+      this.preLoadBufferSize = conf.getInt(Constants.DAOS_PRELOAD_SIZE, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
+      this.bufferedReadEnabled = conf.getBoolean(Constants.DAOS_BUFFERED_READ_ENABLED, Constants.DEFAULT_BUFFERED_READ_ENABLED);
+
+      checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE, "internal read buffer size should be no less than ");
+      checkSizeMin(writeBufferSize, Constants.MINIMUM_DAOS_WRITE_BUFFER_SIZE, "internal write buffer size should be no less than ");
+      checkSizeMin(blockSize, Constants.MINIMUM_DAOS_BLOCK_SIZE, "block size should be no less than ");
+      checkSizeMin(chunkSize, Constants.MINIMUM_DAOS_CHUNK_SIZE, "daos chunk size should be no less than ");
+      checkSizeMin(preLoadBufferSize, Constants.MINIMUM_DAOS_PRELOAD_SIZE, "preload buffer size should be no less than ");
+
+      checkSizeMax(readBufferSize, Constants.MAXIMUM_DAOS_READ_BUFFER_SIZE, "internal read buffer size should not be greater than ");
+      checkSizeMax(writeBufferSize, Constants.MAXIMUM_DAOS_WRITE_BUFFER_SIZE, "internal write buffer size should not be greater than ");
+      checkSizeMax(blockSize, Constants.MAXIMUM_DAOS_BLOCK_SIZE, "block size should be not be greater than ");
+      checkSizeMax(chunkSize, Constants.MAXIMUM_DAOS_CHUNK_SIZE, "daos chunk size should not be greater than ");
+      checkSizeMax(preLoadBufferSize, Constants.MAXIMUM_DAOS_PRELOAD_SIZE, "preload buffer size should not be greater than ");
+
+      if (preLoadBufferSize > readBufferSize) {
+        throw new IllegalArgumentException("preload buffer size " + preLoadBufferSize + " should not be greater than reader buffer size, "+readBufferSize);
+      }
+
+      String poolUuid = conf.get(Constants.DAOS_POOL_UUID);
+      if (StringUtils.isEmpty(poolUuid)) {
+        throw new IllegalArgumentException(Constants.DAOS_POOL_UUID + " is null , need to set up " + Constants.DAOS_POOL_UUID +" in hdfs.xml .");
+      }
+      String contUuid = conf.get(Constants.DAOS_CONTAINER_UUID);
+      if (StringUtils.isEmpty(contUuid)) {
+        throw new IllegalArgumentException(Constants.DAOS_CONTAINER_UUID + " is null, need to set up " + Constants.DAOS_CONTAINER_UUID +" in hdfs.xml .");
+      }
       String svc = conf.get(Constants.DAOS_POOL_SVC);
-      if(svc==null) throw new IOException(Constants.DAOS_POOL_SVC + " is null, need to set up " + Constants.DAOS_POOL_SVC +" in hdfs.xml .");
+      if (StringUtils.isEmpty(svc)) {
+        throw new IllegalArgumentException(Constants.DAOS_POOL_SVC + " is null, need to set up " + Constants.DAOS_POOL_SVC + " in hdfs.xml .");
+      }
 
       // daosFSclient build
-      this.daos = new DaosFsClient.DaosFsClientBuilder().poolId(pooluuid).containerId(contuuid).ranks(svc).build();
+      this.daos = new DaosFsClient.DaosFsClientBuilder().poolId(poolUuid).containerId(contUuid).ranks(svc).build();
       this.uri = URI.create(name.getScheme() + "://" + name.getAuthority());
       this.workingDir = new Path("/user", System.getProperty("user.name")).
               makeQualified(this.uri, this.getWorkingDirectory());
+      //mkdir workingDir in DAOS
+      daos.mkdir(workingDir.toUri().getPath(), true);
       setConf(conf);
     } catch (IOException e) {
-      throw new IOException(e.getMessage());
+      throw new IOException("failed to initialize "+this.getClass().getName(), e);
+    }
+  }
+
+  private void checkSizeMin(int size, int min, String msg){
+    if (size < min) {
+      throw new IllegalArgumentException(msg + min + ", size is "+size);
+    }
+  }
+
+  private void checkSizeMax(int size, long max, String msg){
+    if (size > max) {
+      throw new IllegalArgumentException(msg + max + ", size is "+size);
     }
   }
 
   /**
    * Return the protocol scheme for the FileSystem.
-   * <p/>
    *
-   * @return <code>hdfs</code>
+   * @return {@link Constants#DAOS_SCHEMA}
    */
   @Override
   public String getScheme() {
-    return Constants.FS_DAOS;
+    return Constants.DAOS_SCHEMA;
   }
 
   @Override
@@ -104,16 +208,14 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem open :  path = " + f.toUri().getPath() +" ; buffer size = " + bufferSize);
     }
-    String key = f.toUri().getPath();
-    if (!exists(f)) {
-      throw new FileNotFoundException(f + "no exists");
+
+    DaosFile file = daos.getFile(f.toUri().getPath());
+    if (!file.exists()) {
+      throw new FileNotFoundException(f + " not exist");
     }
-    DaosFile daosFile = daos.getFile(key);
-    long length = daosFile.length();
-    if (daosFile==null||length < 0) {
-         throw new IOException("get file size failed , file path = "+key);
-    }
-    return new FSDataInputStream(new DaosInputStream(daosFile, statistics, length, readSize));
+
+    return new FSDataInputStream(new DaosInputStream(
+            file, statistics, readBufferSize, preLoadBufferSize, bufferedReadEnabled));
   }
 
   @Override
@@ -133,19 +235,17 @@ public class DaosFileSystem extends FileSystem {
 
     DaosFile daosFile = this.daos.getFile(key);
 
-    if (daosFile.exists()) {
-      throw new FileAlreadyExistsException(f + " already exists");
+    if (daosFile.exists() && (!daosFile.delete())) {
+      throw new IOException("failed to delete existing file "+daosFile);
     }
 
     daosFile.createNewFile(
               Constants.DAOS_MODLE,
               DaosObjectType.OC_SX,
-              this.chunksize);
+              this.chunkSize,
+              true);
 
-    if(daosFile==null){
-      throw new IOException("get daosFile failed");
-    }
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, key, statistics, writeSize));
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, key, writeBufferSize, statistics), statistics);
   }
 
   @Override
@@ -158,168 +258,68 @@ public class DaosFileSystem extends FileSystem {
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem: rename old path %s to new path %s" ,src.toUri().getPath(),dst.toUri().getPath());
+      LOG.debug("DaosFileSystem: rename old path {} to new path {}" ,src.toUri().getPath(), dst.toUri().getPath());
     }
+    String srcPath = src.toUri().getPath();
+    String destPath = dst.toUri().getPath();
     // determine  if src is root dir and whether it exits
     if(src.toUri().getPath().equals("/")){
       if(LOG.isDebugEnabled()){
-        LOG.debug("DaosFileSystem:  cat not rename root path %s",src);
+        LOG.debug("DaosFileSystem:  can not rename root path {}", src);
       }
-      return false;
+      throw new IOException("cannot move root / directory");
     }
 
-    FileStatus srcStatus = null;
-    try{
-      srcStatus = getFileStatus(src);
-    }catch (FileNotFoundException e){
-      throw new FileNotFoundException(String.format(
-              "Failed to rename %s to %s, src dir do not !", src ,dst));
+    if (srcPath.equals(destPath)){
+      throw new IOException("dest and src paths are same. "+srcPath);
     }
 
-    // determine dst
-    FileStatus dstStatus = null;
-    try {
-      dstStatus = getFileStatus(dst);
-      if(srcStatus.isDirectory()&&dstStatus.isFile()){
-        // If dst exists and not a directory / not empty
-        throw new FileAlreadyExistsException(String.format(
-                "Failed to rename %s to %s, file already exists or not empty!",
-                src, dst));
-      }else if (srcStatus.getPath().equals(dstStatus.getPath())) {
-        if(LOG.isDebugEnabled()){
-          LOG.debug("DaosFileSystem:  src and dst refer to the same file or directory ");
-        }
-        return !srcStatus.isDirectory();
-      } else if (dstStatus.isDirectory()) {
-        // If dst is a directory
-        dst = new Path(dst, src.getName());
-        FileStatus[] statuses;
-        try {
-          statuses = listStatus(dst);
-        } catch (FileNotFoundException fnde) {
-          statuses = null;
-        }
-        if (statuses != null && statuses.length > 0) {
-          // If dst exists and not a directory / not empty
-          throw new FileAlreadyExistsException(String.format(
-                  "Failed to rename %s to %s, file already exists or not empty!", src, dst));
-        }
-      } else {
-        // If dst is not a directory
-        throw new FileAlreadyExistsException(String.format(
-                "Failed to rename %s to %s, file already exists!", src, dst));
-      }
-    } catch (FileNotFoundException e) {
-      // If dst doesn't exist, check whether dst dir exists or not
-      try {
-        dstStatus = getFileStatus(dst.getParent());
-        if (!dstStatus.isDirectory()) {
-          throw new IOException(String.format(
-                  "Failed to rename %s to %s, %s is a file",
-                  src, dst, dst.getParent()));
-        }
-      } catch (FileNotFoundException e2) {
-        throw new FileNotFoundException(String.format(
-                "Failed to rename %s to %s, dst parent dir do not exists!", src ,dst));
-      }
+    if (daos.exists(destPath)) {
+      throw new IOException("dest file exists, "+destPath);
     }
 
-    try {
-      //Time to start
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("DaosFileSystem:    renaming old file %s to new file %s" ,src.toUri().getPath(),dst.toUri().getPath());
-      }
-      if(srcStatus.isDirectory()){
-        daos.getFile(src.toUri().getPath()).rename(dst.toUri().getPath());
-      }else if(srcStatus.isFile()){
-        daos.getFile(src.toUri().getPath()).rename(dst.toUri().getPath());
-      }
-    }catch (IOException e){
-      return false;
-    }
+    daos.move(srcPath, destPath);
     return true;
   }
 
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem:   delete  path = %s - recursive = %s",f.toUri().getPath(),recursive);
+      LOG.debug("DaosFileSystem:   delete  path = {} - recursive = {}", f.toUri().getPath(), recursive);
     }
-
-    FileStatus fileStatus;
-    try {
-      fileStatus = getFileStatus(f);
-    } catch (FileNotFoundException e) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("DaosFileSystem:  Couldn't delete " + f + " - does not exist");
-      }
-      return false;
-    }
-
-    if (fileStatus.isDirectory()) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("DaosFileSystem: Path is a directory");
-      }
-      FileStatus[] statuses = null;
-      try{
-        if(recursive){
-          // delete the dir and all files in the dir
-          return daos.getFile(fileStatus.getPath().toUri().getPath()).delete(true);
-        }else{
-          statuses = listStatus(fileStatus.getPath());
-          if (statuses != null && statuses.length > 0){
-              throw new  IOException("DaosFileSystem delete : There are files in dir ");
-          }else if(statuses != null && statuses.length == 0){
-            // delete empty dir
-            return  daos.getFile(f.toUri().getPath()).delete();
-          }
-        }
-      }catch(FileNotFoundException e ){
-        throw new FileNotFoundException(String.format(
-                "Failed to delete %s , path do not exists!", f ));
-      }
-    }
-
-    // delete file
-    return daos.getFile(f.toUri().getPath()).delete();
+    return daos.delete(f.toUri().getPath(), recursive);
   }
 
   @Override
   public FileStatus[] listStatus(Path f) throws IOException{
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem listStatus :  List status for path = %s " ,f.toUri().getPath());
+      LOG.debug("DaosFileSystem listStatus :  List status for path = {}", f.toUri().getPath());
     }
+
+    DaosFile file = daos.getFile(f.toUri().getPath());
 
     final List<FileStatus> result = Lists.newArrayList();
     try {
-      String key = f.toUri().getPath();
-
-      final FileStatus fileStatus = getFileStatus(f);
-      if(fileStatus==null) {
-        return result.toArray(new FileStatus[result.size()]);
-      }
-      if (fileStatus.isDirectory()) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("DaosFileSystem listStatus : doing listFile for directory %s " , f.toUri().getPath());
-        }
-        String[] fileString = daos.getFile(key).listChildren();
-        if(fileString==null||fileString.length <= 0 ){
-          return result.toArray(new FileStatus[result.size()]);
-        }
-        for (String filePath : fileString) {
-          if(filePath.equals("/")){
-            FileStatus file =getFileStatus(new Path(key + filePath).makeQualified(this.uri, this.workingDir));
-            result.add(file);
-          }else{
-            FileStatus file = getFileStatus(new Path(key + "/" + filePath).makeQualified(this.uri, this.workingDir));
-            result.add(file);
+      if (file.isDirectory()) {
+        String[] children = file.listChildren();
+        if (children != null && children.length > 0 ){
+          for (String child : children) {
+            FileStatus childStatus = getFileStatus(new Path(f, child).makeQualified(this.uri, this.workingDir)
+                    , daos.getFile(file, child));
+            result.add(childStatus);
           }
         }
       } else {
-        result.add(fileStatus);
+        result.add(getFileStatus(f, file));
       }
-    } catch (FileNotFoundException e) {
-      throw new FileNotFoundException(e.getMessage());
+    } catch (IOException e){
+      if (e instanceof DaosIOException) {
+        DaosIOException de = (DaosIOException)e;
+        if (de.getErrorCode() == com.intel.daos.client.Constants.ERROR_CODE_NOT_EXIST) {
+          throw new FileNotFoundException(e.getMessage());
+        }
+      }
+      throw e;
     }
     return result.toArray(new FileStatus[result.size()]);
   }
@@ -337,80 +337,51 @@ public class DaosFileSystem extends FileSystem {
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem mkdirs: Making directory = %s ",f.toUri().getPath());
+      LOG.debug("DaosFileSystem mkdirs: Making directory = {} ",f.toUri().getPath());
     }
     String key = f.toUri().getPath();
-    try{
-      FileStatus status = getFileStatus(f);
-      // if the thread reaches here, there is something at the path
-      if (status.isDirectory()) {
-        return true;
-      }else{
-        throw new FileAlreadyExistsException("Not a directory: " + f);
-      }
-    }catch(FileNotFoundException e){
-      validatePath(f);
-      daos.getFile(key).mkdirs();
-      return true;
-    }
-  }
 
-  /**
-   * Check whether the path is a valid path.
-   *
-   * @param path the path to be checked.
-   * @throws IOException
-   */
-  private void validatePath(Path path) throws IOException {
-    Path fPart = path.getParent();
-    do {
-      try {
-        FileStatus fileStatus = getFileStatus(fPart);
-        if (fileStatus.isDirectory()) {
-          // If path exists and a directory, exit
-          break;
-        } else {
-          throw new FileAlreadyExistsException(String.format(
-                  "Can't make directory for path '%s', it is a file.", fPart));
-        }
-      } catch (FileNotFoundException fnfe) {
-      }
-      fPart = fPart.getParent();
-    } while (fPart != null);
+    daos.mkdir(key, com.intel.daos.client.Constants.FILE_DEFAULT_FILE_MODE, true);
+    return true;
   }
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem getFileStatus:  Get File Status , path= %s ",f.toUri().getPath());
+      LOG.debug("DaosFileSystem getFileStatus:  Get File Status , path = {}", f.toUri().getPath());
     }
     String key = f.toUri().getPath();
-    DaosFile daosFile = daos.getFile(key);
-    if(!key.isEmpty()&&daosFile!=null){
-      if (!daosFile.exists()) {
-        throw new FileNotFoundException("File does not exist: " + key);
-      }
-      if (daosFile.isDirectory()) {
-        return new FileStatus(0, true, 1, this.blockSize, 0, f);
-      } else {
-        long length = daosFile.length();
-        if (length < 0) {
-          throw new IOException("get illegal file  , file path = " +key);
-        }
-        return new FileStatus(length, false, 1, this.blockSize, 0, f);
-      }
+    return getFileStatus(f, daos.getFile(key));
+  }
+
+  @Override
+  protected void rename(Path src, Path dst, Options.Rename... options) throws IOException {
+    super.rename(src, dst, options);
+  }
+
+  @Override
+  public void moveFromLocalFile(Path[] srcs, Path dst) throws IOException {
+    super.moveFromLocalFile(srcs, dst);
+  }
+
+  private FileStatus getFileStatus(Path path, DaosFile file) throws IOException{
+    if (!file.exists()) {
+      throw new FileNotFoundException(file + "doesn't exist");
     }
-    throw new FileNotFoundException("no exist path= " + f.toUri().getPath());
+
+    StatAttributes attributes = file.getStatAttributes();
+    return new FileStatus(attributes.getLength(), !attributes.isFile(), 1,
+            attributes.isFile() ? blockSize:0, DaosUtils.toMilliSeconds(attributes.getModifyTime()), path);
   }
 
   @Override
   public boolean exists(Path f){
     if (LOG.isDebugEnabled()) {
-      LOG.debug(" DaosFileSystem exists: Is path = %s exists",f.toUri().getPath());
+      LOG.debug(" DaosFileSystem exists: Is path = {} exists",f.toUri().getPath());
     }
     try {
       String key = f.toUri().getPath();
-      return daos.getFile(key).exists();
+      return daos.exists(key);
     } catch (IOException e) {
       return false;
     }
@@ -421,6 +392,13 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem close");
     }
+    if (daos != null) {
+      daos.disconnect();
+    }
     super.close();
+  }
+
+  public boolean isBufferedReadEnabled() {
+    return bufferedReadEnabled;
   }
 }

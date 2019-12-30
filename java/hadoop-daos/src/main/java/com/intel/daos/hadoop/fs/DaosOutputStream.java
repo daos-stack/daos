@@ -1,19 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+/*
+ * (C) Copyright 2018-2019 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
  */
 
 package com.intel.daos.hadoop.fs;
@@ -22,6 +27,7 @@ import com.intel.daos.client.DaosFile;
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,23 +39,30 @@ import java.nio.ByteBuffer;
 public class DaosOutputStream extends OutputStream {
   private static final Logger LOG = LoggerFactory.getLogger(DaosOutputStream.class);
 
-  private FileSystem.Statistics stats;
   private ByteBuffer buffer;
-  private final byte[] singleByte = new byte[1];
-  private long position = 0;
+  private long fileOffset;
   private boolean closed;
   private String path;
   private final DaosFile daosFile;
+  private final FileSystem.Statistics stats;
 
   public DaosOutputStream(DaosFile daosFile,
                           String path,
-                          FileSystem.Statistics stats,
-                          final int writeSize) {
+                          final int writeBufferSize, FileSystem.Statistics stats) {
+    this(daosFile, path, ByteBuffer.allocateDirect(writeBufferSize), stats);
+  }
+
+  public DaosOutputStream(DaosFile daosFile,
+                          String path,
+                          ByteBuffer buffer, FileSystem.Statistics stats) {
     this.path = path;
-    this.stats = stats;
     this.daosFile = daosFile;
     this.closed = false;
-    this.buffer = ByteBuffer.allocateDirect(writeSize);
+    this.buffer = buffer;
+    this.stats = stats;
+    if (!(buffer instanceof DirectBuffer)) {
+      throw new IllegalArgumentException("need instance of direct buffer, but "+buffer.getClass().getName());
+    }
   }
 
   /**
@@ -61,84 +74,69 @@ public class DaosOutputStream extends OutputStream {
       LOG.debug("DaosOutputStream : write single byte into daos");
     }
     checkNotClose();
-    this.singleByte[0] = (byte) b;
-    this.buffer.put(this.singleByte);
+    this.buffer.put((byte)b);
     if (!this.buffer.hasRemaining()) {
-      try {
-        daoswrite();
-      } catch (IOException e) {
-        throw new IOException(e.getMessage());
-      }
+      daosWrite();
     }
   }
 
   @Override
-  public synchronized void write(byte[] b, int off, int len)
+  public synchronized void write(byte[] buf, int off, int len)
       throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosOutputStream : write into daos , len = " + len);
+      LOG.debug("DaosOutputStream : write byte array into daos , len = " + len);
     }
     checkNotClose();
 
     // validate write args
-    if (b == null) {
-      throw new NullPointerException("Null buffer");
-    } else if (off < 0 || len < 0) {
-      throw new IllegalArgumentException("offset/length is nagative , offset = " + off + ", length = " + len);
-    } else if(len > (b.length - off)){
+    if (off < 0 || len < 0) {
+      throw new IllegalArgumentException("offset/length is negative , offset = " + off + ", length = " + len);
+    }
+    if(len > (buf.length - off)){
       throw new IndexOutOfBoundsException("requested more bytes than destination buffer size "
-              +" : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (b.length - off ));
+              +" : request length = " + len + ", with offset = " + off + ", buffer capacity =" + (buf.length - off ));
     }
 
-    //start
-    try {
+    if(this.buffer.remaining() >= len){
+      this.buffer.put(buf, off, len);
       if (!this.buffer.hasRemaining()) {
-        daoswrite();
+        daosWrite();
       }
-      if(this.buffer.remaining()>= len){
-        this.buffer.put(b,off,len);
-      }else{
-        int length = this.buffer.remaining();
-        this.buffer.put(b,off,length);
-        if (!this.buffer.hasRemaining()) {
-          daoswrite();
-        }
-        write(b,off+length,(len-length));
+      return;
+    }
+    while (len > 0){
+      int length = Math.min(len, this.buffer.remaining());
+      this.buffer.put(buf, off, length);
+      if (!this.buffer.hasRemaining()) {
+        daosWrite();
       }
-    } catch (IOException e) {
-      throw new IOException(e.getMessage());
+      len -= length;
+      off += length;
     }
   }
 
   /**
    * write data in cache buffer to DAOS.
    */
-  private synchronized void daoswrite() throws IOException {
+  private synchronized void daosWrite() throws IOException {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosOutputStream : Write into this.path == " + this.path);
     }
-    long currentTime = System.currentTimeMillis();
-    long writeSize = -1;
-    if (this.daosFile == null) {
-      throw new NullPointerException("Null daosFile");
+    long currentTime = 0;
+    if(LOG.isDebugEnabled()){
+      currentTime = System.currentTimeMillis();
     }
-    writeSize = this.daosFile.write(
-      this.buffer, 0,this.position,
+    long writeSize = this.daosFile.write(
+      this.buffer, 0, this.fileOffset,
       this.buffer.position());
+    stats.incrementWriteOps(1);
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosOutputStream : writing by daos_api spend time is : "
           + (System.currentTimeMillis() - currentTime)
           + " ; writing data size : " + writeSize + ".");
     }
-    if(writeSize < 0){
-      throw new IOException("write failed , rc = " + writeSize);
-    }
-    this.position += writeSize;
-    if (this.stats != null) {
-      this.buffer.clear();
-      this.stats.incrementBytesWritten(writeSize);
-      this.stats.incrementWriteOps(1);
-    }
+    this.fileOffset += writeSize;
+    this.buffer.clear();
   }
 
   @Override
@@ -146,19 +144,16 @@ public class DaosOutputStream extends OutputStream {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosOutputStream close");
     }
-    checkNotClose();
-    try {
-      if (this.buffer.position() > 0) {
-        daoswrite();
-      }
-      if (this.daosFile != null) {
-        this.daosFile.release();
-      }
-    } catch (IOException e) {
-      LOG.error(e.getMessage());
-      throw new IOException(e.getMessage());
+    if (closed) {
+      return;
     }
-    if(this.buffer!=null){
+    if (this.buffer.position() > 0) {
+      daosWrite();
+    }
+    if (this.daosFile != null) {
+      this.daosFile.release();
+    }
+    if(this.buffer != null){
       ((sun.nio.ch.DirectBuffer)this.buffer).cleaner().clean();
       this.buffer = null;
     }
@@ -174,12 +169,7 @@ public class DaosOutputStream extends OutputStream {
     checkNotClose();
 
     if (this.buffer.position() > 0) {
-      try {
-        daoswrite();
-      } catch (IOException e) {
-        LOG.error(e.getMessage());
-        throw new IOException(e.getMessage());
-      }
+      daosWrite();
     }
     super.flush();
   }

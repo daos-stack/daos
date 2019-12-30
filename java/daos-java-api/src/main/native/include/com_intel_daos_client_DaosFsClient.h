@@ -26,10 +26,10 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_mkdir
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    createNewFile
- * Signature: (JLjava/lang/String;Ljava/lang/String;IIII)J
+ * Signature: (JLjava/lang/String;Ljava/lang/String;IIIIZ)J
  */
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
-  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jint, jint);
+  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jint, jint, jboolean);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient

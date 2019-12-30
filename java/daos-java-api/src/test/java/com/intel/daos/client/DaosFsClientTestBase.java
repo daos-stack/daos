@@ -26,7 +26,9 @@ public class DaosFsClientTestBase {
         }else{
           System.out.println("failed to delete folder "+path);
         }
+        childFile.release();
       }
+      daosFile.release();
       return client;
     }catch (Exception e){
       System.out.println("failed to clear/prepare file system");

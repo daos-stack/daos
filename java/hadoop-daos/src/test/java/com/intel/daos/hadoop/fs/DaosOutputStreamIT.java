@@ -3,10 +3,7 @@ package com.intel.daos.hadoop.fs;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
@@ -16,10 +13,9 @@ import static org.junit.Assert.assertEquals;
 /**
  *
  */
-public class TestDaosOutputStream{
+public class DaosOutputStreamIT {
   private static FileSystem fs;
-  private static String testRootPath =
-          TestDaosTestUtils.generateUniqueTestPath();
+  private static String testRootPath = DaosUtils.generateUniqueTestPath();
 
   @Rule
   public Timeout testTimeout = new Timeout(30 * 60 * 1000);
@@ -49,6 +45,19 @@ public class TestDaosOutputStream{
   }
 
   @Test
+  public void testOutputStream2ExistingFile() throws IOException {
+    long size = 1024;
+
+    Path p = new Path("/test/data");
+    fs.mkdirs(p);
+    Path file = new Path(p, "1");
+    ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
+    ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
+
+    Assert.assertEquals(1024, fs.listStatus(file)[0].getLen());
+  }
+
+  @Test
   public void testZeroByteUpload() throws IOException {
     ContractTestUtils.createAndVerifyFile(fs, getTestPath(), 0);
   }
@@ -70,7 +79,7 @@ public class TestDaosOutputStream{
     // fs.delete
     //   getFileStatus & delete & exists & create fake dir read 2, write 2
     ContractTestUtils.createAndVerifyFile(fs, getTestPath(), size - 1);
-    int readNum = (int) (size-1)/ Constants.DEFAULE_DAOS_READ_BUFFER_SIZE + 1;
+    int readNum = (int) (size-1)/ Constants.DEFAULT_DAOS_PRELOAD_SIZE + 1;
     assertEquals(readNum, statistics.getReadOps());
     assertEquals(size - 1, statistics.getBytesRead());
     int writeNum = (int) (size-1)/ Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE + 1;

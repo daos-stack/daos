@@ -1,31 +1,26 @@
 package com.intel.daos.hadoop.fs;
 
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.*;
 import org.junit.Test;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import static org.junit.Assume.assumeTrue;
 
+public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
-public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
-  private static final Log LOG = LogFactory.getLog(TestDaosFileSystemContract.class);
+  private static final Log LOG = LogFactory.getLog(DaosFileSystemContractIT.class);
 
   @Override
-  protected  void setUp() throws IOException {
-    System.out.println("@setup");
-    this.fs= DaosFSFactory.getFS();
-    this.fs.mkdirs(new Path("/test"));
-
+  protected void setUp() throws Exception {
+    fs = DaosFSFactory.getFS();
+    fs.mkdirs(new Path("/test"));
   }
 
   @Override
-  protected  void tearDown() throws  Exception {
-    System.out.println("@tearDown");
+  protected void tearDown() throws Exception {
     super.tearDown();
   }
 
@@ -47,9 +42,13 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
   @Test
   public void testRenameRootDirForbidden() throws Exception {
     assumeTrue(renameSupported());
-    rename(super.path("/"),
-        super.path("/test/newRootDir"),
-        false, true, false);
+    try {
+      rename(super.path("/"),
+              super.path("/test/newRootDir"),
+              false, true, false);
+      fail("should throw IOException");
+    }catch (IOException e){
+    }
   }
 
   @Test
@@ -88,7 +87,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     try {
       super.rename(src, dst, false, false, false);
       fail("Should throw FileNotFoundException!");
-    } catch (FileNotFoundException e) {
+    } catch (IOException e) {
       // expected
     }
   }
@@ -103,7 +102,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     try {
       super.rename(src, dst, false, true, false);
       fail("Should throw FileNotFoundException!");
-    } catch (FileNotFoundException e) {
+    } catch (IOException e) {
       // expected
     }
   }
@@ -125,10 +124,9 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
 
     Path dst = this.path("/test/new");
     Path dstChild = new Path(dst, src.getName());
-    this.fs.mkdirs(dst);
     super.rename(src, dst, true, false, true);
-    assertEquals(1, this.fs.listStatus(dst).length);
-    assertEquals(4, this.fs.listStatus(dstChild).length);
+    assertEquals(4, this.fs.listStatus(dst).length);
+    assertFalse(fs.exists(dstChild));
 
   }
 
@@ -140,8 +138,8 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     Path dst = this.path("/test/new/newdir");
     try {
       super.rename(src, dst, false, true, false);
-      fail("Should throw FileNotFoundException!");
-    } catch (FileNotFoundException e) {
+      fail("Should throw IOException!");
+    } catch (IOException e) {
       // expected
     }
   }
@@ -169,8 +167,8 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     this.createFile(dst);
     try {
       super.rename(src, dst, false, true, true);
-      fail("Should throw FileAlreadyExistsException");
-    } catch (FileAlreadyExistsException e) {
+      fail("Should throw IOException");
+    } catch (IOException e) {
       // expected
     }
   }
@@ -186,7 +184,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     try {
       super.rename(src, dst, false, true, true);
       fail("Should throw FileAlreadyExistsException");
-    } catch (FileAlreadyExistsException e) {
+    } catch (IOException e) {
       // expected
     }
   }
@@ -214,12 +212,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     this.fs.mkdirs(new Path("/test/hadoop"));
     this.createFile(testFile);
     assertTrue(this.fs.exists(testFile));
-    try {
-      this.fs.mkdirs(testFile);
-      fail("Should throw FileAlreadyExistsException!");
-    } catch (FileAlreadyExistsException e) {
-      // expected
-    }
+    this.fs.mkdirs(testFile);
   }
 
   @Override
@@ -256,19 +249,20 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     this.fs.mkdirs(new Path("/test/hadoop/dir/subdir"));
     createFile(path("/test/hadoop/dir/subdir/file2"));
 
-    Path dst = path("/test/new/newdir");
-    fs.mkdirs(dst);
+    Path parent = path("/test/new/");
+    Path dst = path("/test/new/dir");
+    fs.mkdirs(parent);
     rename(src, dst, true, false, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/new/newdir/dir")));
+            fs.exists(path("/test/new/dir")));
     assertFalse("Nested file1 exists",
             fs.exists(path("/test/hadoop/dir/file1")));
     assertFalse("Nested file2 exists",
             fs.exists(path("/test/hadoop/dir/subdir/file2")));
     assertTrue("Renamed nested file1 exists",
-            fs.exists(path("/test/new/newdir/dir/file1")));
+            fs.exists(path("/test/new/dir")));
     assertTrue("Renamed nested exists",
-            fs.exists(path("/test/new/newdir/dir/subdir/file2")));
+            fs.exists(path("/test/new/dir/subdir/file2")));
   }
 
   @Override
@@ -290,11 +284,12 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     Path src = path("/test/hadoop/file");
     this.fs.mkdirs(new Path("/test/hadoop"));
     createFile(src);
-    Path dst = path("/test/new/newdir");
-    this.fs.mkdirs(dst);
+    Path parent = new Path("/test/new/");
+    Path dst = path("/test/new/file");
+    this.fs.mkdirs(parent);
     rename(src, dst, true, false, true);
     assertTrue("Destination changed",
-            fs.exists(path("/test/new/newdir/file")));
+            fs.exists(path("/test/new/file")));
   }
 
   @Override
@@ -346,7 +341,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     this.fs.mkdirs(dir);
     Path file = path("/test/hadoop/file");
     Path subdir = path("/test/hadoop/subdir");
-    this.fs.mkdirs(subdir);
+    fs.mkdirs(subdir);
 
     createFile(file);
     assertTrue("Created subdir", fs.mkdirs(subdir));
@@ -355,12 +350,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     assertTrue("Dir exists", fs.exists(dir));
     assertTrue("Subdir exists", fs.exists(subdir));
 
-    try {
-      fs.delete(dir, false);
-      fail("Should throw IOException.");
-    } catch (IOException e) {
-      // expected
-    }
+    assertFalse("no delete", fs.delete(dir, false));
     assertTrue("File still exists", fs.exists(file));
     assertTrue("Dir still exists", fs.exists(dir));
     assertTrue("Subdir still exists", fs.exists(subdir));
@@ -380,12 +370,7 @@ public class TestDaosFileSystemContract extends FileSystemContractBaseTest {
     FSDataOutputStream out = fs.create(src);
     out.writeChar('H'); //write some data
     out.close();
-    try {
-      out.close();
-      fail("Should throw IOException.");
-    } catch (IOException e) {
-      // expected
-    }
+    out.close();
   }
 
   /**

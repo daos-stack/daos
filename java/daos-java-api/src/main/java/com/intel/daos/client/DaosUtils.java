@@ -74,4 +74,9 @@ public final class DaosUtils {
     String id = UUID.randomUUID().toString();
     return id.substring(0, 16);
   }
+
+  public static long toMilliSeconds(StatAttributes.TimeSpec modifyTime) {
+    long ms = modifyTime.getSeconds() * 1000;
+    return ms + modifyTime.getNano()/(1000*1000);
+  }
 }

@@ -86,6 +86,11 @@ public class DaosUtilsTest {
   }
 
   @Test
+  public void testValue() throws Exception {
+    Assert.assertTrue(02 == 2);
+  }
+
+  @Test
   public void testUuidLength(){
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());

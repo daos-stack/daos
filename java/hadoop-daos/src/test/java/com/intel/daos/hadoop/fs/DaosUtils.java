@@ -10,22 +10,16 @@ import java.net.URI;
 /**
  *
  */
-public class TestDaosTestUtils {
+public class DaosUtils {
   private static Configuration configuration;
   public static final String TEST_FS_DAOS_NAME = "test.fs.daos.name";
 
-  private TestDaosTestUtils(){
+  private DaosUtils(){}
 
-  }
-
-  public static DaosFileSystem createTestFileSystem(Configuration conf){
+  public static DaosFileSystem createTestFileSystem(Configuration conf)throws IOException{
     DaosFileSystem daosFileSystem = new DaosFileSystem();
-    try {
-      configuration =conf;
-      daosFileSystem.initialize(getURI(configuration), configuration);
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    configuration = conf;
+    daosFileSystem.initialize(getURI(configuration), configuration);
     return daosFileSystem;
   }
 
@@ -35,18 +29,18 @@ public class TestDaosTestUtils {
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-            TestDaosTestUtils.TEST_FS_DAOS_NAME, "daos:///");
+            DaosUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
 
     boolean liveTest = !StringUtils.isEmpty(fsname);
     URI testURI = null;
     if (liveTest) {
       testURI = URI.create(fsname);
-      liveTest = testURI.getScheme().equals(Constants.FS_DAOS);
+      liveTest = testURI.getScheme().equals(Constants.DAOS_SCHEMA);
     }
 
     if (!liveTest) {
       throw new AssumptionViolatedException("No test filesystem in "
-          + TestDaosTestUtils.TEST_FS_DAOS_NAME);
+          + DaosUtils.TEST_FS_DAOS_NAME);
     }
     return testURI;
   }
@@ -61,5 +55,4 @@ public class TestDaosTestUtils {
     return testUniqueForkId == null ? "/test" :
         "/" + testUniqueForkId + "/test";
   }
-
 }
