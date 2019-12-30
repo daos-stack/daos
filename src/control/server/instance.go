@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 
@@ -46,6 +47,7 @@ import (
 // daos_io_server.
 type IOServerStarter interface {
 	Start(context.Context, chan<- error) error
+	IsStarted() bool
 	GetConfig() *ioserver.Config
 }
 
@@ -214,6 +216,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	}
 
 	return srv.runner.Start(ctx, errChan)
+}
+
+func (srv *IOServerInstance) IsStarted() bool {
+	return srv.runner.IsStarted()
 }
 
 // NotifyReady receives a ready message from the running IOServer
@@ -459,6 +465,16 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 	}
 	sb := srv.getSuperblock()
 
-	return system.NewMember(sb.Rank.Uint32(), sb.UUID,
-		srv.msClient.cfg.ControlAddr, system.MemberStateStarted), nil
+	msAddr, err := srv.msClient.LeaderAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", msAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return system.NewMember(sb.Rank.Uint32(), sb.UUID, addr,
+		system.MemberStateStarted), nil
 }
