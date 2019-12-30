@@ -616,7 +616,7 @@ insert(uint64_t idx, daos_handle_t th, struct a_ioreq *req, int sync)
 		    sync ? "sync" : "async");
 
 	/** execute update operation */
-	rc = daos_obj_update(oh, th, &req->dkey, 1, &req->iod, &req->sgl,
+	rc = daos_obj_update(oh, th, 0, &req->dkey, 1, &req->iod, &req->sgl,
 			     sync ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "object update failed\n");
 }
@@ -658,7 +658,7 @@ lookup(uint64_t idx, daos_handle_t th, struct a_ioreq *req,
 		    verify ? "sync" : "async");
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(oh, th, &req->dkey, 1, &req->iod, &req->sgl,
+	rc = daos_obj_fetch(oh, th, 0, &req->dkey, 1, &req->iod, &req->sgl,
 			    NULL, verify ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "dsr fetch failed\n");
 }

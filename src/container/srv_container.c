@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * /file
+ * \file
  *
  * ds_cont: Container Operations
  *
@@ -44,6 +44,98 @@
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	       daos_prop_t **prop_out);
+
+/** Container Property knowledge */
+
+/** Get the redundancy factor from a containers properites. */
+uint32_t
+daos_cont_prop2redunfac(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
+
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RF1 : (uint32_t)prop->dpe_val;
+}
+
+/** Get the redundancy level from a containers properites. */
+uint32_t
+daos_cont_prop2redunlvl(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
+
+	return prop == NULL ? DAOS_PROP_CO_REDUN_NODE : (uint32_t)prop->dpe_val;
+}
+
+/**
+ * This function verifies that the container meets it's redundancy requirements
+ * based on the current pool map. The redundancy requirement is measured
+ * checking a domain level and counting how many downstream failures it has.
+ * if there are more failures for that domain type then allowed restrict
+ * container opening.
+ *
+ * \param pmap  [in]    The pool map referenced by the container.
+ * \param props [in]    The container properties, used to get redundancy factor
+ *                      and level.
+ *
+ * \return	0 if the container meets the requirements, negative error code
+ *		if it does not.
+ */
+static int
+cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
+{
+	uint32_t num_failed;
+	uint32_t num_allowed_failures;
+	int rc = 0;
+	int redun_fac = daos_cont_prop2redunfac(props);
+	int redun_lvl = daos_cont_prop2redunlvl(props);
+
+	switch (redun_lvl) {
+	case DAOS_PROP_CO_REDUN_RACK:
+		rc = pool_map_get_failed_cnt(pmap,
+					     PO_COMP_TP_RACK);
+		break;
+	case DAOS_PROP_CO_REDUN_NODE:
+		rc = pool_map_get_failed_cnt(pmap,
+					     PO_COMP_TP_NODE);
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	if (rc < 0)
+		return rc;
+
+	/**
+	 * A pool with a redundancy factor of n can have at most n failures
+	 * before pool_open fails and an error is reported.
+	 */
+	num_failed = rc;
+	switch (redun_fac) {
+	case DAOS_PROP_CO_REDUN_RF0:
+		num_allowed_failures = 0;
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		num_allowed_failures = 1;
+		break;
+	case DAOS_PROP_CO_REDUN_RF2:
+		num_allowed_failures = 2;
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+		num_allowed_failures = 3;
+		break;
+	case DAOS_PROP_CO_REDUN_RF4:
+		num_allowed_failures = 4;
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	if (num_allowed_failures <= num_failed)
+		return 0;
+	else
+		return -DER_INVAL;
+}
 
 static int
 cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
@@ -254,8 +346,8 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			D_FREE(entry_def->dpe_str);
-			entry_def->dpe_str = strndup(entry->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
@@ -517,6 +609,8 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tdi_uuid, cont_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -681,7 +775,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
 	struct container_hdl	chdl;
-	struct cont_query_out  *out = crt_reply_get(rpc);
+	struct pool_map		*pmap;
+	struct cont_open_out   *out = crt_reply_get(rpc);
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
@@ -709,12 +804,28 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	/* query the container properties from RDB and update to IV */
+	/* Determine pool meets container redundancy factor requirments*/
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+
+	if (!(in->coi_capas & DAOS_COO_FORCE)) {
+		pmap = pool_hdl->sph_pool->sp_map;
+		rc = cont_verify_redun_req(pmap, prop);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": Container does not meet redundancy "
+					"requirments, set DAOS_COO_FORCE to "
+					"force container open rc: %d.\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			daos_prop_free(prop);
+			D_GOTO(out, rc);
+		}
+	}
+
+	/* query the container properties from RDB and update to IV */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
 				 in->coi_op.ci_hdl, in->coi_op.ci_uuid,
 				 prop);
@@ -755,7 +866,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 * ds_cont_op_handler.
 	 */
 	rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
-	out->cqo_prop = prop;
+	out->coo_prop = prop;
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
@@ -789,6 +900,8 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -966,6 +1079,8 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	out->tqo_hae = DAOS_EPOCH_MAX;
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1024,8 +1139,8 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
-		prop->dpp_entries[idx].dpe_str =
-			strndup(value.iov_buf, value.iov_len);
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		idx++;
@@ -1429,6 +1544,119 @@ out_svc:
 	return rc;
 }
 
+/* argument type for callback function to list containers */
+struct list_cont_iter_args {
+	uuid_t				pool_uuid;
+
+	/* Number of containers in pool and conts[] index while counting */
+	uint64_t			ncont;
+
+	/* conts[]: capacity*/
+	uint64_t			conts_len;
+	struct daos_pool_cont_info	*conts;
+};
+
+/* callback function for list containers iteration. */
+static int
+enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct list_cont_iter_args	*ap = varg;
+	struct daos_pool_cont_info	*cinfo;
+	uuid_t				 cont_uuid;
+	(void) val;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		return -DER_IO;
+	}
+
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	D_DEBUG(DF_DSMS, "pool/cont: "DF_CONTF"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid));
+
+	/* Realloc conts[] if needed (double each time starting with 1) */
+	if (ap->ncont == ap->conts_len) {
+		void	*ptr;
+		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
+					ap->conts_len * 2;
+
+		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
+		if (ptr == NULL)
+			return -DER_NOMEM;
+		ap->conts = ptr;
+		ap->conts_len = realloc_elems;
+	}
+
+	cinfo = &ap->conts[ap->ncont];
+	ap->ncont++;
+	uuid_copy(cinfo->pci_uuid, cont_uuid);
+	return 0;
+}
+
+/**
+ * List all containers in a pool.
+ *
+ * \param[in]	pool_uuid	Pool UUID.
+ * \param[out]	conts		Array of container info structures
+ *				to be allocated. Caller must free.
+ * \param[out]	ncont		Number of containers in the pool
+ *				(number of items populated in conts[]).
+ */
+int
+ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+	     uint64_t *ncont)
+{
+	int				 rc;
+	struct cont_svc			*svc;
+	struct rdb_tx			 tx;
+	struct list_cont_iter_args	 args;
+
+	*conts = NULL;
+	*ncont = 0;
+
+	args.ncont = 0;			/* number of containers in the pool */
+	args.conts_len = 0;		/* allocated length of conts[] */
+	args.conts = NULL;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+				    NULL /* hint **/);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
+			    enum_cont_cb, &args);
+
+	/* read-only, so no rdb_tx_commit */
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	cont_svc_put_leader(svc);
+
+out:
+	D_DEBUG(DF_DSMS, "iterate rc=%d, args.conts=%p, args.ncont="DF_U64"\n",
+			rc, args.conts, args.ncont);
+
+	if (rc != 0) {
+		/* Error in iteration */
+		if (args.conts)
+			D_FREE(args.conts);
+	} else {
+		*ncont = args.ncont;
+		*conts = args.conts;
+	}
+	return rc;
+}
+
 static int
 cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
@@ -1444,17 +1672,13 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return cont_attr_set(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
 		return ds_cont_epoch_discard(tx, pool_hdl, cont, hdl, rpc);
-	case CONT_EPOCH_COMMIT:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    false);
 	case CONT_EPOCH_AGGREGATE:
 		return ds_cont_epoch_aggregate(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_LIST:
 		return ds_cont_snap_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_CREATE:
-		return ds_cont_epoch_commit(tx, pool_hdl, cont, hdl, rpc,
-					    true);
-	 case CONT_SNAP_DESTROY:
+		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
@@ -1498,7 +1722,7 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 					DP_UUID(in->ci_hdl));
 				rc = -DER_NO_HDL;
 			} else {
-				D_ERROR(DF_CONT": failed to look up container"
+				D_ERROR(DF_CONT": failed to look up container "
 					"handle "DF_UUID": %d\n",
 					DP_CONT(cont->c_svc->cs_pool_uuid,
 						cont->c_uuid),

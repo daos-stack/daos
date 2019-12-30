@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,9 +135,9 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
 
 	/* uuid needs extra parsing */
-	if (cc_options.pool_uuid == NULL)
+	if (!cc_options.pool_uuid ||
+	    (uuid_parse(cc_options.pool_uuid, pool_uuid) < 0))
 		return EINVAL;
-	rc = uuid_parse(cc_options.pool_uuid, pool_uuid);
 
 	/* turn the list of pool service nodes into a rank list */
 	rc = parse_rank_list(cc_options.server_list,

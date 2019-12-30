@@ -34,14 +34,15 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -69,6 +70,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Backup active config.
 	saveActiveConfig(log, cfg)
 
+	if cfg.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged helper logging")
+		}
+	}
+
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down
 	// from one place.
@@ -84,9 +91,17 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.New("NVMe support only available with single server in this release")
 	}
 
+	bdevProvider := bdev.DefaultProvider(log)
+	// temporary scaffolding -- remove when bdev forwarding to pbin works
+	if os.Geteuid() == 0 {
+		if err := bdevProvider.Init(bdev.InitRequest{SPDKShmID: cfg.NvmeShmID}); err != nil {
+			return errors.Wrap(err, "failed to init SPDK")
+		}
+	}
+
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := common.NewMembership(log)
+	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
@@ -117,14 +132,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, scmProvider, cfg, membership)
+	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
 	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
-	defer controlService.Teardown()
 
 	// Create and start listener on management network.
 	lis, err := net.Listen("tcp4", controlAddr.String())
@@ -155,7 +169,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("DAOS control server listening on %s", controlAddr)
+	log.Infof("DAOS control server (pid %d) listening on %s", os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -200,5 +214,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return nil
 	}
 
-	return errors.Wrap(harness.Start(ctx), "DAOS I/O Server exited with error")
+	return errors.Wrap(harness.Start(ctx, membership), "DAOS I/O Server exited with error")
 }

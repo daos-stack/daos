@@ -25,35 +25,87 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/client"
 )
 
-// systemCmd is the struct representing the top-level system subcommand.
+// SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
+	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+}
+
+type leaderQueryCmd struct {
+	logCmd
+	cfgCmd
+	connectedCmd
+}
+
+func (cmd *leaderQueryCmd) Execute(_ []string) error {
+	resp, err := cmd.conns.LeaderQuery(client.LeaderQueryReq{
+		System: cmd.config.SystemName,
+	})
+	if err != nil {
+		return errors.Wrap(err, "leader query failed")
+	}
+
+	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
+		strings.Join(resp.Replicas, ", "))
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
+	Prep bool `long:"prep" description:"Perform prep phase of controlled shutdown."`
+	Kill bool `long:"kill" description:"Perform kill phase of controlled shutdown."`
 }
 
 // Execute is run when systemStopCmd activates
 func (cmd *systemStopCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
+	if !cmd.Prep && !cmd.Kill {
+		cmd.Prep = true
+		cmd.Kill = true
+	}
 
-	members, err := cmd.conns.SystemStop()
+	req := client.SystemStopReq{Prep: cmd.Prep, Kill: cmd.Kill}
+	results, err := cmd.conns.SystemStop(req)
 	if err != nil {
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	}
-	if len(members) > 0 {
-		msg += fmt.Sprintf(": still %d active members", len(members))
+		return errors.Wrap(err, "System-Stop command failed")
 	}
 
-	cmd.log.Infof("System-stop command %s\n", msg)
+	if len(results) == 0 {
+		cmd.log.Debug("System-Stop no member results returned\n")
+		return nil
+	}
+	cmd.log.Debug("System-Stop command succeeded\n")
+
+	idTitle := "Member ID"
+	operationTitle := "Operation"
+	resultTitle := "Result"
+
+	formatter := NewTableFormatter([]string{idTitle, operationTitle, resultTitle})
+	var table []TableRow
+
+	for _, r := range results {
+		row := TableRow{idTitle: r.ID}
+		row[operationTitle] = r.Action
+		msg := "OK"
+		if r.Err != nil {
+			msg = r.Err.Error()
+		}
+		row[resultTitle] = msg
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
 
 	return nil
 }
@@ -66,19 +118,91 @@ type systemMemberQueryCmd struct {
 
 // Execute is run when systemMemberQueryCmd activates
 func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
-
 	members, err := cmd.conns.SystemMemberQuery()
-	switch {
-	case err != nil:
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	case len(members) > 0:
-		msg += members.String()
-	default:
-		msg += "no joined members"
+	if err != nil {
+		return errors.Wrap(err, "System-Member-Query command failed")
 	}
 
-	cmd.log.Infof("System-member-query command %s\n", msg)
+	cmd.log.Debug("System-Member-Query command succeeded\n")
+	if len(members) == 0 {
+		cmd.log.Info("No members in system\n")
+		return nil
+	}
 
+	rankTitle := "Member Rank"
+	uuidTitle := "Member UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := NewTableFormatter([]string{rankTitle, uuidTitle, addrTitle, stateTitle})
+	var table []TableRow
+
+	for _, m := range members {
+		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
+
+	return nil
+}
+
+// systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
+type systemListPoolsCmd struct {
+	logCmd
+	connectedCmd
+	cfgCmd
+}
+
+func formatPoolSvcReps(svcReps []uint32) string {
+	var b strings.Builder
+	for i, rep := range svcReps {
+		if i != 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, "%d", rep)
+	}
+
+	return b.String()
+}
+
+// Execute is run when systemListPoolsCmd activates
+func (cmd *systemListPoolsCmd) Execute(args []string) error {
+	if cmd.config == nil {
+		return errors.New("No configuration loaded")
+	}
+	req := client.ListPoolsReq{SysName: cmd.config.SystemName}
+	resp, err := cmd.conns.ListPools(req)
+	if err != nil {
+		return errors.Wrap(err, "List-Pools command failed")
+	}
+
+	cmd.log.Debug("List-Pools command succeeded\n")
+	if len(resp.Pools) == 0 {
+		cmd.log.Info("No pools in system\n")
+		return nil
+	}
+
+	uuidTitle := "Pool UUID"
+	svcRepTitle := "Svc Replicas"
+
+	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
+	var table []TableRow
+
+	for _, pool := range resp.Pools {
+		row := TableRow{uuidTitle: pool.UUID}
+
+		if len(pool.SvcReplicas) != 0 {
+			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
+		}
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
 	return nil
 }

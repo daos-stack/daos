@@ -46,6 +46,8 @@
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
+#define DTX_BTREE_ORDER		23	/* Order for DTX tree */
+
 
 
 #define DAOS_VOS_VERSION 1
@@ -123,20 +125,32 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* DAOS handle for object index btree */
+	daos_handle_t		vc_btr_hdl;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/* DAOS handle for object index btree */
-	daos_handle_t		vc_btr_hdl;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		vc_dtx_cos_hdl;
+	/** The root of the B+ tree for ative DTXs. */
+	struct btr_root		vc_dtx_active_btr;
+	/** The root of the B+ tree for committed DTXs. */
+	struct btr_root		vc_dtx_committed_btr;
 	/* The DTX COS-btree. */
 	struct btr_root		vc_dtx_cos_btr;
-	/* The global list for commiitable DTXs. */
-	d_list_t		vc_dtx_committable;
-	/* The count of commiitable DTXs. */
+	/* The global list for committable DTXs. */
+	d_list_t		vc_dtx_committable_list;
+	/* The global list for committed DTXs. */
+	d_list_t		vc_dtx_committed_list;
+	/* The temporary list for committed DTXs during re-index. */
+	d_list_t		vc_dtx_committed_tmp_list;
+	/* The count of committable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/* The count of committed DTXs. */
+	uint32_t		vc_dtx_committed_count;
+	/* The items count in vc_dtx_committed_tmp_list. */
+	uint32_t		vc_dtx_committed_tmp_count;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -146,9 +160,45 @@ struct vos_container {
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
-				vc_abort_aggregation:1;
+				vc_abort_aggregation:1,
+				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
+	uint64_t		vc_dtx_resync_gen;
 };
+
+struct vos_dtx_act_ent {
+	struct vos_dtx_act_ent_df	 dae_base;
+	umem_off_t			 dae_df_off;
+	struct vos_dtx_blob_df		*dae_dbd;
+	/* More DTX records if out of the inlined buffer. */
+	struct vos_dtx_record_df	*dae_records;
+	/* The capacity of dae_records, NOT including the inlined buffer. */
+	int				 dae_rec_cap;
+};
+
+#define DAE_XID(dae)		((dae)->dae_base.dae_xid)
+#define DAE_OID(dae)		((dae)->dae_base.dae_oid)
+#define DAE_DKEY_HASH(dae)	((dae)->dae_base.dae_dkey_hash)
+#define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
+#define DAE_SRV_GEN(dae)	((dae)->dae_base.dae_srv_gen)
+#define DAE_LAYOUT_GEN(dae)	((dae)->dae_base.dae_layout_gen)
+#define DAE_INTENT(dae)		((dae)->dae_base.dae_intent)
+#define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
+#define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
+#define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
+#define DAE_REC_OFF(dae)	((dae)->dae_base.dae_rec_off)
+
+struct vos_dtx_cmt_ent {
+	/* Link into vos_conter::vc_dtx_committed_list */
+	d_list_t			 dce_committed_link;
+	struct vos_dtx_cmt_ent_df	 dce_base;
+	uint32_t			 dce_reindex:1,
+					 dce_exist:1;
+};
+
+#define DCE_XID(dce)		((dce)->dce_base.dce_xid)
+#define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 
 struct vos_imem_strts {
 	/**
@@ -298,28 +348,14 @@ int
 vos_obj_tab_register();
 
 /**
- * DTX table create
- * Called from cont_df_rec_alloc.
- *
- * \param pool		[IN]	vos pool
- * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
- *
- * \return		0 on success and negative on failure
- */
-int
-vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
-
-/**
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param pool		[IN]	vos pool
- * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
- *
- * \return		0 on success and negative on failure
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param cont_df	[IN]	Pointer to the on-disk VOS containter.
  */
-int
-vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
+void
+vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table, it is called within vos_init().
@@ -335,8 +371,6 @@ vos_dtx_table_register(void);
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	Address (offset) of the DTX to be checked.
- * \param record	[IN]	Address (offset) of the record modified via
- *				the DTX.
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -352,8 +386,7 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, umem_off_t record, uint32_t intent,
-			   uint32_t type);
+			   umem_off_t entry, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -371,6 +404,12 @@ int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, umem_off_t *tx_id);
 
+/**
+ * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
+ */
+void
+vos_dtx_cleanup_dth(struct dtx_handle *dth);
+
 /** Return the already active dtx id, if any */
 umem_off_t
 vos_dtx_get(void);
@@ -379,14 +418,14 @@ vos_dtx_get(void);
  * Deregister the record from the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
+ * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	The DTX entry address (offset).
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
- * \param type		[IN]	The record type, vos_dtx_record_types.
  */
 void
-vos_dtx_deregister_record(struct umem_instance *umm, umem_off_t entry,
-			  umem_off_t record, uint32_t type);
+vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
+			  umem_off_t entry, umem_off_t record);
 
 /**
  * Mark the DTX as prepared locally.
@@ -398,10 +437,9 @@ vos_dtx_deregister_record(struct umem_instance *umm, umem_off_t entry,
 int
 vos_dtx_prepared(struct dtx_handle *dth);
 
-void
+int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count);
-
+			int counti, daos_epoch_t epoch);
 
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
@@ -435,6 +473,16 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 uint64_t
 vos_dtx_cos_oldest(struct vos_container *cont);
 
+/**
+ * Establish indexed active DTX table in DRAM.
+ *
+ * \param cont	[IN]	Pointer to the container.
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_act_reindex(struct vos_container *cont);
+
 enum vos_tree_class {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
@@ -448,12 +496,14 @@ enum vos_tree_class {
 	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
-	/** DAOS two-phase commit transation table */
-	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** DAOS two-phase commit transation table (active) */
+	VOS_BTR_DTX_ACT_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** DAOS two-phase commit transation table (committed) */
+	VOS_BTR_DTX_CMT_TABLE	= (VOS_BTR_BEGIN + 6),
 	/** The objects with committable DTXs in DRAM */
-	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
+	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 7),
 	/** The VOS incarnation log tree */
-	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
+	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 8),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -496,6 +546,8 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
+	/** global record size, needed for EC singv record */
+	daos_size_t		 rb_gsize;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */

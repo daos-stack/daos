@@ -52,6 +52,7 @@ print_usage()
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -X|--dtx_tests\n");
 	print_message("vos_tests -l|--incarnation-log-tests\n");
+	print_message("vos_tests -z|--csum_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
 	print_message("vos_tests -f|--filter <filter>\n");
 	print_message("vos_tests -e|--exclude <filter>\n");
@@ -96,6 +97,7 @@ run_all_tests(int keys, bool nest_iterators)
 	failed += run_gc_tests();
 	failed += run_dtx_tests();
 	failed += run_ilog_tests();
+	failed += run_csum_extent_tests();
 	return failed;
 }
 
@@ -109,7 +111,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglni:mXA:hf:e:";
+	const char *short_options = "apcdglzni:mXA:hf:e:";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -122,6 +124,7 @@ main(int argc, char **argv)
 		{"punch_model_tests",	no_argument, 0, 'm'},
 		{"garbage_collector",	no_argument, 0, 'g'},
 		{"ilog_tests",		no_argument, 0, 'l'},
+		{"csum_tests",		no_argument, 0, 'z'},
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
@@ -157,8 +160,14 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-			cmocka_set_test_filter(optarg);
-				printf("Test filter: %s\n", optarg);
+			{
+				/** Add wildcards for easier filtering */
+				char filter[sizeof(optarg) + 2];
+
+				sprintf(filter, "*%s*", optarg);
+				cmocka_set_test_filter(filter);
+				printf("Test filter: %s\n", filter);
+			}
 #else
 			D_PRINT("filter not enabled");
 #endif
@@ -217,6 +226,10 @@ main(int argc, char **argv)
 			break;
 		case 'l':
 			nr_failed += run_ilog_tests();
+			test_run = true;
+			break;
+		case 'z':
+			nr_failed += run_csum_extent_tests();
 			test_run = true;
 			break;
 		case 'f':

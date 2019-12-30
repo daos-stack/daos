@@ -48,6 +48,8 @@ const (
 )
 
 const (
+	// MethodPrepShutdown is a ModuleMgmt method
+	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
 	// MethodKillRank is a ModuleMgmt method
 	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
 	// MethodSetRank is a ModuleMgmt method
@@ -78,11 +80,25 @@ const (
 	MethodListPools = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
+	// MethodPoolUpdateACL is a ModuleMgmt method
+	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
+	// MethodPoolDeleteACL is a ModuleMgmt method
+	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	// MethodDevStateQuery is a ModuleMgmt method
+	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
+	// MethodSetFaultyState is a ModuleMgmt method
+	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	// MethodListContainers is a ModuleMgmt method
+	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	// MethodPoolQuery defines a method for querying a pool
+	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
 )
 
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	// MethodBIOError is a ModuleSrv method
+	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
 const (

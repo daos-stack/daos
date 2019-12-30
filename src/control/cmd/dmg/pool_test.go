@@ -129,7 +129,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(acl.String())
+	_, err = file.WriteString(formatACL(acl))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", &client.PoolGetACLReq{
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -283,9 +283,69 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolOverwriteACL-%+v", &client.PoolOverwriteACLReq{
+				fmt.Sprintf("PoolOverwriteACL-%+v", client.PoolOverwriteACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update pool ACL with invalid ACL file",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
+			"ConnectClients",
+			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
+		},
+		{
+			"Update pool ACL without file or entry",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab",
+			"ConnectClients",
+			dmgTestErr("either ACL file or entry parameter is required"),
+		},
+		{
+			"Update pool ACL with both file and entry",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s --entry A::user@:rw", testACLFile),
+			"ConnectClients",
+			dmgTestErr("either ACL file or entry parameter is required"),
+		},
+		{
+			"Update pool ACL with ACL file",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+					ACL:  testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update pool ACL with entry",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --entry A::user@:rw",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Delete pool ACL without principal flag",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab",
+			"ConnectClients",
+			dmgTestErr("the required flag `-p, --principal' was not specified"),
+		},
+		{
+			"Delete pool ACL",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab --principal OWNER@",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolDeleteACL-%+v", client.PoolDeleteACLReq{
+					UUID:      "12345678-1234-1234-1234-1234567890ab",
+					Principal: "OWNER@",
 				}),
 			}, " "),
 			nil,

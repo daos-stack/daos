@@ -55,6 +55,25 @@ two pool service replica on rank 0 and 1.
 $ dmg pool destroy --pool=${puuid}
 ```
 
+**To see a list of the pools in your DAOS system:**
+
+```
+$ dmg system list-pools
+```
+
+This will return a table of pool UUIDs and the ranks of their pool service
+replicas. For example:
+
+```
+$ dmg system list-pools
+localhost:10001: connected
+Pool UUID				Svc Replicas
+---------				------------
+2a8ec3b2-729b-4617-bf51-77f37f764194	0,1
+a106d667-5c5d-4d6f-ac3a-89099196c41a	0
+85141a07-e3ba-42a6-81c2-3f18253c5e47	0
+```
+
 ## Pool Properties
 
 At creation time, a list of pool properties can be specified through the
@@ -177,13 +196,57 @@ with one ACE per line.
 
 ### Modifying a pool's ACL
 
+For all of these commands using an ACL file, the ACL file must be in the format
+noted above for pool creation.
+
+#### Overwriting the ACL
+
 To replace a pool's ACL with a new ACL:
 
 ```
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
-The ACL file must be in the format noted above for pool creation.
+#### Updating entries in an existing ACL
+
+To add or update multiple entries in an existing pool ACL:
+
+```
+$ dmg pool update-acl --pool <UUID> --acl-file <path>
+```
+
+To add or update a single entry in an existing pool ACL:
+
+```
+$ dmg pool update-acl --pool <UUID> --entry <ACE>
+```
+
+If there is no existing entry for the principal in the ACL, the new entry is
+added to the ACL. If there is already an entry for the principal, that entry
+is replaced with the new one.
+
+#### Removing an entry from the ACL
+
+To delete an entry for a given principal, or identity, in an existing pool ACL:
+
+```
+$ dmg pool delete-acl --pool <UUID> --principal <principal>
+```
+
+The principal corresponds to the principal/identity portion of an ACE that was
+set during pool creation or a previous pool ACL operation. For the delete
+operation, the principal argument must be formatted as follows:
+
+* Named user: `u:username@`
+* Named group: `g:groupname@`
+* Special principals:
+  * `OWNER@`
+  * `GROUP@`
+  * `EVERYONE@`
+
+The entry for that principal will be completely removed. This does not always
+mean that the principal will have no access. Rather, their access to the pool
+will be decided based on the remaining ACL rules.
 
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,

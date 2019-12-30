@@ -43,12 +43,15 @@ DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
 DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
 /* debug bit groups */
-#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 
 static void
 debug_fini_locked(void)
 {
 	int	rc;
+
+	/* Deregister daos specific error codes */
+	daos_errno_fini();
 
 	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 	if (rc != 0) /* Just print a message but no need to fail */
@@ -200,6 +203,16 @@ daos_debug_init(char *logfile)
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);
 
+	/* Register daos specific error codes */
+	rc = daos_errno_init();
+	if (rc != 0) {
+		D_ERROR("DAOS error strings could not be registered: "DF_RC"\n",
+			DP_RC(rc));
+		/* Ignore the error as it only affects new daos error codes
+		 * log messages.
+		 */
+	}
+
 	return 0;
 
 failed_unlock:
@@ -238,8 +251,19 @@ daos_key2str(daos_key_t *key)
 		strcpy(buf, "<NULL>");
 	} else {
 		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+		int i;
+		char *akey = key->iov_buf;
+		bool can_print = true;
 
-		if (isprint(*(char *)key->iov_buf)) {
+		for (i = 0 ; i < len ; i++) {
+			if (akey[i] == '\0')
+				break;
+			if (!isprint(akey[i])) {
+				can_print = false;
+				break;
+			}
+		}
+		if (can_print) {
 			strncpy(buf, key->iov_buf, len);
 			buf[len] = 0;
 		} else {

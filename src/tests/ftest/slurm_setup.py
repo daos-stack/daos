@@ -25,11 +25,11 @@
 import socket
 import argparse
 import logging
-import os
-import pwd
+import getpass
 import re
-from general_utils import pcmd, run_task
 from ClusterShell.NodeSet import NodeSet
+from util.general_utils import pcmd, run_task
+
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
@@ -159,19 +159,44 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
-    # Check if file exists on slurm control node
-    if execute_cluster_cmds(
-            args.control, ["ls /etc/munge/munge.key"], args.sudo) > 0:
-        # Create one key on control node and then copy it to all slurm nodes
-        if execute_cluster_cmds(
-                args.control, ["create-munge-key"], args.sudo) > 0:
-            return 1
+    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
+    # exlude the control node
+    nodes = NodeSet(str(args.nodes))
+    nodes.difference_update(str(args.control))
 
     # copy key to all nodes FROM slurmctl node;
+    # change the protections/ownership on the munge dir on all nodes
     cmd_list = [
-        "clush --copy -p -B -S -w {} /etc/munge/munge.key".format(args.nodes)]
-    ret_code = execute_cluster_cmds(args.control, cmd_list, args.sudo)
-    if ret_code > 0:
+        "sudo chmod -R 777 /etc/munge; sudo chown {}. /etc/munge".format(
+            args.user)]
+    if execute_cluster_cmds(all_nodes, cmd_list) > 0:
+        return 1
+
+    # Check if file exists on slurm control node
+    # change the protections/ownership on the munge key before copying
+    cmd_list = ["set -Eeu",
+                "rc=0",
+                "if [ ! -f /etc/munge/munge.key ]",
+                "then sudo create-munge-key",
+                "fi",
+                "sudo chmod 777 /etc/munge/munge.key",
+                "sudo chown {}. /etc/munge/munge.key".format(args.user)]
+
+    if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
+        return 1
+    # remove any existing key from other nodes
+    cmd_list = ["sudo rm -f /etc/munge/munge.key",
+                "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
+                    args.control)]
+    if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
+        return 1
+    # set the protection back to defaults
+    cmd_list = [
+        "sudo chmod 400 /etc/munge/munge.key",
+        "sudo chown munge. /etc/munge/munge.key",
+        "sudo chmod 700 /etc/munge",
+        "sudo chown munge. /etc/munge"]
+    if execute_cluster_cmds(all_nodes, ["; ".join(cmd_list)]) > 0:
         return 1
 
     # Start Munge service on all nodes
@@ -202,9 +227,15 @@ def start_slurm(args):
     # Startup the slurm control service
     if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0:
         return 1
-    else:
-        # Startup the slurm service
-        return execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
+
+    # Startup the slurm service
+    if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0:
+        return 1
+
+    # ensure that the nodes are in the idle state
+    cmd_list = ["scontrol update nodename={} state=idle".format(
+        args.nodes)]
+    return execute_cluster_cmds(args.control, cmd_list, args.sudo)
 
 
 def main():
@@ -230,7 +261,7 @@ def main():
         help="Partiton name; all nodes will be in this partition")
     parser.add_argument(
         "-u", "--user",
-        default=pwd.getpwuid(os.geteuid()).pw_name,
+        default=getpass.getuser(),
         help="slurm user for config file; if none the current user is used")
     parser.add_argument(
         "-i", "--install",

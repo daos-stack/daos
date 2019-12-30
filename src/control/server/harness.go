@@ -25,14 +25,12 @@ package server
 
 import (
 	"context"
-	"os"
-	"strconv"
 	"sync"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerHarness is responsible for managing IOServer instances
@@ -179,9 +177,28 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 	return ctx.Err()
 }
 
+func registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
+	m, err := instance.newMember()
+	if err != nil {
+		return errors.Wrap(err, "failed to get member from instance")
+	}
+
+	count, err := membership.Add(m)
+	if err != nil {
+		return errors.Wrap(err, "failed to add MS replica to membership")
+	}
+
+	if count != 1 {
+		return errors.Errorf("expected MS replica to be first member "+
+			"(want 1, got %d)", count)
+	}
+
+	return nil
+}
+
 // Start starts all configured instances and the management
 // service, then waits for them to exit.
-func (h *IOServerHarness) Start(parent context.Context) error {
+func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -202,6 +219,12 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		if err := instance.Start(ctx, errChan); err != nil {
 			return err
 		}
+		// If this instance is a MS replica, register membership
+		if instance.IsMSReplica() {
+			if err := registerNewMember(membership, instance); err != nil {
+				return err
+			}
+		}
 	}
 
 	// ... wait until they say they've started
@@ -214,17 +237,23 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 				return err
 			}
 		case ready := <-instance.AwaitReady():
-			if pmixless() {
-				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
-				if err := instance.SetRank(ctx, ready); err != nil {
-					return err
-				}
+			h.log.Debugf("instance ready: %v", ready)
+			if err := instance.SetRank(ctx, ready); err != nil {
+				return err
 			}
 		}
-	}
 
-	if err := h.StartManagementService(ctx); err != nil {
-		return errors.Wrap(err, "failed to start management service")
+		// If this instance is a MS replica, start it before
+		// moving on so that other instances can join.
+		if instance.IsMSReplica() {
+			if err := instance.StartManagementService(); err != nil {
+				return errors.Wrap(err, "failed to start management service")
+			}
+		}
+
+		if err := instance.LoadModules(); err != nil {
+			return errors.Wrap(err, "failed to load I/O server modules")
+		}
 	}
 
 	// now monitor them
@@ -258,31 +287,6 @@ func (h *IOServerHarness) StartManagementService(ctx context.Context) error {
 	return nil
 }
 
-// pmixless returns if we are in PMIx-less or PMIx mode.
-func pmixless() bool {
-	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
-		return true
-	}
-	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
-		return true
-	}
-	return false
-}
-
-// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
-// value, it returns an error.
-func pmixRank() (ioserver.Rank, error) {
-	s, ok := os.LookupEnv("PMIX_RANK")
-	if !ok {
-		return ioserver.NilRank, errors.New("not in PMIx mode")
-	}
-	r, err := strconv.ParseUint(s, 0, 32)
-	if err != nil {
-		return ioserver.NilRank, errors.Wrap(err, "PMIX_RANK="+s)
-	}
-	return ioserver.Rank(r), nil
-}
-
 type mgmtInfo struct {
 	isReplica       bool
 	shouldBootstrap bool
@@ -298,18 +302,6 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-	// A temporary workaround to create and start MS before we fully
-	// migrate to PMIx-less mode.
-	if !pmixless() {
-		rank, err := pmixRank()
-		if err != nil {
-			return nil, err
-		}
-		if rank == 0 {
-			mi.isReplica = true
-			mi.shouldBootstrap = true
-		}
 	}
 
 	return mi, nil

@@ -301,6 +301,13 @@ typedef struct {
 	d_rank_list_t			*mgpi_svc;
 } daos_mgmt_pool_info_t;
 
+/* DAOS pool container information
+ *
+ */
+struct daos_pool_cont_info {
+	uuid_t		pci_uuid;
+};
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *
@@ -348,10 +355,14 @@ typedef struct {
  *
  * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
  * daos_epoch_commit().
+ *
+ * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
+ * factor/level requirments of the container.
  */
 #define DAOS_COO_RO	(1U << 0)
 #define DAOS_COO_RW	(1U << 1)
 #define DAOS_COO_NOSLIP	(1U << 2)
+#define DAOS_COO_FORCE	(1U << 3)
 
 /** Container information */
 typedef struct {

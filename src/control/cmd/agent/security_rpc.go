@@ -105,7 +105,7 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	if method != drpc.MethodRequestCredentials {
-		return nil, errors.Errorf("Attempt to call unregistered function")
+		return nil, drpc.UnknownMethodFailure()
 	}
 
 	uConn, ok := session.Conn.(*net.UnixConn)
@@ -130,7 +130,7 @@ func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []
 
 	responseBytes, err := proto.Marshal(response)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to marshal response")
+		return nil, drpc.MarshalingFailure()
 	}
 	return responseBytes, nil
 }

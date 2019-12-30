@@ -92,6 +92,9 @@ struct csum_ft {
 	void		(*cf_reset)(struct daos_csummer *obj);
 	void		(*cf_get)(struct daos_csummer *obj);
 	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
+	bool		(*cf_compare)(struct daos_csummer *obj,
+				      uint8_t *buf1, uint8_t *buf2,
+				      size_t buf_len);
 
 	/** Len in bytes. Ft can either statically set csum_len or provide
 	 *  a get_len function
@@ -181,8 +184,12 @@ int
 daos_csummer_finish(struct daos_csummer *obj);
 
 bool
-daos_csummer_compare(struct daos_csummer *obj, daos_csum_buf_t *a,
-		     daos_csum_buf_t *b);
+daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
+			 daos_csum_buf_t *b);
+
+bool
+daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
+			  uint8_t *b, uint32_t csum_len);
 
 /**
  * Using the data from the sgl, calculates the checksums
@@ -280,6 +287,10 @@ dcb_set_null(daos_csum_buf_t *csum_buf);
 bool
 dcb_is_valid(const daos_csum_buf_t *csum);
 
+/** insert a csum into a dcb at a specific index */
+void
+dcb_insert(daos_csum_buf_t *dcb, int idx, uint8_t *csum_buf, size_t len);
+
 /** Returns the index of the checksum provided the offset into the data
  * the checksums are derived from.
  */
@@ -362,6 +373,87 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
  */
 int
 daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl);
+
+static inline bool
+csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
+{
+	/** Only support ARRAY Type currently */
+	return iod->iod_type == DAOS_IOD_ARRAY &&
+	       iod->iod_size > 0 &&
+	       iod->iod_size <= chunksize;
+}
+
+/**
+ * ----------------------------------------------------------------------
+ * Chunk operations for alignment and getting boundaries
+ * ----------------------------------------------------------------------
+ */
+
+/** Get the floor/ceiling of a specific chunk given the offset and chunksize */
+daos_off_t
+csum_chunk_align_floor(daos_off_t off, size_t chunksize);
+daos_off_t
+csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
+
+/** Represents a chunk, extent, or some calculated alignment for a range
+ */
+struct daos_csum_range {
+	daos_off_t	dcr_lo; /** idx to first record in chunk */
+	daos_off_t	dcr_hi; /** idx to last record in chunk */
+	daos_size_t	dcr_nr; /** num of records in chunk  */
+};
+
+static inline void
+dcr_set_idxs(struct daos_csum_range *range, daos_off_t lo, daos_off_t hi)
+{
+	range->dcr_lo = lo;
+	range->dcr_hi = hi;
+	range->dcr_nr = hi - lo + 1;
+}
+
+static inline void
+dcr_set_idx_nr(struct daos_csum_range *range, daos_off_t lo, size_t nr)
+{
+	range->dcr_lo = lo;
+	range->dcr_nr = nr;
+	range->dcr_hi = lo + nr - 1;
+}
+
+/**
+ * Given a recx, get chunk boundaries for a chunk index not exceeding the
+ * recx
+ */
+struct daos_csum_range
+csum_recx_chunkidx2range(daos_recx_t *recx, uint32_t rec_size,
+			 uint32_t chunksize, uint64_t chunk_idx);
+
+/**
+ * get chunk boundaries for chunk with record offset \record_idx that doesn't
+ * exceed lo/hi
+ */
+struct daos_csum_range
+csum_recidx2range(size_t chunksize, daos_off_t record_idx, size_t lo_boundary,
+		  daos_off_t hi_boundary, size_t rec_size);
+
+/**
+ * get chunk boundaries for chunk of index \chunk_idx.
+ * boundaries must not exceed lo/hi
+ */
+struct daos_csum_range
+csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx,
+		    uint64_t lo, uint64_t hi);
+
+struct daos_csum_range
+csum_chunkrange(uint64_t chunksize, uint64_t idx);
+
+/**
+ * will grow the selected range to align to chunk boundaries, not exceeding
+ * lo/hi
+ */
+struct daos_csum_range
+csum_align_boundaries(daos_off_t lo, daos_off_t hi, daos_off_t lo_boundary,
+		      daos_off_t hi_boundary, daos_off_t record_size,
+		      size_t chunksize);
 
 #endif /** __DAOS_CHECKSUM_H */
 

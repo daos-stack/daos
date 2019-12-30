@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type StoragePrepareReq struct {
 	Nvme                 *PrepareNvmeReq `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
@@ -30,16 +32,17 @@ func (m *StoragePrepareReq) Reset()         { *m = StoragePrepareReq{} }
 func (m *StoragePrepareReq) String() string { return proto.CompactTextString(m) }
 func (*StoragePrepareReq) ProtoMessage()    {}
 func (*StoragePrepareReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{0}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{0}
 }
+
 func (m *StoragePrepareReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StoragePrepareReq.Unmarshal(m, b)
 }
 func (m *StoragePrepareReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StoragePrepareReq.Marshal(b, m, deterministic)
 }
-func (dst *StoragePrepareReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StoragePrepareReq.Merge(dst, src)
+func (m *StoragePrepareReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StoragePrepareReq.Merge(m, src)
 }
 func (m *StoragePrepareReq) XXX_Size() int {
 	return xxx_messageInfo_StoragePrepareReq.Size(m)
@@ -76,16 +79,17 @@ func (m *StoragePrepareResp) Reset()         { *m = StoragePrepareResp{} }
 func (m *StoragePrepareResp) String() string { return proto.CompactTextString(m) }
 func (*StoragePrepareResp) ProtoMessage()    {}
 func (*StoragePrepareResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{1}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{1}
 }
+
 func (m *StoragePrepareResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StoragePrepareResp.Unmarshal(m, b)
 }
 func (m *StoragePrepareResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StoragePrepareResp.Marshal(b, m, deterministic)
 }
-func (dst *StoragePrepareResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StoragePrepareResp.Merge(dst, src)
+func (m *StoragePrepareResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StoragePrepareResp.Merge(m, src)
 }
 func (m *StoragePrepareResp) XXX_Size() int {
 	return xxx_messageInfo_StoragePrepareResp.Size(m)
@@ -122,16 +126,17 @@ func (m *StorageScanReq) Reset()         { *m = StorageScanReq{} }
 func (m *StorageScanReq) String() string { return proto.CompactTextString(m) }
 func (*StorageScanReq) ProtoMessage()    {}
 func (*StorageScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{2}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{2}
 }
+
 func (m *StorageScanReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageScanReq.Unmarshal(m, b)
 }
 func (m *StorageScanReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageScanReq.Marshal(b, m, deterministic)
 }
-func (dst *StorageScanReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageScanReq.Merge(dst, src)
+func (m *StorageScanReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageScanReq.Merge(m, src)
 }
 func (m *StorageScanReq) XXX_Size() int {
 	return xxx_messageInfo_StorageScanReq.Size(m)
@@ -168,16 +173,17 @@ func (m *StorageScanResp) Reset()         { *m = StorageScanResp{} }
 func (m *StorageScanResp) String() string { return proto.CompactTextString(m) }
 func (*StorageScanResp) ProtoMessage()    {}
 func (*StorageScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{3}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{3}
 }
+
 func (m *StorageScanResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageScanResp.Unmarshal(m, b)
 }
 func (m *StorageScanResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageScanResp.Marshal(b, m, deterministic)
 }
-func (dst *StorageScanResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageScanResp.Merge(dst, src)
+func (m *StorageScanResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageScanResp.Merge(m, src)
 }
 func (m *StorageScanResp) XXX_Size() int {
 	return xxx_messageInfo_StorageScanResp.Size(m)
@@ -215,16 +221,17 @@ func (m *StorageFormatReq) Reset()         { *m = StorageFormatReq{} }
 func (m *StorageFormatReq) String() string { return proto.CompactTextString(m) }
 func (*StorageFormatReq) ProtoMessage()    {}
 func (*StorageFormatReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{4}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{4}
 }
+
 func (m *StorageFormatReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageFormatReq.Unmarshal(m, b)
 }
 func (m *StorageFormatReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageFormatReq.Marshal(b, m, deterministic)
 }
-func (dst *StorageFormatReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageFormatReq.Merge(dst, src)
+func (m *StorageFormatReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageFormatReq.Merge(m, src)
 }
 func (m *StorageFormatReq) XXX_Size() int {
 	return xxx_messageInfo_StorageFormatReq.Size(m)
@@ -268,16 +275,17 @@ func (m *StorageFormatResp) Reset()         { *m = StorageFormatResp{} }
 func (m *StorageFormatResp) String() string { return proto.CompactTextString(m) }
 func (*StorageFormatResp) ProtoMessage()    {}
 func (*StorageFormatResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_5eee7f1bd028e7e7, []int{5}
+	return fileDescriptor_0d2c4ccf1453ffdb, []int{5}
 }
+
 func (m *StorageFormatResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageFormatResp.Unmarshal(m, b)
 }
 func (m *StorageFormatResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageFormatResp.Marshal(b, m, deterministic)
 }
-func (dst *StorageFormatResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageFormatResp.Merge(dst, src)
+func (m *StorageFormatResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageFormatResp.Merge(m, src)
 }
 func (m *StorageFormatResp) XXX_Size() int {
 	return xxx_messageInfo_StorageFormatResp.Size(m)
@@ -311,9 +319,9 @@ func init() {
 	proto.RegisterType((*StorageFormatResp)(nil), "ctl.StorageFormatResp")
 }
 
-func init() { proto.RegisterFile("storage.proto", fileDescriptor_storage_5eee7f1bd028e7e7) }
+func init() { proto.RegisterFile("storage.proto", fileDescriptor_0d2c4ccf1453ffdb) }
 
-var fileDescriptor_storage_5eee7f1bd028e7e7 = []byte{
+var fileDescriptor_0d2c4ccf1453ffdb = []byte{
 	// 320 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x92, 0xbf, 0x4e, 0xc3, 0x30,
 	0x10, 0x87, 0x95, 0x86, 0xa2, 0xca, 0x15, 0xb4, 0xb9, 0x32, 0x84, 0x4c, 0x21, 0xb4, 0x10, 0x96,

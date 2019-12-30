@@ -39,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // IOServerStarter defines an interface for starting the actual
@@ -56,14 +57,14 @@ type IOServerStarter interface {
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	log           logging.Logger
-	runner        IOServerStarter
-	bdevProvider  *bdev.ClassProvider
-	scmProvider   *scm.Provider
-	msClient      *mgmtSvcClient
-	instanceReady chan *srvpb.NotifyReadyReq
-	storageReady  chan struct{}
-	fsRoot        string
+	log               logging.Logger
+	runner            IOServerStarter
+	bdevClassProvider *bdev.ClassProvider
+	scmProvider       *scm.Provider
+	msClient          *mgmtSvcClient
+	instanceReady     chan *srvpb.NotifyReadyReq
+	storageReady      chan struct{}
+	fsRoot            string
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -76,17 +77,17 @@ type IOServerInstance struct {
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
-	bp *bdev.ClassProvider, sp *scm.Provider,
+	bcp *bdev.ClassProvider, sp *scm.Provider,
 	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
 
 	return &IOServerInstance{
-		log:           log,
-		runner:        r,
-		bdevProvider:  bp,
-		scmProvider:   sp,
-		msClient:      msc,
-		instanceReady: make(chan *srvpb.NotifyReadyReq),
-		storageReady:  make(chan struct{}),
+		log:               log,
+		runner:            r,
+		bdevClassProvider: bcp,
+		scmProvider:       sp,
+		msClient:          msc,
+		instanceReady:     make(chan *srvpb.NotifyReadyReq),
+		storageReady:      make(chan struct{}),
 	}
 }
 
@@ -205,10 +206,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 			return errors.Wrap(err, "start failed; no superblock")
 		}
 	}
-	if err := srv.bdevProvider.PrepareDevices(); err != nil {
+	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
 		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
 	}
-	if err := srv.bdevProvider.GenConfigFile(); err != nil {
+	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
 
@@ -269,7 +270,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 	if !superblock.ValidRank || !superblock.MS {
 		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
 			Uuid:  superblock.UUID,
-			Rank:  uint32(r),
+			Rank:  r.Uint32(),
 			Uri:   ready.Uri,
 			Nctxs: ready.Nctxs,
 			// Addr member populated in msClient
@@ -300,7 +301,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
@@ -359,7 +360,11 @@ func (srv *IOServerInstance) StartManagementService() error {
 		}
 	}
 
-	// Notify the I/O server that it may set up its server modules now.
+	return nil
+}
+
+// LoadModules initiates the I/O server startup sequence.
+func (srv *IOServerInstance) LoadModules() error {
 	return srv.callSetUp()
 }
 
@@ -438,4 +443,22 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	}
 
 	return makeDrpcCall(dc, module, method, body)
+}
+
+func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+
+	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
+		srv.Index(), bio.TgtId, bio)
+}
+
+// newMember returns reference to a new member struct if one can be retrieved
+// from superblock, error otherwise. Member populated with local reply address.
+func (srv *IOServerInstance) newMember() (*system.Member, error) {
+	if !srv.hasSuperblock() {
+		return nil, errors.New("missing superblock")
+	}
+	sb := srv.getSuperblock()
+
+	return system.NewMember(sb.Rank.Uint32(), sb.UUID,
+		srv.msClient.cfg.ControlAddr, system.MemberStateStarted), nil
 }

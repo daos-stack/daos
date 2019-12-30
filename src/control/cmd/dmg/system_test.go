@@ -43,6 +43,30 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system stop with kill",
+			"system stop --kill",
+			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"system stop with prep",
+			"system stop --prep",
+			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"leader query",
+			"system leader-query",
+			"ConnectClients LeaderQuery-daos_server",
+			nil,
+		},
+		{
+			"system list-pools with default config",
+			"system list-pools",
+			"ConnectClients ListPools-{daos_server}",
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"system quack",
 			"",

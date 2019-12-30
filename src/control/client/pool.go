@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -35,7 +36,7 @@ import (
 type PoolCreateReq struct {
 	ScmBytes   uint64
 	NvmeBytes  uint64
-	RankList   string
+	RankList   []uint32
 	NumSvcReps uint32
 	Sys        string
 	Usr        string
@@ -47,7 +48,7 @@ type PoolCreateReq struct {
 // PoolCreateResp struct contains response
 type PoolCreateResp struct {
 	UUID    string
-	SvcReps string
+	SvcReps []uint32
 }
 
 // PoolCreate will create a DAOS pool using provided parameters and generated
@@ -73,7 +74,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		Usergroup: req.Grp, Uuid: poolUUIDStr,
 	}
 
-	if req.ACL != nil {
+	if !req.ACL.Empty() {
 		rpcReq.Acl = req.ACL.Entries
 	}
 
@@ -131,6 +132,91 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	return nil
 }
 
+type (
+	// PoolQueryReq contains pool query parameters.
+	PoolQueryReq struct {
+		UUID string
+	}
+
+	// StorageUsageStats represents DAOS storage usage statistics.
+	StorageUsageStats struct {
+		Total uint64
+		Free  uint64
+		Min   uint64
+		Max   uint64
+		Mean  uint64
+	}
+
+	// PoolRebuildState indicates the current state of the pool rebuild process.
+	PoolRebuildState uint
+
+	// PoolRebuildStatus contains detailed information about the pool rebuild process.
+	PoolRebuildStatus struct {
+		Status  int32
+		State   PoolRebuildState
+		Objects uint64
+		Records uint64
+	}
+
+	// PoolQueryResp contains the pool query response.
+	PoolQueryResp struct {
+		Status        int32
+		UUID          string
+		TotalTargets  uint32
+		ActiveTargets uint32
+		Disabled      bool
+		Rebuild       *PoolRebuildStatus
+		Scm           *StorageUsageStats
+		Nvme          *StorageUsageStats
+	}
+)
+
+const (
+	// PoolRebuildStateIdle indicates that the rebuild process is idle.
+	PoolRebuildStateIdle PoolRebuildState = iota
+	// PoolRebuildStateDone indicates that the rebuild process has completed.
+	PoolRebuildStateDone
+	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
+	PoolRebuildStateBusy
+)
+
+func (prs PoolRebuildState) String() string {
+	return [...]string{"idle", "done", "busy"}[prs]
+}
+
+// PoolQuery performs a query against the pool service.
+func (c *connList) PoolQuery(req PoolQueryReq) (*PoolQueryResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcReq := &mgmtpb.PoolQueryReq{
+		Uuid: req.UUID,
+	}
+
+	c.log.Debugf("DAOS pool query request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolQuery(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("DAOS pool query response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	resp := new(PoolQueryResp)
+	if err := convert.Types(rpcResp, resp); err != nil {
+		return nil, errors.Wrap(err, "failed to convert from proto to native")
+	}
+
+	return resp, nil
+}
+
 // PoolGetACLReq contains the input parameters for PoolGetACL
 type PoolGetACLReq struct {
 	UUID string // pool UUID
@@ -142,7 +228,7 @@ type PoolGetACLResp struct {
 }
 
 // PoolGetACL gets the Access Control List for the pool.
-func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
+func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -165,7 +251,7 @@ func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -183,14 +269,14 @@ type PoolOverwriteACLResp struct {
 // PoolOverwriteACL sends a request to replace the pool's old Access Control List
 // with a new one. If it succeeds, it returns the updated ACL. If not, it returns
 // an error.
-func (c *connList) PoolOverwriteACL(req *PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
+func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
 	pbReq := &mgmtpb.ModifyACLReq{Uuid: req.UUID}
-	if req.ACL != nil {
+	if !req.ACL.Empty() {
 		pbReq.ACL = req.ACL.Entries
 	}
 
@@ -209,6 +295,97 @@ func (c *connList) PoolOverwriteACL(req *PoolOverwriteACLReq) (*PoolOverwriteACL
 	}
 
 	return &PoolOverwriteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
+	}, nil
+}
+
+// PoolUpdateACLReq contains the input parameters for PoolUpdateACL
+type PoolUpdateACLReq struct {
+	UUID string             // pool UUID
+	ACL  *AccessControlList // ACL entries to add to the pool
+}
+
+// PoolUpdateACLResp returns the updated ACL for the pool
+type PoolUpdateACLResp struct {
+	ACL *AccessControlList // actual ACL of the pool
+}
+
+// PoolUpdateACL sends a request to add new entries and update existing entries
+// in a pool's Access Control List. If it succeeds, it returns the updated ACL.
+// If not, it returns an error.
+func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ACL.Empty() {
+		return nil, errors.New("no entries requested")
+	}
+
+	pbReq := &mgmtpb.ModifyACLReq{Uuid: req.UUID}
+	pbReq.ACL = req.ACL.Entries
+
+	c.log.Debugf("Update DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolUpdateACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Update DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolUpdateACLResp{
+		ACL: accessControlListFromPB(pbResp),
+	}, nil
+}
+
+// PoolDeleteACLReq contains the input parameters for PoolDeleteACL.
+type PoolDeleteACLReq struct {
+	UUID      string // UUID of the pool
+	Principal string // Principal whose entry will be removed
+}
+
+// PoolDeleteACLResp returns the updated ACL for the pool.
+type PoolDeleteACLResp struct {
+	ACL *AccessControlList // actual ACL of the pool
+}
+
+// PoolDeleteACL sends a request to delete an entry in a pool's Access Control
+// List. If it succeeds, it returns the updated ACL. If it fails, it returns an
+// error.
+func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, error) {
+	if req.Principal == "" {
+		return nil, errors.New("no principal provided")
+	}
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.DeleteACLReq{Uuid: req.UUID, Principal: req.Principal}
+
+	c.log.Debugf("Delete DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolDeleteACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Delete DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolDeleteACLResp{
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }

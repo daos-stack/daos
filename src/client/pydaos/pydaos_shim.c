@@ -31,6 +31,7 @@
 
 #include <Python.h>
 
+#include <daos_errno.h>
 #include <gurt/debug.h>
 #include <gurt/list.h>
 
@@ -561,8 +562,8 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 		}
 		if (!op->key)
 			D_GOTO(err, 0);
-		rc = daos_kv_get(oh, DAOS_TX_NONE, op->key, &op->size, op->buf,
-				 evp);
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
+				 op->buf, evp);
 		if (rc)
 			break;
 	}
@@ -708,10 +709,10 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 
 		/** insert or delete kv pair */
 		if (size == 0)
-			rc = daos_kv_remove(oh, DAOS_TX_NONE, key_str, evp);
+			rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, key_str, evp);
 		else
-			rc = daos_kv_put(oh, DAOS_TX_NONE, key_str, size, buf,
-					 evp);
+			rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_str, size,
+					 buf, evp);
 		if (rc)
 			break;
 	}
