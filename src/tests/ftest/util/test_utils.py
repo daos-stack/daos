@@ -311,7 +311,6 @@ class TestPool(TestDaosApiBase):
             # it's different from the group name passed in to --group. Server
             # group isn't used in dmg. We don't pass it into the command, but
             # we'll still use it to set self.pool.group
-            #self.dmg.action_command.group.value = self.name.value
             self.dmg.action_command.group.value = self.groupname.value
             self.dmg.action_command.user.value = self.username.value
             self.dmg.action_command.scm_size.value = self.scm_size.value
