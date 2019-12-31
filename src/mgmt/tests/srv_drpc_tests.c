@@ -1200,8 +1200,8 @@ test_drpc_pool_set_prop_success(void **state)
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
-	int 			prop_number = DAOS_PROP_PO_MAX;
-	int 			val_number = 1;
+	int			prop_number = DAOS_PROP_PO_MAX;
+	int			val_number = 1;
 
 	req.uuid = TEST_UUID;
 	req.number = prop_number;
