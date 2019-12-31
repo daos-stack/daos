@@ -80,7 +80,8 @@ func parseHugePageInfo(input io.Reader) (*hugePageInfo, error) {
 			if len(sf) != 2 {
 				return nil, errors.Errorf("unable to parse %q", keyVal[1])
 			}
-			// units are always kB afaik -- double-check
+			// units are hard-coded to kB in the kernel, but doesn't hurt
+			// to double-check...
 			if sf[1] != "kB" {
 				return nil, errors.Errorf("unhandled page size unit %q", sf[1])
 			}

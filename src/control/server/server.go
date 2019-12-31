@@ -149,11 +149,15 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			break
 		}
 
-		// If we have multiple I/O instances with block devices, then we need to apportion
-		// the hugepage memory among the instances.
-		srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
-		// reserve a little for daos_admin
-		srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		// If the configuration specifies that we should explicitly set hugepage values
+		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		if cfg.SetHugepages {
+			// If we have multiple I/O instances with block devices, then we need to apportion
+			// the hugepage memory among the instances.
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			// reserve a little for daos_admin
+			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		}
 
 		// Each instance must have a unique shmid in order to run as SPDK primary.
 		// Use a stable identifier that's easy to construct elsewhere if we don't

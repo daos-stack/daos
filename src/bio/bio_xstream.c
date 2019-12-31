@@ -931,9 +931,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 				" process mode\n");
 		}
 
-		/* set this to create a single hugepage file */
-		opts.hugepage_single_segments = true;
-
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
 			D_ERROR("failed to initialize SPDK env, rc:%d\n", rc);
