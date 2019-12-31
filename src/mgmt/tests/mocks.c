@@ -280,9 +280,6 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 	daos_prop_t *res_prop;
 	size_t i;
 
-	if (prop == NULL)
-		return -DER_INVAL;
-
 	if (ds_mgmt_set_prop_return != 0)
 		return ds_mgmt_set_prop_return;
 

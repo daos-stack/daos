@@ -1117,9 +1117,9 @@ expect_drpc_pool_set_prop_resp_with_error(Drpc__Response *resp,
 static void
 test_drpc_pool_set_prop_invalid_property_type(void **state)
 {
-	Drpc__Call call = DRPC__CALL__INIT;
-	Drpc__Response resp = DRPC__RESPONSE__INIT;
-	Mgmt__PoolSetPropReq req = MGMT__POOL_SET_PROP_REQ__INIT;
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
 	req.uuid = TEST_UUID;
 	/* make the value valid to ensure we're testing the property */
@@ -1138,9 +1138,9 @@ test_drpc_pool_set_prop_invalid_property_type(void **state)
 static void
 test_drpc_pool_set_prop_invalid_value_type(void **state)
 {
-	Drpc__Call call = DRPC__CALL__INIT;
-	Drpc__Response resp = DRPC__RESPONSE__INIT;
-	Mgmt__PoolSetPropReq req = MGMT__POOL_SET_PROP_REQ__INIT;
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
 	req.uuid = TEST_UUID;
 	req.number = 1; /* doesn't matter */
@@ -1158,9 +1158,9 @@ test_drpc_pool_set_prop_invalid_value_type(void **state)
 static void
 test_drpc_pool_set_prop_bad_uuid(void **state)
 {
-	Drpc__Call call = DRPC__CALL__INIT;
-	Drpc__Response resp = DRPC__RESPONSE__INIT;
-	Mgmt__PoolSetPropReq req = MGMT__POOL_SET_PROP_REQ__INIT;
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
 	req.uuid = "wow this won't work";
 	req.number = 1; /* doesn't matter */
@@ -1197,11 +1197,11 @@ expect_drpc_pool_set_prop_resp_success(Drpc__Response *resp,
 static void
 test_drpc_pool_set_prop_success(void **state)
 {
-	Drpc__Call call = DRPC__CALL__INIT;
-	Drpc__Response resp = DRPC__RESPONSE__INIT;
-	Mgmt__PoolSetPropReq req = MGMT__POOL_SET_PROP_REQ__INIT;
-	int prop_number = DAOS_PROP_PO_MAX; /* no special handling */
-	int val_number = 1;
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+	int 			prop_number = DAOS_PROP_PO_MAX;
+	int 			val_number = 1;
 
 	req.uuid = TEST_UUID;
 	req.number = prop_number;
