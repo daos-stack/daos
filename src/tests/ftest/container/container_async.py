@@ -60,6 +60,7 @@ class ContainerAsync(TestWithServers):
         super(ContainerAsync, self).__init__(*args, **kwargs)
         self.container1 = None
         self.container2 = None
+        self.pool = None
 
     def test_createasync(self):
         """
