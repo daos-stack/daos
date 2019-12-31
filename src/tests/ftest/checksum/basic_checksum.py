@@ -25,19 +25,22 @@
 import os
 import ctypes
 import time
-import agent_utils
-import server_utils
-import write_host_file
-
 from pydaos.raw import (DaosPool, DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
+from test_utils import TestPool
 
 
 class ChecksumContainerValidation(TestWithServers):
     """
-    Test Class Description:
-
+    Test Class Description: This test is enables
+    checksum container properties and performs
+    single object inserts and verifies
+    contents. This is a basic sanity
+    test for enabling checksum testing.
+    This test case doesn't use TestPool/
+    TestContainer for now. TestPool/TestContainer
+    needs changes to support checksum.
     :avocado: recursive
     """
     # pylint: disable=too-many-instance-attributes
@@ -48,37 +51,23 @@ class ChecksumContainerValidation(TestWithServers):
         self.container = None
         self.obj = None
         self.ioreq = None
-        self.hostlist = None
-        self.hostfile = None
         self.no_of_dkeys = None
         self.no_of_akeys = None
         self.array_size = None
         self.record_length = None
-        server_group = self.params.get("name",
-                                       '/server_config/',
-                                       'daos_server')
-        self.hostlist = self.params.get("test_servers", '/run/hosts/*')
-        self.hostfile = write_host_file.write_host_file(self.hostlist,
-                                                        self.workdir)
+
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.agent_sessions = agent_utils.run_agent(
-            self, self.hostlist)
-        server_utils.run_server(self, self.hostfile, server_group)
-
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
+        self.pool = TestPool(self.context)
+        self.pool.get_params(self)
+        self.pool.create()
         self.pool.connect(2)
         self.csum = self.params.get("enable_checksum", '/run/container/*')
         self.container = DaosContainer(self.context)
-        self.container.create(poh=self.pool.handle, enable_chksum=self.csum)
+        self.container.create(poh=self.pool.pool.handle,
+                              enable_chksum=self.csum)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -87,19 +76,6 @@ class ChecksumContainerValidation(TestWithServers):
         self.ioreq = IORequest(self.context,
                                self.container,
                                self.obj, objtype=4)
-
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):
         '''

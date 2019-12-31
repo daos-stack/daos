@@ -660,14 +660,10 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             raise ServerFailed("Can't find orterun")
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
-	# Removing the following --mca options. openmpi3
-	# doesn't seem to accept these commands.
-	# TODO: Needs further investigation.
-	# 
-        # server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
-        # server_cmd.extend(["--mca", "btl", "tcp,self"])
-        # server_cmd.extend(["--mca", "oob", "tcp"])
-        # server_cmd.extend(["--mca", "pml", "ob1"])
+        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix", "0"])
+        server_cmd.extend(["--mca", "btl", "tcp,self"])
+        server_cmd.extend(["--mca", "oob", "tcp"])
+        server_cmd.extend(["--mca", "pml", "ob1"])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
 
         # Add any user supplied environment
