@@ -1200,6 +1200,7 @@ test_drpc_pool_set_prop_success(void **state)
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+	daos_prop_t		*exp_result;
 	int			prop_number = DAOS_PROP_PO_MAX;
 	int			val_number = 1;
 
@@ -1209,6 +1210,11 @@ test_drpc_pool_set_prop_success(void **state)
 	req.numval = val_number;
 	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
 	setup_pool_set_prop_drpc_call(&call, &req);
+
+	exp_result = daos_prop_alloc(1);
+	exp_result->dpp_entries[0].dpe_type = prop_number;
+	exp_result->dpp_entries[0].dpe_val = val_number;
+	ds_mgmt_pool_set_prop_result = exp_result;
 
 	ds_mgmt_drpc_pool_set_prop(&call, &resp);
 
