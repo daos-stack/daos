@@ -63,18 +63,18 @@ func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
 
-// SystemRestart will perform a restart after a controlled shutdown of DAOS system.
-func (c *connList) SystemRestart() error {
+// SystemStart will perform a restart after a controlled shutdown of DAOS system.
+func (c *connList) SystemStart() error {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return err
 	}
 
-	rpcReq := &ctlpb.SystemRestartReq{}
+	rpcReq := &ctlpb.SystemStartReq{}
 
 	c.log.Debugf("DAOS system restart request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getCtlClient().SystemRestart(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
 	if err != nil {
 		return err
 	}

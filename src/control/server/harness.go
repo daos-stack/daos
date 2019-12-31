@@ -87,7 +87,7 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	}
 
 	var err error
-	for _, mi := range h.Instances() {
+	for _, mi := range h.instances {
 		// try each instance, returning the first one that is a replica (if any are)
 		if err = checkIsMSReplica(mi); err == nil {
 			return mi, nil
@@ -152,7 +152,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 	}
 
 	h.log.Info("Waiting for I/O server instance storage to be ready...")
-	for _, instance := range h.Instances() {
+	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
 			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
@@ -272,14 +272,11 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 			msg := fmt.Sprintf("instance exited: %v", err)
 			if allInstancesStopped {
 				msg += ", all instances stopped!"
-				h.IsRestartable()
+				h.setRestartable()
 			}
 			h.log.Info(msg)
 		case <-h.restart: // trigger harness to restart instances
 			h.log.Debug("restart instances")
-			if h.HasStartedInstances() {
-				return errors.New("cannot restart when instances are running")
-			}
 			return nil
 		}
 	}
@@ -323,7 +320,7 @@ func (h *IOServerHarness) HasStartedInstances() bool {
 	h.RLock()
 	defer h.RUnlock()
 
-	for _, instance := range h.Instances() {
+	for _, instance := range h.instances {
 		if instance.IsStarted() {
 			return true
 		}
@@ -340,6 +337,9 @@ func (h *IOServerHarness) RestartInstances() error {
 	if !h.IsStarted() {
 		return errors.New("can't start instances: harness not started")
 	}
+	if !h.IsRestartable() {
+		return errors.New("can't start instances: harness not ready")
+	}
 	if h.HasStartedInstances() {
 		return errors.New("can't start instances: already started")
 	}
@@ -354,7 +354,7 @@ func (h *IOServerHarness) StartManagementService(ctx context.Context) error {
 	h.RLock()
 	defer h.RUnlock()
 
-	for _, instance := range h.Instances() {
+	for _, instance := range h.instances {
 		if err := instance.StartManagementService(); err != nil {
 			return err
 		}

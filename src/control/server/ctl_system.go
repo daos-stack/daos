@@ -231,21 +231,22 @@ func (svc *ControlService) restartMembers(ctx context.Context, leader *IOServerI
 
 	// build list of harnesses to restart
 	for _, member := range members {
-		if _, exists := results[member.Addr.String()]; exists {
+		addr := member.Addr.String()
+		if _, exists := results[addr]; exists {
 			continue
 		}
 
-		results[msAddr] = svc.restartHarness(ctx, leader, member.Addr.String())
+		results[addr] = svc.restartHarness(ctx, leader, addr)
 	}
 
 	return results, nil
 }
 
-// SystemRestart implements the method defined for the Management Service.
+// SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled restart of DAOS system.
-func (svc *ControlService) SystemRestart(ctx context.Context, req *ctlpb.SystemRestartReq) (*ctlpb.SystemRestartResp, error) {
-	resp := &ctlpb.SystemRestartResp{}
+func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
+	resp := &ctlpb.SystemStartResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -254,7 +255,7 @@ func (svc *ControlService) SystemRestart(ctx context.Context, req *ctlpb.SystemR
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemRestart RPC; restarting system members")
+	svc.log.Debug("Received SystemStart RPC; restarting system members")
 
 	// restart stopped system members
 	_, err = svc.restartMembers(ctx, mi)
@@ -264,7 +265,7 @@ func (svc *ControlService) SystemRestart(ctx context.Context, req *ctlpb.SystemR
 
 	// TODO: meaningfully populate response
 
-	svc.log.Debug("Responding to SystemRestart RPC")
+	svc.log.Debug("Responding to SystemStart RPC")
 
 	return resp, nil
 }

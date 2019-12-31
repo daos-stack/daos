@@ -38,7 +38,7 @@ type SystemCmd struct {
 	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
 	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
 	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	Restart     systemRestartCmd     `command:"restart" alias:"r" description:"Perform restart of stopped DAOS system"`
+	Start       systemStartCmd       `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
 	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
@@ -61,7 +61,8 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to shutdown system.
+// systemMemberQueryCmd is the struct representing the command to list
+// system member details.
 type systemMemberQueryCmd struct {
 	logCmd
 	connectedCmd
@@ -102,7 +103,7 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 	return nil
 }
 
-// systemStopCmd is the struct representing the command to restart system.
+// systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
@@ -152,17 +153,17 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	return nil
 }
 
-// systemRestartCmd is the struct representing the command to restart system.
-type systemRestartCmd struct {
+// systemStartCmd is the struct representing the command to start system.
+type systemStartCmd struct {
 	logCmd
 	connectedCmd
 }
 
-// Execute is run when systemRestartCmd activates
-func (cmd *systemRestartCmd) Execute(args []string) error {
+// Execute is run when systemStartCmd activates
+func (cmd *systemStartCmd) Execute(args []string) error {
 	msg := "SUCCEEDED: "
 
-	err := cmd.conns.SystemRestart()
+	err := cmd.conns.SystemStart()
 	if err != nil {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}

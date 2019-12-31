@@ -198,8 +198,8 @@ func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, e
 	return &client.ListPoolsResp{}, nil
 }
 
-func (tc *testConn) SystemRestart() error {
-	tc.appendInvocation("SystemRestart")
+func (tc *testConn) SystemStart() error {
+	tc.appendInvocation("SystemStart")
 	return nil
 }
 
