@@ -27,6 +27,7 @@ import os
 import subprocess
 import paramiko
 import socket
+from env_modules import load_mpi
 
 class MpioFailed(Exception):
     """Raise if MPIO failed"""
@@ -40,6 +41,8 @@ class MpioUtils():
 
     def mpich_installed(self, hostlist):
         """Check if mpich is installed"""
+
+        load_mpi('mpich')
 
         try:
             # checking mpich install

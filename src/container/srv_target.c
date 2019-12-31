@@ -70,6 +70,18 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	return vos_aggregate(cont->sc_hdl, epr);
 }
 
+static bool
+cont_aggregate_runnable(struct ds_cont_child *cont)
+{
+	struct ds_pool	*pool = cont->sc_pool->spc_pool;
+
+	if ((pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ||
+	    (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy()))
+		return false;
+
+	return true;
+}
+
 static int
 cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 {
@@ -84,12 +96,12 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
 
-	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
-	*sleep = interval;
-
-	if (dss_aggregation_disabled())
+	if (!cont_aggregate_runnable(cont)) {
+		*sleep = NSEC_PER_SEC << 2;
 		return 0;
+	}
 
+	*sleep = NSEC_PER_SEC;
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0)
 		return 0;
@@ -115,6 +127,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		epoch_min = cinfo.ci_hae;
 	}
 
+	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -126,7 +139,6 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		*sleep = (epoch_min - (epoch_max - interval));
 		return 0;
 	}
-	*sleep = 0;
 
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
@@ -172,12 +184,12 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	if (i == 0)
 		epoch_range.epr_lo = 0;
 	else
-		epoch_range.epr_lo = snapshots[i-1] + 1;
-
+		epoch_range.epr_lo = snapshots[i - 1] + 1;
 
 	if (epoch_range.epr_lo >= epoch_max)
 		return 0;
 
+	*sleep = 0;
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
