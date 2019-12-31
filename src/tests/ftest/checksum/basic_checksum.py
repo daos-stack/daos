@@ -22,10 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import os
 import ctypes
 import time
-from pydaos.raw import (DaosPool, DaosContainer, IORequest,
+from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
 from test_utils import TestPool
