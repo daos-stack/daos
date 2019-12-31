@@ -122,8 +122,8 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath, 0)
 
@@ -151,8 +151,8 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath, idx)
 
@@ -187,8 +187,8 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestNotifyReadyReqBytes(t, sockPath,
 		uint32(numInstances))
@@ -271,8 +271,8 @@ func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, 0, 0, false, false,
 		true)
@@ -299,8 +299,8 @@ func TestSrvModule_HandleBioError_Success_Multi(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, idx, 0, false, false,
 		true)
@@ -327,8 +327,8 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
-	sock := createTestSocket(t, sockPath)
-	defer cleanupTestSocket(sockPath, sock)
+	_, cleanup := common.CreateTestSocket(t, sockPath)
+	defer cleanup()
 
 	reqBytes := getTestBioErrorReqBytes(t, sockPath, uint32(numInstances),
 		0, false, false, true)

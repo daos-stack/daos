@@ -26,10 +26,13 @@ package common
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -184,4 +187,54 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	return tmpDir, func() {
 		os.RemoveAll(tmpDir)
 	}
+}
+
+// CreateTestSocket creates a Unix Domain Socket that can listen for connections
+// on a given path. It returns the listener and a cleanup function.
+func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func()) {
+	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
+	sock, err := net.ListenUnix("unixpacket", addr)
+	if err != nil {
+		t.Fatalf("Couldn't set up test socket: %v", err)
+	}
+
+	cleanup := func() {
+		sock.Close()
+		syscall.Unlink(sockPath)
+	}
+
+	err = os.Chmod(sockPath, 0777)
+	if err != nil {
+		cleanup()
+		t.Fatalf("Unable to set permissions on test socket: %v", err)
+	}
+
+	return sock, cleanup
+}
+
+// SetupTestListener sets up a Unix Domain Socket in a temp directory to listen
+// and receive one connection.
+// The server-side connection object is sent through the conn channel when a client
+// connects.
+// It returns the path to the socket, to allow the client to connect, and a
+// cleanup function.
+func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
+	tmpDir, tmpCleanup := CreateTestDir(t)
+
+	path := filepath.Join(tmpDir, "test.sock")
+	sock, socketCleanup := CreateTestSocket(t, path)
+	cleanup := func() {
+		socketCleanup()
+		tmpCleanup()
+	}
+
+	go func() {
+		newConn, err := sock.AcceptUnix()
+		if err != nil {
+			t.Fatalf("Failed to accept connection: %v", err)
+		}
+		conn <- newConn
+	}()
+
+	return path, cleanup
 }
