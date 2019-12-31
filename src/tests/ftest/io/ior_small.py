@@ -48,4 +48,31 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,daosio,small,pr,hw,iorsmall
         """
+        flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        transfer_size = self.params.get("ior_transfer_size", '/run/ior/iorflags/*')
+        block_size = self.params.get("ior_block_size", '/run/ior/iorflags/*')
+        obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
+
+        for oclass in obj_class:
+            self.ior_cmd.daos_oclass.update(oclass)
+            for api in apis:
+                self.ior_cmd.api.update(api)
+                self.ior_cmd.flags.update(flags[0])
+                for ts in transfer_size:
+                    self.ior_cmd.transfer_size.update(ts)
+                    if ts == '256B':
+                        self.ior_cmd.block_size.update(block_size[0])
+                    else:
+                        self.ior_cmd.block_size.update(block_size[1])
+                    
+                    self.run_ior_with_pool()
+
+        # Running a variant for ior fpp
+        self.ior_cmd.flags.update(flags[1])
+        self.ior_cmd.api.update(apis[0])
+        self.ior_cmd.block_size.update(block_size[1])
+        self.ior_cmd.transfer_size.update(transfer_size[1])
+        self.ior_cmd.daos_oclass.update(obj_class[0])
+
         self.run_ior_with_pool()

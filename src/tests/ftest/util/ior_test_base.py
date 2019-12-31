@@ -154,7 +154,7 @@ class IorTestBase(TestWithServers):
             # self.pool.connect()
             # self.create_cont()
             if self.ior_cmd.transfer_size.value == "256B":
-                self.cancelForTicket("DAOS-3449")
+                return("Skipping the case for transfer_size=256B")
             self.start_dfuse()
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")
