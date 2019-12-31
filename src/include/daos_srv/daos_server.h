@@ -176,6 +176,7 @@ enum {
 struct dss_xstream;
 
 bool dss_xstream_exiting(struct dss_xstream *dxs);
+bool dss_xstream_is_busy(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -464,6 +465,33 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+/** RPC counter types */
+enum dss_rpc_cntr_id {
+	DSS_RC_OBJ	= 0,
+	DSS_RC_CONT,
+	DSS_RC_POOL,
+	DSS_RC_MAX,
+};
+
+/** RPC counter */
+struct dss_rpc_cntr {
+	/**
+	 * starting wall-clock time, it can be used to calculate average
+	 * workload.
+	 */
+	uint64_t		rc_stime;
+	/** number of active RPCs */
+	uint64_t		rc_active;
+	/** total number of processed RPCs since \a rc_stime */
+	uint64_t		rc_total;
+	/** total number of failed RPCs since \a rc_stime */
+	uint64_t		rc_errors;
+};
+
+void dss_rpc_cntr_enter(enum dss_rpc_cntr_id id);
+void dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool failed);
+struct dss_rpc_cntr *dss_rpc_cntr_get(enum dss_rpc_cntr_id id);
+
 int dss_rpc_send(crt_rpc_t *rpc);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
@@ -622,7 +650,7 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-bool dss_aggregation_disabled(void);
+bool dss_agg_disabled(void);
 
 int notify_bio_error(bool unmap, bool update, int tgt_id);
 
