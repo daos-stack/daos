@@ -180,20 +180,23 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 
 // registerNewMember creates a new system.Member for given instance and adds it
 // to the system membership.
-func registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
+func (h *IOServerHarness) registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
 	m, err := instance.newMember()
 	if err != nil {
 		return errors.Wrap(err, "failed to get member from instance")
 	}
 
-	count, err := membership.Add(m)
+	created, oldState, err := membership.AddOrUpdate(m)
 	if err != nil {
 		return errors.Wrap(err, "failed to add MS replica to membership")
 	}
 
-	if count != 1 {
-		return errors.Errorf("expected MS replica to be first member "+
-			"(want 1, got %d)", count)
+	if created {
+		h.log.Debugf("bootstrapping system member: rank %d, addr %s\n",
+			m.Rank, m.Addr)
+	} else {
+		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s\n",
+			m.Rank, m.Addr, *oldState, m.State)
 	}
 
 	return nil
@@ -210,7 +213,7 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 		}
 
 		if instance.IsMSReplica() {
-			if err := registerNewMember(membership, instance); err != nil {
+			if err := h.registerNewMember(membership, instance); err != nil {
 				return err
 			}
 		}

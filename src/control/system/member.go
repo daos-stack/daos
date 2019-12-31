@@ -42,13 +42,20 @@ const (
 	MemberStateStarted
 	MemberStateStopping     // prep-shutdown successfully run
 	MemberStateStopped      // process cleanly stopped
+	MemberStateEvicted      // rank has been evicted from DAOS system
 	MemberStateErrored      // process stopped with errors
 	MemberStateUnresponsive // e.g. zombie process
 )
 
 func (ms MemberState) String() string {
 	return [...]string{
-		"Unknown", "Started", "Stopping", "Stopped", "Errored", "Unresponsive",
+		"Unknown",
+		"Started",
+		"Stopping",
+		"Stopped",
+		"Evicted",
+		"Errored",
+		"Unresponsive",
 	}[ms]
 }
 

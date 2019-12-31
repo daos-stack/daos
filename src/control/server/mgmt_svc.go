@@ -229,10 +229,15 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	}
 
 	// if join successful, record membership
-	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		created, oldState, err := svc.membership.AddOrUpdate(resp.GetRank(), req.GetUuid(),
-			replyAddr, system.MemberStateStarted)
+	if resp.GetStatus() == 0 {
+		newState := system.MemberStateEvicted
+		if resp.GetState() == mgmtpb.JoinResp_IN {
+			newState = system.MemberStateStarted
+		}
 
+		member := system.NewMember(resp.GetRank(), req.GetUuid(), replyAddr, newState)
+
+		created, oldState, err := svc.membership.AddOrUpdate(member)
 		if err != nil {
 			return nil, errors.WithMessage(err, "adding or updating membership")
 		}
@@ -242,7 +247,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 				resp.GetRank(), replyAddr)
 		} else {
 			svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s\n",
-				resp.GetRank(), replyAddr, *oldState, system.MemberStateStarted)
+				resp.GetRank(), replyAddr, *oldState, newState)
 		}
 	}
 
