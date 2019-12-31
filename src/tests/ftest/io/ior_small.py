@@ -50,7 +50,8 @@ class IorSmall(IorTestBase):
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        transfer_size = self.params.get("ior_transfer_size", '/run/ior/iorflags/*')
+        transfer_size = self.params.get("ior_transfer_size",
+                                        '/run/ior/iorflags/*')
         block_size = self.params.get("ior_block_size", '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
@@ -65,7 +66,7 @@ class IorSmall(IorTestBase):
                         self.ior_cmd.block_size.update(block_size[0])
                     else:
                         self.ior_cmd.block_size.update(block_size[1])
-                    
+
                     self.run_ior_with_pool()
 
         # Running a variant for ior fpp
