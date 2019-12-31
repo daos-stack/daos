@@ -91,7 +91,7 @@ def set_defaults(env):
 
     compiler = env.subst("$COMPILER")
     if compiler == "clang":
-        env.Append(CCFLAGS=['-Wno-unused-command-line-agument'])
+        env.Append(CCFLAGS=['-Wno-unused-command-line-argument'])
 
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
