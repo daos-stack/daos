@@ -78,7 +78,7 @@ func MemberResultsToPB(results system.MemberResults) []*ctlpb.SystemStopResp_Res
 	pbResults := make([]*ctlpb.SystemStopResp_Result, 0, len(results))
 
 	for _, r := range results {
-		pbResult := &ctlpb.SystemStopResp_Result{Id: r.ID, Action: r.Action}
+		pbResult := &ctlpb.SystemStopResp_Result{Rank: r.Rank, Action: r.Action}
 		if r.Err != nil {
 			pbResult.Errored = true
 			pbResult.Msg = r.Err.Error()
@@ -100,8 +100,7 @@ func MemberResultsFromPB(log logging.Logger, pbResults []*ctlpb.SystemStopResp_R
 			err = errors.New(mr.Msg)
 		}
 
-		results = append(results, system.NewMemberResult(mr.Id,
-			mr.Action, err))
+		results = append(results, system.NewMemberResult(mr.Rank, mr.Action, err))
 	}
 
 	return results
