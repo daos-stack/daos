@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -50,8 +51,9 @@ type (
 
 	// Runner starts and manages an instance of a DAOS I/O Server
 	Runner struct {
-		Config *Config
-		log    logging.Logger
+		Config  *Config
+		log     logging.Logger
+		started uint32
 	}
 )
 
@@ -112,6 +114,10 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Debugf("%s:%d args: %s", ioServerBin, r.Config.Index, args)
 	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
+
+	r.setStarted()
+	defer r.setStopped()
+
 	return errors.Wrapf(exitStatus(cmd.Run()), "%s (instance %d) exited", binPath, r.Config.Index)
 }
 
@@ -132,6 +138,18 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	}()
 
 	return nil
+}
+
+func (r *Runner) setStarted() {
+	atomic.StoreUint32(&r.started, 1)
+}
+
+func (r *Runner) setStopped() {
+	atomic.StoreUint32(&r.started, 0)
+}
+
+func (r *Runner) IsStarted() bool {
+	return atomic.LoadUint32(&r.started) == 1
 }
 
 // GetConfig returns the runner's configuration

@@ -20,58 +20,43 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package ioserver
 
-import "context"
+package drpc
 
-type (
-	TestRunnerConfig struct {
-		StartCb    func()
-		StartErr   error
-		ErrChanCb  func() error
-		ErrChanErr error
-	}
+import (
+	"testing"
 
-	TestRunner struct {
-		runnerCfg TestRunnerConfig
-		serverCfg *Config
-	}
+	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
-func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
-	if trc == nil {
-		trc = &TestRunnerConfig{}
-	}
-	return &TestRunner{
-		runnerCfg: *trc,
-		serverCfg: sc,
+func TestMarshal_Failed(t *testing.T) {
+	result, err := Marshal(nil)
+
+	common.CmpErr(t, MarshalingFailure(), err)
+
+	if result != nil {
+		t.Errorf("Expected no marshaled result, got: %+v", result)
 	}
 }
 
-func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
-	if tr.runnerCfg.StartCb != nil {
-		tr.runnerCfg.StartCb()
+func TestMarshal_Success(t *testing.T) {
+	message := &Call{Module: 1, Method: 2, Sequence: 3}
+
+	result, err := Marshal(message)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
 	}
-	if tr.runnerCfg.ErrChanCb == nil {
-		tr.runnerCfg.ErrChanCb = func() error {
-			return tr.runnerCfg.ErrChanErr
-		}
+
+	// Unmarshaled result should match original
+	pMsg := &Call{}
+	_ = proto.Unmarshal(result, pMsg)
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(message, pMsg, cmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
 	}
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case errChan <- tr.runnerCfg.ErrChanCb():
-			return
-		}
-	}()
-
-	return tr.runnerCfg.StartErr
-}
-
-func (tr *TestRunner) IsStarted() bool { return true }
-
-func (tr *TestRunner) GetConfig() *Config {
-	return tr.serverCfg
 }
