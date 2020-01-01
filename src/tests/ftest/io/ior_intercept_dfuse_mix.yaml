@@ -12,7 +12,7 @@ server_config:
     servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        scm_size: 15
+        scm_size: 75
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
@@ -22,9 +22,8 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 300 G
-        scm_size: 10000000000
-        nvme_size: 100000000000
+        scm_size: 70000000000
+        nvme_size: 700000000000
     createsvc:
         svcn: 1
 ior:
@@ -38,8 +37,8 @@ ior:
         ssf:
           flags: "-k -D 300 -v -w -r"
           api: POSIX
-          transfer_size: '4K'
-          block_size: '128M'
+          transfer_size: '1M'
+          block_size: '8G'
           write_x: 3
           read_x: 1
           daos_oclass: "SX"
