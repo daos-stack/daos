@@ -300,28 +300,3 @@ class Logfac:
     INFO = 1
     WARNING = 2
     ERROR = 3
-
-class ContainerProp:
-    """Container properties enum values.
-    """
-    DAOS_PROP_CO_MIN = 4096
-    DAOS_PROP_CO_LABEL = 4097
-    DAOS_PROP_CO_LAYOUT_TYPE = 4098
-    DAOS_PROP_CO_LAYOUT_VER = 4099
-    DAOS_PROP_CO_CSUM = 4100
-    DAOS_PROP_CO_CSUM_CHUNK_SIZE = 4101
-    DAOS_PROP_CO_CSUM_SERVER_VERIFY = 4102
-    DAOS_PROP_CO_REDUN_FAC = 4103
-    DAOS_PROP_CO_REDUN_LVL = 4104
-    DAOS_PROP_CO_SNAPSHOT_MAX = 4105
-    DAOS_PROP_CO_ACL = 4106
-    DAOS_PROP_CO_COMPRESS = 4107
-    DAOS_PROP_CO_ENCRYPT = 4108
-    DAOS_PROP_CO_MAX = 4109
-
-class ContainerLayer:
-    """Container Layer Types.
-    """
-    CONT_UNKNOWN = 0
-    CONT_POSIX = 1
-    CONT_HDF5 = 2

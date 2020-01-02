@@ -63,10 +63,18 @@ class ChecksumContainerValidation(TestWithServers):
         self.pool.get_params(self)
         self.pool.create()
         self.pool.connect(2)
+
         self.csum = self.params.get("enable_checksum", '/run/container/*')
         self.container = DaosContainer(self.context)
+        # Get the container properties input structure
+        # Refer: daos_api.py for latest structure.
+        #
+        cont_property = self.container.get_cont_prop()
+        cont_property.enable_chksum = self.csum
+        self.container.set_cont_prop(cont_property)
         self.container.create(poh=self.pool.pool.handle,
-                              enable_chksum=self.csum)
+                              con_prop=self.container.set_cont_prop(
+                                  cont_property))
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -75,25 +83,6 @@ class ChecksumContainerValidation(TestWithServers):
         self.ioreq = IORequest(self.context,
                                self.container,
                                self.obj, objtype=4)
-
-    def reconnect(self):
-        '''
-        Function to reconnect the pool/container and reopen the Object
-        for read verification.
-        '''
-        # Close the Obj/Container, Disconnect the Pool.
-        self.obj.close()
-        self.container.close()
-        self.pool.disconnect()
-        time.sleep(5)
-        # Connect Pool, Open Container and Object
-        self.pool.connect(2)
-        self.container.open()
-        self.obj.open()
-        self.ioreq = IORequest(self.context,
-                               self.container,
-                               self.obj,
-                               objtype=4)
 
     def test_single_object_with_checksum(self):
         """
@@ -123,11 +112,8 @@ class ChecksumContainerValidation(TestWithServers):
                 if record_index == len(self.record_length):
                     record_index = 0
 
-        self.reconnect()
-
         self.d_log.info("Single Dataset Verification -- Started")
         record_index = 0
-        transaction_index = 0
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0]) *
@@ -147,7 +133,6 @@ class ChecksumContainerValidation(TestWithServers):
                               .format("dkey {0}".format(dkey),
                                       "akey {0}".format(akey)))
 
-                transaction_index = transaction_index + 1
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0

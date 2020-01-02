@@ -46,6 +46,10 @@ DaosObjClass = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
 
+DaosContPropEnum = enum.Enum(
+    "DaosContPropEnum",
+    {key: value for key, value in pydaos_shim.__dict__.items()
+     if key.startswith("DAOS_PROP_")})
 
 class DaosPool(object):
     """A python object representing a DAOS pool."""
@@ -1360,6 +1364,36 @@ class IORequest(object):
         return result
 
 
+class DaosContProperties(ctypes.Structure):
+    """ This is a python container properties
+    structure used to set the type(eg: posix),
+    enable checksum.
+    NOTE: This structure can be enhanced in
+    future for setting other container properties
+    (if needed)
+    """
+    _fields_ = [("type", ctypes.c_char*10),
+                ("enable_chksum", ctypes.c_bool),
+                ("srv_verify", ctypes.c_bool),
+                ("chksum_type", ctypes.c_uint64),
+                ("chunk_size", ctypes.c_uint64)]
+
+    def __init__(self):
+        # Set some default values for
+        # container input parameters.
+        # NOTE: This is not the actual
+        # container properties. These are
+        # input variables which is used
+        # to set appropriate
+        # container properties.
+        super(DaosContProperties, self).__init__()
+        self.type = "Unknown"
+        self.enable_chksum = False
+        self.srv_verify = False
+        self.chksum_type = ctypes.c_uint64(100)
+        self.chunk_size = ctypes.c_uint64(0)
+
+
 class DaosContainer(object):
     """A python object representing a DAOS container."""
 
@@ -1375,18 +1409,25 @@ class DaosContainer(object):
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
+        self.cont_input_values = DaosContProperties()
         self.cont_prop = None
-        self.cont_type = None
-        self.flag = None
+
+    def get_cont_prop(self):
+        """ Get the container properties """
+        return self.cont_input_values
+
+    def set_cont_prop(self, set_cont_prop):
+        """ Set the container properties.
+        Recommended usage: Perform a get_cont_prop
+        and then set_contprop.
+        """
+        self.cont_input_values = set_cont_prop
 
     def get_uuid_str(self):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def create(self, poh, con_uuid=None, layer_type=None,
-               enable_chksum=False, srv_verify=False,
-               chksum_type=None, chunk_size=None,
-               cb_func=None):
+    def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -1397,6 +1438,8 @@ class DaosContainer(object):
         else:
             conversion.c_uuid(con_uuid, self.uuid)
         self.poh = poh
+        if con_prop is not None:
+            self.cont_input_values = con_prop
         # We will support only basic properties. Full
         # container properties will not be exposed.
         # Create DaosProperty for checksum
@@ -1404,64 +1447,66 @@ class DaosContainer(object):
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
-        if (layer_type is not None) and (enable_chksum is False):
+        if ((self.cont_input_values.type != "Unknown")
+                and (self.cont_input_values.enable_chksum is False)):
             # Only layer_type like posix, hdf5 defined.
             num_prop = 1
-        elif (layer_type is None) and (enable_chksum is True):
+        elif ((self.cont_input_values.type == "Unknown")
+                and (self.cont_input_values.enable_chksum is True)):
             # Obly checksum enabled.
             num_prop = 3
-        elif (layer_type is not None) and (enable_chksum is True):
+        elif ((self.cont_input_values.type != "Unknown")
+                and (self.cont_input_values.enable_chksum is True)):
             # Both layer and checksum properties define
             num_prop = 4
 
-        if (layer_type is not None) or (enable_chksum is True):
+        if ((self.cont_input_values.type != "Unknown")
+                or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
-            self.cont_type = daos_cref.ContainerLayer()
-            self.flag = daos_cref.ContainerProp()
         # idx index is used to increment the dpp_entried array
         # value. If layer_type is None and checksum is enabled
         # the index will vary. [eg: layer is none, checksum
         # dpp_entries will start with idx=0. If layer is not
         # none, checksum dpp_entries will start at idx=1.]
         idx = 0
-        if layer_type is not None:
+        if self.cont_input_values.type != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                self.flag.DAOS_PROP_CO_LAYOUT_TYPE)
-            if layer_type == "posix":
+                DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
+            if self.cont_input_values.type == "posix":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    self.cont_type.CONT_POSIX)
-            elif layer_type == "hdf5":
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
+            elif self.cont_input_values.type == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    self.cont_type.CONT_HDF5)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    self.cont_type.CONT_UNKNOWN)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
             idx = idx + 1
         # If checksum flag is enabled.
-        if enable_chksum is True:
+        if self.cont_input_values.enable_chksum is True:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                self.flag.DAOS_PROP_CO_CSUM)
-            if chksum_type is None:
+                DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
+            if self.cont_input_values.chksum_type == 100:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    chksum_type)
+                    self.cont_input_values.chksum_type)
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                self.flag.DAOS_PROP_CO_CSUM_SERVER_VERIFY)
-            if srv_verify is True:
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value)
+            if self.cont_input_values.srv_verify is True:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(0)
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                self.flag.DAOS_PROP_CO_CSUM_CHUNK_SIZE)
-            if chunk_size is None:
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
+            if self.cont_input_values.chunk_size == 0:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     16384)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    chunk_size)
+                    self.cont_input_values.chunk_size)
 
         func = self.context.get_function('create-cont')
 
