@@ -133,6 +133,11 @@ func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, e
 	return nil, nil
 }
 
+func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
+	return &client.PoolSetPropResp{}, nil
+}
+
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil

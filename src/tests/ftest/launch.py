@@ -554,6 +554,7 @@ def get_log_files(config_yaml, daos_files=None):
             "server_log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
+            "helper_log_file": "/tmp/daos_admin.log",
             "socket_dir": "/tmp/daos_sockets",
             "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
             "test_variant_client_logs":

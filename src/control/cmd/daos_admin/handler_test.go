@@ -36,6 +36,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -61,16 +63,14 @@ func TestHandler(t *testing.T) {
 	}
 	successResp := &pbin.Response{}
 	mountReqPayload, err := json.Marshal(scm.MountRequest{
-		Forwarded: true,
-		Source:    "/src",
-		Target:    testTarget,
-		FsType:    "abc",
+		Source: "/src",
+		Target: testTarget,
+		FsType: "abc",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	scmFormatReqPayload, err := json.Marshal(scm.FormatRequest{
-		Forwarded:  true,
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
 		OwnerGID:   os.Getgid(),
@@ -81,19 +81,56 @@ func TestHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scmPrepareReqPayload, err := json.Marshal(scm.PrepareRequest{Forwarded: true})
+
+	scmPrepareReqPayload, err := json.Marshal(scm.PrepareRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	scmScanReqPayload, err := json.Marshal(scm.ScanRequest{Forwarded: true})
+
+	scmScanReqPayload, err := json.Marshal(scm.ScanRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdevInitReqPayload, err := json.Marshal(bdev.InitRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdevScanReqPayload, err := json.Marshal(bdev.ScanRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdevPrepareReqPayload, err := json.Marshal(bdev.PrepareRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bdevFormatReqPayload, err := json.Marshal(bdev.FormatRequest{
+		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
+		Class:              storage.BdevClassNvme,
+		DeviceList:         []string{"foo"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for name, tc := range map[string]struct {
 		req    *pbin.Request
-		mbc    *scm.MockBackendConfig
-		msc    *scm.MockSysConfig
+		smbc   *scm.MockBackendConfig
+		smsc   *scm.MockSysConfig
+		bmbc   *bdev.MockBackendConfig
 		expRes *pbin.Response
 		expErr error
 	}{
@@ -126,7 +163,7 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			msc: &scm.MockSysConfig{
+			smsc: &scm.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expRes: &pbin.Response{
@@ -151,7 +188,7 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			msc: &scm.MockSysConfig{
+			smsc: &scm.MockSysConfig{
 				UnmountErr: errors.New("unmount failed"),
 			},
 			expRes: &pbin.Response{
@@ -176,7 +213,7 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmFormat",
 				Payload: scmFormatReqPayload,
 			},
-			msc: &scm.MockSysConfig{
+			smsc: &scm.MockSysConfig{
 				MountErr: errors.New("mount failed"),
 			},
 			expRes: &pbin.Response{
@@ -201,7 +238,7 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmFormat",
 				Payload: scmFormatReqPayload,
 			},
-			mbc: &scm.MockBackendConfig{
+			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
@@ -226,7 +263,7 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
-			mbc: &scm.MockBackendConfig{
+			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
@@ -251,12 +288,110 @@ func TestHandler(t *testing.T) {
 				Method:  "ScmScan",
 				Payload: scmScanReqPayload,
 			},
-			mbc: &scm.MockBackendConfig{
+			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
 				Error: &pbin.RequestFailure{Message: "scan failed"},
 			},
+		},
+		"BdevInit nil payload": {
+			req: &pbin.Request{
+				Method: "BdevInit",
+			},
+			expRes: nilPayloadResp,
+		},
+		"BdevInit success": {
+			req: &pbin.Request{
+				Method:  "BdevInit",
+				Payload: bdevInitReqPayload,
+			},
+			expRes: successResp,
+		},
+		"BdevInit failure": {
+			req: &pbin.Request{
+				Method:  "BdevInit",
+				Payload: bdevInitReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				InitErr: errors.New("init failed"),
+			},
+			expRes: &pbin.Response{
+				Error: &pbin.RequestFailure{Message: "init failed"},
+			},
+		},
+		"BdevScan nil payload": {
+			req: &pbin.Request{
+				Method: "BdevScan",
+			},
+			expRes: nilPayloadResp,
+		},
+		"BdevScan success": {
+			req: &pbin.Request{
+				Method:  "BdevScan",
+				Payload: bdevScanReqPayload,
+			},
+			expRes: successResp,
+		},
+		"BdevScan failure": {
+			req: &pbin.Request{
+				Method:  "BdevScan",
+				Payload: bdevScanReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("scan failed"),
+			},
+			expRes: &pbin.Response{
+				Error: &pbin.RequestFailure{Message: "scan failed"},
+			},
+		},
+		"BdevPrepare nil payload": {
+			req: &pbin.Request{
+				Method: "BdevPrepare",
+			},
+			expRes: nilPayloadResp,
+		},
+		"BdevPrepare success": {
+			req: &pbin.Request{
+				Method:  "BdevPrepare",
+				Payload: bdevPrepareReqPayload,
+			},
+			expRes: successResp,
+		},
+		"BdevPrepare failure": {
+			req: &pbin.Request{
+				Method:  "BdevPrepare",
+				Payload: bdevPrepareReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				PrepareErr: errors.New("prepare failed"),
+			},
+			expRes: &pbin.Response{
+				Error: &pbin.RequestFailure{Message: "prepare failed"},
+			},
+		},
+		"BdevFormat nil payload": {
+			req: &pbin.Request{
+				Method: "BdevFormat",
+			},
+			expRes: nilPayloadResp,
+		},
+		"BdevFormat success": {
+			req: &pbin.Request{
+				Method:  "BdevFormat",
+				Payload: bdevFormatReqPayload,
+			},
+			expRes: successResp,
+		},
+		"BdevFormat failure": {
+			req: &pbin.Request{
+				Method:  "BdevFormat",
+				Payload: bdevFormatReqPayload,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				FormatErr: errors.New("format failed"),
+			},
+			expRes: successResp, // The format error is handled at a higher layer
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -264,9 +399,10 @@ func TestHandler(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			var destBuf bytes.Buffer
-			sp := scm.NewMockProvider(log, tc.mbc, tc.msc)
+			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
+			bp := bdev.NewMockProvider(log, tc.bmbc)
 
-			gotErr := handleRequest(log, sp, tc.req, &destBuf)
+			gotErr := handleRequest(log, sp, bp, tc.req, &destBuf)
 			common.CmpErr(t, tc.expErr, gotErr)
 
 			if destBuf.Len() > 0 {

@@ -199,11 +199,13 @@ type mockListPoolsResult struct {
 }
 
 type mockMgmtSvcClientConfig struct {
-	ACLRet          *mockACLResult
-	ListPoolsRet    *mockListPoolsResult
-	killErr         error
-	poolQueryResult *mgmtpb.PoolQueryResp
-	poolQueryErr    error
+	ACLRet            *mockACLResult
+	ListPoolsRet      *mockListPoolsResult
+	killErr           error
+	poolQueryResult   *mgmtpb.PoolQueryResp
+	poolQueryErr      error
+	poolSetPropResult *mgmtpb.PoolSetPropResp
+	poolSetPropErr    error
 }
 
 type mockMgmtSvcClient struct {
@@ -227,6 +229,13 @@ func (m *mockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQuery
 		return nil, m.cfg.poolQueryErr
 	}
 	return m.cfg.poolQueryResult, nil
+}
+
+func (m *mockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq, _ ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
+	if m.cfg.poolSetPropErr != nil {
+		return nil, m.cfg.poolSetPropErr
+	}
+	return m.cfg.poolSetPropResult, nil
 }
 
 // returnACLResult returns the mock ACL results - either an error or an ACLResp
@@ -401,6 +410,27 @@ type mockConnectConfig struct {
 	controlConfig mockControlConfig
 	ctlClientCfg  mockMgmtCtlClientConfig
 	svcClientCfg  mockMgmtSvcClientConfig
+}
+
+// newMockConnnectCfg is the config-based version of newMockConnect()
+func newMockConnectCfg(log logging.Logger, cfg *mockConnectConfig) *connList {
+	if cfg == nil {
+		cfg = &mockConnectConfig{}
+	}
+
+	cl := &connList{
+		log: log,
+		factory: &mockControllerFactory{
+			log:          log,
+			controlCfg:   cfg.controlConfig,
+			ctlClientCfg: cfg.ctlClientCfg,
+			svcClientCfg: cfg.svcClientCfg,
+		},
+	}
+
+	_ = cl.ConnectClients(cfg.addresses)
+
+	return cl
 }
 
 func newMockConnect(log logging.Logger,

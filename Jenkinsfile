@@ -48,8 +48,9 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = ""
-def functional_rpms  = "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0"
+def functional_rpms  = "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
+                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -1027,7 +1028,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
@@ -1103,14 +1104,14 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   functional_rpms + ' ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_repos: el7_daos_repos,
                                        inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
                                                   functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
