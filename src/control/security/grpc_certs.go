@@ -44,9 +44,16 @@ func GetServerTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 	}
 
 	tlsConfig := tls.Config{
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{*cfg.tlsKeypair},
-		ClientCAs:    cfg.caPool,
+		ClientAuth:               tls.RequireAndVerifyClientCert,
+		Certificates:             []tls.Certificate{*cfg.tlsKeypair},
+		ClientCAs:                cfg.caPool,
+		MinVersion:               tls.VersionTLS12,
+		MaxVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		},
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil
@@ -65,9 +72,16 @@ func GetClientTransportCredentials(cfg *TransportConfig) (credentials.TransportC
 	}
 
 	tlsConfig := tls.Config{
-		ServerName:   cfg.ServerName,
-		Certificates: []tls.Certificate{*cfg.tlsKeypair},
-		RootCAs:      cfg.caPool,
+		ServerName:               cfg.ServerName,
+		Certificates:             []tls.Certificate{*cfg.tlsKeypair},
+		RootCAs:                  cfg.caPool,
+		MinVersion:               tls.VersionTLS12,
+		MaxVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		},
 	}
 	creds := credentials.NewTLS(&tlsConfig)
 	return creds, nil

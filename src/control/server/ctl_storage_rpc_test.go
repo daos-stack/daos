@@ -533,6 +533,7 @@ func TestStorageFormat(t *testing.T) {
 				{
 					Crets: []*NvmeControllerResult{
 						{
+							Pciaddr: "<nil>",
 							State: &ResponseState{
 								Status: ResponseStatus_CTL_ERR_NVME,
 								Error:  msgBdevScmNotReady,
@@ -595,6 +596,7 @@ func TestStorageFormat(t *testing.T) {
 				{
 					Crets: []*NvmeControllerResult{
 						{
+							Pciaddr: "<nil>",
 							State: &ResponseState{
 								Status: ResponseStatus_CTL_ERR_NVME,
 								Error:  msgBdevScmNotReady,

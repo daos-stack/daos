@@ -38,60 +38,69 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 {
 	uint8_t	*body;
-	size_t	len;
+	size_t	 len;
 
 	len = mgmt__daos_resp__get_packed_size(daos_resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate drpc response body\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__daos_resp__pack(daos_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+}
+
+void
+ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PrepShutdownReq	*req = NULL;
+	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__prep_shutdown_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (prep shutdown)\n");
 		return;
 	}
 
-	if (mgmt__daos_resp__pack(daos_resp, body) != len) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Unexpected num bytes for daos resp\n");
-		return;
-	}
+	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
-	/* Populate drpc response body with packed daos response */
-	drpc_resp->body.len = len;
-	drpc_resp->body.data = body;
+	/* TODO: disable auto evict and pool rebuild here */
+	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
+		req->rank);
+
+	pack_daos_response(&resp, drpc_resp);
+	mgmt__prep_shutdown_req__free_unpacked(req, NULL);
 }
 
 void
 ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__KillRankReq	 *req = NULL;
-	Mgmt__DaosResp		 *resp = NULL;
+	Mgmt__KillRankReq	*req = NULL;
+	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
 	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__kill_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (kill rank)\n");
 		return;
 	}
 
 	D_INFO("Received request to kill rank %u (force: %d)\n",
 		req->rank, req->force);
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__kill_rank_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(resp);
 
 	/* terminate local service */
 	if (req->force)
@@ -102,23 +111,22 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		req->rank, sig);
 	kill(getpid(), sig);
 
+	pack_daos_response(&resp, drpc_resp);
 	mgmt__kill_rank_req__free_unpacked(req, NULL);
-	pack_daos_response(resp, drpc_resp);
-	D_FREE(resp);
 }
 
 void
 ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__SetRankReq	*req = NULL;
-	Mgmt__DaosResp		*resp = NULL;
-	int			rc;
+	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__set_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (set rank)\n");
 		return;
 	}
@@ -126,26 +134,13 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to set rank to %u\n",
 		req->rank);
 
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__set_rank_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(resp);
-
 	rc = crt_rank_self_set(req->rank);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: %d\n", req->rank, rc);
-		resp->status = rc;
-	}
 
+	resp.status = rc;
+	pack_daos_response(&resp, drpc_resp);
 	mgmt__set_rank_req__free_unpacked(req, NULL);
-	pack_daos_response(resp, drpc_resp);
-	D_FREE(resp);
 }
 
 /*
@@ -156,32 +151,21 @@ void
 ds_mgmt_drpc_create_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__CreateMsReq	*req = NULL;
-	Mgmt__DaosResp		*resp = NULL;
-	uuid_t			uuid;
-	int			rc;
+	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
+	uuid_t			 uuid;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__create_ms_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (create MS)\n");
 		return;
 	}
 
 	D_INFO("Received request to create MS (bootstrap=%d)\n",
 		req->bootstrap);
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__create_ms_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(resp);
 
 	if (req->bootstrap) {
 		rc = uuid_parse(req->uuid, uuid);
@@ -199,10 +183,9 @@ ds_mgmt_drpc_create_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			req->bootstrap, rc);
 
 out:
+	resp.status = rc;
+	pack_daos_response(&resp, drpc_resp);
 	mgmt__create_ms_req__free_unpacked(req, NULL);
-	resp->status = rc;
-	pack_daos_response(resp, drpc_resp);
-	D_FREE(resp);
 }
 
 /*
@@ -212,20 +195,10 @@ out:
 void
 ds_mgmt_drpc_start_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResp	*resp = NULL;
-	int rc;
+	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+	int		rc;
 
 	D_INFO("Received request to start MS\n");
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(resp);
 
 	rc = ds_mgmt_svc_start(false /* !create */, 0 /* size */,
 			       false /* !bootstrap */, NULL /* uuid */,
@@ -234,99 +207,75 @@ ds_mgmt_drpc_start_mgmt_svc(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_DEBUG(DB_MGMT, "MS already started\n");
 	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
-		resp->status = rc;
+		resp.status = rc;
 	}
 
-	pack_daos_response(resp, drpc_resp);
-	D_FREE(resp);
+	pack_daos_response(&resp, drpc_resp);
 }
 
 void
 ds_mgmt_drpc_get_attach_info(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__GetAttachInfoReq	*req = NULL;
-	Mgmt__GetAttachInfoResp	*resp = NULL;
+	Mgmt__GetAttachInfoResp	 resp = MGMT__GET_ATTACH_INFO_RESP__INIT;
 	uint8_t			*body;
-	size_t			len;
-	int			rc;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__get_attach_info_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (get attach info)\n");
 		return;
 	}
 
 	D_INFO("Received request to get attach info\n");
 
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate inner response ref\n");
-		mgmt__get_attach_info_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__get_attach_info_resp__init(resp);
-
-	rc = ds_mgmt_get_attach_info_handler(resp);
-	if (rc != 0) {
+	rc = ds_mgmt_get_attach_info_handler(&resp);
+	if (rc != 0)
 		D_ERROR("Failed to get attach info: %d\n", rc);
-		resp->status = rc;
-	}
 
-	len = mgmt__get_attach_info_resp__get_packed_size(resp);
+	resp.status = rc;
+
+	len = mgmt__get_attach_info_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__get_attach_info_resp__pack(resp, body);
+		mgmt__get_attach_info_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
 	mgmt__get_attach_info_req__free_unpacked(req, NULL);
-	D_FREE(resp);
 }
 
 void
 ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__JoinReq		*req = NULL;
-	Mgmt__JoinResp		*resp = NULL;
-	struct mgmt_join_in	in = {};
-	struct mgmt_join_out	out = {};
+	Mgmt__JoinResp		 resp = MGMT__JOIN_RESP__INIT;
+	struct mgmt_join_in	 in = {};
+	struct mgmt_join_out	 out = {};
 	uint8_t			*body;
-	size_t			len;
-	int			rc;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__join_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (join)\n");
 		return;
 	}
 
 	D_INFO("Received request to join\n");
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__join_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__join_resp__init(resp);
 
 	in.ji_rank = req->rank;
 	in.ji_server.sr_flags = SERVER_IN;
@@ -359,27 +308,26 @@ ds_mgmt_drpc_join(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	resp->rank = out.jo_rank;
+	resp.rank = out.jo_rank;
 	if (out.jo_flags & SERVER_IN)
-		resp->state = MGMT__JOIN_RESP__STATE__IN;
+		resp.state = MGMT__JOIN_RESP__STATE__IN;
 	else
-		resp->state = MGMT__JOIN_RESP__STATE__OUT;
+		resp.state = MGMT__JOIN_RESP__STATE__OUT;
 
 out:
-	resp->status = rc;
-	len = mgmt__join_resp__get_packed_size(resp);
+	resp.status = rc;
+	len = mgmt__join_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__join_resp__pack(resp, body);
+		mgmt__join_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
 	mgmt__join_req__free_unpacked(req, NULL);
-	D_FREE(resp);
 }
 
 static int
@@ -464,55 +412,50 @@ err_out:
 	return rc;
 }
 
+static d_rank_list_t *
+uint32_array_to_rank_list(uint32_t *ints, size_t len)
+{
+	d_rank_list_t	*result;
+	size_t		i;
+
+	result = d_rank_list_alloc(len);
+	if (result == NULL)
+		return NULL;
+
+	for (i = 0; i < len; i++)
+		result->rl_ranks[i] = (d_rank_t)ints[i];
+
+	return result;
+}
+
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolCreateReq	*req = NULL;
-	Mgmt__PoolCreateResp	*resp = NULL;
+	Mgmt__PoolCreateResp	 resp = MGMT__POOL_CREATE_RESP__INIT;
 	d_rank_list_t		*targets = NULL;
 	d_rank_list_t		*svc = NULL;
-	uuid_t			pool_uuid;
+	uuid_t			 pool_uuid;
 	daos_prop_t		*prop = NULL;
-	int			buflen = 16;
-	int			index;
-	int			i;
-	char			*extra = NULL;
 	uint8_t			*body;
-	size_t			len;
-	int			rc;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_create_req__unpack(NULL, drpc_req->body.len,
-						 drpc_req->body.data);
-
+					    drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (create pool)\n");
 		return;
 	}
 
 	D_INFO("Received request to create pool\n");
 
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__pool_create_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init */
-	mgmt__pool_create_resp__init(resp);
-
-	/* Parse targets rank list. */
-	if (strlen(req->ranks) != 0) {
-		targets = daos_rank_list_parse(req->ranks, ",");
-		if (targets == NULL) {
-			D_ERROR("failed to parse target ranks\n");
-			rc = -DER_INVAL;
-			goto out;
-		}
-		D_DEBUG(DB_MGMT, "ranks in: %s\n", req->ranks);
+	if (req->n_ranks > 0) {
+		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
+		if (targets == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = uuid_parse(req->uuid, pool_uuid);
@@ -539,54 +482,25 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	assert(svc->rl_nr > 0);
+	D_ASSERT(svc->rl_nr > 0);
 
-	D_ALLOC(resp->svcreps, buflen);
-	if (resp->svcreps == NULL) {
-		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out_svc;
-	}
+	rc = rank_list_to_uint32_array(svc, &resp.svcreps, &resp.n_svcreps);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
 
-	/* Populate the pool service replica ranks string. */
-	index = sprintf(resp->svcreps, "%u", svc->rl_ranks[0]);
-
-	for (i = 1; i < svc->rl_nr; i++) {
-		index += snprintf(&resp->svcreps[index], buflen-index,
-				  ",%u", svc->rl_ranks[i]);
-		if (index >= buflen) {
-			buflen *= 2;
-
-			D_ALLOC(extra, buflen);
-
-			if (extra == NULL) {
-				D_ERROR("failed to allocate buffer");
-				rc = -DER_NOMEM;
-				goto out_svc;
-			}
-
-			index = snprintf(extra, buflen, "%s,%u",
-					 resp->svcreps, svc->rl_ranks[i]);
-
-			D_FREE(resp->svcreps);
-			resp->svcreps = extra;
-		}
-	}
-
-	D_DEBUG(DB_MGMT, "%d service replicas: %s\n", svc->rl_nr,
-		resp->svcreps);
+	D_DEBUG(DB_MGMT, "%d service replicas\n", svc->rl_nr);
 
 out_svc:
 	d_rank_list_free(svc);
 out:
-	resp->status = rc;
-	len = mgmt__pool_create_resp__get_packed_size(resp);
+	resp.status = rc;
+	len = mgmt__pool_create_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__pool_create_resp__pack(resp, body);
+		mgmt__pool_create_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
@@ -596,44 +510,32 @@ out:
 	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
-	if (resp->svcreps && resp->svcreps[0] != '\0')
-		D_FREE(resp->svcreps);
-	D_FREE(resp);
+	if (resp.svcreps)
+		D_FREE(resp.svcreps);
 }
 
 void
 ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolDestroyReq	*req = NULL;
-	Mgmt__PoolDestroyResp	*resp = NULL;
-	uuid_t			uuid;
+	Mgmt__PoolDestroyResp	 resp = MGMT__POOL_DESTROY_RESP__INIT;
+	uuid_t			 uuid;
 	uint8_t			*body;
-	size_t			len;
-	int			rc;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_destroy_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (destroy pool)\n");
 		return;
 	}
 
 	D_INFO("Received request to destroy pool %s\n",
 		req->uuid);
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__pool_destroy_req__free_unpacked(req, NULL);
-		return;
-	}
-
-	/* Response status is populated with SUCCESS on init. */
-	mgmt__pool_destroy_resp__init(resp);
 
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
@@ -651,20 +553,19 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 out:
-	resp->status = rc;
-	len = mgmt__pool_destroy_resp__get_packed_size(resp);
+	resp.status = rc;
+	len = mgmt__pool_destroy_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__pool_destroy_resp__pack(resp, body);
+		mgmt__pool_destroy_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
-	D_FREE(resp);
 }
 
 static void
@@ -694,6 +595,9 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 	size_t	ace_nr = 0;
 	int	rc;
 
+	if (acl == NULL)
+		return 0; /* nothing to do */
+
 	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
 	if (rc != 0) {
 		D_ERROR("Couldn't convert ACL to string list, rc=%d", rc);
@@ -702,6 +606,35 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 
 	resp->n_acl = ace_nr;
 	resp->acl = ace_list;
+
+	return 0;
+}
+
+static int
+prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
+{
+	struct daos_prop_entry	*entry;
+	int			rc = 0;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry != NULL) {
+		rc = add_acl_to_response((struct daos_acl *)entry->dpe_val_ptr,
+					 resp);
+		if (rc != 0)
+			return rc;
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	if (entry != NULL && entry->dpe_str != NULL) {
+		D_STRNDUP(resp->owneruser, entry->dpe_str,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	if (entry != NULL && entry->dpe_str != NULL) {
+		D_STRNDUP(resp->ownergroup, entry->dpe_str,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	}
 
 	return 0;
 }
@@ -715,7 +648,7 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	len = mgmt__aclresp__get_packed_size(acl_resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
@@ -727,17 +660,17 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__GetACLReq		*req = NULL;
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
+	Mgmt__GetACLReq	*req = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc;
+	uuid_t		pool_uuid;
+	daos_prop_t	*access_prop = NULL;
 
 	req = mgmt__get_aclreq__unpack(NULL, drpc_req->body.len,
 				       drpc_req->body.data);
 	if (req == NULL) {
 		D_ERROR("Failed to unpack GetACLReq\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 
@@ -749,18 +682,18 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_mgmt_pool_get_acl(pool_uuid, &acl);
+	rc = ds_mgmt_pool_get_acl(pool_uuid, &access_prop);
 	if (rc != 0) {
 		D_ERROR("Couldn't get pool ACL, rc=%d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = add_acl_to_response(acl, &resp);
+	rc = prop_to_acl_response(access_prop, &resp);
 	if (rc != 0)
 		D_GOTO(out_acl, rc);
 
 out_acl:
-	daos_acl_free(acl);
+	daos_prop_free(access_prop);
 out:
 	resp.status = rc;
 
@@ -807,15 +740,15 @@ out:
 void
 ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc = 0;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
-	struct daos_acl		*result = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc = 0;
+	uuid_t		pool_uuid;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*result = NULL;
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 	if (rc != 0)
@@ -827,8 +760,8 @@ ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_acl, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out_acl:
 	daos_acl_free(acl);
@@ -842,15 +775,15 @@ out:
 void
 ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
-	int			rc = 0;
-	uuid_t			pool_uuid;
-	struct daos_acl		*acl = NULL;
-	struct daos_acl		*result = NULL;
+	Mgmt__ACLResp	resp = MGMT__ACLRESP__INIT;
+	int		rc = 0;
+	uuid_t		pool_uuid;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*result = NULL;
 
 	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
 	if (rc == -DER_PROTO) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 	if (rc != 0)
@@ -862,8 +795,8 @@ ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_acl, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out_acl:
 	daos_acl_free(acl);
@@ -881,13 +814,13 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
 	int			rc = 0;
 	uuid_t			pool_uuid;
-	struct daos_acl		*result = NULL;
+	daos_prop_t		*result = NULL;
 
 	req = mgmt__delete_aclreq__unpack(NULL, drpc_req->body.len,
 					  drpc_req->body.data);
 	if (req == NULL) {
 		D_ERROR("Failed to unpack DeleteACLReq\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 
@@ -902,8 +835,8 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc);
 	}
 
-	rc = add_acl_to_response(result, &resp);
-	daos_acl_free(result);
+	rc = prop_to_acl_response(result, &resp);
+	daos_prop_free(result);
 
 out:
 	resp.status = rc;
@@ -914,78 +847,49 @@ out:
 	mgmt__delete_aclreq__free_unpacked(req, NULL);
 }
 
-/* Convert d_rank_list_t values to a string of comma-separated ranks.
- * Allocates, fills and returns string (to be freed by caller).
- * If unsuccessful, returns NULL.
- */
-static char *
-rank_list_to_csvstr(d_rank_list_t *rl)
+static int
+rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 {
-	char	*buf = NULL;
-	int	 buflen = 16;	/* grow as needed */
-	int	 bufidx;
-	int	 i;
+	uint32_t i;
 
-	D_ALLOC(buf, buflen);
-	if (buf == NULL)
-		goto out;
+	D_ALLOC_ARRAY(*ints, rl->rl_nr);
+	if (*ints == NULL)
+		return -DER_NOMEM;
 
-	bufidx = sprintf(buf, "%u", rl->rl_ranks[0]);
-	for (i = 1; i < rl->rl_nr; i++) {
-		bufidx += snprintf(&buf[bufidx], buflen-bufidx,
-				      ",%u", rl->rl_ranks[i]);
-		if (bufidx >= buflen) {
-			char *extra = NULL;
+	*len = rl->rl_nr;
 
-			buflen *= 2;
-			D_ALLOC(extra, buflen);
-			if (extra == NULL) {
-				D_FREE(buf);
-				buf = NULL;
-				goto out;
-			}
-			bufidx = snprintf(extra, buflen, "%s,%u",
-				       buf, rl->rl_ranks[i]);
-			D_FREE(buf);
-			buf = extra;
-		}
-	}
+	for (i = 0; i < rl->rl_nr; i++)
+		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
-out:
-	return buf;
+	return 0;
 }
 
 void
 ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__ListPoolsReq		*req = NULL;
-	Mgmt__ListPoolsResp		resp = MGMT__LIST_POOLS_RESP__INIT;
+	Mgmt__ListPoolsResp		 resp = MGMT__LIST_POOLS_RESP__INIT;
 	uint8_t				*body;
 	size_t				 len;
 	struct mgmt_list_pools_one	*pools = NULL;
 	size_t				 pools_len = 0;
-	uint64_t			 npools;
 	int				 i;
 	int				 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__list_pools_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
-
+	req = mgmt__list_pools_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (list pools)\n");
 		mgmt__list_pools_req__free_unpacked(req, NULL);
 		return;
 	}
 
-	D_INFO("Received request to list pools in DAOS system %s\n",
-		req->sys);
+	D_INFO("Received request to list pools in DAOS system %s\n", req->sys);
 
-	/* resp.pools, n_pols, and numpools are all NULL/0 to start */
-
-	npools = req->numpools;
-	rc = ds_mgmt_list_pools(req->sys, &npools, &pools, &pools_len);
+	/* Get all the pools - don't care how many */
+	rc = ds_mgmt_list_pools(req->sys, NULL, &pools, &pools_len);
 	if (rc != 0) {
 		D_ERROR("Failed to list pools in %s :%d\n", req->sys, rc);
 		D_GOTO(out, rc);
@@ -995,35 +899,45 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ALLOC_ARRAY(resp.pools, pools_len);
 		if (resp.pools == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	}
-	resp.numpools = npools;	/* in system, may exceed n_pools*/
-	resp.n_pools = pools_len;	/* in reply <= req->numpools */
 
-	for (i = 0; i < pools_len; i++) {
-		d_rank_list_t	*svc = pools[i].lp_svc;
+		resp.n_pools = pools_len;
 
-		D_ALLOC_PTR(resp.pools[i]);
-		if (resp.pools[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		for (i = 0; i < pools_len; i++) {
+			d_rank_list_t	*svc = pools[i].lp_svc;
+			uint32_t	*svcreps;
+			size_t		svcreps_len;
 
-		D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
-		if (resp.pools[i]->uuid == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
+			D_ALLOC_PTR(resp.pools[i]);
+			if (resp.pools[i] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			mgmt__list_pools_resp__pool__init(resp.pools[i]);
 
-		resp.pools[i]->svcreps = rank_list_to_csvstr(svc);
-		if (resp.pools[i]->svcreps == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
+			if (resp.pools[i]->uuid == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
+
+			rc = rank_list_to_uint32_array(svc, &svcreps,
+						       &svcreps_len);
+			if (rc != 0)
+				D_GOTO(out, rc);
+
+			resp.pools[i]->svcreps = svcreps;
+			resp.pools[i]->n_svcreps = svcreps_len;
+		}
+	} else if (pools_len != 0) {
+		D_ERROR("Invalid results - pools=NULL, pools_len=%lu\n",
+			pools_len);
+		D_GOTO(out, rc = -DER_UNKNOWN);
 	}
 
 out:
 	resp.status = rc;
-	resp.numpools = npools;	/* in system, may exceed n_pools */
 
 	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
 		mgmt__list_pools_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1049,6 +963,94 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ListContReq		*req = NULL;
+	Mgmt__ListContResp		 resp = MGMT__LIST_CONT_RESP__INIT;
+	uuid_t				 req_uuid;
+	uint8_t				*body;
+	size_t				 len;
+	struct daos_pool_cont_info	*containers = NULL;
+	uint64_t			 containers_len = 0;
+	int				 i;
+	int				 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__list_cont_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (list containers)\n");
+		mgmt__list_cont_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	D_INFO("Received request to list containers in DAOS pool %s\n",
+		req->uuid);
+
+	/* resp.containers, n_containers are NULL/0 */
+
+	if (uuid_parse(req->uuid, req_uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	rc = ds_mgmt_pool_list_cont(req_uuid, &containers, &containers_len);
+	if (rc != 0) {
+		D_ERROR("Failed to list containers in pool %s :%d\n",
+			req->uuid, rc);
+		D_GOTO(out, rc);
+	}
+
+	if (containers) {
+		D_ALLOC_ARRAY(resp.containers, containers_len);
+		if (resp.containers == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+	resp.n_containers = containers_len;
+
+	for (i = 0; i < containers_len; i++) {
+		D_ALLOC_PTR(resp.containers[i]);
+		if (resp.containers[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__list_cont_resp__cont__init(resp.containers[i]);
+
+		D_ALLOC(resp.containers[i]->uuid, DAOS_UUID_STR_SIZE);
+		if (resp.containers[i]->uuid == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		uuid_unparse(containers[i].pci_uuid, resp.containers[i]->uuid);
+	}
+
+out:
+	resp.status = rc;
+	len = mgmt__list_cont_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__list_cont_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__list_cont_req__free_unpacked(req, NULL);
+
+	if (resp.containers) {
+		for (i = 0; i < resp.n_containers; i++) {
+			if (resp.containers[i]) {
+				if (resp.containers[i]->uuid)
+					D_FREE(resp.containers[i]->uuid);
+				D_FREE(resp.containers[i]);
+			}
+		}
+		D_FREE(resp.containers);
+	}
+
+	D_FREE(containers);
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__SmdDevReq		*req = NULL;
@@ -1063,7 +1065,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (smd list devs)\n");
 		return;
 	}
@@ -1089,7 +1091,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	len = mgmt__smd_dev_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_dev_resp__pack(resp, body);
@@ -1132,7 +1134,7 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (smd list pools)\n");
 		return;
 	}
@@ -1158,7 +1160,7 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	len = mgmt__smd_pool_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__smd_pool_resp__pack(resp, body);
@@ -1204,7 +1206,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (bio health query)\n");
 		return;
 	}
@@ -1256,10 +1258,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	bds = bio_health->mb_dev_state;
 	resp->error_count = bds.bds_error_count;
 	resp->temperature = bds.bds_temperature;
-	if (bds.bds_media_errors)
-		resp->media_errors = bds.bds_media_errors[0];
-	else
-		resp->media_errors = 0;
+	resp->media_errors = bds.bds_media_errors[0];
 	resp->read_errs = bds.bds_bio_read_errs;
 	resp->write_errs = bds.bds_bio_write_errs;
 	resp->unmap_errs = bds.bds_bio_unmap_errs;
@@ -1276,7 +1275,7 @@ out:
 	len = mgmt__bio_health_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__bio_health_resp__pack(resp, body);
@@ -1292,25 +1291,154 @@ out:
 }
 
 void
-ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosResp	*resp = NULL;
+	Mgmt__DevStateReq	*req = NULL;
+	Mgmt__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
+	int			 rc = 0;
 
-	D_INFO("Received request to setup server\n");
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__dev_state_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state query)\n");
+		return;
+	}
+
+	D_INFO("Received request to query device state\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__dev_state_req__free_unpacked(req, NULL);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__daos_resp__init(resp);
+	mgmt__dev_state_resp__init(resp);
+
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_state_query(uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to query device state :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__dev_state_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__dev_state_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__dev_state_req__free_unpacked(req, NULL);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	D_FREE(resp);
+}
+
+void
+ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DevStateReq	*req = NULL;
+	Mgmt__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__dev_state_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state set faulty)\n");
+		return;
+	}
+
+	D_INFO("Received request to set device state to FAULTY\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__dev_state_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__dev_state_resp__init(resp);
+
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_set_faulty(uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__dev_state_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__dev_state_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__dev_state_req__free_unpacked(req, NULL);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	D_FREE(resp);
+}
+
+void
+ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+
+	D_INFO("Received request to setup server\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 
-	pack_daos_response(resp, drpc_resp);
-	D_FREE(resp);
+	pack_daos_response(&resp, drpc_resp);
 }
 

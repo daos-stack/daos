@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -66,6 +67,7 @@ type Connect interface {
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
@@ -74,10 +76,14 @@ type Connect interface {
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	StorageScan(*StorageScanReq) *StorageScanResp
-	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StorageFormat(reformat bool) StorageFormatResults
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
+	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
@@ -194,9 +200,11 @@ func (c *connList) makeRequests(req interface{},
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
+	conns := c.controllers
 
-	addrs := []string{}
-	for _, mc := range c.controllers {
+	addrs := make([]string, 0, len(conns))
+	sort.Slice(conns, func(i, j int) bool { return conns[i].getAddress() < conns[j].getAddress() })
+	for _, mc := range conns {
 		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, req, ch)
 	}

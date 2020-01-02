@@ -478,6 +478,12 @@ test_teardown(void **state)
 	}
 
 	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+		if (arg->myrank != 0) {
+			if (!daos_handle_is_inval(arg->pool.poh))
+				rc = daos_pool_disconnect(arg->pool.poh, NULL);
+		}
+		if (arg->multi_rank)
+			MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
 			pool_destroy_safe(arg, NULL);
 

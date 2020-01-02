@@ -163,7 +163,16 @@ crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data)
 		*data = prop;
 		return rc;
 	case CRT_PROC_FREE:
-		daos_prop_free(*data);
+		prop = *data;
+		if (prop == NULL)
+			return 0;
+		if (prop->dpp_nr == 0 || prop->dpp_entries == NULL) {
+			D_FREE_PTR(prop);
+			return 0;
+		}
+		crt_proc_prop_entries(proc, prop);
+		D_FREE(prop->dpp_entries);
+		D_FREE_PTR(prop);
 		return 0;
 	default:
 		D_ERROR("bad proc_op %d.\n", proc_op);

@@ -197,7 +197,10 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 }
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through newState.
-func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.ResponseStatus, errMsg string, infoMsg string) *ctlpb.ScmMountResult {
+func newMntRet(log logging.Logger, op, mntPoint string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.ScmMountResult {
+	if mntPoint == "" {
+		mntPoint = "<nil>"
+	}
 	return &ctlpb.ScmMountResult{
 		Mntpoint: mntPoint,
 		State:    newState(log, status, errMsg, infoMsg, "scm mount "+op),
@@ -205,11 +208,13 @@ func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.Resp
 }
 
 // newCret creates and populates NVMe controller result and logs error
-func newCret(log logging.Logger, op string, pciaddr string, status ctlpb.ResponseStatus, errMsg string,
-	infoMsg string) *ctlpb.NvmeControllerResult {
+func newCret(log logging.Logger, op, pciAddr string, status ctlpb.ResponseStatus, errMsg, infoMsg string) *ctlpb.NvmeControllerResult {
+	if pciAddr == "" {
+		pciAddr = "<nil>"
+	}
 
 	return &ctlpb.NvmeControllerResult{
-		Pciaddr: pciaddr,
+		Pciaddr: pciAddr,
 		State:   newState(log, status, errMsg, infoMsg, "nvme controller "+op),
 	}
 }
@@ -249,7 +254,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	}
 
 	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
-		i.Index, reformat)
+		i.Index(), reformat)
 
 	scmConfig := i.scmConfig()
 

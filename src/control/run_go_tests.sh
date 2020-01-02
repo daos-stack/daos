@@ -48,12 +48,15 @@ function setup_environment()
 	LD_LIBRARY_PATH=${SL_PREFIX}/lib64
 	LD_LIBRARY_PATH+=":${SL_SPDK_PREFIX}/lib"
 	LD_LIBRARY_PATH+=":${SL_HWLOC_PREFIX}/lib"
+	LD_LIBRARY_PATH+=":${SL_OFI_PREFIX}/lib"
 	CGO_LDFLAGS=-L${SL_PREFIX}/lib64
 	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
 	CGO_LDFLAGS+=" -L${SL_HWLOC_PREFIX}/lib"
+	CGO_LDFLAGS+=" -L${SL_OFI_PREFIX}/lib"
 	CGO_CFLAGS=-I${SL_PREFIX}/include
 	CGO_CFLAGS+=" -I${SL_SPDK_PREFIX}/include"
 	CGO_CFLAGS+=" -I${SL_HWLOC_PREFIX}/include"
+	CGO_CFLAGS+=" -I${SL_OFI_PREFIX}/include"
 }
 
 function check_formatting()
