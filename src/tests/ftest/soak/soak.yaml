@@ -105,7 +105,7 @@ soak_stress:
     taskspernode:
       - 1
       - 16
-      #- 32
+      - 32
     poollist:
       - pool_ior
       - pool_fio
@@ -162,13 +162,13 @@ fio_smoke:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blocksize:
+    blksz:
         - '256B'
         - '1M'
-    size:
+    sz:
         - '1M'
         - '1G'
-    rw:
+    readwrite:
         - 'rw'
         - 'randrw'
   test:
@@ -206,13 +206,13 @@ fio_stress:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blocksize:
+    blksz:
         - '256B'
         - '1M'
-    size:
+    sz:
         - '1M'
         - '1G'
-    rw:
+    readwrite:
         - 'rw'
         - 'randrw'
   test:

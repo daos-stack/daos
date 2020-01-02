@@ -43,7 +43,7 @@ static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
