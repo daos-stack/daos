@@ -78,9 +78,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
-
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-
 
 	rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
 	if (rc == -DER_SUCCESS) {
@@ -90,6 +88,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(req, entry);
+		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+		d_list_del(&dfp->dfp_list);
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 		D_FREE(dfp);
 		D_FREE(dfs);
 		return;
