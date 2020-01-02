@@ -66,7 +66,7 @@ extern d_iov_t ds_pool_prop_self_heal;		/* uint64_t */
 extern d_iov_t ds_pool_prop_reclaim;		/* uint64_t */
 extern d_iov_t ds_pool_prop_owner;		/* string */
 extern d_iov_t ds_pool_prop_owner_group;	/* string */
-extern d_iov_t ds_pool_prop_accept_connections;	/* uint32_t */
+extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
 extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 
 /** pool handle KVS */

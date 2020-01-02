@@ -464,7 +464,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
-	uint32_t		accept_connections;
+	uint32_t		connectable;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
 	d_iov_t		value;
@@ -557,10 +557,10 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
 
-	/* Write accept_connections property */
-	accept_connections = 1;
-	d_iov_set(&value, &accept_connections, sizeof(accept_connections));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_accept_connections, &value);
+	/* Write connectable property */
+	connectable = 1;
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
 
@@ -1777,7 +1777,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
-	uint32_t			accept_connections;
+	uint32_t			connectable;
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -1813,15 +1813,16 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Check if pool is being destroyed and not accepting connections */
-	d_iov_set(&value, &accept_connections, sizeof(accept_connections));
+	d_iov_set(&value, &connectable, sizeof(connectable));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root,
-			   &ds_pool_prop_accept_connections, &value);
+			   &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
-	D_DEBUG(DF_DSMS, "pool "DF_UUID": accept_connections=%u\n",
-		DP_UUID(in->pci_op.pi_uuid), accept_connections);
-	if (accept_connections == 0) {
-		D_ERROR("pool being destroyed, not accepting connections\n");
+	D_DEBUG(DF_DSMS, DF_UUID": connectable=%u\n",
+		DP_UUID(in->pci_op.pi_uuid), connectable);
+	if (!connectable) {
+		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
+			DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_lock, rc = -DER_BUSY);
 	}
 
@@ -3608,8 +3609,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	if (n_hdl_uuids > 0) {
 		/* If pool destroy but not forcibly, error: the pool is busy */
 
-		if ((in->pvi_pool_destroy) &&
-		    (in->pvi_pool_destroy_force == 0)) {
+		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
 			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
 				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
 			D_GOTO(out_lock, rc = -DER_BUSY);
@@ -3622,13 +3622,12 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	/* If pool destroy and not error case, disable new connections */
 	if (in->pvi_pool_destroy) {
-		uint32_t	accept_connections = 0;
+		uint32_t	connectable = 0;
 		d_iov_t		value;
 
-		d_iov_set(&value, &accept_connections,
-			  sizeof(accept_connections));
+		d_iov_set(&value, &connectable, sizeof(connectable));
 		rc = rdb_tx_update(&tx, &svc->ps_root,
-				&ds_pool_prop_accept_connections, &value);
+				   &ds_pool_prop_connectable, &value);
 		if (rc != 0)
 			D_GOTO(out_lock, rc);
 		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "

@@ -176,7 +176,6 @@ CRT_RPC_DECLARE(mgmt_profile, DAOS_ISEQ_MGMT_PROFILE,
 CRT_RPC_DECLARE(mgmt_tgt_create, DAOS_ISEQ_MGMT_TGT_CREATE,
 		DAOS_OSEQ_MGMT_TGT_CREATE)
 
-/* kccain1: propagate "force" boolean? */
 #define DAOS_ISEQ_MGMT_TGT_DESTROY /* input fields */		 \
 	((uuid_t)		(td_pool_uuid)		CRT_VAR)
 

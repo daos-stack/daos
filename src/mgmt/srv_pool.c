@@ -41,7 +41,6 @@ struct list_pools_iter_args {
 	struct mgmt_list_pools_one	*pools;
 };
 
-/* kccain1: propagate "force" boolean? arg here and in CaRT RPC? */
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 {
@@ -187,7 +186,8 @@ pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc != 0) {
 		D_GOTO(out_lock, rc);
-	} else if (rec->pr_state != POOL_READY) {
+	} else if ((rec->pr_state != POOL_READY) &&
+		   (rec->pr_state != POOL_DESTROYING)) {
 		D_ERROR("Pool not ready\n");
 		D_GOTO(out_lock, rc = -DER_AGAIN);
 	}
@@ -583,9 +583,13 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 	if (rc != 0)
 		goto out;
 
-	/* Get pool service ranks before pool_destroy_prepare() that changes
-	 * pr_state to destroying.
-	 */
+	rc = pool_destroy_prepare(svc, pool_uuid);
+	if (rc != 0) {
+		if (rc == -DER_ALREADY)
+			rc = 0;
+		goto out_ranks;
+	}
+
 	rc = pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
 	if (rc != 0) {
 		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
@@ -599,14 +603,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
 		goto out_ranks;
-	}
-
-	rc = pool_destroy_prepare(svc, pool_uuid);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY) {
-			rc = 0;
-			goto out_ranks;
-		}
 	}
 
 	rc = ds_pool_svc_destroy(pool_uuid);

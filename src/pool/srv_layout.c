@@ -45,7 +45,7 @@ RDB_STRING_KEY(ds_pool_prop_, self_heal);
 RDB_STRING_KEY(ds_pool_prop_, reclaim);
 RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
-RDB_STRING_KEY(ds_pool_prop_, accept_connections);
+RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
 
 /** pool handle KVS */
