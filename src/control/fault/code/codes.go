@@ -51,6 +51,7 @@ const (
 	// DAOS system fault codes
 	SystemUnknown Code = iota + 400
 	SystemMemberExists
+	SystemMemberMissing
 	SystemMemberChanged
 
 	// security fault codes

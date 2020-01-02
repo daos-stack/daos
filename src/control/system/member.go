@@ -129,7 +129,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Errorf("member %s already exists", value)
+		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
 	}
 
 	m.members[member.Rank] = member
@@ -143,7 +143,7 @@ func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	defer m.Unlock()
 
 	if _, found := m.members[rank]; !found {
-		return errors.Errorf("member with rank %d not found", rank)
+		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	m.members[rank].SetState(state)
@@ -154,34 +154,21 @@ func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 // AddOrUpdate adds member to membership or updates member state if member
 // already exists in membership. Returns flag for whether member was created and
 // the previous state if updated.
-func (m *Membership) AddOrUpdate(member *Member) (created bool, oldState *MemberState, err error) {
-	var oldMember *Member
+func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
+	m.Lock()
+	defer m.Unlock()
 
-	m.RLock()
-	defer m.RUnlock()
+	oldMember, found := m.members[member.Rank]
+	if found {
+		m.members[member.Rank].SetState(member.State())
+		os := oldMember.State()
 
-	_, err = m.Add(member)
-	if err == nil {
-		created = true
-		return
+		return false, &os
 	}
 
-	if !FaultMemberExists.Equals(err) {
-		return
-	}
+	m.members[member.Rank] = member
 
-	oldMember, err = m.Get(member.Rank)
-	if err != nil {
-		return
-	}
-	os := oldMember.State()
-
-	if err = m.SetMemberState(member.Rank, member.State()); err != nil {
-		return
-	}
-	oldState = &os
-
-	return
+	return true, nil
 }
 
 // Remove removes member from membership, idempotent.
@@ -199,7 +186,7 @@ func (m *Membership) Get(rank uint32) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Errorf("member with rank %d not found", rank)
+		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	return member, nil

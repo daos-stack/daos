@@ -30,8 +30,13 @@ import (
 var (
 	FaultMemberExists = systemFault(
 		code.SystemMemberExists,
-		"system with given rank already exists",
+		"system member with given rank already exists",
 		"update system member instead of adding",
+	)
+	FaultMemberMissing = systemFault(
+		code.SystemMemberMissing,
+		"system member with given rank doesn't exists",
+		"",
 	)
 )
 

@@ -186,11 +186,7 @@ func (h *IOServerHarness) registerNewMember(membership *system.Membership, insta
 		return errors.Wrap(err, "failed to get member from instance")
 	}
 
-	created, oldState, err := membership.AddOrUpdate(m)
-	if err != nil {
-		return errors.Wrap(err, "failed to add MS replica to membership")
-	}
-
+	created, oldState := membership.AddOrUpdate(m)
 	if created {
 		h.log.Debugf("bootstrapping system member: rank %d, addr %s\n",
 			m.Rank, m.Addr)

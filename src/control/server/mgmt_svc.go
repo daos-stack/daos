@@ -237,11 +237,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 		member := system.NewMember(resp.GetRank(), req.GetUuid(), replyAddr, newState)
 
-		created, oldState, err := svc.membership.AddOrUpdate(member)
-		if err != nil {
-			return nil, errors.WithMessage(err, "adding or updating membership")
-		}
-
+		created, oldState := svc.membership.AddOrUpdate(member)
 		if created {
 			svc.log.Debugf("new system member: rank %d, addr %s\n",
 				resp.GetRank(), replyAddr)
