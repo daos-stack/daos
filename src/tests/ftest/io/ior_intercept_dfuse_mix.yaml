@@ -6,13 +6,13 @@ hosts:
         - client-B
         - client-C
         - client-D
-timeout: 4800
+timeout: 2400
 server_config:
     name: daos_server
     servers:
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-        scm_size: 75
+        scm_size: 55
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
@@ -22,8 +22,8 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 70000000000
-        nvme_size: 700000000000
+        scm_size: 50000000000
+        nvme_size: 500000000000
     createsvc:
         svcn: 1
 ior:
@@ -39,7 +39,7 @@ ior:
           api: POSIX
           transfer_size: '1M'
           block_size: '8G'
-          write_x: 3
+          write_x: 1
           read_x: 1
           daos_oclass: "SX"
 dfuse:
