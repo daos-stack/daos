@@ -192,7 +192,7 @@ func (h *IOServerHarness) registerNewMember(membership *system.Membership, insta
 			m.Rank, m.Addr)
 	} else {
 		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s\n",
-			m.Rank, m.Addr, *oldState, m.State)
+			m.Rank, m.Addr, *oldState, m.State())
 	}
 
 	return nil
