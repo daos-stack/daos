@@ -374,7 +374,7 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
 	int			 rc;
-	unsigned int		 monitor_period;
+	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
 	D_ASSERT(ctxt->bxc_blobstore != NULL);
