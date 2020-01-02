@@ -163,6 +163,41 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
+func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.PrepShutdownReq) (resp *mgmtpb.DaosResp, stopErr error) {
+	stopErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+
+			prefix := fmt.Sprintf("prep shutdown(%s, %+v)", destAddr, *req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			for {
+				var err error
+
+				select {
+				case <-ctx.Done():
+					return errors.Wrap(ctx.Err(), prefix)
+				default:
+				}
+
+				resp, err = pbClient.PrepShutdown(ctx, req)
+				if msc.retryOnErr(err, ctx, prefix) {
+					continue
+				}
+				if resp == nil {
+					return errors.New("unexpected nil response status")
+				}
+				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+					continue
+				}
+
+				return nil
+			}
+		})
+
+	return
+}
+
 func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {

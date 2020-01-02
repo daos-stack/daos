@@ -114,12 +114,9 @@ func (mb *MockBackend) Prepare(_ int, _, _ string) error {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {
-	return &Provider{
-		log:     log,
-		backend: NewMockBackend(mbc),
-	}
+	return NewProvider(log, NewMockBackend(mbc)).WithForwardingDisabled()
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewMockProvider(log, nil)
+	return NewMockProvider(log, nil).WithForwardingDisabled()
 }

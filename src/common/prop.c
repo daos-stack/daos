@@ -215,7 +215,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_RECLAIM_SNAPSHOT &&
+			if (val != DAOS_RECLAIM_DISABLED &&
+			    val != DAOS_RECLAIM_LAZY &&
+			    val != DAOS_RECLAIM_SNAPSHOT &&
 			    val != DAOS_RECLAIM_BATCH &&
 			    val != DAOS_RECLAIM_TIME) {
 				D_ERROR("invalid reclaim "DF_U64".\n", val);
@@ -271,8 +273,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_REDUN_RF1 &&
-			    val != DAOS_PROP_CO_REDUN_RF3) {
+			if (val != DAOS_PROP_CO_REDUN_RF0 &&
+			    val != DAOS_PROP_CO_REDUN_RF1 &&
+			    val != DAOS_PROP_CO_REDUN_RF2 &&
+			    val != DAOS_PROP_CO_REDUN_RF3 &&
+			    val != DAOS_PROP_CO_REDUN_RF4) {
 				D_ERROR("invalid redundancy factor "DF_U64".\n",
 					val);
 				return false;
