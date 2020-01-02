@@ -70,6 +70,8 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	return tr.runnerCfg.StartErr
 }
 
+func (tr *TestRunner) IsStarted() bool { return true }
+
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg
 }

@@ -25,33 +25,22 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 
-import write_host_file
-import daos_perf_utils
+from write_host_file import write_host_file
+from daos_perf_utils import DaosPerfCommand, DaosPerfFailed
 
 
 class DaosPerf(TestWithServers):
-    """
-    Test Class Description: Tests daos_perf with different config.
+    """Test Class Description: Tests daos_perf with different config.
+
     :avocado: recursive
     """
 
-    def setUp(self):
-        super(DaosPerf, self).setUp()
-
-        # set client variables
-        self.hostfile_clients = (
-            write_host_file.write_host_file(self.hostlist_clients,
-                                            self.workdir, None))
-        # initialise daos_perf_cmd
-        self.daos_perf_cmd = daos_perf_utils.DaosPerfCommand()
-
     def runner(self, test_path):
-        """
-        Common runner function to obtain and run daos_perf
+        """Run daos_perf.
+
         Args:
             test_path: string to depict path of params in yaml file
         """
-
         # daos_perf parameters
         pool_size_scm = self.params.get(
             "size", '/run/{}/pool_size/scm/'.format(test_path))
@@ -78,21 +67,22 @@ class DaosPerf(TestWithServers):
         object_class = self.params.get(
             "o", '/run/{}/client_processes/np_16/*'.format(test_path))
 
-        try:
-            # set daos_perf params
-            self.daos_perf_cmd.pool_size_scm.value = pool_size_scm
-            self.daos_perf_cmd.test_mode.value = mode
-            self.daos_perf_cmd.flags.value = daos_perf_flags
-            self.daos_perf_cmd.single_value_size.value = single_value_size
-            self.daos_perf_cmd.num_of_objects.value = num_of_obj
-            self.daos_perf_cmd.dkeys.value = num_of_dkeys
-            self.daos_perf_cmd.akeys.value = num_of_akeys
-            self.daos_perf_cmd.records.value = num_of_recs
-            self.daos_perf_cmd.oclass.value = object_class
+        # set daos_perf params
+        daos_perf_cmd = DaosPerfCommand()
+        daos_perf_cmd.pool_size_scm.value = pool_size_scm
+        daos_perf_cmd.test_mode.value = mode
+        daos_perf_cmd.flags.value = daos_perf_flags
+        daos_perf_cmd.single_value_size.value = single_value_size
+        daos_perf_cmd.num_of_objects.value = num_of_obj
+        daos_perf_cmd.dkeys.value = num_of_dkeys
+        daos_perf_cmd.akeys.value = num_of_akeys
+        daos_perf_cmd.records.value = num_of_recs
+        daos_perf_cmd.oclass.value = object_class
+        hostfile = write_host_file(self.hostlist_clients, self.workdir, None)
 
+        try:
             # run daos_perf
-            self.daos_perf_cmd.run(self.basepath, client_processes,
-                                   self.hostfile_clients)
+            daos_perf_cmd.run(self.basepath, client_processes, hostfile)
 
             # Parsing output to look for failures
             # stderr directed to stdout
@@ -106,13 +96,14 @@ class DaosPerf(TestWithServers):
                     if message in line:
                         self.fail("DaosPerf Test Failed with error_message: "
                                   "{}".format(line))
-        except (daos_perf_utils.DaosPerfFailed) as excep:
+        except DaosPerfFailed as excep:
             self.fail("<DaosPerf Test FAILED>\n {}".format(excep))
 
     def test_small(self):
-        """
-        Jira ID: DAOS-1714
+        """Jira ID: DAOS-1714.
+
         Test Description: Small daos_perf test
+
         Use cases: Run daos_perf in 'daos' and 'vos' modes
                    Run daos_perf using single value and array value types
                    for 'vos' mode. Also run the above config with and

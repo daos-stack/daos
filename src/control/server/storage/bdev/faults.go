@@ -23,17 +23,38 @@
 package bdev
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
 var (
 	FaultUnknown = bdevFault(code.BdevUnknown, "unknown bdev error", "")
-
-	FaultFormatUnknownClass = bdevFault(
-		code.BdevFormatBadParam, "format request contains unhandled block device class", "",
-	)
 )
+
+func FaultFormatBadPciAddr(pciAddr string) *fault.Fault {
+	return bdevFault(
+		code.BdevFormatBadPciAddress,
+		fmt.Sprintf("format request contains invalid NVMe PCI address %q", pciAddr),
+		"check your configuration, restart the server, and retry the format operation",
+	)
+}
+
+func FaultFormatUnknownClass(class string) *fault.Fault {
+	return bdevFault(
+		code.BdevFormatBadParam,
+		fmt.Sprintf("format request contains unhandled block device class %q", class),
+		"check your configuration and restart the server",
+	)
+}
+
+func FaultFormatError(err error) *fault.Fault {
+	return bdevFault(
+		code.BdevFormatFailure,
+		fmt.Sprintf("NVMe format failed: %s", err), "",
+	)
+}
 
 func bdevFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

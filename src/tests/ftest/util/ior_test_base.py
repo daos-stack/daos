@@ -32,7 +32,7 @@ from mpio_utils import MpioUtils
 from test_utils import TestPool
 from dfuse_utils import Dfuse
 from daos_utils import create_container
-import write_host_file
+from write_host_file import write_host_file
 
 
 class IorTestBase(TestWithServers):
@@ -46,9 +46,7 @@ class IorTestBase(TestWithServers):
         super(IorTestBase, self).__init__(*args, **kwargs)
         self.ior_cmd = None
         self.processes = None
-        self.hostfile_clients_slots = None
         self.dfuse = None
-        self.container = None
 
     def setUp(self):
         """Set up each test case."""
@@ -65,9 +63,6 @@ class IorTestBase(TestWithServers):
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
             self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
 
     def tearDown(self):
         """Tear down each test case."""
@@ -136,7 +131,7 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self, intercept=None):
+    def run_ior_with_pool(self, intercept=None, hostfile=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -145,8 +140,9 @@ class IorTestBase(TestWithServers):
         Args:
             intercept (str): path to the interception library. Shall be used
                              only for POSIX through DFUSE.
-            ior_flags (str, optional): ior flags. Defaults to None.
-            object_class (str, optional): daos object class. Defaults to None.
+            hostfile (str, optional): path to the hostfile. Defaults to None
+                which will create a hostfile using all of the hostfile_client
+                hosts w/o any slots specified.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -166,8 +162,8 @@ class IorTestBase(TestWithServers):
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
-                           intercept)
+        out = self.run_ior(
+            self.get_job_manager_command(), self.processes, intercept, hostfile)
 
         return out
 
@@ -187,21 +183,27 @@ class IorTestBase(TestWithServers):
             self.fail("Unsupported IOR API")
 
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
-        return Mpirun(self.ior_cmd, mpirun_path)
+        return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
 
-    def run_ior(self, manager, processes, intercept=None):
+    def run_ior(self, manager, processes, intercept=None, hostfile=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
             intercept (str): path to interception library.
+            hostfile (str, optional): path to the hostfile. Defaults to None
+                which will create a hostfile using all of the hostfile_client
+                hosts w/o any slots specified.
         """
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        manager.setup_command(env, self.hostfile_clients, processes)
+        if hostfile is None:
+            hostfile = write_host_file(
+                self.hostlist_clients, self.workdir, None)
+        manager.setup_command(env, hostfile, processes)
         try:
             out = manager.run()
             return out

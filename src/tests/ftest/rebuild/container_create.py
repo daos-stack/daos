@@ -28,6 +28,7 @@ from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure, Mpirun
 from ior_utils import IorCommand
 from test_utils import TestPool, TestContainer
+from write_host_file import write_host_file
 
 
 class ContainerCreate(TestWithServers):
@@ -159,7 +160,8 @@ class ContainerCreate(TestWithServers):
             mpirun.job.get_params(self)
             mpirun.setup_command(
                 mpirun.job.get_default_env("mpirun", self.tmp),
-                self.hostfile_clients, len(self.hostlist_clients))
+                write_host_file(self.hostlist_clients, self.workdir),
+                len(self.hostlist_clients))
 
         # Cancel any tests with tickets already assigned
         if rank == 1 or rank == 2:

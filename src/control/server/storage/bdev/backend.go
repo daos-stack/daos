@@ -24,6 +24,8 @@ package bdev
 
 import (
 	"encoding/json"
+	"os"
+	"syscall"
 
 	"github.com/pkg/errors"
 
@@ -48,10 +50,51 @@ type (
 	}
 )
 
-func (w *spdkWrapper) init(initShmID ...int) error {
+// suppressOutput is a horrible, horrible hack necessitated by the fact that
+// SPDK blathers to stdout, causing console spam and messing with our secure
+// communications channel between the server and privileged helper.
+func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
+	realStdout, dErr := syscall.Dup(syscall.Stdout)
+	if dErr != nil {
+		err = dErr
+		return
+	}
+
+	devNull, oErr := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if oErr != nil {
+		err = oErr
+		return
+	}
+
+	if err = syscall.Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
+		return
+	}
+
+	restore = func() {
+		// NB: Normally panic() in production code is frowned upon, but in this
+		// case if we get errors there really isn't any handling to be done
+		// because things have gone completely sideways.
+		if err := devNull.Close(); err != nil {
+			panic(err)
+		}
+		if err := syscall.Dup2(realStdout, syscall.Stdout); err != nil {
+			panic(err)
+		}
+	}
+
+	return
+}
+
+func (w *spdkWrapper) init(initShmID ...int) (err error) {
 	if w.initialized {
 		return nil
 	}
+
+	restore, err := w.suppressOutput()
+	if err != nil {
+		return errors.Wrap(err, "failed to suppress SPDK output")
+	}
+	defer restore()
 
 	shmID := 0
 	if len(initShmID) > 0 {
@@ -153,16 +196,28 @@ func getFormattedController(pciAddr string, bcs []spdk.Controller) (*storage.Nvm
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if err := b.Init(); err != nil {
+	if pciAddr == "" {
+		return nil, FaultFormatBadPciAddr("")
+	}
+
+	controllers, err := b.Scan()
+	if err != nil {
 		return nil, err
 	}
 
-	if pciAddr == "" {
-		return nil, errors.New("empty pciAddr string")
+	foundAddr := false
+	for _, c := range controllers {
+		if c.PciAddr == pciAddr {
+			foundAddr = true
+			break
+		}
 	}
 
-	err := b.binding.Format(pciAddr)
-	if err != nil {
+	if !foundAddr {
+		return nil, FaultFormatBadPciAddr(pciAddr)
+	}
+
+	if err := b.binding.Format(pciAddr); err != nil {
 		return nil, err
 	}
 

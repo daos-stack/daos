@@ -119,9 +119,6 @@ int ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
-void ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				      void *priv);
 void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);

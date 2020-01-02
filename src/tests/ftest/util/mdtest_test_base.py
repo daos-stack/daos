@@ -34,7 +34,7 @@ from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
 from daos_utils import create_container
-import write_host_file
+from write_host_file import write_host_file
 
 
 class MdtestBase(TestWithServers):
@@ -48,9 +48,7 @@ class MdtestBase(TestWithServers):
         super(MdtestBase, self).__init__(*args, **kwargs)
         self.mdtest_cmd = None
         self.processes = None
-        self.hostfile_clients_slots = None
         self.dfuse = None
-        self.container = None
 
     def setUp(self):
         """Set up each test case."""
@@ -69,9 +67,6 @@ class MdtestBase(TestWithServers):
         # with single client node
         if self.mdtest_cmd.api.value == "POSIX":
             self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
 
     def tearDown(self):
         """Tear down each test case."""
@@ -174,21 +169,27 @@ class MdtestBase(TestWithServers):
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
             path = os.path.join(mpio_util.mpichinstall, "bin")
-            return Mpirun(self.mdtest_cmd, path)
+            return Mpirun(self.mdtest_cmd, path, mpitype="mpich")
 
         path = os.path.join(self.ompi_prefix, "bin")
         return Orterun(self.mdtest_cmd, path)
 
-    def run_mdtest(self, manager, processes):
+    def run_mdtest(self, manager, processes, hostfile=None):
         """Run the Mdtest command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
+            hostfile (str, optional): path to the hostfile. Defaults to None
+                which will create a hostfile using all of the hostfile_client
+                hosts w/o any slots specified.
         """
         env = self.mdtest_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
-        manager.setup_command(env, self.hostfile_clients, processes)
+        if hostfile is None:
+            hostfile = write_host_file(
+                self.hostlist_clients, self.workdir, None)
+        manager.setup_command(env, hostfile, processes)
         try:
             manager.run()
         except CommandFailure as error:

@@ -23,9 +23,6 @@
 """
 from logging import getLogger
 
-import getpass
-import re
-
 from command_utils import CommandWithSubCommand, CommandWithParameters
 from command_utils import FormattedParameter, CommandFailure
 

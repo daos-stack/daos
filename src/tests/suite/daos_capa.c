@@ -346,14 +346,14 @@ io_invalid_poh(void **state)
 		/** update record */
 		print_message("Updating %d bytes with invalid pool handle ..."
 			      "\n", STACK_BUF_LEN);
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
 		/** fetch */
 		print_message("fetching records with invalid pool handle...\n");
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -437,7 +437,7 @@ io_invalid_coh(void **state)
 		/** update record */
 		print_message("Updating records with stale container handle "
 			      "...\n");
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -445,7 +445,7 @@ io_invalid_coh(void **state)
 		/** fetch */
 		print_message("fetching records with stale container handle "
 			      "...\n");
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -515,7 +515,7 @@ update_ro(void **state)
 
 	/** update record */
 	print_message("Updating records with read-only container handle ...\n");
-	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 	print_message("got -DER_NO_PERM as expected\n");
 

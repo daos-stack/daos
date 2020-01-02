@@ -553,7 +553,10 @@ def get_pool_uuid_from_stdout(stdout_str):
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to
     # get the returned value.
-    matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
-    if len(matches) > 0:
-        return matches[0]
-    return None
+    uuid = None
+    svc = None
+    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
+    if match:
+        uuid = match.group(1)
+        svc = match.group(2)
+    return uuid, svc

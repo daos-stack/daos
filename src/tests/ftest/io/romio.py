@@ -23,7 +23,7 @@
 '''
 from __future__ import print_function
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
 
 
@@ -38,7 +38,6 @@ class Romio(TestWithServers):
         super(Romio, self).__init__(*args, **kwargs)
         self.mpio = None
 
-    @skipForTicket("CORCI-635")
     def test_romio(self):
         """Test ID: DAOS-1994.
 
@@ -56,9 +55,8 @@ class Romio(TestWithServers):
             self.fail("Exiting Test: Mpich not installed")
 
         try:
-            # Run romio
-            self.mpio.run_romio(
-                self.basepath, self.hostlist_clients, romio_test_repo)
+            # running romio
+            self.mpio.run_romio(self.hostlist_clients, romio_test_repo)
 
             # Parsing output to look for failures
             # stderr directed to stdout

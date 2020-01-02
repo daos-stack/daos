@@ -41,8 +41,9 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
         >>> env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
+        >>> hostfile = write_host_file(self.hostlist_clients, self.workdir)
         >>> processes = len(self.hostlist_clients)
-        >>> mpirun.setup_command(env, self.hostfile_clients, processes)
+        >>> mpirun.setup_command(env, hostfile, processes)
         >>> mpirun.run()
     """
 

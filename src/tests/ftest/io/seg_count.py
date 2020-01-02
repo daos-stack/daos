@@ -44,7 +44,7 @@ class SegCount(IorTestBase):
         :avocado: tags=all,mpiio,large,ior_segcount
         """
         # Update the hostfile with the requested number of slots per host
-        self.hostfile_clients = write_host_file(
+        hostfile = write_host_file(
             self.hostlist_clients, self.workdir, self.processes)
 
         # Set the IOR segment count
@@ -68,4 +68,4 @@ class SegCount(IorTestBase):
             self.ior_cmd.segment_count.update(120)
 
         # Create a pool and run IOR
-        self.run_ior_with_pool()
+        self.run_ior_with_pool(hostfile=hostfile)

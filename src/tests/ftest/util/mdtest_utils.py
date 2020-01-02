@@ -139,7 +139,6 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 
