@@ -55,16 +55,6 @@ ior:
               block_size: '512M'
               write_x: 1
               read_x: 1
-            8K:
-              transfer_size: '8K'
-              block_size: '1G'
-              write_x: 1
-              read_x: 1
-            128K:
-              transfer_size: '128K'
-              block_size: '4G'
-              write_x: 2
-              read_x: 1
             1M:
               transfer_size: '1M'
               block_size: '8G'
