@@ -115,11 +115,6 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
-static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
-	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
-	.co_pre_forward	= NULL,
-};
-
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
  */

@@ -130,8 +130,7 @@ func TestParseEnvVars(t *testing.T) {
 }
 
 func TestCircularRef(t *testing.T) {
-	var circular testConfig
-	circular = *testStruct
+	circular := *testStruct
 	circular.CircularRef = &circular
 
 	got, err := parseCmdTags(&circular, shortFlagTag, joinShortArgs, nil)

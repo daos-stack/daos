@@ -186,7 +186,6 @@ void
 cont_free(struct d_ulink *ulink)
 {
 	struct vos_container		*cont;
-	struct dtx_batched_cleanup_blob	*bcb;
 	int				 i;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
@@ -202,13 +201,6 @@ cont_free(struct d_ulink *ulink)
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
-
-	while ((bcb = d_list_pop_entry(&cont->vc_batched_cleanup_list,
-				       struct dtx_batched_cleanup_blob,
-				       bcb_cont_link)) != NULL) {
-		D_ASSERT(d_list_empty(&bcb->bcb_dce_list));
-		D_FREE(bcb);
-	}
 
 	dbtree_close(cont->vc_btr_hdl);
 
@@ -379,7 +371,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
-	D_INIT_LIST_HEAD(&cont->vc_batched_cleanup_list);
 	cont->vc_dtx_committable_count = 0;
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;

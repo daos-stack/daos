@@ -30,6 +30,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -76,7 +77,7 @@ func readRequest(log logging.Logger, rdr io.Reader) (*pbin.Request, error) {
 	return &req, nil
 }
 
-func handleRequest(log logging.Logger, scmProvider *scm.Provider, req *pbin.Request, resDest io.Writer) (err error) {
+func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *bdev.Provider, req *pbin.Request, resDest io.Writer) (err error) {
 	if req == nil {
 		return errors.New("nil request")
 	}
@@ -143,6 +144,54 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, req *pbin.Requ
 		}
 
 		return sendSuccess(pRes, &res, resDest)
+	case "BdevInit":
+		var iReq bdev.InitRequest
+		if err := json.Unmarshal(req.Payload, &iReq); err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		err = bdevProvider.Init(iReq)
+		if err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		return sendSuccess(nil, &res, resDest)
+	case "BdevScan":
+		var sReq bdev.ScanRequest
+		if err := json.Unmarshal(req.Payload, &sReq); err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		sRes, err := bdevProvider.Scan(sReq)
+		if err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		return sendSuccess(sRes, &res, resDest)
+	case "BdevPrepare":
+		var pReq bdev.PrepareRequest
+		if err := json.Unmarshal(req.Payload, &pReq); err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		pRes, err := bdevProvider.Prepare(pReq)
+		if err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		return sendSuccess(pRes, &res, resDest)
+	case "BdevFormat":
+		var fReq bdev.FormatRequest
+		if err := json.Unmarshal(req.Payload, &fReq); err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		fRes, err := bdevProvider.Format(fReq)
+		if err != nil {
+			return sendFailure(err, &res, resDest)
+		}
+
+		return sendSuccess(fRes, &res, resDest)
 	default:
 		return sendFailure(errors.Errorf("unhandled method %q", req.Method), &res, resDest)
 	}
