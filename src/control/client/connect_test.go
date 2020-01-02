@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -240,26 +241,6 @@ func TestKillRank(t *testing.T) {
 	}
 }
 
-func newMockConnectCfg(log logging.Logger, cfg *mockConnectConfig) *connList {
-	if cfg == nil {
-		cfg = &mockConnectConfig{}
-	}
-
-	cl := &connList{
-		log: log,
-		factory: &mockControllerFactory{
-			log:          log,
-			controlCfg:   cfg.controlConfig,
-			ctlClientCfg: cfg.ctlClientCfg,
-			svcClientCfg: cfg.svcClientCfg,
-		},
-	}
-
-	_ = cl.ConnectClients(cfg.addresses)
-
-	return cl
-}
-
 func TestPoolQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mc      *mockConnectConfig
@@ -300,7 +281,7 @@ func TestPoolQuery(t *testing.T) {
 						Activetargets: 16,
 						Disabled:      true,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
-							State:   mgmtpb.PoolRebuildState_BUSY,
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
 							Records: 2,
 						},
@@ -747,6 +728,155 @@ func TestListPools(t *testing.T) {
 
 			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolSetProp(t *testing.T) {
+	const (
+		testPropName          = "test-prop"
+		testPropValStr        = "test-val"
+		testPropValNum uint64 = 42
+	)
+
+	for name, tc := range map[string]struct {
+		mc      *mockConnectConfig
+		req     PoolSetPropReq
+		expResp *PoolSetPropResp
+		expErr  error
+	}{
+		"no active connections": {
+			expErr: errors.New("no active connections"),
+		},
+		"set-prop fails": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolSetPropErr: errors.New("set-prop failed"),
+				},
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+			expErr: errors.New("set-prop failed"),
+		},
+		"nonzero resp status": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+						Status: -42,
+					},
+				},
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+			expErr: errors.New("DAOS returned error code: -42"),
+		},
+		"empty request property": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: "",
+			},
+			expErr: errors.New("invalid property name"),
+		},
+		"invalid request value": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+			},
+			expErr: errors.New("unhandled property value"),
+		},
+		"invalid response value": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolSetPropResult: &mgmtpb.PoolSetPropResp{},
+				},
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValNum,
+			},
+			expErr: errors.New("unable to represent response value"),
+		},
+		"successful string property": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+						Property: &mgmtpb.PoolSetPropResp_Name{
+							Name: testPropName,
+						},
+						Value: &mgmtpb.PoolSetPropResp_Strval{
+							Strval: testPropValStr,
+						},
+					},
+				},
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+			expResp: &PoolSetPropResp{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValStr,
+			},
+		},
+		"successful numeric property": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: mockMgmtSvcClientConfig{
+					poolSetPropResult: &mgmtpb.PoolSetPropResp{
+						Property: &mgmtpb.PoolSetPropResp_Name{
+							Name: testPropName,
+						},
+						Value: &mgmtpb.PoolSetPropResp_Numval{
+							Numval: testPropValNum,
+						},
+					},
+				},
+			},
+			req: PoolSetPropReq{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    testPropValNum,
+			},
+			expResp: &PoolSetPropResp{
+				UUID:     MockUUID,
+				Property: testPropName,
+				Value:    strconv.FormatUint(testPropValNum, 10),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			c := newMockConnectCfg(log, tc.mc)
+			gotResp, gotErr := c.PoolSetProp(tc.req)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

@@ -113,6 +113,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
