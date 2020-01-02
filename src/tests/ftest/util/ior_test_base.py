@@ -275,7 +275,7 @@ class IorTestBase(TestWithServers):
         self.lock.acquire(True)
         tsize = self.ior_cmd.transfer_size.value
         testfile = os.path.join(self.dfuse.mount_dir.value,
-                                "testfile{}{}".format(tsize, jobnum))
+                                "testfile{}{}".format(tsize, job_num))
         if intercept:
             testfile += "intercept"
         self.ior_cmd.test_file.update(testfile)
