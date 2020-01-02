@@ -214,5 +214,9 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);
+void
+ds_pool_disable_evict(void);
+void
+ds_pool_enable_evict(void);
 
 #endif /* __DAOS_SRV_POOL_H__ */

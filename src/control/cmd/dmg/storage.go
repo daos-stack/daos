@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	summarySep = "/"
-	successMsg = "storage format ok"
+	rowFieldSep = "/"
+	successMsg  = "storage format ok"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -122,10 +122,10 @@ func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error
 		if len(groups) == 0 {
 			return "no hosts found", nil
 		}
-		return storageSummaryTable("Hosts", "SCM Total", "NVMe Total", groups)
+		return tabulateHostGroups(groups, "Hosts", "SCM Total", "NVMe Total")
 	}
 
-	formatHostGroupResults(out, groups)
+	formatHostGroups(out, groups)
 
 	return out.String(), nil
 }
@@ -150,7 +150,7 @@ func groupScanResults(result *client.StorageScanResp, summary bool) (groups host
 
 		if summary {
 			fmt.Fprintf(buf, "%s%s%s", result.Scm[srv].Summary(),
-				summarySep, result.Nvme[srv].Summary())
+				rowFieldSep, result.Nvme[srv].Summary())
 			if err = groups.AddHost(buf.String(), host); err != nil {
 				return
 			}
@@ -234,7 +234,7 @@ func formatCmdDisplay(results client.StorageFormatResults, summary bool) (string
 		fmt.Fprintf(out, "\n%s\n", groups)
 	}
 
-	return formatHostGroupResults(out, mixedGroups), nil
+	return formatHostGroups(out, mixedGroups), nil
 }
 
 // groupFormatResults collects identical output keyed on hostset from

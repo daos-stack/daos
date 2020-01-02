@@ -97,7 +97,7 @@ func (fc *FabricConfig) Validate() error {
 func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
-		kv := strings.Split(pair, "=")
+		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			continue
 		}
@@ -111,7 +111,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 	mergedKeys := make(map[string]struct{})
 	for _, pair := range newVars {
-		kv := strings.Split(pair, "=")
+		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			continue
 		}
