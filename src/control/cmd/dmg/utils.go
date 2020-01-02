@@ -137,7 +137,8 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	return
 }
 
-func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	for _, res := range groups.Keys() {
 		hostset := groups[res].RangedString()
 		lineBreak := strings.Repeat("-", len(hostset))
@@ -145,4 +146,32 @@ func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) strin
 	}
 
 	return buf.String()
+}
+
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
+
+	formatter := NewTableFormatter(titles)
+	var table []TableRow
+
+	for _, result := range groups.Keys() {
+		row := TableRow{groupTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, rowFieldSep)
+		if len(summary) != len(columnTitles) {
+			return "", errors.New("unexpected summary format")
+		}
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
 }
