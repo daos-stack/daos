@@ -337,8 +337,8 @@ def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
     return result
 
 
-def get_pool_uuid_from_stdout(stdout_str):
-    """Get Pool UUID from stdout.
+def get_pool_uuid_service_replicas_from_stdout(stdout_str):
+    """Get Pool UUID and Service replicas from stdout.
 
     stdout_str is something like:
     Active connections: [wolf-3:10001]
@@ -352,7 +352,8 @@ def get_pool_uuid_from_stdout(stdout_str):
         stdout_str (str): Output of pool create command.
 
     Returns:
-        str: Pool UUID if found. Otherwise None.
+        Tuple (str, str): Tuple that contains two items; Pool UUID and Service
+            replicas if found. If not found, the tuple contains None.
     """
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to

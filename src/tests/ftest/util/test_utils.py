@@ -35,8 +35,7 @@ from env_modules import load_mpi
 import ctypes
 import getpass
 import grp
-from dmg_utils import (get_pool_uuid_from_stdout,
-                       get_service_replicas_from_stdout, DmgCommand)
+from dmg_utils import (get_pool_uuid_service_replicas_from_stdout, DmgCommand)
 
 class CallbackHandler(object):
     """Defines a callback method to use with DaosApi class methods."""
@@ -320,9 +319,10 @@ class TestPool(TestDaosApiBase):
             self.log.info("Result stdout = %s", create_result.stdout)
             self.log.info("Result exit status = %s", create_result.exit_status)
             # Get UUID and service replica from the output
-            new_uuid = get_pool_uuid_from_stdout(create_result.stdout)
-            service_replica = get_service_replicas_from_stdout(
+            uuid_svc = get_pool_uuid_service_replicas_from_stdout(
                 create_result.stdout)
+            new_uuid = uuid_svc[0]
+            service_replica = uuid_svc[1]
 
             # 3. Create DaosPool object. The process is similar to the one in
             # DaosPool.create, but there are some modifications
