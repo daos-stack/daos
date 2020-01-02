@@ -75,12 +75,12 @@ class MdtestSmall(MdtestBase):
                             for depth in dir_depth[:-1]:
                                 self.mdtest_cmd.depth.update(depth)
                                 self.execute_mdtest()
-                                self.mdtest_cmd.num_of_files_dirs.update(" ")
+                                self.mdtest_cmd.num_of_files_dirs.update(None)
                         else:
                             self.mdtest_cmd.items.update(num_of_items)
                             self.mdtest_cmd.depth.update(dir_depth[2])
                             self.execute_mdtest()
-                            self.mdtest_cmd.items.update(" ")
+                            self.mdtest_cmd.items.update(None)
             else:
                 for api in mdtest_api:
                     self.mdtest_cmd.api.update(api)
@@ -101,5 +101,5 @@ class MdtestSmall(MdtestBase):
                         self.mdtest_cmd.depth.update(dir_depth[2])
 
                     self.execute_mdtest()
-                    self.mdtest_cmd.num_of_files_dirs.update(" ")
-                    self.mdtest_cmd.items.update(" ")
+                    self.mdtest_cmd.num_of_files_dirs.update(None)
+                    self.mdtest_cmd.items.update(None)
