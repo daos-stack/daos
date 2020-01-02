@@ -157,7 +157,7 @@ class IorTestBase(TestWithServers):
                 self.cancelForTicket("DAOS-3449")
             self.start_dfuse()
             testfile = os.path.join(self.dfuse.mount_dir.value,
-                                      "testfile{}".format(test_file_suffix))
+                                    "testfile{}".format(test_file_suffix))
 
             self.ior_cmd.test_file.update(testfile)
 
