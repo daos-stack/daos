@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import os
-import subprocess
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers

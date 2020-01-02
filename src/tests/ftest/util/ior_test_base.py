@@ -22,12 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
-import subprocess
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure, EnvironmentVariables
+from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils import TestPool
 from dfuse_utils import Dfuse
