@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package scm
+package bdev
 
 import (
 	"github.com/daos-stack/daos/src/control/logging"
@@ -39,55 +39,22 @@ func NewForwarder(log logging.Logger) *Forwarder {
 	}
 }
 
-func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
+func (f *Forwarder) Init(req InitRequest) error {
 	req.Forwarded = true
 
-	res := new(MountResponse)
-	if err := f.SendReq("ScmMount", req, res); err != nil {
-		return nil, err
+	res := new(InitResponse)
+	if err := f.SendReq("BdevInit", req, res); err != nil {
+		return err
 	}
 
-	return res, nil
-}
-
-func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
-	req.Forwarded = true
-
-	res := new(MountResponse)
-	if err := f.SendReq("ScmUnmount", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
-	req.Forwarded = true
-
-	res := new(FormatResponse)
-	if err := f.SendReq("ScmFormat", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
-	req.Forwarded = true
-
-	res := new(FormatResponse)
-	if err := f.SendReq("ScmCheckFormat", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
+	return nil
 }
 
 func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 
 	res := new(ScanResponse)
-	if err := f.SendReq("ScmScan", req, res); err != nil {
+	if err := f.SendReq("BdevScan", req, res); err != nil {
 		return nil, err
 	}
 
@@ -98,7 +65,18 @@ func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	req.Forwarded = true
 
 	res := new(PrepareResponse)
-	if err := f.SendReq("ScmPrepare", req, res); err != nil {
+	if err := f.SendReq("BdevPrepare", req, res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
+	req.Forwarded = true
+
+	res := new(FormatResponse)
+	if err := f.SendReq("BdevFormat", req, res); err != nil {
 		return nil, err
 	}
 

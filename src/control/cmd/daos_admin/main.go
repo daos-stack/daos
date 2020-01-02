@@ -35,6 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -99,7 +100,8 @@ func main() {
 	}
 
 	scmProvider := scm.DefaultProvider(log).WithForwardingDisabled()
-	if err := handleRequest(log, scmProvider, req, conn); err != nil {
+	bdevProvider := bdev.DefaultProvider(log).WithForwardingDisabled()
+	if err := handleRequest(log, scmProvider, bdevProvider, req, conn); err != nil {
 		exitWithError(log, err)
 	}
 }
