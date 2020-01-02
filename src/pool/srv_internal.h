@@ -104,6 +104,7 @@ void ds_pool_attr_list_handler(crt_rpc_t *rpc);
 void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
+int ds_pool_evict_rank(uuid_t pool_uuid, d_rank_t rank);
 
 /*
  * srv_target.c
@@ -117,9 +118,6 @@ int ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				      void *priv);
-void ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
