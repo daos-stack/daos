@@ -357,34 +357,10 @@ def get_pool_uuid_from_stdout(stdout_str):
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to
     # get the returned value.
-    matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
-    if len(matches) > 0:
-        return matches[0]
-    return None
-
-
-def get_service_replicas_from_stdout(stdout_str):
-    """Get service replicas from stdout.
-
-    stdout_str is something like:
-    Active connections: [wolf-3:10001]
-    Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
-    Pool-create command SUCCEEDED: UUID: 9cf5be2d-083d-4f6b-9f3e-38d771ee313f,
-    Service replicas: 0
-
-    This method makes it easy to create a test. This method expects there's a
-    single number after "Service replicas:"
-
-    Args:
-        stdout_str (str): Output of pool create command.
-
-    Returns:
-        str: Service replicas value if found. Otherwise None.
-    """
-    # Find the following with regex. One or more of whitespace after "Service
-    # replicas:" followed by one of more of number. Use parenthesis to get the
-    # returned value.
-    matches = re.findall(r"Service replicas:\s+([0-9]+)", stdout_str)
-    if len(matches) > 0:
-        return matches[0]
-    return None
+    uuid = None
+    svc = None
+    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
+    if match:
+        uuid = match.group(1)
+        svc = match.group(2)
+    return uuid, svc
