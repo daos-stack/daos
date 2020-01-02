@@ -1047,7 +1047,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 

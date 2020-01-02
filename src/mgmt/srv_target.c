@@ -617,7 +617,6 @@ out:
 int
 tgt_kill_pool(void *args)
 {
-	/* kccain1 - propagate "force" boolean? */
 	struct d_uuid	*id = args;
 
 	/* XXX: there are a few test cases that leak pool close
@@ -697,8 +696,6 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
-		/* kccain1 - propagate "force' boolean? */
-		/* kccain1 - why not td_in->td_pool_uuid as first arg?) */
 		rc = tgt_destroy(td_req->cr_input, path);
 	} else if (errno == ENOENT) {
 		char	*zombie;
