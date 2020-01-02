@@ -798,19 +798,6 @@ int
 vos_iter_delete(daos_handle_t ih, void *args);
 
 /**
- * Aggregate the creation/punch records in the current entry of the iterator
- *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
- *
- * \return		Zero on Success
- *			-DER_NONEXIST if the entry has been removed entirely
- *			negative value if error
- */
-int
-vos_iter_aggregate(daos_handle_t ih, bool discard);
-
-/**
  * If the iterator has any element. The condition provided to vos_iter_prepare
  * will not be taken into account, so even if there is no element can match
  * the iterator condition, but the function still returns false if there is

@@ -1417,16 +1417,17 @@ exit:
 	return rc;
 }
 
-static int
-vos_obj_iter_aggregate(struct vos_iterator *iter, bool discard)
+int
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 {
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
-	bool			 deleted = false;
+	bool			 reprobe = false;
 	int			 rc;
 
 	D_ASSERTF(iter->it_type != VOS_ITER_SINGLE &&
@@ -1453,25 +1454,26 @@ vos_obj_iter_aggregate(struct vos_iterator *iter, bool discard)
 
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */
-		deleted = true;
+		reprobe = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		if (((krec->kr_bmap & KREC_BF_BTR) &&
-		     !dbtree_is_empty_inplace(&krec->kr_btr)) ||
+		D_ASSERTF(((krec->kr_bmap & KREC_BF_BTR) &&
+		     dbtree_is_empty_inplace(&krec->kr_btr)) ||
 		    ((krec->kr_bmap & KREC_BF_EVT) &&
-		     !evtree_is_empty_inplace(&krec->kr_evt))) {
-			/* Keys/records in subtree are inaccessible */
-			D_DEBUG(DB_IO, "Deleting orphaned subtree\n");
-		}
+		     evt_is_empty(&krec->kr_evt)), "Subtree is orphaned\n");
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
+	} else if (rc == -DER_NONEXIST) {
+		/* Key no longer exists at epoch but isn't empty */
+		reprobe = true;
+		rc = 0;
 	}
 
 	rc = vos_tx_end(umm, rc);
 
 exit:
-	if (rc == 0 && deleted)
-		return -DER_NONEXIST; /* Indicate the key was removed */
+	if (rc == 0 && reprobe)
+		return 1;
 
 	return rc;
 
@@ -1528,7 +1530,6 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
 	.iop_delete		= vos_obj_iter_delete,
-	.iop_aggregate		= vos_obj_iter_aggregate,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**

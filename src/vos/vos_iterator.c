@@ -532,23 +532,6 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
-int
-vos_iter_aggregate(daos_handle_t ih, bool discard)
-{
-	struct vos_iterator *iter = vos_hdl2iter(ih);
-	int rc;
-
-	rc = iter_verify_state(iter);
-	if (rc)
-		return rc;
-
-	D_ASSERT(iter->it_ops != NULL);
-	if (iter->it_ops->iop_aggregate == NULL)
-		return -DER_NOSYS;
-
-	return iter->it_ops->iop_aggregate(iter, discard);
-}
-
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -678,6 +661,7 @@ probe:
 				break;
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
+			acts = 0;
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&

@@ -856,8 +856,6 @@ struct vos_iter_ops {
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter,
 			      void *args);
-	/** Aggregate the current entry */
-	int	(*iop_aggregate)(struct vos_iterator *iter, bool discard);
 	/**
 	 * Optional, the iterator has no element.
 	 *
@@ -1016,5 +1014,35 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
+
+/**
+ * Aggregate the creation/punch records in the current entry of the object
+ * iterator
+ *
+ * \param ih[IN]	Iterator handle
+ * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ *
+ * \return		Zero on Success
+ *			1 if a reprobe is needed (entry is removed or not
+ *			visible)
+ *			negative value otherwise
+ */
+int
+oi_iter_aggregate(daos_handle_t ih, bool discard);
+
+/**
+ * Aggregate the creation/punch records in the current entry of the key
+ * iterator
+ *
+ * \param ih[IN]	Iterator handle
+ * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ *
+ * \return		Zero on Success
+ *			1 if a reprobe is needed (entry is removed or not
+ *			visible)
+ *			negative value otherwise
+ */
+int
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
 
 #endif /* __VOS_INTERNAL_H__ */

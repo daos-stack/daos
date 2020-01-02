@@ -1395,17 +1395,18 @@ ilog_fetch_finish(struct ilog_entries *entries)
 
 static int
 remove_ilog_entry(struct ilog_context *lctx, daos_handle_t *toh,
-		  struct ilog_entry *entry, int *removed)
+		  const struct ilog_entry *entry, int *removed)
 {
-	d_iov_t	iov;
-	int	rc;
+	struct ilog_id	id = entry->ie_id;
+	d_iov_t		iov;
+	int		rc;
 
 	rc = ilog_tx_begin(lctx);
 	if (rc != 0)
 		return rc;
 	D_DEBUG(DB_IO, "Removing ilog entry at "DF_U64"\n",
 		entry->ie_id.id_epoch);
-	d_iov_set(&iov, &entry->ie_id, sizeof(entry->ie_id));
+	d_iov_set(&iov, &id, sizeof(id));
 	rc = dbtree_delete(*toh, BTR_PROBE_EQ, &iov, lctx);
 	if (rc != 0) {
 		D_ERROR("Could not remove entry from tree: "DF_RC"\n",
@@ -1420,6 +1421,98 @@ remove_ilog_entry(struct ilog_context *lctx, daos_handle_t *toh,
 	return 0;
 }
 
+struct agg_arg {
+	const daos_epoch_range_t	*aa_epr;
+	const struct ilog_entry		*aa_prev;
+	const struct ilog_entry		*aa_prior_punch;
+	daos_epoch_t			 aa_punched;
+	bool				 aa_discard;
+};
+
+enum {
+	AGG_RC_DONE,
+	AGG_RC_NEXT,
+	AGG_RC_REMOVE,
+	AGG_RC_REMOVE_PREV,
+};
+
+static int
+check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
+{
+	int	rc;
+
+	D_DEBUG(DB_TRACE, "Entry "DF_U64" punch=%s prev="DF_U64
+		" prior_punch="DF_U64"\n", entry->ie_id.id_epoch,
+		entry->ie_punch ? "yes" : "no",
+		agg_arg->aa_prev ? agg_arg->aa_prev->ie_id.id_epoch : 0,
+		agg_arg->aa_prior_punch ?
+		agg_arg->aa_prior_punch->ie_id.id_epoch : 0);
+
+	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
+		D_GOTO(done, rc = AGG_RC_DONE);
+	if (entry->ie_id.id_epoch < agg_arg->aa_epr->epr_lo) {
+		if (entry->ie_id.id_epoch <= agg_arg->aa_punched) {
+			/* Skip entries outside of the range and
+			 * punched by the parent
+			 */
+			D_GOTO(done, rc = AGG_RC_NEXT);
+		}
+		if (entry->ie_punch) {
+			/* Just save the prior punch entry */
+			agg_arg->aa_prior_punch = entry;
+		} else {
+			/* A create covers the prior punch */
+			agg_arg->aa_prior_punch = NULL;
+		}
+		D_GOTO(done, rc = AGG_RC_NEXT);
+	}
+
+	/* With purge set, there should not be uncommitted entries */
+	D_ASSERT(entry->ie_status != ILOG_UNCOMMITTED);
+
+	if (agg_arg->aa_discard || entry->ie_status == ILOG_REMOVED ||
+	    agg_arg->aa_punched >= entry->ie_id.id_epoch) {
+		/* Remove stale entry or punched entry */
+		D_GOTO(done, rc = AGG_RC_REMOVE);
+	}
+
+	if (agg_arg->aa_prev != NULL) {
+		const struct ilog_entry	*prev = agg_arg->aa_prev;
+		bool			 punch = prev->ie_punch;
+
+		if (!punch) {
+			/* punched by outer level */
+			punch = prev->ie_id.id_epoch <= agg_arg->aa_punched;
+		}
+		if (entry->ie_punch == punch) {
+			/* Remove redundant entry */
+			D_GOTO(done, rc = AGG_RC_REMOVE);
+		}
+	}
+
+	if (!entry->ie_punch) {
+		/* Create is needed for now */
+		D_GOTO(done, rc = AGG_RC_NEXT);
+	}
+
+	if (agg_arg->aa_prev == NULL) {
+		/* No punched entry to remove */
+		D_GOTO(done, rc = AGG_RC_REMOVE);
+	}
+
+	if (agg_arg->aa_prev->ie_id.id_epoch < agg_arg->aa_epr->epr_lo) {
+		/** Data punched is not in range */
+		agg_arg->aa_prior_punch = entry;
+		D_GOTO(done, rc = AGG_RC_NEXT);
+	}
+
+	D_ASSERT(!agg_arg->aa_prev->ie_punch);
+	/* Punch is redundant or covers nothing.  Remove it. */
+	rc = AGG_RC_REMOVE_PREV;
+done:
+	return rc;
+}
+
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
@@ -1428,8 +1521,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_context	*lctx;
 	struct ilog_entry	*entry;
-	struct ilog_entry	*prev;
-	struct ilog_entry	*prior_punch;
+	struct agg_arg		 agg_arg;
 	struct ilog_root	*root;
 	struct ilog_root	 tmp = {0};
 	struct ilog_id		 old_id;
@@ -1464,21 +1556,22 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	D_ASSERT(!ilog_empty(root)); /* ilog_fetch should have failed */
 
+	agg_arg.aa_epr = epr;
+	agg_arg.aa_prev = NULL;
+	agg_arg.aa_prior_punch = NULL;
+	agg_arg.aa_punched = punched;
+	agg_arg.aa_discard = discard;
+
 	if (root->lr_tree.it_embedded) {
 		entry = &entries->ie_entries[0];
-		switch (entry->ie_status) {
-		case ILOG_COMMITTED:
-			if (entry->ie_id.id_epoch < epr->epr_lo ||
-			    entry->ie_id.id_epoch > epr->epr_hi) {
-				rc = 0;
-				goto done;
-			}
-			if (!discard && !entry->ie_punch) {
-				rc = 0;
-				return 0;
-			}
-			/* fallthrough */
-		case ILOG_REMOVED:
+		rc = check_agg_entry(&entries->ie_entries[0], &agg_arg);
+
+		switch (rc) {
+		case AGG_RC_DONE:
+		case AGG_RC_NEXT:
+			rc = 0;
+			break;
+		case AGG_RC_REMOVE:
 			old_id = root->lr_id;
 			tmp.lr_magic = ilog_ver_inc(lctx);
 			rc = ilog_ptr_set(lctx, root, &tmp);
@@ -1487,12 +1580,14 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 			empty = true;
 			rc = ilog_log_del(lctx, &old_id);
-			D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64"\n",
-				entry->ie_id.id_epoch);
-			removed++;
+			D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64" "DF_RC
+				"\n", entry->ie_id.id_epoch, DP_RC(rc));
+			if (rc == 0)
+				removed++;
 			break;
+		case AGG_RC_REMOVE_PREV:
+			/* Fall through: Should not get this here */
 		default:
-			/* Should never be UNCOMMITTED with purge set */
 			D_ASSERT(0);
 		}
 		goto done;
@@ -1505,76 +1600,34 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			"\n", DP_RC(rc));
 		return rc;
 	}
-	prev = NULL;
-	prior_punch = NULL;
 	ilog_foreach_entry(entries, entry) {
-		D_DEBUG(DB_TRACE, "Entry "DF_U64" punch=%s prev="DF_U64
-			" prior_punch="DF_U64"\n", entry->ie_id.id_epoch,
-			entry->ie_punch ? "yes" : "no",
-			prev ? prev->ie_id.id_epoch : 0,
-			prior_punch ? prior_punch->ie_id.id_epoch : 0);
-		if (entry->ie_id.id_epoch > epr->epr_hi)
-			break; /* Done */
-		if (entry->ie_id.id_epoch < epr->epr_lo) {
-			if (entry->ie_id.id_epoch <= punched) {
-				/* Skip entries outside of the range and
-				 * punched by the parent
-				 */
-				continue;
-			}
-			if (entry->ie_punch) {
-				/* Just save the prior punch entry */
-				prior_punch = entry;
-			} else {
-				/* A create covers the prior punch */
-				prior_punch = NULL;
-			}
-			goto next; /* skip to next entry */
+		rc = check_agg_entry(entry, &agg_arg);
+
+		switch (rc) {
+		case AGG_RC_DONE:
+			goto collapse;
+		case AGG_RC_NEXT:
+			agg_arg.aa_prev = entry;
+			break;
+		case AGG_RC_REMOVE_PREV:
+			rc = remove_ilog_entry(lctx, &toh, agg_arg.aa_prev,
+					       &removed);
+			if (rc != 0)
+				goto done;
+
+			agg_arg.aa_prev = agg_arg.aa_prior_punch;
+			/* Fall through */
+		case AGG_RC_REMOVE:
+			rc = remove_ilog_entry(lctx, &toh, entry, &removed);
+			if (rc != 0)
+				goto done;
+			break;
+		default:
+			/* Unknown return code */
+			D_ASSERT(0);
 		}
-		if (discard || entry->ie_status == ILOG_REMOVED ||
-		    punched >= entry->ie_id.id_epoch) {
-			/* Remove stale entry or punched entry */
-			goto remove_entry;
-		}
-
-		if (prev != NULL && prev->ie_punch == entry->ie_punch) {
-			/* Remove redundant entry */
-			goto remove_entry;
-		}
-
-		if (!entry->ie_punch) {
-			/* Create is needed for now */
-			goto next;
-		}
-
-		if (prev == NULL)
-			goto remove_entry;
-
-		if (prev->ie_id.id_epoch < epr->epr_lo) {
-			/** Data punched is not in range */
-			prior_punch = entry;
-			goto next;
-		}
-
-		/* remove the punched create entry */
-		D_ASSERT(!prev->ie_punch);
-		rc = remove_ilog_entry(lctx, &toh, prev,
-				       &removed);
-		if (rc != 0)
-			goto done;
-
-		/* Punch is redundant or covers nothing.  Remove it. */
-		prev = prior_punch;
-		goto remove_entry;
-next:
-		prev = entry;
-		continue;
-remove_entry:
-		rc = remove_ilog_entry(lctx, &toh, entry, &removed);
-		if (rc != 0)
-			goto done;
 	}
-
+collapse:
 	rc = collapse_tree(lctx, &toh);
 
 	empty = ilog_empty(root);

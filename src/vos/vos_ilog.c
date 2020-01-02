@@ -324,13 +324,21 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   struct vos_ilog_info *info)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct ilog_desc_cbs	 cbs;
 	struct umem_instance	*umm = vos_cont2umm(cont);
+	struct ilog_desc_cbs	 cbs;
+	int			 rc;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
+	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
 
-	return ilog_aggregate(umm, ilog, &cbs, epr, discard, punched,
-			      &info->ii_entries);
+	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punched,
+			    &info->ii_entries);
+
+	if (rc != 0)
+		return rc;
+
+	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi,
+			      punched, NULL, info);
 }
 
 void

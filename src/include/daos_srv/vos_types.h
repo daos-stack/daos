@@ -231,14 +231,17 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
+		/** Key, object, or DTX entry */
 		struct {
 			/** Non-zero if punched */
 			daos_epoch_t		ie_punch;
 			union {
+				/** dkey or akey */
 				struct {
-					/** dkey or akey */
+					/** key value */
 					daos_key_t		ie_key;
 				};
+				/** object or DTX entry */
 				struct {
 					/** The DTX identifier. */
 					struct dtx_id		ie_xid;
@@ -251,6 +254,7 @@ typedef struct {
 				};
 			};
 		};
+		/** Array entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -285,8 +289,6 @@ enum {
 	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
 	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
 	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
-	VOS_ITER_CB_AGGREGATE	= (1UL << 3),	/* Aggregate entry */
-	VOS_ITER_CB_DISCARD	= (1UL << 4),	/* Discard entry */
 };
 
 /**

@@ -134,8 +134,7 @@ struct vos_agg_param {
 	daos_unit_oid_t		ap_oid;		/* current object ID */
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
-	unsigned int		ap_sub_tree_empty:1,
-				ap_discard:1;
+	unsigned int		ap_discard:1;
 	struct umem_instance	*ap_umm;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -383,7 +382,6 @@ delete:
 	if (rc) {
 		D_ERROR("Failed to delete SV entry: %d\n", rc);
 	} else if (vos_iter_empty(ih) == 1 && agg_param->ap_discard) {
-		agg_param->ap_sub_tree_empty = 1;
 		/* Trigger re-probe in akey iteration */
 		*acts |= VOS_ITER_CB_YIELD;
 	}
@@ -1379,7 +1377,6 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * always inform vos_iterate() to check if subtree is empty.
 		 */
 		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
-			agg_param->ap_sub_tree_empty = 1;
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
 		}
@@ -1488,8 +1485,11 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_OBJ:
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		break;
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
 		break;
 	case VOS_ITER_SINGLE:
 		return 0;
@@ -1500,9 +1500,8 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return -DER_INVAL;
 	}
 
-	rc = vos_iter_aggregate(ih, agg_param->ap_discard);
-	if (rc == -DER_NONEXIST) {
-		/* Entry was removed.  Trigger re-probe in iterator */
+	if (rc == 1) {
+		/* Reprobe flag is set */
 		*acts |= VOS_ITER_CB_YIELD;
 		rc = 0;
 	}

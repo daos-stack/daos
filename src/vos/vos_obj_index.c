@@ -512,8 +512,8 @@ oi_iter_match_probe(struct vos_iterator *iter)
 	}
 	return 0;
  failed:
-	if (rc == -DER_NONEXIST)
-		return 0; /* end of iteration, not a failure */
+	if (rc == -DER_NONEXIST) /* Non-existence isn't a failure */
+		return rc;
 
 	D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
 		 "iterator %s failed, rc=%d\n", str, rc);
@@ -624,13 +624,15 @@ exit:
 	return rc;
 }
 
-static int
-oi_iter_aggregate(struct vos_iterator *iter, bool discard)
+int
+oi_iter_aggregate(daos_handle_t ih, bool discard)
 {
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
+	bool			 reprobe = false;
 	bool			 deleted = false;
 	int			 rc;
 
@@ -657,26 +659,31 @@ oi_iter_aggregate(struct vos_iterator *iter, bool discard)
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
+		reprobe = true;
 		deleted = true;
-		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
-			/* Keys in subtree are inaccessible */
-			D_DEBUG(DB_IO, "Deleting orphaned subtree\n");
-		}
+		D_ASSERTF(dbtree_is_empty_inplace(&obj->vo_tree),
+			  "Subtree is orphaned\n");
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
+	} else if (rc == -DER_NONEXIST) {
+		/** ilog isn't visible in range but still has some enrtries */
+		reprobe = true;
+		rc = 0;
 	}
 
 	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && deleted) {
-		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-					  oiter->oit_cont, oid);
-		if (rc != 0)
-			D_ERROR("Could not evict object "DF_UOID"\n",
-				DP_UOID(oid));
+	if (rc == 0 && reprobe) {
+		if (deleted) {
+			/* Evict the object from cache */
+			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+						  oiter->oit_cont, oid);
+			if (rc != 0)
+				D_ERROR("Could not evict object "DF_UOID"\n",
+					DP_UOID(oid));
+		}
 
-		return -DER_NONEXIST;
+		return 1;
 	}
 
 	return rc;
@@ -690,7 +697,6 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_next		= oi_iter_next,
 	.iop_fetch		= oi_iter_fetch,
 	.iop_delete		= oi_iter_delete,
-	.iop_aggregate		= oi_iter_aggregate,
 };
 
 /**

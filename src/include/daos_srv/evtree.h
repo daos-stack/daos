@@ -239,7 +239,7 @@ struct evt_root {
 };
 
 static inline int
-evtree_is_empty_inplace(struct evt_root *root)
+evt_is_empty(struct evt_root *root)
 {
 	D_ASSERT(root != NULL);
 	return root->tr_depth == 0;

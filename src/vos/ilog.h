@@ -203,8 +203,9 @@ struct ilog_entries {
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
  *
- *  \return 0 on success, error code on failure, 1 if the log is empty after
- *  completion.
+ *  \return	0		success
+ *		1		success but indicates log is empty
+ *		< 0		Error
  */
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,

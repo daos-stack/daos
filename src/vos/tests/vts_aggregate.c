@@ -1203,6 +1203,7 @@ agg_punches_test(void **state, bool discard)
 			}
 		}
 	}
+	daos_fail_loc_set(0);
 }
 
 static void
@@ -1867,8 +1868,6 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS415: Aggregate many object/key punches",
-	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -1897,6 +1896,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
 	  aggregate_14, NULL, agg_tst_teardown },
+	{ "VOS415: Aggregate many object/key punches",
+	  aggregate_15, NULL, agg_tst_teardown },
 };
 
 int
