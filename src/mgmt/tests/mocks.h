@@ -106,4 +106,13 @@ void mock_ds_mgmt_list_cont_gen_cont(size_t ncont);
 void mock_ds_mgmt_pool_list_cont_setup(void);
 void mock_ds_mgmt_pool_list_cont_teardown(void);
 
+/*
+ * Mock ds_mgmt_pool_set_prop
+ */
+extern int		ds_mgmt_pool_set_prop_return;
+extern daos_prop_t	*ds_mgmt_pool_set_prop_result;
+
+void mock_ds_mgmt_pool_set_prop_setup(void);
+void mock_ds_mgmt_pool_set_prop_teardown(void);
+
 #endif /* __MGMT_TESTS_MOCKS_H__ */
