@@ -83,14 +83,14 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member identified
 // its string representation "address/rank".
 type MemberResult struct {
-	ID     string
+	Rank   uint32
 	Action string
 	Err    error
 }
 
 // NewMemberResult returns a reference to a new member result struct.
-func NewMemberResult(memberID, action string, err error) *MemberResult {
-	return &MemberResult{ID: memberID, Action: action, Err: err}
+func NewMemberResult(rank uint32, action string, err error) *MemberResult {
+	return &MemberResult{Rank: rank, Action: action, Err: err}
 }
 
 // MemberResults is a type alias for a slice of member result references.

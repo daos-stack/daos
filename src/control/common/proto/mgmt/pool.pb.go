@@ -3,9 +3,11 @@
 
 package mgmt
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // PoolRebuildState indicates the pool's rebuild state.
 type PoolRebuildState int32
@@ -32,6 +34,7 @@ var PoolRebuildState_name = map[int32]string{
 	1: "DONE",
 	2: "BUSY",
 }
+
 var PoolRebuildState_value = map[string]int32{
 	"IDLE": 0,
 	"DONE": 1,
@@ -41,8 +44,9 @@ var PoolRebuildState_value = map[string]int32{
 func (x PoolRebuildState) String() string {
 	return proto.EnumName(PoolRebuildState_name, int32(x))
 }
+
 func (PoolRebuildState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{0}
+	return fileDescriptor_8a14d8612184524f, []int{0}
 }
 
 // PoolCreateReq supplies new pool parameters.
@@ -65,16 +69,17 @@ func (m *PoolCreateReq) Reset()         { *m = PoolCreateReq{} }
 func (m *PoolCreateReq) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateReq) ProtoMessage()    {}
 func (*PoolCreateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{0}
+	return fileDescriptor_8a14d8612184524f, []int{0}
 }
+
 func (m *PoolCreateReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateReq.Unmarshal(m, b)
 }
 func (m *PoolCreateReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolCreateReq.Marshal(b, m, deterministic)
 }
-func (dst *PoolCreateReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolCreateReq.Merge(dst, src)
+func (m *PoolCreateReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolCreateReq.Merge(m, src)
 }
 func (m *PoolCreateReq) XXX_Size() int {
 	return xxx_messageInfo_PoolCreateReq.Size(m)
@@ -161,16 +166,17 @@ func (m *PoolCreateResp) Reset()         { *m = PoolCreateResp{} }
 func (m *PoolCreateResp) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateResp) ProtoMessage()    {}
 func (*PoolCreateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{1}
+	return fileDescriptor_8a14d8612184524f, []int{1}
 }
+
 func (m *PoolCreateResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateResp.Unmarshal(m, b)
 }
 func (m *PoolCreateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolCreateResp.Marshal(b, m, deterministic)
 }
-func (dst *PoolCreateResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolCreateResp.Merge(dst, src)
+func (m *PoolCreateResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolCreateResp.Merge(m, src)
 }
 func (m *PoolCreateResp) XXX_Size() int {
 	return xxx_messageInfo_PoolCreateResp.Size(m)
@@ -209,16 +215,17 @@ func (m *PoolDestroyReq) Reset()         { *m = PoolDestroyReq{} }
 func (m *PoolDestroyReq) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyReq) ProtoMessage()    {}
 func (*PoolDestroyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{2}
+	return fileDescriptor_8a14d8612184524f, []int{2}
 }
+
 func (m *PoolDestroyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyReq.Unmarshal(m, b)
 }
 func (m *PoolDestroyReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolDestroyReq.Marshal(b, m, deterministic)
 }
-func (dst *PoolDestroyReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolDestroyReq.Merge(dst, src)
+func (m *PoolDestroyReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolDestroyReq.Merge(m, src)
 }
 func (m *PoolDestroyReq) XXX_Size() int {
 	return xxx_messageInfo_PoolDestroyReq.Size(m)
@@ -262,16 +269,17 @@ func (m *PoolDestroyResp) Reset()         { *m = PoolDestroyResp{} }
 func (m *PoolDestroyResp) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyResp) ProtoMessage()    {}
 func (*PoolDestroyResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{3}
+	return fileDescriptor_8a14d8612184524f, []int{3}
 }
+
 func (m *PoolDestroyResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyResp.Unmarshal(m, b)
 }
 func (m *PoolDestroyResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolDestroyResp.Marshal(b, m, deterministic)
 }
-func (dst *PoolDestroyResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolDestroyResp.Merge(dst, src)
+func (m *PoolDestroyResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolDestroyResp.Merge(m, src)
 }
 func (m *PoolDestroyResp) XXX_Size() int {
 	return xxx_messageInfo_PoolDestroyResp.Size(m)
@@ -301,16 +309,17 @@ func (m *ListPoolsReq) Reset()         { *m = ListPoolsReq{} }
 func (m *ListPoolsReq) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsReq) ProtoMessage()    {}
 func (*ListPoolsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{4}
+	return fileDescriptor_8a14d8612184524f, []int{4}
 }
+
 func (m *ListPoolsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListPoolsReq.Unmarshal(m, b)
 }
 func (m *ListPoolsReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListPoolsReq.Marshal(b, m, deterministic)
 }
-func (dst *ListPoolsReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListPoolsReq.Merge(dst, src)
+func (m *ListPoolsReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsReq.Merge(m, src)
 }
 func (m *ListPoolsReq) XXX_Size() int {
 	return xxx_messageInfo_ListPoolsReq.Size(m)
@@ -341,16 +350,17 @@ func (m *ListPoolsResp) Reset()         { *m = ListPoolsResp{} }
 func (m *ListPoolsResp) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsResp) ProtoMessage()    {}
 func (*ListPoolsResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{5}
+	return fileDescriptor_8a14d8612184524f, []int{5}
 }
+
 func (m *ListPoolsResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListPoolsResp.Unmarshal(m, b)
 }
 func (m *ListPoolsResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListPoolsResp.Marshal(b, m, deterministic)
 }
-func (dst *ListPoolsResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListPoolsResp.Merge(dst, src)
+func (m *ListPoolsResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsResp.Merge(m, src)
 }
 func (m *ListPoolsResp) XXX_Size() int {
 	return xxx_messageInfo_ListPoolsResp.Size(m)
@@ -387,16 +397,17 @@ func (m *ListPoolsResp_Pool) Reset()         { *m = ListPoolsResp_Pool{} }
 func (m *ListPoolsResp_Pool) String() string { return proto.CompactTextString(m) }
 func (*ListPoolsResp_Pool) ProtoMessage()    {}
 func (*ListPoolsResp_Pool) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{5, 0}
+	return fileDescriptor_8a14d8612184524f, []int{5, 0}
 }
+
 func (m *ListPoolsResp_Pool) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListPoolsResp_Pool.Unmarshal(m, b)
 }
 func (m *ListPoolsResp_Pool) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListPoolsResp_Pool.Marshal(b, m, deterministic)
 }
-func (dst *ListPoolsResp_Pool) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListPoolsResp_Pool.Merge(dst, src)
+func (m *ListPoolsResp_Pool) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListPoolsResp_Pool.Merge(m, src)
 }
 func (m *ListPoolsResp_Pool) XXX_Size() int {
 	return xxx_messageInfo_ListPoolsResp_Pool.Size(m)
@@ -435,16 +446,17 @@ func (m *ListContReq) Reset()         { *m = ListContReq{} }
 func (m *ListContReq) String() string { return proto.CompactTextString(m) }
 func (*ListContReq) ProtoMessage()    {}
 func (*ListContReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{6}
+	return fileDescriptor_8a14d8612184524f, []int{6}
 }
+
 func (m *ListContReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListContReq.Unmarshal(m, b)
 }
 func (m *ListContReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListContReq.Marshal(b, m, deterministic)
 }
-func (dst *ListContReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListContReq.Merge(dst, src)
+func (m *ListContReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListContReq.Merge(m, src)
 }
 func (m *ListContReq) XXX_Size() int {
 	return xxx_messageInfo_ListContReq.Size(m)
@@ -474,16 +486,17 @@ func (m *ListContResp) Reset()         { *m = ListContResp{} }
 func (m *ListContResp) String() string { return proto.CompactTextString(m) }
 func (*ListContResp) ProtoMessage()    {}
 func (*ListContResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{7}
+	return fileDescriptor_8a14d8612184524f, []int{7}
 }
+
 func (m *ListContResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListContResp.Unmarshal(m, b)
 }
 func (m *ListContResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListContResp.Marshal(b, m, deterministic)
 }
-func (dst *ListContResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListContResp.Merge(dst, src)
+func (m *ListContResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListContResp.Merge(m, src)
 }
 func (m *ListContResp) XXX_Size() int {
 	return xxx_messageInfo_ListContResp.Size(m)
@@ -519,16 +532,17 @@ func (m *ListContResp_Cont) Reset()         { *m = ListContResp_Cont{} }
 func (m *ListContResp_Cont) String() string { return proto.CompactTextString(m) }
 func (*ListContResp_Cont) ProtoMessage()    {}
 func (*ListContResp_Cont) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{7, 0}
+	return fileDescriptor_8a14d8612184524f, []int{7, 0}
 }
+
 func (m *ListContResp_Cont) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ListContResp_Cont.Unmarshal(m, b)
 }
 func (m *ListContResp_Cont) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ListContResp_Cont.Marshal(b, m, deterministic)
 }
-func (dst *ListContResp_Cont) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ListContResp_Cont.Merge(dst, src)
+func (m *ListContResp_Cont) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListContResp_Cont.Merge(m, src)
 }
 func (m *ListContResp_Cont) XXX_Size() int {
 	return xxx_messageInfo_ListContResp_Cont.Size(m)
@@ -558,16 +572,17 @@ func (m *PoolQueryReq) Reset()         { *m = PoolQueryReq{} }
 func (m *PoolQueryReq) String() string { return proto.CompactTextString(m) }
 func (*PoolQueryReq) ProtoMessage()    {}
 func (*PoolQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{8}
+	return fileDescriptor_8a14d8612184524f, []int{8}
 }
+
 func (m *PoolQueryReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolQueryReq.Unmarshal(m, b)
 }
 func (m *PoolQueryReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolQueryReq.Marshal(b, m, deterministic)
 }
-func (dst *PoolQueryReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolQueryReq.Merge(dst, src)
+func (m *PoolQueryReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolQueryReq.Merge(m, src)
 }
 func (m *PoolQueryReq) XXX_Size() int {
 	return xxx_messageInfo_PoolQueryReq.Size(m)
@@ -601,16 +616,17 @@ func (m *StorageUsageStats) Reset()         { *m = StorageUsageStats{} }
 func (m *StorageUsageStats) String() string { return proto.CompactTextString(m) }
 func (*StorageUsageStats) ProtoMessage()    {}
 func (*StorageUsageStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{9}
+	return fileDescriptor_8a14d8612184524f, []int{9}
 }
+
 func (m *StorageUsageStats) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageUsageStats.Unmarshal(m, b)
 }
 func (m *StorageUsageStats) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageUsageStats.Marshal(b, m, deterministic)
 }
-func (dst *StorageUsageStats) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageUsageStats.Merge(dst, src)
+func (m *StorageUsageStats) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageUsageStats.Merge(m, src)
 }
 func (m *StorageUsageStats) XXX_Size() int {
 	return xxx_messageInfo_StorageUsageStats.Size(m)
@@ -671,16 +687,17 @@ func (m *PoolRebuildStatus) Reset()         { *m = PoolRebuildStatus{} }
 func (m *PoolRebuildStatus) String() string { return proto.CompactTextString(m) }
 func (*PoolRebuildStatus) ProtoMessage()    {}
 func (*PoolRebuildStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{10}
+	return fileDescriptor_8a14d8612184524f, []int{10}
 }
+
 func (m *PoolRebuildStatus) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolRebuildStatus.Unmarshal(m, b)
 }
 func (m *PoolRebuildStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolRebuildStatus.Marshal(b, m, deterministic)
 }
-func (dst *PoolRebuildStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolRebuildStatus.Merge(dst, src)
+func (m *PoolRebuildStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolRebuildStatus.Merge(m, src)
 }
 func (m *PoolRebuildStatus) XXX_Size() int {
 	return xxx_messageInfo_PoolRebuildStatus.Size(m)
@@ -738,16 +755,17 @@ func (m *PoolQueryResp) Reset()         { *m = PoolQueryResp{} }
 func (m *PoolQueryResp) String() string { return proto.CompactTextString(m) }
 func (*PoolQueryResp) ProtoMessage()    {}
 func (*PoolQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_726a694af50615e4, []int{11}
+	return fileDescriptor_8a14d8612184524f, []int{11}
 }
+
 func (m *PoolQueryResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolQueryResp.Unmarshal(m, b)
 }
 func (m *PoolQueryResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PoolQueryResp.Marshal(b, m, deterministic)
 }
-func (dst *PoolQueryResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PoolQueryResp.Merge(dst, src)
+func (m *PoolQueryResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PoolQueryResp.Merge(m, src)
 }
 func (m *PoolQueryResp) XXX_Size() int {
 	return xxx_messageInfo_PoolQueryResp.Size(m)
@@ -815,6 +833,7 @@ func (m *PoolQueryResp) GetNvme() *StorageUsageStats {
 }
 
 func init() {
+	proto.RegisterEnum("mgmt.PoolRebuildState", PoolRebuildState_name, PoolRebuildState_value)
 	proto.RegisterType((*PoolCreateReq)(nil), "mgmt.PoolCreateReq")
 	proto.RegisterType((*PoolCreateResp)(nil), "mgmt.PoolCreateResp")
 	proto.RegisterType((*PoolDestroyReq)(nil), "mgmt.PoolDestroyReq")
@@ -829,12 +848,11 @@ func init() {
 	proto.RegisterType((*StorageUsageStats)(nil), "mgmt.StorageUsageStats")
 	proto.RegisterType((*PoolRebuildStatus)(nil), "mgmt.PoolRebuildStatus")
 	proto.RegisterType((*PoolQueryResp)(nil), "mgmt.PoolQueryResp")
-	proto.RegisterEnum("mgmt.PoolRebuildState", PoolRebuildState_name, PoolRebuildState_value)
 }
 
-func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_726a694af50615e4) }
+func init() { proto.RegisterFile("pool.proto", fileDescriptor_8a14d8612184524f) }
 
-var fileDescriptor_pool_726a694af50615e4 = []byte{
+var fileDescriptor_8a14d8612184524f = []byte{
 	// 633 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x54, 0xdb, 0x6e, 0xd3, 0x4c,
 	0x10, 0xfe, 0x7d, 0x6a, 0xd3, 0x69, 0xdd, 0x3f, 0x5d, 0x55, 0xc5, 0x8a, 0x10, 0x32, 0x16, 0x17,
