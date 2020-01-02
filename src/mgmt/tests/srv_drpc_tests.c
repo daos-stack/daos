@@ -31,6 +31,7 @@
 #include <cmocka.h>
 
 #include <daos/drpc.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 #include <uuid/uuid.h>
 #include "../acl.pb-c.h"
