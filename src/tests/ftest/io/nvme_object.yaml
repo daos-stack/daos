@@ -18,7 +18,6 @@ server_config:
  servers:
    bdev_class: nvme
    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-   targets: 8
 pool:
  createmode:
   mode: 511
