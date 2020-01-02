@@ -33,6 +33,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_pool		*dfp = parent->ie_dfs->dfs_dfp;
 	struct dfuse_dfs		*dfs;
 	dfs_t				*ddfs;
 	int				rc;
@@ -48,6 +49,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 
+	dfs->dfs_dfp = dfp;
+
 	/* Dentry names where are not valid uuids cannot possibly be added so in
 	 * this case return the negative dentry with a timeout to prevent future
 	 * lookups.
@@ -55,17 +58,16 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (uuid_parse(name, dfs->dfs_cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_LOG_ERROR("Invalid container uuid");
+		DFUSE_LOG_INFO("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfs);
 		return;
 	}
-	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
 	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
 
 	if (create) {
-		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
+		rc = dfs_cont_create(dfp->dfp_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("dfs_cont_create() failed: (%d)", rc);
@@ -101,7 +103,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		}
 	}
 
-	rc = daos_cont_open(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
+	rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 			    DAOS_COO_RW, &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
 	if (rc == -DER_NONEXIST) {
@@ -117,9 +119,11 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
+	ie->ie_root = true;
+
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
 		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(close, rc);
@@ -142,7 +146,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_dfs = dfs;
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,

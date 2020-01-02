@@ -124,6 +124,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	char			cont[40] = {};
 	size_t			cont_size = 40;
 	struct dfuse_dfs	*dfs = NULL;
+	struct dfuse_pool	*dfp = NULL;
 	int ret;
 
 	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_UNS_POOL_ATTR,
@@ -153,7 +154,11 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (dfs == NULL)
 		return ENOMEM;
 
-	if (uuid_parse(pool, dfs->dfs_pool) < 0) {
+	D_ALLOC_PTR(dfp);
+	if (dfp == NULL)
+		return ENOMEM;
+
+	if (uuid_parse(pool, dfp->dfp_pool) < 0) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
 		D_GOTO(out_err, ret = EINVAL);
 	}
@@ -166,9 +171,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
 
 	/* Connect to DAOS pool */
-	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
+	rc = daos_pool_connect(dfp->dfp_pool, fs_handle->dpi_info->di_group,
 			       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
-			       &dfs->dfs_poh, &dfs->dfs_pool_info,
+			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
@@ -176,7 +181,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	/* Try to open the DAOS container (the mountpoint) */
-	rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont, DAOS_COO_RW,
+	rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
 			    &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
 	if (rc) {
@@ -185,7 +190,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_pool, ret = rc);
 	}
 
-	rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
 		       &dfs->dfs_ns);
 	if (rc) {
 		daos_cont_close(dfs->dfs_coh, NULL);
@@ -215,7 +220,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_umount, ret = rc);
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
@@ -239,11 +244,12 @@ out_cont:
 	if (rc)
 		DFUSE_TRA_ERROR(dfs, "daos_cont_close() failed %d", rc);
 out_pool:
-	rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+	rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 	if (rc)
 		DFUSE_TRA_ERROR(dfs, "daos_pool_disconnect() failed %d", rc);
 out_err:
 	D_FREE(dfs);
+	D_FREE(dfp);
 	return ret;
 }
 

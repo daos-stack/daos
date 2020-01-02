@@ -21,8 +21,6 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos/common.h>
-
 #include "dfuse_common.h"
 #include "dfuse.h"
 #include "daos_fs.h"
@@ -38,6 +36,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_info		*dfuse_info = fs_handle->dpi_info;
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
+	struct dfuse_pool		*dfp = NULL;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
 	daos_pool_info_t		pool_info = {};
@@ -55,36 +54,54 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!dfs)
 		D_GOTO(err, rc = ENOMEM);
 
+	D_ALLOC_PTR(dfp);
+	if (!dfp)
+		D_GOTO(err, rc = ENOMEM);
+
+	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+	dfs->dfs_dfp = dfp;
+
 	/*
 	 * Dentry names with invalid uuids cannot possibly be added. In this
 	 * case, return the negative dentry with a timeout to prevent future
 	 * lookups.
 	 */
-	if (uuid_parse(name, dfs->dfs_pool) < 0) {
+	if (uuid_parse(name, dfp->dfp_pool) < 0) {
 		entry.entry_timeout = 60;
-		DFUSE_LOG_ERROR("Invalid container uuid");
+		DFUSE_LOG_INFO("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
+		D_FREE(dfp);
 		D_FREE(dfs);
 		return;
 	}
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
+
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+
+
 	rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
 	if (rc == -DER_SUCCESS) {
-		DFUSE_TRA_INFO(ie,
-			       "Reusing existing pool entry without reconnect");
+		DFUSE_TRA_WARNING(ie,
+				"Reusing existing pool entry without reconnect");
 		entry.attr = ie->ie_stat;
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(req, entry);
+		D_FREE(dfp);
 		D_FREE(dfs);
 		return;
 	}
 
-	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
+	DFUSE_TRA_UP(dfp, parent->ie_dfs->dfs_dfp, "dfp");
 
-	rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
+	DFUSE_TRA_UP(dfs, dfp, "dfs");
+
+	rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
 			       dfuse_info->di_svcl, DAOS_PC_RW,
-			       &dfs->dfs_poh, &dfs->dfs_pool_info,
+			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc) {
 		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)", rc);
@@ -102,6 +119,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!ie)
 		D_GOTO(close, rc = ENOMEM);
 
+	ie->ie_root = true;
+
 	DFUSE_TRA_UP(ie, parent, "inode");
 
 	ie->ie_parent = parent->ie_stat.st_ino;
@@ -117,7 +136,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
-	rc = daos_pool_query(dfs->dfs_poh, NULL, &pool_info, prop, NULL);
+	rc = daos_pool_query(dfp->dfp_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "daos_pool_query() failed: (%d)", rc);
 		D_GOTO(close, rc = daos_der2errno(rc));
@@ -152,7 +171,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	daos_prop_free(prop);
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
@@ -168,11 +187,12 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return;
 close:
-	daos_pool_disconnect(dfs->dfs_poh, NULL);
+	daos_pool_disconnect(dfp->dfp_poh, NULL);
 	D_FREE(ie);
 	daos_prop_free(prop);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
+	D_FREE(dfp);
 	return;
 }

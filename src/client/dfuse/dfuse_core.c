@@ -62,8 +62,9 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		return true;
 	}
 
-	if (uuid_compare(ir->ir_id.irid_dfs->dfs_pool,
-			 ir_id->irid_dfs->dfs_pool) != 0)
+	/* TODO: This could just compare pointers now */
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_dfp->dfp_pool,
+			 ir_id->irid_dfs->dfs_dfp->dfp_pool) != 0)
 		return false;
 
 	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
@@ -220,6 +221,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
+	ie->ie_root = true;
+
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
@@ -283,7 +286,7 @@ ino_flush(d_list_t *rlink, void *arg)
 					      ie->ie_parent,
 					      ie->ie_name,
 					      strlen(ie->ie_name));
-	if (rc != 0)
+	if (rc != 0 && rc != -EBADF)
 		DFUSE_TRA_WARNING(ie,
 				  "%lu %lu '%s': %d %s",
 				  ie->ie_parent, ie->ie_stat.st_ino,
@@ -340,7 +343,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		handles++;
 	} while (rlink);
 
-	if (handles) {
+	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL) {
 		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
 				  refs, handles);
 	} else {

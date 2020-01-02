@@ -49,7 +49,8 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
-	d_list_t			di_dfs_list;
+	/* List head of dfuse_pool entries */
+	d_list_t			di_dfp_list;
 	pthread_mutex_t			di_lock;
 };
 
@@ -153,18 +154,51 @@ extern struct dfuse_inode_ops dfuse_dfs_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
+struct dfuse_pool {
+	daos_pool_info_t	dfp_pool_info;
+	uuid_t			dfp_pool;
+	daos_handle_t		dfp_poh;
+	/* List of dfuse_pool entries in the process */
+	d_list_t		dfp_list;
+	/* List head of dfuse_dfs entries using this pool */
+	d_list_t		dfp_dfs_list;
+};
+
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dfs_ops;
+	struct dfuse_pool	*dfs_dfp;
 	dfs_t			*dfs_ns;
-	uuid_t			dfs_pool;
 	uuid_t			dfs_cont;
-	daos_handle_t		dfs_poh;
 	daos_handle_t		dfs_coh;
-	daos_pool_info_t	dfs_pool_info;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
-	d_list_t		dfs_list;
+	/* List of dfuse_dfs entries in the dfuse_pool */
+	/* RENAME once code compiles */
+	d_list_t		dfs_cont_list;
 };
+
+/*
+ * struct dfuse_info contains list of dfuse_pool
+ *  One of these per process.
+ * struct dfuse_pool contains list of dfuse_dfs
+ *  may or may not have a pool
+ *  has one or more dfs.
+ * struct dfuse_dfs has callbacks.
+ *  may or may not have a container
+ *  has one or more inodes
+ *
+ * struct dfuse_inode_entry is an inode.
+ *  links to dfuse_dfs
+ *
+ * Every inode needs a dfs.
+ *
+ * In normal use inodes get evicted but every inode holds a ref on it's parent
+ * so there's no need for inodes to hold a ref on their dfs, just the root.
+ * During shutdown inodes can be processed in any order, which means we can't
+ * just free the DFS when we release the root inode (unless we don't reference
+ * the dfs in ie_close())
+ *
+ */
 
 /* dfuse_core.c */
 /* Start a dfuse projection */
@@ -412,6 +446,8 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
+
+	bool ie_root;
 };
 
 /**

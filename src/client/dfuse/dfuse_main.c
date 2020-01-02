@@ -119,6 +119,7 @@ main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
 	char			*svcl = NULL;
+	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_dfs	*dfs = NULL;
 	char			c;
 	int			ret = -DER_SUCCESS;
@@ -149,7 +150,7 @@ main(int argc, char **argv)
 	if (!dfuse_info)
 		D_GOTO(out, ret = -DER_NOMEM);
 
-	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+	D_INIT_LIST_HEAD(&dfuse_info->di_dfp_list);
 	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
 	if (rc != -DER_SUCCESS) {
 		D_GOTO(out, ret = rc);
@@ -240,20 +241,32 @@ main(int argc, char **argv)
 		D_GOTO(out_svcl, 0);
 	}
 
-	DFUSE_TRA_UP(dfs, dfuse_info, "dfs");
+	D_ALLOC_PTR(dfp);
+	if (!dfp) {
+		D_GOTO(out_svcl, 0);
+	}
 
-	d_list_add(&dfs->dfs_list, &dfuse_info->di_dfs_list);
+	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
+	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
+	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+
+	dfs->dfs_dfp = dfp;
+
+	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
+	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	if (dfuse_info->di_pool) {
-		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
+
+		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
 			DFUSE_LOG_ERROR("Invalid pool uuid");
 			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
 
 		/** Connect to DAOS pool */
-		rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
+		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
 				       dfuse_info->di_svcl, DAOS_PC_RW,
-				       &dfs->dfs_poh, &dfs->dfs_pool_info,
+				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
@@ -268,7 +281,7 @@ main(int argc, char **argv)
 			}
 
 			/** Try to open the DAOS container (the mountpoint) */
-			rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont,
+			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 					    DAOS_COO_RW, &dfs->dfs_coh,
 					    &dfs->dfs_co_info, NULL);
 			if (rc) {
@@ -277,7 +290,7 @@ main(int argc, char **argv)
 				D_GOTO(out_pool, 0);
 			}
 
-			rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
+			rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
 				       &dfs->dfs_ns);
 			if (rc) {
 				daos_cont_close(dfs->dfs_coh, NULL);
@@ -296,6 +309,7 @@ main(int argc, char **argv)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_cont, ret = rc);
 
+	/* Remove all inodes from the hash tables */
 	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
@@ -308,47 +322,41 @@ out_cont:
 		daos_cont_close(dfs->dfs_coh, NULL);
 	}
 out_pool:
-	if (dfuse_info->di_pool)
-		daos_pool_disconnect(dfs->dfs_poh, NULL);
+	if (dfp && !daos_handle_is_inval(dfp->dfp_poh))
+		daos_pool_disconnect(dfp->dfp_poh, NULL);
 out_dfs:
-	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
-				       struct dfuse_dfs, dfs_list))) {
-		/* Try and close/disconnect all container/pool handles and free
-		 * the dfs struct.
-		 *
-		 * dfuse_destroy_fuse() has already been called here which will
-		 * have iterated the inode table and should have dropped all
-		 * references to the dfs entries, however depending on the order
-		 * some pools/containers may be left open here so check for this
-		 * and try them again.
-		 */
-		if (!daos_handle_is_inval(dfs->dfs_coh)) {
 
-			if (dfs->dfs_ns) {
+	d_list_for_each_entry(dfp, &dfuse_info->di_dfp_list, dfp_list) {
+		DFUSE_TRA_ERROR(dfp, "DFP left at the end");
+		d_list_for_each_entry(dfs, &dfp->dfp_dfs_list, dfs_cont_list) {
+			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
+			if (!daos_handle_is_inval(dfs->dfs_coh)) {
+
 				rc = dfs_umount(dfs->dfs_ns);
 				if (rc != 0)
 					DFUSE_TRA_ERROR(dfs,
 							"dfs_umount() failed (%d)",
 							rc);
-			}
 
-			rc = daos_cont_close(dfs->dfs_coh, NULL);
-			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfs,
-						"daos_cont_close() failed: (%d)",
-						rc);
+				rc = daos_cont_close(dfs->dfs_coh, NULL);
+				if (rc != -DER_SUCCESS) {
+					DFUSE_TRA_ERROR(dfs,
+							"daos_cont_close() failed: (%d)",
+							rc);
+				}
 			}
+			DFUSE_TRA_DOWN(dfs);
+		}
 
-		} else if (!daos_handle_is_inval(dfs->dfs_poh)) {
-			rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+		if (!daos_handle_is_inval(dfp->dfp_poh)) {
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfs,
+				DFUSE_TRA_ERROR(dfp,
 						"daos_pool_disconnect() failed: (%d)",
 						rc);
 			}
 		}
-
-		D_FREE(dfs);
+		DFUSE_TRA_DOWN(dfp);
 	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
