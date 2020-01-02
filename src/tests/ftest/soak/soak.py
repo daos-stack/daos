@@ -255,9 +255,9 @@ class Soak(TestWithServers):
 
         fio_namespace = "/run/" + job_spec
         # test params
-        bs_list = self.params.get("blocksize", fio_namespace + "/global/*")
-        size_list = self.params.get("size", fio_namespace + "/global/*")
-        rw_list = self.params.get("rw", fio_namespace + "/global/*")
+        bs_list = self.params.get("blksz", fio_namespace + "/global/*")
+        size_list = self.params.get("sz", fio_namespace + "/global/*")
+        rw_list = self.params.get("readwrite", fio_namespace + "/global/*")
 
         params_all = [item for item in self.params.iteritems()]
         namespace = list(
@@ -270,6 +270,7 @@ class Soak(TestWithServers):
                 for rw in rw_list:
                     # Get the parameters for Fio
                     fio_cmd = Fio(namespace, self)
+                    fio_cmd.get_params(self)
                     # update fio params
                     fio_cmd.blocksize.update(blocksize)
                     fio_cmd.size.update(size)
@@ -287,6 +288,7 @@ class Soak(TestWithServers):
                     commands.append(cmd)
                     self.log.info(
                         "<<FIO cmdline>>: %s \n", commands[-1])
+                    fio_cmd = None
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):

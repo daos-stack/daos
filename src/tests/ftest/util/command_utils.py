@@ -28,10 +28,11 @@ import signal
 
 from avocado.utils import process
 
+from env_modules import load_mpi
+
 
 class CommandFailure(Exception):
     """Base exception for this module."""
-
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -250,6 +251,7 @@ class ExecutableCommand(CommandWithParameters):
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
+        self.exit_status_exception = True
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -283,6 +285,7 @@ class ExecutableCommand(CommandWithParameters):
             "cmd": command,
             "timeout": self.timeout,
             "verbose": self.verbose,
+            "ignore_status": not self.exit_status_exception,
             "allow_output_check": "combined",
             "shell": True,
             "env": self.env,
@@ -561,11 +564,21 @@ class Orterun(JobManager):
         self.hostfile.value = hostfile
         self.processes.value = processes
 
+    def run(self):
+        """Run the orterun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi("openmpi")
+        return super(Orterun, self).run()
+
 
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, path="", subprocess=False):
+    def __init__(self, job, path="", subprocess=False, mpitype="openmpi"):
         """Create a Mpirun object.
 
         Args:
@@ -581,6 +594,7 @@ class Mpirun(JobManager):
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
+        self.mpitype = mpitype
 
     def setup_command(self, env, hostfile, processes):
         """Set up the mpirun command with common inputs.
@@ -597,6 +611,16 @@ class Mpirun(JobManager):
         # Setup the orterun command
         self.hostfile.value = hostfile
         self.processes.value = processes
+
+    def run(self):
+        """Run the mpirun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi(self.mpitype)
+        return super(Mpirun, self).run()
 
 
 class Srun(JobManager):

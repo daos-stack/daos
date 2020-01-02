@@ -56,6 +56,13 @@ func (r *Rank) String() string {
 	}
 }
 
+func (r *Rank) Uint32() uint32 {
+	if r == nil {
+		return uint32(NilRank)
+	}
+	return uint32(*r)
+}
+
 func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var i uint32
 	if err := unmarshal(&i); err != nil {

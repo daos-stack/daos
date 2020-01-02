@@ -143,13 +143,13 @@ fio_smoke:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blocksize:
+    blksz:
         - '256B'
         - '1M'
-    size:
+    sz:
         - '1M'
         - '1G'
-    rw:
+    readwrite:
         - 'rw'
         - 'randrw'
   test:
@@ -187,13 +187,13 @@ fio_stress:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blocksize:
+    blksz:
         - '256B'
         - '1M'
-    size:
+    sz:
         - '1M'
         - '1G'
-    rw:
+    readwrite:
         - 'rw'
         - 'randrw'
   test:
