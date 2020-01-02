@@ -15,13 +15,11 @@ Installing the components into seperate directories allow to upgrade the compone
     HWLOC=${daos_prefix_path}/opt/hwloc
     MERCURY=${daos_prefix_path}/opt/mercury
     PMDK=${daos_prefix_path}/opt/pmdk
-    OMPI=${daos_prefix_path}/opt/ompi
     OPA=${daos_prefix_path}/opt/openpa
-    PMIX=${daos_prefix_path}/opt/pmix
     FIO=${daos_prefix_path}/opt/fio
     SPDK=${daos_prefix_path}/opt/spdk
 
-    PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
+    PATH=$CART/bin/:${daos_prefix_path}/bin/:$PATH
 ```
 
 With this approach DAOS would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and required options are saved for future compilations. So, after the first time, during development, a mere "scons --config=force" and "scons --config=force install" would suffice for compiling changes to daos source code.

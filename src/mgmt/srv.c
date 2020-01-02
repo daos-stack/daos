@@ -37,6 +37,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
+#include <daos_mgmt.h>
 
 #include "srv_internal.h"
 #include "drpc_internal.h"
@@ -141,6 +142,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_LIST_CONTAINERS:
 		ds_mgmt_drpc_pool_list_cont(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_SET_PROP:
+		ds_mgmt_drpc_pool_set_prop(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");
@@ -178,8 +182,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
-		if (rc == 0 && ps_in->ps_key_id == DSS_KEY_FAIL_LOC)
-			rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+		if (rc == 0 && ps_in->ps_key_id == DMG_KEY_FAIL_LOC)
+			rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 						ps_in->ps_value_extra);
 		if (rc)
 			D_ERROR("Set parameter failed key_id %d: rc %d\n",
