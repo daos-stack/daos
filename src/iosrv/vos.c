@@ -95,8 +95,8 @@ is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 
 	/* Check if the sgl is full */
 	if (arg->sgl_idx >= sgl->sg_nr) {
-		D_DEBUG(DB_IO, "sgl is full sgl %d/%d size "DF_U64"\n",
-			arg->sgl_idx, sgl->sg_nr, size);
+		D_DEBUG(DB_IO, "full sgl %d/%d size " DF_U64"\n", arg->sgl_idx,
+			sgl->sg_nr, size);
 		return 1;
 	}
 
@@ -119,7 +119,6 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 
 	type = vos_iter_type_2pack_type(vos_type);
 	/* Append a new descriptor to kds. */
-	D_ASSERT(arg->kds_len < arg->kds_cap);
 	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
 	arg->kds[arg->kds_len].kd_key_len = sizeof(entry->ie_oid);
 	arg->kds[arg->kds_len].kd_val_type = type;

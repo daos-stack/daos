@@ -319,7 +319,8 @@ bsgl_dcb_resize(struct vos_io_context *ioc)
 /** Fetch the single value within the specified epoch range of an key */
 static int
 akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
-		  daos_size_t *rsize, struct vos_io_context *ioc)
+		  daos_size_t *rsize, daos_size_t *gsize,
+		  struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
@@ -364,6 +365,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		goto out;
 
 	*rsize = rbund.rb_rsize;
+	*gsize = rbund.rb_gsize;
 out:
 	return rc;
 }
@@ -621,7 +623,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size,
+				       &iod->iod_size, ioc);
 		goto out;
 	}
 
@@ -822,7 +825,7 @@ iod_update_biov(struct vos_io_context *ioc)
 
 static int
 akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
-		   struct vos_io_context *ioc)
+		   daos_size_t gsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
@@ -858,6 +861,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
+	rbund.rb_gsize	= gsize;
 	rbund.rb_off	= umoff;
 	rbund.rb_ver	= pm_ver;
 
@@ -939,7 +943,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n",
 			ioc->ic_epr.epr_hi);
-		rc = akey_update_single(toh, pm_ver, iod->iod_size, ioc);
+		rc = akey_update_single(toh, pm_ver, iod->iod_size,
+					iod->iod_size, ioc);
 		goto out;
 	} /* else: array */
 
@@ -1384,8 +1389,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
 out:
-	if (err != 0)
+	if (err != 0) {
+		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
+	}
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 

@@ -82,13 +82,16 @@ struct bio_nvme_data {
 	d_list_t		 bd_bdevs;
 	char			*bd_nvme_conf;
 	int			 bd_shm_id;
+	/* When using SPDK primary mode, specifies memory allocation in MB */
+	int			 bd_mem_size;
 };
 
 static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+	      int mem_size)
 {
 	char		*env;
 	int		rc, fd;
@@ -158,6 +161,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
+	nvme_glb.bd_mem_size = mem_size;
 	return 0;
 
 free_cond:
@@ -917,6 +921,16 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		opts.name = "daos";
 		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 			opts.shm_id = nvme_glb.bd_shm_id;
+
+		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
+			opts.mem_size = nvme_glb.bd_mem_size;
+			D_PRINT("Requesting %d MB memory allocation and"
+				" expecting SPDK primary process mode\n",
+				opts.mem_size);
+		} else {
+			D_PRINT("Expecting SPDK auto-detection of secondary"
+				" process mode\n");
+		}
 
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {

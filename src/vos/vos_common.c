@@ -279,6 +279,7 @@ vos_nvme_fini(void)
 #define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
+#define VOS_NVME_MEM_SIZE	DAOS_NVME_MEM_PRIMARY
 
 static int
 vos_nvme_init(void)
@@ -292,7 +293,8 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID,
+		VOS_NVME_MEM_SIZE);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;

@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server"
 )
 
 var daosVersion string
@@ -137,6 +139,10 @@ func main() {
 	var opts mainOpts
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+		if errors.Cause(err) == context.Canceled {
+			log.Infof("%s (pid %d) shutting down", server.ControlPlaneName, os.Getpid())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }

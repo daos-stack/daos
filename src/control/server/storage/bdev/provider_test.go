@@ -82,7 +82,7 @@ func TestBdevScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			p := NewProvider(log, NewMockBackend(tc.mbc))
+			p := NewMockProvider(log, tc.mbc)
 
 			gotRes, gotErr := p.Scan(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -136,7 +136,7 @@ func TestBdevPrepare(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			p := NewProvider(log, NewMockBackend(tc.mbc))
+			p := NewMockProvider(log, tc.mbc)
 
 			gotRes, gotErr := p.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -172,7 +172,7 @@ func TestBdevFormat(t *testing.T) {
 			expRes: &FormatResponse{
 				DeviceResponses: DeviceFormatResponses{
 					"foo": &DeviceFormatResponse{
-						Error: errors.Wrap(FaultFormatUnknownClass, "whoops"),
+						Error: FaultFormatUnknownClass("whoops"),
 					},
 				},
 			},
@@ -277,7 +277,7 @@ func TestBdevFormat(t *testing.T) {
 					},
 					storage.MockNvmeController(2).PciAddr: &DeviceFormatResponse{
 						Formatted: false,
-						Error:     errors.New("format failed"),
+						Error:     FaultFormatError(errors.New("format failed")),
 					},
 					storage.MockNvmeController(3).PciAddr: &DeviceFormatResponse{
 						Formatted:  true,
@@ -291,7 +291,7 @@ func TestBdevFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			p := NewProvider(log, NewMockBackend(tc.mbc))
+			p := NewMockProvider(log, tc.mbc)
 
 			gotRes, gotErr := p.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
