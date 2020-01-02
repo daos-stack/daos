@@ -273,8 +273,12 @@ class IorTestBase(TestWithServers):
             intercept (str): path to interception library.
         """
         self.lock.acquire(True)
-        self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
-                                      + "/testfile{}".format(job_num))
+        tsize = self.ior_cmd.transfer_size.value
+        testfile = os.path.join(self.dfuse.mount_dir.value,
+                                "testfile{}{}".format(tsize, jobnum))
+        if intercept:
+            testfile += "intercept"
+        self.ior_cmd.test_file.update(testfile)
         manager = self.get_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
         env = self.ior_cmd.get_default_env(
