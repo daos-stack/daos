@@ -30,7 +30,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include "csum_extent_tests.h"
 #include <daos_api.h>
 #include <daos/checksum.h>
 #include "vts_array.h"
@@ -78,10 +77,6 @@ static struct io_test_flag io_test_flags[] = {
 	{
 		.tf_str		= "Single Value + CSUM",
 		.tf_bits	= TF_USE_CSUM,
-	},
-	{
-		.tf_str		= "Array Value + CSUM",
-		.tf_bits	= TF_USE_CSUM | TF_REC_EXT,
 	},
 	{
 		.tf_str		= "ZC + extent",
@@ -302,8 +297,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
-				ent.ie_biov.bi_buf == NULL ?
-				"[NULL]" : (char *)ent.ie_biov.bi_buf);
+				bio_iov2buf(&ent.ie_biov) == NULL ?
+				"[NULL]" : (char *)bio_iov2buf(&ent.ie_biov));
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
@@ -529,9 +524,9 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(biov->bi_buf, srv_iov->iov_buf + off,
-		       biov->bi_data_len);
-		off += biov->bi_data_len;
+		memcpy(bio_iov2buf(biov), srv_iov->iov_buf + off,
+		       bio_iov2len(biov));
+		off += bio_iov2len(biov);
 	}
 	assert_true(srv_iov->iov_len == off);
 
@@ -549,13 +544,13 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 		  daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
 		  bool verbose)
 {
-	struct bio_sglist *bsgl;
-	struct bio_iov	*biov;
-	d_iov_t	*dst_iov;
-	daos_handle_t	 ioh;
-	unsigned int	 off;
-	int		 i;
-	int		 rc;
+	struct bio_sglist	*bsgl;
+	struct bio_iov		*biov;
+	d_iov_t			*dst_iov;
+	daos_handle_t		 ioh;
+	unsigned int		 off;
+	int			 i;
+	int			 rc;
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
@@ -585,9 +580,9 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
 		if (!bio_addr_is_hole(&biov->bi_addr))
-			memcpy(dst_iov->iov_buf + off, biov->bi_buf,
-			       biov->bi_data_len);
-		off += biov->bi_data_len;
+			memcpy(dst_iov->iov_buf + off, bio_iov2buf(biov),
+			       bio_iov2len(biov));
+		off += bio_iov2len(biov);
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
@@ -606,7 +601,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 			 daos_epoch_t fetch_epoch)
 {
 	int			rc = 0;
-	d_iov_t		val_iov;
+	d_iov_t			val_iov;
 	daos_key_t		dkey;
 	daos_key_t		akey;
 	daos_recx_t		rex;
@@ -635,16 +630,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		iod.iod_type = DAOS_IOD_ARRAY;
 		recx_size = UPDATE_REC_SIZE;
 		recx_nr   = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
-		if (arg->ta_flags & TF_USE_CSUM) {
-			csum_count = UPDATE_CSUM_MAX_COUNT;
-			dts_buf_render(expected_csum_buf, UPDATE_CSUM_BUF_SIZE);
-			dcb_set(&csum, expected_csum_buf,
-				UPDATE_CSUM_BUF_SIZE,
-				UPDATE_CSUM_SIZE, csum_count,
-				UPDATE_BUF_SIZE / csum_count);
-
-			iod.iod_csums = &csum;
-		}
 	} else {
 		iod.iod_type = DAOS_IOD_SINGLE;
 		recx_size = UPDATE_BUF_SIZE;
@@ -1717,7 +1702,7 @@ io_sgl_update(void **state)
 	d_iov_set(sgl.sg_iovs, &fetch_buf[0], SGL_TEST_BUF_COUNT *
 		     SGL_TEST_BUF_SIZE);
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
-				&sgl);
+			   &sgl);
 	if (rc) {
 		print_error("Failed to fetch: %d\n", rc);
 		goto exit;
@@ -1800,7 +1785,7 @@ io_sgl_fetch(void **state)
 	}
 	/* Now fetch */
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
-				&sgl);
+			   &sgl);
 	if (rc)
 		goto exit;
 	/* Test if ground truth matches fetch_buffs */
@@ -1873,7 +1858,7 @@ io_fetch_hole(void **state)
 	/* Fetch */
 	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
-				&sgl);
+			   &sgl);
 	assert_int_equal(rc, 0);
 
 	assert_memory_equal(ground_truth, fetch_buf, 3 * 1024);
@@ -1905,7 +1890,7 @@ io_fetch_hole(void **state)
 	d_iov_set(&val_iov, &fetch_buf[0], 3 * 1024);
 	/* Fetch using epoch 2 */
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 2, &dkey, 1, &iod,
-				&sgl);
+			   &sgl);
 	assert_int_equal(rc, 0);
 
 	/* Test if ground truth matches fetch_buf */
@@ -2463,22 +2448,6 @@ static const struct CMUnitTest io_tests[] = {
 		pool_cont_same_uuid, NULL, NULL},
 	{ "VOS299: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
-	{ "VOS300: Extent checksums with multiple extents requested",
-		csum_multiple_extents_tests, NULL, NULL},
-	{ "VOS301: Extent checksums with zero len csum buffer",
-		csum_test_csum_buffer_of_0_during_fetch, NULL, NULL},
-	{ "VOS302: Extent checksums with holes",
-		csum_test_holes, NULL, NULL},
-	{ "VOS303: Test checksums when extent index doesn't start at 0",
-		csum_extent_not_starting_at_0, NULL, NULL},
-	{ "VOS304: Test checksums with chunk-unaligned extents",
-		csum_extent_not_chunk_aligned, NULL, NULL},
-	{ "VOS305: Some EVT Checksum Helper Functions",
-		evt_csum_helper_functions_tests, NULL, NULL},
-	{ "VOS306: Some input validation",
-		csum_invalid_input_tests, NULL, NULL},
-	{ "VOS350: Checksum fault injection test : Multiple extents",
-		csum_fault_injection_multiple_extents_tests, NULL, NULL},
 	{ "VOS351: Checksum fault injection test : Single Value",
 		io_csum_fault_injection_single_value, NULL, NULL},
 };

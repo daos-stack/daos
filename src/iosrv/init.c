@@ -71,6 +71,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
+/** NVMe mem_size for SPDK memory allocation when using primary mode */
+int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
+
 /** IO server instance index */
 unsigned int		dss_instance_idx;
 
@@ -469,8 +472,7 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	rc = crt_init_opt(daos_sysname,
-			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE |
-			  CRT_FLAG_BIT_PMIX_DISABLE,
+			  CRT_FLAG_BIT_SERVER,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
@@ -633,6 +635,8 @@ Options:\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
       Bind to cores within the specified NUMA node\n\
+  --mem_size=mem_size, -r mem_size\n\
+      Allocates mem_size MB for SPDK when using primary process mode\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -652,6 +656,7 @@ parse(int argc, char **argv)
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
+		{ "mem_size",		required_argument,	NULL,	'r' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
@@ -663,8 +668,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
-				NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
+				opts, NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
 
@@ -734,6 +739,14 @@ parse(int argc, char **argv)
 			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
+			break;
+		case 'r':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			dss_nvme_mem_size = nr;
 			break;
 		case 'h':
 			usage(argv[0], stdout);

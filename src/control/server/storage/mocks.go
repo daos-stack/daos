@@ -37,19 +37,14 @@ func getIndex(varIdx ...int32) int32 {
 }
 
 func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
-	idx := getIndex(varIdx...)
-
-	return &NvmeDeviceHealth{
-		CtrlrPciAddr: concat("pciAddr", idx),
-	}
+	return &NvmeDeviceHealth{}
 }
 
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := getIndex(varIdx...)
 	return &NvmeNamespace{
-		ID:           idx,
-		Size:         idx,
-		CtrlrPciAddr: concat("pciAddr", idx),
+		ID:   idx,
+		Size: idx,
 	}
 }
 

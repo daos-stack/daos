@@ -940,7 +940,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	scan_arg->rebuild_tgt_nr = rsi->rsi_tgts_num;
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
-	/* step-3: start scann leader */
+	/* step-3: start scan leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_REBUILD,
 			    DSS_TGT_SELF, 0, NULL);
 	if (rc != 0) {
@@ -960,6 +960,7 @@ out:
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
+	ro->rso_stable_epoch = crt_hlc_get();
 	if (rc) {
 		/* If it failed, tell the master the target can not
 		 * start the rebuild, so master will put the target
@@ -982,10 +983,7 @@ out:
 	}
 
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	/* will fix cart to call co_post_reply() for this case, freeing
-	 * it immediately at here is potentially unsafe.
-	 */
-	/* d_rank_list_free(fail_list); */
+	d_rank_list_free(fail_list);
 }
 
 int
@@ -998,6 +996,10 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
+
+	if (src->rso_status == 0 &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
 
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)
@@ -1022,12 +1024,42 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 }
 
 int
-rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg)
+rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg)
 {
-	struct rebuild_scan_out *out = crt_reply_get(rpc);
+	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
+	struct ds_pool			*pool;
+	d_iov_t				iov = { 0 };
+	d_sg_list_t			sgl;
+	int				rc;
 
-	if (out->rso_ranks_list != NULL)
-		d_rank_list_free(out->rso_ranks_list);
+	if (rpc->cr_co_bulk_hdl == NULL) {
+		D_ERROR("No pool map in scan rpc\n");
+		return -DER_INVAL;
+	}
 
-	return 0;
+	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR("Can not find pool.\n");
+		return -DER_NONEXIST;
+	}
+
+	/* update the pool map */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
+	if (rc != 0) {
+		D_ERROR("ds_pool_tgt_map_update failed for "DF_UUID", rc %d.\n",
+			DP_UUID(rsi->rsi_pool_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	ds_pool_put(pool);
+	return rc;
 }
+

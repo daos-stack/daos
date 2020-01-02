@@ -338,7 +338,7 @@ dc_cont_alloc(const uuid_t uuid)
 	D_INIT_LIST_HEAD(&dc->dc_obj_list);
 	D_INIT_LIST_HEAD(&dc->dc_po_list);
 	if (D_RWLOCK_INIT(&dc->dc_obj_list_lock, NULL) != 0) {
-		free(dc);
+		D_FREE(dc);
 		dc = NULL;
 	}
 
@@ -989,7 +989,8 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
+	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE ||
+	    rc == -DER_EVICTED) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
@@ -2105,10 +2106,15 @@ struct daos_csummer *
 dc_cont_hdl2csummer(daos_handle_t coh)
 {
 	struct dc_cont	*dc;
+	struct daos_csummer *csum;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return NULL;
 
-	return dc->dc_csummer;
+	csum = dc->dc_csummer;
+	dc_cont_put(dc);
+
+	return csum;
+
 }

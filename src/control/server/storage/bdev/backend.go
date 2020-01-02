@@ -24,6 +24,8 @@ package bdev
 
 import (
 	"encoding/json"
+	"os"
+	"syscall"
 
 	"github.com/pkg/errors"
 
@@ -36,6 +38,7 @@ type (
 	spdkWrapper struct {
 		spdk.Env
 		spdk.Nvme
+		controllers []spdk.Controller
 
 		initialized bool
 	}
@@ -47,10 +50,51 @@ type (
 	}
 )
 
-func (w *spdkWrapper) init(initShmID ...int) error {
+// suppressOutput is a horrible, horrible hack necessitated by the fact that
+// SPDK blathers to stdout, causing console spam and messing with our secure
+// communications channel between the server and privileged helper.
+func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
+	realStdout, dErr := syscall.Dup(syscall.Stdout)
+	if dErr != nil {
+		err = dErr
+		return
+	}
+
+	devNull, oErr := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if oErr != nil {
+		err = oErr
+		return
+	}
+
+	if err = syscall.Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
+		return
+	}
+
+	restore = func() {
+		// NB: Normally panic() in production code is frowned upon, but in this
+		// case if we get errors there really isn't any handling to be done
+		// because things have gone completely sideways.
+		if err := devNull.Close(); err != nil {
+			panic(err)
+		}
+		if err := syscall.Dup2(realStdout, syscall.Stdout); err != nil {
+			panic(err)
+		}
+	}
+
+	return
+}
+
+func (w *spdkWrapper) init(initShmID ...int) (err error) {
 	if w.initialized {
 		return nil
 	}
+
+	restore, err := w.suppressOutput()
+	if err != nil {
+		return errors.Wrap(err, "failed to suppress SPDK output")
+	}
+	defer restore()
 
 	shmID := 0
 	if len(initShmID) > 0 {
@@ -60,6 +104,12 @@ func (w *spdkWrapper) init(initShmID ...int) error {
 	if err := w.InitSPDKEnv(shmID); err != nil {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
+
+	cs, err := w.Discover()
+	if err != nil {
+		return errors.Wrap(err, "failed to discover NVMe")
+	}
+	w.controllers = cs
 
 	w.initialized = true
 	return nil
@@ -75,14 +125,6 @@ func convert(in interface{}, out interface{}) error {
 }
 
 func convertController(in spdk.Controller, out *storage.NvmeController) error {
-	return convert(in, out)
-}
-
-func convertNamespace(in spdk.Namespace, out *storage.NvmeNamespace) error {
-	return convert(in, out)
-}
-
-func convertDeviceHealth(in spdk.DeviceHealth, out *storage.NvmeDeviceHealth) error {
 	return convert(in, out)
 }
 
@@ -106,37 +148,13 @@ func (b *spdkBackend) Init(shmID ...int) error {
 	return nil
 }
 
-func coalesceControllers(bcs []spdk.Controller, bns []spdk.Namespace, bhs []spdk.DeviceHealth) ([]*storage.NvmeController, error) {
+func convertControllers(bcs []spdk.Controller) ([]*storage.NvmeController, error) {
 	scs := make([]*storage.NvmeController, 0, len(bcs))
 
 	for _, bc := range bcs {
 		sc := &storage.NvmeController{}
 		if err := convertController(bc, sc); err != nil {
 			return nil, errors.Wrapf(err, "failed to convert spdk Controller %+v", bc)
-		}
-
-		for _, bn := range bns {
-			if bn.CtrlrPciAddr != sc.PciAddr {
-				continue
-			}
-			sn := &storage.NvmeNamespace{}
-			if err := convertNamespace(bn, sn); err != nil {
-				return nil, errors.Wrapf(err, "failed to convert spdk Namespace %+v", bn)
-			}
-			sc.Namespaces = append(sc.Namespaces, sn)
-		}
-
-		for _, bh := range bhs {
-			if bh.CtrlrPciAddr != sc.PciAddr {
-				continue
-			}
-			if sc.HealthStats != nil {
-				return nil, errors.Errorf("duplicate health entry for %s", sc.PciAddr)
-			}
-			sc.HealthStats = &storage.NvmeDeviceHealth{}
-			if err := convertDeviceHealth(bh, sc.HealthStats); err != nil {
-				return nil, errors.Wrapf(err, "failed to convert spdk DeviceHealth %+v", bh)
-			}
 		}
 
 		scs = append(scs, sc)
@@ -150,15 +168,10 @@ func (b *spdkBackend) Scan() (storage.NvmeControllers, error) {
 		return nil, err
 	}
 
-	bcs, bns, bhs, err := b.binding.Discover()
-	if err != nil {
-		return nil, err
-	}
-
-	return coalesceControllers(bcs, bns, bhs)
+	return convertControllers(b.binding.controllers)
 }
 
-func getFormattedController(pciAddr string, bcs []spdk.Controller, bns []spdk.Namespace) (*storage.NvmeController, error) {
+func getFormattedController(pciAddr string, bcs []spdk.Controller) (*storage.NvmeController, error) {
 	var spdkController *spdk.Controller
 	for _, bc := range bcs {
 		if bc.PCIAddr == pciAddr {
@@ -171,32 +184,44 @@ func getFormattedController(pciAddr string, bcs []spdk.Controller, bns []spdk.Na
 		return nil, errors.Errorf("unable to resolve %s after format", pciAddr)
 	}
 
-	scs, err := coalesceControllers([]spdk.Controller{*spdkController}, bns, nil)
+	scs, err := convertControllers([]spdk.Controller{*spdkController})
 	if err != nil {
 		return nil, err
 	}
 	if len(scs) != 1 {
-		return nil, errors.Errorf("unable to resolve %s in coalesceControllers", pciAddr)
+		return nil, errors.Errorf("unable to resolve %s in convertControllers", pciAddr)
 	}
 
 	return scs[0], nil
 }
 
 func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
-	if err := b.Init(); err != nil {
-		return nil, err
-	}
-
 	if pciAddr == "" {
-		return nil, errors.New("empty pciAddr string")
+		return nil, FaultFormatBadPciAddr("")
 	}
 
-	bcs, bns, err := b.binding.Format(pciAddr)
+	controllers, err := b.Scan()
 	if err != nil {
 		return nil, err
 	}
 
-	return getFormattedController(pciAddr, bcs, bns)
+	foundAddr := false
+	for _, c := range controllers {
+		if c.PciAddr == pciAddr {
+			foundAddr = true
+			break
+		}
+	}
+
+	if !foundAddr {
+		return nil, FaultFormatBadPciAddr(pciAddr)
+	}
+
+	if err := b.binding.Format(pciAddr); err != nil {
+		return nil, err
+	}
+
+	return getFormattedController(pciAddr, b.binding.controllers)
 }
 
 func (b *spdkBackend) Prepare(nrHugePages int, targetUser, pciWhiteList string) error {

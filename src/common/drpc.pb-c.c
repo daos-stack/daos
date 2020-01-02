@@ -238,19 +238,25 @@ const ProtobufCMessageDescriptor drpc__response__descriptor =
   (ProtobufCMessageInit) drpc__response__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue drpc__status__enum_values_by_number[5] =
+static const ProtobufCEnumValue drpc__status__enum_values_by_number[8] =
 {
   { "SUCCESS", "DRPC__STATUS__SUCCESS", 0 },
   { "SUBMITTED", "DRPC__STATUS__SUBMITTED", 1 },
   { "FAILURE", "DRPC__STATUS__FAILURE", 2 },
   { "UNKNOWN_MODULE", "DRPC__STATUS__UNKNOWN_MODULE", 3 },
   { "UNKNOWN_METHOD", "DRPC__STATUS__UNKNOWN_METHOD", 4 },
+  { "FAILED_UNMARSHAL_CALL", "DRPC__STATUS__FAILED_UNMARSHAL_CALL", 5 },
+  { "FAILED_UNMARSHAL_PAYLOAD", "DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD", 6 },
+  { "FAILED_MARSHAL", "DRPC__STATUS__FAILED_MARSHAL", 7 },
 };
 static const ProtobufCIntRange drpc__status__value_ranges[] = {
-{0, 0},{0, 5}
+{0, 0},{0, 8}
 };
-static const ProtobufCEnumValueIndex drpc__status__enum_values_by_name[5] =
+static const ProtobufCEnumValueIndex drpc__status__enum_values_by_name[8] =
 {
+  { "FAILED_MARSHAL", 7 },
+  { "FAILED_UNMARSHAL_CALL", 5 },
+  { "FAILED_UNMARSHAL_PAYLOAD", 6 },
   { "FAILURE", 2 },
   { "SUBMITTED", 1 },
   { "SUCCESS", 0 },
@@ -264,9 +270,9 @@ const ProtobufCEnumDescriptor drpc__status__descriptor =
   "Status",
   "Drpc__Status",
   "drpc",
-  5,
+  8,
   drpc__status__enum_values_by_number,
-  5,
+  8,
   drpc__status__enum_values_by_name,
   1,
   drpc__status__value_ranges,

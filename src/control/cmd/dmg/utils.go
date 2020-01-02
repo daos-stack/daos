@@ -24,7 +24,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -41,9 +43,6 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 	switch len(hp) {
 	case 1:
-		if defaultPort == 0 {
-			defaultPort = 10000
-		}
 		// no port specified, use default
 		port = strconv.Itoa(defaultPort)
 	case 2:
@@ -59,9 +58,6 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 		return "", "", errors.Errorf("cannot parse %q", addrPattern)
 	}
 
-	if port == "0" {
-		return "", "", errors.Errorf("invalid port %q", port)
-	}
 	if hp[0] == "" {
 		return "", "", errors.Errorf("invalid host %q", hp[0])
 	}
@@ -71,21 +67,28 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
 // of ports to HostSets.
-func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroups, error) {
-	portHosts := make(hostlist.HostGroups)
+func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostGroups, err error) {
+	var hostSet, port string
+	var inHostSet *hostlist.HostList
+	portHosts = make(hostlist.HostGroups)
 
-	for _, ptn := range addrPatterns {
-		hostSet, port, err := splitPort(ptn, defaultPort)
+	inHostSet, err = hostlist.Create(addrPatterns)
+	if err != nil {
+		return
+	}
+
+	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
+		hostSet, port, err = splitPort(ptn, defaultPort)
 		if err != nil {
-			return nil, err
+			return
 		}
 
-		if err := portHosts.AddHost(port, hostSet); err != nil {
-			return nil, err
+		if err = portHosts.AddHost(port, hostSet); err != nil {
+			return
 		}
 	}
 
-	return portHosts, nil
+	return
 }
 
 // flattenHostAddrs takes nodeset:port patterns and returns individual addresses
@@ -95,7 +98,7 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 
 	// expand any compressed nodesets for specific ports, should fail if no
 	// port in pattern.
-	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), defaultPort)
+	portHosts, err = hostsByPort(addrPatterns, defaultPort)
 	if err != nil {
 		return
 	}
@@ -107,6 +110,8 @@ func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err
 			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
 		}
 	}
+
+	sort.Strings(addrs)
 
 	return
 }
@@ -130,4 +135,43 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	}
 
 	return
+}
+
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+	for _, res := range groups.Keys() {
+		hostset := groups[res].RangedString()
+		lineBreak := strings.Repeat("-", len(hostset))
+		fmt.Fprintf(buf, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
+	}
+
+	return buf.String()
+}
+
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
+
+	formatter := NewTableFormatter(titles)
+	var table []TableRow
+
+	for _, result := range groups.Keys() {
+		row := TableRow{groupTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, rowFieldSep)
+		if len(summary) != len(columnTitles) {
+			return "", errors.New("unexpected summary format")
+		}
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
 }

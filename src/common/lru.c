@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -330,8 +330,9 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 				     struct daos_llink, ll_qlink);
 
 		d_list_del_init(&llink->ll_qlink);
-		d_hash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
 		lcache->dlc_idle_nr--;
+		/* NB. hash entry free could yield */
+		d_hash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
 	}
 	D_DEBUG(DB_TRACE, "Done releasing reference\n");
 }

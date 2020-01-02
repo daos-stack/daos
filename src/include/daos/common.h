@@ -81,8 +81,8 @@ struct daos_tree_overhead {
 
 /** Points to a byte in an iov, in an sgl */
 struct daos_sgl_idx {
-	uint32_t	iov_idx;
-	daos_off_t	iov_offset;
+	uint32_t	iov_idx; /** index of iov */
+	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
 /*
@@ -105,8 +105,10 @@ char *DP_UUID(const void *uuid);
 
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %s"
-#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+#define DF_KEY			"[%d] %.*s"
+#define DP_KEY(key)		(int)(key)->iov_len,	\
+		                (int)(key)->iov_len,	\
+		                daos_key2str(key)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -474,18 +476,6 @@ daos_crt_network_error(int err)
 #define daos_rank_in_rank_list		d_rank_in_rank_list
 #define daos_rank_list_append		d_rank_list_append
 
-/* the key of various type of parameters, used by DAOS client to set
- * different parameters globally on all servers.
- */
-enum {
-	DSS_KEY_FAIL_LOC = 0,
-	DSS_KEY_FAIL_VALUE,
-	DSS_KEY_FAIL_NUM,
-	DSS_REBUILD_RES_PERCENTAGE,
-	DSS_DISABLE_AGGREGATION,
-	DSS_KEY_NUM,
-};
-
 void
 daos_fail_loc_set(uint64_t id);
 void
@@ -644,6 +634,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
+#define DAOS_NVME_MEM_PRIMARY	0
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 

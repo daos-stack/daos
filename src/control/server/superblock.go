@@ -26,9 +26,12 @@ package server
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"syscall"
 
 	uuid "github.com/google/uuid"
+	bytesize "github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
@@ -157,6 +160,22 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
+}
+
+func (srv *IOServerInstance) logScmStorage() error {
+	scmMount := path.Dir(srv.superblockPath())
+	stBuf := new(syscall.Statfs_t)
+
+	if err := syscall.Statfs(scmMount, stBuf); err != nil {
+		return err
+	}
+
+	frSize := uint64(stBuf.Frsize)
+	totalBytes := float64(frSize * stBuf.Blocks)
+	availBytes := float64(frSize * stBuf.Bavail)
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
+		bytesize.New(totalBytes), bytesize.New(availBytes))
+	return nil
 }
 
 // WriteSuperblock writes the instance's superblock

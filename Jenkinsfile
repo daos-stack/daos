@@ -48,7 +48,9 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos_adio-rpm ior-hpc@PR-48"
+def functional_rpms  = "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
+                       "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
+                       "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -77,6 +79,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
+                            module load mpi/openmpi3-x86_64
                             coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
@@ -156,7 +159,7 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
+                                   ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
                     }
                     post {
                         always {
@@ -429,7 +432,6 @@ pipeline {
                             */
                         }
                         unsuccessful {
-                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
@@ -838,7 +840,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
+                                       inst_rpms: "openmpi3 hwloc-devel argobots cart-${env.CART_COMMIT} fuse3-libs libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1026,9 +1028,9 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1102,16 +1104,16 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms + ' ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms + ' ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1183,7 +1185,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos
+                                       inst_repos: el7_daos_repos
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo yum -y install daos-client
