@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -183,9 +183,9 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
-	return make(system.Members, 0), nil
+func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
+	tc.appendInvocation("SystemQuery")
+	return &client.SystemQueryResp{}, nil
 }
 
 func (tc *testConn) SystemStop(req client.SystemStopReq) (system.MemberResults, error) {

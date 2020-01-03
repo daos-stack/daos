@@ -32,14 +32,15 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
-	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd     `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS system status"`
+	Stop        systemStopCmd      `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	ListPools   systemListPoolsCmd `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
 type leaderQueryCmd struct {
@@ -111,43 +112,66 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to shutdown system.
-type systemMemberQueryCmd struct {
+// systemQueryCmd is the struct representing the command to shutdown system.
+type systemQueryCmd struct {
 	logCmd
 	connectedCmd
+	Rank *uint32 `long:"rank" short:"r" description:"System member rank to query"`
 }
 
-// Execute is run when systemMemberQueryCmd activates
-func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	members, err := cmd.conns.SystemMemberQuery()
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(args []string) error {
+	nilRank := ioserver.NilRank
+	req := client.SystemQueryReq{
+		Rank: nilRank.Uint32(),
+	}
+	if cmd.Rank != nil {
+		req.Rank = *cmd.Rank
+	}
+	resp, err := cmd.conns.SystemQuery(req)
 	if err != nil {
-		return errors.Wrap(err, "System-Member-Query command failed")
+		return errors.Wrap(err, "System-Query command failed")
 	}
 
-	cmd.log.Debug("System-Member-Query command succeeded\n")
-	if len(members) == 0 {
-		cmd.log.Info("No members in system\n")
+	cmd.log.Debug("System-Query command succeeded")
+	if len(resp.Members) == 0 {
+		cmd.log.Info("No members in system")
 		return nil
 	}
 
-	rankTitle := "Rank"
-	uuidTitle := "UUID"
-	addrTitle := "Control Address"
-	stateTitle := "State"
-
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
-	var table []txtfmt.TableRow
-
-	for _, m := range members {
-		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
-		row[addrTitle] = m.Addr.String()
-		row[stateTitle] = m.State().String()
-
-		table = append(table, row)
+	if cmd.Rank != nil {
+		if len(resp.Members) != 1 {
+			return errors.Errorf("expected 1 member in result, got %d", len(resp.Members))
+		}
+		m := resp.Members[0]
+		table := []txtfmt.TableRow{
+			{"address": m.Addr.String()},
+			{"uuid": m.UUID},
+			{"status": m.State().String()},
+			{"reason": "unknown"},
+		}
+		title := fmt.Sprintf("Rank %d", *cmd.Rank)
+		cmd.log.Info(txtfmt.FormatEntity(title, table))
+		return nil
 	}
 
-	cmd.log.Info(formatter.Format(table))
+	rankPrefix := "r-"
+	groups := make(hostlist.HostGroups)
+	for _, m := range resp.Members {
+		if err := groups.AddHost(m.State().String(), fmt.Sprintf("%s%d", rankPrefix, m.Rank)); err != nil {
+			return err
+		}
+	}
+
+	out, err := tabulateHostGroups(groups, "Rank", "State")
+	if err != nil {
+		return err
+	}
+
+	// kind of a hack, but don't want to modify the hostlist library to
+	// accept invalid hostnames.
+	out = strings.ReplaceAll(out, rankPrefix, "")
+	cmd.log.Info(out)
 
 	return nil
 }

@@ -42,8 +42,8 @@ service MgmtCtl {
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS
 	rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};
-	// Query DAOS system membership (joined data-plane instances)
-	rpc SystemMemberQuery(SystemMemberQueryReq) returns(SystemMemberQueryResp) {};
+	// Query DAOS system status
+	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {};
 	// Stop DAOS system (shutdown data-plane instances)
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
 	// Retrieve a list of supported fabric providers

@@ -54,11 +54,13 @@ message SystemStopResp {
 	repeated Result results = 1;
 }
 
-// SystemMemberQueryReq supplies system query parameters.
-message SystemMemberQueryReq {}
+// SystemQueryReq supplies system query parameters.
+message SystemQueryReq {
+	uint32 rank = 1; // member rank to query
+}
 
-// SystemMemberQueryResp returns active system members.
-message SystemMemberQueryResp {
+// SystemQueryResp returns active system members.
+message SystemQueryResp {
 	repeated SystemMember members = 1;
 }
 

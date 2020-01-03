@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,10 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -38,11 +40,11 @@ const (
 	prepShutdownTimeout = 10 * retryDelay
 )
 
-// SystemMemberQuery implements the method defined for the Management Service.
+// SystemQuery implements the method defined for the Management Service.
 //
-// Return system membership list including member state.
-func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq) (*ctlpb.SystemMemberQueryResp, error) {
-	resp := &ctlpb.SystemMemberQueryResp{}
+// Return system status.
+func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
+	resp := &ctlpb.SystemQueryResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -51,15 +53,25 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemMemberQuery RPC")
+	svc.log.Debug("Received SystemQuery RPC")
 
-	membersPB, err := proto.MembersToPB(svc.membership.Members())
-	if err != nil {
+	var members []*system.Member
+	nilRank := ioserver.NilRank
+	if nilRank.Equals(ioserver.NewRankPtr(req.Rank)) {
+		members = svc.membership.Members()
+	} else {
+		member, err := svc.membership.Get(req.Rank)
+		if err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+
+	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}
-	resp.Members = membersPB
 
-	svc.log.Debug("Responding to SystemMemberQuery RPC")
+	svc.log.Debug("Responding to SystemQuery RPC")
 
 	return resp, nil
 }
