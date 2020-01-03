@@ -1444,7 +1444,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
@@ -1457,10 +1457,19 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		reprobe = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		D_ASSERTF(((krec->kr_bmap & KREC_BF_BTR) &&
-		     dbtree_is_empty_inplace(&krec->kr_btr)) ||
-		    ((krec->kr_bmap & KREC_BF_EVT) &&
-		     evt_is_empty(&krec->kr_evt)), "Subtree is orphaned\n");
+		if (krec->kr_bmap & KREC_BF_BTR &&
+		    !dbtree_is_empty_inplace(&krec->kr_btr)) {
+			/* This should be an assert eventually but we can't
+			 * at present prevent underpunch
+			 */
+			D_ERROR("Removing orphaned single value tree\n");
+		} else if (krec->kr_bmap & KREC_BF_EVT &&
+			   !evt_is_empty(&krec->kr_evt)) {
+			/* This should be an assert eventually but we can't
+			 * at present prevent underpunch
+			 */
+			D_ERROR("Removing orphaned array value tree\n");
+		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
@@ -1469,7 +1478,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		rc = 0;
 	}
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 
 exit:
 	if (rc == 0 && reprobe)

@@ -1059,8 +1059,8 @@ do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 
 #define NUM_INTERNAL 200
 static void
-agg_punches_test_helper(void **state, int type, bool discard, int first,
-			int last)
+agg_punches_test_helper(void **state, int record_type, int type, bool discard,
+			int first, int last)
 {
 	struct io_test_args	*arg = *state;
 	daos_unit_oid_t		 oid;
@@ -1076,6 +1076,7 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 	char			 dkey[2] = "a";
 	char			 akey[2] = "b";
 	int			 old_flags = arg->ta_flags;
+	daos_recx_t		 recx = {0, 1};
 
 	oid = dts_unit_oid_gen(0, 0, 0);
 
@@ -1083,7 +1084,7 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 
 	if (first != AGG_NONE) {
 		update_value(arg, oid, epr.epr_lo++, dkey, akey,
-			     DAOS_IOD_SINGLE, sizeof(first_val), NULL,
+			     record_type, sizeof(first_val), &recx,
 			     &first_val);
 		if (first == AGG_PUNCH) {
 			/* Punch the first update */
@@ -1102,14 +1103,14 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 			continue;
 		}
 		update_value(arg, oid, epoch++, dkey, akey,
-			     DAOS_IOD_SINGLE, sizeof(middle_val), NULL,
+			     record_type, sizeof(middle_val), &recx,
 			     &middle_val);
 		middle_epoch = epoch;
 	}
 
 	if (last == AGG_UPDATE) {
-		update_value(arg, oid, epoch++, dkey, akey, DAOS_IOD_SINGLE,
-			     sizeof(last_val), NULL, &last_val);
+		update_value(arg, oid, epoch++, dkey, akey, record_type,
+			     sizeof(last_val), &recx, &last_val);
 	}
 
 	/* Set upper bound for aggregation */
@@ -1128,15 +1129,15 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 			 * should exist because it's outside of the epr.
 			 */
 			fetch_val = 0;
-			fetch_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
-				    sizeof(first_val), NULL, &fetch_val);
+			fetch_value(arg, oid, 1, dkey, akey, record_type,
+				    sizeof(first_val), &recx, &fetch_val);
 			assert_int_equal(fetch_val, first_val);
 			/* Reading at "snapshot" should also work except for
 			 * punch, it will be gone.
 			 */
 			fetch_val = 0;
 			fetch_value(arg, oid, epr.epr_lo, dkey, akey,
-				    DAOS_IOD_SINGLE, sizeof(first_val), NULL,
+				    record_type, sizeof(first_val), &recx,
 				    &fetch_val);
 			assert_int_equal(fetch_val,
 					 (first == AGG_PUNCH) ? 0 : first_val);
@@ -1149,16 +1150,16 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 		fetch_val = 0;
 		if (first == AGG_UPDATE && discard)
 			expected = first_val;
-		fetch_value(arg, oid, middle_epoch, dkey, akey, DAOS_IOD_SINGLE,
-			    sizeof(middle_val), NULL, &fetch_val);
+		fetch_value(arg, oid, middle_epoch, dkey, akey, record_type,
+			    sizeof(middle_val), &recx, &fetch_val);
 		assert_int_equal(fetch_val, expected);
 
 		/* Final value should be present for aggregation but not
 		 * discard
 		 */
 		fetch_val = 0;
-		fetch_value(arg, oid, epr.epr_hi, dkey, akey, DAOS_IOD_SINGLE,
-			    sizeof(last_val), NULL, &fetch_val);
+		fetch_value(arg, oid, epr.epr_hi, dkey, akey, record_type,
+			    sizeof(last_val), &recx, &fetch_val);
 		expected = last_val;
 		if (discard) {
 			expected = 0;
@@ -1187,7 +1188,7 @@ agg_punches_test_helper(void **state, int type, bool discard, int first,
 
 /** Do a punch aggregation test */
 static void
-agg_punches_test(void **state, bool discard)
+agg_punches_test(void **state, int record_type, bool discard)
 {
 	int	first, last, type;
 	int	lstart;
@@ -1198,8 +1199,9 @@ agg_punches_test(void **state, bool discard)
 		for (last = lstart; last <= AGG_UPDATE; last++) {
 			for (type = AGG_OBJ_TYPE; type <= AGG_AKEY_TYPE;
 			     type++) {
-				agg_punches_test_helper(state, type, discard,
-							first, last);
+				agg_punches_test_helper(state, record_type,
+							type, discard, first,
+							last);
 			}
 		}
 	}
@@ -1209,7 +1211,13 @@ agg_punches_test(void **state, bool discard)
 static void
 discard_14(void **state)
 {
-	agg_punches_test(state, true);
+	agg_punches_test(state, DAOS_IOD_SINGLE, true);
+}
+
+static void
+discard_15(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_ARRAY, true);
 }
 
 /*
@@ -1825,7 +1833,13 @@ aggregate_14(void **state)
 static void
 aggregate_15(void **state)
 {
-	agg_punches_test(state, false);
+	agg_punches_test(state, DAOS_IOD_SINGLE, false);
+}
+
+static void
+aggregate_16(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_ARRAY, false);
 }
 
 static int
@@ -1862,8 +1876,10 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_12, NULL, agg_tst_teardown },
 	{ "VOS463: Discard won't run into infinite loop",
 	  discard_13, NULL, agg_tst_teardown },
-	{ "VOS464: Discard object/key punches",
+	{ "VOS464: Discard object/key punches sv",
 	  discard_14, NULL, agg_tst_teardown },
+	{ "VOS465: Discard object/key punches array",
+	  discard_15, NULL, agg_tst_teardown },
 
 };
 
@@ -1896,8 +1912,10 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
 	  aggregate_14, NULL, agg_tst_teardown },
-	{ "VOS415: Aggregate many object/key punches",
+	{ "VOS415: Aggregate many object/key punches sv",
 	  aggregate_15, NULL, agg_tst_teardown },
+	{ "VOS416: Aggregate many object/key punches array",
+	  aggregate_16, NULL, agg_tst_teardown },
 };
 
 int

@@ -648,7 +648,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
-	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
@@ -661,8 +661,12 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 			DP_UOID(oid));
 		reprobe = true;
 		deleted = true;
-		D_ASSERTF(dbtree_is_empty_inplace(&obj->vo_tree),
-			  "Subtree is orphaned\n");
+		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
+			/* This can be an assert once we have sane under punch
+			 * detection.
+			 */
+			D_ERROR("Removing orphaned dkey tree\n");
+		}
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
@@ -671,7 +675,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		rc = 0;
 	}
 
-	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
 	if (rc == 0 && reprobe) {
 		if (deleted) {
