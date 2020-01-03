@@ -23,9 +23,8 @@
 """
 
 import ctypes
-import time
 from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj)
+                        DaosInputParams, DaosObj)
 from apricot import TestWithServers
 from test_utils import TestPool
 
@@ -66,15 +65,10 @@ class ChecksumContainerValidation(TestWithServers):
 
         self.csum = self.params.get("enable_checksum", '/run/container/*')
         self.container = DaosContainer(self.context)
-        # Get the container properties input structure
-        # Refer: daos_api.py for latest structure.
-        #
-        cont_property = self.container.get_cont_prop()
-        cont_property.enable_chksum = self.csum
-        self.container.set_cont_prop(cont_property)
+        input_param = self.container.cont_input_values
+        input_param.enable_chksum = self.csum
         self.container.create(poh=self.pool.pool.handle,
-                              con_prop=self.container.set_cont_prop(
-                                  cont_property))
+                              con_prop=input_param)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)

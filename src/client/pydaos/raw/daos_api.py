@@ -1394,6 +1394,31 @@ class DaosContProperties(ctypes.Structure):
         self.chunk_size = ctypes.c_uint64(0)
 
 
+class DaosInputParams(object):
+    """ This is a helper python method
+    which can be used to pack input
+    parameters for create methods
+    (eg: container or pool (future)).
+    """
+    def __init__(self):
+        super(DaosInputParams, self).__init__()
+        # Get the input params for setting
+        # container properties for
+        # create method.
+        self.co_prop = DaosContProperties()
+
+    def get_con_create_params(self):
+        """ Get the container create params.
+        This is method is used to pack
+        input parameters as a structure.
+        Perform a get_con_create_params
+        and update the appropriate
+        input params before calling the
+        create container method.
+        """
+        return self.co_prop
+
+
 class DaosContainer(object):
     """A python object representing a DAOS container."""
 
@@ -1409,19 +1434,11 @@ class DaosContainer(object):
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
-        self.cont_input_values = DaosContProperties()
+        # Get access to container input params
+        self.input = DaosInputParams()
+        # Export the cont create params structure for user.
+        self.cont_input_values = self.input.get_con_create_params()
         self.cont_prop = None
-
-    def get_cont_prop(self):
-        """ Get the container properties """
-        return self.cont_input_values
-
-    def set_cont_prop(self, set_cont_prop):
-        """ Set the container properties.
-        Recommended usage: Perform a get_cont_prop
-        and then set_contprop.
-        """
-        self.cont_input_values = set_cont_prop
 
     def get_uuid_str(self):
         """Return C representation of Python string."""
@@ -1443,13 +1460,13 @@ class DaosContainer(object):
         # We will support only basic properties. Full
         # container properties will not be exposed.
         # Create DaosProperty for checksum
-        # 1. Layer Type.
+        # 1. Layout Type.
         # 2. Enable checksum,
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
         if ((self.cont_input_values.type != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
-            # Only layer_type like posix, hdf5 defined.
+            # Only type like posix, hdf5 defined.
             num_prop = 1
         elif ((self.cont_input_values.type == "Unknown")
                 and (self.cont_input_values.enable_chksum is True)):
@@ -1457,7 +1474,7 @@ class DaosContainer(object):
             num_prop = 3
         elif ((self.cont_input_values.type != "Unknown")
                 and (self.cont_input_values.enable_chksum is True)):
-            # Both layer and checksum properties define
+            # Both layout and checksum properties defined
             num_prop = 4
 
         if ((self.cont_input_values.type != "Unknown")
