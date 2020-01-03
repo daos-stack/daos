@@ -45,12 +45,9 @@ ior:
             - DAOS
             - MPIIO
             - POSIX
-          ior_transfer_size:
-            - '256B'
-            - '1M'
-          ior_block_size:
-            - '4M'
-            - '32M'
+          transfer_block_size:
+            - [256B, 4M]
+            - [1M, 32M]
           obj_class:
             - "SX"
 # Commenting it out until DAOS-3097/3143 is resolved.

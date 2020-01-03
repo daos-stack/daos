@@ -28,24 +28,16 @@ mdtest:
   iteration: 1
   dfs_destroy: True
   manager: "MPICH"
-  mdtest_flags:
-    - ' '
-    - '-u'
-  mdtest_api:
-    - DFS
-    - POSIX
-  read_write:
-    - 0
-    - 4096
-  branch_factor:
-    - 1
-    - 2
-  number_of_files_dirs: 1000
-  dir_depth:
-    - 0
-    - 20
-    - 5
-  num_of_items: 10
+  mdtest_params:
+#     [api, write, read, branching factor, num_of_dir_files, depth, flags]
+    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, ' '] 
+    - [POSIX, 0, 0, 1, 1000, 0, ' ']
+    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 2, 10, 5, ' ']
+    - [POSIX, 4096, 4096, 2, 10, 5, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
+    - [POSIX, 0, 0, 2, 10, 5, '-u']
 
 dfuse:
   mount_dir: "/tmp/daos_dfuse"

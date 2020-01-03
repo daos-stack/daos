@@ -45,61 +45,25 @@ class MdtestSmall(MdtestBase):
         :avocado: tags=all,pr,hw,mdtest,mdtestsmall
         """
         # local params
-        mdtest_flags = self.params.get("mdtest_flags", "/run/mdtest/*")
-        mdtest_api = self.params.get("mdtest_api", "/run/mdtest/*")
-        read_write = self.params.get("read_write", "/run/mdtest/*")
-        branch_factor = self.params.get("branch_factor", "/run/mdtest/*")
-        dir_depth = self.params.get("dir_depth", "/run/mdtest/*")
-        num_of_items = self.params.get("num_of_items", "/run/mdtest/*")
-        number_of_files_dirs = self.params.get("number_of_files_dirs",
-                                               "/run/mdtest/*")
+        mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
         # Running mdtest for different variants
-        for flag in mdtest_flags:
-            self.mdtest_cmd.flags.update(flag)
-            if self.mdtest_cmd.flags.value == ' ':
-                for api in mdtest_api:
-                    self.mdtest_cmd.api.update(api)
-                    if self.mdtest_cmd.api.value == 'DFS':
-                        self.mdtest_cmd.write_bytes.update(read_write[1])
-                        self.mdtest_cmd.read_bytes.update(read_write[1])
-                    else:
-                        self.mdtest_cmd.write_bytes.update(read_write[0])
-                        self.mdtest_cmd.read_bytes.update(read_write[0])
-                    for branch in branch_factor:
-                        self.mdtest_cmd.branching_factor.update(branch)
-                        if (self.mdtest_cmd.branching_factor.value ==
-                                branch_factor[0]):
-                            self.mdtest_cmd.num_of_files_dirs.update(
-                                number_of_files_dirs)
-                            for depth in dir_depth[:-1]:
-                                self.mdtest_cmd.depth.update(depth)
-                                self.execute_mdtest()
-                                self.mdtest_cmd.num_of_files_dirs.update(None)
-                        else:
-                            self.mdtest_cmd.items.update(num_of_items)
-                            self.mdtest_cmd.depth.update(dir_depth[2])
-                            self.execute_mdtest()
-                            self.mdtest_cmd.items.update(None)
+        for params in mdtest_params:
+            # update mdtest params
+            self.mdtest_cmd.api.update(params[0])
+            self.mdtest_cmd.write_bytes.update(params[1])
+            self.mdtest_cmd.read_bytes.update(params[2])
+            self.mdtest_cmd.branching_factor.update(params[3])
+            # if branching factor is 1 use num_of_files_dirs
+            # else use items option of mdtest
+            if params[3] == 1:
+                self.mdtest_cmd.num_of_files_dirs.update(params[4])
             else:
-                for api in mdtest_api:
-                    self.mdtest_cmd.api.update(api)
-                    if self.mdtest_cmd.api.value == 'POSIX':
-                        self.mdtest_cmd.write_bytes.update(read_write[1])
-                        self.mdtest_cmd.read_bytes.update(read_write[1])
-                        self.mdtest_cmd.branching_factor.update(
-                            branch_factor[0])
-                        self.mdtest_cmd.num_of_files_dirs.update(
-                            number_of_files_dirs)
-                        self.mdtest_cmd.depth.update(dir_depth[1])
-                    else:
-                        self.mdtest_cmd.write_bytes.update(read_write[0])
-                        self.mdtest_cmd.read_bytes.update(read_write[0])
-                        self.mdtest_cmd.branching_factor.update(
-                            branch_factor[1])
-                        self.mdtest_cmd.items.update(num_of_items)
-                        self.mdtest_cmd.depth.update(dir_depth[2])
-
-                    self.execute_mdtest()
-                    self.mdtest_cmd.num_of_files_dirs.update(None)
-                    self.mdtest_cmd.items.update(None)
+                self.mdtest_cmd.items.update(params[4])
+            self.mdtest_cmd.depth.update(params[5])
+            self.mdtest_cmd.flags.update(params[6])
+            # run mdtest
+            self.execute_mdtest()
+            # set num_files_dirs and items to None before each iteration
+            self.mdtest_cmd.num_of_files_dirs.update(None)
+            self.mdtest_cmd.items.update(None)
