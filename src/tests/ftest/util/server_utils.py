@@ -260,6 +260,7 @@ class DaosServerConfig(ObjectWithParameters):
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)

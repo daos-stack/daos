@@ -650,8 +650,6 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-bool dss_agg_disabled(void);
-
 int notify_bio_error(bool unmap, bool update, int tgt_id);
 
 #endif /* __DSS_API_H__ */
