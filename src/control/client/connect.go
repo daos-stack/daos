@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,9 +82,9 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
-	SystemQuery() (system.Members, error)
-	SystemStart() error
+	SystemQuery(SystemQueryReq) (*SystemQueryResp, error)
 	SystemStop(SystemStopReq) (system.MemberResults, error)
+	SystemStart() error
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
 	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }

@@ -62,7 +62,9 @@ message SystemStartReq {}
 message SystemStartResp {}
 
 // SystemQueryReq supplies system query parameters.
-message SystemQueryReq {}
+message SystemQueryReq {
+	uint32 rank = 1; // member rank to query
+}
 
 // SystemQueryResp returns active system members.
 message SystemQueryResp {

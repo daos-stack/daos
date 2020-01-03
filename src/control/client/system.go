@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -84,27 +85,41 @@ func (c *connList) SystemStart() error {
 	return nil
 }
 
-// SystemQuery will return the list of members joined to DAOS system.
-//
-// Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery() (system.Members, error) {
+// SystemQueryReq contains the inputs for the system query request.
+type SystemQueryReq struct {
+	Rank uint32
+}
+
+// SystemQueryResp contains the request response.
+type SystemQueryResp struct {
+	Members system.Members
+}
+
+// SystemQuery requests DAOS system status.
+func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemQueryReq{}
+	rpcReq := &ctlpb.SystemQueryReq{
+		Rank: req.Rank,
+	}
 
-	c.log.Debug("Sending DAOS system member query request\n")
+	c.log.Debugf("Sending DAOS system query request: %+v", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debug("Received DAOS system member query response\n")
+	c.log.Debugf("Received DAOS system query response: %+v", rpcResp)
 
-	return proto.MembersFromPB(c.log, rpcResp.Members)
+	sqr := new(SystemQueryResp)
+	if err := convert.Types(rpcResp, sqr); err != nil {
+		return nil, err
+	}
+	return sqr, nil
 }
 
 // KillRank Will terminate server running at given rank on pool specified by

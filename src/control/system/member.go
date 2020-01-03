@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
@@ -66,6 +67,47 @@ type Member struct {
 	UUID  string
 	Addr  net.Addr
 	state MemberState
+}
+
+func (sm *Member) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON Member
+	return json.Marshal(&struct {
+		Addr string
+		*toJSON
+	}{
+		Addr:   sm.Addr.String(),
+		toJSON: (*toJSON)(sm),
+	})
+}
+
+func (sm *Member) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON Member
+	from := &struct {
+		Addr string
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sm),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", from.Addr)
+	if err != nil {
+		return err
+	}
+	sm.Addr = addr
+
+	return nil
 }
 
 func (sm *Member) String() string {

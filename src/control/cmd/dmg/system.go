@@ -32,12 +32,13 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
 	LeaderQuery leaderQueryCmd     `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS System Membership"`
+	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS system status"`
 	Stop        systemStopCmd      `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 	Start       systemStartCmd     `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
 	ListPools   systemListPoolsCmd `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
@@ -163,13 +164,77 @@ type systemStartCmd struct {
 // Execute is run when systemStartCmd activates
 func (cmd *systemStartCmd) Execute(args []string) error {
 	msg := "SUCCEEDED: "
-
+	4
 	err := cmd.conns.SystemStart()
 	if err != nil {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 
 	cmd.log.Infof("System-start command %s\n", msg)
+
+	return nil
+}
+
+// systemQueryCmd is the struct representing the command to query system status.
+type systemQueryCmd struct {
+	logCmd
+	connectedCmd
+	Rank *uint32 `long:"rank" short:"r" description:"System member rank to query"`
+}
+
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(args []string) error {
+	nilRank := ioserver.NilRank
+	req := client.SystemQueryReq{
+		Rank: nilRank.Uint32(),
+	}
+	if cmd.Rank != nil {
+		req.Rank = *cmd.Rank
+	}
+	resp, err := cmd.conns.SystemQuery(req)
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
+	}
+
+	cmd.log.Debug("System-Query command succeeded")
+	if len(resp.Members) == 0 {
+		cmd.log.Info("No members in system")
+		return nil
+	}
+
+	if cmd.Rank != nil {
+		if len(resp.Members) != 1 {
+			return errors.Errorf("expected 1 member in result, got %d", len(resp.Members))
+		}
+		m := resp.Members[0]
+		table := []txtfmt.TableRow{
+			{"address": m.Addr.String()},
+			{"uuid": m.UUID},
+			{"status": m.State().String()},
+			{"reason": "unknown"},
+		}
+		title := fmt.Sprintf("Rank %d", *cmd.Rank)
+		cmd.log.Info(txtfmt.FormatEntity(title, table))
+		return nil
+	}
+
+	rankPrefix := "r-"
+	groups := make(hostlist.HostGroups)
+	for _, m := range resp.Members {
+		if err := groups.AddHost(m.State().String(), fmt.Sprintf("%s%d", rankPrefix, m.Rank)); err != nil {
+			return err
+		}
+	}
+
+	out, err := tabulateHostGroups(groups, "Rank", "State")
+	if err != nil {
+		return err
+	}
+
+	// kind of a hack, but don't want to modify the hostlist library to
+	// accept invalid hostnames.
+	out = strings.ReplaceAll(out, rankPrefix, "")
+	cmd.log.Info(out)
 
 	return nil
 }
