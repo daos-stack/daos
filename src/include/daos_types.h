@@ -177,43 +177,6 @@ typedef struct {
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
 
-/**
- * Container
- */
-
-/**
- * DAOS_COO_RO opens the container for reading only. This flag conflicts with
- * DAOS_COO_RW.
- *
- * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
- * with DAOS_COO_RO.
- *
- * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
- * daos_epoch_commit().
- *
- * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirments of the container.
- */
-#define DAOS_COO_RO	(1U << 0)
-#define DAOS_COO_RW	(1U << 1)
-#define DAOS_COO_NOSLIP	(1U << 2)
-#define DAOS_COO_FORCE	(1U << 3)
-
-/** Container information */
-typedef struct {
-	/** Container UUID */
-	uuid_t			ci_uuid;
-	/** Epoch of latest persisten snapshot */
-	daos_epoch_t		ci_lsnapshot;
-	/** Number of snapshots */
-	uint32_t		ci_nsnapshots;
-	/** Epochs of returns snapshots */
-	daos_epoch_t	       *ci_snapshots;
-	/** The minimal "Highest aggregated epoch" among all targets */
-	daos_epoch_t		ci_hae;
-	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} daos_cont_info_t;
-
 typedef d_iov_t daos_key_t;
 
 /**
