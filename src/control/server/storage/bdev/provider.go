@@ -25,19 +25,25 @@ package bdev
 import (
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
 	// InitRequest defines the parameters for initializing the provider.
 	InitRequest struct {
+		pbin.ForwardableRequest
 		SPDKShmID int
 	}
 
+	// InitResponse contains the results of a successful Init operation.
+	InitResponse struct{}
+
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Forwarded bool
+		pbin.ForwardableRequest
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -47,7 +53,7 @@ type (
 
 	// PrepareRequest defines the parameters for a Prepare operation.
 	PrepareRequest struct {
-		Forwarded     bool
+		pbin.ForwardableRequest
 		HugePageCount int
 		PCIWhitelist  string
 		TargetUser    string
@@ -59,7 +65,7 @@ type (
 
 	// FormatRequest defines the parameters for a Format operation.
 	FormatRequest struct {
-		Forwarded  bool
+		pbin.ForwardableRequest
 		Class      storage.BdevClass
 		DeviceList []string
 	}
@@ -67,7 +73,7 @@ type (
 	// DeviceFormatResponse contains device-specific Format operation results.
 	DeviceFormatResponse struct {
 		Formatted  bool
-		Error      error
+		Error      *fault.Fault
 		Controller *storage.NvmeController
 	}
 
@@ -93,6 +99,7 @@ type (
 	Provider struct {
 		log     logging.Logger
 		backend Backend
+		fwd     *Forwarder
 	}
 )
 
@@ -106,16 +113,33 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	return &Provider{
 		log:     log,
 		backend: backend,
+		fwd:     NewForwarder(log),
 	}
+}
+
+func (p *Provider) WithForwardingDisabled() *Provider {
+	p.fwd.Disabled = true
+	return p
+}
+
+func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
+	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
 // Init performs any initialization steps required by the provider.
 func (p *Provider) Init(req InitRequest) error {
+	if p.shouldForward(req) {
+		return p.fwd.Init(req)
+	}
 	return p.backend.Init(req.SPDKShmID)
 }
 
 // Scan attempts to perform a scan to discover NVMe components in the system.
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwd.Scan(req)
+	}
+
 	cs, err := p.backend.Scan()
 	if err != nil {
 		return nil, err
@@ -129,6 +153,10 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 // Prepare attempts to perform all actions necessary to make NVMe components available for
 // use by DAOS.
 func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwd.Prepare(req)
+	}
+
 	// run reset first to ensure reallocation of hugepages
 	if err := p.backend.Reset(); err != nil {
 		return nil, errors.WithMessage(err, "SPDK setup reset")
@@ -140,10 +168,11 @@ func (p *Provider) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 		return res, nil
 	}
 
-	return res, errors.WithMessage(
-		p.backend.Prepare(req.HugePageCount, req.TargetUser, req.PCIWhitelist),
-		"SPDK setup",
-	)
+	if err := p.backend.Prepare(req.HugePageCount, req.TargetUser, req.PCIWhitelist); err != nil {
+		return nil, errors.WithMessage(err, "SPDK prepare")
+	}
+
+	return res, nil
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS (NB: no-op for non-NVMe devices).
@@ -152,7 +181,11 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
-	// TODO: Kick off device formats in goroutines? Serially formatting a large
+	if p.shouldForward(req) {
+		return p.fwd.Format(req)
+	}
+
+	// TODO (DAOS-3844): Kick off device formats in goroutines? Serially formatting a large
 	// number of NVMe devices can be slow.
 	res := &FormatResponse{
 		DeviceResponses: make(DeviceFormatResponses),
@@ -162,7 +195,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		res.DeviceResponses[dev] = &DeviceFormatResponse{}
 		switch req.Class {
 		default:
-			res.DeviceResponses[dev].Error = errors.Wrap(FaultFormatUnknownClass, req.Class.String())
+			res.DeviceResponses[dev].Error = FaultFormatUnknownClass(req.Class.String())
 		case storage.BdevClassKdev, storage.BdevClassFile, storage.BdevClassMalloc:
 			res.DeviceResponses[dev].Formatted = true
 			p.log.Infof("%s format for non-NVMe bdev skipped (%s)", req.Class, dev)
@@ -171,7 +204,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 			c, err := p.backend.Format(dev)
 			if err != nil {
 				p.log.Errorf("%s format failed (%s)", req.Class, dev)
-				res.DeviceResponses[dev].Error = err
+				res.DeviceResponses[dev].Error = FaultFormatError(err)
 				continue
 			}
 			res.DeviceResponses[dev].Controller = c
