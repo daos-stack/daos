@@ -122,6 +122,7 @@ type BdevConfig struct {
 	DeviceCount int       `yaml:"bdev_number,omitempty"`
 	FileSize    int       `yaml:"bdev_size,omitempty"`
 	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
+	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	Hostname    string    `yaml:"-"` // used when generating templates
 }
