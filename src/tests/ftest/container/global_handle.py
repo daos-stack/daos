@@ -66,8 +66,7 @@ class GlobalHandle(TestWithServers):
                                          pool_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        pool_handle = pool.global2local(self.context,
-                                        pool_glob_handle.iov_len,
+        pool_handle = pool.global2local(pool_glob_handle.iov_len,
                                         pool_glob_handle.iov_buf_len,
                                         buf2)
 
@@ -83,8 +82,7 @@ class GlobalHandle(TestWithServers):
                                          cont_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        dummy_cont_handle = container.global2local(self.context,
-                                                   cont_glob_handle.iov_len,
+        dummy_cont_handle = container.global2local(cont_glob_handle.iov_len,
                                                    cont_glob_handle.iov_buf_len,
                                                    buf2)
         # just try one thing to make sure handle is good

@@ -25,6 +25,7 @@ from pool_test_base import PoolTestBase
 
 
 class BadCreateTest(PoolTestBase):
+    # pylint: disable=too-many-ancestors
     """Test pool create calls.
 
     Test Class Description:

@@ -58,8 +58,7 @@ class GlobalHandle(TestWithServers):
         pool.group = "daos_server"
 
         # note that the handle is stored inside the pool as well
-        dummy_local_handle = pool.global2local(self.context, iov_len,
-                                               buf_len, buf)
+        dummy_local_handle = pool.global2local(iov_len, buf_len, buf)
 
         # perform some operations that will use the new handle
         pool.pool_query()

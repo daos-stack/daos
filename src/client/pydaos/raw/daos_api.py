@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 from __future__ import print_function
 
 import ctypes
@@ -47,7 +48,29 @@ DaosObjClass = enum.Enum(
      if key.startswith("OC_")})
 
 
+def convert_input(name, value, conversion_method):
+    """Convert an input value using the specified method and handle any errors.
+
+    Args:
+        name (str): name of the input value
+        value (object): input value to convert
+        conversion_method (object): method used to convert the input value
+
+    Raises:
+        DaosApiError: if an error occurs during the conversion
+
+    Returns:
+        object: the value converted by the conversion_method
+
+    """
+    try:
+        return conversion_method(value)
+    except TypeError as error:
+        raise DaosApiError("Invalid '{}' argument: {}".format(name, error))
+
+
 class DaosPool(object):
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS pool."""
 
     def __init__(self, context):
@@ -78,17 +101,11 @@ class DaosPool(object):
     def create(self, mode, uid, gid, scm_size, group, target_list=None,
                cb_func=None, svcn=1, nvme_size=0):
         """Send a pool creation request to the daos server group."""
-        c_mode = c_uid = c_gid = c_scm_size = c_nvme_size = None
-        for name in ("mode", "uid", "gid", "scm_size", "nvme_size"):
-            local_name = "_".join(["c", name])
-            try:
-                if name in ("scm_size", "nvme_size"):
-                    locals()[local_name] = ctypes.c_longlong(locals()[name])
-                else:
-                    locals()[local_name] = ctypes.c_int(locals()[name])
-            except TypeError as error:
-                raise DaosApiError(
-                    "Invalid '{}' argument: {}".format(name, error))
+        c_mode = convert_input("mode", mode, ctypes.c_int)
+        c_uid = convert_input("uid", uid, ctypes.c_int)
+        c_gid = convert_input("gid", gid, ctypes.c_int)
+        c_scm_size = convert_input("scm_size", scm_size, ctypes.c_longlong)
+        c_nvme_size = convert_input("nvme_size", nvme_size, ctypes.c_longlong)
         if group:
             self.set_group(group)
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -210,7 +227,7 @@ class DaosPool(object):
         buf.extend(c_buf.raw)
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
-    def global2local(self, context, iov_len, buf_len, buf):
+    def global2local(self, iov_len, buf_len, buf):
         """Convert a global pool handle to local."""
         func = self.context.get_function("convert-pglobal")
 
@@ -730,6 +747,7 @@ class DaosObj(object):
 
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
+            # pylint: disable=no-member
             obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
@@ -1367,6 +1385,7 @@ class IORequest(object):
 
 
 class DaosContainer(object):
+    # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
     def __init__(self, context, cuuid=None, poh=None, coh=None):
@@ -1799,7 +1818,7 @@ class DaosContainer(object):
         buf.extend(c_buf.raw)
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
-    def global2local(self, context, iov_len, buf_len, buf):
+    def global2local(self, iov_len, buf_len, buf):
         """Convert a global container handle to a local handle."""
         func = self.context.get_function("convert-cglobal")
 
@@ -2103,6 +2122,7 @@ class DaosSnapshot(object):
 
 
 class DaosServer(object):
+    # pylint: disable=too-few-public-methods
     """Represent a DAOS Server."""
 
     def __init__(self, context, group, rank):
@@ -2229,6 +2249,7 @@ class DaosLog:
         self.daos_log(msg, daos_cref.Logfac.ERROR)
 
     def daos_log(self, msg, level):
+        # pylint: disable=protected-access
         """Write specified message to client daos.log."""
         func = self.context.get_function("d_log")
 

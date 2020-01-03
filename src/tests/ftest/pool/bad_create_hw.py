@@ -25,6 +25,7 @@ from pool_test_base import PoolTestBase
 
 
 class BadCreate(PoolTestBase):
+    # pylint: disable=too-many-ancestors
     """Test pool creation with NVMe hardware.
 
     Test Class Description:
