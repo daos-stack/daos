@@ -24,8 +24,8 @@
  * dc_cont: Container Client API
  */
 
-#ifndef __DAOS_CONTAINER_H__
-#define __DAOS_CONTAINER_H__
+#ifndef __DD_CONT_H__
+#define __DD_CONT_H__
 
 #include <daos/common.h>
 #include <daos/pool_map.h>
@@ -80,4 +80,4 @@ int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);
 
-#endif /* __DAOS_CONTAINER_H__ */
+#endif /* __DD_CONT_H__ */
