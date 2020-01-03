@@ -31,6 +31,7 @@ from command_utils import BasicParameter, ObjectWithParameters
 from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
                         c_uuid_to_str)
 from general_utils import check_pool_files, get_random_string, DaosTestError
+from env_modules import load_mpi
 
 
 class CallbackHandler(object):
@@ -596,6 +597,7 @@ class TestPool(TestDaosApiBase):
             "DAOS_SINGLETON_CLI": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", ""),
         }
+        load_mpi("openmpi")
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,

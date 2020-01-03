@@ -87,6 +87,7 @@ static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec)
 {
+	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
@@ -113,6 +114,13 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	rec->rec_off = obj_off;
+
+	/* For new created object, commit it synchronously to reduce
+	 * potential conflict with subsequent modifications against
+	 * the same object.
+	 */
+	if (dth != NULL)
+		dth->dth_sync = 1;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
 		DP_UOID(obj->vo_id), rec->rec_off);
@@ -602,13 +610,13 @@ oi_iter_delete(struct vos_iterator *iter, void *args)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 
-	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);

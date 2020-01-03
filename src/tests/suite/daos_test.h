@@ -287,6 +287,7 @@ int run_daos_checksum_test(int rank, int size);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
+int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -314,6 +315,17 @@ int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
 		       int sub_tests_size, test_setup_cb_t setup_cb,
 		       test_teardown_cb_t teardown_cb);
+
+void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
+void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
+			 bool discard);
+void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+				int failed_tgt);
+void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
+			   int *failed_tgts, int nr);
+
+int rebuild_sub_setup(void **state);
+int rebuild_small_sub_setup(void **state);
 
 static inline void
 daos_test_print(int rank, char *message)

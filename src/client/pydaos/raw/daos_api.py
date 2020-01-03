@@ -822,7 +822,7 @@ class DaosObj(object):
         # punch synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-obj')
         if cb_func is None:
-            ret = func(self.obj_handle, c_tx, None)
+            ret = func(self.obj_handle, c_tx, 0, None)
             if ret != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
                                    .format(ret))
@@ -872,7 +872,7 @@ class DaosObj(object):
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-dkeys')
         if cb_func is None:
-            ret = func(self.obj_handle, c_tx, c_len_dkeys,
+            ret = func(self.obj_handle, c_tx, 0, c_len_dkeys,
                        ctypes.byref(c_dkeys), None)
             if ret != 0:
                 raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
@@ -928,7 +928,7 @@ class DaosObj(object):
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-akeys')
         if cb_func is None:
-            ret = func(self.obj_handle, c_tx, ctypes.byref(c_dkey_iov),
+            ret = func(self.obj_handle, c_tx, 0, ctypes.byref(c_dkey_iov),
                        c_len_akeys, ctypes.byref(c_akeys), None)
             if ret != 0:
                 raise DaosApiError("punch-akeys returned non-zero. RC: {0}"
@@ -1050,7 +1050,7 @@ class IORequest(object):
         dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
         dkey_iov.iov_len = ctypes.sizeof(dkey)
 
-        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov),
+        ret = func(self.obj.obj_handle, c_tx, 0, ctypes.byref(dkey_iov),
                    1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -1102,7 +1102,7 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov), 1,
+        ret = func(self.obj.obj_handle, c_tx, 0, ctypes.byref(dkey_iov), 1,
                    ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
         if ret != 0:
             raise DaosApiError("Array fetch returned non-zero. RC: {0}"
@@ -1165,7 +1165,7 @@ class IORequest(object):
             dkey_ptr = None
 
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.obj_handle, c_tx, dkey_ptr, 1,
+        ret = func(self.obj.obj_handle, c_tx, 0, dkey_ptr, 1,
                    ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -1234,7 +1234,7 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('fetch-obj')
-        ret = func(self.obj.obj_handle, c_tx, dkey_ptr,
+        ret = func(self.obj.obj_handle, c_tx, 0, dkey_ptr,
                    1, iod_ptr, sgl_ptr, None, None)
         if ret != 0:
             raise DaosApiError("Object fetch returned non-zero. RC: {0}"
@@ -1292,7 +1292,7 @@ class IORequest(object):
 
         # now do it
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.obj_handle, c_tx, dkey_ptr, c_count,
+        ret = func(self.obj.obj_handle, c_tx, 0, dkey_ptr, c_count,
                    iod_ptr, sgl_ptr, None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
@@ -1350,7 +1350,7 @@ class IORequest(object):
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.obj_handle, c_tx, ctypes.byref(dkey_iov),
+        ret = func(self.obj.obj_handle, c_tx, 0, ctypes.byref(dkey_iov),
                    c_count, ctypes.byref(iods), sgl_ptr, None, None)
         if ret != 0:
             raise DaosApiError("multikey fetch returned non-zero. RC: {0}"

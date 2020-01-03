@@ -44,6 +44,10 @@ service MgmtSvc {
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
+	// PoolQuery queries a DAOS pool.
+	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
+	// Set a DAOS pool property.
+	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Fetch the Access Control List for a DAOS pool.
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.
@@ -70,4 +74,6 @@ service MgmtSvc {
 	rpc DevStateQuery(DevStateReq) returns (DevStateResp) {}
 	// Set the device state of an NVMe SSD to FAULTY
 	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
+	// List all containers in a pool
+	rpc ListContainers(ListContReq) returns (ListContResp) {}
 }

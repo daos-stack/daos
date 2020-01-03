@@ -52,11 +52,13 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 		*/
 		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
 			f_shard->fs_shard_idx);
+
 		D_ASSERTF(f_new->fs_fseq != f_shard->fs_fseq,
 			  "same fseq %u!\n", f_new->fs_fseq);
 
 		if (f_new->fs_fseq < f_shard->fs_fseq)
 			continue;
+
 		d_list_add(&f_new->fs_list, tmp);
 		return;
 	}
@@ -73,7 +75,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt)
+		struct pool_target *tgt, bool for_reint)
 {
 	struct failed_shard *f_new;
 
@@ -85,9 +87,15 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_shard_idx = shard_idx;
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_tgt_id = -1;
 
-	remap_add_one(remap_list, f_new);
+	if (!for_reint) {
+		f_new->fs_tgt_id = -1;
+		remap_add_one(remap_list, f_new);
+	} else {
+		f_new->fs_tgt_id = tgt->ta_comp.co_id;
+		d_list_add(&f_new->fs_list, remap_list);
+	}
+
 	return 0;
 }
 
@@ -186,7 +194,7 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 
 int
 remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
-		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
+		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
 		struct pl_obj_layout *layout, d_list_t *remap_list)
@@ -198,10 +206,11 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 	d_list_for_each_entry(f_shard, remap_list, fs_list) {
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
-		if (f_shard->fs_fseq > rebuild_ver)
+		if (f_shard->fs_fseq > r_ver)
 			break;
 
-		if (f_shard->fs_status == PO_COMP_ST_DOWN) {
+		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
+		    f_shard->fs_status == PO_COMP_ST_UP) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
@@ -222,6 +231,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 				leader = pl_select_leader(md->omd_id,
 					l_shard->po_shard, layout->ol_nr,
 					true, pl_obj_get_shard, layout);
+
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "
 					       "is leader or not for obj "
@@ -229,7 +239,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 					       "ver:%d, shard:%d, rc = %d\n",
 					       DP_OID(md->omd_id),
 					       f_shard->fs_fseq,
-					       f_shard->fs_status, rebuild_ver,
+					       f_shard->fs_status, r_ver,
 					       l_shard->po_shard, leader);
 					goto fill;
 				}
@@ -254,7 +264,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 						DP_OID(md->omd_id),
 						f_shard->fs_fseq,
 						f_shard->fs_status,
-						rebuild_ver, l_shard->po_shard);
+						r_ver, l_shard->po_shard);
 					continue;
 				}
 
@@ -264,7 +274,7 @@ fill:
 					"ver:%d, shard:%d, to be rebuilt.\n",
 					myrank, DP_OID(md->omd_id),
 					f_shard->fs_fseq,
-					rebuild_ver, l_shard->po_shard);
+					r_ver, l_shard->po_shard);
 				tgt_id[*idx] = f_shard->fs_tgt_id;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
@@ -274,7 +284,7 @@ fill:
 			D_ERROR(""DF_OID" rebuild is done for "
 				"fseq:%d(status:%d)? rbd_ver:%d rc %d\n",
 				DP_OID(md->omd_id), f_shard->fs_fseq,
-				f_shard->fs_status, rebuild_ver, rc);
+				f_shard->fs_status, r_ver, rc);
 		}
 	}
 
@@ -284,7 +294,8 @@ fill:
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		struct failed_shard *f_shard, struct pl_obj_shard *l_shard)
+		bool for_reint, struct failed_shard *f_shard,
+		struct pl_obj_shard *l_shard)
 {
 	struct failed_shard *f_tmp;
 
@@ -292,7 +303,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		goto next_fail;
 
 	/* The selected spare target is down as well */
-	if (pool_target_unavail(spare_tgt)) {
+	if (pool_target_unavail(spare_tgt, for_reint)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);

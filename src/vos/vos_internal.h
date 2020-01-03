@@ -164,33 +164,12 @@ struct vos_container {
 				vc_reindex_cmt_dtx:1;
 	unsigned int		vc_open_count;
 	uint64_t		vc_dtx_resync_gen;
-
-	/* The list of dtx_batched_cleanup_blob::bcb_cont_link. */
-	d_list_t		vc_batched_cleanup_list;
-};
-
-struct dtx_batched_cleanup_blob {
-	/* Link into vos_container::vc_batched_cleanup_list */
-	d_list_t		bcb_cont_link;
-
-	/* The list of vos_dtx_cmt_ent::dce_bcb_link. */
-	d_list_t		bcb_dce_list;
-
-	/* The count of valid DAE entry, if hit zero, then batched cleanup. */
-	int			bcb_dae_count;
-
-	/* The offset of the vos_dtx_blob_df to be batched cleanup. */
-	umem_off_t		bcb_dbd_off;
-
-	/* The offset of dae_rec_off to be batched cleanup. */
-	umem_off_t		bcb_recs[0];
 };
 
 struct vos_dtx_act_ent {
 	struct vos_dtx_act_ent_df	 dae_base;
 	umem_off_t			 dae_df_off;
 	struct vos_dtx_blob_df		*dae_dbd;
-	struct dtx_batched_cleanup_blob	*dae_bcb;
 	/* More DTX records if out of the inlined buffer. */
 	struct vos_dtx_record_df	*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
@@ -213,13 +192,7 @@ struct vos_dtx_act_ent {
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
 	d_list_t			 dce_committed_link;
-
-	/* Link into dtx_batched_cleanup_blob::bcb_dce_list. */
-	d_list_t			 dce_bcb_link;
-
-	struct dtx_batched_cleanup_blob	*dce_bcb;
 	struct vos_dtx_cmt_ent_df	 dce_base;
-	int				 dce_index;
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1;
 };
@@ -398,8 +371,6 @@ vos_dtx_table_register(void);
  * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	Address (offset) of the DTX to be checked.
- * \param record	[IN]	Address (offset) of the record modified via
- *				the DTX.
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
  *
@@ -415,8 +386,7 @@ vos_dtx_table_register(void);
  */
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   umem_off_t entry, umem_off_t record, uint32_t intent,
-			   uint32_t type);
+			   umem_off_t entry, uint32_t intent, uint32_t type);
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -433,6 +403,12 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, umem_off_t *tx_id);
+
+/**
+ * Cleanup DTX handle (in DRAM things) when related PMDK transaction failed.
+ */
+void
+vos_dtx_cleanup_dth(struct dtx_handle *dth);
 
 /** Return the already active dtx id, if any */
 umem_off_t
@@ -570,6 +546,8 @@ struct vos_rec_bundle {
 	struct vos_krec_df	*rb_krec;
 	/** input record size */
 	daos_size_t		 rb_rsize;
+	/** global record size, needed for EC singv record */
+	daos_size_t		 rb_gsize;
 	/** pool map version */
 	uint32_t		 rb_ver;
 	/** tree class */
@@ -995,22 +973,6 @@ static inline struct umem_instance *
 vos_cont2umm(struct vos_container *cont)
 {
 	return vos_pool2umm(cont->vc_pool);
-}
-
-static inline int
-vos_tx_begin(struct umem_instance *umm)
-{
-	return umem_tx_begin(umm, NULL);
-}
-
-static inline int
-vos_tx_end(struct umem_instance *umm, int rc)
-{
-	if (rc != 0)
-		return umem_tx_abort(umm, rc);
-
-	return umem_tx_commit(umm);
-
 }
 
 static inline uint32_t
