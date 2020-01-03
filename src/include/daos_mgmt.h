@@ -28,6 +28,20 @@ extern "C" {
 
 #include <daos_event.h>
 #include <daos_types.h>
+#include <daos_pool.h>
+
+/*
+ * DAOS management pool information
+ */
+typedef struct {
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
+	uuid_t				 mgpi_uuid;
+	/** List of current pool service replica ranks */
+	d_rank_list_t			*mgpi_svc;
+} daos_mgmt_pool_info_t;
 
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
