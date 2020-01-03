@@ -583,13 +583,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_destroy_prepare(svc, pool_uuid);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY)
-			rc = 0;
-		goto out_ranks;
-	}
-
 	rc = pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
 	if (rc != 0) {
 		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
@@ -602,6 +595,13 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 	if (rc != 0) {
 		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
+		goto out_ranks;
+	}
+
+	rc = pool_destroy_prepare(svc, pool_uuid);
+	if (rc != 0) {
+		if (rc == -DER_ALREADY)
+			rc = 0;
 		goto out_ranks;
 	}
 
