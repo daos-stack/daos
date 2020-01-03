@@ -35,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -80,8 +81,8 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
-	SystemMemberQuery() (common.SystemMembers, error)
-	SystemStop() (common.SystemMemberResults, error)
+	SystemMemberQuery() (system.Members, error)
+	SystemStop(SystemStopReq) (system.MemberResults, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
 	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }

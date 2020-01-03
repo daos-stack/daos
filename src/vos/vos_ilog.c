@@ -38,8 +38,7 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, UMOFF_NULL,
-					intent, DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(umm, coh, tx_id, intent, DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
 
