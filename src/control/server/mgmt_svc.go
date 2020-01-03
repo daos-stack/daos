@@ -693,28 +693,28 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	return resp, nil
 }
 
-// RestartRanks implements the method defined for the Management Service.
+// StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.
 //
 // TODO: Current implementation sends restart signal to harness, restarting all
 //       ranks managed by harness, future implementations will allow individual
 //       ranks to be restarted.
-func (svc *mgmtSvc) RestartRanks(ctx context.Context, req *mgmtpb.RestartRanksReq) (*mgmtpb.RestartRanksResp, error) {
-	svc.log.Debugf("MgmtSvc.RestartRanks dispatch, req:%+v\n", *req)
+func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq) (*mgmtpb.StartRanksResp, error) {
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
 	if _, err := svc.harness.GetMSLeaderInstance(); err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.RestartRanksResp{}
+	resp := &mgmtpb.StartRanksResp{}
 
 	// perform controlled restart of I/O Server harness
 	if err := svc.harness.RestartInstances(); err != nil {
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.RestartRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

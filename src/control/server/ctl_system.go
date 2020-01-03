@@ -200,18 +200,34 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 	return resp, nil
 }
 
-// restartHarness restarts ranks managed by harness running on remote host.
-// TODO: specify specific rank(s) to restart in request
-func (svc *ControlService) restartHarness(ctx context.Context, leader *IOServerInstance, addr string) error {
-	_, err := leader.msClient.Restart(ctx, addr, &mgmtpb.RestartRanksReq{})
+// startRemoteHarness starts ranks managed by harness running on remote host.
+//
+// TODO: specify specific rank(s) to start in request
+func (svc *ControlService) startRemoteHarness(ctx context.Context, leader *IOServerInstance, addr string, ranks ...uint32) error {
+	req := mgmtpb.StartRanksReq{}
+	req.Ranks = make([]uint32, 0, maxIoServers)
+
+	if len(ranks) > maxIoServers {
+		return errors.New("number of of ranks exceeds maximum")
+	}
+	if len(ranks) > 0 {
+		for _, rank := range ranks {
+			req.Ranks = append(req.Ranks, rank)
+		}
+	}
+
+	// TODO: populate response with DER codes for each rank start.
+	_, err := leader.msClient.Start(ctx, addr, &req)
 
 	return err
 }
 
-// restartMembers sends multicast RestartRanks gRPC requests to host addresses in
+// startMembers sends multicast StartRanks gRPC requests to host addresses in
 // system membership list. Each host address represents a gRPC server associated
 // with a harness managing one or more data-plane instances (DAOS system members).
-func (svc *ControlService) restartMembers(ctx context.Context, leader *IOServerInstance) (map[string]error, error) {
+//
+// TODO: specify the ranks managed by the harness that should be started.
+func (svc *ControlService) startMembers(ctx context.Context, leader *IOServerInstance) (map[string]error, error) {
 	members := svc.membership.Members()
 	results := make(map[string]error)
 
@@ -220,23 +236,23 @@ func (svc *ControlService) restartMembers(ctx context.Context, leader *IOServerI
 		return nil, err
 	}
 
-	// first restart harness managing MS leader
-	if err := svc.restartHarness(ctx, leader, msAddr); err != nil {
+	// first start harness managing MS leader
+	if err := svc.startRemoteHarness(ctx, leader, msAddr); err != nil {
 		return nil, errors.Wrapf(err,
-			"couldn't restart harness managing MS leader at %s", msAddr)
+			"couldn't start harness managing MS leader at %s", msAddr)
 	}
 	results[msAddr] = nil
 
 	// TODO: do we need to wait for the MS to be up before we start the rest?
 
-	// build list of harnesses to restart
+	// build list of harnesses to start
 	for _, member := range members {
 		addr := member.Addr.String()
 		if _, exists := results[addr]; exists {
 			continue
 		}
 
-		results[addr] = svc.restartHarness(ctx, leader, addr)
+		results[addr] = svc.startRemoteHarness(ctx, leader, addr)
 	}
 
 	return results, nil
@@ -244,7 +260,9 @@ func (svc *ControlService) restartMembers(ctx context.Context, leader *IOServerI
 
 // SystemStart implements the method defined for the Management Service.
 //
-// Initiate controlled restart of DAOS system.
+// Initiate controlled start of DAOS system.
+//
+// TODO: specify the specific ranks that should be started in request.
 func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	resp := &ctlpb.SystemStartResp{}
 
@@ -255,15 +273,15 @@ func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemSta
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemStart RPC; restarting system members")
+	svc.log.Debug("Received SystemStart RPC; starting system members")
 
-	// restart stopped system members
-	_, err = svc.restartMembers(ctx, mi)
+	// start stopped system members
+	_, err = svc.startMembers(ctx, mi)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: meaningfully populate response
+	// TODO: populate response
 
 	svc.log.Debug("Responding to SystemStart RPC")
 

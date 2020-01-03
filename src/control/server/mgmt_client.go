@@ -238,19 +238,19 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 	return
 }
 
-// Restart calls function remotely over gRPC on server listening at destAddr.
+// Start calls function remotely over gRPC on server listening at destAddr.
 //
-// Shipped function issues RestartRanks requests using MgmtSvcClient to
+// Shipped function issues StartRanks requests using MgmtSvcClient to
 // restart the designated ranks as configured in persistent superblock.
-func (msc *mgmtSvcClient) Restart(ctx context.Context, destAddr string, req *mgmtpb.RestartRanksReq) (resp *mgmtpb.RestartRanksResp, restartErr error) {
+func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.StartRanksReq) (resp *mgmtpb.StartRanksResp, restartErr error) {
 	restartErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
-			prefix := fmt.Sprintf("restart(%s, %+v)", destAddr, *req)
+			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, *req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
-			_, err := pbClient.RestartRanks(ctx, req)
+			_, err := pbClient.StartRanks(ctx, req)
 
 			return err
 		})
