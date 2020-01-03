@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,23 +42,35 @@ func TestEntityFormatter(t *testing.T) {
 				{"c": "d"},
 				{"bananas": "grapes"},
 			},
-			expectedResult: `title   
------   
-a       b       
-c       d       
-bananas grapes  
+			expectedResult: `title
+-----
+a       : b     
+c       : d     
+bananas : grapes
 `,
 		},
 		"empty title": {
 			attrs: []TableRow{
 				{"a": "b"},
 			},
-			expectedResult: "a b \n",
+			expectedResult: "a : b\n",
 		},
 		"empty attrs": {
 			title: "empty",
 			expectedResult: `empty
 -----
+`,
+		},
+		"long title": {
+			title: "long title is long",
+			attrs: []TableRow{
+				{"a": "b"},
+				{"foo": "bar"},
+			},
+			expectedResult: `long title is long
+------------------
+a   : b  
+foo : bar
 `,
 		},
 	} {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,27 +24,42 @@
 package txtfmt
 
 import (
+	"bytes"
 	"fmt"
 	"text/tabwriter"
 )
 
-// EntityFormatter is a variant of TableFormatter that can be used
-// for neatly displaying attributes of a single entity.
+// EntityFormatter can be used for neatly displaying attributes
+// of a single entity.
 type EntityFormatter struct {
-	TableFormatter
+	title  string
+	writer *tabwriter.Writer
+	out    bytes.Buffer
+
+	Separator string
+}
+
+func (f *EntityFormatter) formatHeader() {
+	if f.title == "" {
+		return
+	}
+
+	fmt.Fprintf(&f.out, "%s\n", f.title)
+	for i := 0; i < len(f.title); i++ {
+		fmt.Fprintf(&f.out, "-")
+	}
+	fmt.Fprintf(&f.out, "\n")
 }
 
 // Format generates an output string for the supplied table rows.
 // It includes a single subject header, and each row is printed as an
 // attribute/value pair.
 func (f *EntityFormatter) Format(table []TableRow) string {
-	if len(f.titles) > 0 && f.titles[0] != "" {
-		f.formatHeader()
-	}
+	f.formatHeader()
 
 	for _, row := range table {
 		for key, val := range row {
-			fmt.Fprintf(f.writer, "%s\t%s\t\n", key, val)
+			fmt.Fprintf(f.writer, "%s\t%s%s\t\n", key, f.Separator, val)
 		}
 	}
 
@@ -59,9 +74,11 @@ func (f *EntityFormatter) Init(padWidth int) {
 
 // NewEntityFormatter returns an initialized EntityFormatter.
 func NewEntityFormatter(title string, padWidth int) *EntityFormatter {
-	f := &EntityFormatter{}
+	f := &EntityFormatter{
+		title:     title,
+		Separator: ": ",
+	}
 	f.Init(padWidth)
-	f.SetColumnTitles(title)
 	return f
 }
 
