@@ -61,11 +61,11 @@ message SystemStartReq {}
 // of attempts to start system members.
 message SystemStartResp {}
 
-// SystemMemberQueryReq supplies system query parameters.
-message SystemMemberQueryReq {}
+// SystemQueryReq supplies system query parameters.
+message SystemQueryReq {}
 
-// SystemMemberQueryResp returns active system members.
-message SystemMemberQueryResp {
+// SystemQueryResp returns active system members.
+message SystemQueryResp {
 	repeated SystemMember members = 1;
 }
 

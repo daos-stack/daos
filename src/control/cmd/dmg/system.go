@@ -35,11 +35,11 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
-	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	Start       systemStartCmd       `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
-	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd     `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS System Membership"`
+	Stop        systemStopCmd      `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd     `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
+	ListPools   systemListPoolsCmd `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
 type leaderQueryCmd struct {
@@ -61,21 +61,21 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to list
+// systemQueryCmd is the struct representing the command to list
 // system member details.
-type systemMemberQueryCmd struct {
+type systemQueryCmd struct {
 	logCmd
 	connectedCmd
 }
 
-// Execute is run when systemMemberQueryCmd activates
-func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	members, err := cmd.conns.SystemMemberQuery()
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(args []string) error {
+	members, err := cmd.conns.SystemQuery()
 	if err != nil {
-		return errors.Wrap(err, "System-Member-Query command failed")
+		return errors.Wrap(err, "System-Query command failed")
 	}
 
-	cmd.log.Debug("System-Member-Query command succeeded\n")
+	cmd.log.Debug("System-Query command succeeded\n")
 	if len(members) == 0 {
 		cmd.log.Info("No members in system\n")
 		return nil
@@ -173,7 +173,7 @@ func (cmd *systemStartCmd) Execute(args []string) error {
 	return nil
 }
 
-// Execute is run when systemMemberQueryCmd activates
+// Execute is run when systemListPoolsCmd activates
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
 type systemListPoolsCmd struct {
 	logCmd

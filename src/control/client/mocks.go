@@ -168,8 +168,8 @@ func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.
 	return &ctlpb.ProviderListReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
-	return &ctlpb.SystemMemberQueryResp{}, nil
+func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
+	return &ctlpb.SystemQueryResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {

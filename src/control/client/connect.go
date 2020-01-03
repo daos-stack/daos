@@ -82,7 +82,7 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
-	SystemMemberQuery() (system.Members, error)
+	SystemQuery() (system.Members, error)
 	SystemStart() error
 	SystemStop(SystemStopReq) (system.MemberResults, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)

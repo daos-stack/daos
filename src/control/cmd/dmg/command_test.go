@@ -183,8 +183,8 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
+func (tc *testConn) SystemQuery() (system.Members, error) {
+	tc.appendInvocation("SystemQuery")
 	return make(system.Members, 0), nil
 }
 

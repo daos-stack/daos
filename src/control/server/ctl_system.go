@@ -38,11 +38,11 @@ const (
 	prepShutdownTimeout = 10 * retryDelay
 )
 
-// SystemMemberQuery implements the method defined for the Management Service.
+// SystemQuery implements the method defined for the Management Service.
 //
 // Return system membership list including member state.
-func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq) (*ctlpb.SystemMemberQueryResp, error) {
-	resp := &ctlpb.SystemMemberQueryResp{}
+func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
+	resp := &ctlpb.SystemQueryResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -51,7 +51,7 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemMemberQuery RPC")
+	svc.log.Debug("Received SystemQuery RPC")
 
 	membersPB, err := proto.MembersToPB(svc.membership.Members())
 	if err != nil {
@@ -59,7 +59,7 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 	}
 	resp.Members = membersPB
 
-	svc.log.Debug("Responding to SystemMemberQuery RPC")
+	svc.log.Debug("Responding to SystemQuery RPC")
 
 	return resp, nil
 }

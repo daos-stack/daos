@@ -43,7 +43,7 @@ service MgmtCtl {
 	// Format nonvolatile storage devices for use with DAOS
 	rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};
 	// Query DAOS system membership (joined data-plane instances)
-	rpc SystemMemberQuery(SystemMemberQueryReq) returns(SystemMemberQueryResp) {};
+	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {};
 	// Stop DAOS system (shutdown data-plane instances)
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
 	// Start DAOS system (restart data-plane instances)
