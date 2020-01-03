@@ -94,6 +94,8 @@ const (
 	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
 	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
+	// MethodPoolSetProp defines a method for setting a pool property
+	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 )
 
 const (

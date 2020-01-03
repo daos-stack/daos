@@ -975,22 +975,6 @@ vos_cont2umm(struct vos_container *cont)
 	return vos_pool2umm(cont->vc_pool);
 }
 
-static inline int
-vos_tx_begin(struct umem_instance *umm)
-{
-	return umem_tx_begin(umm, NULL);
-}
-
-static inline int
-vos_tx_end(struct umem_instance *umm, int rc)
-{
-	if (rc != 0)
-		return umem_tx_abort(umm, rc);
-
-	return umem_tx_commit(umm);
-
-}
-
 static inline uint32_t
 vos_iter_intent(struct vos_iterator *iter)
 {

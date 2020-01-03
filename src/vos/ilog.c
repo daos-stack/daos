@@ -367,7 +367,7 @@ ilog_tx_begin(struct ilog_context *lctx)
 	if (lctx->ic_in_txn)
 		return 0;
 
-	rc = vos_tx_begin(&lctx->ic_umm);
+	rc = umem_tx_begin(&lctx->ic_umm, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -400,7 +400,7 @@ ilog_tx_end(struct ilog_context *lctx, int rc)
 
 done:
 	lctx->ic_in_txn = false;
-	return vos_tx_end(&lctx->ic_umm, rc);
+	return umem_tx_end(&lctx->ic_umm, rc);
 }
 
 static inline bool

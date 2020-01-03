@@ -31,6 +31,7 @@
 #include <cmocka.h>
 
 #include <daos/drpc.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 #include <uuid/uuid.h>
 #include "../acl.pb-c.h"
@@ -960,6 +961,7 @@ test_drpc_list_cont_bad_request(void **state)
 	ds_mgmt_drpc_pool_list_cont(&call, &resp);
 
 	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
+
 	assert_null(resp.body.data);
 	assert_int_equal(resp.body.len, 0);
 }
@@ -1034,6 +1036,195 @@ test_drpc_pool_list_cont_with_containers(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * dRPC Pool SetProp setup/teardown
+ */
+
+static int
+drpc_pool_set_prop_setup(void **state)
+{
+	mock_ds_mgmt_pool_set_prop_setup();
+
+	return 0;
+}
+
+static int
+drpc_pool_set_prop_teardown(void **state)
+{
+	mock_ds_mgmt_pool_set_prop_teardown();
+
+	return 0;
+}
+
+/*
+ * dRPC Pool SetProp tests
+ */
+static void
+test_drpc_pool_set_prop_bad_request(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	uint8_t		bad_bytes[16];
+	size_t		i;
+
+	/* Fill out with junk that won't translate to a PoolSetPropReq */
+	for (i = 0; i < sizeof(bad_bytes); i++)
+		bad_bytes[i] = i;
+
+	call.body.data = bad_bytes;
+	call.body.len = sizeof(bad_bytes);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
+
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+}
+
+static void
+setup_pool_set_prop_drpc_call(Drpc__Call *call, Mgmt__PoolSetPropReq *req)
+{
+	size_t			len;
+	uint8_t			*body;
+
+	len = mgmt__pool_set_prop_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_set_prop_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+expect_drpc_pool_set_prop_resp_with_error(Drpc__Response *resp,
+					int expected_err)
+{
+	Mgmt__PoolSetPropResp *set_prop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	set_prop_resp = mgmt__pool_set_prop_resp__unpack(NULL,
+			resp->body.len, resp->body.data);
+	assert_non_null(set_prop_resp);
+	assert_int_equal(set_prop_resp->status, expected_err);
+
+	mgmt__pool_set_prop_resp__free_unpacked(set_prop_resp, NULL);
+}
+
+static void
+test_drpc_pool_set_prop_invalid_property_type(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+
+	req.uuid = TEST_UUID;
+	/* make the value valid to ensure we're testing the property */
+	req.numval = 1;
+	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_set_prop_invalid_value_type(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+
+	req.uuid = TEST_UUID;
+	req.number = 1; /* doesn't matter */
+	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_set_prop_bad_uuid(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+
+	req.uuid = "wow this won't work";
+	req.number = 1; /* doesn't matter */
+	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+expect_drpc_pool_set_prop_resp_success(Drpc__Response *resp,
+				       int prop_number, int val_number)
+{
+	Mgmt__PoolSetPropResp	*setprop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	setprop_resp = mgmt__pool_set_prop_resp__unpack(NULL, resp->body.len,
+					 resp->body.data);
+	assert_non_null(setprop_resp);
+	assert_int_equal(setprop_resp->status, 0);
+	assert_int_equal(setprop_resp->number, prop_number);
+	assert_int_equal(setprop_resp->numval, val_number);
+
+	mgmt__pool_set_prop_resp__free_unpacked(setprop_resp, NULL);
+}
+
+static void
+test_drpc_pool_set_prop_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+	daos_prop_t		*exp_result;
+	int			prop_number = DAOS_PROP_PO_MAX;
+	int			val_number = 1;
+
+	req.uuid = TEST_UUID;
+	req.number = prop_number;
+	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	req.numval = val_number;
+	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	exp_result = daos_prop_alloc(1);
+	exp_result->dpp_entries[0].dpe_type = prop_number;
+	exp_result->dpp_entries[0].dpe_val = val_number;
+	ds_mgmt_pool_set_prop_result = exp_result;
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_success(&resp, prop_number, val_number);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -1045,6 +1236,10 @@ test_drpc_pool_list_cont_with_containers(void **state)
 #define LIST_CONT_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_list_cont_setup, \
 						drpc_list_cont_teardown)
+
+#define POOL_SET_PROP_TEST(x) cmocka_unit_test_setup_teardown(x, \
+						drpc_pool_set_prop_setup, \
+						drpc_pool_set_prop_teardown)
 
 int
 main(void)
@@ -1079,6 +1274,13 @@ main(void)
 		LIST_CONT_TEST(test_drpc_pool_list_cont_mgmt_svc_fails),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_no_containers),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_with_containers),
+		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_request),
+		POOL_SET_PROP_TEST(
+			test_drpc_pool_set_prop_invalid_property_type),
+		POOL_SET_PROP_TEST(
+			test_drpc_pool_set_prop_invalid_value_type),
+		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
+		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

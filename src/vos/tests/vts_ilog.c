@@ -44,7 +44,7 @@ ilog_alloc_root(struct umem_instance *umm)
 	int		 rc = 0;
 	umem_off_t	 ilog_off = UMOFF_NULL;
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
 		print_message("Tx begin failed\n");
 		goto done;
@@ -56,7 +56,7 @@ ilog_alloc_root(struct umem_instance *umm)
 		rc = -DER_NOSPACE;
 	}
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 done:
 	assert_int_equal(rc, 0);
 
@@ -68,7 +68,7 @@ ilog_free_root(struct umem_instance *umm, struct ilog_df *ilog)
 {
 	int		 rc = 0;
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
 		print_message("Tx begin failed\n");
 		goto done;
@@ -76,7 +76,7 @@ ilog_free_root(struct umem_instance *umm, struct ilog_df *ilog)
 
 	rc = umem_free(umm, umem_ptr2off(umm, ilog));
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 done:
 	assert_int_equal(rc, 0);
 }
