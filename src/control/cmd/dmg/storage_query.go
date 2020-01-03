@@ -87,7 +87,7 @@ type smdQueryCmd struct {
 	logCmd
 	connectedCmd
 	Devices bool `short:"d" long:"devices" description:"List all devices/blobstores stored in per-server metadata table."`
-	Pools   bool `short:"p" long:"pools" descriptsion:"List all VOS pool targets stored in per-server metadata table."`
+	Pools   bool `short:"p" long:"pools" description:"List all VOS pool targets stored in per-server metadata table."`
 }
 
 // Execute is run when ListSmdDevCmd activates
