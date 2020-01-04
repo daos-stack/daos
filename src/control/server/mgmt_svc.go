@@ -703,6 +703,40 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	return resp, nil
 }
 
+// PingRank implements the method defined for the Management Service.
+//
+// Query data-plane instances (DAOS system members) managed by harness to verify
+// responsiveness.
+func (svc *mgmtSvc) PingRank(ctx context.Context, req *mgmtpb.PingRankReq) (*mgmtpb.DaosResp, error) {
+	svc.log.Debugf("MgmtSvc.PingRank dispatch, req:%+v\n", *req)
+
+	var mi *IOServerInstance
+	for _, i := range svc.harness.Instances() {
+		if i.hasSuperblock() && i.getSuperblock().Rank.Equals(ioserver.NewRankPtr(req.Rank)) {
+			mi = i
+			break
+		}
+	}
+
+	if mi == nil {
+		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PingRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // StartRanks implements the method defined for the Management Service.
 //
 // Restart data-plane instances (DAOS system members) managed by harness.

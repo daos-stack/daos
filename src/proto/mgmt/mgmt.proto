@@ -68,6 +68,8 @@ service MgmtSvc {
 	rpc PrepShutdown(PrepShutdownReq) returns (DaosResp) {}
 	// Kill DAOS IO server identified by rank.
 	rpc KillRank(KillRankReq) returns (DaosResp) {}
+	// Ping DAOS IO server identified by rank.
+	rpc PingRank(PingRankReq) returns (DaosResp) {}
 	// Start DAOS IO servers identified by rank.
 	rpc StartRanks(StartRanksReq) returns (StartRanksResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.

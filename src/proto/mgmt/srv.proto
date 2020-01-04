@@ -85,6 +85,12 @@ message KillRankReq {
 
 // KillRankResp is identical to DaosResp.
 
+message PingRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// PingRankResp is identical to DaosResp.
+
 message StartRanksReq {
 	repeated uint32 ranks = 1; // Start each of the ranks supplied.
 }
