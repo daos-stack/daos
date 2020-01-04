@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -35,15 +35,21 @@ import (
 
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
-	Prep bool
-	Kill bool
+	Prep  bool
+	Kill  bool
+	Ranks []uint32
+}
+
+// SystemStopResp contains the request response.
+type SystemStopResp struct {
+	Results system.MemberResults
 }
 
 // SystemStop will perform a controlled shutdown of DAOS system and a list
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
+func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -51,83 +57,92 @@ func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 
 	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill}
 
-	c.log.Debug("Sending DAOS system shutdown request\n")
+	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debug("Received DAOS system shutdown response\n")
+	c.log.Debugf("DAOS system stop response: %s\n", rpcResp)
 
-	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
+	ssr := new(SystemStopResp)
+	if err := convert.Types(rpcResp, ssr); err != nil {
+		return nil, err
+	}
+	return ssr, nil
 }
 
-// SystemStart will perform a restart after a controlled shutdown of DAOS system.
-func (c *connList) SystemStart() error {
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		return err
-	}
-
-	rpcReq := &ctlpb.SystemStartReq{}
-
-	c.log.Debugf("DAOS system restart request: %s\n", rpcReq)
-
-	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
-	if err != nil {
-		return err
-	}
-
-	c.log.Debugf("DAOS system restart response: %s\n", rpcResp)
-
-	return nil
+// SystemStartReq contains the inputs for the system start request.
+type SystemStartReq struct {
+	Ranks []uint32
 }
 
-// SystemQuery will return the list of members joined to DAOS system.
-//
-// Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery() (system.Members, error) {
+// SystemStartResp contains the request response.
+type SystemStartResp struct {
+	Results system.MemberResults // resulting from harness starts
+}
+
+// SystemStart will perform a start after a controlled shutdown of DAOS system.
+func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemQueryReq{}
+	rpcReq := &ctlpb.SystemStartReq{}
 
-	c.log.Debug("Sending DAOS system member query request\n")
+	c.log.Debugf("DAOS system start request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("DAOS system start response: %s\n", rpcResp)
+
+	ssr := new(SystemStartResp)
+	if err := convert.Types(rpcResp, ssr); err != nil {
+		return nil, err
+	}
+	return ssr, nil
+}
+
+// SystemQueryReq contains the inputs for the system query request.
+type SystemQueryReq struct {
+	Rank uint32
+}
+
+// SystemQueryResp contains the request response.
+type SystemQueryResp struct {
+	Members system.Members
+}
+
+// SystemQuery requests DAOS system status.
+func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcReq := &ctlpb.SystemQueryReq{
+		Rank: req.Rank,
+	}
+
+	c.log.Debugf("DAOS system query request: %+v", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debug("Received DAOS system member query response\n")
+	c.log.Debugf("DAOS system query response: %+v", rpcResp)
 
-	return proto.MembersFromPB(c.log, rpcResp.Members)
-}
-
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
-//
-// Currently this is not exposed by control/cmd/dmg as a user command.
-// TODO: consider usage model.
-func (c *connList) KillRank(rank uint32) ResultMap {
-	var resp *mgmtpb.DaosResp
-	var addr string
-	results := make(ResultMap)
-
-	mc, err := chooseServiceLeader(c.controllers)
-	if err == nil {
-		resp, err = mc.getSvcClient().KillRank(context.Background(),
-			&mgmtpb.KillRankReq{Rank: rank})
-		addr = mc.getAddress()
+	sqr := new(SystemQueryResp)
+	if err := convert.Types(rpcResp, sqr); err != nil {
+		return nil, err
 	}
-
-	result := ClientResult{addr, resp, err}
-	results[result.Address] = result
-
-	return results
+	return sqr, nil
 }
 
 // LeaderQueryReq contains the inputs for the leader query command.

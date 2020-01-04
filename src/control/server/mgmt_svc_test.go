@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -37,6 +38,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -1573,6 +1576,418 @@ func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.StorageSetFaulty(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_DrespToRankResult(t *testing.T) {
+	dRank := uint32(1)
+	dStateGood := system.MemberStateStarted
+	dStateBad := system.MemberStateErrored
+
+	for name, tc := range map[string]struct {
+		daosResp    *mgmtpb.DaosResp
+		inErr       error
+		targetState system.MemberState
+		junkRpc     bool
+		expResult   *mgmtpb.RanksResp_RankResult
+	}{
+		"rank success": {
+			expResult: &mgmtpb.RanksResp_RankResult{Rank: dRank, State: uint32(dStateGood)},
+		},
+		"rank failure": {
+			daosResp: &mgmtpb.DaosResp{Status: -1},
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
+			},
+		},
+		"drpc failure": {
+			inErr: errors.New("returned from CallDrpc"),
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
+			},
+		},
+		"unmarshal failure": {
+			junkRpc: true,
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.daosResp == nil {
+				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
+			}
+			if tc.targetState == system.MemberStateUnknown {
+				tc.targetState = dStateGood
+			}
+
+			// convert input DaosResp to drpcResponse to test
+			rb := makeBadBytes(42)
+			if !tc.junkRpc {
+				rb, _ = proto.Marshal(tc.daosResp)
+			}
+			resp := &drpc.Response{
+				Status: drpc.Status_SUCCESS, // this will already have been validated by CallDrpc
+				Body:   rb,
+			}
+
+			gotResult := drespToRankResult(dRank, resp, tc.inErr, tc.targetState)
+			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"instances stopped": {
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 3},
+					{Rank: 2, State: 3},
+				},
+			},
+		},
+		"dRPC resp fails": {
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 5, Errored: true},
+					{Rank: 2, State: 5, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": {
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 5, Errored: true},
+					{Rank: 2, State: 5, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 5, Errored: true},
+					{Rank: 2, State: 5, Errored: true},
+				},
+			},
+		},
+		"successful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 2},
+					{Rank: 2, State: 2},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.PrepShutdownRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_KillRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"dRPC resp fails": { // doesn't effect result, err logged
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 1, Errored: true},
+					{Rank: 2, State: 1, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": { // doesn't effect result, err logged
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 1, Errored: true},
+					{Rank: 2, State: 1, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": { // doesn't effect result, err logged
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 1, Errored: true},
+					{Rank: 2, State: 1, Errored: true},
+				},
+			},
+		},
+		"instances started": { // unsuccessful result for kill
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 1, Errored: true},
+					{Rank: 2, State: 1, Errored: true},
+				},
+			},
+		},
+		"instances stopped": { // successful result for kill
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 3},
+					{Rank: 2, State: 3},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.KillRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_StartRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB:        true,
+			instancesStopped: true,
+			req:              &mgmtpb.RanksReq{},
+			expErr:           errors.New("instance 0 has no superblock"),
+		},
+		"instances started": {
+			req:    &mgmtpb.RanksReq{},
+			expErr: errors.New("can't start instances: already started"),
+		},
+		"instances stopped": { // unsuccessful result for kill
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, State: 3, Errored: true, Msg: "want Started, got Stopped"},
+					{Rank: 2, State: 3, Errored: true, Msg: "want Started, got Stopped"},
+				},
+			},
+		},
+		// TODO: test instance state changing to started after restart
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, false)
+
+			svc.harness.setStarted()
+			svc.harness.setRestartable()
+
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+			}
+
+			gotResp, gotErr := svc.StartRanks(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
