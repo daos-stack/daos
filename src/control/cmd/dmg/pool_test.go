@@ -132,7 +132,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(formatACL(acl))
+	_, err = file.WriteString(formatACLDefault(acl))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
@@ -315,6 +315,17 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Get pool ACL",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool ACL with verbose flag",
+			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --verbose",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
