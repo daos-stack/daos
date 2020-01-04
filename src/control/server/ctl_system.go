@@ -222,6 +222,32 @@ func (svc *ControlService) startRemoteHarness(ctx context.Context, leader *IOSer
 	return err
 }
 
+func resolveLeaderMemberAddr(leader *IOServerInstance, members system.Members) (string, error) {
+	var leaderMember *system.Member
+
+	msAddr, err := leader.msClient.LeaderAddress()
+	if err != nil {
+		return "", err
+	}
+
+	aps, err := resolveAccessPoints([]string{msAddr})
+	if err != nil {
+		return "", err
+	}
+
+	for _, member := range members {
+		if member.Addr.String() == aps[0].String() {
+			leaderMember = member
+		}
+	}
+	if leaderMember == nil {
+		return "", errors.Errorf("MS leader address %s not found in membership",
+			aps[0].String())
+	}
+
+	return leaderMember.Addr.String(), nil
+}
+
 // startMembers sends multicast StartRanks gRPC requests to host addresses in
 // system membership list. Each host address represents a gRPC server associated
 // with a harness managing one or more data-plane instances (DAOS system members).
@@ -231,21 +257,22 @@ func (svc *ControlService) startMembers(ctx context.Context, leader *IOServerIns
 	members := svc.membership.Members()
 	results := make(map[string]error)
 
-	msAddr, err := leader.msClient.LeaderAddress()
+	leaderAddr, err := resolveLeaderMemberAddr(leader, members)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err,
+			"couldn't resolve harness address of MS leader")
 	}
 
 	// first start harness managing MS leader
-	if err := svc.startRemoteHarness(ctx, leader, msAddr); err != nil {
+	if err := svc.startRemoteHarness(ctx, leader, leaderAddr); err != nil {
 		return nil, errors.Wrapf(err,
-			"couldn't start harness managing MS leader at %s", msAddr)
+			"couldn't start harness managing MS leader at %s", leaderAddr)
 	}
-	results[msAddr] = nil
+	results[leaderAddr] = nil
 
 	// TODO: do we need to wait for the MS to be up before we start the rest?
 
-	// build list of harnesses to start
+	// start each harness once only
 	for _, member := range members {
 		addr := member.Addr.String()
 		if _, exists := results[addr]; exists {

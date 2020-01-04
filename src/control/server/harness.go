@@ -188,11 +188,15 @@ func (h *IOServerHarness) registerNewMember(membership *system.Membership, insta
 
 	created, oldState := membership.AddOrUpdate(m)
 	if created {
-		h.log.Debugf("bootstrapping system member: rank %d, addr %s\n",
+		h.log.Debugf("bootstrapping system member: rank %d, addr %s",
 			m.Rank, m.Addr)
 	} else {
-		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s\n",
+		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s",
 			m.Rank, m.Addr, *oldState, m.State())
+		if *oldState == m.State() {
+			h.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+				m.Rank, *oldState, m.State())
+		}
 	}
 
 	return nil
