@@ -186,7 +186,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/tmp");
 	if (rc) {
 		printf("Error initializing VOS instance\n");
 		goto exit_0;
@@ -231,7 +231,7 @@ main(int argc, char **argv)
 
 	fclose(fp);
 exit_1:
-	vos_fini();
+	vos_self_fini();
 exit_0:
 	daos_debug_fini();
 	return 0;

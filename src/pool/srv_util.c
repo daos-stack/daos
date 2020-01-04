@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -726,7 +726,7 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 		}
 
 		d_list_del(&pool_info->spi_link);
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 	}
 
 	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",

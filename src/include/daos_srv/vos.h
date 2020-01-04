@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,24 +241,23 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
- * NB: Required only when using VOS as a standalone
- * library.
+ * NB: Required only when using VOS as a standalone library.
+ *
+ * \param db_path [IN]	path for system DB that stores NVMe metadata
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_init(void);
+vos_self_init(const char *db_path);
 
 /**
  * Finalize the environment for a VOS instance
  * Must be called for clean up at the end of using a vos instance
  *
- * NB: Needs to be called only when VOS is used as a
- * standalone library.
+ * NB: Needs to be called only when VOS is used as a standalone library.
  */
 void
-vos_fini(void);
-
+vos_self_fini(void);
 
 /**
  * Versioning Object Storage Pool (VOSP)
@@ -534,6 +533,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 /**
  * Delete an object, this object is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data
+ * migration protocol.
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	ID of the object being deleted
@@ -542,6 +543,22 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
+
+/**
+ * Delete a dkey or akey, the key is unaccessible at any epoch after deletion.
+ * This function is not part of DAOS data model API, it is only used by data
+ * migration protocol and system database.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	ID of the object
+ * \param dkey	[IN]	dkey being deleted if \a akey is NULL
+ * \param akey	[IN]	Optional, akey being deleted
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey);
 
 /**
  * I/O APIs
@@ -942,5 +959,9 @@ enum vos_cont_opc {
  */
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
+
+struct sys_db *vos_db_get(void);
+int  vos_db_init(const char *path);
+void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ typedef struct {
 	uint16_t	ba_hole;
 	uint32_t	ba_padding;
 } bio_addr_t;
+
+struct sys_db;
 
 /** Ensure this remains compatible */
 D_CASSERT(sizeof(((bio_addr_t *)0)->ba_off) == sizeof(umem_off_t));
@@ -326,15 +328,15 @@ void bio_register_ract_ops(struct bio_reaction_ops *ops);
 /**
  * Global NVMe initialization.
  *
- * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
+ * \param[IN] db		persistent database to store SMD data
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-		  int mem_size);
+int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+		  struct sys_db *db);
 
 /**
  * Global NVMe finilization.

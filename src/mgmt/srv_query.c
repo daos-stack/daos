@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	ABT_thread_free(&thread);
 
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -171,7 +171,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		d_list_del(&dev_info->sdi_link);
 		/* Frees sdi_tgts and dev_info */
-		smd_free_dev_info(dev_info);
+		smd_dev_free_info(dev_info);
 		dev_info = NULL;
 
 		i++;
@@ -181,7 +181,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	if (rc != 0) {
 		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 			d_list_del(&dev_info->sdi_link);
-			smd_free_dev_info(dev_info);
+			smd_dev_free_info(dev_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
@@ -264,7 +264,7 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 
 		d_list_del(&pool_info->spi_link);
 		/* Frees spi_tgts, spi_blobs, and pool_info */
-		smd_free_pool_info(pool_info);
+		smd_pool_free_info(pool_info);
 		pool_info = NULL;
 
 		i++;
@@ -275,7 +275,7 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 		d_list_for_each_entry_safe(pool_info, tmp, &pool_list,
 					   spi_link) {
 			d_list_del(&pool_info->spi_link);
-			smd_free_pool_info(pool_info);
+			smd_pool_free_info(pool_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->pools[i] != NULL) {
@@ -349,7 +349,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
 out:
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)
@@ -449,7 +449,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 
 out:
 	strncpy(resp->dev_state, "FAULTY\n", buflen);
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
 		if (resp->dev_state != NULL)

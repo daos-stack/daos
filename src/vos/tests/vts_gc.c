@@ -46,6 +46,8 @@ struct gc_test_args {
 	bool			 gc_array;
 };
 
+#define CREDS_MAX		16
+
 static struct gc_test_args	gc_args;
 
 static const int cont_nr	= 4;
@@ -161,7 +163,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 	int		         i;
 	int			 j;
 	int			 k;
-	int			 rc;
+	int			 rc = 0;
 
 	cred = dts_credit_take(&args->gc_ctx);
 	D_ASSERT(cred);
@@ -188,10 +190,12 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 
 				rc = gc_obj_update(args, coh, oid, 1, cred);
 				if (rc)
-					return rc;
+					goto out;
 			}
 		}
 	}
+out:
+	dts_credit_return(&args->gc_ctx, cred);
 	return 0;
 }
 
@@ -245,6 +249,69 @@ gc_wait_check(struct gc_test_args *args, bool cont_delete)
 	}
 	print_message("Test successfully completed\n");
 	return 0;
+}
+
+int
+gc_key_run(struct gc_test_args *args)
+{
+	struct dts_io_credit *creds[CREDS_MAX] = {NULL};
+	struct dts_io_credit *cred;
+	daos_unit_oid_t	      oid;
+	int		      i;
+	int		      rc;
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+	for (i = 0; i < CREDS_MAX; i++) {
+		daos_iod_t *iod;
+
+		cred = creds[i] = dts_credit_take(&args->gc_ctx);
+		D_ASSERT(cred);
+
+		iod = &cred->tc_iod;
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf, DTS_KEY_LEN);
+		d_iov_set(&iod->iod_name, cred->tc_abuf, DTS_KEY_LEN);
+
+		gc_add_stat(STAT_DKEY);
+		dts_key_gen(cred->tc_dbuf, DTS_KEY_LEN, NULL);
+
+		gc_add_stat(STAT_AKEY);
+		dts_key_gen(cred->tc_abuf, DTS_KEY_LEN, NULL);
+
+		rc = gc_obj_update(args, args->gc_ctx.tsc_coh, oid, 1, cred);
+		if (rc) {
+			print_error("failed to insert key: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+	}
+
+	gc_print_stat();
+	for (i = 0; i < CREDS_MAX; i++) {
+		rc = vos_obj_del_key(args->gc_ctx.tsc_coh, oid,
+				     &creds[i]->tc_dkey, NULL);
+		if (rc) {
+			print_error("failed to delete objects: %s\n",
+				    d_errstr(rc));
+			goto out;
+		}
+	}
+	rc = gc_wait_check(args, false);
+out:
+	for (i = 0; i < CREDS_MAX; i++) {
+		if (creds[i])
+			dts_credit_return(&args->gc_ctx, creds[i]);
+	}
+	return rc;
+}
+
+static void
+gc_key_test(void **state)
+{
+	struct gc_test_args *args = *state;
+	int		     rc;
+
+	rc = gc_key_run(args);
+	assert_int_equal(rc, 0);
 }
 
 static int
@@ -378,7 +445,7 @@ gc_setup(void **state)
 	tc->tsc_scm_size	= (2ULL << 30);
 	tc->tsc_nvme_size	= (4ULL << 30);
 	tc->tsc_cred_vsize	= max(recx_size, singv_size);
-	tc->tsc_cred_nr		= -1; /* sync mode */
+	tc->tsc_cred_nr		= CREDS_MAX;
 	tc->tsc_mpi_rank	= 0;
 	tc->tsc_mpi_size	= 1;
 	uuid_generate(tc->tsc_pool_uuid);
@@ -418,11 +485,13 @@ gc_prepare(void **state)
 }
 
 static const struct CMUnitTest gc_tests[] = {
-	{ "GC01: object garbage collecting",
+	{ "GC01: key garbage collecting",
+	  gc_key_test, gc_prepare, NULL},
+	{ "GC02: object garbage collecting",
 	  gc_obj_test, gc_prepare, NULL},
-	{ "GC02: object garbage collecting (array)",
+	{ "GC03: object garbage collecting (array)",
 	  gc_obj_bio_test, gc_prepare, NULL},
-	{ "GC03: container garbage collecting",
+	{ "GC04: container garbage collecting",
 	  gc_cont_test, gc_prepare, NULL},
 };
 

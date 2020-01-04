@@ -229,6 +229,73 @@ out:
 	return rc;
 }
 
+/* Delete a key in its parent tree.
+ * NB: there is no "delete" in DAOS data model, this is really for the
+ * system DB, or space reclaim after data movement.
+ */
+int
+vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey)
+{
+	struct daos_lru_cache	*occ  = vos_obj_cache_current();
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm  = vos_cont2umm(cont);
+	struct vos_object	*obj;
+	daos_key_t		*key;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t		 toh;
+	int			 rc;
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, true, DAOS_INTENT_KILL, true,
+			  &obj);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc) {
+		D_ERROR("object hold error: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc) {
+		D_ERROR("memory TX start error: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	rc = obj_tree_init(obj);
+	if (rc) {
+		D_ERROR("init dkey tree error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+
+	if (akey) { /* delete akey */
+		key = akey;
+		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+				      dkey, 0, DAOS_INTENT_PUNCH, NULL, &toh);
+		if (rc)
+			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
+			goto out_tx;
+	} else { /* delete dkey */
+		key = dkey;
+		toh = obj->obj_toh;
+	}
+
+	key_tree_delete(obj, toh, key);
+	if (rc) {
+		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
+		goto out_tx;
+	}
+out_tx:
+	rc = umem_tx_end(umm, rc);
+	gc_wait(); /* NB: noop for full-stack mode */
+out:
+	if (akey)
+		key_tree_release(toh, false);
+
+	vos_obj_release(occ, obj, true);
+	return rc;
+}
+
 static int
 key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 		    vos_iter_type_t type, daos_epoch_range_t *epr,

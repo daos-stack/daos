@@ -346,7 +346,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
 	if (tsc->tsc_pmem_file) /* VOS mode */
-		rc = vos_init();
+		rc = vos_self_init("/tmp");
 	else
 		rc = daos_init();
 	if (rc)
@@ -393,7 +393,7 @@ dts_ctx_fini(struct dts_context *tsc)
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
 		if (tsc->tsc_pmem_file)
-			vos_fini();
+			vos_self_fini();
 		else
 			daos_fini();
 		/* fall through */

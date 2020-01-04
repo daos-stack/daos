@@ -164,4 +164,7 @@ dss_xs2tgt(int xs_id)
 	return (xs_id - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
 }
 
+int sys_db_init(const char *storage_path, struct sys_db **db_p);
+void sys_db_fini(void);
+
 #endif /* __DAOS_SRV_INTERNAL__ */

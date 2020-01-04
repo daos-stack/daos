@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/vos.h>
 #include <vos_layout.h>
 #include <vos_ilog.h>
 #include <vos_obj.h>
@@ -200,30 +201,7 @@ struct vos_dtx_cmt_ent {
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 
-struct vos_imem_strts {
-	/**
-	 * In-memory object cache for the PMEM
-	 * object table
-	 */
-	struct daos_lru_cache	*vis_ocache;
-	/** Hash table to refcount VOS handles */
-	/** (container/pool, etc.,) */
-	struct d_hash_table	*vis_pool_hhash;
-	struct d_hash_table	*vis_cont_hhash;
-};
-/* in-memory structures standalone instance */
-struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
-
-static inline struct bio_xs_context *
-vos_xsctxt_get(void)
-{
-#ifdef VOS_STANDALONE
-	return vsa_xsctxt_inst;
-#else
-	return dss_get_module_info()->dmi_nvme_ctxt;
-#endif
-}
 
 enum {
 	VOS_KEY_CMP_UINT64	= (1ULL << 63),
@@ -245,11 +223,6 @@ extern struct vos_iter_ops vos_dtx_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
-	/* in-memory structures TLS instance */
-	/* TODO: move those members to vos_tls, nosense to have another
-	 * data structure for it.
-	 */
-	struct vos_imem_strts		 vtl_imems_inst;
 	/** pools registered for GC */
 	d_list_t			 vtl_gc_pools;
 	/* PMDK transaction stage callback data */
@@ -267,21 +240,27 @@ struct vos_tls {
 	 *	 ULTs. The user needs to guarantee that by itself.
 	 */
 	struct dtx_handle		*vtl_dth;
+	/** In-memory object cache for the PMEM object table */
+	struct daos_lru_cache		*vtl_ocache;
+	/** pool open handle hash table */
+	struct d_hash_table		*vtl_pool_hhash;
+	/** container open handle hash table */
+	struct d_hash_table		*vtl_cont_hhash;
 };
 
-struct vos_tls *
-vos_tls_get();
+struct bio_xs_context *vos_xsctxt_get(void);
+struct vos_tls *vos_tls_get();
 
 static inline struct d_hash_table *
 vos_pool_hhash_get(void)
 {
-	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
+	return vos_tls_get()->vtl_pool_hhash;
 }
 
 static inline struct d_hash_table *
 vos_cont_hhash_get(void)
 {
-	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
+	return vos_tls_get()->vtl_cont_hhash;
 }
 
 static inline struct umem_tx_stage_data *
@@ -326,7 +305,11 @@ vos_pool_hash_del(struct vos_pool *pool)
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-struct daos_lru_cache *vos_get_obj_cache(void);
+static inline struct daos_lru_cache *
+vos_get_obj_cache(void)
+{
+	return vos_tls_get()->vtl_ocache;
+}
 
 /**
  * Register btree class for container table, it is called within vos_init()
@@ -954,6 +937,8 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
 uint16_t

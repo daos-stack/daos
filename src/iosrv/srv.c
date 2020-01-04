@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1029,6 +1029,7 @@ enum {
 	XD_INIT_ULT_INIT,
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_REG_KEY,
+	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1048,6 +1049,8 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
+	case XD_INIT_SYS_DB:
+		sys_db_fini();
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
@@ -1073,9 +1076,10 @@ dss_srv_fini(bool force)
 }
 
 int
-dss_srv_init()
+dss_srv_init(void)
 {
-	int	rc;
+	struct sys_db	*db;
+	int		 rc;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1110,8 +1114,13 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-		dss_nvme_mem_size);
+	rc = sys_db_init(dss_storage_path, &db);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_SYS_DB;
+
+	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id,
+			   dss_nvme_mem_size, db);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

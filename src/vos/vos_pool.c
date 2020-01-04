@@ -544,7 +544,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	if (uma->uma_pool == NULL) {
 		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
 			DP_UUID(uuid), pmemobj_errormsg());
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
 	/* initialize a umem instance for later btree operations */

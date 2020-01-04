@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1003,4 +1003,22 @@ out:
 
 	dss_enum_unpack_io_fini(&io);
 	return rc;
+}
+
+int
+sys_db_init(const char *storage_path, struct sys_db **db_p)
+{
+	int	rc;
+
+	rc = vos_db_init(storage_path);
+	if (rc == 0)
+		*db_p = vos_db_get();
+
+	return rc;
+}
+
+void
+sys_db_fini(void)
+{
+	vos_db_fini();
 }

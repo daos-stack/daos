@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,14 +90,14 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-	      int mem_size)
+bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
+	      struct sys_db *db)
 {
 	char		*env;
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
-	rc = smd_init(storage_path);
+	rc = smd_init(db);
 	if (rc != 0) {
 		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -420,7 +420,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	if (rc == 0) {
 		D_ASSERT(dev_info->sdi_tgt_cnt != 0);
 		d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
-		smd_free_dev_info(dev_info);
+		smd_dev_free_info(dev_info);
 	} else if (rc == -DER_NONEXIST) {
 		/* device not present in table, first target mapped to dev */
 		d_bdev->bb_tgt_cnt = 0;
@@ -626,7 +626,7 @@ assign_device(int tgt_id)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
@@ -693,7 +693,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 		}
 	}
 
-	smd_free_dev_info(dev_info);
+	smd_dev_free_info(dev_info);
 	if (!found) {
 		/* TODO
 		 * Mapping in per-server metadata and device list
