@@ -24,7 +24,7 @@
 
 import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
-                        DaosInputParams, DaosObj)
+                        DaosObj)
 from apricot import TestWithServers
 from test_utils import TestPool
 

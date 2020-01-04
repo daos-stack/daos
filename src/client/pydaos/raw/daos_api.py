@@ -1409,7 +1409,7 @@ class DaosInputParams(object):
 
     def get_con_create_params(self):
         """ Get the container create params.
-        This is method is used to pack
+        This method is used to pack
         input parameters as a structure.
         Perform a get_con_create_params
         and update the appropriate
