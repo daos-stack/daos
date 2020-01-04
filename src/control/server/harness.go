@@ -299,11 +299,12 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	defer shutdown()
 
 	for {
-		// Single daos_server dRPC server to handle all iosrv requests
-		if err := drpcSetup(ctx, h.log, cfg.SocketDir, h.Instances(), cfg.TransportConfig); err != nil {
-			return errors.WithMessage(err, "dRPC setup")
+		if cfg != nil {
+			// Single daos_server dRPC server to handle all iosrv requests
+			if err := drpcSetup(ctx, h.log, cfg.SocketDir, h.Instances(), cfg.TransportConfig); err != nil {
+				return errors.WithMessage(err, "dRPC setup")
+			}
 		}
-
 		if err := h.startInstances(ctx, membership); err != nil {
 			return err
 		}
