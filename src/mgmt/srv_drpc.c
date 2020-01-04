@@ -92,7 +92,6 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__KillRankReq	*req = NULL;
 	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
-	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__kill_rank_req__unpack(
@@ -107,16 +106,33 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		req->rank, req->force);
 
 	/* terminate local service */
-	if (req->force)
-		sig = SIGKILL;
-	else
-		sig = SIGTERM;
-	D_INFO("Service rank %d is being killed by signal %d\n",
-		req->rank, sig);
-	kill(getpid(), sig);
+	ds_mgmt_kill_rank(req->force);
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__kill_rank_req__free_unpacked(req, NULL);
+}
+
+void
+ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PingRankReq	*req = NULL;
+	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__ping_rank_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (ping rank)\n");
+		return;
+	}
+
+	D_INFO("Received request to ping rank %u\n", req->rank);
+
+	/* TODO: verify iosrv components are functioning as expected */
+
+	pack_daos_response(&resp, drpc_resp);
+	mgmt__ping_rank_req__free_unpacked(req, NULL);
 }
 
 void

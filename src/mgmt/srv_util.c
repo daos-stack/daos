@@ -80,3 +80,17 @@ out:
 		d_rank_list_free(ranks);
 	return rc;
 }
+
+void
+ds_mgmt_kill_rank(bool force)
+{
+	int	sig;
+
+	if (force)
+		sig = SIGKILL;
+	else
+		sig = SIGTERM;
+
+	D_INFO("Kill with signal %d\n", sig);
+	kill(getpid(), sig);
+}

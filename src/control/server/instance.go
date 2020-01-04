@@ -43,11 +43,12 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// IOServerStarter defines an interface for starting the actual
+// IOServerRunner defines an interface for starting and stopping the
 // daos_io_server.
-type IOServerStarter interface {
+type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
-	IsStarted() bool
+	IsRunning() bool
+	Stop() error
 	GetConfig() *ioserver.Config
 }
 
@@ -60,7 +61,7 @@ type IOServerStarter interface {
 // per node.
 type IOServerInstance struct {
 	log               logging.Logger
-	runner            IOServerStarter
+	runner            IOServerRunner
 	bdevClassProvider *bdev.ClassProvider
 	scmProvider       *scm.Provider
 	msClient          *mgmtSvcClient
@@ -80,7 +81,7 @@ type IOServerInstance struct {
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
 	bcp *bdev.ClassProvider, sp *scm.Provider,
-	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
+	msc *mgmtSvcClient, r IOServerRunner) *IOServerInstance {
 
 	return &IOServerInstance{
 		log:               log,
@@ -222,8 +223,12 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
+func (srv *IOServerInstance) Stop() error {
+	return srv.runner.Stop()
+}
+
 func (srv *IOServerInstance) IsStarted() bool {
-	return srv.runner.IsStarted()
+	return srv.runner.IsRunning()
 }
 
 // NotifyReady receives a ready message from the running IOServer
