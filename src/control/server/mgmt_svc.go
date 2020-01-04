@@ -562,6 +562,8 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 // SmdListPools implements the method defined for the Management Service.
 func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
+	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
+
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
@@ -582,6 +584,8 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 
 // DevStateQuery implements the method defined for the Management Service.
 func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	svc.log.Debugf("MgmtSvc.DevStateQuery dispatch, req:%+v\n", *req)
+
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
@@ -602,6 +606,8 @@ func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) 
 
 // StorageSetFaulty implements the method defined for the Management Service.
 func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
+	svc.log.Debugf("MgmtSvc.StorageSetFaulty dispatch, req:%+v\n", *req)
+
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
