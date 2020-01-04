@@ -64,6 +64,5 @@ class MdtestSmall(MdtestBase):
             self.mdtest_cmd.flags.update(params[6])
             # run mdtest
             self.execute_mdtest()
-            # set num_files_dirs and items to None before each iteration
-            self.mdtest_cmd.num_of_files_dirs.update(None)
-            self.mdtest_cmd.items.update(None)
+            # re-set mdtest params before next iteration
+            self.mdtest_cmd.get_params(self)
