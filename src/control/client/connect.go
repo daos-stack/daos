@@ -69,6 +69,7 @@ type Connect interface {
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
 	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
+	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
