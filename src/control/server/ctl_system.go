@@ -32,10 +32,58 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	memberStopTimeout   = 10 * retryDelay
-	prepShutdownTimeout = 10 * retryDelay
-)
+// updateMemberStatus requests registered harness to ping their instances (system
+// members) in order to determine IO Server process responsiveness. Update membership
+// appropriately.
+//
+// Each host address represents a gRPC server associated with a harness managing
+// one or more data-plane instances (DAOS system members).
+//
+// TODO: specify the ranks managed by the harness that should be started.
+func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOServerInstance) error {
+	// exclude members with states that can't be updated with response check
+	statesToExclude := []system.MemberState{
+		system.MemberStateEvicted, system.MemberStateErrored,
+		system.MemberStateUnknown, system.MemberStateStopped,
+		system.MemberStateUnresponsive,
+	}
+	hostAddrs := svc.membership.Hosts(statesToExclude...)
+
+	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
+
+	// currently just update newly unresponsive or errored members
+	badRanks := make(map[uint32]system.MemberState)
+	for _, addr := range hostAddrs {
+		hResults, err := harnessAction(ctx, leader.msClient,
+			NewRemoteHarnessReq(HarnessQuery, addr))
+		if err != nil {
+			return err
+		}
+
+		for _, result := range hResults {
+			if result.State == system.MemberStateUnresponsive ||
+				result.State == system.MemberStateErrored {
+
+				badRanks[result.Rank] = result.State
+			}
+		}
+	}
+
+	// only update members in the appropriate state (Started/Stopping)
+	// leave unresponsive members to be updated by a join
+	filteredMembers := svc.membership.Members(system.MemberStateEvicted, system.MemberStateErrored,
+		system.MemberStateUnknown, system.MemberStateStopped, system.MemberStateUnresponsive)
+
+	for _, m := range filteredMembers {
+		if state, exists := badRanks[m.Rank]; exists {
+			if err := svc.membership.SetMemberState(m.Rank, state); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
 
 // SystemQuery implements the method defined for the Management Service.
 //
@@ -45,15 +93,20 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
-	_, err := svc.harness.GetMSLeaderInstance()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
 	svc.log.Debug("Received SystemQuery RPC")
 
-	// TODO DAOS-3647: update status of each system member if
-	// !mi.IsStarted()
+	if mi.IsStarted() {
+		// update status of each system member
+		// TODO: should only given rank be updated if supplied in request?
+		if err := svc.updateMemberStatus(ctx, mi); err != nil {
+			return nil, err
+		}
+	}
 
 	var members []*system.Member
 	// negative Rank in request indicates none specified
@@ -164,7 +217,6 @@ func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstanc
 	results = append(results, hResults...)
 
 	if err := svc.membership.UpdateMemberStates(results); err != nil {
-
 		return nil, err
 	}
 
@@ -279,9 +331,7 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 		}
 	}
 
-	// target state will always be set in this scenario
 	if err := svc.membership.UpdateMemberStates(filteredResults); err != nil {
-
 		return nil, err
 	}
 

@@ -81,8 +81,8 @@ func harnessAction(ctx context.Context, msClient *mgmtSvcClient, req *RemoteHarn
 
 	switch req.Action {
 	case HarnessQuery:
-		// TODO: implement msClient.Status to check responsiveness
-		return nil, errors.New("HarnessQuery not implemented")
+		requestFn = msClient.Status
+		timeout = 3 * time.Second
 	case HarnessPrepShutdown:
 		requestFn = msClient.PrepShutdown
 	case HarnessStop:

@@ -97,6 +97,8 @@ service MgmtSvc {
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Kill DAOS IO servers on a host. (gRPC fanout)
 	rpc KillRanks(RanksReq) returns (RanksResp) {}
+	// Ping DAOS IO servers on a host. (gRPC fanout)
+	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 }

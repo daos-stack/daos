@@ -52,6 +52,8 @@ const (
 const (
 	// MethodPrepShutdown is a ModuleMgmt method
 	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
+	// MethodPingRank is a ModuleMgmt method
+	MethodPingRank = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodKillRank is a ModuleMgmt method
 	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
 	// MethodSetRank is a ModuleMgmt method
