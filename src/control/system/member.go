@@ -160,8 +160,8 @@ func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
 
 	oldMember, found := m.members[member.Rank]
 	if found {
-		m.members[member.Rank].SetState(member.State())
 		os := oldMember.State()
+		m.members[member.Rank].SetState(member.State())
 
 		return false, &os
 	}

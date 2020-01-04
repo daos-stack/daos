@@ -260,7 +260,6 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done(): // received when harness is exiting
-			h.log.Debug("harness exiting")
 			return ctx.Err()
 		case err := <-h.errChan: // received when instance exits
 			// TODO: Restart failed instances on unexpected exit.
@@ -272,7 +271,6 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 			}
 			h.log.Info(msg)
 		case <-h.restart: // trigger harness to restart instances
-			h.log.Debug("restart instances")
 			return nil
 		}
 	}
@@ -282,7 +280,7 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 
 // Start starts all configured instances, waits for them to be ready and then
 // loops monitoring instance exit, harness exit and harness restart signals.
-func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership) error {
+func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership, cfg *Configuration) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -297,6 +295,11 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	defer shutdown()
 
 	for {
+		// Single daos_server dRPC server to handle all iosrv requests
+		if err := drpcSetup(ctx, h.log, cfg.SocketDir, h.Instances(), cfg.TransportConfig); err != nil {
+			return errors.WithMessage(err, "dRPC setup")
+		}
+
 		if err := h.startInstances(ctx, membership); err != nil {
 			return err
 		}
@@ -334,7 +337,7 @@ func (h *IOServerHarness) RestartInstances() error {
 		return errors.New("can't start instances: harness not started")
 	}
 	if !h.IsRestartable() {
-		return errors.New("can't start instances: harness not ready")
+		return errors.New("can't start instances: already running")
 	}
 	if h.HasStartedInstances() {
 		return errors.New("can't start instances: already started")

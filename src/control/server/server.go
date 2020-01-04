@@ -141,11 +141,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
-	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
-		return errors.WithMessage(err, "dRPC setup")
-	}
-
 	// Create and setup control service.
 	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
 	if err != nil {
@@ -197,5 +192,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 
-	return errors.Wrapf(harness.Start(ctx, membership), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

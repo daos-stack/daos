@@ -703,10 +703,6 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq) (*mgmtpb.StartRanksResp, error) {
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
-	if _, err := svc.harness.GetMSLeaderInstance(); err != nil {
-		return nil, err
-	}
-
 	resp := &mgmtpb.StartRanksResp{}
 
 	// perform controlled restart of I/O Server harness
