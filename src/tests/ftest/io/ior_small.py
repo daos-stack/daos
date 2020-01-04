@@ -55,11 +55,12 @@ class IorSmall(IorTestBase):
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
         # run tests for different variants
+        self.ior_cmd.flags.update(flags[0])
         for oclass in obj_class:
             self.ior_cmd.daos_oclass.update(oclass)
             for api in apis:
                 self.ior_cmd.api.update(api)
-                self.ior_cmd.flags.update(flags[0])
+#                self.ior_cmd.flags.update(flags[0])
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
