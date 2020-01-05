@@ -245,11 +245,11 @@ func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, 
 		os.RemoveAll(filepath.Dir(defaultConfig.Path))
 		t.Fatal(err)
 	}
-	closure := func() {
+	cleanup := func() {
 		os.RemoveAll(filepath.Dir(defaultConfig.Path))
 	}
 
-	return f, closure
+	return f, cleanup
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
@@ -261,9 +261,9 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			f, closure := createTestConfig(t, log, "")
+			f, cleanup := createTestConfig(t, log, "")
 			f.Close()
-			defer closure()
+			defer cleanup()
 
 			var opts cliOptions
 			conn := newTestConn(t)
