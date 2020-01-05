@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package txtfmt
 
 import (
 	"bytes"
@@ -46,7 +46,7 @@ func (t *TableFormatter) Init() {
 }
 
 // SetColumnTitles sets the ordered column titles for the table.
-func (t *TableFormatter) SetColumnTitles(c []string) {
+func (t *TableFormatter) SetColumnTitles(c ...string) {
 	if c == nil {
 		t.titles = []string{}
 		return
@@ -95,9 +95,9 @@ func (t *TableFormatter) Format(table []TableRow) string {
 }
 
 // NewTableFormatter creates and instantiates a new TableFormatter.
-func NewTableFormatter(columnTitles []string) *TableFormatter {
+func NewTableFormatter(columnTitles ...string) *TableFormatter {
 	f := &TableFormatter{}
 	f.Init()
-	f.SetColumnTitles(columnTitles)
+	f.SetColumnTitles(columnTitles...)
 	return f
 }
