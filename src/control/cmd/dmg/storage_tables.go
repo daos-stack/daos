@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	bytesize "github.com/inhies/go-bytesize"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -49,15 +50,15 @@ func scmModuleScanTable(ms storage.ScmModules) string {
 	slotTitle := "Channel Slot"
 	capacityTitle := "Capacity"
 
-	formatter := NewTableFormatter([]string{
+	formatter := txtfmt.NewTableFormatter(
 		physicalIdTitle, socketTitle, memCtrlrTitle, channelTitle, slotTitle, capacityTitle,
-	})
-	var table []TableRow
+	)
+	var table []txtfmt.TableRow
 
 	sort.Slice(ms, func(i, j int) bool { return ms[i].PhysicalID < ms[j].PhysicalID })
 
 	for _, m := range ms {
-		row := TableRow{physicalIdTitle: fmt.Sprint(m.PhysicalID)}
+		row := txtfmt.TableRow{physicalIdTitle: fmt.Sprint(m.PhysicalID)}
 		row[socketTitle] = fmt.Sprint(m.SocketID)
 		row[memCtrlrTitle] = fmt.Sprint(m.ControllerID)
 		row[channelTitle] = fmt.Sprint(m.ChannelID)
@@ -84,13 +85,13 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	socketTitle := "Socket ID"
 	capacityTitle := "Capacity"
 
-	formatter := NewTableFormatter([]string{deviceTitle, socketTitle, capacityTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(deviceTitle, socketTitle, capacityTitle)
+	var table []txtfmt.TableRow
 
 	sort.Slice(nss, func(i, j int) bool { return nss[i].BlockDevice < nss[j].BlockDevice })
 
 	for _, ns := range nss {
-		row := TableRow{deviceTitle: ns.BlockDevice}
+		row := txtfmt.TableRow{deviceTitle: ns.BlockDevice}
 		row[socketTitle] = fmt.Sprint(ns.NumaNode)
 		row[capacityTitle] = bytesize.New(float64(ns.Size)).String()
 
@@ -113,13 +114,13 @@ func scmFormatTable(smr proto.ScmMountResults) string {
 	mntTitle := "SCM Mount"
 	resultTitle := "Format Result"
 
-	formatter := NewTableFormatter([]string{mntTitle, resultTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(mntTitle, resultTitle)
+	var table []txtfmt.TableRow
 
 	sort.Slice(smr, func(i, j int) bool { return smr[i].Mntpoint < smr[j].Mntpoint })
 
 	for _, mnt := range smr {
-		row := TableRow{mntTitle: mnt.Mntpoint}
+		row := txtfmt.TableRow{mntTitle: mnt.Mntpoint}
 
 		result := mnt.State.Status.String()
 		if mnt.State.Error != "" {
@@ -153,10 +154,10 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 	socketTitle := "Socket ID"
 	capacityTitle := "Capacity"
 
-	formatter := NewTableFormatter([]string{
+	formatter := txtfmt.NewTableFormatter(
 		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle,
-	})
-	var table []TableRow
+	)
+	var table []txtfmt.TableRow
 
 	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
@@ -166,7 +167,7 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 			tCap += bytesize.GB * bytesize.New(float64(ns.Size))
 		}
 
-		row := TableRow{pciTitle: ctrlr.Pciaddr}
+		row := txtfmt.TableRow{pciTitle: ctrlr.Pciaddr}
 		row[modelTitle] = ctrlr.Model
 		row[fwTitle] = ctrlr.Fwrev
 		row[socketTitle] = fmt.Sprint(ctrlr.Socketid)
@@ -191,13 +192,13 @@ func nvmeFormatTable(ncr proto.NvmeControllerResults) string {
 	pciTitle := "NVMe PCI"
 	resultTitle := "Format Result"
 
-	formatter := NewTableFormatter([]string{pciTitle, resultTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(pciTitle, resultTitle)
+	var table []txtfmt.TableRow
 
 	sort.Slice(ncr, func(i, j int) bool { return ncr[i].Pciaddr < ncr[j].Pciaddr })
 
 	for _, ctrlr := range ncr {
-		row := TableRow{pciTitle: ctrlr.Pciaddr}
+		row := txtfmt.TableRow{pciTitle: ctrlr.Pciaddr}
 
 		result := ctrlr.State.Status.String()
 		if ctrlr.State.Error != "" {
