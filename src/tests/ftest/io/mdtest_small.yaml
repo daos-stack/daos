@@ -29,7 +29,7 @@ mdtest:
   dfs_destroy: True
   manager: "MPICH"
   mdtest_params:
-#     [api, write, read, branching factor, num_of_dir_files, depth, flags]
+#     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
     - [DFS, 4096, 4096, 1, 1000, 0, ' ']
     - [DFS, 4096, 4096, 1, 1000, 20, ' ']
     - [POSIX, 0, 0, 1, 1000, 0, ' ']

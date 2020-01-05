@@ -60,7 +60,6 @@ class IorSmall(IorTestBase):
             self.ior_cmd.daos_oclass.update(oclass)
             for api in apis:
                 self.ior_cmd.api.update(api)
-#                self.ior_cmd.flags.update(flags[0])
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
