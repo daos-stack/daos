@@ -56,11 +56,11 @@ func getDefaultConfig(t *testing.T, log logging.Logger) (*client.Configuration, 
 		os.RemoveAll(path.Dir(defaultConfig.Path))
 		t.Fatal(err)
 	}
-	closure := func() {
+	cleanup := func() {
 		os.RemoveAll(path.Dir(defaultConfig.Path))
 	}
 
-	return defaultConfig, f, closure
+	return defaultConfig, f, cleanup
 }
 
 func getTestFile(t *testing.T) *os.File {
@@ -78,9 +78,9 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig, f, closure := getDefaultConfig(t, log)
+	defaultConfig, f, cleanup := getDefaultConfig(t, log)
 	f.Close()
-	defer closure()
+	defer cleanup()
 
 	cfg, err := client.GetConfig(log, "")
 	if err != nil {
@@ -98,8 +98,8 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig, f, closure := getDefaultConfig(t, log)
-	defer closure()
+	defaultConfig, f, cleanup := getDefaultConfig(t, log)
+	defer cleanup()
 
 	defaultConfig.SystemName = t.Name()
 

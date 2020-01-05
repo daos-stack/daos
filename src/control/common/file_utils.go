@@ -233,7 +233,7 @@ func Run(cmd string) error {
 // invoking the current process.
 func GetWorkingPath(inPath string) (string, error) {
 	if path.IsAbs(inPath) {
-		return inPath, nil
+		return "", errors.New("unexpected absolute path, want absolute")
 	}
 
 	workingDir, err := os.Getwd()
@@ -248,7 +248,7 @@ func GetWorkingPath(inPath string) (string, error) {
 // currently running process.
 func GetAdjacentPath(inPath string) (string, error) {
 	if path.IsAbs(inPath) {
-		return inPath, nil
+		return "", errors.New("unexpected absolute path, want absolute")
 	}
 
 	selfPath, err := os.Readlink("/proc/self/exe")
@@ -257,6 +257,28 @@ func GetAdjacentPath(inPath string) (string, error) {
 	}
 
 	return path.Join(path.Dir(selfPath), inPath), nil
+}
+
+// ResolvePath simply returns an absolute path, appends input path to current
+// working directory if input path not empty otherwise appends default path to
+// location of running binary (adjacent). Use case is specific to config files.
+func ResolvePath(inPath string, defaultPath string) (outPath string, err error) {
+	switch {
+	case inPath == "":
+		// no custom path specified, look up adjacent
+		outPath, err = GetAdjacentPath(defaultPath)
+	case filepath.IsAbs(inPath):
+		outPath = inPath
+	default:
+		// custom path specified, look up relative to cwd
+		outPath, err = GetWorkingPath(inPath)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return outPath, nil
 }
 
 // FindBinary attempts to locate the named binary by checking $PATH first.

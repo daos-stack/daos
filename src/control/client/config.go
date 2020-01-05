@@ -98,14 +98,14 @@ func newDefaultConfiguration(ext External) *Configuration {
 // GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(log logging.Logger, path string) (*Configuration, error) {
+func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
 	c := NewConfiguration()
-	if err := c.SetPath(log, path); err != nil {
+	if err := c.SetPath(inPath); err != nil {
 		return nil, err
 	}
 
 	if _, err := os.Stat(c.Path); err != nil {
-		if path == "" && os.IsNotExist(err) {
+		if inPath == "" && os.IsNotExist(err) {
 			log.Debugf("No configuration file found; using default values")
 			c.Path = ""
 			return c, nil
@@ -121,23 +121,14 @@ func GetConfig(log logging.Logger, path string) (*Configuration, error) {
 	return c, nil
 }
 
-func (c *Configuration) SetPath(log logging.Logger, path string) (err error) {
-	var newPath string
-
-	if path == "" {
-		// no custom path specified, look up adjacent
-		newPath, err = common.GetAdjacentPath(c.Path)
-	} else {
-		// custom path specified, look up relative to cwd
-		newPath, err = common.GetWorkingPath(path)
-	}
-
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
 	if err != nil {
-		return
+		return err
 	}
 	c.Path = newPath
 
-	return
+	return nil
 }
 
 // LoadConfig reads the configuration file specified by Configuration.Path

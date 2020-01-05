@@ -232,7 +232,7 @@ func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, 
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	if err := defaultConfig.SetPath(log, path); err != nil {
+	if err := defaultConfig.SetPath(path); err != nil {
 		t.Fatal(err)
 	}
 
