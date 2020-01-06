@@ -840,7 +840,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "openmpi3 hwloc-devel argobots cart-${env.CART_COMMIT} fuse3-libs libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
+                                       inst_rpms: "openmpi3 hwloc-devel argobots cart-${env.CART_COMMIT} fuse3 libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
