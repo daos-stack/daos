@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 
 /*
