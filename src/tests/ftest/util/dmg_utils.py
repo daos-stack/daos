@@ -55,6 +55,8 @@ class DmgCommand(DaosCommand):
             self.action_command = self.DmgCreateSubCommand()
         elif self.action.value == "destroy":
             self.action_command = self.DmgDestroySubCommand()
+        elif self.action.value == "query":
+            self.action_command = self.DmgQuerySubCommand()
         else:
             self.action_command = None
 
@@ -107,6 +109,16 @@ class DmgCommand(DaosCommand):
                 "/run/dmg/destroy/*", "destroy")
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
+
+    class DmgQuerySubCommand(CommandWithParameters):
+        """Defines an object representing a query sub dmg command."""
+
+        def __init__(self):
+            """Create a dmg query command object."""
+            super(DmgCommand.DmgQuerySubCommand, self).__init__(
+                "/run/dmg/query/*", "query")
+            self.pool = FormattedParameter("--pool {}")
+
 
 def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
@@ -310,7 +322,7 @@ def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
             daos_avocado_test.yaml
         pool_uuid (str): Pool UUID to destroy.
         insecure (bool, optional): Insecure mode. Defaults to True.
-        foce (bool, optional): Force removal of DAOS pool. Defaults to True.
+        force (bool, optional): Force removal of DAOS pool. Defaults to True.
 
     Returns:
         CmdResult: Object that contains exit status, stdout, and other
@@ -325,6 +337,41 @@ def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
     dmg.get_action_command()
     dmg.action_command.pool.value = pool_uuid
     dmg.action_command.force.value = force
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("Pool destroy command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def pool_query(path, host_port, pool_uuid, insecure=True, force=True):
+    """ Execute pool query command through dmg tool to servers provided.
+
+    Args:
+        path (str): Path to the directory of dmg binary.
+        host_port (list of str): List of Host:Port where daos_server runs.
+            Use 10001 for the default port number. This number is defined in
+            daos_avocado_test.yaml
+        pool_uuid (str): Pool UUID to destroy.
+        insecure (bool, optional): Insecure mode. Defaults to True.
+        force (bool, optional): Force removal of DAOS pool. Defaults to True.
+
+    Returns:
+        CmdResult: Object that contains exit status, stdout, and other
+            information.
+    """
+
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = host_port
+    dmg.request.value = "pool"
+    dmg.action.value = "query"
+    dmg.get_action_command()
+    dmg.action_command.pool.value = pool_uuid
 
     try:
         result = dmg.run()

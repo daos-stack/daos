@@ -1,0 +1,29 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  createmode:
+    mode_RW:
+      mode: 146
+  createset:
+    group: daos_server
+  createsize:
+    scm_size: 1000000000
+    nvme_size: 2000000000
+  createsvc:
+    svcn: 1
+dmg:
+  request: storage
+  action: scan
+  insecure: True
