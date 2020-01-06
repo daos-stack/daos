@@ -36,6 +36,7 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
+#include <daos/pool_map.h>
 
 /*
  * RPC operation codes
@@ -423,8 +424,21 @@ pool_target_addr_list_free(struct pool_target_addr_list *list);
 uint64_t
 pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
 
+void
+pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
+			 uint32_t map_version, uint32_t leader_rank,
+			 struct daos_pool_space *ps,
+			 struct daos_rebuild_status *rs,
+			 daos_pool_info_t *info);
+
 int list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 			  struct daos_pool_cont_info *buf, daos_size_t ncont);
 void list_cont_bulk_destroy(crt_bulk_t bulk);
+
+int
+map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
+		unsigned int nr);
+void
+map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf);
 
 #endif /* __POOL_RPC_H__ */
