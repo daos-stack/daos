@@ -201,7 +201,7 @@ drpc_listener_stop(void)
 
 	rc = ABT_thread_join(status.thread);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT error re-joining thread: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ABT error re-joining thread: %d\n", rc);
 		return dss_abterr2der(rc);
 	}
 

@@ -149,7 +149,7 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 
 	rc = ABT_rwlock_create(&svc->cs_lock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create cs_lock: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create cs_lock: %d\n", rc);
 		D_GOTO(err, rc = dss_abterr2der(rc));
 	}
 

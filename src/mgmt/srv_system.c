@@ -110,7 +110,7 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 	rc = ABT_rwlock_create(&svc->ms_lock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create ms_lock: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create ms_lock: %d\n", rc);
 		rc = dss_abterr2der(rc);
 		goto err_svc;
 	}

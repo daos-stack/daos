@@ -432,7 +432,7 @@ abt_init(int argc, char *argv[])
 	/* Now, initialize Argobots. */
 	rc = ABT_init(argc, argv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to init ABT: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to init ABT: %d\n", rc);
 		return dss_abterr2der(rc);
 	}
 
@@ -915,8 +915,7 @@ main(int argc, char **argv)
 	while (1) {
 		rc = sigwait(&set, &sig);
 		if (rc) {
-			D_ERROR("failed to wait for signals: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("failed to wait for signals: %d\n", rc);
 			break;
 		}
 

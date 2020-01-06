@@ -105,24 +105,22 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 
 	rc = ABT_mutex_create(&svc->s_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create mutex: "DF_RC"\n", svc->s_name,
-			DP_RC(rc));
+		D_ERROR("%s: failed to create mutex: %d\n", svc->s_name, rc);
 		rc = dss_abterr2der(rc);
 		goto err_db_path;
 	}
 
 	rc = ABT_cond_create(&svc->s_state_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create state_cv: "DF_RC"\n", svc->s_name,
-			DP_RC(rc));
+		D_ERROR("%s: failed to create state_cv: %d\n", svc->s_name, rc);
 		rc = dss_abterr2der(rc);
 		goto err_mutex;
 	}
 
 	rc = ABT_cond_create(&svc->s_leader_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create leader_ref_cv: "DF_RC"\n",
-			svc->s_name, DP_RC(rc));
+		D_ERROR("%s: failed to create leader_ref_cv: %d\n", svc->s_name,
+			rc);
 		rc = dss_abterr2der(rc);
 		goto err_state_cv;
 	}
@@ -130,8 +128,8 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	if (rsvc_class(class)->sc_map_dist != NULL) {
 		rc = ABT_cond_create(&svc->s_map_dist_cv);
 		if (rc != ABT_SUCCESS) {
-			D_ERROR("%s: failed to create map_dist_cv: "DF_RC"\n",
-				svc->s_name, DP_RC(rc));
+			D_ERROR("%s: failed to create map_dist_cv: %d\n",
+				svc->s_name, rc);
 			rc = dss_abterr2der(rc);
 			goto err_leader_ref_cv;
 		}

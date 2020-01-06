@@ -53,10 +53,7 @@ debug_fini_locked(void)
 	/* Deregister daos specific error codes */
 	daos_errno_fini();
 
-	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
-	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to deallocate daos debug bits: "DF_RC"\n",
-			DP_RC(rc));
+	D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 
 	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */

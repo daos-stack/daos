@@ -246,16 +246,14 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 
 	rc = ABT_mutex_create(&db->d_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB": failed to create mutex: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to create mutex: %d\n", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
 		goto err_db;
 	}
 
 	rc = ABT_cond_create(&db->d_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB": failed to create ref CV: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to create ref CV: %d\n", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
 		goto err_mutex;
 	}

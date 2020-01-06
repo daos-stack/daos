@@ -876,7 +876,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create ps_lock: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create ps_lock: %d\n", rc);
 		rc = dss_abterr2der(rc);
 		goto err_svc;
 	}

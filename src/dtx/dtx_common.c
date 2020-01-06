@@ -340,8 +340,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh, struct dtx_conflict_entry **dces,
 	int	rc;
 
 	rc = ABT_future_wait(dlh->dlh_future);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed "DF_RC"\n",
-		DP_RC(rc));
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 	rc = dlh->dlh_result;
 	if (rc == -DER_INPROGRESS && dces_cnt != NULL) {
 		struct dtx_conflict_entry	*conflict;
@@ -886,8 +885,7 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 
 	sub->dss_result = rc;
 	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed "DF_RC"\n",
-		DP_RC(rc));
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
 
 	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
 		sub->dss_tgt.st_rank, sub->dss_tgt.st_tgt_idx,
@@ -968,7 +966,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 	rc = ABT_future_create(dlh->dlh_sub_cnt, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ABT_future_create failed %d.\n", rc);
 		D_FREE_PTR(ult_arg);
 		return dss_abterr2der(rc);
 	}

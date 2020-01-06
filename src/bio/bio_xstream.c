@@ -909,9 +909,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		}
 
 		if (spdk_conf_first_section(config) == NULL) {
+			D_ERROR("invalid format %s\n", nvme_glb.bd_nvme_conf);
 			rc = -DER_INVAL;
-			D_ERROR("invalid format %s, "DF_RC"\n",
-				nvme_glb.bd_nvme_conf, DP_RC(rc));
 			goto out;
 		}
 

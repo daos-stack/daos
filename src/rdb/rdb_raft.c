@@ -562,7 +562,7 @@ rdb_raft_recv_is_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 
 		rc = ABT_eventual_set(arg->drb_eventual, NULL /* value */,
 				      0 /* nbytes */);
-		D_ASSERTF(rc == ABT_SUCCESS, ""DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	}
 	return 0;
 }
@@ -660,7 +660,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 
 	/* Wait for all transfers to complete. */
 	rc = ABT_eventual_wait(arg.drb_eventual, NULL /* value */);
-	D_ASSERTF(rc == ABT_SUCCESS, ""DF_RC"\n", DP_RC(rc));
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	rc = arg.drb_rc;
 
 out_eventual:
