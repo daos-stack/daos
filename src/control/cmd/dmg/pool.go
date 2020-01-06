@@ -115,8 +115,8 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 
 	// Maintain output compability with the `daos pool query` output.
 	var bld strings.Builder
-	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%t\n",
-		resp.UUID, resp.TotalTargets, resp.Disabled)
+	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%d\n",
+		resp.UUID, resp.TotalTargets, resp.DisabledTargets)
 	bld.WriteString("Pool space info:\n")
 	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
 	if resp.Scm != nil {
