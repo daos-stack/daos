@@ -333,6 +333,39 @@ out:
 	return bits;
 }
 
+/**
+ * Translates the response from a pool query RPC to a pool_info structure.
+ *
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		map_buf		Map buffer for pool
+ * \param[in]		map_version	Pool map version
+ * \param[in]		leader_rank	Pool leader rank
+ * \param[in]		ps		Pool space
+ * \param[in]		rs		Rebuild status
+ * @param[in][out]	info		Pool info - pass in with pi_bits set
+ *					Returned populated with inputs
+ */
+void
+pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
+			 uint32_t map_version, uint32_t leader_rank,
+			 struct daos_pool_space *ps,
+			 struct daos_rebuild_status *rs,
+			 daos_pool_info_t *info)
+{
+	D_ASSERT(ps != NULL);
+	D_ASSERT(rs != NULL);
+
+	uuid_copy(info->pi_uuid, pool_uuid);
+	info->pi_ntargets	= map_buf->pb_target_nr;
+	info->pi_nnodes		= map_buf->pb_node_nr;
+	info->pi_map_ver	= map_version;
+	info->pi_leader		= leader_rank;
+	if (info->pi_bits & DPI_SPACE)
+		info->pi_space		= *ps;
+	if (info->pi_bits & DPI_REBUILD_STATUS)
+		info->pi_rebuild_st	= *rs;
+}
+
 int
 list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 		      struct daos_pool_cont_info *buf, daos_size_t ncont)
@@ -353,5 +386,38 @@ list_cont_bulk_destroy(crt_bulk_t bulk)
 {
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
+}
+
+int
+map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
+		unsigned int nr)
+{
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
+	int		rc;
+
+	*buf = pool_buf_alloc(nr);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+	if (rc != 0) {
+		pool_buf_free(*buf);
+		*buf = NULL;
+	}
+
+	return rc;
+}
+
+void
+map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
+{
+	crt_bulk_free(bulk);
+	pool_buf_free(buf);
 }
 
