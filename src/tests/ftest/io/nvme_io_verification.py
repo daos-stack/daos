@@ -26,7 +26,7 @@ from __future__ import print_function
 import avocado
 
 from pydaos.raw import DaosApiError
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from ior_test_base import IorTestBase
 
 class NvmeIoVerification(IorTestBase):

@@ -43,7 +43,7 @@ from ior_utils import IorCommand
 from command_utils import Orterun, CommandFailure
 from server_utils import run_server, stop_server
 from write_host_file import write_host_file
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
 

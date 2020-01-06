@@ -23,6 +23,8 @@
 """
 from apricot import TestWithServers, skipForTicket
 from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from ior_test_base import IorTestBase
 
 
 class RebuildTests(TestWithServers):
