@@ -38,32 +38,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	struct fuse_bufvec		fb = {};
 	daos_size_t			size;
 	void				*buff;
-	void				*ahead_buff = NULL;
 	int				rc;
+	size_t				buff_len = len;
+	bool				skip_read = false;
+	bool				readahead = false;
 
 	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
 
 	DFUSE_TRA_DEBUG(oh, "Will try readahead file size %zi",
 			oh->doh_ie->ie_stat.st_size);
-
-	D_ALLOC(buff, len);
-	if (!buff) {
-		DFUSE_REPLY_ERR_RAW(NULL, req, ENOMEM);
-		return;
-	}
-
-	/* TODO:
-	 *
-	 * fuse_lowlevel_notify_store() does not call free() on the buffer
-	 * after use so a single buffer rather than two would work well here.
-	 * We could combine the truncated and readahead logic by just having
-	 * the trunctated check set a "skip-dfs_read" flag and just have one
-	 * flow through this function rather than two.
-	 * For the ie_truncated code a lot of zeroed data is being passed to
-	 * the kernel so it would be possible to have a "zero-buffer" allcocated
-	 * once and reuse it rather than a malloc + memset every time.
-	 */
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
@@ -73,67 +57,57 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		off_t pos_ra = position + len + READAHEAD_SIZE;
 
 		DFUSE_TRA_DEBUG(oh, "Returning zeros");
+		skip_read = true;
 
 		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
 		    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
 		    (position >= oh->doh_ie->ie_end_off ||
 		    pos_ra <= oh->doh_ie->ie_start_off))) {
-			D_ALLOC(ahead_buff, READAHEAD_SIZE);
 
-			if (ahead_buff) {
-				fb.count = 1;
-				fb.buf[0].mem = ahead_buff;
-				fb.buf[0].size = READAHEAD_SIZE;
-
-				rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
-								ino,
-								position + len,
-								&fb,
-								0);
-				D_FREE(ahead_buff);
-			}
+			readahead = true;
 		}
+	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
+		len < (1024 * 1024) &&
+		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+		/* Only do readahead if the requested size is less than 1Mb and the file
+		 * size is > 1Mb
+		 */
 
-		DFUSE_REPLY_BUF(oh, req, buff, len);
-		D_FREE(buff);
+		readahead = true;
+	}
+
+	if (readahead)
+		buff_len += READAHEAD_SIZE;
+
+	D_ALLOC(buff, buff_len);
+	if (!buff) {
+		DFUSE_REPLY_ERR_RAW(NULL, req, ENOMEM);
 		return;
 	}
 
 	sgl.sg_nr = 1;
-	d_iov_set(&iov[0], (void *)buff, len);
+	d_iov_set(&iov[0], (void *)buff, buff_len);
 	sgl.sg_iovs = iov;
 
-	/* Only do readahead if the requested size is less than 1Mb and the file
-	 * size is > 1Mb
-	 */
-	if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
-	    len < (1024 * 1024) &&
-	    oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
-
-		D_ALLOC(ahead_buff, READAHEAD_SIZE);
-		if (ahead_buff != NULL) {
-			d_iov_set(&iov[1], (void *)ahead_buff, READAHEAD_SIZE);
-			sgl.sg_nr = 2;
+	if (skip_read) {
+		size = buff_len;
+	} else {
+		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_REPLY_ERR_RAW(oh, req, rc);
+			D_FREE(buff);
+			return;
 		}
-	}
-
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-		D_FREE(buff);
-		D_FREE(ahead_buff);
-		return;
 	}
 
 	if (size <= len) {
 		DFUSE_REPLY_BUF(oh, req, buff, size);
 		D_FREE(buff);
-		D_FREE(ahead_buff);
 		return;
 	}
 
 	fb.count = 1;
-	fb.buf[0].mem = ahead_buff;
+	fb.buf[0].mem = buff + len;
 	fb.buf[0].size = size - len;
 
 	DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
@@ -148,5 +122,4 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
-	D_FREE(ahead_buff);
 }
