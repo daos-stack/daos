@@ -129,7 +129,7 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self, intercept=None):
+    def run_ior_with_pool(self, intercept=None, test_file_suffix=""):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -156,8 +156,10 @@ class IorTestBase(TestWithServers):
             if self.ior_cmd.transfer_size.value == "256B":
                 self.cancelForTicket("DAOS-3449")
             self.start_dfuse()
-            self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
-                                          + "/testfile")
+            testfile = os.path.join(self.dfuse.mount_dir.value,
+                                    "testfile{}".format(test_file_suffix))
+
+            self.ior_cmd.test_file.update(testfile)
 
         out = self.run_ior(self.get_job_manager_command(), self.processes,
                            intercept)
