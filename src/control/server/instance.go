@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"os"
 	"sync"
 
@@ -46,6 +47,7 @@ import (
 // daos_io_server.
 type IOServerStarter interface {
 	Start(context.Context, chan<- error) error
+	IsStarted() bool
 	GetConfig() *ioserver.Config
 }
 
@@ -213,13 +215,21 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
 
+	if err := srv.logScmStorage(); err != nil {
+		srv.log.Errorf("unable to log SCM storage stats: %s", err)
+	}
+
 	return srv.runner.Start(ctx, errChan)
+}
+
+func (srv *IOServerInstance) IsStarted() bool {
+	return srv.runner.IsStarted()
 }
 
 // NotifyReady receives a ready message from the running IOServer
 // instance.
 func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index(), msg)
+	srv.log.Debugf("%s instance %d ready: %v", DataPlaneName, srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
@@ -238,7 +248,7 @@ func (srv *IOServerInstance) AwaitReady() chan *srvpb.NotifyReadyReq {
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
-	srv.log.Debugf("I/O server instance %d notifying storage ready", srv.Index())
+	srv.log.Debugf("%s instance %d notifying storage ready", DataPlaneName, srv.Index())
 	go func() {
 		close(srv.storageReady)
 	}()
@@ -248,9 +258,9 @@ func (srv *IOServerInstance) NotifyStorageReady() {
 func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index(), ctx.Err())
+		srv.log.Infof("%s instance %d storage not ready: %s", DataPlaneName, srv.Index(), ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Infof("I/O server instance %d storage ready", srv.Index())
+		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
 	}
 }
 
@@ -325,7 +335,7 @@ func (srv *IOServerInstance) StartManagementService() error {
 
 	// should have been loaded by now
 	if superblock == nil {
-		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index())
+		return errors.Errorf("%s instance %d: nil superblock", DataPlaneName, srv.Index())
 	}
 
 	if superblock.CreateMS {
@@ -459,6 +469,16 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 	}
 	sb := srv.getSuperblock()
 
-	return system.NewMember(sb.Rank.Uint32(), sb.UUID,
-		srv.msClient.cfg.ControlAddr, system.MemberStateStarted), nil
+	msAddr, err := srv.msClient.LeaderAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", msAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return system.NewMember(sb.Rank.Uint32(), sb.UUID, addr,
+		system.MemberStateStarted), nil
 }

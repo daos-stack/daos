@@ -272,6 +272,43 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 	}
 }
 
+int		ds_mgmt_pool_set_prop_return;
+daos_prop_t	*ds_mgmt_pool_set_prop_prop;
+daos_prop_t	*ds_mgmt_pool_set_prop_result;
+void		*ds_mgmt_pool_set_prop_result_ptr;
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+		      daos_prop_t **result)
+{
+	if (prop != NULL)
+		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true);
+	ds_mgmt_pool_set_prop_result_ptr = (void *)result;
+
+	if (result != NULL && ds_mgmt_pool_set_prop_result != NULL) {
+		size_t len = ds_mgmt_pool_set_prop_result->dpp_nr;
+
+		*result = daos_prop_alloc(len);
+		daos_prop_copy(*result, ds_mgmt_pool_set_prop_result);
+	}
+
+	return ds_mgmt_pool_set_prop_return;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_setup(void)
+{
+	ds_mgmt_pool_set_prop_return = 0;
+	ds_mgmt_pool_set_prop_prop = NULL;
+	ds_mgmt_pool_set_prop_result = NULL;
+	ds_mgmt_pool_set_prop_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_set_prop_teardown(void)
+{
+	daos_prop_free(ds_mgmt_pool_set_prop_result);
+}
+
 /*
  * Mock ds_mgmt_pool_list_cont
  */
