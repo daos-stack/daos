@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 // splitPort separates port from compressed host string
@@ -137,7 +138,8 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	return
 }
 
-func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	for _, res := range groups.Keys() {
 		hostset := groups[res].RangedString()
 		lineBreak := strings.Repeat("-", len(hostset))
@@ -145,4 +147,32 @@ func formatHostGroupResults(buf *bytes.Buffer, groups hostlist.HostGroups) strin
 	}
 
 	return buf.String()
+}
+
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
+
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
+
+	for _, result := range groups.Keys() {
+		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, rowFieldSep)
+		if len(summary) != len(columnTitles) {
+			return "", errors.New("unexpected summary format")
+		}
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
 }

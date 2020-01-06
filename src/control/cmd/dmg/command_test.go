@@ -35,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -132,6 +133,11 @@ func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, e
 	return nil, nil
 }
 
+func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
+	return &client.PoolSetPropResp{}, nil
+}
+
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
@@ -177,14 +183,14 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
+func (tc *testConn) SystemMemberQuery() (system.Members, error) {
 	tc.appendInvocation("SystemMemberQuery")
-	return make(common.SystemMembers, 0), nil
+	return make(system.Members, 0), nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
+func (tc *testConn) SystemStop(req client.SystemStopReq) (system.MemberResults, error) {
 	tc.appendInvocation("SystemStop")
-	return make(common.SystemMemberResults, 0), nil
+	return make(system.MemberResults, 0), nil
 }
 
 func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {

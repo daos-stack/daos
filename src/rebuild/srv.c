@@ -34,6 +34,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rebuild.h>
+#include <daos_mgmt.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
@@ -559,7 +560,8 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 				D_ASSERT(dom != NULL);
 				D_DEBUG(DB_REBUILD, "target %d failed\n",
 					dom->do_comp.co_rank);
-				if (pool_component_unavail(&dom->do_comp)) {
+				if (pool_component_unavail(&dom->do_comp,
+							false)) {
 					setbit(rgt->rgt_scan_bits,
 					       dom->do_comp.co_rank);
 					setbit(rgt->rgt_pull_bits,
@@ -1448,7 +1450,7 @@ void
 rebuild_hang(void)
 {
 	D_DEBUG(DB_REBUILD, "Hang current rebuild process.\n");
-	dss_parameters_set(DSS_REBUILD_RES_PERCENTAGE, 0);
+	dss_parameters_set(DMG_KEY_REBUILD_THROTTLING, 0);
 }
 
 static int

@@ -149,7 +149,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -175,15 +175,17 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
 
-	rc = vos_tx_end(vos_cont2umm(cont), rc);
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
-	vos_dth_set(NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		vos_dtx_cleanup_dth(dth);
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
+	}
+	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -208,7 +210,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return rc;
 	}
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc)
 		goto out;
 
@@ -216,7 +218,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 	if (rc)
 		goto out;
 
@@ -1402,13 +1404,13 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 
 	umm = vos_obj2umm(oiter->it_obj);
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->it_hdl, args);
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
 		D_ERROR("Failed to delete iter entry: %d\n", rc);

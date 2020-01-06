@@ -2271,10 +2271,10 @@ rdb_raft_get_request_timeout(void)
 static uint64_t
 rdb_raft_get_compact_thres(void)
 {
-	unsigned int i = 0;
+	unsigned int i = 256;
 
 	d_getenv_int("RDB_COMPACT_THRESHOLD", &i);
-	return i == 0 ? UINT64_MAX : i;
+	return i;
 }
 
 int
