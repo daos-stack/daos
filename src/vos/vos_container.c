@@ -186,7 +186,6 @@ void
 cont_free(struct d_ulink *ulink)
 {
 	struct vos_container		*cont;
-	struct dtx_batched_cleanup_blob	*bcb;
 	int				 i;
 
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
@@ -202,13 +201,6 @@ cont_free(struct d_ulink *ulink)
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
-
-	while ((bcb = d_list_pop_entry(&cont->vc_batched_cleanup_list,
-				       struct dtx_batched_cleanup_blob,
-				       bcb_cont_link)) != NULL) {
-		D_ASSERT(d_list_empty(&bcb->bcb_dce_list));
-		D_FREE(bcb);
-	}
 
 	dbtree_close(cont->vc_btr_hdl);
 
@@ -304,7 +296,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
-	rc = vos_tx_begin(vos_pool2umm(vpool));
+	rc = umem_tx_begin(vos_pool2umm(vpool), NULL);
 	if (rc != 0)
 		goto exit;
 
@@ -313,7 +305,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 
-	rc = vos_tx_end(vos_pool2umm(vpool), rc);
+	rc = umem_tx_end(vos_pool2umm(vpool), rc);
 exit:
 	return rc;
 }
@@ -379,7 +371,6 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
-	D_INIT_LIST_HEAD(&cont->vc_batched_cleanup_list);
 	cont->vc_dtx_committable_count = 0;
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
@@ -593,7 +584,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	rc = vos_tx_begin(vos_pool2umm(pool));
+	rc = umem_tx_begin(vos_pool2umm(pool), NULL);
 	if (rc) {
 		D_ERROR("Failed to start pmdk transaction: "DF_RC"\n",
 			DP_RC(rc));
@@ -603,7 +594,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	d_iov_set(&iov, &key, sizeof(struct d_uuid));
 	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
 
-	rc = vos_tx_end(vos_pool2umm(pool), rc);
+	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {
 		D_ERROR("Failed to end pmdk transaction: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(exit, rc);

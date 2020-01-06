@@ -15,7 +15,7 @@ default all subsystems are enabled ("DD_SUBSYS=all").
 - DAOS Facilities: [common, tree, vos, client, server, rdb, pool, container,
 		    object, placement, rebuild, tier, mgmt, eio, tests]
 - Common Facilities (GURT): [MISC, MEM]
-- CaRT Facilities: [RPC, BULK, CORPC, GRP, LM, HG, PMIX, ST, IV]
+- CaRT Facilities: [RPC, BULK, CORPC, GRP, LM, HG, ST, IV]
 
 ## Priority Logging
 

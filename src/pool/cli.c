@@ -47,9 +47,6 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
-static uint64_t
-pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
-
 /**
  * Initialize pool interface
  */
@@ -188,39 +185,6 @@ failed:
 	return NULL;
 }
 
-static int
-map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
-		unsigned int nr)
-{
-	d_iov_t	iov;
-	d_sg_list_t	sgl;
-	int		rc;
-
-	*buf = pool_buf_alloc(nr);
-	if (*buf == NULL)
-		return -DER_NOMEM;
-
-	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-	if (rc != 0) {
-		pool_buf_free(*buf);
-		*buf = NULL;
-	}
-
-	return rc;
-}
-
-static void
-map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
-{
-	crt_bulk_free(bulk);
-	pool_buf_free(buf);
-}
-
 /* Assume dp_map_lock is locked before calling this function */
 static int
 pool_map_update(struct dc_pool *pool, struct pool_map *map,
@@ -295,21 +259,13 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
 	if (info != NULL) {
-		struct pool_target     *ts;
-		int			i;
+		unsigned int num_disabled = 0;
 
-		rc = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &ts);
-		D_ASSERTF(rc > 0, "%d\n", rc);
-		info->pi_ndisabled = 0;
-		for (i = 0; i < rc; i++) {
-			int status = ts[i].ta_comp.co_status;
-
-			if ((status == PO_COMP_ST_DOWN ||
-			     status == PO_COMP_ST_DOWNOUT))
-				info->pi_ndisabled++;
-			/* TODO: Take care of tgts. */
-		}
-		rc = 0;
+		rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
+		if (rc == 0)
+			info->pi_ndisabled = num_disabled;
+		else
+			D_ERROR("Couldn't get failed targets, rc=%d\n", rc);
 	}
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
@@ -318,19 +274,9 @@ out_unlock:
 	if (prop_req != NULL && rc == 0)
 		rc = daos_prop_copy(prop_req, prop_reply);
 
-	if (info != NULL && rc == 0) {
-		D_ASSERT(ps != NULL);
-		D_ASSERT(rs != NULL);
-		uuid_copy(info->pi_uuid, pool->dp_pool);
-		info->pi_ntargets	= map_buf->pb_target_nr;
-		info->pi_nnodes		= map_buf->pb_node_nr;
-		info->pi_map_ver	= map_version;
-		info->pi_leader		= leader_rank;
-		if (info->pi_bits & DPI_SPACE)
-			info->pi_space		= *ps;
-		if (info->pi_bits & DPI_REBUILD_STATUS)
-			info->pi_rebuild_st	= *rs;
-	}
+	if (info != NULL && rc == 0)
+		pool_query_reply_to_info(pool->dp_pool, map_buf, map_version,
+					 leader_rank, ps, rs, info);
 
 	return rc;
 }
@@ -1277,7 +1223,7 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = out->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
-		struct dc_pool *pool = dc_task_get_priv(task);
+		struct dc_pool *pool = arg->dqa_pool;
 
 		D_WARN("pool map buffer size (%ld) < required (%u)\n",
 			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);
@@ -1304,61 +1250,6 @@ out:
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 	return rc;
-}
-
-static uint64_t
-pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
-{
-	struct daos_prop_entry	*entry;
-	uint64_t		 bits = 0;
-	int			 i;
-
-	if (po_info != NULL) {
-		if (po_info->pi_bits & DPI_SPACE)
-			bits |= DAOS_PO_QUERY_SPACE;
-		if (po_info->pi_bits & DPI_REBUILD_STATUS)
-			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
-	}
-
-	if (prop == NULL)
-		goto out;
-	if (prop->dpp_entries == NULL) {
-		bits |= DAOS_PO_QUERY_PROP_ALL;
-		goto out;
-	}
-
-	for (i = 0; i < prop->dpp_nr; i++) {
-		entry = &prop->dpp_entries[i];
-		switch (entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-			bits |= DAOS_PO_QUERY_PROP_LABEL;
-			break;
-		case DAOS_PROP_PO_SPACE_RB:
-			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
-			break;
-		case DAOS_PROP_PO_SELF_HEAL:
-			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
-			break;
-		case DAOS_PROP_PO_RECLAIM:
-			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
-			break;
-		case DAOS_PROP_PO_ACL:
-			bits |= DAOS_PO_QUERY_PROP_ACL;
-			break;
-		case DAOS_PROP_PO_OWNER:
-			bits |= DAOS_PO_QUERY_PROP_OWNER;
-			break;
-		case DAOS_PROP_PO_OWNER_GROUP:
-			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
-			break;
-		default:
-			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
-			break;
-		}
-	}
-
-out:
-	return bits;
 }
 
 /**
@@ -1455,28 +1346,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-}
-
-static int
-list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      struct daos_pool_cont_info *buf, daos_size_t ncont)
-{
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
-
-	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-}
-
-static void
-list_cont_bulk_destroy(crt_bulk_t bulk)
-{
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
 }
 
 struct pool_lc_arg {

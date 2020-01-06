@@ -59,7 +59,7 @@ class CartSelfTest(TestWithoutServers):
         super(CartSelfTest, self).setUp()
         self.agent_sessions = None
 
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
@@ -78,7 +78,7 @@ class CartSelfTest(TestWithoutServers):
         self.env_dict = {
             "CRT_PHY_ADDR_STR":     "ofi+sockets",
             "CRT_CTX_NUM":          "8",
-            "OFI_INTERFACE":        "eth0",
+            "OFI_INTERFACE":        os.environ.get("OFI_INTERFACE", "eth0"),
             "CRT_CTX_SHARE_ADDR":   str(self.share_addr)
         }
         self.env_list = []

@@ -410,6 +410,15 @@ umem_tx_abort(struct umem_instance *umm, int err)
 		return 0;
 }
 
+static inline int
+umem_tx_end(struct umem_instance *umm, int err)
+{
+	if (err)
+		return umem_tx_abort(umm, err);
+	else
+		return umem_tx_commit(umm);
+}
+
 static inline umem_off_t
 umem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size)
 {

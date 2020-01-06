@@ -64,6 +64,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
+	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
+
 	if (create) {
 		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
@@ -117,6 +119,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+
 	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
 		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));
@@ -138,6 +142,10 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
+
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);

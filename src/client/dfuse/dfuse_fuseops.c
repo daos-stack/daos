@@ -602,8 +602,6 @@ err:
 static void
 dfuse_fuse_destroy(void *userdata)
 {
-	DFUSE_TRA_INFO(userdata, "destroy callback");
-	DFUSE_TRA_DOWN(userdata);
 	D_FREE(userdata);
 }
 
