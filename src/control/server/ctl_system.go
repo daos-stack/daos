@@ -41,6 +41,24 @@ const (
 	prepShutdownTimeout = 10 * retryDelay
 )
 
+func (svc *ControlService) updateMembershipStatus(ctx context.Context, leader *IOServerInstance) error {
+	for _, member := range svc.membership.Members() {
+		// TODO: consider optimal Timeout value
+		_, err := leader.msClient.Status(ctx, member.Addr.String(),
+			&mgmtpb.PingRankReq{Rank: member.Rank})
+		if err != nil {
+			svc.log.Errorf("MgmtSvc.updateMemberStatus error %s\n", err)
+			if err := svc.membership.SetMemberState(member.Rank,
+				system.MemberStateUnresponsive); err != nil {
+
+				return errors.Wrapf(err, "setting member state")
+			}
+		}
+	}
+
+	return nil
+}
+
 // SystemQuery implements the method defined for the Management Service.
 //
 // Return system status.
@@ -49,12 +67,17 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
-	_, err := svc.harness.GetMSLeaderInstance()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
 	svc.log.Debug("Received SystemQuery RPC")
+
+	// update status of each system member
+	if err := svc.updateMembershipStatus(ctx, mi); err != nil {
+		return nil, err
+	}
 
 	var members []*system.Member
 	nilRank := ioserver.NilRank
@@ -188,7 +211,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 
 		// prepare system members for shutdown
 		prepResults := svc.prepShutdown(ctx, mi)
-		if err := convert.Types(prepResults, resp.Results); err != nil {
+		if err := convert.Types(prepResults, &resp.Results); err != nil {
 			return nil, err
 		}
 		if prepResults.HasErrors() {
@@ -204,7 +227,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 		if err != nil {
 			return nil, err
 		}
-		if err := convert.Types(stopResults, resp.Results); err != nil {
+		if err := convert.Types(stopResults, &resp.Results); err != nil {
 			return nil, err
 		}
 	}
@@ -339,7 +362,7 @@ func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemSta
 	}
 
 	// populate response
-	if err := convert.Types(startResults, resp.Results); err != nil {
+	if err := convert.Types(startResults, &resp.Results); err != nil {
 		return nil, err
 	}
 

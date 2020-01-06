@@ -257,3 +257,23 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtp
 
 	return
 }
+
+// Status calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues PingRank requests using MgmtSvcClient to
+// query the designated ranks for activity.
+func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req *mgmtpb.PingRankReq) (resp *mgmtpb.DaosResp, statusErr error) {
+	statusErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+
+			prefix := fmt.Sprintf("status(%s, %+v)", destAddr, *req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			_, err := pbClient.PingRank(ctx, req)
+
+			return err
+		})
+
+	return
+}
