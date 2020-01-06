@@ -754,6 +754,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
+        self.add_opts(('MPI_PKG',
+                       'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -1209,7 +1211,7 @@ class PreReqComponent():
 
     def get_defined_components(self):
         """Get a list of all defined component names"""
-        return copy.copy(self.__defined.keys())
+        return copy.copy(list(self.__defined.keys()))
 
     def get_defined(self):
         """Get a dictionary of defined components"""

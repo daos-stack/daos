@@ -262,6 +262,7 @@ def define_components(reqs):
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
                           "PREFIX=$CART_PREFIX "
+                          "MPI_PKG=$MPI_PKG "
                           "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
                           "install"],
                 headers=["cart/api.h", "gurt/list.h"],
