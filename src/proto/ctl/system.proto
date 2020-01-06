@@ -27,15 +27,6 @@ package ctl;
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS system.
 
-// SystemMember refers to a data-plane instance that is a member of DAOS
-// system running on host with the control-plane listening at "Addr".
-message SystemMember {
-	string addr = 1;
-	string uuid = 2;
-	uint32 rank = 3;
-	uint32 state = 4;
-}
-
 // SystemStopReq supplies system shutdown parameters.
 message SystemStopReq {
 	bool prep = 1; // indicates that the prep stage should be performed
@@ -59,7 +50,14 @@ message SystemStartReq {}
 
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
-message SystemStartResp {}
+message SystemStartResp {
+	message Result {
+		string addr = 1; // restarted harness' address
+		bool errored = 2;
+		string msg = 3;
+	}
+	repeated Result results = 1;
+}
 
 // SystemQueryReq supplies system query parameters.
 message SystemQueryReq {
@@ -68,6 +66,14 @@ message SystemQueryReq {
 
 // SystemQueryResp returns active system members.
 message SystemQueryResp {
+	// SystemMember refers to a data-plane instance that is a member of DAOS
+	// system running on host with the control-plane listening at "Addr".
+	message SystemMember {
+		string addr = 1;
+		string uuid = 2;
+		uint32 rank = 3;
+		uint32 state = 4;
+	}
 	repeated SystemMember members = 1;
 }
 

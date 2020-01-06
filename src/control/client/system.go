@@ -27,7 +27,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -40,11 +39,16 @@ type SystemStopReq struct {
 	Kill bool
 }
 
+// SystemStopResp contains the request response.
+type SystemStopResp struct {
+	Results system.MemberResults
+}
+
 // SystemStop will perform a controlled shutdown of DAOS system and a list
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
+func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -52,37 +56,53 @@ func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 
 	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill}
 
-	c.log.Debug("Sending DAOS system shutdown request\n")
+	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debug("Received DAOS system shutdown response\n")
+	c.log.Debugf("DAOS system stop response: %s\n", rpcResp)
 
-	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
+	ssr := new(SystemStopResp)
+	if err := convert.Types(rpcResp, ssr); err != nil {
+		return nil, err
+	}
+	return ssr, nil
 }
 
-// SystemStart will perform a restart after a controlled shutdown of DAOS system.
-func (c *connList) SystemStart() error {
+// SystemStartReq contains the inputs for the system start request.
+type SystemStartReq struct{}
+
+// SystemStartResp contains the request response.
+type SystemStartResp struct {
+	Results system.HarnessResults // results of harness starts
+}
+
+// SystemStart will perform a start after a controlled shutdown of DAOS system.
+func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	rpcReq := &ctlpb.SystemStartReq{}
 
-	c.log.Debugf("DAOS system restart request: %s\n", rpcReq)
+	c.log.Debugf("DAOS system start request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.log.Debugf("DAOS system restart response: %s\n", rpcResp)
+	c.log.Debugf("DAOS system start response: %s\n", rpcResp)
 
-	return nil
+	ssr := new(SystemStartResp)
+	if err := convert.Types(rpcResp, ssr); err != nil {
+		return nil, err
+	}
+	return ssr, nil
 }
 
 // SystemQueryReq contains the inputs for the system query request.
@@ -106,14 +126,14 @@ func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
 		Rank: req.Rank,
 	}
 
-	c.log.Debugf("Sending DAOS system query request: %+v", rpcReq)
+	c.log.Debugf("DAOS system query request: %+v", rpcReq)
 
 	rpcResp, err := mc.getCtlClient().SystemQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debugf("Received DAOS system query response: %+v", rpcResp)
+	c.log.Debugf("DAOS system query response: %+v", rpcResp)
 
 	sqr := new(SystemQueryResp)
 	if err := convert.Types(rpcResp, sqr); err != nil {

@@ -135,14 +135,21 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member identified
 // its string representation "address/rank".
 type MemberResult struct {
-	Rank   uint32
-	Action string
-	Err    error
+	Rank    uint32
+	Action  string
+	Errored bool
+	Msg     string
 }
 
 // NewMemberResult returns a reference to a new member result struct.
 func NewMemberResult(rank uint32, action string, err error) *MemberResult {
-	return &MemberResult{Rank: rank, Action: action, Err: err}
+	result := MemberResult{Rank: rank, Action: action}
+	if err != nil {
+		result.Errored = true
+		result.Msg = err.Error()
+	}
+
+	return &result
 }
 
 // MemberResults is a type alias for a slice of member result references.
@@ -151,10 +158,45 @@ type MemberResults []*MemberResult
 // HasErrors returns true if any of the member results errored.
 func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
-		if res.Err != nil {
+		if res.Errored {
 			return true
 		}
 	}
+
+	return false
+}
+
+// HarnessResult refers to the result of an action on a harness identified
+// its address' string representation.
+type HarnessResult struct {
+	Addr    string
+	Action  string
+	Errored bool
+	Msg     string
+}
+
+// NewHarnessResult returns a reference to a new harness result struct.
+func NewHarnessResult(addr string, action string, err error) *HarnessResult {
+	result := HarnessResult{Addr: addr, Action: action}
+	if err != nil {
+		result.Errored = true
+		result.Msg = err.Error()
+	}
+
+	return &result
+}
+
+// HarnessResults is a type alias for a slice of harness result references.
+type HarnessResults []*HarnessResult
+
+// HasErrors returns true if any of the harness results errored.
+func (hrs HarnessResults) HasErrors() bool {
+	for _, res := range hrs {
+		if res.Errored {
+			return true
+		}
+	}
+
 	return false
 }
 

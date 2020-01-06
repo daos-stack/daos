@@ -314,6 +314,10 @@ func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankRe
 	return &mgmtpb.DaosResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) PingRank(ctx context.Context, req *mgmtpb.PingRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+	return &mgmtpb.DaosResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq, o ...grpc.CallOption) (*mgmtpb.StartRanksResp, error) {
 	return &mgmtpb.StartRanksResp{}, nil
 }
