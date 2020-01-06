@@ -6,7 +6,7 @@ hosts:
     - server-B
   test_clients:
     - client-C
-timeout: 1500
+timeout: 1800
 server_config:
     name: daos_server
 pool:
@@ -21,12 +21,12 @@ pool:
         svcn: 1
     pool_count: 5
 cont:
-    cont_count: 10
+    cont_count: 5
 dfuse:
     mount_dir: /tmp/
 bashcmd:
   dirname: test
   filename1: testfile1.txt
   filename2: testfile2.txt
-  dd_count: 1024
-  dd_blocksize: 1024
+  dd_count: 512
+  dd_blocksize: 512
