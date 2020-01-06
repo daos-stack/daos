@@ -150,13 +150,19 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_DEBUG(ie, "'%s' '%s'", pool, cont);
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+
 	D_ALLOC_PTR(dfs);
-	if (dfs == NULL)
+	if (dfs == NULL) {
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 		return ENOMEM;
+	}
 
 	D_ALLOC_PTR(dfp);
-	if (dfp == NULL)
+	if (dfp == NULL) {
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 		return ENOMEM;
+	}
 
 	if (uuid_parse(pool, dfp->dfp_pool) < 0) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
@@ -219,9 +225,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
@@ -233,8 +237,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	DFUSE_TRA_INFO(ie, "UNS entry point activated, root %lu",
 		       dfs->dfs_root);
 
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;
-
 out_umount:
 	rc = dfs_umount(dfs->dfs_ns);
 	if (rc)
@@ -248,6 +252,7 @@ out_pool:
 	if (rc)
 		DFUSE_TRA_ERROR(dfs, "daos_pool_disconnect() failed %d", rc);
 out_err:
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	D_FREE(dfs);
 	D_FREE(dfp);
 	return ret;
@@ -289,11 +294,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
-		if (rc) {
-			D_GOTO(err, 0);
-			DFUSE_TRA_INFO(ie,
-				       "check_for_uns_ep() returned %d", rc);
-		}
+		DFUSE_TRA_INFO(ie,
+			"check_for_uns_ep() returned %d", rc);
+		if (rc)
+			D_GOTO(err, rc);
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);

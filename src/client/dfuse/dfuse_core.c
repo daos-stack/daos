@@ -50,31 +50,17 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 
 	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
-	/* First check if the both parts of the OID match */
+	/* First check if it's the same container (dfs struct) */
+	if (ir->ir_id.irid_dfs != ir_id->irid_dfs)
+		return false;
+
+	/* Then check if the both parts of the OID match */
 	if (ir->ir_id.irid_oid.lo != ir_id->irid_oid.lo)
 		return false;
 
 	if (ir->ir_id.irid_oid.hi != ir_id->irid_oid.hi)
 		return false;
 
-	/* Then check if it's the same container (dfs struct) */
-	if (ir->ir_id.irid_dfs == ir_id->irid_dfs) {
-		return true;
-	}
-
-	/* TODO: This could just compare pointers now */
-	if (uuid_compare(ir->ir_id.irid_dfs->dfs_dfp->dfp_pool,
-			 ir_id->irid_dfs->dfs_dfp->dfp_pool) != 0)
-		return false;
-
-	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
-			 ir_id->irid_dfs->dfs_cont) != 0)
-		return false;
-
-	/* This case means it's the same container name, but a different dfs
-	 * struct which can happen with repeated lookups of already open
-	 * containers
-	 */
 	return true;
 }
 

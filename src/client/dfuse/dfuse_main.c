@@ -51,7 +51,8 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 		ret = fuse_session_loop(dfuse_info->di_session);
 	}
 	if (ret != 0)
-		DFUSE_LOG_ERROR("Fuse loop exited with return code: %d", ret);
+		DFUSE_TRA_ERROR(dfuse_info,
+				"Fuse loop exited with return code: %d", ret);
 
 	return ret;
 }
@@ -148,12 +149,12 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(out, ret = -DER_NOMEM);
+		D_GOTO(out_debug, ret = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&dfuse_info->di_dfp_list);
 	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(out, ret = rc);
+		D_GOTO(out_debug, ret = rc);
 	}
 
 	dfuse_info->di_threaded = true;
@@ -199,7 +200,8 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
-		DFUSE_LOG_WARNING("Not running in background under orterun");
+		DFUSE_TRA_WARNING(dfuse_info,
+				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
 	}
 
@@ -232,7 +234,8 @@ main(int argc, char **argv)
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
-		DFUSE_LOG_ERROR("Invalid pool service rank list");
+		DFUSE_TRA_ERROR(dfuse_info,
+				"Invalid pool service rank list");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
 	}
 
@@ -259,7 +262,7 @@ main(int argc, char **argv)
 	if (dfuse_info->di_pool) {
 
 		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
-			DFUSE_LOG_ERROR("Invalid pool uuid");
+			DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
 			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
 
@@ -269,14 +272,15 @@ main(int argc, char **argv)
 				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			DFUSE_TRA_ERROR(dfp,
+					"Failed to connect to pool (%d)", rc);
 			D_GOTO(out_dfs, 0);
 		}
 
 		if (dfuse_info->di_cont) {
 
 			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
-				DFUSE_LOG_ERROR("Invalid container uuid");
+				DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
 				D_GOTO(out_pool, ret = -DER_INVAL);
 			}
 
@@ -285,7 +289,8 @@ main(int argc, char **argv)
 					    DAOS_COO_RW, &dfs->dfs_coh,
 					    &dfs->dfs_co_info, NULL);
 			if (rc) {
-				DFUSE_LOG_ERROR("Failed container open (%d)",
+				DFUSE_TRA_ERROR(dfp,
+						"Failed container open (%d)",
 						rc);
 				D_GOTO(out_pool, 0);
 			}
@@ -294,7 +299,8 @@ main(int argc, char **argv)
 				       &dfs->dfs_ns);
 			if (rc) {
 				daos_cont_close(dfs->dfs_coh, NULL);
-				DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+				DFUSE_TRA_ERROR(dfp,
+						"dfs_mount failed (%d)", rc);
 				D_GOTO(out_pool, 0);
 			}
 			dfs->dfs_ops = &dfuse_dfs_ops;
@@ -366,13 +372,13 @@ out_dfuse:
 	D_FREE(dfuse_info);
 	daos_fini();
 out_debug:
+	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
 out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
-	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	if (ret)
 		return -(ret + DER_ERR_GURT_BASE);
 	else

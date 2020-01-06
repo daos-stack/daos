@@ -378,7 +378,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ENTRY(req, entry)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning entry mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(req, "Returning entry %li mode %#x dir:%d", \
+				(entry).attr.st_ino,			\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\
 		__rc = fuse_reply_entry(req, &entry);			\

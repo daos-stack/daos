@@ -36,7 +36,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_info		*dfuse_info = fs_handle->dpi_info;
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_dfs		*dfs = NULL;
+	struct dfuse_dfs		*dfsi;
 	struct dfuse_pool		*dfp = NULL;
+	struct dfuse_pool		*dfpi;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
 	daos_pool_info_t		pool_info = {};
@@ -50,17 +52,11 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
 
-	D_ALLOC_PTR(dfs);
-	if (!dfs)
-		D_GOTO(err, rc = ENOMEM);
-
 	D_ALLOC_PTR(dfp);
 	if (!dfp)
 		D_GOTO(err, rc = ENOMEM);
 
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
-	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
-	dfs->dfs_dfp = dfp;
 
 	/*
 	 * Dentry names with invalid uuids cannot possibly be added. In this
@@ -69,32 +65,54 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	if (uuid_parse(name, dfp->dfp_pool) < 0) {
 		entry.entry_timeout = 60;
-		DFUSE_LOG_INFO("Invalid container uuid");
+		DFUSE_TRA_INFO(parent, "Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfp);
-		D_FREE(dfs);
 		return;
 	}
 
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
-	rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
-	if (rc == -DER_SUCCESS) {
-		DFUSE_TRA_WARNING(ie,
-				"Reusing existing pool entry without reconnect");
-		entry.attr = ie->ie_stat;
-		entry.generation = 1;
-		entry.ino = entry.attr.st_ino;
-		DFUSE_REPLY_ENTRY(req, entry);
-		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-		d_list_del(&dfp->dfp_list);
-		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-		D_FREE(dfp);
-		D_FREE(dfs);
-		return;
+	d_list_for_each_entry(dfpi,
+			      &fs_handle->dpi_info->di_dfp_list,
+			      dfp_list) {
+		if (uuid_compare(dfp->dfp_pool, dfpi->dfp_pool) != 0) {
+			continue;
+		}
+
+		d_list_for_each_entry(dfsi,
+				      &dfpi->dfp_dfs_list,
+				      dfs_cont_list) {
+			{
+				if (uuid_is_null(dfsi->dfs_cont) != 1)
+					continue;
+
+				DFUSE_TRA_INFO(dfpi, "Found existing pool");
+
+				rc = dfuse_check_for_inode(fs_handle, dfsi, &ie);
+				D_ASSERT(rc == -DER_SUCCESS);
+
+				DFUSE_TRA_INFO(ie,
+					       "Reusing existing pool entry without reconnect");
+				entry.attr = ie->ie_stat;
+				entry.generation = 1;
+				entry.ino = entry.attr.st_ino;
+				DFUSE_REPLY_ENTRY(req, entry);
+				D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
+				D_FREE(dfp);
+				return;
+			}
+		}
 	}
+
+	D_ALLOC_PTR(dfs);
+	if (!dfs)
+		D_GOTO(err_unlock, rc = ENOMEM);
+
+	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+	dfs->dfs_dfp = dfp;
+
+	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 
 	DFUSE_TRA_UP(dfp, parent->ie_dfs->dfs_dfp, "dfp");
 
@@ -105,15 +123,15 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			       &dfp->dfp_poh, &dfp->dfp_pool_info,
 			       NULL);
 	if (rc) {
-		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)", rc);
+		DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed: (%d)", rc);
 
 		/* This is the error you get when the agent isn't started
 		 * and EHOSTUNREACH seems to better reflect this than ENOTDIR
 		 */
 		if (rc == -DER_BADPATH)
-			D_GOTO(err, rc = EHOSTUNREACH);
+			D_GOTO(err_unlock, rc = EHOSTUNREACH);
 
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
 
 	D_ALLOC_PTR(ie);
@@ -133,7 +151,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
-		DFUSE_LOG_ERROR("Failed to allocate pool property");
+		DFUSE_TRA_ERROR(dfp, "Failed to allocate pool property");
 		D_GOTO(close, rc = ENOMEM);
 	}
 
@@ -149,7 +167,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = daos_acl_principal_to_uid(prop_entry->dpe_str,
 				       &ie->ie_stat.st_uid);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Unable to convert owner to uid: (%d)", rc);
+		DFUSE_TRA_ERROR(dfp, "Unable to convert owner to uid: (%d)",
+				rc);
 		D_GOTO(close, rc);
 	}
 
@@ -158,7 +177,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = daos_acl_principal_to_gid(prop_entry->dpe_str,
 				       &ie->ie_stat.st_gid);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Unable to convert owner-group to gid: (%d)",
+		DFUSE_TRA_ERROR(dfp,
+				"Unable to convert owner-group to gid: (%d)",
 				rc);
 		D_GOTO(close, rc);
 	}
@@ -171,9 +191,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	daos_prop_free(prop);
 
-	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
@@ -186,11 +204,15 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_ops = &dfuse_cont_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
+
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return;
 close:
 	daos_pool_disconnect(dfp->dfp_poh, NULL);
 	D_FREE(ie);
 	daos_prop_free(prop);
+err_unlock:
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
