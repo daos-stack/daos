@@ -145,7 +145,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
-Requires: librdmacm librdmacm-dev
+Requires: librdmacm
 %endif
 # ensure we get exactly the right cart RPM
 %if %{defined cart_sha1}
@@ -336,6 +336,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Jan 06 2020 Ravindran Padmanabhan <ravindran.padmanabhan@intel.com> - 0.8.0-1
+- Add: librdmacm, librdmacm-dev.
+
 * Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1
 - Version bump up to 0.8.0
 
