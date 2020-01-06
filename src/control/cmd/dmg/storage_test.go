@@ -92,13 +92,13 @@ func TestStorageCommands(t *testing.T) {
 		},
 		{
 			"Set FAULTY device status",
-			"storage setfaulty --devuuid abcd",
+			"storage set nvme-faulty --devuuid abcd",
 			"ConnectClients StorageSetFaulty-dev_uuid:\"abcd\" ",
 			nil,
 		},
 		{
 			"Set FAULTY device status without device specified",
-			"storage setfaulty",
+			"storage set nvme-faulty",
 			"ConnectClients StorageSetFaulty",
 			fmt.Errorf("the required flag `-u, --devuuid' was not specified"),
 		},

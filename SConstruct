@@ -261,6 +261,8 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    prereqs.add_opts(('MPI_PKG',
+                      'MPI package to load from external environment', None))
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
@@ -290,6 +292,8 @@ def scons():
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
+                ['scons_local/env_modules.py'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')

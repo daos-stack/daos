@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -229,6 +230,9 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 	if err != nil {
 		return nil, errors.Wrap(err, "generate format request")
 	}
+
+	scmStr := fmt.Sprintf("SCM (%s:%s)", scmCfg.Class, scmCfg.MountPoint)
+	c.log.Infof("Starting format of %s", scmStr)
 	res, err := c.scm.Format(*req)
 	if err != nil {
 		eMsg = err.Error()
@@ -241,6 +245,11 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 		status = ctlpb.ResponseStatus_CTL_ERR_SCM
 	}
 
+	if err != nil {
+		c.log.Errorf("  format of %s failed: %s", scmStr, err)
+	}
+	c.log.Infof("Finished format of %s", scmStr)
+
 	return newMntRet(c.log, "format", scmCfg.MountPoint, status, eMsg, iMsg), nil
 }
 
@@ -250,13 +259,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	const msgFormatErr = "failure formatting storage, check RPC response for details"
 	needsSuperblock := true
 	needsScmFormat := reformat
-	// placeholder result indicating NVMe not yet formatted
-	resp.Crets = proto.NvmeControllerResults{
-		newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
-	}
 
-	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
-		i.Index(), reformat)
+	c.log.Infof("formatting storage for %s instance %d (reformat: %t)",
+		DataPlaneName, i.Index(), reformat)
 
 	scmConfig := i.scmConfig()
 
@@ -308,6 +313,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 		// A config with SCM and no block devices is valid.
 		if len(bdevConfig.DeviceList) > 0 {
+			bdevListStr := strings.Join(bdevConfig.DeviceList, ",")
+			c.log.Infof("Starting format of %s block devices (%s)", bdevConfig.Class, bdevListStr)
+
 			res, err := c.bdev.Format(bdev.FormatRequest{
 				Class:      bdevConfig.Class,
 				DeviceList: bdevConfig.DeviceList,
@@ -322,6 +330,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 				if status.Error != nil {
 					ctlpbStatus = ctlpb.ResponseStatus_CTL_ERR_NVME
 					errMsg = status.Error.Error()
+					c.log.Errorf("  format of %s device %s failed: %s", bdevConfig.Class, dev, errMsg)
 					if fault.HasResolution(status.Error) {
 						infoMsg = fault.ShowResolutionFor(status.Error)
 					}
@@ -329,6 +338,8 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 				results = append(results,
 					newCret(c.log, "format", dev, ctlpbStatus, errMsg, infoMsg))
 			}
+
+			c.log.Infof("Finished format of %s block devices (%s)", bdevConfig.Class, bdevListStr)
 		}
 	}
 
@@ -367,6 +378,13 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 	for _, i := range c.harness.Instances() {
 		if err := c.doFormat(i, req.Reformat, resp); err != nil {
 			return errors.WithMessage(err, "formatting storage")
+		}
+	}
+
+	if resp.Crets == nil {
+		// indicate that NVMe not yet formatted
+		resp.Crets = proto.NvmeControllerResults{
+			newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
 		}
 	}
 

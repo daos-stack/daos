@@ -88,8 +88,7 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = crt_init_opt(NULL, CRT_FLAG_BIT_PMIX_DISABLE,
-			  daos_crt_init_opt_get(false, 1));
+	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: %d\n", rc);
 		D_GOTO(unlock, rc);

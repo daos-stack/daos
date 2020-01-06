@@ -75,6 +75,10 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
+#ifndef DRPC_TEST
+	ds_pool_disable_evict();
+#endif
+
 	/* TODO: disable auto evict and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
@@ -568,6 +572,137 @@ out:
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 }
 
+void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolSetPropReq	*req         = NULL;
+	Mgmt__PoolSetPropResp	 resp        = MGMT__POOL_SET_PROP_RESP__INIT;
+	daos_prop_t		*new_prop    = NULL;
+	daos_prop_t		*result      = NULL;
+	char			*out_str_val = NULL;
+	struct daos_prop_entry	*entry;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_set_prop_req__unpack(NULL, drpc_req->body.len,
+					     drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool setprop)\n");
+		return;
+	}
+
+	D_INFO("Received request to set pool property on %s\n", req->uuid);
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	new_prop = daos_prop_alloc(1);
+	if (new_prop == NULL) {
+		D_ERROR("Failed to allocate daos property\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (req->property_case != MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER) {
+		D_ERROR("Pool property request must be numeric\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	new_prop->dpp_entries[0].dpe_type = req->number;
+
+	switch (req->value_case) {
+	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
+		D_ASPRINTF(out_str_val, "%s", req->strval);
+		if (out_str_val == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		new_prop->dpp_entries[0].dpe_str = out_str_val;
+		break;
+	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
+		new_prop->dpp_entries[0].dpe_val = req->numval;
+		break;
+	default:
+		D_ERROR("Pool property request with no value (%d)\n",
+				req->value_case);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_pool_set_prop(uuid, new_prop, &result);
+	if (rc != 0) {
+		D_ERROR("Failed to set pool property on %s: %d\n",
+				req->uuid, rc);
+		goto out;
+	}
+
+	if (result == NULL) {
+		D_ERROR("Null set pool property response\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	entry = daos_prop_entry_get(result, req->number);
+	if (entry == NULL) {
+		D_ERROR("Did not receive property %d in result\n",
+			req->number);
+		D_GOTO(out_result, rc = -DER_INVAL);
+	}
+
+	if (entry->dpe_type != req->number) {
+		D_ERROR("Property req/resp mismatch (%d != %d)",
+			entry->dpe_type, req->number);
+		D_GOTO(out_result, rc = -DER_INVAL);
+	}
+
+	resp.property_case = MGMT__POOL_SET_PROP_RESP__PROPERTY_NUMBER;
+	resp.number = entry->dpe_type;
+
+	switch (req->value_case) {
+	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
+		if (entry->dpe_str == NULL)
+			D_GOTO(out_result, rc = -DER_INVAL);
+		D_ASPRINTF(resp.strval, "%s",
+			   entry->dpe_str);
+		if (resp.strval == NULL)
+			D_GOTO(out_result, rc = -DER_NOMEM);
+		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_STRVAL;
+		break;
+	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
+		resp.numval = entry->dpe_val;
+		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_NUMVAL;
+		break;
+	default:
+		D_ERROR("Pool property response with no value (%d)\n",
+				req->value_case);
+		D_GOTO(out_result, rc = -DER_INVAL);
+	}
+
+out_result:
+	daos_prop_free(result);
+
+out:
+	daos_prop_free(new_prop);
+	D_FREE(out_str_val);
+
+	resp.status = rc;
+	len = mgmt__pool_set_prop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_set_prop_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	if (req->value_case == MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL)
+		D_FREE(resp.strval);
+	mgmt__pool_set_prop_req__free_unpacked(req, NULL);
+}
+
 static void
 free_ace_list(char **list, size_t len)
 {
@@ -1048,6 +1183,107 @@ out:
 	}
 
 	D_FREE(containers);
+}
+
+static void
+storage_usage_stats_from_pool_space(Mgmt__StorageUsageStats *stats,
+				    struct daos_pool_space *space,
+				    unsigned int media_type)
+{
+	D_ASSERT(media_type < DAOS_MEDIA_MAX);
+
+	stats->total = space->ps_space.s_total[media_type];
+	stats->free = space->ps_space.s_free[media_type];
+	stats->min = space->ps_free_min[media_type];
+	stats->max = space->ps_free_max[media_type];
+	stats->mean = space->ps_free_mean[media_type];
+}
+
+static void
+pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
+			      struct daos_rebuild_status *info)
+{
+	rebuild->status = info->rs_errno;
+	if (rebuild->status == 0) {
+		rebuild->objects = info->rs_obj_nr;
+		rebuild->records = info->rs_rec_nr;
+
+		if (info->rs_version == 0)
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
+		else if (info->rs_done)
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
+		else
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+	}
+}
+
+void
+ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	int			rc = 0;
+	Mgmt__PoolQueryReq	*req;
+	Mgmt__PoolQueryResp	resp = MGMT__POOL_QUERY_RESP__INIT;
+	Mgmt__StorageUsageStats	scm = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
+	uuid_t			uuid;
+	daos_pool_info_t	pool_info = {0};
+	size_t			len;
+	uint8_t			*body;
+
+	req = mgmt__pool_query_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack pool query req\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query DAOS pool %s\n", req->uuid);
+
+	if (uuid_parse(req->uuid, uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	pool_info.pi_bits = DPI_ALL;
+	rc = ds_mgmt_pool_query(uuid, &pool_info);
+	if (rc != 0) {
+		D_ERROR("Failed to query the pool, rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Populate the response */
+	resp.uuid = req->uuid;
+	resp.totaltargets = pool_info.pi_ntargets;
+	resp.disabledtargets = pool_info.pi_ndisabled;
+	resp.activetargets = pool_info.pi_space.ps_ntargets;
+
+	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
+					    DAOS_MEDIA_SCM);
+	resp.scm = &scm;
+
+	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
+					    DAOS_MEDIA_NVME);
+	resp.nvme = &nvme;
+
+	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
+	resp.rebuild = &rebuild;
+
+out:
+	resp.status = rc;
+
+	len = mgmt__pool_query_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__pool_query_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_query_req__free_unpacked(req, NULL);
 }
 
 void

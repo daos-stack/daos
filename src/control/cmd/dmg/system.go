@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
@@ -63,21 +65,48 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
+	Prep bool `long:"prep" description:"Perform prep phase of controlled shutdown."`
+	Kill bool `long:"kill" description:"Perform kill phase of controlled shutdown."`
 }
 
 // Execute is run when systemStopCmd activates
 func (cmd *systemStopCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
+	if !cmd.Prep && !cmd.Kill {
+		cmd.Prep = true
+		cmd.Kill = true
+	}
 
-	members, err := cmd.conns.SystemStop()
+	req := client.SystemStopReq{Prep: cmd.Prep, Kill: cmd.Kill}
+	results, err := cmd.conns.SystemStop(req)
 	if err != nil {
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	}
-	if len(members) > 0 {
-		msg += fmt.Sprintf(": still %d active members", len(members))
+		return errors.Wrap(err, "System-Stop command failed")
 	}
 
-	cmd.log.Infof("System-stop command %s\n", msg)
+	if len(results) == 0 {
+		cmd.log.Debug("System-Stop no member results returned\n")
+		return nil
+	}
+	cmd.log.Debug("System-Stop command succeeded\n")
+
+	groups := make(hostlist.HostGroups)
+
+	for _, r := range results {
+		msg := "OK"
+		if r.Err != nil {
+			msg = r.Err.Error()
+		}
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if err = groups.AddHost(resStr, fmt.Sprintf("rank%d", r.Rank)); err != nil {
+			return errors.Wrap(err, "adding rank result to group")
+		}
+	}
+
+	out, err := tabulateHostGroups(groups, "Ranks", "Operation", "Result")
+	if err != nil {
+		return errors.Wrap(err, "printing result table")
+	}
+
+	cmd.log.Info(out)
 
 	return nil
 }
@@ -90,19 +119,35 @@ type systemMemberQueryCmd struct {
 
 // Execute is run when systemMemberQueryCmd activates
 func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	msg := "SUCCEEDED: "
-
 	members, err := cmd.conns.SystemMemberQuery()
-	switch {
-	case err != nil:
-		msg = errors.WithMessagef(err, "FAILED").Error()
-	case len(members) > 0:
-		msg += members.String()
-	default:
-		msg += "no joined members"
+	if err != nil {
+		return errors.Wrap(err, "System-Member-Query command failed")
 	}
 
-	cmd.log.Infof("System-member-query command %s\n", msg)
+	cmd.log.Debug("System-Member-Query command succeeded\n")
+	if len(members) == 0 {
+		cmd.log.Info("No members in system\n")
+		return nil
+	}
+
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	var table []txtfmt.TableRow
+
+	for _, m := range members {
+		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
 
 	return nil
 }
@@ -146,11 +191,11 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	uuidTitle := "Pool UUID"
 	svcRepTitle := "Svc Replicas"
 
-	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(uuidTitle, svcRepTitle)
+	var table []txtfmt.TableRow
 
 	for _, pool := range resp.Pools {
-		row := TableRow{uuidTitle: pool.UUID}
+		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
 		if len(pool.SvcReplicas) != 0 {
 			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)
