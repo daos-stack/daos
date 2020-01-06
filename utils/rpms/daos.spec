@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       0.8.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -23,9 +23,9 @@ BuildRequires: cart-devel-%{cart_sha1}
 %else
 BuildRequires: cart-devel
 %endif
-# temporarliy until we can land ompi@PR-10 and
-# scons_local@bmurrell/ompi-env-module
-BuildRequires: ompi-devel
+BuildRequires: openmpi3-devel
+BuildRequires: hwloc-devel
+BuildRequires: libpsm2-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -67,6 +67,7 @@ BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
+BuildRequires: Modules
 %if 0%{?is_opensuse}
 # have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
 BuildRequires: boost-devel
@@ -116,6 +117,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
+Requires: hwloc
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 # ensure we get exactly the right cart RPM
@@ -336,8 +338,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Mon Jan 06 2020 Ravindran Padmanabhan <ravindran.padmanabhan@intel.com> - 0.8.0-1
+* Mon Jan 06 2020 Ravindran Padmanabhan <ravindran.padmanabhan@intel.com> - 0.8.0-2
 - Add: librdmacm, librdmacm-dev.
+
+* Fri Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
+- Remove openmpi, pmix, and hwloc builds, use hwloc and openmpi packages
 
 * Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1
 - Version bump up to 0.8.0
