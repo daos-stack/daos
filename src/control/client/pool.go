@@ -24,6 +24,8 @@
 package client
 
 import (
+	"strconv"
+
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -160,14 +162,14 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status        int32
-		UUID          string
-		TotalTargets  uint32
-		ActiveTargets uint32
-		Disabled      bool
-		Rebuild       *PoolRebuildStatus
-		Scm           *StorageUsageStats
-		Nvme          *StorageUsageStats
+		Status          int32
+		UUID            string
+		TotalTargets    uint32
+		ActiveTargets   uint32
+		DisabledTargets uint32
+		Rebuild         *PoolRebuildStatus
+		Scm             *StorageUsageStats
+		Nvme            *StorageUsageStats
 	}
 )
 
@@ -217,6 +219,93 @@ func (c *connList) PoolQuery(req PoolQueryReq) (*PoolQueryResp, error) {
 	return resp, nil
 }
 
+// PoolSetPropReq contains pool set-prop parameters.
+type PoolSetPropReq struct {
+	// UUID identifies the pool for which this property should be set.
+	UUID string
+	// Property is always a string representation of the pool property.
+	// It will be resolved into the C representation prior to being
+	// forwarded over dRPC.
+	Property string
+	// Value is an approximation of the union in daos_prop_entry.
+	// It can be either a string or a uint64. Struct-based properties
+	// are not supported via this API.
+	Value interface{}
+}
+
+// SetString sets the property value to a string.
+func (pspr *PoolSetPropReq) SetString(strVal string) {
+	pspr.Value = strVal
+}
+
+// SetNumber sets the property value to a uint64 number.
+func (pspr *PoolSetPropReq) SetNumber(numVal uint64) {
+	pspr.Value = numVal
+}
+
+// PoolSetPropResp contains the response to a pool set-prop operation.
+type PoolSetPropResp struct {
+	UUID     string
+	Property string
+	Value    string
+}
+
+// PoolSetProp sends a pool set-prop request to the pool service leader.
+func (c *connList) PoolSetProp(req PoolSetPropReq) (*PoolSetPropResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Property == "" {
+		return nil, errors.Errorf("invalid property name %q", req.Property)
+	}
+
+	rpcReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.UUID,
+	}
+	rpcReq.SetPropertyName(req.Property)
+
+	switch val := req.Value.(type) {
+	case string:
+		rpcReq.SetValueString(val)
+	case uint64:
+		rpcReq.SetValueNumber(val)
+	default:
+		return nil, errors.Errorf("unhandled property value: %+v", req.Value)
+	}
+
+	c.log.Debugf("DAOS pool setprop request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolSetProp(context.Background(), rpcReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "PoolSetProp failed")
+	}
+
+	c.log.Debugf("DAOS pool setprop response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	resp := &PoolSetPropResp{
+		UUID:     req.UUID,
+		Property: rpcResp.GetName(),
+	}
+
+	switch v := rpcResp.GetValue().(type) {
+	case *mgmtpb.PoolSetPropResp_Strval:
+		resp.Value = v.Strval
+	case *mgmtpb.PoolSetPropResp_Numval:
+		resp.Value = strconv.FormatUint(v.Numval, 10)
+	default:
+		return nil, errors.Errorf("unable to represent response value %+v", rpcResp.Value)
+	}
+
+	return resp, nil
+}
+
 // PoolGetACLReq contains the input parameters for PoolGetACL
 type PoolGetACLReq struct {
 	UUID string // pool UUID
@@ -251,7 +340,7 @@ func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -295,7 +384,7 @@ func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLR
 	}
 
 	return &PoolOverwriteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -341,7 +430,7 @@ func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, erro
 	}
 
 	return &PoolUpdateACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }
 
@@ -386,6 +475,6 @@ func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, erro
 	}
 
 	return &PoolDeleteACLResp{
-		ACL: &AccessControlList{Entries: pbResp.ACL},
+		ACL: accessControlListFromPB(pbResp),
 	}, nil
 }

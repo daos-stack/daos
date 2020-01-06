@@ -29,12 +29,13 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
+	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -43,6 +44,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
+)
+
+const (
+	ControlPlaneName = "DAOS Control Server"
+	DataPlaneName    = "DAOS I/O Server"
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -55,13 +62,15 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
+func instanceShmID(idx int) int {
+	return os.Getpid() + idx + 1
+}
+
 // define supported maximum number of I/O servers
 const maxIoServers = 2
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	log.Debugf("cfg: %#v", cfg)
-
 	err := cfg.Validate()
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
@@ -87,27 +96,73 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to resolve daos_server control address")
 	}
 
-	if len(cfg.Servers) > 1 && cfgHasBdev(cfg) {
-		return errors.New("NVMe support only available with single server in this release")
+	bdevProvider := bdev.DefaultProvider(log)
+	runningUser, err := user.Current()
+	if err != nil {
+		return errors.Wrap(err, "unable to lookup current user")
 	}
 
-	bdevProvider := bdev.DefaultProvider(log)
-	// temporary scaffolding -- remove when bdev forwarding to pbin works
-	if os.Geteuid() == 0 {
-		if err := bdevProvider.Init(bdev.InitRequest{SPDKShmID: cfg.NvmeShmID}); err != nil {
-			return errors.Wrap(err, "failed to init SPDK")
+	if !cfgHasBdev(cfg) {
+		// If there are no bdevs in the config, don't waste memory on configuring
+		// hugepages (1 is minimum to avoid default).
+		cfg.NrHugepages = 1
+	}
+
+	// Perform an automatic prepare based on the values in the config file.
+	prepReq := bdev.PrepareRequest{
+		HugePageCount: cfg.NrHugepages,
+		TargetUser:    runningUser.Username,
+		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+	}
+	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+	if _, err := bdevProvider.Prepare(prepReq); err != nil {
+		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	}
+
+	hugePages, err := getHugePageInfo()
+	if err != nil {
+		return errors.Wrap(err, "unable to read system hugepage info")
+	}
+
+	// Don't bother with these checks if there aren't any block devices configured.
+	if cfgHasBdev(cfg) {
+		if hugePages.Free != hugePages.Total {
+			// Not sure if this should be an error, per se, but I think we want to display it
+			// on the console to let the admin know that there might be something that needs
+			// to be cleaned up?
+			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
+		}
+
+		if hugePages.FreeMB() == 0 {
+			// Is this appropriate? Or should we bomb out?
+			log.Error("no free hugepages -- NVMe performance may suffer")
 		}
 	}
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	membership := common.NewMembership(log)
+	membership := system.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
 		}
+
+		// If the configuration specifies that we should explicitly set hugepage values
+		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		if cfg.SetHugepages {
+			// If we have multiple I/O instances with block devices, then we need to apportion
+			// the hugepage memory among the instances.
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			// reserve a little for daos_admin
+			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		}
+
+		// Each instance must have a unique shmid in order to run as SPDK primary.
+		// Use a stable identifier that's easy to construct elsewhere if we don't
+		// have access to the instance configuration.
+		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -154,65 +209,33 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(tcOpt)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-
-	// If running as root and user name specified in config file, respawn proc.
-	needsRespawn := syscall.Getuid() == 0 && cfg.UserName != ""
-
-	// Only provide IO/Agent communication if not attempting to respawn after format,
-	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
-	if !needsRespawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
-	}
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
 
 	go func() {
 		_ = grpcServer.Serve(lis)
 	}()
 	defer grpcServer.GracefulStop()
 
-	log.Infof("DAOS control server (pid %d) listening on %s", os.Getpid(), controlAddr)
+	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
-		for {
-			select {
-			case sig := <-sigChan:
-				log.Debugf("Caught signal: %s", sig)
-				if err := drpcCleanup(cfg.SocketDir); err != nil {
-					log.Errorf("error during dRPC cleanup: %s", err)
-				}
-				shutdown()
-			}
+		sig := <-sigChan
+		log.Debugf("Caught signal: %s", sig)
+		if err := drpcCleanup(cfg.SocketDir); err != nil {
+			log.Errorf("error during dRPC cleanup: %s", err)
 		}
+		shutdown()
 	}()
 
-	// If the configuration is SCM-only, don't require the running user to be
-	// root in order to handle storage setup.
-	//
-	// TODO: Remove all references to root when NVMe support is added to the
-	// privileged binary helper.
-	if !cfgHasBdev(cfg) || syscall.Geteuid() == 0 {
-		if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
-			return err
-		}
+	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
+		return err
 	}
 
 	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
 		return err
 	}
 
-	// TODO: Move any ownership changes into the privileged binary as necessary.
-	if needsRespawn {
-		// Chown required files and respawn process under new user.
-		if err := changeFileOwnership(cfg); err != nil {
-			return errors.WithMessage(err, "changing file ownership")
-		}
-
-		log.Infof("formatting complete and file ownership changed,"+
-			"please rerun %s as user %s\n", os.Args[0], cfg.UserName)
-
-		return nil
-	}
-
-	return errors.Wrap(harness.Start(ctx), "DAOS I/O Server exited with error")
+	return errors.Wrapf(harness.Start(ctx, membership), "%s exited with error", DataPlaneName)
 }

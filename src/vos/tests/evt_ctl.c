@@ -44,6 +44,7 @@
 #include <daos_srv/evtree.h>
 #include <daos_srv/bio.h>
 #include <daos/tests_lib.h>
+#include <daos_pool.h>
 #include <utest_common.h>
 
 /*

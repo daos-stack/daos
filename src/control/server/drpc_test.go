@@ -24,10 +24,8 @@
 package server
 
 import (
-	"net"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -36,27 +34,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
-
-func createTestSocket(t *testing.T, sockPath string) *net.UnixListener {
-	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
-	sock, err := net.ListenUnix("unixpacket", addr)
-	if err != nil {
-		t.Fatalf("Couldn't set up test socket: %v", err)
-	}
-
-	err = os.Chmod(sockPath, 0777)
-	if err != nil {
-		cleanupTestSocket(sockPath, sock)
-		t.Fatalf("Unable to set permissions on test socket: %v", err)
-	}
-
-	return sock
-}
-
-func cleanupTestSocket(path string, sock *net.UnixListener) {
-	sock.Close()
-	syscall.Unlink(path)
-}
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
 	err := checkDrpcClientSocketPath("")
@@ -116,8 +93,8 @@ func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
 	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
-	sock := createTestSocket(t, path)
-	defer cleanupTestSocket(path, sock)
+	_, cleanup := common.CreateTestSocket(t, path)
+	defer cleanup()
 
 	err := checkDrpcClientSocketPath(path)
 
@@ -186,8 +163,8 @@ func TestDrpcCleanup_Single(t *testing.T) {
 		"daos_io_server_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		sock := createTestSocket(t, sockPath)
-		defer cleanupTestSocket(sockPath, sock)
+		_, cleanup := common.CreateTestSocket(t, sockPath)
+		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
 
@@ -211,8 +188,8 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"daos_io_server",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		sock := createTestSocket(t, sockPath)
-		defer cleanupTestSocket(sockPath, sock)
+		_, cleanup := common.CreateTestSocket(t, sockPath)
+		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
 
@@ -247,8 +224,8 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 		path := filepath.Join(tmpDir, sockName)
 		sockPaths = append(sockPaths, path)
 
-		sock := createTestSocket(t, path)
-		defer cleanupTestSocket(path, sock)
+		_, cleanup := common.CreateTestSocket(t, path)
+		defer cleanup()
 	}
 
 	err := drpcCleanup(tmpDir)

@@ -52,6 +52,7 @@ type PoolCmd struct {
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -93,13 +94,13 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolQueryCmd struct {
 	logCmd
 	connectedCmd
-	Uuid string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (c *PoolQueryCmd) Execute(args []string) error {
 	req := client.PoolQueryReq{
-		UUID: c.Uuid,
+		UUID: c.UUID,
 	}
 
 	resp, err := c.conns.PoolQuery(req)
@@ -113,8 +114,8 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 
 	// Maintain output compability with the `daos pool query` output.
 	var bld strings.Builder
-	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%t\n",
-		resp.UUID, resp.TotalTargets, resp.Disabled)
+	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%d\n",
+		resp.UUID, resp.TotalTargets, resp.DisabledTargets)
 	bld.WriteString("Pool space info:\n")
 	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
 	if resp.Scm != nil {
@@ -144,6 +145,36 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	return nil
 }
 
+// PoolSetPropCmd represents the command to set a property on a pool.
+type PoolSetPropCmd struct {
+	logCmd
+	connectedCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
+	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
+}
+
+// Execute is run when PoolSetPropCmd subcommand is activated.
+func (c *PoolSetPropCmd) Execute(_ []string) error {
+	req := client.PoolSetPropReq{
+		UUID:     c.UUID,
+		Property: c.Property,
+	}
+
+	req.SetString(c.Value)
+	if numVal, err := strconv.ParseUint(c.Value, 10, 64); err == nil {
+		req.SetNumber(numVal)
+	}
+
+	resp, err := c.conns.PoolSetProp(req)
+	if err != nil {
+		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
+	return nil
+}
+
 // PoolGetACLCmd represents the command to fetch an Access Control List of a
 // DAOS pool.
 type PoolGetACLCmd struct {
@@ -163,7 +194,7 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -196,7 +227,7 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -242,7 +273,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
@@ -270,7 +301,7 @@ func (d *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(resp.ACL.String())
+	d.log.Info(formatACL(resp.ACL))
 
 	return nil
 }
