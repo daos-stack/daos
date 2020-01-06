@@ -33,7 +33,7 @@
 #include <daos_kv.h>
 
 int
-daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
+daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
 {
 	daos_kv_put_t	*args;
@@ -47,6 +47,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
 	args = dc_task_get_args(task);
 	args->oh	= oh;
 	args->th	= th;
+	args->flags	= flags;
 	args->key	= key;
 	args->buf_size	= buf_size;
 	args->buf	= buf;
@@ -55,7 +56,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, const char *key,
 }
 
 int
-daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
+daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
 	    daos_size_t *buf_size, void *buf, daos_event_t *ev)
 {
 	daos_kv_get_t	*args;
@@ -69,6 +70,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
 	args = dc_task_get_args(task);
 	args->oh	= oh;
 	args->th	= th;
+	args->flags	= flags;
 	args->key	= key;
 	args->buf_size	= buf_size;
 	args->buf	= buf;
@@ -77,8 +79,8 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, const char *key,
 }
 
 int
-daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
-	       daos_event_t *ev)
+daos_kv_remove(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+	       const char *key, daos_event_t *ev)
 {
 	daos_kv_remove_t	*args;
 	tse_task_t		*task;
@@ -91,6 +93,7 @@ daos_kv_remove(daos_handle_t oh, daos_handle_t th, const char *key,
 	args = dc_task_get_args(task);
 	args->oh	= oh;
 	args->th	= th;
+	args->flags	= flags;
 	args->key	= key;
 
 	return dc_task_schedule(task, true);

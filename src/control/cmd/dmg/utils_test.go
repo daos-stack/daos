@@ -24,6 +24,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -32,6 +33,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
 func TestFlattenAddrs(t *testing.T) {
@@ -220,3 +222,75 @@ func TestCheckConns(t *testing.T) {
 		})
 	}
 }*/
+
+func mockHostGroups(t *testing.T) hostlist.HostGroups {
+	groups := make(hostlist.HostGroups)
+
+	for k, v := range map[string]string{
+		"host1": "13GB (3 devices)/200TB (4 devices)",
+		"host2": "13GB (3 devices)/200TB (4 devices)",
+		"host3": "13GB (3 devices)/400TB (4 devices)",
+		"host4": "13GB (3 devices)/400TB (4 devices)",
+		"host5": "10GB (2 devices)/200TB (1 devices)",
+	} {
+		if err := groups.AddHost(v, k); err != nil {
+			t.Fatal("couldn't add host group")
+		}
+	}
+
+	return groups
+}
+
+func TestFormatHostGroups(t *testing.T) {
+	for name, tt := range map[string]struct {
+		g   hostlist.HostGroups
+		out string
+	}{
+		"formatted results": {
+			g:   mockHostGroups(t),
+			out: "-----\nhost5\n-----\n10GB (2 devices)/200TB (1 devices)---------\nhost[1-2]\n---------\n13GB (3 devices)/200TB (4 devices)---------\nhost[3-4]\n---------\n13GB (3 devices)/400TB (4 devices)",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			if diff := cmp.Diff(tt.out, formatHostGroups(buf, tt.g)); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestTabulateHostGroups(t *testing.T) {
+	mockColumnTitles := []string{"Hosts", "SCM", "NVME"}
+
+	for name, tt := range map[string]struct {
+		g         hostlist.HostGroups
+		cTitles   []string
+		out       string
+		expErrMsg string
+	}{
+		"formatted results": {
+			g:       mockHostGroups(t),
+			cTitles: mockColumnTitles,
+			out:     "Hosts\t\tSCM\t\tNVME\t\t\t\n-----\t\t---\t\t----\t\t\t\nhost5\t\t10GB (2 devices)200TB (1 devices)\t\nhost[1-2]\t13GB (3 devices)200TB (4 devices)\t\nhost[3-4]\t13GB (3 devices)400TB (4 devices)\t\n",
+		},
+		"column number mismatch": {
+			g:         mockHostGroups(t),
+			cTitles:   []string{"Hosts", "SCM", "NVME", "???"},
+			expErrMsg: "unexpected summary format",
+		},
+		"too few columns": {
+			g:         mockHostGroups(t),
+			cTitles:   []string{"Hosts"},
+			expErrMsg: "insufficient number of column titles",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			table, err := tabulateHostGroups(tt.g, tt.cTitles...)
+			ExpectError(t, err, tt.expErrMsg, name)
+			if diff := cmp.Diff(tt.out, table); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

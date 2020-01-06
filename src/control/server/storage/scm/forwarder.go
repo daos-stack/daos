@@ -23,121 +23,84 @@
 package scm
 
 import (
-	"context"
-	"encoding/json"
-
-	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 type Forwarder struct {
-	log logging.Logger
+	pbin.Forwarder
 }
 
-func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{}) error {
-	if fwdReq == nil {
-		return errors.New("nil request")
-	}
-	if fwdRes == nil {
-		return errors.New("nil response")
-	}
+func NewForwarder(log logging.Logger) *Forwarder {
+	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
 
-	pbinPath, err := common.FindBinary(pbin.DaosAdminName)
-	if err != nil {
-		return err
+	return &Forwarder{
+		Forwarder: *pf,
 	}
-
-	payload, err := json.Marshal(fwdReq)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal forwarded request as payload")
-	}
-
-	req := &pbin.Request{
-		Method:  method,
-		Payload: payload,
-	}
-
-	ctx := context.TODO()
-	res, err := pbin.ExecReq(ctx, f.log, pbinPath, req)
-	if err != nil {
-		if pbin.IsFailedRequest(err) {
-			return err
-		}
-		return errors.Wrap(err, "privileged binary execution failed")
-	}
-
-	if err := json.Unmarshal(res.Payload, fwdRes); err != nil {
-		return errors.Wrap(err, "failed to unmarshal forwarded response")
-	}
-
-	return nil
 }
 
 func (f *Forwarder) Mount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	var res MountResponse
-	if err := f.sendReq("ScmMount", req, &res); err != nil {
+	res := new(MountResponse)
+	if err := f.SendReq("ScmMount", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (f *Forwarder) Unmount(req MountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	var res MountResponse
-	if err := f.sendReq("ScmUnmount", req, &res); err != nil {
+	res := new(MountResponse)
+	if err := f.SendReq("ScmUnmount", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (f *Forwarder) Format(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
-	var res FormatResponse
-	if err := f.sendReq("ScmFormat", req, &res); err != nil {
+	res := new(FormatResponse)
+	if err := f.SendReq("ScmFormat", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (f *Forwarder) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	req.Forwarded = true
 
-	var res FormatResponse
-	if err := f.sendReq("ScmCheckFormat", req, &res); err != nil {
+	res := new(FormatResponse)
+	if err := f.SendReq("ScmCheckFormat", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (f *Forwarder) Scan(req ScanRequest) (*ScanResponse, error) {
 	req.Forwarded = true
 
-	var res ScanResponse
-	if err := f.sendReq("ScmScan", req, &res); err != nil {
+	res := new(ScanResponse)
+	if err := f.SendReq("ScmScan", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (f *Forwarder) Prepare(req PrepareRequest) (*PrepareResponse, error) {
 	req.Forwarded = true
 
-	var res PrepareResponse
-	if err := f.sendReq("ScmPrepare", req, &res); err != nil {
+	res := new(PrepareResponse)
+	if err := f.SendReq("ScmPrepare", req, res); err != nil {
 		return nil, err
 	}
 
-	return &res, nil
+	return res, nil
 }

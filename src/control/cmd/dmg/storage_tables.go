@@ -27,35 +27,12 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
 	bytesize "github.com/inhies/go-bytesize"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-func storageSummaryTable(hostsetTitle, scmTitle, nvmeTitle string, groups hostlist.HostGroups) (string, error) {
-	formatter := NewTableFormatter([]string{hostsetTitle, scmTitle, nvmeTitle})
-	var table []TableRow
-
-	for _, result := range groups.Keys() {
-		row := TableRow{hostsetTitle: groups[result].RangedString()}
-
-		summary := strings.Split(result, summarySep)
-		if len(summary) != 2 {
-			return "", errors.New("unexpected summary format")
-		}
-		row[scmTitle] = summary[0]
-		row[nvmeTitle] = summary[1]
-
-		table = append(table, row)
-	}
-
-	return formatter.Format(table), nil
-}
 
 func scmModuleScanTable(ms storage.ScmModules) string {
 	buf := &bytes.Buffer{}
