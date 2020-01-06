@@ -86,8 +86,13 @@ cleanup() {
                 fi
             fi
             x=0
+            if grep \"# DAOS_BASE # added by ftest.sh\" /etc/fstab; then
+                nfs_mount=true
+            else
+                nfs_mount=false
+            fi
             sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-            if [ -n \"$DAOS_BASE\" ]; then
+            if [ -n \"$DAOS_BASE\" ] && \$nfs_mount; then
                 while [ \$x -lt 30 ] &&
                       grep $DAOS_BASE /proc/mounts &&
                       ! sudo umount $DAOS_BASE; do
@@ -169,14 +174,18 @@ fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-mkdir -p $DAOS_BASE
-ed <<EOF /etc/fstab
+if [ -f $DAOS_BASE/SConstruct ]; then
+    echo \\\"No need to NFS mount $DAOS_BASE\\\"
+else
+    mkdir -p $DAOS_BASE
+    ed <<EOF /etc/fstab
 \\\\\\\$a
-$NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
+$NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # DAOS_BASE # added by ftest.sh
 .
 wq
 EOF
-mount \\\"$DAOS_BASE\\\"\"
+    mount \\\"$DAOS_BASE\\\"
+fi\"
 
 # set up symlinks to spdk scripts (none of this would be
 # necessary if we were testing from RPMs) in order to
@@ -215,7 +224,7 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
+if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
