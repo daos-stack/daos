@@ -32,6 +32,9 @@ import re
 class _env_module():
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
+    _mpi_map = {"mpich":['mpi/mpich-x86_64', 'mpich'],
+                "openmpi":['mpi/openmpi3-x86_64', 'gnu-openmpi',
+                           'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""
@@ -117,15 +120,14 @@ class _env_module():
 
     def _mpi_module(self, mpi):
         """attempt to load the requested module"""
-        mpich = ['mpi/mpich-x86_64', 'mpich']
-        openmpi = ['mpi/openmpi3-x86_64', 'gnu-openmpi',
-                   'mpi/openmpi-x86_64']
-        if mpi == "mpich":
-            load = mpich
-            unload = openmpi
-        else:
-            load = openmpi
-            unload = mpich
+        load = []
+        unload = []
+
+        for key, value in self._mpi_map.items():
+            if key == mpi:
+                load = value
+            else:
+                unload += value
 
         for to_load in load:
             if self._module_func('is-loaded', to_load):
@@ -144,13 +146,11 @@ class _env_module():
 
     def _mpi_module_old(self, mpi):
         """attempt to load the requested module"""
-        mpich = ['mpi/mpich-x86_64', 'mpich']
-        openmpi = ['mpi/openmpi3-x86_64', 'gnu-openmpi',
-                   'mpi/openmpi-x86_64']
-        if mpi == "mpich":
-            load = mpich
-        else:
-            load = openmpi
+        load = []
+        for key, value in self._mpi_map.items():
+            if key == mpi:
+                load = value
+
         self._module_func('purge')
         for to_load in load:
             self._module_func('load', to_load)
