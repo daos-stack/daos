@@ -438,12 +438,13 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
 
-	if (biov->bi_data_len != rbund->rb_rsize)
+	if (bio_iov2len(biov) != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = biov->bi_data_len;
+	irec->ir_size	 = bio_iov2len(biov);
+	irec->ir_gsize	 = rbund->rb_gsize;
 	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
@@ -486,7 +487,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 		kbund->kb_epoch = skey->sv_epoch;
 
 	/* NB: return record address, caller should copy/rma data for it */
-	biov->bi_data_len = irec->ir_size;
+	bio_iov_set_len(biov, irec->ir_size);
 	biov->bi_addr = irec->ir_ex_addr;
 	biov->bi_buf = NULL;
 
@@ -502,6 +503,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
+	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	return 0;
 }
@@ -668,8 +670,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, UMOFF_NULL, intent,
-					  DTX_RT_SVT);
+					  svt->ir_dtx, intent, DTX_RT_SVT);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -735,7 +736,7 @@ evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
 	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
-					  UMOFF_NULL, intent, DTX_RT_EVT);
+					  intent, DTX_RT_EVT);
 }
 
 int

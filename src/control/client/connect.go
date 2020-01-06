@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -34,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -66,6 +68,8 @@ type Connect interface {
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
+	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
@@ -74,10 +78,14 @@ type Connect interface {
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	StorageScan(*StorageScanReq) *StorageScanResp
-	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StorageFormat(reformat bool) StorageFormatResults
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	SystemMemberQuery() (common.SystemMembers, error)
-	SystemStop() (common.SystemMemberResults, error)
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
+	SystemMemberQuery() (system.Members, error)
+	SystemStop(SystemStopReq) (system.MemberResults, error)
+	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
@@ -194,9 +202,11 @@ func (c *connList) makeRequests(req interface{},
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
+	conns := c.controllers
 
-	addrs := []string{}
-	for _, mc := range c.controllers {
+	addrs := make([]string, 0, len(conns))
+	sort.Slice(conns, func(i, j int) bool { return conns[i].getAddress() < conns[j].getAddress() })
+	for _, mc := range conns {
 		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, req, ch)
 	}

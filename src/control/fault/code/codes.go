@@ -46,6 +46,9 @@ const (
 
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
+	BdevFormatBadParam
+	BdevFormatFailure
+	BdevFormatBadPciAddress
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

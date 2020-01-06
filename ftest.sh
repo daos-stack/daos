@@ -145,9 +145,16 @@ if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
         fi
     fi
 
+    tmpfs_size=16777216
+    memsize=\"\$(sed -ne '/MemTotal:/s/.* \([0-9][0-9]*\) kB/\1/p' \
+               /proc/meminfo)\"
+    if [ \$memsize -gt 32000000 ]; then
+        # make it twice as big on the hardware cluster
+        tmpfs_size=\$((tmpfs_size*2))
+    fi
     sudo ed <<EOF /etc/fstab
 \\\$a
-tmpfs /mnt/daos tmpfs rw,relatime,size=16777216k 0 0 # added by ftest.sh
+tmpfs /mnt/daos tmpfs rw,relatime,size=\${tmpfs_size}k 0 0 # added by ftest.sh
 .
 wq
 EOF
@@ -174,6 +181,21 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 wq
 EOF
 mount \\\"$DAOS_BASE\\\"\"
+
+# set up symlinks to spdk scripts (none of this would be
+# necessary if we were testing from RPMs) in order to
+# perform NVMe operations via daos_admin
+sudo mkdir -p /usr/share/daos/control
+sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+           /usr/share/daos/control
+sudo mkdir -p /usr/share/spdk/scripts
+sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+           /usr/share/spdk/scripts
+sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+           /usr/share/spdk/scripts
+sudo rm -f /usr/share/spdk/include
+sudo ln -s $SL_PREFIX/include \
+           /usr/share/spdk/include
 
 # first, strip the execute bit from the in-tree binary,
 # then copy daos_admin binary into \$PATH and fix perms
@@ -203,7 +225,10 @@ rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
-export OFI_INTERFACE=eth0
+
+# Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
+unset OFI_INTERFACE
+
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.

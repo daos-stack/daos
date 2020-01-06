@@ -47,9 +47,6 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
-static uint64_t
-pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);
-
 /**
  * Initialize pool interface
  */
@@ -1277,7 +1274,7 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	rc = out->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
-		struct dc_pool *pool = dc_task_get_priv(task);
+		struct dc_pool *pool = arg->dqa_pool;
 
 		D_WARN("pool map buffer size (%ld) < required (%u)\n",
 			pool_buf_size(map_buf->pb_nr), out->pqo_map_buf_size);
@@ -1304,61 +1301,6 @@ out:
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 	return rc;
-}
-
-static uint64_t
-pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
-{
-	struct daos_prop_entry	*entry;
-	uint64_t		 bits = 0;
-	int			 i;
-
-	if (po_info != NULL) {
-		if (po_info->pi_bits & DPI_SPACE)
-			bits |= DAOS_PO_QUERY_SPACE;
-		if (po_info->pi_bits & DPI_REBUILD_STATUS)
-			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
-	}
-
-	if (prop == NULL)
-		goto out;
-	if (prop->dpp_entries == NULL) {
-		bits |= DAOS_PO_QUERY_PROP_ALL;
-		goto out;
-	}
-
-	for (i = 0; i < prop->dpp_nr; i++) {
-		entry = &prop->dpp_entries[i];
-		switch (entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-			bits |= DAOS_PO_QUERY_PROP_LABEL;
-			break;
-		case DAOS_PROP_PO_SPACE_RB:
-			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
-			break;
-		case DAOS_PROP_PO_SELF_HEAL:
-			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
-			break;
-		case DAOS_PROP_PO_RECLAIM:
-			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
-			break;
-		case DAOS_PROP_PO_ACL:
-			bits |= DAOS_PO_QUERY_PROP_ACL;
-			break;
-		case DAOS_PROP_PO_OWNER:
-			bits |= DAOS_PO_QUERY_PROP_OWNER;
-			break;
-		case DAOS_PROP_PO_OWNER_GROUP:
-			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
-			break;
-		default:
-			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
-			break;
-		}
-	}
-
-out:
-	return bits;
 }
 
 /**
@@ -1455,28 +1397,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-}
-
-static int
-list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      struct daos_pool_cont_info *buf, daos_size_t ncont)
-{
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
-
-	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-}
-
-static void
-list_cont_bulk_destroy(crt_bulk_t bulk)
-{
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
 }
 
 struct pool_lc_arg {

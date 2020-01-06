@@ -215,7 +215,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_RECLAIM_SNAPSHOT &&
+			if (val != DAOS_RECLAIM_DISABLED &&
+			    val != DAOS_RECLAIM_LAZY &&
+			    val != DAOS_RECLAIM_SNAPSHOT &&
 			    val != DAOS_RECLAIM_BATCH &&
 			    val != DAOS_RECLAIM_TIME) {
 				D_ERROR("invalid reclaim "DF_U64".\n", val);
@@ -271,8 +273,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_REDUN_RF1 &&
-			    val != DAOS_PROP_CO_REDUN_RF3) {
+			if (val != DAOS_PROP_CO_REDUN_RF0 &&
+			    val != DAOS_PROP_CO_REDUN_RF1 &&
+			    val != DAOS_PROP_CO_REDUN_RF2 &&
+			    val != DAOS_PROP_CO_REDUN_RF3 &&
+			    val != DAOS_PROP_CO_REDUN_RF4) {
 				D_ERROR("invalid redundancy factor "DF_U64".\n",
 					val);
 				return false;
@@ -325,8 +330,8 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			entry_dup->dpe_str = strndup(entry->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_dup->dpe_str == NULL) {
 				D_ERROR("failed to dup label.\n");
 				daos_prop_free(prop_dup);
@@ -431,8 +436,8 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
-			entry_req->dpe_str = strndup(entry_reply->dpe_str,
-						     DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			label_alloc = true;

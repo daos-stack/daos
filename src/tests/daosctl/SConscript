@@ -1,4 +1,5 @@
 """Build daosctl"""
+import daos_build
 
 def scons():
     """Execute build"""
@@ -11,10 +12,13 @@ def scons():
                'pool-cmds.c', 'cont-cmds.c', 'io-cmds.c']
 
     denv = env.Clone()
+
+    mpi = daos_build.configure_mpi(prereqs, denv)
+    if mpi is None:
+        return
+
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
-
-    prereqs.require(denv, 'ompi')
 
     daosctl = denv.Program('daosctl', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', daosctl)

@@ -2,12 +2,11 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
-    prereqs.require(denv, 'ompi')
 
     dc_array_tgts = denv.SharedObject(['dc_array.c'])
 

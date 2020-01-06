@@ -149,7 +149,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -175,15 +175,17 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
 
-	rc = vos_tx_end(vos_cont2umm(cont), rc);
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
-	vos_dth_set(NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		vos_dtx_cleanup_dth(dth);
 		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
 			DP_UOID(oid), rc);
+	}
+	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -208,7 +210,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return rc;
 	}
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc)
 		goto out;
 
@@ -216,7 +218,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 	if (rc)
 		goto out;
 
@@ -960,10 +962,8 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
-	it_entry->ie_biov.bi_buf = NULL;
-	it_entry->ie_biov.bi_data_len = it_entry->ie_recx.rx_nr *
-					it_entry->ie_rsize;
-	it_entry->ie_biov.bi_addr = entry.en_addr;
+	bio_iov_set(&it_entry->ie_biov, entry.en_addr,
+		    it_entry->ie_recx.rx_nr * it_entry->ie_rsize);
  out:
 	return rc;
 }
@@ -975,20 +975,20 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	struct bio_io_context	*bioc;
 	struct bio_iov		*biov = &it_entry->ie_biov;
 
-	D_ASSERT(biov->bi_buf == NULL);
+	D_ASSERT(bio_iov2buf(biov) == NULL);
 	D_ASSERT(iov_out->iov_buf != NULL);
 
 	/* Skip copy and return success for a punched record */
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
-	else if (iov_out->iov_buf_len < biov->bi_data_len)
+	else if (iov_out->iov_buf_len < bio_iov2len(biov))
 		return -DER_OVERFLOW;
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
 	 * size in bio_read().
 	 */
-	iov_out->iov_len = biov->bi_data_len;
+	iov_out->iov_len = bio_iov2len(biov);
 	bioc = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
 	D_ASSERT(bioc != NULL);
 
@@ -1404,13 +1404,13 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 
 	umm = vos_obj2umm(oiter->it_obj);
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->it_hdl, args);
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
 		D_ERROR("Failed to delete iter entry: %d\n", rc);

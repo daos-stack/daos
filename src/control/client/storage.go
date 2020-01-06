@@ -33,7 +33,6 @@ import (
 	"golang.org/x/net/context"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
 )
 
 const (
@@ -201,8 +200,8 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 			return // recv err
 		}
 
-		sRes.nvmeCtrlr.Responses = resp.Crets
-		sRes.scmMount.Responses = resp.Mrets
+		sRes.Nvme = resp.Crets
+		sRes.Scm = resp.Mrets
 
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
 	}
@@ -210,16 +209,14 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 
 // StorageFormat prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap) {
+func (c *connList) StorageFormat(reformat bool) StorageFormatResults {
 	req := &ctlpb.StorageFormatReq{Reformat: reformat}
 	cResults := c.makeRequests(req, StorageFormatRequest)
-	cCtrlrResults := make(ClientCtrlrMap) // srv address:NVMe SSDs
-	cMountResults := make(ClientMountMap) // srv address:SCM mounts
+	formatResults := make(StorageFormatResults)
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: res.Err}
-			cMountResults[res.Address] = types.MountResults{Err: res.Err}
+			formatResults[res.Address] = StorageFormatResult{Err: res.Err}
 			continue
 		}
 
@@ -227,15 +224,12 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 		if !ok {
 			err := fmt.Errorf(msgBadType, StorageFormatResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: err}
-			cMountResults[res.Address] = types.MountResults{Err: err}
+			formatResults[res.Address] = StorageFormatResult{Err: err}
 			continue
 		}
 
-		cCtrlrResults[res.Address] = storageRes.nvmeCtrlr
-		cMountResults[res.Address] = storageRes.scmMount
-		// storageRes.scmModule ignored for update
+		formatResults[res.Address] = storageRes
 	}
 
-	return cCtrlrResults, cMountResults
+	return formatResults
 }

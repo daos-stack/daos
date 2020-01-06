@@ -115,7 +115,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         # Display any errors or requested output
         if retcode != expect_rc or verbose:
             msg = "failure running" if retcode != expect_rc else "output from"
-            if len(list(task.iter_buffers(rc_nodes))) == 0:
+            if not list(task.iter_buffers(rc_nodes)):
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
@@ -209,7 +209,7 @@ def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
 
-    e.g. boro-[26-27] becomes a list with entries boro-26, boro-27
+    e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
     all slurmfinds acceptable so it might not parse everything possible.

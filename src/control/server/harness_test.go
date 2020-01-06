@@ -122,7 +122,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 
 	for idx, i := range h.Instances() {
-		if uint32(*i._superblock.Rank) != uint32(idx) {
+		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 		if i == mi {
@@ -242,7 +242,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 		expStartCount int
 	}{
 		"normal startup/shutdown": {
-			expStartErr:   errors.New("context canceled"),
+			expStartErr:   context.Canceled,
 			expStartCount: maxIoServers,
 		},
 		"fails to start": {
@@ -325,7 +325,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 			done := make(chan struct{})
 			ctx, shutdown := context.WithCancel(context.Background())
 			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
-				common.CmpErr(t, expStartErr, th.Start(ctx))
+				common.CmpErr(t, expStartErr, th.Start(ctx, nil))
 				close(done)
 			}(t, tc.expStartErr, harness)
 
@@ -335,6 +335,24 @@ func TestHarnessIOServerStart(t *testing.T) {
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
+			}
+
+			if tc.expStartErr != context.Canceled {
+				return
+			}
+
+			for _, srv := range harness.Instances() {
+				expCall := &drpc.Call{
+					Module: drpc.ModuleMgmt,
+					Method: drpc.MethodSetUp,
+				}
+				lastCall := srv._drpcClient.(*mockDrpcClient).SendMsgInputCall
+				if lastCall == nil ||
+					lastCall.Module != expCall.Module ||
+					lastCall.Method != expCall.Method {
+					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
+						srv.Index(), expCall, lastCall)
+				}
 			}
 		})
 	}
