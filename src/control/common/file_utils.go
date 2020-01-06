@@ -233,7 +233,7 @@ func Run(cmd string) error {
 // invoking the current process.
 func GetWorkingPath(inPath string) (string, error) {
 	if path.IsAbs(inPath) {
-		return "", errors.New("unexpected absolute path, want absolute")
+		return "", errors.New("unexpected absolute path, want relative")
 	}
 
 	workingDir, err := os.Getwd()
@@ -248,7 +248,7 @@ func GetWorkingPath(inPath string) (string, error) {
 // currently running process.
 func GetAdjacentPath(inPath string) (string, error) {
 	if path.IsAbs(inPath) {
-		return "", errors.New("unexpected absolute path, want absolute")
+		return "", errors.New("unexpected absolute path, want relative")
 	}
 
 	selfPath, err := os.Readlink("/proc/self/exe")

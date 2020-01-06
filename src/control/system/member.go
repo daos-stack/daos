@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
@@ -40,13 +41,23 @@ type MemberState int
 const (
 	MemberStateUnknown MemberState = iota
 	MemberStateStarted
-	MemberStateStopping
-	MemberStateErrored
-	MemberStateUnresponsive
+	MemberStateStopping     // prep-shutdown successfully run
+	MemberStateStopped      // process cleanly stopped
+	MemberStateEvicted      // rank has been evicted from DAOS system
+	MemberStateErrored      // process stopped with errors
+	MemberStateUnresponsive // e.g. zombie process
 )
 
 func (ms MemberState) String() string {
-	return [...]string{"Unknown", "Started", "Stopping", "Errored", "Unresponsive"}[ms]
+	return [...]string{
+		"Unknown",
+		"Started",
+		"Stopping",
+		"Stopped",
+		"Evicted",
+		"Errored",
+		"Unresponsive",
+	}[ms]
 }
 
 // Member refers to a data-plane instance that is a member of this DAOS
@@ -56,6 +67,47 @@ type Member struct {
 	UUID  string
 	Addr  net.Addr
 	state MemberState
+}
+
+func (sm *Member) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON Member
+	return json.Marshal(&struct {
+		Addr string
+		*toJSON
+	}{
+		Addr:   sm.Addr.String(),
+		toJSON: (*toJSON)(sm),
+	})
+}
+
+func (sm *Member) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON Member
+	from := &struct {
+		Addr string
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sm),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", from.Addr)
+	if err != nil {
+		return err
+	}
+	sm.Addr = addr
+
+	return nil
 }
 
 func (sm *Member) String() string {
@@ -83,14 +135,21 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member identified
 // its string representation "address/rank".
 type MemberResult struct {
-	Rank   uint32
-	Action string
-	Err    error
+	Rank    uint32
+	Action  string
+	Errored bool
+	Msg     string
 }
 
 // NewMemberResult returns a reference to a new member result struct.
 func NewMemberResult(rank uint32, action string, err error) *MemberResult {
-	return &MemberResult{Rank: rank, Action: action, Err: err}
+	result := MemberResult{Rank: rank, Action: action}
+	if err != nil {
+		result.Errored = true
+		result.Msg = err.Error()
+	}
+
+	return &result
 }
 
 // MemberResults is a type alias for a slice of member result references.
@@ -99,10 +158,45 @@ type MemberResults []*MemberResult
 // HasErrors returns true if any of the member results errored.
 func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
-		if res.Err != nil {
+		if res.Errored {
 			return true
 		}
 	}
+
+	return false
+}
+
+// HarnessResult refers to the result of an action on a harness identified
+// its address' string representation.
+type HarnessResult struct {
+	Addr    string
+	Action  string
+	Errored bool
+	Msg     string
+}
+
+// NewHarnessResult returns a reference to a new harness result struct.
+func NewHarnessResult(addr string, action string, err error) *HarnessResult {
+	result := HarnessResult{Addr: addr, Action: action}
+	if err != nil {
+		result.Errored = true
+		result.Msg = err.Error()
+	}
+
+	return &result
+}
+
+// HarnessResults is a type alias for a slice of harness result references.
+type HarnessResults []*HarnessResult
+
+// HasErrors returns true if any of the harness results errored.
+func (hrs HarnessResults) HasErrors() bool {
+	for _, res := range hrs {
+		if res.Errored {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -119,7 +213,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Errorf("member %s already exists", value)
+		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
 	}
 
 	m.members[member.Rank] = member
@@ -133,12 +227,32 @@ func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	defer m.Unlock()
 
 	if _, found := m.members[rank]; !found {
-		return errors.Errorf("member with rank %d not found", rank)
+		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	m.members[rank].SetState(state)
 
 	return nil
+}
+
+// AddOrUpdate adds member to membership or updates member state if member
+// already exists in membership. Returns flag for whether member was created and
+// the previous state if updated.
+func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
+	m.Lock()
+	defer m.Unlock()
+
+	oldMember, found := m.members[member.Rank]
+	if found {
+		os := oldMember.State()
+		m.members[member.Rank].SetState(member.State())
+
+		return false, &os
+	}
+
+	m.members[member.Rank] = member
+
+	return true, nil
 }
 
 // Remove removes member from membership, idempotent.
@@ -156,7 +270,7 @@ func (m *Membership) Get(rank uint32) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Errorf("member with rank %d not found", rank)
+		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	return member, nil
