@@ -8,6 +8,7 @@ provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
 nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
+helper_log_file: /tmp/daos_admin.log
 ## uncomment to drop privileges before starting data plane
 ## (if started as root to perform hardware provisioning)
 # user_name: daosuser

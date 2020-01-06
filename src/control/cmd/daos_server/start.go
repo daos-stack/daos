@@ -77,9 +77,6 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if err != nil {
 		return err
 	}
-	if cmd.config.NvmeShmID == 0 {
-		cmd.config.SetNvmeShmID(host)
-	}
 
 	for _, srv := range cmd.config.Servers {
 		srv.WithHostname(host)

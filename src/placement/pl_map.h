@@ -61,10 +61,12 @@ struct pl_map_ops {
 				  uint32_t *shard_id,
 				  unsigned int array_size, int myrank);
 	int (*o_obj_find_reint)(struct pl_map *map,
-				struct daos_obj_md *md,
-				struct daos_obj_shard_md *shard_md,
-				struct pl_target_grp *tgp_reint,
-				uint32_t *tgt_reint);
+				  struct daos_obj_md *md,
+				  struct daos_obj_shard_md *shard_md,
+				  uint32_t reint_ver,
+				  uint32_t *tgt_rank,
+				  uint32_t *shard_id,
+				  unsigned int array_size, int myrank);
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
@@ -92,7 +94,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt);
+		struct pool_target *tgt, bool for_reint);
 
 void
 remap_list_free_all(d_list_t *remap_list);
@@ -115,7 +117,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
-		       d_list_t *remap_list, struct failed_shard *f_shard,
+		       d_list_t *remap_list, bool for_reint,
+		       struct failed_shard *f_shard,
 		       struct pl_obj_shard *l_shard);
 
 int
