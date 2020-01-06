@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
@@ -86,26 +88,25 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	}
 	cmd.log.Debug("System-Stop command succeeded\n")
 
-	idTitle := "Member ID"
-	operationTitle := "Operation"
-	resultTitle := "Result"
-
-	formatter := NewTableFormatter([]string{idTitle, operationTitle, resultTitle})
-	var table []TableRow
+	groups := make(hostlist.HostGroups)
 
 	for _, r := range results {
-		row := TableRow{idTitle: r.ID}
-		row[operationTitle] = r.Action
 		msg := "OK"
 		if r.Err != nil {
 			msg = r.Err.Error()
 		}
-		row[resultTitle] = msg
-
-		table = append(table, row)
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if err = groups.AddHost(resStr, fmt.Sprintf("rank%d", r.Rank)); err != nil {
+			return errors.Wrap(err, "adding rank result to group")
+		}
 	}
 
-	cmd.log.Info(formatter.Format(table))
+	out, err := tabulateHostGroups(groups, "Ranks", "Operation", "Result")
+	if err != nil {
+		return errors.Wrap(err, "printing result table")
+	}
+
+	cmd.log.Info(out)
 
 	return nil
 }
@@ -129,16 +130,16 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		return nil
 	}
 
-	rankTitle := "Member Rank"
-	uuidTitle := "Member UUID"
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
 	addrTitle := "Control Address"
 	stateTitle := "State"
 
-	formatter := NewTableFormatter([]string{rankTitle, uuidTitle, addrTitle, stateTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	var table []txtfmt.TableRow
 
 	for _, m := range members {
-		row := TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
 		row[uuidTitle] = m.UUID
 		row[addrTitle] = m.Addr.String()
 		row[stateTitle] = m.State().String()
@@ -190,11 +191,11 @@ func (cmd *systemListPoolsCmd) Execute(args []string) error {
 	uuidTitle := "Pool UUID"
 	svcRepTitle := "Svc Replicas"
 
-	formatter := NewTableFormatter([]string{uuidTitle, svcRepTitle})
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(uuidTitle, svcRepTitle)
+	var table []txtfmt.TableRow
 
 	for _, pool := range resp.Pools {
-		row := TableRow{uuidTitle: pool.UUID}
+		row := txtfmt.TableRow{uuidTitle: pool.UUID}
 
 		if len(pool.SvcReplicas) != 0 {
 			row[svcRepTitle] = formatPoolSvcReps(pool.SvcReplicas)

@@ -74,7 +74,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 
 	// TODO: parallelise and make async.
 	for _, member := range members {
-		result := system.NewMemberResult(member.String(), "prep shutdown", nil)
+		result := system.NewMemberResult(member.Rank, "prep shutdown", nil)
 
 		resp, err := leader.msClient.PrepShutdown(ctx, member.Addr.String(),
 			&mgmtpb.PrepShutdownReq{Rank: member.Rank})
@@ -101,7 +101,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 }
 
 func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInstance, member *system.Member) *system.MemberResult {
-	result := system.NewMemberResult(member.String(), "stop", nil)
+	result := system.NewMemberResult(member.Rank, "stop", nil)
 
 	// TODO: force should be applied if a number of retries fail
 	resp, err := leader.msClient.Stop(ctx, member.Addr.String(),

@@ -46,6 +46,11 @@ DaosObjClass = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
 
+DaosContPropEnum = enum.Enum(
+    "DaosContPropEnum",
+    {key: value for key, value in pydaos_shim.__dict__.items()
+     if key.startswith("DAOS_PROP_")})
+
 class DaosPool(object):
     """A python object representing a DAOS pool."""
 
@@ -1359,6 +1364,61 @@ class IORequest(object):
         return result
 
 
+class DaosContProperties(ctypes.Structure):
+    """ This is a python container properties
+    structure used to set the type(eg: posix),
+    enable checksum.
+    NOTE: This structure can be enhanced in
+    future for setting other container properties
+    (if needed)
+    """
+    _fields_ = [("type", ctypes.c_char*10),
+                ("enable_chksum", ctypes.c_bool),
+                ("srv_verify", ctypes.c_bool),
+                ("chksum_type", ctypes.c_uint64),
+                ("chunk_size", ctypes.c_uint64)]
+
+    def __init__(self):
+        # Set some default values for
+        # container input parameters.
+        # NOTE: This is not the actual
+        # container properties. These are
+        # input variables which is used
+        # to set appropriate
+        # container properties.
+        super(DaosContProperties, self).__init__()
+        self.type = "Unknown"
+        self.enable_chksum = False
+        self.srv_verify = False
+        self.chksum_type = ctypes.c_uint64(100)
+        self.chunk_size = ctypes.c_uint64(0)
+
+
+class DaosInputParams(object):
+    """ This is a helper python method
+    which can be used to pack input
+    parameters for create methods
+    (eg: container or pool (future)).
+    """
+    def __init__(self):
+        super(DaosInputParams, self).__init__()
+        # Get the input params for setting
+        # container properties for
+        # create method.
+        self.co_prop = DaosContProperties()
+
+    def get_con_create_params(self):
+        """ Get the container create params.
+        This method is used to pack
+        input parameters as a structure.
+        Perform a get_con_create_params
+        and update the appropriate
+        input params before calling the
+        create container method.
+        """
+        return self.co_prop
+
+
 class DaosContainer(object):
     """A python object representing a DAOS container."""
 
@@ -1374,12 +1434,17 @@ class DaosContainer(object):
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
+        # Get access to container input params
+        self.input = DaosInputParams()
+        # Export the cont create params structure for user.
+        self.cont_input_values = self.input.get_con_create_params()
+        self.cont_prop = None
 
     def get_uuid_str(self):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def create(self, poh, con_uuid=None, cb_func=None):
+    def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
@@ -1389,24 +1454,101 @@ class DaosContainer(object):
             self.uuid = None
         else:
             conversion.c_uuid(con_uuid, self.uuid)
-
         self.poh = poh
+        if con_prop is not None:
+            self.cont_input_values = con_prop
+        # We will support only basic properties. Full
+        # container properties will not be exposed.
+        # Create DaosProperty for checksum
+        # 1. Layout Type.
+        # 2. Enable checksum,
+        # 3. Server Verfiy
+        # 4. Chunk Size Allocation.
+        if ((self.cont_input_values.type != "Unknown")
+                and (self.cont_input_values.enable_chksum is False)):
+            # Only type like posix, hdf5 defined.
+            num_prop = 1
+        elif ((self.cont_input_values.type == "Unknown")
+                and (self.cont_input_values.enable_chksum is True)):
+            # Obly checksum enabled.
+            num_prop = 3
+        elif ((self.cont_input_values.type != "Unknown")
+                and (self.cont_input_values.enable_chksum is True)):
+            # Both layout and checksum properties defined
+            num_prop = 4
+
+        if ((self.cont_input_values.type != "Unknown")
+                or (self.cont_input_values.enable_chksum is True)):
+            self.cont_prop = daos_cref.DaosProperty(num_prop)
+        # idx index is used to increment the dpp_entried array
+        # value. If layer_type is None and checksum is enabled
+        # the index will vary. [eg: layer is none, checksum
+        # dpp_entries will start with idx=0. If layer is not
+        # none, checksum dpp_entries will start at idx=1.]
+        idx = 0
+        if self.cont_input_values.type != "Unknown":
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
+            if self.cont_input_values.type == "posix":
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
+            elif self.cont_input_values.type == "hdf5":
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
+            idx = idx + 1
+        # If checksum flag is enabled.
+        if self.cont_input_values.enable_chksum is True:
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
+            if self.cont_input_values.chksum_type == 100:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_input_values.chksum_type)
+            idx = idx + 1
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value)
+            if self.cont_input_values.srv_verify is True:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(0)
+            idx = idx + 1
+            self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
+            if self.cont_input_values.chunk_size == 0:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    16384)
+            else:
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
+                    self.cont_input_values.chunk_size)
 
         func = self.context.get_function('create-cont')
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, None, None)
-            if ret != 0:
-                self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise DaosApiError(
-                    "Container create returned non-zero. RC: {0}".format(ret))
+            if self.cont_prop is None:
+                ret = func(self.poh, self.uuid, None, None)
             else:
-                self.attached = 1
+                ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                           None)
+                if ret != 0:
+                    self.uuid = (ctypes.c_ubyte * 1)(0)
+                    raise DaosApiError(
+                        "Container create returned non-zero. RC: {0}".format(
+                            ret))
+                else:
+                    self.attached = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, None, event]
+            if self.cont_prop is None:
+                params = [self.poh, self.uuid, None, None, event]
+            else:
+                params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                          None, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -2116,6 +2258,7 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
+
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2235,6 +2378,7 @@ class DaosLog:
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
+
 
 class DaosApiError(Exception):
     """DAOS API exception class."""

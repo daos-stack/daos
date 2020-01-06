@@ -46,7 +46,7 @@ message SystemStopReq {
 // of attempts to stop system members.
 message SystemStopResp {
 	message Result {
-		string id = 1;
+		uint32 rank = 1;
 		string action = 2;
 		bool errored = 3;
 		string msg = 4;

@@ -261,6 +261,7 @@ class DaosServerConfig(ObjectWithParameters):
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -454,7 +455,7 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
         if storage_prep_flag != "ram":
-            storage_prepare(self._hosts, "root", storage_prep_flag)
+            storage_prepare(self._hosts, getpass.getuser(), storage_prep_flag)
             self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
@@ -572,7 +573,7 @@ def storage_prepare(hosts, user, device_type):
         device_args = " --hugepages=4096"
     else:
         raise ServerFailed("Invalid device type")
-    cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
+    cmd = ("{} storage prepare {} -u \"{}\" {} -f"
            .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
@@ -661,7 +662,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             raise ServerFailed("Can't find orterun")
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
-        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
+        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix", "0"])
         server_cmd.extend(["--mca", "btl", "tcp,self"])
         server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])
