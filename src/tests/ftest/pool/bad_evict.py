@@ -26,7 +26,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 
 
 class BadEvictTest(TestWithServers):
@@ -140,4 +140,5 @@ class BadEvictTest(TestWithServers):
                         pool.uuid[item] = saveduuid[item]
                 if savedsvc is not None:
                     pool.svc = savedsvc
+                pool.disconnect()
                 pool.destroy(1)
