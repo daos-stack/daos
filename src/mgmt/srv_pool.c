@@ -832,6 +832,47 @@ out:
 	return rc;
 }
 
+/**
+ * Calls into the pool svc to query a pool by UUID.
+ *
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in][out]	pool_info	Query results
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid inputs
+ *			Negative value	Other error
+ */
+int
+ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+
+	if (pool_info == NULL) {
+		D_ERROR("pool_info was NULL\n");
+		return -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_query(pool_uuid, ranks, pool_info);
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
 static int
 get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 {

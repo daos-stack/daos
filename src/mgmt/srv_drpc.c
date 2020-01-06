@@ -1185,6 +1185,107 @@ out:
 	D_FREE(containers);
 }
 
+static void
+storage_usage_stats_from_pool_space(Mgmt__StorageUsageStats *stats,
+				    struct daos_pool_space *space,
+				    unsigned int media_type)
+{
+	D_ASSERT(media_type < DAOS_MEDIA_MAX);
+
+	stats->total = space->ps_space.s_total[media_type];
+	stats->free = space->ps_space.s_free[media_type];
+	stats->min = space->ps_free_min[media_type];
+	stats->max = space->ps_free_max[media_type];
+	stats->mean = space->ps_free_mean[media_type];
+}
+
+static void
+pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
+			      struct daos_rebuild_status *info)
+{
+	rebuild->status = info->rs_errno;
+	if (rebuild->status == 0) {
+		rebuild->objects = info->rs_obj_nr;
+		rebuild->records = info->rs_rec_nr;
+
+		if (info->rs_version == 0)
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
+		else if (info->rs_done)
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
+		else
+			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+	}
+}
+
+void
+ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	int			rc = 0;
+	Mgmt__PoolQueryReq	*req;
+	Mgmt__PoolQueryResp	resp = MGMT__POOL_QUERY_RESP__INIT;
+	Mgmt__StorageUsageStats	scm = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
+	uuid_t			uuid;
+	daos_pool_info_t	pool_info = {0};
+	size_t			len;
+	uint8_t			*body;
+
+	req = mgmt__pool_query_req__unpack(NULL, drpc_req->body.len,
+					   drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack pool query req\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query DAOS pool %s\n", req->uuid);
+
+	if (uuid_parse(req->uuid, uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	pool_info.pi_bits = DPI_ALL;
+	rc = ds_mgmt_pool_query(uuid, &pool_info);
+	if (rc != 0) {
+		D_ERROR("Failed to query the pool, rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Populate the response */
+	resp.uuid = req->uuid;
+	resp.totaltargets = pool_info.pi_ntargets;
+	resp.disabledtargets = pool_info.pi_ndisabled;
+	resp.activetargets = pool_info.pi_space.ps_ntargets;
+
+	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
+					    DAOS_MEDIA_SCM);
+	resp.scm = &scm;
+
+	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
+					    DAOS_MEDIA_NVME);
+	resp.nvme = &nvme;
+
+	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
+	resp.rebuild = &rebuild;
+
+out:
+	resp.status = rc;
+
+	len = mgmt__pool_query_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__pool_query_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_query_req__free_unpacked(req, NULL);
+}
+
 void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
