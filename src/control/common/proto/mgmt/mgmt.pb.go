@@ -8,6 +8,8 @@ import (
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -344,6 +346,71 @@ type MgmtSvcServer interface {
 	StorageSetFaulty(context.Context, *DevStateReq) (*DevStateResp, error)
 	// List all containers in a pool
 	ListContainers(context.Context, *ListContReq) (*ListContResp, error)
+}
+
+// UnimplementedMgmtSvcServer can be embedded to have forward compatible implementations.
+type UnimplementedMgmtSvcServer struct {
+}
+
+func (*UnimplementedMgmtSvcServer) Join(ctx context.Context, req *JoinReq) (*JoinResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Join not implemented")
+}
+func (*UnimplementedMgmtSvcServer) LeaderQuery(ctx context.Context, req *LeaderQueryReq) (*LeaderQueryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaderQuery not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolCreate(ctx context.Context, req *PoolCreateReq) (*PoolCreateResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolCreate not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolDestroy(ctx context.Context, req *PoolDestroyReq) (*PoolDestroyResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolDestroy not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolQuery(ctx context.Context, req *PoolQueryReq) (*PoolQueryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolQuery not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolSetProp(ctx context.Context, req *PoolSetPropReq) (*PoolSetPropResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolSetProp not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolGetACL(ctx context.Context, req *GetACLReq) (*ACLResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolGetACL not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolOverwriteACL(ctx context.Context, req *ModifyACLReq) (*ACLResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolOverwriteACL not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolUpdateACL(ctx context.Context, req *ModifyACLReq) (*ACLResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolUpdateACL not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PoolDeleteACL(ctx context.Context, req *DeleteACLReq) (*ACLResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolDeleteACL not implemented")
+}
+func (*UnimplementedMgmtSvcServer) GetAttachInfo(ctx context.Context, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAttachInfo not implemented")
+}
+func (*UnimplementedMgmtSvcServer) BioHealthQuery(ctx context.Context, req *BioHealthReq) (*BioHealthResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BioHealthQuery not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SmdListDevs(ctx context.Context, req *SmdDevReq) (*SmdDevResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SmdListDevs not implemented")
+}
+func (*UnimplementedMgmtSvcServer) SmdListPools(ctx context.Context, req *SmdPoolReq) (*SmdPoolResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SmdListPools not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PrepShutdown(ctx context.Context, req *PrepShutdownReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepShutdown not implemented")
+}
+func (*UnimplementedMgmtSvcServer) KillRank(ctx context.Context, req *KillRankReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KillRank not implemented")
+}
+func (*UnimplementedMgmtSvcServer) ListPools(ctx context.Context, req *ListPoolsReq) (*ListPoolsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPools not implemented")
+}
+func (*UnimplementedMgmtSvcServer) DevStateQuery(ctx context.Context, req *DevStateReq) (*DevStateResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DevStateQuery not implemented")
+}
+func (*UnimplementedMgmtSvcServer) StorageSetFaulty(ctx context.Context, req *DevStateReq) (*DevStateResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StorageSetFaulty not implemented")
+}
+func (*UnimplementedMgmtSvcServer) ListContainers(ctx context.Context, req *ListContReq) (*ListContResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListContainers not implemented")
 }
 
 func RegisterMgmtSvcServer(s *grpc.Server, srv MgmtSvcServer) {
