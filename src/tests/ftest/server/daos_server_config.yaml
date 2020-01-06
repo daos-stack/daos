@@ -3,6 +3,6 @@
 hosts:
   test_servers:
     - server-A
-timeout: 50
+timeout: 200
 server_config:
   name: daos_server
