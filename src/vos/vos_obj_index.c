@@ -611,13 +611,13 @@ oi_iter_delete(struct vos_iterator *iter, void *args)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 
-	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: "DF_RC"\n", DP_RC(rc));

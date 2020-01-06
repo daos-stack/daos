@@ -55,7 +55,6 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
-		WithNvmeShmID(-1). // don't generate a ShmID in testing
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(

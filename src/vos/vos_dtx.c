@@ -1380,10 +1380,10 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count)
 	D_ASSERT(cont != NULL);
 
 	/* Commit multiple DTXs via single PMDK transaction. */
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		rc = vos_dtx_commit_internal(cont, dtis, count, 0);
-		rc = vos_tx_end(vos_cont2umm(cont), rc);
+		rc = umem_tx_end(vos_cont2umm(cont), rc);
 	}
 
 	return rc;
@@ -1401,7 +1401,7 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	D_ASSERT(cont != NULL);
 
 	/* Abort multiple DTXs via single PMDK transaction. */
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		int	aborted = 0;
 
@@ -1419,7 +1419,7 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 		 * DRAM) even if we abort this PMDK transaction, then let's
 		 * commit the PMDK transaction anyway.
 		 */
-		rc = vos_tx_end(vos_cont2umm(cont), aborted > 0 ? 0 : rc);
+		rc = umem_tx_end(vos_cont2umm(cont), aborted > 0 ? 0 : rc);
 	}
 
 	return rc;
@@ -1448,7 +1448,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1484,7 +1484,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	umem_free(umm, dbd_off);
 
-	return vos_tx_end(umm, 0);
+	return umem_tx_end(umm, 0);
 }
 
 void
