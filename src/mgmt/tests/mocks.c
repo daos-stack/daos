@@ -357,6 +357,32 @@ void mock_ds_mgmt_pool_list_cont_teardown(void)
 	}
 }
 
+int			ds_mgmt_pool_query_return;
+uuid_t			ds_mgmt_pool_query_uuid;
+daos_pool_info_t	ds_mgmt_pool_query_info_out;
+daos_pool_info_t	ds_mgmt_pool_query_info_in;
+void			*ds_mgmt_pool_query_info_ptr;
+int
+ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+{
+	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
+	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
+	if (pool_info != NULL) {
+		ds_mgmt_pool_query_info_in = *pool_info;
+		*pool_info = ds_mgmt_pool_query_info_out;
+	}
+	return ds_mgmt_pool_query_return;
+}
+
+void
+mock_ds_mgmt_pool_query_setup(void)
+{
+	ds_mgmt_pool_query_return = 0;
+	uuid_clear(ds_mgmt_pool_query_uuid);
+	ds_mgmt_pool_query_info_ptr = NULL;
+	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
+}
+
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
