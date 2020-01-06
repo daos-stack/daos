@@ -163,14 +163,17 @@ func TestPoolCommands(t *testing.T) {
 	}
 	createACLFile(t, testACLFile, testACL)
 
-	// An existing file with nothing in it, for tests that need to verify no
-	// overwrite
+	// An existing file with contents for tests that need to verify overwrite
 	testExistingFile := filepath.Join(tmpDir, "existing.txt")
-	f, err := os.Create(testExistingFile)
+	createACLFile(t, testExistingFile, testACL)
+
+	// An existing file with write-only perms
+	testWriteOnlyFile := filepath.Join(tmpDir, "write.txt")
+	createACLFile(t, testWriteOnlyFile, testACL)
+	err = os.Chmod(testWriteOnlyFile, 0222)
 	if err != nil {
-		t.Fatalf("Couldn't create test file: %s", testExistingFile)
+		t.Fatalf("Couldn't set file writable only")
 	}
-	f.Close()
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
@@ -322,7 +325,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Get pool ACL with output to bad file",
-			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --file /foo/bar/acl.txt",
+			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile /foo/bar/acl.txt",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
@@ -333,7 +336,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Get pool ACL with output to existing file",
-			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --file %s", testExistingFile),
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testExistingFile),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
@@ -343,8 +346,30 @@ func TestPoolCommands(t *testing.T) {
 			errors.New(fmt.Sprintf("file already exists: %s", testExistingFile)),
 		},
 		{
+			"Get pool ACL with output to existing file with write-only perms",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testWriteOnlyFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			errors.New(fmt.Sprintf("file already exists: %s", testWriteOnlyFile)),
+		},
+		{
+			"Get pool ACL with output to existing file with force",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s --force", testExistingFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Get pool ACL with output to directory with no write perms",
-			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --file %s", filepath.Join(testNoPermDir, "out.txt")),
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", filepath.Join(testNoPermDir, "out.txt")),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
@@ -450,7 +475,7 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 	aclFile := filepath.Join(tmpDir, "out.txt")
 
 	conn := newTestConn(t)
-	err := runCmd(t, fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --file %s", aclFile), log, conn)
+	err := runCmd(t, fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --outfile %s", aclFile), log, conn)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)

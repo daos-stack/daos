@@ -181,8 +181,9 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 type PoolGetACLCmd struct {
 	logCmd
 	connectedCmd
-	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
-	File string `short:"f" long:"file" required:"0" description:"Output ACL to file"`
+	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	File  string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	Force bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
 }
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
@@ -213,10 +214,12 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 }
 
 func (d *PoolGetACLCmd) writeACLToFile(acl string) error {
-	// Keep the user from clobbering existing files
-	_, err := os.Stat(d.File)
-	if err == nil {
-		return errors.New(fmt.Sprintf("file already exists: %s", d.File))
+	if !d.Force {
+		// Keep the user from clobbering existing files
+		_, err := os.Stat(d.File)
+		if err == nil {
+			return errors.New(fmt.Sprintf("file already exists: %s", d.File))
+		}
 	}
 
 	f, err := os.Create(d.File)
