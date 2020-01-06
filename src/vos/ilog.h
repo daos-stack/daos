@@ -199,7 +199,7 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
- *  \param	punched		Max punch of parent incarnation log
+ *  \param	punched[in]	Max punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
  *
@@ -212,18 +212,6 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	       bool discard, daos_epoch_t punched,
 	       struct ilog_entries *entries);
-
-/** Fetch the entire incarnation log.  This function will refresh only when
- * the underlying log or the intent has changed.  If the struct is shared
- * between multiple ULT's fetch should be done after every yield.
- *
- *  \param	umm[in]		The umem instance
- *  \param	intent[in]	The intent of the operation
- *  \param	entries[in,out]	Allocated structure passed in will be filled
- *				with incarnation log entries in the range.
- *
- *  \return 0 on success, error code on failure
- */
 
 /** Initialize an ilog_entries struct for fetch
  *

@@ -633,7 +633,6 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 reprobe = false;
-	bool			 deleted = false;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -660,13 +659,18 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
 		reprobe = true;
-		deleted = true;
 		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
 			/* This can be an assert once we have sane under punch
 			 * detection.
 			 */
 			D_ERROR("Removing orphaned dkey tree\n");
 		}
+		/* Evict the object from cache */
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+					  oiter->oit_cont, oid);
+		if (rc != 0)
+			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
@@ -677,18 +681,8 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && reprobe) {
-		if (deleted) {
-			/* Evict the object from cache */
-			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-						  oiter->oit_cont, oid);
-			if (rc != 0)
-				D_ERROR("Could not evict object "DF_UOID"\n",
-					DP_UOID(oid));
-		}
-
+	if (rc == 0 && reprobe)
 		return 1;
-	}
 
 	return rc;
 }

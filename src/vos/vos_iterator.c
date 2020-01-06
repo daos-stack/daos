@@ -647,12 +647,6 @@ probe:
 				D_GOTO(out, rc);
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
-
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
 		}
 
 		if (post_cb) {
@@ -663,11 +657,12 @@ probe:
 			set_reprobe(type, acts, anchors, param->ip_flags);
 			acts = 0;
 
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
+		}
+
+		if (need_reprobe(type, anchors)) {
+			D_ASSERT(!daos_anchor_is_zero(anchor) &&
+				 !daos_anchor_is_eof(anchor));
+			goto probe;
 		}
 
 		rc = vos_iter_next(ih);

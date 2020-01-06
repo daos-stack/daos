@@ -1506,12 +1506,10 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = 0;
 	}
 
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("VOS aggregation failed: %d\n", rc);
-		return rc;
-	}
 
-	return 0;
+	return rc;
 }
 
 static int

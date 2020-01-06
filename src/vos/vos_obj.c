@@ -1430,9 +1430,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 	bool			 reprobe = false;
 	int			 rc;
 
-	D_ASSERTF(iter->it_type != VOS_ITER_SINGLE &&
-		  iter->it_type != VOS_ITER_RECX,
-		  "Aggregation not supported on array or sv iterators\n");
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
+		  iter->it_type == VOS_ITER_DKEY,
+		  "Aggregation only supported on keys\n");
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
 	D_ASSERTF(rc != -DER_NONEXIST,
