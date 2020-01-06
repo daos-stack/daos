@@ -77,6 +77,8 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
+# support verbs
+BuildRequires: librdmacm librdmacm-dev
 %endif # 0%{?is_opensuse}
 # have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
 # have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
@@ -143,6 +145,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: librdmacm librdmacm-dev
 %endif
 # ensure we get exactly the right cart RPM
 %if %{defined cart_sha1}
