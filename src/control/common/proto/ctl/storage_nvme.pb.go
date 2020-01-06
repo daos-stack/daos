@@ -38,7 +38,7 @@ func (m *NvmeController) Reset()         { *m = NvmeController{} }
 func (m *NvmeController) String() string { return proto.CompactTextString(m) }
 func (*NvmeController) ProtoMessage()    {}
 func (*NvmeController) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0}
 }
 
 func (m *NvmeController) XXX_Unmarshal(b []byte) error {
@@ -122,7 +122,7 @@ func (m *NvmeController_Namespace) Reset()         { *m = NvmeController_Namespa
 func (m *NvmeController_Namespace) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Namespace) ProtoMessage()    {}
 func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0, 0}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0, 0}
 }
 
 func (m *NvmeController_Namespace) XXX_Unmarshal(b []byte) error {
@@ -190,7 +190,7 @@ func (m *NvmeController_Health) Reset()         { *m = NvmeController_Health{} }
 func (m *NvmeController_Health) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Health) ProtoMessage()    {}
 func (*NvmeController_Health) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{0, 1}
+	return fileDescriptor_b4b1a62bc89112d2, []int{0, 1}
 }
 
 func (m *NvmeController_Health) XXX_Unmarshal(b []byte) error {
@@ -329,7 +329,7 @@ func (m *NvmeControllerResult) Reset()         { *m = NvmeControllerResult{} }
 func (m *NvmeControllerResult) String() string { return proto.CompactTextString(m) }
 func (*NvmeControllerResult) ProtoMessage()    {}
 func (*NvmeControllerResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{1}
+	return fileDescriptor_b4b1a62bc89112d2, []int{1}
 }
 
 func (m *NvmeControllerResult) XXX_Unmarshal(b []byte) error {
@@ -378,7 +378,7 @@ func (m *PrepareNvmeReq) Reset()         { *m = PrepareNvmeReq{} }
 func (m *PrepareNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeReq) ProtoMessage()    {}
 func (*PrepareNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{2}
+	return fileDescriptor_b4b1a62bc89112d2, []int{2}
 }
 
 func (m *PrepareNvmeReq) XXX_Unmarshal(b []byte) error {
@@ -438,7 +438,7 @@ func (m *PrepareNvmeResp) Reset()         { *m = PrepareNvmeResp{} }
 func (m *PrepareNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeResp) ProtoMessage()    {}
 func (*PrepareNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{3}
+	return fileDescriptor_b4b1a62bc89112d2, []int{3}
 }
 
 func (m *PrepareNvmeResp) XXX_Unmarshal(b []byte) error {
@@ -476,7 +476,7 @@ func (m *ScanNvmeReq) Reset()         { *m = ScanNvmeReq{} }
 func (m *ScanNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeReq) ProtoMessage()    {}
 func (*ScanNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{4}
+	return fileDescriptor_b4b1a62bc89112d2, []int{4}
 }
 
 func (m *ScanNvmeReq) XXX_Unmarshal(b []byte) error {
@@ -509,7 +509,7 @@ func (m *ScanNvmeResp) Reset()         { *m = ScanNvmeResp{} }
 func (m *ScanNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeResp) ProtoMessage()    {}
 func (*ScanNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{5}
+	return fileDescriptor_b4b1a62bc89112d2, []int{5}
 }
 
 func (m *ScanNvmeResp) XXX_Unmarshal(b []byte) error {
@@ -554,7 +554,7 @@ func (m *FormatNvmeReq) Reset()         { *m = FormatNvmeReq{} }
 func (m *FormatNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*FormatNvmeReq) ProtoMessage()    {}
 func (*FormatNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_d6a1f773b02577a4, []int{6}
+	return fileDescriptor_b4b1a62bc89112d2, []int{6}
 }
 
 func (m *FormatNvmeReq) XXX_Unmarshal(b []byte) error {
@@ -587,9 +587,9 @@ func init() {
 	proto.RegisterType((*FormatNvmeReq)(nil), "ctl.FormatNvmeReq")
 }
 
-func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_d6a1f773b02577a4) }
+func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_b4b1a62bc89112d2) }
 
-var fileDescriptor_storage_nvme_d6a1f773b02577a4 = []byte{
+var fileDescriptor_b4b1a62bc89112d2 = []byte{
 	// 629 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x4f, 0x6b, 0xdb, 0x4e,
 	0x10, 0x45, 0xf1, 0x9f, 0x38, 0x23, 0xff, 0x81, 0xfd, 0x85, 0x1f, 0xc2, 0xd0, 0x62, 0x7c, 0x28,

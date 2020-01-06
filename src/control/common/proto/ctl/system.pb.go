@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // SystemMember refers to a data-plane instance that is a member of DAOS
 // system running on host with the control-plane listening at "Addr".
@@ -34,16 +36,17 @@ func (m *SystemMember) Reset()         { *m = SystemMember{} }
 func (m *SystemMember) String() string { return proto.CompactTextString(m) }
 func (*SystemMember) ProtoMessage()    {}
 func (*SystemMember) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{0}
+	return fileDescriptor_86a7260ebdc12f47, []int{0}
 }
+
 func (m *SystemMember) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemMember.Unmarshal(m, b)
 }
 func (m *SystemMember) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemMember.Marshal(b, m, deterministic)
 }
-func (dst *SystemMember) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemMember.Merge(dst, src)
+func (m *SystemMember) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemMember.Merge(m, src)
 }
 func (m *SystemMember) XXX_Size() int {
 	return xxx_messageInfo_SystemMember.Size(m)
@@ -95,16 +98,17 @@ func (m *SystemStopReq) Reset()         { *m = SystemStopReq{} }
 func (m *SystemStopReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStopReq) ProtoMessage()    {}
 func (*SystemStopReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{1}
+	return fileDescriptor_86a7260ebdc12f47, []int{1}
 }
+
 func (m *SystemStopReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStopReq.Unmarshal(m, b)
 }
 func (m *SystemStopReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemStopReq.Marshal(b, m, deterministic)
 }
-func (dst *SystemStopReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStopReq.Merge(dst, src)
+func (m *SystemStopReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemStopReq.Merge(m, src)
 }
 func (m *SystemStopReq) XXX_Size() int {
 	return xxx_messageInfo_SystemStopReq.Size(m)
@@ -142,16 +146,17 @@ func (m *SystemStopResp) Reset()         { *m = SystemStopResp{} }
 func (m *SystemStopResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStopResp) ProtoMessage()    {}
 func (*SystemStopResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{2}
+	return fileDescriptor_86a7260ebdc12f47, []int{2}
 }
+
 func (m *SystemStopResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStopResp.Unmarshal(m, b)
 }
 func (m *SystemStopResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemStopResp.Marshal(b, m, deterministic)
 }
-func (dst *SystemStopResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStopResp.Merge(dst, src)
+func (m *SystemStopResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemStopResp.Merge(m, src)
 }
 func (m *SystemStopResp) XXX_Size() int {
 	return xxx_messageInfo_SystemStopResp.Size(m)
@@ -183,16 +188,17 @@ func (m *SystemStopResp_Result) Reset()         { *m = SystemStopResp_Result{} }
 func (m *SystemStopResp_Result) String() string { return proto.CompactTextString(m) }
 func (*SystemStopResp_Result) ProtoMessage()    {}
 func (*SystemStopResp_Result) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{2, 0}
+	return fileDescriptor_86a7260ebdc12f47, []int{2, 0}
 }
+
 func (m *SystemStopResp_Result) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStopResp_Result.Unmarshal(m, b)
 }
 func (m *SystemStopResp_Result) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemStopResp_Result.Marshal(b, m, deterministic)
 }
-func (dst *SystemStopResp_Result) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStopResp_Result.Merge(dst, src)
+func (m *SystemStopResp_Result) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemStopResp_Result.Merge(m, src)
 }
 func (m *SystemStopResp_Result) XXX_Size() int {
 	return xxx_messageInfo_SystemStopResp_Result.Size(m)
@@ -242,16 +248,17 @@ func (m *SystemStartReq) Reset()         { *m = SystemStartReq{} }
 func (m *SystemStartReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStartReq) ProtoMessage()    {}
 func (*SystemStartReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{3}
+	return fileDescriptor_86a7260ebdc12f47, []int{3}
 }
+
 func (m *SystemStartReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStartReq.Unmarshal(m, b)
 }
 func (m *SystemStartReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemStartReq.Marshal(b, m, deterministic)
 }
-func (dst *SystemStartReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStartReq.Merge(dst, src)
+func (m *SystemStartReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemStartReq.Merge(m, src)
 }
 func (m *SystemStartReq) XXX_Size() int {
 	return xxx_messageInfo_SystemStartReq.Size(m)
@@ -274,16 +281,17 @@ func (m *SystemStartResp) Reset()         { *m = SystemStartResp{} }
 func (m *SystemStartResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStartResp) ProtoMessage()    {}
 func (*SystemStartResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{4}
+	return fileDescriptor_86a7260ebdc12f47, []int{4}
 }
+
 func (m *SystemStartResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemStartResp.Unmarshal(m, b)
 }
 func (m *SystemStartResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemStartResp.Marshal(b, m, deterministic)
 }
-func (dst *SystemStartResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStartResp.Merge(dst, src)
+func (m *SystemStartResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemStartResp.Merge(m, src)
 }
 func (m *SystemStartResp) XXX_Size() int {
 	return xxx_messageInfo_SystemStartResp.Size(m)
@@ -305,16 +313,17 @@ func (m *SystemQueryReq) Reset()         { *m = SystemQueryReq{} }
 func (m *SystemQueryReq) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryReq) ProtoMessage()    {}
 func (*SystemQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{5}
+	return fileDescriptor_86a7260ebdc12f47, []int{5}
 }
+
 func (m *SystemQueryReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemQueryReq.Unmarshal(m, b)
 }
 func (m *SystemQueryReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemQueryReq.Marshal(b, m, deterministic)
 }
-func (dst *SystemQueryReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemQueryReq.Merge(dst, src)
+func (m *SystemQueryReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemQueryReq.Merge(m, src)
 }
 func (m *SystemQueryReq) XXX_Size() int {
 	return xxx_messageInfo_SystemQueryReq.Size(m)
@@ -337,16 +346,17 @@ func (m *SystemQueryResp) Reset()         { *m = SystemQueryResp{} }
 func (m *SystemQueryResp) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryResp) ProtoMessage()    {}
 func (*SystemQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_system_e6dbfbd3c8253fd6, []int{6}
+	return fileDescriptor_86a7260ebdc12f47, []int{6}
 }
+
 func (m *SystemQueryResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SystemQueryResp.Unmarshal(m, b)
 }
 func (m *SystemQueryResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SystemQueryResp.Marshal(b, m, deterministic)
 }
-func (dst *SystemQueryResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemQueryResp.Merge(dst, src)
+func (m *SystemQueryResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SystemQueryResp.Merge(m, src)
 }
 func (m *SystemQueryResp) XXX_Size() int {
 	return xxx_messageInfo_SystemQueryResp.Size(m)
@@ -375,9 +385,9 @@ func init() {
 	proto.RegisterType((*SystemQueryResp)(nil), "ctl.SystemQueryResp")
 }
 
-func init() { proto.RegisterFile("system.proto", fileDescriptor_system_e6dbfbd3c8253fd6) }
+func init() { proto.RegisterFile("system.proto", fileDescriptor_86a7260ebdc12f47) }
 
-var fileDescriptor_system_e6dbfbd3c8253fd6 = []byte{
+var fileDescriptor_86a7260ebdc12f47 = []byte{
 	// 285 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x91, 0xc1, 0x6a, 0xbb, 0x40,
 	0x10, 0xc6, 0xd9, 0xbf, 0xf9, 0x47, 0x33, 0x4d, 0xda, 0x64, 0x29, 0x65, 0xc9, 0x49, 0x3c, 0x09,
