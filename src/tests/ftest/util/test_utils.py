@@ -222,6 +222,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
+        self.dmg = None
         # Required to use dmg. It defined the directory where dmg is installed.
         # Use self.basepath + '/install/bin' in the test
         self.dmg_bin_path = dmg_bin_path
@@ -242,7 +243,7 @@ class TestPool(TestDaosApiBase):
         pool block in yaml. For example,
 
         pool:
-            control_method: 1
+            control_method: dmg
 
         This tells this method to use dmg. The test also needs to set
         dmg_bin_path through the constructor if dmg is used. For example,
@@ -282,7 +283,11 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
-        elif self.control_method.value == self.USE_DMG:
+        else:
+            if self.dmg is None:
+                raise DaosTestError(
+                    "self.dmg is None. dmg_bin_path needs to be set through "
+                    "the constructor of TestPool to create pool with dmg.")
             # Currently, there is one test that creates the pool over the
             # subset of the server hosts; pool/evict_test. To do so, the test
             # needs to set the rank(s) to target_list.value starting from 0.
@@ -350,8 +355,6 @@ class TestPool(TestDaosApiBase):
             # 4. Set UUID and attached to the DaosPool object
             self.pool.set_uuid_str(new_uuid)
             self.pool.attached = 1
-        else:
-            self.log.error("Cannot create pool! Use USE_API or USE_DMG")
 
         self.uuid = self.pool.get_uuid_str()
 
