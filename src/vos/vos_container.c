@@ -296,7 +296,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
-	rc = vos_tx_begin(vos_pool2umm(vpool));
+	rc = umem_tx_begin(vos_pool2umm(vpool), NULL);
 	if (rc != 0)
 		goto exit;
 
@@ -305,7 +305,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 
-	rc = vos_tx_end(vos_pool2umm(vpool), rc);
+	rc = umem_tx_end(vos_pool2umm(vpool), rc);
 exit:
 	return rc;
 }
@@ -584,7 +584,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	rc = vos_tx_begin(vos_pool2umm(pool));
+	rc = umem_tx_begin(vos_pool2umm(pool), NULL);
 	if (rc) {
 		D_ERROR("Failed to start pmdk transaction: "DF_RC"\n",
 			DP_RC(rc));
@@ -594,7 +594,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	d_iov_set(&iov, &key, sizeof(struct d_uuid));
 	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
 
-	rc = vos_tx_end(vos_pool2umm(pool), rc);
+	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {
 		D_ERROR("Failed to end pmdk transaction: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(exit, rc);

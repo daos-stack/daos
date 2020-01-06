@@ -274,6 +274,8 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    prereqs.add_opts(('MPI_PKG',
+                      'MPI package to load from external environment', None))
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
