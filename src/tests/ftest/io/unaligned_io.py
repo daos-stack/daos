@@ -29,7 +29,7 @@ class DaosRunIoConf(IoConfTestBase):
 
     :avocado: recursive
     """
-
+    # pylint: disable=too-many-ancestors
     def test_unaligned_io(self):
         """Jira ID: DAOS-3151.
 
@@ -37,13 +37,13 @@ class DaosRunIoConf(IoConfTestBase):
             Create the records with requested sizes in yaml.daos_run_io_conf
             will write the full data set. Modify single byte in random offset
             with different value. later verify the full data set where single
-            byte will have only updated value rest all data is intact with
+            byte will have only updated value, rest all data is intact with
             original value.
 
         Use Cases:
             Write data set, modified 1bytes in different offsets. Verify
             read through
 
-        :avocado: tags=all,medium,pr,hw,unaligned_io
+        :avocado: tags=all,medium,hw,unaligned_io,full_regression
         """
         self.unaligned_io()

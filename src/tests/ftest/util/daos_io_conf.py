@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,17 +23,19 @@
 """
 import os
 import random
+from avocado.utils import process
 
 from apricot import TestWithServers
-from command_utils import ExecutableCommand
+from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
+from command_utils import BasicParameter
 from test_utils import TestPool
 
 class IoConfGen(ExecutableCommand):
-    """Base IoConf execute command class.
+    """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
 
     :avocado: recursive
     """
-    def __init__(self, command, path="", env=None):
+    def __init__(self, path="", env=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -41,11 +43,48 @@ class IoConfGen(ExecutableCommand):
         Args:
             command (str): string of the command to be executed.
             path (str, optional): path to location of command binary file.
-                Defaults to "".
+                Defaults to ""
         """
-        super(IoConfGen, self).__init__("", command, path)
+        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+                                        "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
+        self.ranks = FormattedParameter("-g {}")
+        self.targets = FormattedParameter("-t {}")
+        self.obj_num = FormattedParameter("-o {}")
+        self.akeys = FormattedParameter("-a {}")
+        self.dkeys = FormattedParameter("-d {}")
+        self.record_size = FormattedParameter("-s {}")
+        self.obj_class = FormattedParameter("-O {}")
+        self.filename = BasicParameter(None, "testfile")
+
+    def run_conf(self):
+        """Run the daos_run_io_conf command as a foreground process.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
+                            self.filename.value])
+        kwargs = {
+            "cmd": command,
+            "timeout": self.timeout,
+            "verbose": self.verbose,
+            "allow_output_check": "combined",
+            "shell": True,
+            "env": self.env,
+            "sudo": self.sudo,
+        }
+        try:
+            # Block until the command is complete or times out
+            return process.run(**kwargs)
+
+        except process.CmdError as error:
+            # Command failed or possibly timed out
+            msg = "Error occurred running '{}': {}".format(command, error)
+            self.log.error(msg)
+            raise CommandFailure(msg)
 
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
@@ -53,85 +92,21 @@ class IoConfTestBase(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
-        self.pool = TestPool(self.context, self.log)
-
-    def setUp(self):
-        """Set up each test case."""
-        super(IoConfTestBase, self).setUp()
-
     def setup_test_pool(self):
         """Define a TestPool object."""
+        self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
 
-    def gen_io_conf(self, filename="testfile"):
+    def gen_unaligned_io_conf(self, record_size, filename="testfile"):
         """
-        Generate the test data set file based on parameter from yaml file
+        Generate the data-set file based on record size.
 
         Args:
-            filename (string): Filename (with/without path) for
-            create the data set.
-        """
-        rank_size = self.params.get("ranks",
-                                    "/run/daos_io_conf_run/no_of_ranks/*/")
-        target_size = self.params.get("targets",
-                                      "/run/daos_io_conf_run/tgts/*/")
-        obj_num = self.params.get("obj_num",
-                                   "/run/daos_io_conf_run/no_of_objects/*/")
-        dkey_num = self.params.get("dkeys",
-                                   "/run/daos_io_conf_run/no_of_dkeys/*/")
-        akey_num = self.params.get("akeys",
-                                   "/run/daos_io_conf_run/no_of_akeys/*/")
-        rec_size = self.params.get("re_size",
-                                   "/run/daos_io_conf_run/record_size/*/")
-        obj_class = self.params.get("obj_class",
-                                   "/run/daos_io_conf_run/object_class/*/")
-
-        #Get the daos_gen_io_conf bin path.
-        daos_gen_io_conf_bin = (os.path.join(self.prefix,
-                                             "bin/daos_gen_io_conf"))
-        cmd = [daos_gen_io_conf_bin,
-               rank_size,
-               target_size,
-               obj_num,
-               dkey_num,
-               akey_num,
-               rec_size,
-               obj_class,
-               filename]
-
-        #Run daos_gen_io_conf
-        #daos_gen_io_conf -g <rank_size> -t <tgt_size>-o [obj_num]
-        #-d [dkey_num] -a [akey_num] -s [rec_size]-O obj_class <file_name>
-        gen_io_conf = IoConfGen(" ".join(cmd))
-        gen_io_conf.run()
-
-    def run_io_conf(self, filename="testfile"):
-        """ Run daos_run_io_conf <file_name> """
-        #Get the daos_run_io_conf bin path.
-        daos_run_io_conf_bin = (os.path.join(self.prefix,
-                                             "bin/daos_run_io_conf"))
-        cmd = [daos_run_io_conf_bin,
-               filename]
-
-        #Run daos_run_io_conf
-        run_io_conf = IoConfGen(" ".join(cmd),
-                                env={"POOL_SCM_SIZE":"{}"
-                                     .format(self.pool.scm_size)})
-        run_io_conf.run()
-
-    def gen_unaligned_io_conf(self, last_offset, filename="testfile"):
-        """
-        Generate the test data set file based on last_offset value
-
-        Args:
-            last_offset(Number): Last offset number to fill the data.
+            record_size(Number): Record Size to fill the data.
             filename (string): Filename (with/without path) for
                                creating the data set.
         """
-        rand_ofs_end = random.randint(1, last_offset)
+        rand_ofs_end = random.randint(1, record_size)
         rand_ofs_start = rand_ofs_end - 1
         file_data=(
             "test_lvl daos",
@@ -139,7 +114,7 @@ class IoConfTestBase(TestWithServers):
             "akey akey_0",
             "iod_size 1",
             "pool --query",
-            "update --tx 0 --recx \"[0, {}]045\"".format(last_offset),
+            "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
             "update --tx 1 --recx \"[{}, {}]123\""
             .format(rand_ofs_start, rand_ofs_end),
             "fetch  --tx 1 -v --recx \"[0, {}]045 [{}, {}]123 [{}, {}]045\""
@@ -147,7 +122,7 @@ class IoConfTestBase(TestWithServers):
                     rand_ofs_start,
                     rand_ofs_end,
                     rand_ofs_end,
-                    last_offset),
+                    record_size),
             "pool --query")
         file_hd = open(filename,"w+")
         file_hd.write("\n".join(file_data))
@@ -157,23 +132,27 @@ class IoConfTestBase(TestWithServers):
         """
         Execute the rebuild test steps.
         """
-        #Setup the pool
         self.setup_test_pool()
-        #create test file using daos_gen_io_conf
-        self.gen_io_conf()
+        pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf.get_params(self)
+        io_conf.run()
         #Run test file using daos_run_io_conf
-        self.run_io_conf()
+        io_conf.run_conf()
 
     def unaligned_io(self):
         """
-        Execute the unaligned IO tests.
+        Execute the unaligned IO test steps.
         """
         total_sizes = self.params.get("sizes", "/run/datasize/*")
         #Setup the pool
         self.setup_test_pool()
-        for last_offset in total_sizes:
-            print("Start test for record size = {}".format(last_offset))
+        pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf.get_params(self)
+        for record_size in total_sizes:
+            print("Start test for record size = {}".format(record_size))
             #create unaligned test data set
-            self.gen_unaligned_io_conf(last_offset)
+            self.gen_unaligned_io_conf(record_size)
             #Run test file using daos_run_io_conf
-            self.run_io_conf()
+            io_conf.run_conf()
