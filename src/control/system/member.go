@@ -74,10 +74,12 @@ func (sm *Member) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON Member
 	return json.Marshal(&struct {
-		Addr string
+		Addr  string
+		State int
 		*toJSON
 	}{
 		Addr:   sm.Addr.String(),
+		State:  int(sm.state),
 		toJSON: (*toJSON)(sm),
 	})
 }
@@ -91,7 +93,8 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Member
 	from := &struct {
-		Addr string
+		Addr  string
+		State int
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sm),
@@ -106,6 +109,8 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	sm.Addr = addr
+
+	sm.state = MemberState(from.State)
 
 	return nil
 }

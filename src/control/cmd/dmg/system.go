@@ -169,7 +169,7 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 		}
 	}
 
-	out, err := tabulateHostGroups(groups, "Ranks", "Operation", "Result")
+	out, err := tabulateHostGroups(groups, "Rank", "Operation", "Result")
 	if err != nil {
 		return errors.Wrap(err, "printing result table")
 	}
@@ -216,7 +216,7 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		}
 	}
 
-	out, err := tabulateHostGroups(groups, "Hosts", "Operation", "Result")
+	out, err := tabulateHostGroups(groups, "Host", "Operation", "Result")
 	if err != nil {
 		return err
 	}

@@ -270,6 +270,8 @@ func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req *mgmt
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
+			ctx, _ = context.WithTimeout(ctx, retryDelay)
+
 			_, err := pbClient.PingRank(ctx, req)
 
 			return err

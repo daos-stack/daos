@@ -36,23 +36,29 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	memberStopTimeout   = 10 * retryDelay
-	prepShutdownTimeout = 10 * retryDelay
-)
+func (svc *ControlService) updateMembershipStatus(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
+	for _, addr := range svc.membership.Hosts() {
+		ns := system.MemberStateUnknown
 
-func (svc *ControlService) updateMembershipStatus(ctx context.Context, leader *IOServerInstance) error {
-	for _, member := range svc.membership.Members() {
-		// TODO: consider optimal Timeout value
-		_, err := leader.msClient.Status(ctx, member.Addr.String(),
-			&mgmtpb.PingRankReq{Rank: member.Rank})
+		resp, err := leader.msClient.Status(ctx, addr, &mgmtpb.PingRankReq{})
 		if err != nil {
-			svc.log.Errorf("MgmtSvc.updateMemberStatus error %s\n", err)
-			if err := svc.membership.SetMemberState(member.Rank,
-				system.MemberStateUnresponsive); err != nil {
+			return errors.Wrap(err, "MgmtSvcClient.Status")
+		}
 
-				return errors.Wrapf(err, "setting member state")
-			}
+		for _, results := range resp.Results {
+			svc.log.Errorf("MgmtSvc.updateMemberStatus error %s\n", err)
+			ns = system.MemberStateUnresponsive
+		}
+
+		if member.State() == system.MemberStateUnresponsive {
+			ns = system.MemberStateStarted
+		}
+
+		if ns == system.MemberStateUnknown {
+			continue
+		}
+		if err := svc.membership.SetMemberState(member.Rank, ns); err != nil {
+			return errors.Wrapf(err, "setting member state")
 		}
 	}
 
@@ -104,9 +110,6 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerInstance) system.MemberResults {
 	members := svc.membership.Members()
 	results := make(system.MemberResults, 0, len(members))
-
-	// total retry timeout, allows for 10 retries
-	ctx, _ = context.WithTimeout(ctx, prepShutdownTimeout)
 
 	// TODO: parallelise and make async.
 	for _, member := range members {
@@ -171,9 +174,6 @@ func (svc *ControlService) stopMembers(ctx context.Context, leader *IOServerInst
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving system leader from membership")
 	}
-
-	// total retry timeout, allows for 10 retries
-	ctx, _ = context.WithTimeout(ctx, memberStopTimeout)
 
 	// TODO: parallelise and make async.
 	for _, member := range members {
