@@ -44,7 +44,7 @@ def configure_mpi(prereqs, env, required=None):
     if env.subst("$MPI_PKG") != "":
         return _configure_mpi_pkg(env)
 
-    mpis = ['ompi', 'mpich']
+    mpis = ['openmpi', 'mpich']
     if not required is None:
         if isinstance(required, str):
             mpis = [required]
@@ -53,10 +53,13 @@ def configure_mpi(prereqs, env, required=None):
 
     for mpi in mpis:
         load_mpi(mpi)
-        if prereqs.check_component(mpi):
-            prereqs.require(env, mpi)
+        comp = mpi
+        if mpi == "openmpi":
+            comp = "ompi"
+        if prereqs.check_component(comp):
+            prereqs.require(env, comp)
             print("%s is installed" % mpi)
-            return mpi
+            return comp
         print("No %s installed and/or loaded" % mpi)
     print("No OMPI installed")
     return None
