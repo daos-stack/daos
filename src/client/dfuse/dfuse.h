@@ -279,7 +279,8 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
-		__rc = fuse_reply_attr(req, attr, (ie)->ie_dfs->dfs_attr_timeout); \
+		__rc = fuse_reply_attr(req, attr,			\
+				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \

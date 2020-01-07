@@ -51,26 +51,28 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&
-	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-	     position >= oh->doh_ie->ie_end_off ||
-	     position + len <= oh->doh_ie->ie_start_off)) {
+		((oh->doh_ie->ie_start_off == 0 &&
+			oh->doh_ie->ie_end_off == 0) ||
+			position >= oh->doh_ie->ie_end_off ||
+			position + len <= oh->doh_ie->ie_start_off)) {
 		off_t pos_ra = position + len + READAHEAD_SIZE;
 
 		DFUSE_TRA_DEBUG(oh, "Returning zeros");
 		skip_read = true;
 
 		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
-		    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-		    (position >= oh->doh_ie->ie_end_off ||
-		    pos_ra <= oh->doh_ie->ie_start_off))) {
+		    ((oh->doh_ie->ie_start_off == 0 &&
+				oh->doh_ie->ie_end_off == 0) ||
+				(position >= oh->doh_ie->ie_end_off ||
+					pos_ra <= oh->doh_ie->ie_start_off))) {
 
 			readahead = true;
 		}
 	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
 		len < (1024 * 1024) &&
 		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
-		/* Only do readahead if the requested size is less than 1Mb and the file
-		 * size is > 1Mb
+		/* Only do readahead if the requested size is less than 1Mb and
+		 * the file size is > 1Mb
 		 */
 
 		readahead = true;
@@ -92,7 +94,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	if (skip_read) {
 		size = buff_len;
 	} else {
-		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
+		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size,
+			      NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_REPLY_ERR_RAW(oh, req, rc);
 			D_FREE(buff);
