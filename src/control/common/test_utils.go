@@ -185,7 +185,10 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	}
 
 	return tmpDir, func() {
-		os.RemoveAll(tmpDir)
+		err := os.RemoveAll(tmpDir)
+		if err != nil {
+			t.Fatalf("Couldn't remove tmp dir: %v", err)
+		}
 	}
 }
 

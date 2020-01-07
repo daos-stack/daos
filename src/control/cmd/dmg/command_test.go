@@ -183,8 +183,8 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
+func (tc *testConn) SystemQuery() (system.Members, error) {
+	tc.appendInvocation("SystemQuery")
 	return make(system.Members, 0), nil
 }
 
@@ -201,6 +201,11 @@ func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryR
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
 	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
 	return &client.ListPoolsResp{}, nil
+}
+
+func (tc *testConn) SystemStart() error {
+	tc.appendInvocation("SystemStart")
+	return nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
@@ -226,6 +231,14 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
+func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, conn client.Connect) error {
+	t.Helper()
+
+	var opts cliOptions
+	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
+	return parseOpts(args, &opts, conn, log)
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -235,13 +248,15 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			var opts cliOptions
 			conn := newTestConn(t)
-			args := append([]string{"--insecure"}, strings.Split(st.cmd, " ")...)
-			err := parseOpts(args, &opts, conn, log)
+			err := runCmd(t, st.cmd, log, conn)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
+				}
+
+				if err == nil {
+					t.Fatalf("expected err '%v', got nil", st.expectedErr)
 				}
 
 				testExpectedError(t, st.expectedErr, err)
