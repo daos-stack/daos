@@ -54,11 +54,18 @@ message SystemStopResp {
 	repeated Result results = 1;
 }
 
-// SystemMemberQueryReq supplies system query parameters.
-message SystemMemberQueryReq {}
+// SystemStartReq supplies system restart parameters.
+message SystemStartReq {}
 
-// SystemMemberQueryResp returns active system members.
-message SystemMemberQueryResp {
+// SystemStartResp returns status of restart attempt and results
+// of attempts to start system members.
+message SystemStartResp {}
+
+// SystemQueryReq supplies system query parameters.
+message SystemQueryReq {}
+
+// SystemQueryResp returns active system members.
+message SystemQueryResp {
 	repeated SystemMember members = 1;
 }
 
