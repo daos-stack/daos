@@ -97,7 +97,7 @@ class IoConfTestBase(TestWithServers):
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
 
-    def gen_unaligned_io_conf(self, record_size, filename="testfile"):
+    def gen_unaligned_io_conf(record_size, filename="testfile"):
         """
         Generate the data-set file based on record size.
 
@@ -108,7 +108,7 @@ class IoConfTestBase(TestWithServers):
         """
         rand_ofs_end = random.randint(1, record_size)
         rand_ofs_start = rand_ofs_end - 1
-        file_data=(
+        file_data = (
             "test_lvl daos",
             "dkey dkey_0",
             "akey akey_0",
@@ -124,7 +124,7 @@ class IoConfTestBase(TestWithServers):
                     rand_ofs_end,
                     record_size),
             "pool --query")
-        file_hd = open(filename,"w+")
+        file_hd = open(filename, "w+")
         file_hd.write("\n".join(file_data))
         file_hd.close()
 
