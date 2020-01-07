@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type DeviceScanRequest struct {
 	Provider             string   `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
@@ -29,16 +31,17 @@ func (m *DeviceScanRequest) Reset()         { *m = DeviceScanRequest{} }
 func (m *DeviceScanRequest) String() string { return proto.CompactTextString(m) }
 func (*DeviceScanRequest) ProtoMessage()    {}
 func (*DeviceScanRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{0}
+	return fileDescriptor_2cbceb864bca85ee, []int{0}
 }
+
 func (m *DeviceScanRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeviceScanRequest.Unmarshal(m, b)
 }
 func (m *DeviceScanRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DeviceScanRequest.Marshal(b, m, deterministic)
 }
-func (dst *DeviceScanRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DeviceScanRequest.Merge(dst, src)
+func (m *DeviceScanRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeviceScanRequest.Merge(m, src)
 }
 func (m *DeviceScanRequest) XXX_Size() int {
 	return xxx_messageInfo_DeviceScanRequest.Size(m)
@@ -69,16 +72,17 @@ func (m *DeviceScanReply) Reset()         { *m = DeviceScanReply{} }
 func (m *DeviceScanReply) String() string { return proto.CompactTextString(m) }
 func (*DeviceScanReply) ProtoMessage()    {}
 func (*DeviceScanReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{1}
+	return fileDescriptor_2cbceb864bca85ee, []int{1}
 }
+
 func (m *DeviceScanReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeviceScanReply.Unmarshal(m, b)
 }
 func (m *DeviceScanReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DeviceScanReply.Marshal(b, m, deterministic)
 }
-func (dst *DeviceScanReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DeviceScanReply.Merge(dst, src)
+func (m *DeviceScanReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeviceScanReply.Merge(m, src)
 }
 func (m *DeviceScanReply) XXX_Size() int {
 	return xxx_messageInfo_DeviceScanReply.Size(m)
@@ -120,16 +124,17 @@ func (m *ProviderListRequest) Reset()         { *m = ProviderListRequest{} }
 func (m *ProviderListRequest) String() string { return proto.CompactTextString(m) }
 func (*ProviderListRequest) ProtoMessage()    {}
 func (*ProviderListRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{2}
+	return fileDescriptor_2cbceb864bca85ee, []int{2}
 }
+
 func (m *ProviderListRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProviderListRequest.Unmarshal(m, b)
 }
 func (m *ProviderListRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ProviderListRequest.Marshal(b, m, deterministic)
 }
-func (dst *ProviderListRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ProviderListRequest.Merge(dst, src)
+func (m *ProviderListRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProviderListRequest.Merge(m, src)
 }
 func (m *ProviderListRequest) XXX_Size() int {
 	return xxx_messageInfo_ProviderListRequest.Size(m)
@@ -151,16 +156,17 @@ func (m *ProviderListReply) Reset()         { *m = ProviderListReply{} }
 func (m *ProviderListReply) String() string { return proto.CompactTextString(m) }
 func (*ProviderListReply) ProtoMessage()    {}
 func (*ProviderListReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{3}
+	return fileDescriptor_2cbceb864bca85ee, []int{3}
 }
+
 func (m *ProviderListReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProviderListReply.Unmarshal(m, b)
 }
 func (m *ProviderListReply) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ProviderListReply.Marshal(b, m, deterministic)
 }
-func (dst *ProviderListReply) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ProviderListReply.Merge(dst, src)
+func (m *ProviderListReply) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProviderListReply.Merge(m, src)
 }
 func (m *ProviderListReply) XXX_Size() int {
 	return xxx_messageInfo_ProviderListReply.Size(m)
@@ -185,9 +191,9 @@ func init() {
 	proto.RegisterType((*ProviderListReply)(nil), "ctl.ProviderListReply")
 }
 
-func init() { proto.RegisterFile("network_scan.proto", fileDescriptor_network_scan_cf58143dbdf2060c) }
+func init() { proto.RegisterFile("network_scan.proto", fileDescriptor_2cbceb864bca85ee) }
 
-var fileDescriptor_network_scan_cf58143dbdf2060c = []byte{
+var fileDescriptor_2cbceb864bca85ee = []byte{
 	// 159 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0xca, 0x4b, 0x2d, 0x29,
 	0xcf, 0x2f, 0xca, 0x8e, 0x2f, 0x4e, 0x4e, 0xcc, 0xd3, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62,

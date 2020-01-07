@@ -138,18 +138,27 @@ func TestFaultComparison(t *testing.T) {
 			expComparison: true,
 		},
 		{
-			name:          "comparison with other same code",
-			other:         &fault.Fault{Code: testErr.Code},
+			name:          "comparison with other same code and description",
+			other:         &fault.Fault{Code: testErr.Code, Description: testErr.Description},
 			expComparison: true,
 		},
 		{
 			name:          "comparison with other different code",
-			other:         &fault.Fault{Code: testErr.Code + 1},
+			other:         &fault.Fault{Code: testErr.Code + 1, Description: testErr.Description},
 			expComparison: false,
 		},
 		{
-			name:          "comparison with wrapped error",
-			other:         errors.Wrap(&fault.Fault{Code: testErr.Code}, "foobar"),
+			name:          "comparison with other different description",
+			other:         &fault.Fault{Code: testErr.Code, Description: testErr.Description + "A"},
+			expComparison: false,
+		},
+		{
+			name: "comparison with wrapped error",
+			other: errors.Wrap(
+				&fault.Fault{
+					Code: testErr.Code, Description: testErr.Description,
+				},
+				"foobar"),
 			expComparison: true,
 		},
 	} {
