@@ -629,7 +629,7 @@ class ServerManager(ExecutableCommand):
             if is_dcpm:
                 for dcpm_mount in scm_list:
                     commands.extend([
-                        "sudu umount {}".format(dcpm_mount),
+                        "sudo umount {}".format(dcpm_mount),
                         "sudo wipefs -a {}".format(dcpm_mount)])
 
             # Ensure the tmpfs mount point is mounted
