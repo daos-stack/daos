@@ -665,7 +665,7 @@ class ServerManager(ExecutableCommand):
             device_args = " --hugepages=4096"
         else:
             raise ServerFailed("Invalid device type")
-        cmd = "sudo {} storage prepare {} -u \"{}\" {} -f".format(
+        cmd = "{} storage prepare {} -u \"{}\" {} -f".format(
             daos_srv_bin, dev_param, user, device_args)
         result = pcmd(self._hosts, cmd, timeout=120)
         if len(result) > 1 or 0 not in result:
@@ -682,7 +682,7 @@ class ServerManager(ExecutableCommand):
 
         """
         daos_srv_bin = os.path.join(self.daosbinpath, "daos_server")
-        cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin)
+        cmd = "{} storage prepare -n --reset -f".format(daos_srv_bin)
         result = pcmd(self._hosts, cmd)
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
