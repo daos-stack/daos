@@ -582,6 +582,22 @@ ace_hash_entry(d_list_t *rlink)
 			struct ace_hash_entry, entry);
 }
 
+uint32_t
+hash_ace_key_hash(struct d_hash_table *htable, const void *key,
+		  unsigned int ksize)
+{
+	struct daos_ace			*ace = (struct daos_ace *)key;
+	const char			*str_key;
+	size_t				str_key_len;
+	unsigned int			idx;
+
+	str_key = daos_ace_get_principal_str(ace);
+	str_key_len = strnlen(str_key, DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+
+	idx = d_hash_string_u32(str_key, str_key_len);
+	return idx & ((1U << htable->ht_bits) - 1);
+}
+
 /*
  * Key comparison for hash table - Checks whether the principals match.
  * Body of the ACE doesn't need to match.
@@ -677,6 +693,7 @@ validate_aces(struct daos_acl *acl)
 	int			rc;
 	struct d_hash_table	found;
 	d_hash_table_ops_t	ops = {
+			.hop_key_hash = hash_ace_key_hash,
 			.hop_key_cmp = hash_ace_key_cmp,
 			.hop_rec_addref = hash_ace_add_ref,
 			.hop_rec_decref = hash_ace_dec_ref,
