@@ -27,26 +27,45 @@ import (
 	"golang.org/x/net/context"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 )
+
+func bioHealthRequest(mc Control, req interface{}, ch chan ClientResult) {
+	prepareReq, ok := req.(*mgmtpb.BioHealthReq)
+	if !ok {
+		err := errors.Errorf(msgTypeAssert, &mgmtpb.BioHealthReq{}, req)
+
+		mc.logger().Errorf(err.Error())
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return // type err
+	}
+
+	resp, err := mc.getSvcClient().BioHealthQuery(context.Background(), prepareReq)
+	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
+		return
+	}
+
+	ch <- ClientResult{mc.getAddress(), resp, nil}
+}
+
+func (c *connList) BioHealthQuery(req *mgmtpb.BioHealthReq) ResultMap {
+	// TODO: convert the result of the following call to ResultQueryMap
+	return c.makeRequests(req, bioHealthRequest)
+}
 
 // BioHealthQuery will return all BIO device health and I/O error stats for
 // given device UUID
-func (c *connList) BioHealthQuery(req *mgmtpb.BioHealthReq) ResultQueryMap {
-	results := make(ResultQueryMap)
-
-	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		results[""] = ClientBioResult{"", nil, err}
-		return results
-	}
-
-	resp, err := mc.getSvcClient().BioHealthQuery(context.Background(), req)
-
-	result := ClientBioResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
-}
+//func (c *connList) BioHealthQuery(req *mgmtpb.BioHealthReq) ResultQueryMap {
+//	results := make(ResultQueryMap)
+//
+//	resp, err := mc.getSvcClient().BioHealthQuery(context.Background(), req)
+//
+//	result := ClientBioResult{mc.getAddress(), resp, err}
+//	results[result.Address] = result
+//
+//	return results
+//}
 
 // SmdListDevs will list all devices in SMD device table
 func (c *connList) SmdListDevs(req *mgmtpb.SmdDevReq) ResultSmdMap {
