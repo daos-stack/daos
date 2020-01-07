@@ -1,5 +1,5 @@
 #!/usr/bin/env groovy
-/* Copyright (c) 2018-2019 Intel Corporation
+/* Copyright (c) 2018-2020 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -275,13 +275,15 @@ pipeline {
           } // agent
           steps {
             // skip cart as we are already buiding that.
+            sh 'curl -o scons_local/daos.config https://raw.githubusercontent.com/daos-stack/daos/master/utils/build.config'
             sconsBuild target: 'daos',
                        REQUIRES: 'pmdk,argobots,isal,protobufc',
                        directory: 'scons_local',
                        scons_local_replace: true,
                        scm: [url: 'https://github.com/daos-stack/daos.git',
                              cleanAfterCheckout: true,
-                             withSubmodules: true]
+                             withSubmodules: true],
+                       scons_args: '--build-config=daos.config'
             echo "daos depends build succeeded"
           } // steps
         } // stage ('daos depends')

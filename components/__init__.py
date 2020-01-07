@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2019 Intel Corporation
+# Copyright (c) 2016-2020 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -212,33 +212,6 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
-    retriever = GitRepoRetriever("https://review.hpdd.intel.com/daos/iof",
-                                 True)
-    reqs.define('iof',
-                retriever=retriever,
-                commands=["scons $JOBS_OPT "
-                          "OMPI_PREBUILT=$OMPI_PREFIX "
-                          "CART_PREBUILT=$CART_PREFIX "
-                          "FUSE_PREBUILT=$FUSE_PREFIX "
-                          "PREFIX=$IOF_PREFIX "
-                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
-                          "install"],
-                headers=['cnss_plugin.h'],
-                requires=['cart', 'fuse', 'ompi'])
-
-    retriever = GitRepoRetriever("https://github.com/daos-stack/daos",
-                                 True)
-    reqs.define('daos',
-                retriever=retriever,
-                commands=["scons $JOBS_OPT "
-                          "OMPI_PREBUILT=$OMPI_PREFIX "
-                          "CART_PREBUILT=$CART_PREFIX "
-                          "PREFIX=$DAOS_PREFIX "
-                          "USE_INSTALLED=" + ','.join(reqs.installed) + ' ' +
-                          "install"],
-                headers=['daos.h'],
-                requires=['cart', 'ompi'])
-
     retriever = GitRepoRetriever('https://github.com/libfuse/libfuse')
     reqs.define('fuse',
                 retriever=retriever,
@@ -259,7 +232,6 @@ def define_components(reqs):
     reqs.define('cart',
                 retriever=retriever,
                 commands=["scons --config=force $JOBS_OPT "
-                          "OMPI_PREBUILT=$OMPI_PREFIX "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
                           "PREFIX=$CART_PREFIX "
                           "MPI_PKG=$MPI_PKG "
