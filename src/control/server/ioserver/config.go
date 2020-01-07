@@ -191,8 +191,7 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 	// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
 	// specify the correct device for each.
 	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
-		deviceList := []string{}
-		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface, deviceList)
+		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
 		if err != nil {
 			return nil, err
 		}

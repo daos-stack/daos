@@ -511,11 +511,20 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	return affinity, nil
 }
 
-// GetDeviceAlias is a complete method to find an alias for the device name provided.
+// GetDeviceAlias is a wrapper for getDeviceAliasWithSystemList.  This interface
+// specifies an empty additionalSystemDevices list which allows for the default behavior we want
+// for normal use.  Test functions can call getDeviceAliasWithSystemList() directly and specify
+// an arbitrary additionalSystemDevice list as necessary.
+func GetDeviceAlias(device string) (string, error) {
+	additionalSystemDevices := []string{}
+	return getDeviceAliasWithSystemList(device, additionalSystemDevices)
+}
+
+// getDeviceAliasWithSystemList is a complete method to find an alias for the device name provided.
 // For example, the device alias for "ib0" is a sibling node in the hwloc topology
 // with the name "hfi1_0".  Any devices specified by additionalSystemDevices are added
 // to the system device list that is automatically determined.
-func GetDeviceAlias(device string, additionalSystemDevices []string) (string, error) {
+func getDeviceAliasWithSystemList(device string, additionalSystemDevices []string) (string, error) {
 	var node C.hwloc_obj_t
 
 	log.Debugf("Searching for a device alias for: %s", device)
