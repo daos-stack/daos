@@ -79,7 +79,7 @@ class DmgPoolQueryTest(TestWithServers):
         e_info["exp_r_info"] = None
 
         # Verify
-        for k, e, d in zip(e_info.keys(), e_info.values(), d_info.values()):
+        for k, e, d in zip(e_info, e_info.values(), d_info.values()):
             if e != d:
                 self.fail("dmg pool query expected output: {}:{}".format(k, e))
 
@@ -92,10 +92,10 @@ class DmgPoolQueryTest(TestWithServers):
         :avocado: tags=all,tiny,pr,dmg,pool_query,basic
         """
         # Get test UUID
-        expected_out = []
+        exp_out = []
         uuid = self.params.get("uuid", '/run/pool_uuids/*/')
-        expected_out.append(uuid[1])
-        self.log.info("Using test UUID: {}".format(uuid))
+        exp_out.append(uuid[1])
+        self.log.info("Using test UUID: %s", uuid)
 
         # Update hostlist value for dmg command
         port = self.params.get("port", "/run/server_config/*")
@@ -105,8 +105,7 @@ class DmgPoolQueryTest(TestWithServers):
         dmg_out = pool_query(self.bin, host_p, uuid)
 
         # Verify
-        self.log.info("Test expected to finish with: {} exit status".format(
-            expected_out[-1]))
-        if dmg_out.exit_status != expected_out[-1]:
+        self.log.info("Test expected to finish with: %s",exp_out[-1])
+        if dmg_out.exit_status != exp_out[-1]:
             self.fail("Test failed, dmg pool query finished with: {}".format(
                 dmg_out.exit_status))
