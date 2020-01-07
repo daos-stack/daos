@@ -320,7 +320,6 @@ class DestroyTests(TestWithServers):
                 self.pool.uuid, group_names[0]),
             False)
 
-    @skipForTicket("DAOS-2741")
     def test_destroy_connected(self):
         """Destroy pool with connected client.
 
@@ -371,7 +370,6 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             exception_detected, "No exception when deleting a connected pool")
 
-    @skipForTicket("DAOS-2741")
     def test_destroy_withdata(self):
         """Destroy Pool with data.
 
