@@ -168,12 +168,16 @@ func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.
 	return &ctlpb.ProviderListReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
-	return &ctlpb.SystemMemberQueryResp{}, nil
+func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
+	return &ctlpb.SystemQueryResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
 	return &ctlpb.SystemStopResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
+	return &ctlpb.SystemStartResp{}, nil
 }
 
 type mockACLResult struct {
@@ -195,11 +199,13 @@ type mockListPoolsResult struct {
 }
 
 type mockMgmtSvcClientConfig struct {
-	ACLRet          *mockACLResult
-	ListPoolsRet    *mockListPoolsResult
-	killErr         error
-	poolQueryResult *mgmtpb.PoolQueryResp
-	poolQueryErr    error
+	ACLRet            *mockACLResult
+	ListPoolsRet      *mockListPoolsResult
+	killErr           error
+	poolQueryResult   *mgmtpb.PoolQueryResp
+	poolQueryErr      error
+	poolSetPropResult *mgmtpb.PoolSetPropResp
+	poolSetPropErr    error
 }
 
 type mockMgmtSvcClient struct {
@@ -223,6 +229,13 @@ func (m *mockMgmtSvcClient) PoolQuery(ctx context.Context, req *mgmtpb.PoolQuery
 		return nil, m.cfg.poolQueryErr
 	}
 	return m.cfg.poolQueryResult, nil
+}
+
+func (m *mockMgmtSvcClient) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq, _ ...grpc.CallOption) (*mgmtpb.PoolSetPropResp, error) {
+	if m.cfg.poolSetPropErr != nil {
+		return nil, m.cfg.poolSetPropErr
+	}
+	return m.cfg.poolSetPropResult, nil
 }
 
 // returnACLResult returns the mock ACL results - either an error or an ACLResp
@@ -299,6 +312,10 @@ func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.PrepSh
 
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq, o ...grpc.CallOption) (*mgmtpb.StartRanksResp, error) {
+	return &mgmtpb.StartRanksResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
@@ -393,6 +410,27 @@ type mockConnectConfig struct {
 	controlConfig mockControlConfig
 	ctlClientCfg  mockMgmtCtlClientConfig
 	svcClientCfg  mockMgmtSvcClientConfig
+}
+
+// newMockConnnectCfg is the config-based version of newMockConnect()
+func newMockConnectCfg(log logging.Logger, cfg *mockConnectConfig) *connList {
+	if cfg == nil {
+		cfg = &mockConnectConfig{}
+	}
+
+	cl := &connList{
+		log: log,
+		factory: &mockControllerFactory{
+			log:          log,
+			controlCfg:   cfg.controlConfig,
+			ctlClientCfg: cfg.ctlClientCfg,
+			svcClientCfg: cfg.svcClientCfg,
+		},
+	}
+
+	_ = cl.ConnectClients(cfg.addresses)
+
+	return cl
 }
 
 func newMockConnect(log logging.Logger,

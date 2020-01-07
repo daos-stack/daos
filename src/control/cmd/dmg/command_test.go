@@ -133,6 +133,11 @@ func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, e
 	return nil, nil
 }
 
+func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
+	return &client.PoolSetPropResp{}, nil
+}
+
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
@@ -178,8 +183,8 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
+func (tc *testConn) SystemQuery() (system.Members, error) {
+	tc.appendInvocation("SystemQuery")
 	return make(system.Members, 0), nil
 }
 
@@ -196,6 +201,11 @@ func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryR
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
 	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
 	return &client.ListPoolsResp{}, nil
+}
+
+func (tc *testConn) SystemStart() error {
+	tc.appendInvocation("SystemStart")
+	return nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

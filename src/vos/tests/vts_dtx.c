@@ -918,7 +918,7 @@ dtx_17(void **state)
 	vdid.count = 4;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-			 vts_dtx_iter_cb, &vdid);
+			 vts_dtx_iter_cb, NULL, &vdid);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++) {
@@ -934,7 +934,7 @@ dtx_17(void **state)
 	vdid.count = 10;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-			 vts_dtx_iter_cb, &vdid);
+			 vts_dtx_iter_cb, NULL, &vdid);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
@@ -1187,7 +1187,7 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 		vdid.count = 1;
 
 		rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-				 vts_dtx_iter_cb, &vdid);
+				 vts_dtx_iter_cb, NULL, &vdid);
 		assert_int_equal(rc, 0);
 		assert_true(!found);
 	}

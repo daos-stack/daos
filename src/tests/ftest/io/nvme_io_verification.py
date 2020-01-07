@@ -30,6 +30,7 @@ from test_utils import TestPool
 from ior_test_base import IorTestBase
 
 class NvmeIoVerification(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -102,4 +103,4 @@ class NvmeIoVerification(IorTestBase):
                 self.verify_pool_size(size_before_ior, self.processes)
 
             # destroy pool
-            self.pool.destroy()
+            self.destroy_pools(self.pool)

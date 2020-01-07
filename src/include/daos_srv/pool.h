@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 
 /*
@@ -161,6 +162,9 @@ int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
+
+int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
+		      daos_pool_info_t *pool_info);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
