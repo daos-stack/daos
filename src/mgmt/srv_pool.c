@@ -876,7 +876,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
