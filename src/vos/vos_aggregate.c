@@ -128,14 +128,13 @@ struct agg_merge_window {
 };
 
 struct vos_agg_param {
-	uint32_t	ap_credits_max; /* # of tight loops to yield */
-	uint32_t	ap_credits;	/* # of tight loops */
-	daos_handle_t	ap_coh;		/* container handle */
-	daos_unit_oid_t	ap_oid;		/* current object ID */
-	daos_key_t	ap_dkey;	/* current dkey */
-	daos_key_t	ap_akey;	/* current akey */
-	unsigned int	ap_sub_tree_empty:1,
-			ap_discard:1;
+	uint32_t		ap_credits_max; /* # of tight loops to yield */
+	uint32_t		ap_credits;	/* # of tight loops */
+	daos_handle_t		ap_coh;		/* container handle */
+	daos_unit_oid_t		ap_oid;		/* current object ID */
+	daos_key_t		ap_dkey;	/* current dkey */
+	daos_key_t		ap_akey;	/* current akey */
+	unsigned int		ap_discard:1;
 	struct umem_instance	*ap_umm;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -192,105 +191,6 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 	return rc;
 }
 
-static bool
-subtree_empty(vos_iter_type_t child_type, struct vos_agg_param *agg_param)
-{
-	vos_iter_param_t	iter_param = { 0 };
-	daos_handle_t		sub_ih;
-	bool			empty = false;
-	int			rc;
-
-	switch (child_type) {
-	case VOS_ITER_NONE:
-		return true;
-	case VOS_ITER_SINGLE:
-	case VOS_ITER_RECX:
-	      iter_param.ip_akey = agg_param->ap_akey;
-	case VOS_ITER_AKEY:
-	      iter_param.ip_dkey = agg_param->ap_dkey;
-	case VOS_ITER_DKEY:
-	      iter_param.ip_oid = agg_param->ap_oid;
-	      break;
-	default:
-	      D_ASSERTF(0, "Invalid child type %d\n", child_type);
-	      break;
-	}
-
-	iter_param.ip_hdl = agg_param->ap_coh;
-	iter_param.ip_ih = DAOS_HDL_INVAL;
-	iter_param.ip_epr.epr_lo = 0;
-	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
-
-	rc = vos_iter_prepare(child_type, &iter_param, &sub_ih);
-	if (rc == 0) {
-		empty = vos_iter_empty(sub_ih);
-		vos_iter_finish(sub_ih);
-	} else if (rc == -DER_NONEXIST) {
-		empty = true;
-	} else {
-		D_ERROR("Failed to prepare %d iterator: %d\n", child_type, rc);
-	}
-
-	return empty;
-}
-
-static int
-agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
-		   struct vos_agg_param *agg_param, unsigned int *acts)
-{
-	vos_iter_type_t	child_type;
-	int		rc;
-
-	D_ASSERT(agg_param && agg_param->ap_discard);
-	D_ASSERT(acts != NULL);
-
-	if (!agg_param->ap_sub_tree_empty)
-		return 0;
-
-	agg_param->ap_sub_tree_empty = 0;
-	child_type = entry->ie_child_type;
-
-	/* Re-check to see if subtree changed while yielding */
-	if (!subtree_empty(child_type, agg_param))
-		return 0;
-
-	/* Evict object cache before deleting the OI entry */
-	if (child_type == VOS_ITER_DKEY) {
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-					  vos_hdl2cont(agg_param->ap_coh),
-					  entry->ie_oid);
-		if (rc != 0)
-			return rc;
-	}
-
-	/*
-	 * All entries in sub-tree were deleted during the nested sub-tree
-	 * iteration, then vos_iterate() re-probed the key in outer iteration
-	 * to delete it.
-	 *
-	 * Since there can be at most 1 discard/aggregation ULT for each
-	 * container at any given time, the key won't be deleted by others even
-	 * if current ULT yield in sub-tree iteration, and re-probe will find
-	 * the exact matched key.
-	 */
-	rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
-	if (rc) {
-		D_ERROR("Failed to delete key entry: %d\n", rc);
-	} else if (child_type != VOS_ITER_DKEY && vos_iter_empty(ih) == 1) {
-		/*
-		 * When subtree is empty, inform upper level tree to delete the
-		 * root entry (akey, dkey or oi).
-		 */
-		agg_param->ap_sub_tree_empty = 1;
-		/* Trigger re-probe in outer iteration */
-		*acts |= VOS_ITER_CB_YIELD;
-	}
-
-	return rc;
-}
-
 static inline void
 reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 {
@@ -331,9 +231,6 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	if (agg_param->ap_discard)
-		return agg_discard_parent(ih, entry, agg_param, acts);
-
 	return 0;
 }
 
@@ -359,9 +256,6 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
-
-	if (agg_param->ap_discard)
-		return agg_discard_parent(ih, entry, agg_param, acts);
 
 	return 0;
 }
@@ -439,8 +333,10 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	if (agg_param->ap_discard)
-		return agg_discard_parent(ih, entry, agg_param, acts);
+	if (agg_param->ap_discard) {
+		/* No merge window for discard path so bypass checks below. */
+		return 0;
+	}
 
 	/* Reset the max epoch for low-level SV tree iteration */
 	agg_param->ap_max_epoch = 0;
@@ -486,7 +382,6 @@ delete:
 	if (rc) {
 		D_ERROR("Failed to delete SV entry: %d\n", rc);
 	} else if (vos_iter_empty(ih) == 1 && agg_param->ap_discard) {
-		agg_param->ap_sub_tree_empty = 1;
 		/* Trigger re-probe in akey iteration */
 		*acts |= VOS_ITER_CB_YIELD;
 	}
@@ -1482,7 +1377,6 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * always inform vos_iterate() to check if subtree is empty.
 		 */
 		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
-			agg_param->ap_sub_tree_empty = 1;
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
 		}
@@ -1511,16 +1405,16 @@ out:
 }
 
 static int
-vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		 vos_iter_type_t type, vos_iter_param_t *param,
-		 void *cb_arg, unsigned int *acts)
+vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		     vos_iter_type_t type, vos_iter_param_t *param,
+		     void *cb_arg, unsigned int *acts)
 {
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
 	int			 rc;
 
 	cont = vos_hdl2cont(param->ip_hdl);
-	D_DEBUG(DB_EPC, DF_CONT": Aggregate, type:%d, is_discard:%d\n",
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
 		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
 		agg_param->ap_discard);
 
@@ -1573,6 +1467,49 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	return 0;
+}
+
+static int
+vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		      vos_iter_type_t type, vos_iter_param_t *param,
+		      void *cb_arg, unsigned int *acts)
+{
+	struct vos_agg_param	*agg_param = cb_arg;
+	struct vos_container	*cont;
+	int			 rc = 0;
+
+	cont = vos_hdl2cont(param->ip_hdl);
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate post, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		break;
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
+		break;
+	case VOS_ITER_SINGLE:
+		return 0;
+	case VOS_ITER_RECX:
+		return 0;
+	default:
+		D_ASSERTF(false, "Invalid iter type\n");
+		return -DER_INVAL;
+	}
+
+	if (rc == 1) {
+		/* Reprobe flag is set */
+		*acts |= VOS_ITER_CB_YIELD;
+		rc = 0;
+	}
+
+	if (rc != 0)
+		D_ERROR("VOS aggregation failed: %d\n", rc);
+
+	return rc;
 }
 
 static int
@@ -1647,7 +1584,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 vos_aggregate_cb, &agg_param);
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
+			 &agg_param);
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
@@ -1711,7 +1649,8 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 vos_aggregate_cb, &agg_param);
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
+			 &agg_param);
 
 	aggregate_exit(cont, true);
 	return rc;

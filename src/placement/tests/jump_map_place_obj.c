@@ -131,7 +131,7 @@ main(int argc, char **argv)
 	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	plt_obj_place(oid, &lo_1, pl_map);
-	plt_obj_layout_check(lo_1);
+	plt_obj_layout_check(lo_1, COMPONENT_NR);
 
 	/* test plt_obj_place when some/all shards failed */
 	D_PRINT("\ntest to fail all shards  and new placement ...\n");
@@ -139,7 +139,7 @@ main(int argc, char **argv)
 		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 				pl_debug_msg);
 	plt_obj_place(oid, &lo_2, pl_map);
-	plt_obj_layout_check(lo_2);
+	plt_obj_layout_check(lo_2, COMPONENT_NR);
 	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2, DOM_NR));
 	D_PRINT("spare target candidate:");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++) {
@@ -153,7 +153,7 @@ main(int argc, char **argv)
 		plt_add_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 				pl_debug_msg);
 	plt_obj_place(oid, &lo_3, pl_map);
-	plt_obj_layout_check(lo_3);
+	plt_obj_layout_check(lo_3, COMPONENT_NR);
 	D_ASSERT(pt_obj_layout_match(lo_1, lo_3, DOM_NR));
 
 	/* test pl_obj_find_rebuild */
@@ -166,6 +166,7 @@ main(int argc, char **argv)
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 2, spare_tgt_ranks,
 			pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
 			PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
+	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
 	D_ASSERT(spare_cnt == 2);
 	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[0]);
 	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[1]);
@@ -196,6 +197,7 @@ main(int argc, char **argv)
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 3, spare_tgt_ranks,
 			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
 			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
+	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
 	D_ASSERT(spare_cnt == 2);
 	D_ASSERT(shard_ids[0] == 1);
 	D_ASSERT(shard_ids[1] == 0);
@@ -228,6 +230,7 @@ main(int argc, char **argv)
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 5, spare_tgt_ranks,
 			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
 			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
+	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
 	D_ASSERT(spare_cnt == 3);
 
 	pl_obj_layout_free(lo_1);
