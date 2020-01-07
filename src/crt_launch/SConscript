@@ -1,4 +1,3 @@
-#!python
 # Copyright (C) 2016-2019 Intel Corporation
 # All rights reserved.
 #
@@ -36,9 +35,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build crt_launch"""
-from __future__ import print_function
-
 import os
+import sys
 
 CRT_LAUNCH = 'crt_launch.c'
 
@@ -47,11 +45,13 @@ def scons():
 
     Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
 
-    if not prereqs.check_component('ompi'):
-        print("No MPI installed...skipping crt_launch build");
-        return
-
     tenv = env.Clone()
+
+    if tenv.subst("$MPI_PKG") != "":
+        tenv.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
+    elif not prereqs.check_component('ompi'):
+        sys.stdout.write("No MPI installed...skipping crt_launch build\n")
+        return
 
     tenv.AppendUnique(CPPPATH=['#/src/cart'])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'mpi'])

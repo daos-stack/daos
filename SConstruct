@@ -92,7 +92,8 @@ def scons():
     opts = Variables(opts_file)
     prereqs = PreReqComponent(env, opts, arch=platform)
     prereqs.load_definitions(prebuild=['mercury', 'uuid', 'crypto', 'boost'])
-    load_mpi('openmpi')
+    if env.subst("$MPI_PKG") == "":
+        load_mpi('openmpi')
 
     if not env.GetOption('clean'):
         run_checks(env)
