@@ -144,8 +144,8 @@ class TestWithoutServers(Test):
         if self.prefix != "/usr":
             self.tmp = os.path.join(self.prefix, 'tmp')
         else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
-                                 os.path.expanduser('~/daos_test'))
+            self.tmp = os.getenv(
+                'DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
         if not os.path.exists(self.tmp):
             os.makedirs(self.tmp)
 
@@ -439,8 +439,9 @@ class TestWithServers(TestWithoutServers):
                     self.server_managers[-1].runner.export.value.extend(
                         ["PATH"])
                 load_mpi("orterun")
+                yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+
                 try:
-                    yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
                     self.server_managers[-1].start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))

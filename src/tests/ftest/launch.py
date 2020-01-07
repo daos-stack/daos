@@ -61,14 +61,9 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
-BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
-SERVER_KEYS = (
-    "test_servers",
-    )
-CLIENT_KEYS = (
-    "test_clients",
-    )
+DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+SERVER_KEYS = ("test_servers")
+CLIENT_KEYS = ("test_clients")
 
 
 def get_build_environment():
@@ -159,10 +154,14 @@ def set_test_environment():
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
+
+    # Set the default location for daos log files written during testing if not
+    # already defined.
+    if "DAOS_TEST_LOG_DIR" not in os.environ:
+        os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -261,7 +260,7 @@ def spawn_commands(host_list, command, timeout=120):
     # Display the command output
     for code in sorted(results):
         output_data = list(task.iter_buffers(results[code]))
-        if len(output_data) == 0:
+        if not output_data:
             err_nodes = NodeSet.fromlist(results[code])
             print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
         else:
@@ -531,54 +530,6 @@ def get_yaml_data(yaml_file):
     return yaml_data
 
 
-def get_log_files(config_yaml, daos_files=None):
-    """Get a list of DAOS files used by the specified yaml file.
-
-    Args:
-        config_yaml (str): yaml file defining log file locations
-        daos_files (dict, optional): dictionary of default DAOS log files whose
-            keys define which yaml log parameters to use to update the default
-            values. Defaults to None.
-
-    Returns:
-        dict: a dictionary of DAOS file name keys and full path values
-
-    """
-    # List of default DAOS files
-    if daos_files is None:
-        daos_core_test_dir = os.path.split(
-            os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        daos_files = {
-            "log_file": "/tmp/server.log",
-            "admin_log_file": "/tmp/daos_admin.log",
-            "server_log_file": "/tmp/server.log",
-            "agent_log_file": "/tmp/daos_agent.log",
-            "control_log_file": "/tmp/daos_control.log",
-            "helper_log_file": "/tmp/daos_admin.log",
-            "socket_dir": "/tmp/daos_sockets",
-            "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
-            "test_variant_client_logs":
-                "{}/*_client_daos.log".format(daos_core_test_dir),
-            "test_variant_server_logs":
-                "{}/*_server_daos.log".format(daos_core_test_dir),
-        }
-
-    # Determine the log file locations defined by the last run test
-    print("Checking {} for daos log file locations".format(config_yaml))
-    yaml_data = get_yaml_data(config_yaml)
-
-    # Replace any default log file with its yaml definition
-    matches = find_values(yaml_data, daos_files.keys(), val_type=str)
-    for key, value in matches.items():
-        if value != daos_files[key]:
-            print(
-                "  Update found for {}: {} -> {}".format(
-                    key, daos_files[key], value))
-            daos_files[key] = value
-
-    return daos_files
-
-
 def find_yaml_hosts(test_yaml):
     """Find the all the host values in the specified yaml file.
 
@@ -629,12 +580,10 @@ def clean_logs(test_yaml, args):
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
-    # Use the default server yaml and then the test yaml to update the default
-    # DAOS log file locations.  This should simulate how the test defines which
-    # log files it will use when it is run.
-    log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
+    # Remove any log files from the DAOS_TEST_LOG_DIR directory
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(" ".join(log_files.values()))
+    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log"))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -647,24 +596,19 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
-        avocado_logs_dir ([type]): [description]
+        avocado_logs_dir (str): path to the avocado log files
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
+    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     this_host = socket.gethostname().split(".")[0]
-    log_files = get_log_files(
-        os.path.join(get_temporary_directory(), TEST_DAOS_SERVER_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
     # Create a subdirectory in the avocado logs directory for this test
+    doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
     print("Archiving host logs from {} in {}".format(host_list, doas_logs_dir))
     get_output("mkdir {}".format(doas_logs_dir))
-
-    # Create a list of log files that are not directories
-    non_dir_files = [
-        log_file for log_file in log_files.values()
-        if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -674,16 +618,12 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "set -eu",
         "rc=0",
         "copied=()",
-        "for file in {}".format(" ".join(non_dir_files)),
-        "do if [ -e $file ]",
-        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+        "for file in $(ls {}/*.log)".format(logs_dir),
+        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, doas_logs_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
-        "ls -al $file",
-        "fi",
-        "else ((rc++))",
         "ls -al $file",
         "fi",
         "fi",
@@ -840,7 +780,7 @@ def main():
     tag_filter, test_list = get_test_list(args.tags)
 
     # Verify at least one test was requested
-    if len(test_list) == 0:
+    if not test_list:
         print("ERROR: No tests or tags found via {}".format(args.tags))
         exit(1)
 

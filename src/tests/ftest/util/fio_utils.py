@@ -1,15 +1,19 @@
 #!/usr/bin/python
 """
   (C) Copyright 2019 Intel Corporation.
+
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-      http://www.apache.org/licenses/LICENSE-2.0
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
+
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -17,21 +21,24 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-import general_utils
+from general_utils import pcmd
 
-from command_utils import ExecutableCommand
+from command_utils import ExecutableCommand, CommandWithParameters
 from command_utils import CommandFailure, FormattedParameter, BasicParameter
-from ClusterShell.NodeSet import NodeSet
 
 
 class FioCommand(ExecutableCommand):
+    # pylint: disable=too-many-instance-attributes
     """Defines a object representing a fio command."""
 
-    def __init__(self, namespace, command, test):
-        """Create a fio Command object."""
-        super(FioCommand, self).__init__(namespace, command)
-        self.test = test
+    def __init__(self, path=""):
+        """Create a FioCommand object.
+
+        Args:
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+        """
+        super(FioCommand, self).__init__("/run/fio/*", "fio", path)
 
         # fio commandline options
         self.debug = FormattedParameter("--debug={}")
@@ -68,9 +75,147 @@ class FioCommand(ExecutableCommand):
         self.trigger_remote = FormattedParameter("--trigger-remote={}")
         self.aux_path = FormattedParameter("--aux-path={}")
 
-        # fio job options
+        # Middleware to use with fio.  Needs to be configured externally prior
+        # to calling run().
+        self.api = BasicParameter(None, "POSIX")
+
+        # List of fio job names to run
+        self.names = BasicParameter(None)
+        self._jobs = {}
+
+        # List of hosts on which the fio command will run.  If not defined the
+        # fio command will run locally
+        self._hosts = None
+
+    @property
+    def hosts(self):
+        """Get the host(s) on which to remotely run the fio command via run().
+
+        Returns:
+            list: remote host(s) on which the fio command will run.
+
+        """
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the host(s) on which to remotely run the fio command via run().
+
+        If the specified host is None the command will run locally w/o ssh.
+
+        Args:
+            value (list): remote host(s) on which to run the fio command
+        """
+        if value is None or isinstance(value, list):
+            self._hosts = value
+        else:
+            self.log.error("Invalid fio host list: %s (%s)", value, type(value))
+            self._hosts = None
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(FioCommand, self).get_params(test)
+
+        # Add jobs
+        self._jobs.clear()
+        if self.names.value is not None:
+            for name in self.names.value:
+                self._jobs[name] = FioJob(name)
+                self._jobs[name].get_params(self.namespace, test)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        # Exclude self.api and self.names from the command string
+        return self.get_attribute_names(FormattedParameter)
+
+    def update(self, job_name, param_name, value, description=None):
+        """Update the fio job parameter value.
+
+        Args:
+            job_name (str): name of the job
+            param_name ([type]): name of the job parameter
+            value (object): value to assign
+            description (str, optional): name of the parameter which, if
+                provided, is used to display the update. Defaults to None.
+        """
+        if job_name in self._jobs:
+            getattr(self._jobs[job_name], param_name).update(value, description)
+        else:
+            self.log.error("Invalid job name: %s", job_name)
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        command = [super(FioCommand, self).__str__()]
+        for name in sorted(self._jobs):
+            if name == "global":
+                command.insert(1, str(self._jobs[name]))
+            else:
+                command.append(str(self._jobs[name]))
+        return " ".join(command)
+
+    def _run_process(self):
+        """Run the command as a foreground process.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        if self._hosts is None:
+            # Run fio locally
+            self.log.debug("Running: %s", self.__str__())
+            super(FioCommand, self)._run_process()
+        else:
+            # Run fio remotely
+            self.log.debug("Running: %s", self.__str__())
+            ret_codes = pcmd(self._hosts, self.__str__())
+
+            # Report any failures
+            if len(ret_codes) > 1 or 0 not in ret_codes:
+                failed = [
+                    "{}: rc={}".format(val, key)
+                    for key, val in ret_codes.items() if key != 0
+                ]
+                raise CommandFailure(
+                    "Error running fio on the following hosts: {}".format(
+                        ", ".join(failed)))
+
+
+class FioJob(CommandWithParameters):
+    # pylint: disable=too-many-instance-attributes
+    """Defines a object representing a fio job sub-command."""
+
+    def __init__(self, namespace, name):
+        # pylint: disable=too-many-statements
+        """Create a FioJob object.
+
+        Args:
+            namespace (str): parent yaml namespace (path to parameters)
+            name (str): job name used with the '--name=<job>' fio command line
+                argument.  It is also used to define the namespace for the job's
+                parameters.
+        """
+        job_namespace = namespace.split("/")
+        job_namespace.insert(-1, name)
+        super(FioJob, self).__init__(
+            "/".join(job_namespace), "--name={}".format(name))
+
+        # fio global/local job options
         self.description = FormattedParameter("--description={}")
-        self.name = FormattedParameter("--name={}")
         self.wait_for = FormattedParameter("--wait_for={}")
         self.filename = FormattedParameter("--filename={}")
         self.lockfile = FormattedParameter("--lockfile={}")
@@ -282,51 +427,3 @@ class FioCommand(ExecutableCommand):
             "--steadystate_duration={}")
         self.steadystate_ramp_time = FormattedParameter(
             "--steadystate_ramp_time={}")
-
-        # fio api
-        self.api = BasicParameter(None, "POSIX")
-
-    def get_param_names(self):
-        """Get a sorted list of the defined FioCommand parameters."""
-        # Sort the FIO parameter names to generate consistent fio commands
-        all_param_names = super(FioCommand, self).get_param_names()
-        # move the 'name' option as the first option of fio job
-        all_param_names.remove("name")
-        all_param_names.insert(0, "name")
-
-        return all_param_names
-
-
-class Fio(FioCommand):
-    """Class defining an object of type FioCommand"""
-
-    def __init__(self, namespace, test):
-        """Create a fio object"""
-        # Get run command by iterating over different fio jobs
-        # mentioned in yaml file under '/run/fio/'.
-        self.run_cmd = ''
-        for name in namespace:
-            super(Fio, self).__init__(name, "fio", test)
-            self.get_params(test)
-            self.run_cmd += self.__str__()
-
-    def run(self, host):
-        """Execute Fio from the host passed on to the method.
-
-           Args:
-             host: hostname from where to launch fio
-        """
-        # run fio command
-        self.run_cmd = self.run_cmd.replace("fio", ' ').replace(" POSIX", '')
-        print("Running: {}".format('fio' + self.run_cmd))
-        ret_code = general_utils.pcmd(host, 'fio' + self.run_cmd)
-
-        # check for any failures
-        if 0 not in ret_code:
-            error_hosts = NodeSet(
-                ",".join(
-                    [str(node_set) for code, node_set in ret_code.items()
-                     if code != 0]))
-            raise CommandFailure(
-                "Error starting fio on the following hosts: {}".format(
-                    error_hosts))

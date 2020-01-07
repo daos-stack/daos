@@ -13,12 +13,12 @@ server_config:
     0:
       first_core: 0
       pinned_numa_node: 0
-      log_file: /tmp/daos_server0.log
+      log_file: daos_server0.log
       scm_mount: /mnt/daos0
     1:
       first_core: 16
       pinned_numa_node: 1
-      log_file: /tmp/daos_server1.log
+      log_file: daos_server1.log
       scm_mount: /mnt/daos1
 pool:
   createmode:

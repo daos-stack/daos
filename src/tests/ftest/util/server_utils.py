@@ -45,7 +45,7 @@ from distutils.spawn import find_executable
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
 from command_utils import DaosCommand, Orterun, CommandWithParameters
-from general_utils import pcmd, get_file_path
+from general_utils import pcmd
 from dmg_utils import storage_format
 from write_host_file import write_host_file
 from env_modules import load_mpi
@@ -224,7 +224,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
-            self.log_file = BasicParameter(None, "/tmp/server.log")
+            self.log_file = BasicParameter(None, "daos_server.log")
             self.env_vars = BasicParameter(
                 None,
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",
@@ -296,15 +296,16 @@ class DaosServerConfig(ObjectWithParameters):
         self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
-        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
-        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
+        self.control_log_file = BasicParameter(None, "daos_control.log")
+        self.helper_log_file = BasicParameter(None, "daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
         self.user_name = BasicParameter(None)           # e.g. 'daosuser'
         self.group_name = BasicParameter(None)          # e.g. 'daosgroup'
 
-        #
+        # Defines the number of single server config parameters to define in
+        # the yaml file
         self.servers_per_host = BasicParameter(None)
 
         # Single server config parameters
@@ -361,19 +362,29 @@ class DaosServerConfig(ObjectWithParameters):
         Args:
             filename (str): the yaml file to create
         """
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
         # Convert the parameters into a dictionary to write a yaml file
         yaml_data = {"servers": []}
         for name in self.get_param_names():
             if name != "servers_per_host":
                 value = getattr(self, name).value
                 if value is not None and value is not False:
-                    yaml_data[name] = getattr(self, name).value
+                    if name.endswith("log_file"):
+                        yaml_data[name] = os.path.join(
+                            log_dir, getattr(self, name).value)
+                    else:
+                        yaml_data[name] = getattr(self, name).value
         for server_params in self.server_params:
             yaml_data["servers"].append({})
             for name in server_params.get_param_names():
                 value = getattr(server_params, name).value
                 if value is not None and value is not False:
-                    yaml_data["servers"][-1][name] = value
+                    if name.endswith("log_file"):
+                        yaml_data["servers"][-1][name] = os.path.join(
+                            log_dir, getattr(self, name).value)
+                    else:
+                        yaml_data["servers"][-1][name] = value
 
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.

@@ -36,8 +36,10 @@ import yaml
 from general_utils import pcmd, check_file_exists
 from command_utils import ObjectWithParameters, BasicParameter
 
+
 class AgentFailed(Exception):
     """Agent didn't start/stop properly."""
+
 
 class DaosAgentConfig(ObjectWithParameters):
     """Defines the daos_agent configuration yaml parameters."""
@@ -49,12 +51,12 @@ class DaosAgentConfig(ObjectWithParameters):
             """Create a AgentSecurityConfig object."""
             super(DaosAgentConfig.AgentSecurityConfig, self).__init__(
                 "/run/agent_config/transport_config/*")
-            #transport_config:
-            #  allow_insecure: true
-            #  ca_cert:        .daos/daosCA.crt
-            #  cert:           .daos/daos_agent.crt
-            #  key:            .daos/daos_agent.key
-            #  server_name:    server
+            # transport_config:
+            #   allow_insecure: true
+            #   ca_cert:        .daos/daosCA.crt
+            #   cert:           .daos/daos_agent.crt
+            #   key:            .daos/daos_agent.key
+            #   server_name:    server
             self.allow_insecure = BasicParameter(None, True)
             self.ca_cert = BasicParameter(None, ".daos/daosCA.crt")
             self.cert = BasicParameter(None, ".daos/daos_agent.crt")
@@ -77,7 +79,7 @@ class DaosAgentConfig(ObjectWithParameters):
         self.port = BasicParameter(None, 10001)
         self.hostlist = BasicParameter(None)
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
-        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+        self.log_file = BasicParameter(None, "daos_agent.log")
 
         # Agent transport_config parameters
         self.transport_params = self.AgentSecurityConfig()
@@ -100,12 +102,18 @@ class DaosAgentConfig(ObjectWithParameters):
         Args:
             filename (str): the yaml file to create
         """
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
         # Convert the parameters into a dictionary to write a yaml file
         yaml_data = {"transport_config": []}
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None and value is not False:
-                yaml_data[name] = getattr(self, name).value
+                if name.endswith("log_file"):
+                    yaml_data[name] = os.path.join(
+                        log_dir, getattr(self, name).value)
+                else:
+                    yaml_data[name] = getattr(self, name).value
 
         # transport_config
         yaml_data["transport_config"] = {}
@@ -125,6 +133,7 @@ class DaosAgentConfig(ObjectWithParameters):
             raise AgentFailed(
                 "Error writing daos_agent command yaml file {}: {}".format(
                     filename, error))
+
 
 def run_agent(test, server_list, client_list=None):
     """Start daos agents on the specified hosts.
