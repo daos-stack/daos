@@ -267,7 +267,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		if (rc == 0)
 			info->pi_ndisabled = num_disabled;
 		else
-			D_ERROR("Couldn't get failed targets, rc: ""DF_RC"\n",
+			D_ERROR("Couldn't get failed targets, "DF_RC"\n",
 				DP_RC(rc));
 	}
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
