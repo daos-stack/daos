@@ -1,3 +1,4 @@
+#!/usr/bin/python
 """
   (C) Copyright 2018-2020 Intel Corporation.
 
@@ -37,6 +38,7 @@ from general_utils import check_pool_files, DaosTestError
 from env_modules import load_mpi
 
 from dmg_utils import (get_pool_uuid_service_replicas_from_stdout, DmgCommand)
+
 
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
