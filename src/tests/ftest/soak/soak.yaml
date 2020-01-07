@@ -134,8 +134,10 @@ ior_smoke:
     daos_oclass:
         - 'SX'
 fio_smoke:
+  names:
+    - global
+    - test
   global:
-    name: 'global'
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
     thread: 1
@@ -143,18 +145,16 @@ fio_smoke:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blksz:
-        - '256B'
-        - '1M'
-    sz:
-        - '1M'
-        - '1G'
-    readwrite:
-        - 'rw'
-        - 'randrw'
   test:
-    name: 'test'
     numjobs: 1
+  soak:
+    blocksize:
+      - '1M'
+    size:
+      - '1G'
+    rw:
+      - 'rw'
+      - 'randrw'
 ior_stress:
     api:
         - DAOS
@@ -178,8 +178,10 @@ ior_stress:
         # - "RP_3GX"
         # - "RP_4GX"
 fio_stress:
+  names:
+    - global
+    - test
   global:
-    name: 'global'
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
     thread: 16
@@ -187,18 +189,18 @@ fio_stress:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blksz:
-        - '256B'
-        - '1M'
-    sz:
-        - '1M'
-        - '1G'
-    readwrite:
-        - 'rw'
-        - 'randrw'
   test:
-    name: 'test'
     numjobs: 5
+  soak:
+    blocksize:
+      - '256B'
+      - '1M'
+    size:
+      - '500M'
+      - '1G'
+    rw:
+      - 'rw'
+      - 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 
