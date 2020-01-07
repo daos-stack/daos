@@ -52,9 +52,11 @@ print_usage()
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -X|--dtx_tests\n");
 	print_message("vos_tests -l|--incarnation-log-tests\n");
+	print_message("vos_tests -z|--csum_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
 	print_message("vos_tests -f|--filter <filter>\n");
 	print_message("vos_tests -e|--exclude <filter>\n");
+	print_message("vos_tests -m|--punch-model-tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
 }
@@ -81,6 +83,7 @@ run_all_tests(int keys, bool nest_iterators)
 	int	i;
 	int	j;
 
+	failed += run_pm_tests();
 	failed += run_pool_test();
 	failed += run_co_test();
 	for (i = 0; dkey_feats[i] >= 0; i++) {
@@ -94,6 +97,7 @@ run_all_tests(int keys, bool nest_iterators)
 	failed += run_gc_tests();
 	failed += run_dtx_tests();
 	failed += run_ilog_tests();
+	failed += run_csum_extent_tests();
 	return failed;
 }
 
@@ -107,7 +111,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglni:XA:hf:e:";
+	const char *short_options = "apcdglzni:mXA:hf:e:";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -117,8 +121,10 @@ main(int argc, char **argv)
 		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"dtx_tests",		no_argument, 0, 'X'},
+		{"punch_model_tests",	no_argument, 0, 'm'},
 		{"garbage_collector",	no_argument, 0, 'g'},
 		{"ilog_tests",		no_argument, 0, 'l'},
+		{"csum_tests",		no_argument, 0, 'z'},
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
@@ -154,8 +160,14 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-			cmocka_set_test_filter(optarg);
-				printf("Test filter: %s\n", optarg);
+			{
+				/** Add wildcards for easier filtering */
+				char filter[sizeof(optarg) + 2];
+
+				sprintf(filter, "*%s*", optarg);
+				cmocka_set_test_filter(filter);
+				printf("Test filter: %s\n", filter);
+			}
 #else
 			D_PRINT("filter not enabled");
 #endif
@@ -203,6 +215,10 @@ main(int argc, char **argv)
 			nr_failed += run_dtx_tests();
 			test_run = true;
 			break;
+		case 'm':
+			nr_failed += run_pm_tests();
+			test_run = true;
+			break;
 		case 'A':
 			keys = atoi(optarg);
 			nr_failed = run_all_tests(keys, nest_iterators);
@@ -210,6 +226,10 @@ main(int argc, char **argv)
 			break;
 		case 'l':
 			nr_failed += run_ilog_tests();
+			test_run = true;
+			break;
+		case 'z':
+			nr_failed += run_csum_extent_tests();
 			test_run = true;
 			break;
 		case 'f':

@@ -25,6 +25,11 @@ package storage
 import (
 	"bytes"
 	"fmt"
+	"sort"
+
+	"github.com/inhies/go-bytesize"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -58,46 +63,155 @@ type (
 		Capacity        uint64
 	}
 
-	// ScmModules is a type alias for []ScmModule that provides a fmt.Stringer implementation.
+	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
 	ScmModules []ScmModule
 
-	// ScmNamespace represents a mapping between AppDirect regions and block device files.
+	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
 		UUID        string `json:"uuid"`
 		BlockDevice string `json:"blockdev"`
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
+		Size        uint64 `json:"size"`
 	}
 
-	// ScmNamespaces is a type alias for []ScmNamespace that provides a fmt.Stringer implementation.
+	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
 	ScmNamespaces []ScmNamespace
+
+	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
+	NvmeDeviceHealth struct {
+		Temp            uint32
+		TempWarnTime    uint32
+		TempCritTime    uint32
+		CtrlBusyTime    uint64
+		PowerCycles     uint64
+		PowerOnHours    uint64
+		UnsafeShutdowns uint64
+		MediaErrors     uint64
+		ErrorLogEntries uint64
+		TempWarn        bool
+		AvailSpareWarn  bool
+		ReliabilityWarn bool
+		ReadOnlyWarn    bool
+		VolatileWarn    bool
+	}
+
+	// NvmeNamespace represents an individual NVMe namespace on a device.
+	NvmeNamespace struct {
+		ID   int32
+		Size int32
+	}
+
+	// NvmeController represents a NVMe device controller which includes health
+	// and namespace information.
+	NvmeController struct {
+		Model       string
+		Serial      string
+		PciAddr     string
+		FwRev       string
+		SocketID    int32
+		HealthStats *NvmeDeviceHealth
+		Namespaces  []*NvmeNamespace
+	}
+
+	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.
+	NvmeControllers []*NvmeController
 )
 
-func (m ScmModule) String() string {
-	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
-		m.ControllerID, m.ChannelID, m.ChannelPosition)
+func (m *ScmModule) String() string {
+	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", m.PhysicalID, bytesize.New(float64(m.Capacity)),
+		m.SocketID, m.ControllerID, m.ChannelID, m.ChannelPosition)
 }
 
 func (ms ScmModules) String() string {
 	var buf bytes.Buffer
 
+	if len(ms) == 0 {
+		return "\t\tnone\n"
+	}
+
+	sort.Slice(ms, func(i, j int) bool { return ms[i].PhysicalID < ms[j].PhysicalID })
+
 	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t%s\n", m)
+		fmt.Fprintf(&buf, "\t\t%s\n", &m)
 	}
 
 	return buf.String()
 }
 
-func (n ScmNamespace) String() string {
-	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
+// Summary reports accumulated storage space and the number of modules.
+func (ms ScmModules) Summary() string {
+	tCap := bytesize.New(0)
+	for _, m := range ms {
+		tCap += bytesize.New(float64(m.Capacity))
+	}
+
+	return fmt.Sprintf("%s (%d %s)",
+		tCap, len(ms), common.Pluralise("module", len(ms)))
+}
+
+func (n *ScmNamespace) String() string {
+	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
+		bytesize.New(float64(n.Size)))
 }
 
 func (ns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
+	if len(ns) == 0 {
+		return "\t\tnone\n"
+	}
+
+	sort.Slice(ns, func(i, j int) bool { return ns[i].BlockDevice < ns[j].BlockDevice })
+
 	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t%s\n", n)
+		fmt.Fprintf(&buf, "\t\t%s\n", &n)
+	}
+
+	return buf.String()
+}
+
+// Summary reports accumulated storage space and the number of namespaces.
+func (ns ScmNamespaces) Summary() string {
+	tCap := bytesize.New(0)
+	for _, n := range ns {
+		tCap += bytesize.New(float64(n.Size))
+	}
+
+	return fmt.Sprintf("%s (%d %s)",
+		tCap, len(ns), common.Pluralise("namespace", len(ns)))
+}
+
+// ctrlrDetail provides custom string representation for Controller type
+// defined outside this package.
+func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *NvmeController) {
+	if c == nil {
+		fmt.Fprintf(buf, "<nil>\n")
+		return
+	}
+
+	tCap := bytesize.New(0)
+	for _, n := range c.Namespaces {
+		tCap += bytesize.GB * bytesize.New(float64(n.Size))
+	}
+
+	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		c.PciAddr, c.Model, c.FwRev, c.SocketID, tCap)
+}
+
+func (ncs NvmeControllers) String() string {
+	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
+
+	if len(ncs) == 0 {
+		fmt.Fprint(buf, "\t\tnone\n")
+		return buf.String()
+	}
+
+	sort.Slice(ncs, func(i, j int) bool { return ncs[i].PciAddr < ncs[j].PciAddr })
+
+	for _, ctrlr := range ncs {
+		ncs.ctrlrDetail(buf, ctrlr)
 	}
 
 	return buf.String()

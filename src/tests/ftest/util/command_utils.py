@@ -28,10 +28,11 @@ import signal
 
 from avocado.utils import process
 
+from env_modules import load_mpi
+
 
 class CommandFailure(Exception):
     """Base exception for this module."""
-
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -107,7 +108,10 @@ class FormattedParameter(BasicParameter):
         if isinstance(self._default, bool) and self.value:
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
-            if isinstance(self.value, (list, tuple)):
+            if isinstance(self.value, dict):
+                return " ".join([self._str_format.format("{} \"{}\"".format(
+                    key, self.value[key])) for key in self.value])
+            elif isinstance(self.value, (list, tuple)):
                 return " ".join(
                     [self._str_format.format(value) for value in self.value])
             else:
@@ -247,9 +251,15 @@ class ExecutableCommand(CommandWithParameters):
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
+        self.exit_status_exception = True
         self.verbose = True
         self.env = None
         self.sudo = False
+
+    @property
+    def process(self):
+        """Getter for process attribute of the ExecutableCommand class."""
+        return self._process
 
     def run(self):
         """Run the command.
@@ -275,6 +285,7 @@ class ExecutableCommand(CommandWithParameters):
             "cmd": command,
             "timeout": self.timeout,
             "verbose": self.verbose,
+            "ignore_status": not self.exit_status_exception,
             "allow_output_check": "combined",
             "shell": True,
             "env": self.env,
@@ -319,14 +330,14 @@ class ExecutableCommand(CommandWithParameters):
         else:
             self.log.info("Process is already running")
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Optional method to provide a means for detecting successful command
         execution when running the command as a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
@@ -334,7 +345,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         self.log.info(
             "Checking status of the %s command in %s",
-            self._command, subprocess)
+            self._command, sub_process)
         return True
 
     def stop(self):
@@ -355,6 +366,9 @@ class ExecutableCommand(CommandWithParameters):
                 signal.SIGTERM, None, None,
                 signal.SIGQUIT, None,
                 signal.SIGKILL]
+
+            # Turn off verbosity to keep the logs clean as the server stops
+            self._process.verbose = False
 
             # Keep sending signals and or waiting while the process is alive
             while self._process.poll() is None and signal_list:
@@ -406,6 +420,8 @@ class DaosCommand(ExecutableCommand):
         """
         super(DaosCommand, self).get_params(test)
         self.get_action_command()
+        if isinstance(self.action_command, ObjectWithParameters):
+            self.action_command.get_params(test)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -473,9 +489,11 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        # Join the job manager command with the command to manage
-        job_manager_command = super(JobManager, self).__str__()
-        return "{} {}".format(job_manager_command, self.job)
+        commands = [super(JobManager, self).__str__(), str(self.job)]
+        if self.job.sudo:
+            commands.insert(-1, "sudo -n")
+
+        return " ".join(commands)
 
     def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
@@ -518,12 +536,14 @@ class Orterun(JobManager):
             "/run/orterun", "orterun", job, path, subprocess)
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
-        self.processes = FormattedParameter("-np {}", 1)
-        self.display_map = FormattedParameter("--display-map", True)
+        self.processes = FormattedParameter("--np {}", 1)
+        self.display_map = FormattedParameter("--display-map", False)
         self.map_by = FormattedParameter("--map-by {}", "node")
         self.export = FormattedParameter("-x {}", None)
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
+        self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
+        self.mca = FormattedParameter("--mca {}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
@@ -543,11 +563,21 @@ class Orterun(JobManager):
         self.hostfile.value = hostfile
         self.processes.value = processes
 
+    def run(self):
+        """Run the orterun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi("openmpi")
+        return super(Orterun, self).run()
+
 
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, path="", subprocess=False):
+    def __init__(self, job, path="", subprocess=False, mpitype="openmpi"):
         """Create a Mpirun object.
 
         Args:
@@ -562,6 +592,7 @@ class Mpirun(JobManager):
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
+        self.mpitype = mpitype
 
     def setup_command(self, env, hostfile, processes):
         """Set up the mpirun command with common inputs.
@@ -578,6 +609,16 @@ class Mpirun(JobManager):
         # Setup the orterun command
         self.hostfile.value = hostfile
         self.processes.value = processes
+
+    def run(self):
+        """Run the mpirun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi(self.mpitype)
+        return super(Mpirun, self).run()
 
 
 class Srun(JobManager):

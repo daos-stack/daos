@@ -162,15 +162,6 @@ typedef enum {
 	/** probe a specific key */
 	BTR_PROBE_SPEC		= (1 << 8),
 	/**
-	 * Require key/hkey compare function to return BTR_CMP_MATCHED for
-	 * matched fetch and upsert.
-	 */
-	BTR_PROBE_MATCHED	= (1 << 9),
-	/**
-	 * Public probe opcodes, user can combine BTR_PROBE_MATCHED with any
-	 * of the rest opcodes.
-	 */
-	/**
 	 * unconditionally trust the probe result from the previous call,
 	 * bypass probe process for dbtree_upsert (or delete) in the future.
 	 *
@@ -212,9 +203,8 @@ enum btr_key_cmp_rc {
 	 * dbtree can fetch/update value even the provided key is less/greater
 	 * than the compared key.
 	 */
-	BTR_CMP_MATCHED	= (1 << 2),
-	BTR_CMP_UNKNOWN	= (1 << 3),	/* unset */
-	BTR_CMP_ERR	= (1 << 4),	/* error */
+	BTR_CMP_UNKNOWN	= (1 << 2),	/* unset */
+	BTR_CMP_ERR	= (1 << 3),	/* error */
 };
 
 /**
@@ -475,6 +465,13 @@ dbtree_key_cmp_rc(int rc)
 		return BTR_CMP_LT;
 	else
 		return BTR_CMP_GT;
+}
+
+static inline int
+dbtree_is_empty_inplace(const struct btr_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
 }
 
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,

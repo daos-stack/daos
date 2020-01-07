@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -34,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -57,31 +59,34 @@ func chooseServiceLeader(cs []Control) (Control, error) {
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// SetTransportConfig sets the gRPC transport confguration
-	SetTransportConfig(*security.TransportConfig)
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
-	ClearConns() ResultMap
-	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
-	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
-	// TODO: implement Burnin client features
-	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
-	ListFeatures() ClientFeatureMap
-	KillRank(rank uint32) ResultMap
-	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
-	PoolDestroy(*PoolDestroyReq) error
-	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
-	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
-	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
-	SystemMemberQuery() (common.SystemMembers, error)
-	SystemStop() (common.SystemMemberResults, error)
+	ClearConns() ResultMap
+	ConnectClients(Addresses) ResultMap
+	GetActiveConns(ResultMap) ResultMap
+	KillRank(rank uint32) ResultMap
 	NetworkListProviders() ResultMap
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
+	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
+	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
+	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
+	SetTransportConfig(*security.TransportConfig)
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	StorageScan(*StorageScanReq) *StorageScanResp
+	StorageFormat(reformat bool) StorageFormatResults
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
+	SystemQuery() (system.Members, error)
+	SystemStart() error
+	SystemStop(SystemStopReq) (system.MemberResults, error)
+	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
@@ -148,7 +153,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 	controllers := c.controllers[:0]
 	for _, mc := range c.controllers {
 		address := mc.getAddress()
-		if common.Include(addresses, address) {
+		if common.Includes(addresses, address) {
 			continue // ignore duplicate
 		}
 
@@ -193,15 +198,16 @@ func (c *connList) ClearConns() ResultMap {
 
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
-func (c *connList) makeRequests(
-	req interface{},
+func (c *connList) makeRequests(req interface{},
 	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
+	conns := c.controllers
 
-	addrs := []string{}
-	for _, mc := range c.controllers {
+	addrs := make([]string, 0, len(conns))
+	sort.Slice(conns, func(i, j int) bool { return conns[i].getAddress() < conns[j].getAddress() })
+	for _, mc := range conns {
 		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, req, ch)
 	}

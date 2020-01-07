@@ -222,6 +222,45 @@ err_grp:
 	return rc;
 }
 
+int
+dc_mgmt_add_mark(const char *mark)
+{
+	struct dc_mgmt_sys	*sys;
+	struct mgmt_mark_in	*in;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc = NULL;
+	crt_opcode_t		opc;
+	int			rc;
+
+	rc = dc_mgmt_sys_attach(NULL, &sys);
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		return -DER_INVAL;
+	}
+
+	ep.ep_grp = sys->sy_group;
+	ep.ep_rank = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_MARK, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_GOTO(err_grp, rc);
+	}
+
+	D_ASSERT(rpc != NULL);
+	in = crt_req_get(rpc);
+	in->m_mark = (char *)mark;
+	/** send the request */
+	rc = daos_rpc_send_wait(rpc);
+err_grp:
+	D_DEBUG(DB_MGMT, "mgmt mark: rc %d\n", rc);
+	dc_mgmt_sys_detach(sys);
+	return rc;
+
+}
+
 struct dc_mgmt_psr {
 	d_rank_t	 rank;
 	char		*uri;
@@ -398,21 +437,12 @@ put_attach_info(int npsrs, struct dc_mgmt_psr *psrs)
 }
 
 static int
-attach_group(const char *name, bool pmixless, int npsrs,
-	     struct dc_mgmt_psr *psrs, crt_group_t **groupp)
+attach_group(const char *name, int npsrs, struct dc_mgmt_psr *psrs,
+	     crt_group_t **groupp)
 {
 	crt_group_t    *group;
 	int		i;
 	int		rc;
-
-	if (!pmixless) {
-		rc = crt_group_attach((char *)name, &group);
-		if (rc != 0) {
-			D_ERROR("failed to attach to group %s: %d\n", name, rc);
-			goto err;
-		}
-		goto out;
-	}
 
 	rc = crt_group_view_create((char *)name, &group);
 	if (rc != 0) {
@@ -437,7 +467,6 @@ attach_group(const char *name, bool pmixless, int npsrs,
 		}
 	}
 
-out:
 	*groupp = group;
 	return 0;
 
@@ -448,16 +477,12 @@ err:
 }
 
 static void
-detach_group(bool server, bool pmixless, crt_group_t *group)
+detach_group(bool server, crt_group_t *group)
 {
 	int rc = 0;
 
-	if (!server) {
-		if (!pmixless)
-			rc = crt_group_detach(group);
-		else
-			rc = crt_group_view_destroy(group);
-	}
+	if (!server)
+		rc = crt_group_view_destroy(group);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 }
 
@@ -467,7 +492,6 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 {
 	struct dc_mgmt_sys     *sys;
 	crt_group_t	       *group;
-	bool			pmixless = false;
 	int			rc;
 
 	D_DEBUG(DB_MGMT, "attaching to system '%s'\n", name);
@@ -495,25 +519,19 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 		goto out;
 	}
 
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	if (pmixless) {
-		if (psrbs == NULL)
-			rc = get_attach_info(name, &sys->sy_npsrs,
-					     &sys->sy_psrs);
-		else
-			rc = get_attach_info_from_buf(npsrbs, psrbs,
-						      &sys->sy_npsrs,
-						      &sys->sy_psrs);
-		if (rc != 0)
-			goto err_sys;
-		if (sys->sy_npsrs < 1) {
-			D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
-			goto err_psrs;
-		}
+	if (psrbs == NULL)
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+	else
+		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
+					      &sys->sy_psrs);
+	if (rc != 0)
+		goto err_sys;
+	if (sys->sy_npsrs < 1) {
+		D_ERROR(">= 1 PSRs required: %d\n", sys->sy_npsrs);
+		goto err_psrs;
 	}
 
-	rc = attach_group(name, pmixless, sys->sy_npsrs, sys->sy_psrs,
-			  &sys->sy_group);
+	rc = attach_group(name, sys->sy_npsrs, sys->sy_psrs, &sys->sy_group);
 	if (rc != 0)
 		goto err_psrs;
 
@@ -522,8 +540,7 @@ out:
 	return 0;
 
 err_psrs:
-	if (pmixless)
-		put_attach_info(sys->sy_npsrs, sys->sy_psrs);
+	put_attach_info(sys->sy_npsrs, sys->sy_psrs);
 err_sys:
 	D_FREE(sys);
 err:
@@ -533,14 +550,11 @@ err:
 static void
 detach(struct dc_mgmt_sys *sys)
 {
-	bool pmixless = false;
-
 	D_DEBUG(DB_MGMT, "detaching from system '%s'\n", sys->sy_name);
 	D_ASSERT(d_list_empty(&sys->sy_link));
 	D_ASSERTF(sys->sy_ref == 0, "%d\n", sys->sy_ref);
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	detach_group(sys->sy_server, pmixless, sys->sy_group);
-	if (!sys->sy_server && pmixless)
+	detach_group(sys->sy_server, sys->sy_group);
+	if (!sys->sy_server)
 		put_attach_info(sys->sy_npsrs, sys->sy_psrs);
 	D_FREE(sys);
 }

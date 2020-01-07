@@ -40,21 +40,20 @@ import (
 // to MS.
 type mgmtModule struct {
 	log logging.Logger
+	sys string
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
 }
 
-func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req)
 	default:
-		return nil, errors.Errorf("unknown dRPC %d", method)
+		return nil, drpc.UnknownMethodFailure()
 	}
 }
-
-func (mod *mgmtModule) InitModule(state drpc.ModuleState) {}
 
 func (mod *mgmtModule) ID() int32 {
 	return drpc.ModuleMgmt
@@ -63,10 +62,14 @@ func (mod *mgmtModule) ID() int32 {
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
-		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
+		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
 	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+
+	if req.Sys != mod.sys {
+		return nil, errors.Errorf("unknown system name %s", req.Sys)
+	}
 
 	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
 	if err != nil {
@@ -89,7 +92,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	resmgmtpb, err := proto.Marshal(resp)
 	if err != nil {
-		return nil, errors.Wrap(err, "marshal GetAttachInfo response")
+		return nil, drpc.MarshalingFailure()
 	}
 
 	return resmgmtpb, nil

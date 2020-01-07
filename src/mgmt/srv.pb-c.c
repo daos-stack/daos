@@ -142,6 +142,96 @@ void   mgmt__join_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__join_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__leader_query_req__init
+                     (Mgmt__LeaderQueryReq         *message)
+{
+  static const Mgmt__LeaderQueryReq init_value = MGMT__LEADER_QUERY_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__leader_query_req__get_packed_size
+                     (const Mgmt__LeaderQueryReq *message)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__leader_query_req__pack
+                     (const Mgmt__LeaderQueryReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__leader_query_req__pack_to_buffer
+                     (const Mgmt__LeaderQueryReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__LeaderQueryReq *
+       mgmt__leader_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__LeaderQueryReq *)
+     protobuf_c_message_unpack (&mgmt__leader_query_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__leader_query_req__free_unpacked
+                     (Mgmt__LeaderQueryReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__leader_query_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__leader_query_resp__init
+                     (Mgmt__LeaderQueryResp         *message)
+{
+  static const Mgmt__LeaderQueryResp init_value = MGMT__LEADER_QUERY_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__leader_query_resp__get_packed_size
+                     (const Mgmt__LeaderQueryResp *message)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__leader_query_resp__pack
+                     (const Mgmt__LeaderQueryResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__leader_query_resp__pack_to_buffer
+                     (const Mgmt__LeaderQueryResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__LeaderQueryResp *
+       mgmt__leader_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__LeaderQueryResp *)
+     protobuf_c_message_unpack (&mgmt__leader_query_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__leader_query_resp__free_unpacked
+                     (Mgmt__LeaderQueryResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__leader_query_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__get_attach_info_req__init
                      (Mgmt__GetAttachInfoReq         *message)
 {
@@ -238,6 +328,51 @@ void   mgmt__get_attach_info_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__get_attach_info_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__prep_shutdown_req__init
+                     (Mgmt__PrepShutdownReq         *message)
+{
+  static const Mgmt__PrepShutdownReq init_value = MGMT__PREP_SHUTDOWN_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__prep_shutdown_req__get_packed_size
+                     (const Mgmt__PrepShutdownReq *message)
+{
+  assert(message->base.descriptor == &mgmt__prep_shutdown_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__prep_shutdown_req__pack
+                     (const Mgmt__PrepShutdownReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__prep_shutdown_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__prep_shutdown_req__pack_to_buffer
+                     (const Mgmt__PrepShutdownReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__prep_shutdown_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PrepShutdownReq *
+       mgmt__prep_shutdown_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PrepShutdownReq *)
+     protobuf_c_message_unpack (&mgmt__prep_shutdown_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__prep_shutdown_req__free_unpacked
+                     (Mgmt__PrepShutdownReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__prep_shutdown_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__kill_rank_req__init
                      (Mgmt__KillRankReq         *message)
 {
@@ -281,6 +416,96 @@ void   mgmt__kill_rank_req__free_unpacked
   if(!message)
     return;
   assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__restart_ranks_req__init
+                     (Mgmt__RestartRanksReq         *message)
+{
+  static const Mgmt__RestartRanksReq init_value = MGMT__RESTART_RANKS_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__restart_ranks_req__get_packed_size
+                     (const Mgmt__RestartRanksReq *message)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__restart_ranks_req__pack
+                     (const Mgmt__RestartRanksReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__restart_ranks_req__pack_to_buffer
+                     (const Mgmt__RestartRanksReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__RestartRanksReq *
+       mgmt__restart_ranks_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__RestartRanksReq *)
+     protobuf_c_message_unpack (&mgmt__restart_ranks_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__restart_ranks_req__free_unpacked
+                     (Mgmt__RestartRanksReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__restart_ranks_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__restart_ranks_resp__init
+                     (Mgmt__RestartRanksResp         *message)
+{
+  static const Mgmt__RestartRanksResp init_value = MGMT__RESTART_RANKS_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__restart_ranks_resp__get_packed_size
+                     (const Mgmt__RestartRanksResp *message)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__restart_ranks_resp__pack
+                     (const Mgmt__RestartRanksResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__restart_ranks_resp__pack_to_buffer
+                     (const Mgmt__RestartRanksResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__restart_ranks_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__RestartRanksResp *
+       mgmt__restart_ranks_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__RestartRanksResp *)
+     protobuf_c_message_unpack (&mgmt__restart_ranks_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__restart_ranks_resp__free_unpacked
+                     (Mgmt__RestartRanksResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__restart_ranks_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mgmt__set_rank_req__init
@@ -593,6 +818,95 @@ const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
   (ProtobufCMessageInit) mgmt__join_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__leader_query_req__field_descriptors[1] =
+{
+  {
+    "system",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__LeaderQueryReq, system),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__leader_query_req__field_indices_by_name[] = {
+  0,   /* field[0] = system */
+};
+static const ProtobufCIntRange mgmt__leader_query_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.LeaderQueryReq",
+  "LeaderQueryReq",
+  "Mgmt__LeaderQueryReq",
+  "mgmt",
+  sizeof(Mgmt__LeaderQueryReq),
+  1,
+  mgmt__leader_query_req__field_descriptors,
+  mgmt__leader_query_req__field_indices_by_name,
+  1,  mgmt__leader_query_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__leader_query_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__leader_query_resp__field_descriptors[2] =
+{
+  {
+    "currentLeader",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__LeaderQueryResp, currentleader),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__LeaderQueryResp, n_replicas),
+    offsetof(Mgmt__LeaderQueryResp, replicas),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__leader_query_resp__field_indices_by_name[] = {
+  0,   /* field[0] = currentLeader */
+  1,   /* field[1] = replicas */
+};
+static const ProtobufCIntRange mgmt__leader_query_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.LeaderQueryResp",
+  "LeaderQueryResp",
+  "Mgmt__LeaderQueryResp",
+  "mgmt",
+  sizeof(Mgmt__LeaderQueryResp),
+  2,
+  mgmt__leader_query_resp__field_descriptors,
+  mgmt__leader_query_resp__field_indices_by_name,
+  1,  mgmt__leader_query_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__leader_query_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__get_attach_info_req__field_descriptors[1] =
 {
   {
@@ -733,6 +1047,44 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__prep_shutdown_req__field_descriptors[1] =
+{
+  {
+    "rank",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PrepShutdownReq, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__prep_shutdown_req__field_indices_by_name[] = {
+  0,   /* field[0] = rank */
+};
+static const ProtobufCIntRange mgmt__prep_shutdown_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PrepShutdownReq",
+  "PrepShutdownReq",
+  "Mgmt__PrepShutdownReq",
+  "mgmt",
+  sizeof(Mgmt__PrepShutdownReq),
+  1,
+  mgmt__prep_shutdown_req__field_descriptors,
+  mgmt__prep_shutdown_req__field_indices_by_name,
+  1,  mgmt__prep_shutdown_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__prep_shutdown_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__kill_rank_req__field_descriptors[2] =
 {
   {
@@ -782,6 +1134,42 @@ const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor =
   mgmt__kill_rank_req__field_indices_by_name,
   1,  mgmt__kill_rank_req__number_ranges,
   (ProtobufCMessageInit) mgmt__kill_rank_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+#define mgmt__restart_ranks_req__field_descriptors NULL
+#define mgmt__restart_ranks_req__field_indices_by_name NULL
+#define mgmt__restart_ranks_req__number_ranges NULL
+const ProtobufCMessageDescriptor mgmt__restart_ranks_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.RestartRanksReq",
+  "RestartRanksReq",
+  "Mgmt__RestartRanksReq",
+  "mgmt",
+  sizeof(Mgmt__RestartRanksReq),
+  0,
+  mgmt__restart_ranks_req__field_descriptors,
+  mgmt__restart_ranks_req__field_indices_by_name,
+  0,  mgmt__restart_ranks_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__restart_ranks_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+#define mgmt__restart_ranks_resp__field_descriptors NULL
+#define mgmt__restart_ranks_resp__field_indices_by_name NULL
+#define mgmt__restart_ranks_resp__number_ranges NULL
+const ProtobufCMessageDescriptor mgmt__restart_ranks_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.RestartRanksResp",
+  "RestartRanksResp",
+  "Mgmt__RestartRanksResp",
+  "mgmt",
+  sizeof(Mgmt__RestartRanksResp),
+  0,
+  mgmt__restart_ranks_resp__field_descriptors,
+  mgmt__restart_ranks_resp__field_indices_by_name,
+  0,  mgmt__restart_ranks_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__restart_ranks_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[1] =

@@ -25,16 +25,19 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/client"
 )
 
-// readACLFile reads in a file representing an ACL, and translates it into a
-// list of ACE strings.
-func readACLFile(aclFile string) ([]string, error) {
+// readACLFile reads in a file representing an ACL, and translates it into an
+// AccessControlList structure
+func readACLFile(aclFile string) (*client.AccessControlList, error) {
 	file, err := os.Open(aclFile)
 	if err != nil {
 		return nil, errors.WithMessage(err, "opening ACL file")
@@ -50,10 +53,10 @@ func isACLFileComment(line string) bool {
 	return strings.HasPrefix(line, "#")
 }
 
-// parseACL reads the content from io.Reader and puts the results into a list
-// of Access Control Entry strings.
+// parseACL reads the content from io.Reader and puts the results into a
+// client.AccessControlList structure.
 // Assumes that ACE strings are provided one per line.
-func parseACL(reader io.Reader) ([]string, error) {
+func parseACL(reader io.Reader) (*client.AccessControlList, error) {
 	aceList := make([]string, 0)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -67,5 +70,30 @@ func parseACL(reader io.Reader) ([]string, error) {
 		}
 	}
 
-	return aceList, nil
+	return &client.AccessControlList{Entries: aceList}, nil
+}
+
+// formatACL converts the AccessControlList to a human-readable string.
+func formatACL(acl *client.AccessControlList) string {
+	var builder strings.Builder
+
+	if acl.HasOwner() {
+		fmt.Fprintf(&builder, "# Owner: %s\n", acl.Owner)
+	}
+
+	if acl.HasOwnerGroup() {
+		fmt.Fprintf(&builder, "# Owner Group: %s\n", acl.OwnerGroup)
+	}
+
+	builder.WriteString("# Entries:\n")
+	if acl.Empty() {
+		builder.WriteString("#   None\n")
+		return builder.String()
+	}
+
+	for _, ace := range acl.Entries {
+		fmt.Fprintf(&builder, "%s\n", ace)
+	}
+
+	return builder.String()
 }

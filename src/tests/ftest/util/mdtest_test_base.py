@@ -116,7 +116,7 @@ class MdtestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -168,7 +168,7 @@ class MdtestBase(TestWithServers):
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
             path = os.path.join(mpio_util.mpichinstall, "bin")
-            return Mpirun(self.mdtest_cmd, path)
+            return Mpirun(self.mdtest_cmd, path, mpitype="mpich")
 
         path = os.path.join(self.ompi_prefix, "bin")
         return Orterun(self.mdtest_cmd, path)

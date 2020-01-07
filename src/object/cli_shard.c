@@ -137,7 +137,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
-	iods = orw->orw_iods.ca_arrays;
+	iods = orw->orw_iod_array.oia_iods;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
 		/** Got csum successfully from server. Now poison it!! */
@@ -151,9 +151,16 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		orwo->orw_csum.ca_arrays,
 		orwo->orw_csum.ca_count);
 
-	for (i = 0; i < orw->orw_nr && rc == 0; i++)
-		rc = daos_csummer_verify(csummer, &iods[i],
-					 &sgls[i]);
+	for (i = 0; i < orw->orw_nr; i++) {
+		daos_iod_t *iod = &iods[i];
+
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
+
+		rc = daos_csummer_verify(csummer, iod, &sgls[i]);
+		if (rc != 0)
+			break;
+	}
 
 	/** Remove the extra link to the checksum memory to prevent duplicate
 	 * freeing
@@ -220,7 +227,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		uint64_t	*sizes;
 		int		 i, j;
 
-		iods = orw->orw_iods.ca_arrays;
+		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
 		if (orwo->orw_iod_sizes.ca_count != orw->orw_nr) {
@@ -415,8 +422,12 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
-	orw->orw_iods.ca_count = nr;
-	orw->orw_iods.ca_arrays = api_args->iods;
+	orw->orw_iod_array.oia_iod_nr = nr;
+	orw->orw_iod_array.oia_iods = api_args->iods;
+	orw->orw_iod_array.oia_oiods = args->oiods;
+	orw->orw_iod_array.oia_oiod_nr = (args->oiods == NULL) ?
+					 0 : nr;
+	orw->orw_iod_array.oia_offs = args->offs;
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
@@ -578,7 +589,9 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_ERROR("punch rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);
@@ -755,7 +768,13 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	oei->oei_epoch		= args->la_auxi.epoch;
+	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
+		oei->oei_epr = *obj_args->eprs;
+	} else {
+		oei->oei_epr.epr_lo = 0;
+		oei->oei_epr.epr_hi = args->la_auxi.epoch;
+	}
+
 	oei->oei_nr		= *obj_args->nr;
 	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
@@ -1032,7 +1051,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		D_ERROR("query_key rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);

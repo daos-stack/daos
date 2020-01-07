@@ -24,11 +24,9 @@
 package main
 
 import (
+	"net"
 	"os/user"
 	"strconv"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -97,44 +95,56 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 		log:    log,
 		config: tc,
 	}
-	mod.InitModule(nil)
+	mod.ext = &external{}
 	return &mod
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != drpc.MethodRequestCredentials {
-		return nil, errors.Errorf("Attempt to call unregistered function")
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+	if method == drpc.MethodRequestCredentials {
+		return m.getCredential(session)
 	}
 
-	info, err := security.DomainInfoFromUnixConn(m.log, client.Conn)
+	return nil, drpc.UnknownMethodFailure()
+}
+
+// getCredentials generates a signed user credential based on the data attached to
+// the Unix Domain Socket.
+func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
+	uConn, ok := session.Conn.(*net.UnixConn)
+	if !ok {
+		return nil, drpc.NewFailureWithMessage("connection is not a unix socket")
+	}
+
+	info, err := security.DomainInfoFromUnixConn(m.log, uConn)
 	if err != nil {
-		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
+		m.log.Errorf("Unable to get credentials for client socket: %s", err)
+		return m.credRespWithStatus(drpc.DaosMiscError)
 	}
 
 	signingKey, err := m.config.PrivateKey()
 	if err != nil {
-		return nil, err
+		m.log.Error(err.Error())
+		// something is wrong with the cert config
+		return m.credRespWithStatus(drpc.DaosInvalidInput)
 	}
 
-	response, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)
+	cred, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to get AuthSys struct")
+		m.log.Errorf("Failed to get AuthSys struct: %s", err)
+		return m.credRespWithStatus(drpc.DaosMiscError)
 	}
 
-	responseBytes, err := proto.Marshal(response)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to marshal response")
-	}
-	return responseBytes, nil
+	resp := &auth.GetCredResp{Cred: cred}
+	return drpc.Marshal(resp)
 }
 
-// InitModule initializes internal variables for the module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {
-	m.ext = &external{}
+func (m *SecurityModule) credRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
+	resp := &auth.GetCredResp{Status: int32(status)}
+	return drpc.Marshal(resp)
 }
 
-//ID will return Security module ID
+// ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
 	return drpc.ModuleSecurityAgent
 }

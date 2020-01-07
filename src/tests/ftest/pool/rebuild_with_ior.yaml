@@ -2,17 +2,18 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
+    - server-A
+    - server-B
+    - server-C
+    - server-D
   test_clients:
-    - boro-E
-    - boro-F
+    - client-E
+    - client-F
 timeout: 600
 server_config:
   name: daos_server
-  targets: 8
+  servers:
+    targets: 8
 testparams:
   ranks:
     rank_to_kill: 3

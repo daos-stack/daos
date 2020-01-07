@@ -40,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -78,11 +78,10 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 				AccessPoints: defaultApList,
 			},
 		)
-		mb := scm.DefaultMockBackend()
-		sys := scm.NewMockSysProvider(&scm.MockSysConfig{
+		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
-		})
-		mp := scm.NewProvider(log, mb, sys)
+		}
+		mp := scm.NewMockProvider(log, nil, msc)
 		srv := NewIOServerInstance(log, nil, mp, ms, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
@@ -123,7 +122,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 
 	for idx, i := range h.Instances() {
-		if uint32(*i._superblock.Rank) != uint32(idx) {
+		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 		if i == mi {
@@ -243,7 +242,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 		expStartCount int
 	}{
 		"normal startup/shutdown": {
-			expStartErr:   errors.New("context canceled"),
+			expStartErr:   context.Canceled,
 			expStartCount: maxIoServers,
 		},
 		"fails to start": {
@@ -295,7 +294,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 					tc.trc.StartCb = func() { instanceStarts++ }
 				}
 				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
-				bdevProvider, err := storage.NewBdevProvider(log,
+				bdevProvider, err := bdev.NewClassProvider(log,
 					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 				if err != nil {
 					t.Fatal(err)
@@ -305,7 +304,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 					ControlAddr:  &net.TCPAddr{},
 					AccessPoints: []string{"localhost"},
 				}
-				msClient := newMgmtSvcClient(nil, log, msClientCfg)
+				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
 				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
 				if err := harness.AddInstance(srv); err != nil {
 					t.Fatal(err)
@@ -326,7 +325,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 			done := make(chan struct{})
 			ctx, shutdown := context.WithCancel(context.Background())
 			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
-				common.CmpErr(t, expStartErr, th.Start(ctx))
+				common.CmpErr(t, expStartErr, th.Start(ctx, nil, nil))
 				close(done)
 			}(t, tc.expStartErr, harness)
 
@@ -336,6 +335,24 @@ func TestHarnessIOServerStart(t *testing.T) {
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
+			}
+
+			if tc.expStartErr != context.Canceled {
+				return
+			}
+
+			for _, srv := range harness.Instances() {
+				expCall := &drpc.Call{
+					Module: drpc.ModuleMgmt,
+					Method: drpc.MethodSetUp,
+				}
+				lastCall := srv._drpcClient.(*mockDrpcClient).SendMsgInputCall
+				if lastCall == nil ||
+					lastCall.Module != expCall.Module ||
+					lastCall.Method != expCall.Method {
+					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
+						srv.Index(), expCall, lastCall)
+				}
 			}
 		})
 	}

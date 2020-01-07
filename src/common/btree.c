@@ -163,8 +163,8 @@ static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
-static void btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
-			     void *args, bool *empty_rc);
+static int btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
+			    void *args, bool *empty_rc);
 static int btr_root_tx_add(struct btr_context *tcx);
 static bool btr_probe_prev(struct btr_context *tcx);
 static bool btr_probe_next(struct btr_context *tcx);
@@ -494,11 +494,19 @@ btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
 
-static void
+static int
 btr_rec_free(struct btr_context *tcx, struct btr_record *rec, void *args)
 {
-	if (!UMOFF_IS_NULL(rec->rec_off))
-		btr_ops(tcx)->to_rec_free(&tcx->tc_tins, rec, args);
+	int	rc;
+
+	if (UMOFF_IS_NULL(rec->rec_off))
+		return 0;
+
+	rc = btr_ops(tcx)->to_rec_free(&tcx->tc_tins, rec, args);
+	if (rc != 0)
+		D_ERROR("Failed to free rec: rc = %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -1302,7 +1310,6 @@ btr_probe_valid(dbtree_probe_opc_t opc)
 	    opc == BTR_PROBE_EQ)
 		return true;
 
-	opc &= ~BTR_PROBE_MATCHED;
 	return (opc == BTR_PROBE_GT || opc == BTR_PROBE_LT ||
 		opc == BTR_PROBE_GE || opc == BTR_PROBE_LE);
 }
@@ -1432,7 +1439,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	alb.intent = intent;
 
 again:
-	switch (probe_opc & ~BTR_PROBE_MATCHED) {
+	switch (probe_opc) {
 	default:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
@@ -1493,12 +1500,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1547,12 +1548,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1582,24 +1577,8 @@ again:
 	}
 
 	D_ASSERT(cmp != BTR_CMP_EQ);
-	if (cmp & BTR_CMP_MATCHED) {
-		rc = PROBE_RC_OK;
-	} else {
-		if (probe_opc & BTR_PROBE_MATCHED) {
-			rc = PROBE_RC_NONE;
-			/* restore the probe trace for follow-on insert. */
-			if (trace) {
-				D_ASSERT(saved != -1);
-
-				memcpy(tcx->tc_trace, trace,
-				       tcx->tc_depth * sizeof(*trace));
-				btr_trace_set(tcx, level, nd_off, saved);
-			}
-		} else {
-			/* GT/GE/LT/LE without MATCHED */
-			rc = PROBE_RC_OK;
-		}
-	}
+	/* GT/GE/LT/LE */
+	rc = PROBE_RC_OK;
  out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
@@ -1947,7 +1926,11 @@ btr_tx_end(struct btr_context *tcx, int rc)
 	if (rc != 0)
 		return umem_tx_abort(btr_umm(tcx), rc);
 
-	return umem_tx_commit(btr_umm(tcx));
+	rc = umem_tx_commit(btr_umm(tcx));
+	if (rc != 0)
+		D_ERROR("Failed to commit the transaction: %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -2020,18 +2003,21 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
  * NB: this function can delete the last record in the node, it means that
  * caller should be responsible for deleting this node.
  */
-static void
+static int
 btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
 		       bool shift_left, void *args)
 {
 	struct btr_record *rec;
 	struct btr_node   *nd;
+	int		   rc;
 
 	nd = btr_off2ptr(tcx, trace->tr_node);
 	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
 
 	rec = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
-	btr_rec_free(tcx, rec, args);
+	rc = btr_rec_free(tcx, rec, args);
+	if (rc != 0)
+		return rc;
 
 	nd->tn_keyn--;
 	if (shift_left && trace->tr_at != nd->tn_keyn) {
@@ -2049,6 +2035,8 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
 		btr_rec_move(tcx, btr_rec_at(tcx, rec, 1), rec,
 			     trace->tr_at);
 	}
+
+	return 0;
 }
 
 /**
@@ -2072,7 +2060,7 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
  *				TRUE	= right
  *				FALSE	= left
  */
-static void
+static int
 btr_node_del_leaf_rebal(struct btr_context *tcx,
 			struct btr_trace *par_tr, struct btr_trace *cur_tr,
 			umem_off_t sib_off, bool sib_on_right,
@@ -2083,12 +2071,16 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 	struct btr_record	*par_rec;
 	struct btr_record	*src_rec;
 	struct btr_record	*dst_rec;
+	int			 rc;
 
 	cur_nd = btr_off2ptr(tcx, cur_tr->tr_node);
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	D_ASSERT(sib_nd->tn_keyn > 1);
 
-	btr_node_del_leaf_only(tcx, cur_tr, sib_on_right, args);
+	rc = btr_node_del_leaf_only(tcx, cur_tr, sib_on_right, args);
+	if (rc != 0)
+		return rc;
+
 	D_DEBUG(DB_TRACE, "Grab records from the %s sibling, cur:sib=%d:%d\n",
 		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
 		sib_nd->tn_keyn);
@@ -2127,6 +2119,8 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 	}
 	cur_nd->tn_keyn++;
 	sib_nd->tn_keyn--;
+
+	return 0;
 }
 
 /**
@@ -2140,7 +2134,7 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
  * NB: This function should be called only if btr_node_del_leaf_rebal() cannot
  * be called (cannot rebalance the current node and its sibling).
  */
-static void
+static int
 btr_node_del_leaf_merge(struct btr_context *tcx,
 			struct btr_trace *par_tr, struct btr_trace *cur_tr,
 			umem_off_t sib_off, bool sib_on_right,
@@ -2150,11 +2144,15 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 	struct btr_node		*dst_nd;
 	struct btr_record	*src_rec;
 	struct btr_record	*dst_rec;
+	int			 rc;
 
 	/* NB: always left shift because it is easier for the following
 	 * operations.
 	 */
-	btr_node_del_leaf_only(tcx, cur_tr, true, args);
+	rc = btr_node_del_leaf_only(tcx, cur_tr, true, args);
+	if (rc != 0)
+		return rc;
+
 	if (sib_on_right) {
 		/* move all records from the right sibling node to the
 		 * current node.
@@ -2201,6 +2199,8 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 
 	/* point at the node that needs be removed from the parent */
 	par_tr->tr_at += sib_on_right;
+
+	return 0;
 }
 
 /**
@@ -2213,35 +2213,42 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
  *   leaf record as well, merge the current node with the sibling after
  *   the deletion.
  *
- * This function returns false if the deletion does not need to bubble up
- * to upper level tree, otherwise returns true.
+ * \return	0	need to bubble up to upper level tree.
+ * \return	+1	NOT need to bubble up to upper level tree.
+ * \return	-ev	for failure cases.
  */
-static bool
+static int
 btr_node_del_leaf(struct btr_context *tcx,
 		  struct btr_trace *par_tr, struct btr_trace *cur_tr,
 		  umem_off_t sib_off, bool sib_on_right, void *args)
 {
 	struct btr_node *sib_nd;
+	int		 rc;
 
 	if (UMOFF_IS_NULL(sib_off)) {
 		/* don't need to rebalance or merge */
-		btr_node_del_leaf_only(tcx, cur_tr, true, args);
-		return false;
+		rc = btr_node_del_leaf_only(tcx, cur_tr, true, args);
+		if (rc != 0)
+			return rc;
+
+		return 1;
 	}
 
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	if (sib_nd->tn_keyn > 1) {
 		/* grab a record from the sibling */
-		btr_node_del_leaf_rebal(tcx, par_tr, cur_tr,
-					sib_off, sib_on_right,
-					args);
-		return false;
+		rc = btr_node_del_leaf_rebal(tcx, par_tr, cur_tr, sib_off,
+					     sib_on_right, args);
+		if (rc != 0)
+			return rc;
+
+		return 1;
 	}
 
 	/* the sibling can't give record to the current node, merge them */
-	btr_node_del_leaf_merge(tcx, par_tr, cur_tr, sib_off, sib_on_right,
-				args);
-	return true;
+	rc = btr_node_del_leaf_merge(tcx, par_tr, cur_tr, sib_off, sib_on_right,
+				     args);
+	return rc;
 }
 
 /**
@@ -2255,13 +2262,14 @@ btr_node_del_leaf(struct btr_context *tcx,
  * function, caller should either grab a child from a sibling node, or move
  * the only child of this node to a sibling node, then free this node.
  */
-static void
+static int
 btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 			bool shift_left)
 {
 	struct btr_node		*nd;
 	struct btr_record	*rec;
 	umem_off_t		 off;
+	int			 rc;
 
 	nd = btr_off2ptr(tcx, trace->tr_node);
 	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn >= trace->tr_at);
@@ -2272,7 +2280,9 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 	/* NB: we always delete record/node from the bottom to top, so it is
 	 * unnecessary to do cascading free anymore (btr_node_destroy).
 	 */
-	btr_node_free(tcx, off);
+	rc = btr_node_free(tcx, off);
+	if (rc != 0)
+		return rc;
 
 	nd->tn_keyn--;
 	if (shift_left) {
@@ -2305,6 +2315,8 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 			rec->rec_off = nd->tn_child;
 		}
 	}
+
+	return 0;
 }
 
 /**
@@ -2317,7 +2329,7 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
  *     to grab more in the future.
  * NB: see \a btr_node_del_leaf_rebal for the details of parameters
  */
-static void
+static int
 btr_node_del_child_rebal(struct btr_context *tcx,
 			 struct btr_trace *par_tr, struct btr_trace *cur_tr,
 			 umem_off_t sib_off, bool sib_on_right,
@@ -2328,12 +2340,16 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 	struct btr_record	*par_rec;
 	struct btr_record	*src_rec;
 	struct btr_record	*dst_rec;
+	int			 rc;
 
 	cur_nd = btr_off2ptr(tcx, cur_tr->tr_node);
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	D_ASSERT(sib_nd->tn_keyn > 1);
 
-	btr_node_del_child_only(tcx, cur_tr, sib_on_right);
+	rc = btr_node_del_child_only(tcx, cur_tr, sib_on_right);
+	if (rc != 0)
+		return rc;
+
 	D_DEBUG(DB_TRACE, "Grab children from the %s sibling, cur:sib=%d:%d\n",
 		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
 		sib_nd->tn_keyn);
@@ -2368,6 +2384,8 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 	}
 	cur_nd->tn_keyn++;
 	sib_nd->tn_keyn--;
+
+	return 0;
 }
 
 /**
@@ -2379,7 +2397,7 @@ btr_node_del_child_rebal(struct btr_context *tcx,
  *
  * NB: see \a btr_node_del_leaf_rebal for the details of parameters
  */
-static void
+static int
 btr_node_del_child_merge(struct btr_context *tcx,
 			 struct btr_trace *par_tr, struct btr_trace *cur_tr,
 			 umem_off_t sib_off, bool sib_on_right, void *args)
@@ -2389,11 +2407,15 @@ btr_node_del_child_merge(struct btr_context *tcx,
 	struct btr_record	*par_rec;
 	struct btr_record	*src_rec;
 	struct btr_record	*dst_rec;
+	int			 rc;
 
 	/* NB: always left shift because it is easier for the following
 	 * operations.
 	 */
-	btr_node_del_child_only(tcx, cur_tr, true);
+	rc = btr_node_del_child_only(tcx, cur_tr, true);
+	if (rc != 0)
+		return rc;
+
 	if (sib_on_right) {
 		/* move children from the right sibling to the current node. */
 		src_nd = btr_off2ptr(tcx, sib_off);
@@ -2443,6 +2465,8 @@ btr_node_del_child_merge(struct btr_context *tcx,
 
 	/* point at the node that needs be removed from the parent */
 	par_tr->tr_at += sib_on_right;
+
+	return 0;
 }
 
 /**
@@ -2454,35 +2478,42 @@ btr_node_del_child_merge(struct btr_context *tcx,
  *   children as well, merge the current node with the sibling after the
  *   deletion.
  *
- * This function returns false if the deletion does not need to bubble up
- * to upper level tree, otherwise returns true.
+ * \return	0	need to bubble up to upper level tree.
+ * \return	+1	NOT need to bubble up to upper level tree.
+ * \return	-ev	for failure cases.
  */
-static bool
+static int
 btr_node_del_child(struct btr_context *tcx,
 		   struct btr_trace *par_tr, struct btr_trace *cur_tr,
 		   umem_off_t sib_off, bool sib_on_right, void *args)
 {
 	struct btr_node *sib_nd;
+	int		 rc;
 
 	if (UMOFF_IS_NULL(sib_off)) {
 		/* don't need to rebalance or merge */
-		btr_node_del_child_only(tcx, cur_tr, true);
-		return false;
+		rc = btr_node_del_child_only(tcx, cur_tr, true);
+		if (rc != 0)
+			return rc;
+
+		return 1;
 	}
 
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	if (sib_nd->tn_keyn > 1) {
 		/* grab a child from the sibling */
-		btr_node_del_child_rebal(tcx, par_tr, cur_tr,
-					 sib_off, sib_on_right,
-					 args);
-		return false;
+		rc = btr_node_del_child_rebal(tcx, par_tr, cur_tr, sib_off,
+					      sib_on_right, args);
+		if (rc != 0)
+			return rc;
+
+		return 1;
 	}
 
 	/* the sibling can't give any record to the current node, merge them */
-	btr_node_del_child_merge(tcx, par_tr, cur_tr, sib_off, sib_on_right,
-				 args);
-	return true;
+	rc = btr_node_del_child_merge(tcx, par_tr, cur_tr, sib_off,
+				      sib_on_right, args);
+	return rc;
 }
 
 /**
@@ -2498,7 +2529,7 @@ btr_node_del_child(struct btr_context *tcx,
  * \param cur_tr	[IN]	Probe trace of the record being deleted in the
  *				current node
  */
-static bool
+static int
 btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		 struct btr_trace *cur_tr, void *args)
 {
@@ -2506,7 +2537,6 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 	struct btr_node		*cur_nd;
 	struct btr_node		*sib_nd;
 	bool			 is_leaf;
-	bool			 bubble_up;
 	bool			 sib_on_right;
 	umem_off_t		 sib_off;
 
@@ -2562,26 +2592,32 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 	}
 
 	if (btr_has_tx(tcx)) {
-		btr_node_tx_add(tcx, cur_tr->tr_node);
+		int	rc;
+
+		rc = btr_node_tx_add(tcx, cur_tr->tr_node);
+		if (rc != 0)
+			return rc;
+
 		/* if sib_off isn't NULL, it means rebalance/merge will happen
 		 * and the sibling and parent nodes will be changed.
 		 */
 		if (!UMOFF_IS_NULL(sib_off)) {
-			btr_node_tx_add(tcx, sib_off);
-			btr_node_tx_add(tcx, par_tr->tr_node);
+			rc = btr_node_tx_add(tcx, sib_off);
+			if (rc != 0)
+				return rc;
+
+			rc = btr_node_tx_add(tcx, par_tr->tr_node);
+			if (rc != 0)
+				return rc;
 		}
 	}
 
-	if (is_leaf) {
-		bubble_up = btr_node_del_leaf(tcx, par_tr, cur_tr,
-					      sib_off, sib_on_right,
-					      args);
-	} else {
-		bubble_up = btr_node_del_child(tcx, par_tr, cur_tr,
-					       sib_off, sib_on_right,
-					       args);
-	}
-	return bubble_up;
+	if (is_leaf)
+		return btr_node_del_leaf(tcx, par_tr, cur_tr, sib_off,
+					 sib_on_right, args);
+
+	return btr_node_del_child(tcx, par_tr, cur_tr, sib_off,
+				  sib_on_right, args);
 }
 
 /**
@@ -2593,11 +2629,12 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
  *   will be deleted as well. If there is only one child left, then that child
  *   will become the new root, the original root node will be freed.
  */
-static void
+static int
 btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 {
 	struct btr_node		*node;
 	struct btr_root		*root;
+	int			 rc = 0;
 
 	root = tcx->tc_tins.ti_root;
 	node = btr_off2ptr(tcx, trace->tr_node);
@@ -2614,15 +2651,24 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			/* have more than one record, simply remove the record
 			 * to be deleted.
 			 */
-			if (btr_has_tx(tcx))
-				btr_node_tx_add(tcx, trace->tr_node);
+			if (btr_has_tx(tcx)) {
+				rc = btr_node_tx_add(tcx, trace->tr_node);
+				if (rc != 0)
+					return rc;
+			}
 
-			btr_node_del_leaf_only(tcx, trace, true, args);
+			rc = btr_node_del_leaf_only(tcx, trace, true, args);
 		} else {
 
-			btr_node_destroy(tcx, trace->tr_node, args, NULL);
-			if (btr_has_tx(tcx))
-				btr_root_tx_add(tcx);
+			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
+			if (rc != 0)
+				return rc;
+
+			if (btr_has_tx(tcx)) {
+				rc = btr_root_tx_add(tcx);
+				if (rc != 0)
+					return rc;
+			}
 
 			root->tr_depth	= 0;
 			root->tr_node	= BTR_NODE_NULL;
@@ -2630,35 +2676,46 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			btr_context_set_depth(tcx, 0);
 			D_DEBUG(DB_TRACE, "Tree is empty now.\n");
 		}
-
 	} else {
 		/* non-leaf node */
 		D_DEBUG(DB_TRACE, "Delete child from the root, key_nr=%d.\n",
 			node->tn_keyn);
 
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, trace->tr_node);
+		if (btr_has_tx(tcx)) {
+			rc = btr_node_tx_add(tcx, trace->tr_node);
+			if (rc != 0)
+				return rc;
+		}
 
-		btr_node_del_child_only(tcx, trace, true);
+		rc = btr_node_del_child_only(tcx, trace, true);
+		if (rc != 0)
+			return rc;
+
 		if (node->tn_keyn == 0) {
 			/* only has zero key and one child left, reduce
 			 * the tree depth by using the only child node
 			 * to replace the current node.
 			 */
-			if (btr_has_tx(tcx))
-				btr_root_tx_add(tcx);
+			if (btr_has_tx(tcx)) {
+				rc = btr_root_tx_add(tcx);
+				if (rc != 0)
+					return rc;
+			}
 
 			root->tr_depth--;
 			root->tr_node = node->tn_child;
 
 			btr_context_set_depth(tcx, root->tr_depth);
 			btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT);
-			btr_node_free(tcx, trace->tr_node);
+			rc = btr_node_free(tcx, trace->tr_node);
 
-			D_DEBUG(DB_TRACE, "Shrink tree depth to %d\n",
-				tcx->tc_depth);
+			D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+				 "Shrink tree depth to %d: rc = %d\n",
+				 tcx->tc_depth, rc);
 		}
 	}
+
+	return rc;
 }
 
 static int
@@ -2666,22 +2723,25 @@ btr_delete(struct btr_context *tcx, void *args)
 {
 	struct btr_trace	*par_tr;
 	struct btr_trace	*cur_tr;
+	int			 rc = 0;
 
 	for (cur_tr = &tcx->tc_trace[tcx->tc_depth - 1];; cur_tr = par_tr) {
-		bool	bubble_up;
-
 		if (cur_tr == tcx->tc_trace) { /* root */
-			btr_root_del_rec(tcx, cur_tr, args);
+			rc = btr_root_del_rec(tcx, cur_tr, args);
 			break;
 		}
 
 		par_tr = cur_tr - 1;
-		bubble_up = btr_node_del_rec(tcx, par_tr, cur_tr, args);
-		if (!bubble_up)
+		rc = btr_node_del_rec(tcx, par_tr, cur_tr, args);
+		if (rc != 0) {
+			if (rc > 0)
+				rc = 0;
 			break;
+		}
 	}
-	D_DEBUG(DB_TRACE, "Deletion done\n");
-	return 0; /* no error so far */
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, "Deletion done: rc = %d\n", rc);
+	return rc;
 }
 
 static int
@@ -3101,13 +3161,14 @@ dbtree_close(daos_handle_t toh)
 }
 
 /** Destroy a tree node and all its children recursively. */
-static void
+static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
 	bool		 empty	= true;
+	int		 rc;
 	int		 i;
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
@@ -3122,7 +3183,10 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 			struct btr_record *rec;
 
 			rec = btr_node_rec_at(tcx, nd_off, i);
-			btr_rec_free(tcx, rec, args);
+			rc = btr_rec_free(tcx, rec, args);
+			if (rc != 0)
+				return rc;
+
 			if (!tcx->tc_creds_on)
 				continue;
 
@@ -3139,7 +3203,10 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 			umem_off_t	child_off;
 
 			child_off = btr_node_child_at(tcx, nd_off, i);
-			btr_node_destroy(tcx, child_off, args, &empty);
+			rc = btr_node_destroy(tcx, child_off, args, &empty);
+			if (rc != 0)
+				return rc;
+
 			if (!tcx->tc_creds_on || tcx->tc_creds > 0) {
 				D_ASSERT(empty);
 				continue;
@@ -3156,10 +3223,16 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 	}
 
 	if (empty) {
-		btr_node_free(tcx, nd_off);
+		rc = btr_node_free(tcx, nd_off);
+		if (rc != 0)
+			return rc;
 	} else {
-		if (btr_has_tx(tcx))
-			btr_node_tx_add(tcx, nd_off);
+		if (btr_has_tx(tcx)) {
+			rc = btr_node_tx_add(tcx, nd_off);
+			if (rc != 0)
+				return rc;
+		}
+
 		/* NB: i can be zero for non-leaf node */
 		D_ASSERT(i >= 0);
 		nd->tn_keyn = i;
@@ -3167,6 +3240,8 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 
 	if (empty_rc)
 		*empty_rc = empty;
+
+	return 0;
 }
 
 /** destroy all tree nodes and records, then release the root */

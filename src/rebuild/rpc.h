@@ -68,7 +68,6 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uuid_t)		(rsi_pool_hdl_uuid)	CRT_VAR) \
 	((uuid_t)		(rsi_cont_hdl_uuid)	CRT_VAR) \
 	((d_rank_list_t)	(rsi_svc_list)		CRT_PTR) \
-	((d_iov_t)		(rsi_ns_iov)		CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
@@ -79,6 +78,7 @@ extern struct crt_proto_format rebuild_proto_fmt;
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
 	((d_rank_list_t)	(rso_ranks_list)	CRT_PTR) \
+	((uint64_t)		(rso_stable_epoch)	CRT_VAR) \
 	((int32_t)		(rso_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)

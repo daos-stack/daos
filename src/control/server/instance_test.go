@@ -25,6 +25,7 @@ package server
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,6 +79,33 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 	}
 
 	waitForIosrvReady(t, instance)
+}
+
+func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
+	return &srvpb.BioErrorReq{
+		DrpcListenerSock: sockPath,
+		InstanceIdx:      idx,
+		TgtId:            tgt,
+		UnmapErr:         unmap,
+		ReadErr:          read,
+		WriteErr:         write,
+	}
+}
+
+func TestIOServerInstance_BioError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	instance := getTestIOServerInstance(log)
+
+	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
+
+	instance.BioErrorNotify(req)
+
+	expectedOut := "detected blob I/O error"
+	if !strings.Contains(buf.String(), expectedOut) {
+		t.Fatal("No I/O error notification detected")
+	}
 }
 
 func TestIOServerInstance_CallDrpc(t *testing.T) {
@@ -196,8 +224,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, nil, ms)
+			mp := scm.NewMockProvider(log, nil, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
@@ -323,9 +350,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			mb := scm.NewMockBackend(tc.mbCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, mb, ms)
+			mp := scm.NewMockProvider(log, tc.mbCfg, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()

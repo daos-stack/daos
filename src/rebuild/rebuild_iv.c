@@ -138,12 +138,15 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				src_iv->riv_toberb_obj_count;
 			rgt->rgt_status.rs_obj_nr += src_iv->riv_obj_count;
 			rgt->rgt_status.rs_rec_nr += src_iv->riv_rec_count;
+			rgt->rgt_status.rs_size += src_iv->riv_size;
 		}
 
 		rebuild_global_status_update(rgt, src_iv);
-		if (rgt->rgt_status.rs_errno == 0)
+		if (rgt->rgt_status.rs_errno == 0) {
 			rgt->rgt_status.rs_errno = src_iv->riv_status;
-
+			if (src_iv->riv_status != 0)
+				rgt->rgt_status.rs_fail_rank = src_iv->riv_rank;
+		}
 		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
 			"toberb_obj/rb_obj/rec/global done/status/rank "
 			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
@@ -172,8 +175,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	dst_iv->riv_global_done = src_iv->riv_global_done;
 	dst_iv->riv_global_scan_done = src_iv->riv_global_scan_done;
+	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
 
-	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done) {
+	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
+	    dst_iv->riv_stable_epoch) {
 		struct rebuild_tgt_pool_tracker *rpt;
 		d_rank_t	rank;
 		int		rc;
@@ -187,11 +192,18 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return 0;
 		}
 
-		D_DEBUG(DB_REBUILD, DF_UUID" rebuild finished"
-			" sgl/gl %d/%d\n",
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild status gsd/gd %d/%d"
+			" stable eph "DF_U64"\n",
 			 DP_UUID(src_iv->riv_pool_uuid),
 			 dst_iv->riv_global_scan_done,
-			 dst_iv->riv_global_done);
+			 dst_iv->riv_global_done, dst_iv->riv_stable_epoch);
+
+		if (rpt->rt_stable_epoch == 0)
+			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
+		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
+			D_WARN("leader change stable epoch from "DF_U64" to "
+			       DF_U64 "\n", rpt->rt_stable_epoch,
+			       dst_iv->riv_stable_epoch);
 
 		/* on svc nodes update the rebuild status completed list
 		 * to serve rebuild status querying in case of master
@@ -209,6 +221,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rs.rs_rec_nr	= src_iv->riv_rec_count;
 			rs.rs_toberb_obj_nr	=
 				src_iv->riv_toberb_obj_count;
+			rs.rs_size	= src_iv->riv_size;
 
 			rc = rebuild_status_completed_update(
 					src_iv->riv_pool_uuid, &rs);
@@ -263,7 +276,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_fetch(ns, &key, &sgl);
+	rc = ds_iv_fetch(ns, &key, &sgl, true /* retry */);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -288,7 +301,8 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
+			  true /* retry */);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 

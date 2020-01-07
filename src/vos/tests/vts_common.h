@@ -40,12 +40,6 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
-
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
@@ -126,8 +120,11 @@ int run_discard_tests(void);
 int run_aggregate_tests(bool slow);
 int run_dtx_tests(void);
 int run_gc_tests(void);
+int run_pm_tests(void);
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
 
 int run_ilog_tests(void);
+
+int run_csum_extent_tests(void);
 
 #endif

@@ -32,6 +32,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -110,9 +113,8 @@ func TestReadACLFile_Success(t *testing.T) {
 	}
 
 	// Just sanity check - parsing is already tested more in-depth below
-	if len(result) != expectedNumACEs {
-		t.Errorf("Expected %d items, got %d",
-			expectedNumACEs, len(result))
+	if len(result.Entries) != expectedNumACEs {
+		t.Errorf("Expected %d items, got %d", expectedNumACEs, len(result.Entries))
 	}
 }
 
@@ -129,13 +131,14 @@ func TestParseACL_EmptyFile(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 0 {
-		t.Errorf("Expected empty result, got %d items", len(result))
+	if len(result.Entries) != 0 {
+		t.Errorf("Expected empty result, got %d items", len(result.Entries))
 	}
 }
 
 func TestParseACL_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
+	expectedACL := &client.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + "\n",
 	}
@@ -150,17 +153,14 @@ func TestParseACL_OneValidACE(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 result, got %d items", len(result))
-	}
-
-	if result[0] != expectedACE {
-		t.Errorf("Expected ACE '%s', got '%s'", expectedACE, result[0])
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
 func TestParseACL_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
+	expectedACL := &client.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + " \n\n",
 	}
@@ -175,12 +175,8 @@ func TestParseACL_WhitespaceExcluded(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 result, got %d items", len(result))
-	}
-
-	if result[0] != expectedACE {
-		t.Errorf("Expected ACE '%s', got '%s'", expectedACE, result[0])
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
@@ -191,6 +187,9 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 		"A:g:readers@:r",
 		"L:f:baduser@:rw",
 		"U:f:EVERYONE@:rw",
+	}
+	expectedACL := &client.AccessControlList{
+		Entries: expectedACEs,
 	}
 
 	mockFile := &mockReader{
@@ -207,16 +206,8 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != len(expectedACEs) {
-		t.Fatalf("Expected %d results, got %d items",
-			len(expectedACEs), len(result))
-	}
-
-	for i, resultACE := range result {
-		if resultACE != expectedACEs[i] {
-			t.Errorf("Expected ACE string '%s' at index %d, got '%s'",
-				expectedACEs[i], i, resultACE)
-		}
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
@@ -248,6 +239,9 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 		"L:f:baduser@:rw",
 		"U:f:EVERYONE@:rw",
 	}
+	expectedACL := &client.AccessControlList{
+		Entries: expectedACEs,
+	}
 
 	input := []string{
 		"# This is a comment",
@@ -269,7 +263,62 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if diff := cmp.Diff(result, expectedACEs); diff != "" {
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
 		t.Errorf("Unexpected ACE list: %v\n", diff)
+	}
+}
+
+func TestFormatACL(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl    *client.AccessControlList
+		expStr string
+	}{
+		"nil": {
+			expStr: "# Entries:\n#   None\n",
+		},
+		"empty": {
+			acl:    &client.AccessControlList{},
+			expStr: "# Entries:\n#   None\n",
+		},
+		"single": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr: "# Entries:\nA::user@:rw\n",
+		},
+		"multiple": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
+		},
+		"with owner user": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+				},
+				Owner: "bob@",
+			},
+			expStr: "# Owner: bob@\n# Entries:\nA::OWNER@:rw\n",
+		},
+		"with owner group": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A:G:GROUP@:rw",
+				},
+				OwnerGroup: "admins@",
+			},
+			expStr: "# Owner Group: admins@\n# Entries:\nA:G:GROUP@:rw\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, formatACL(tc.acl), tc.expStr, "string output didn't match")
+		})
 	}
 }

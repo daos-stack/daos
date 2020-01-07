@@ -23,10 +23,9 @@
 '''
 import os
 import traceback
-import json
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 
 
 class BadCreateTest(TestWithServers):
@@ -115,14 +114,9 @@ class BadCreateTest(TestWithServers):
                 break
 
         try:
-            # setup the DAOS python API
-            with open('../../../.build_vars.json') as build_file:
-                data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib/')
-
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(context)
+            pool = DaosPool(self.context)
             pool.create(mode, uid, gid, size, group, targetptr)
 
             if expected_result in ['FAIL']:
@@ -134,5 +128,4 @@ class BadCreateTest(TestWithServers):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if pool is not None and pool.attached:
-                pool.destroy(1)
+            self.destroy_pools(pool)

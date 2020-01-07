@@ -26,8 +26,8 @@
  * This consists of dc_pool methods that do not belong to DAOS API.
  */
 
-#ifndef __DAOS_POOL_H__
-#define __DAOS_POOL_H__
+#ifndef __DD_POOL_H__
+#define __DD_POOL_H__
 
 #include <daos/common.h>
 #include <gurt/hash.h>
@@ -35,6 +35,7 @@
 #include <daos/rsvc.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include <daos_pool.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -81,6 +82,7 @@ int dc_pool_exclude_out(tse_task_t *task);
 int dc_pool_add(tse_task_t *task);
 int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
+int dc_pool_list_cont(tse_task_t *task);
 
 int dc_pool_add_replicas(tse_task_t *task);
 int dc_pool_remove_replicas(tse_task_t *task);
@@ -96,4 +98,4 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 int dc_pool_local_close(daos_handle_t ph);
 int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
 
-#endif /* __DAOS_POOL_H__ */
+#endif /* __DD_POOL_H__ */

@@ -1,21 +1,24 @@
+server_manager:
+    srv_timeout: 500
 hosts:
-   test_machines:
-        test_servers:
-            - boro-A
-            - boro-B
-            - boro-C
-            - boro-D
-        test_clients:
-            - boro-E
-            - boro-F
-            - boro-G
-            - boro-H
-timeout: 500
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 1800
 server_config:
     name: daos_server
-    server:
+    servers:
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
@@ -24,6 +27,7 @@ pool:
         group: daos_server
     createsize:
         scm_size: 3000000000
+        nvme_size: 9000000000
     createsvc:
         svcn: 1
 ior:
@@ -32,44 +36,21 @@ ior:
             np: 16
     test_file: daos:testFile
     repetitions: 2
-# Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
-    iorflags: !mux
-        ssf:
-          flags: "-v -W -w -r -R"
-          ior_api: !mux
-            daos:
-              api: DAOS
-            mpiio:
-              api: MPIIO
-            posix:
-              api: POSIX
-          transfersize_blocksize: !mux
-            256B:
-              transfer_size: '256B'
-              block_size: '4M'
-            1M:
-              transfer_size: '1M'
-              block_size: '32M'
-
-          objectclass: !mux
-            oclass_SX:
-              daos_oclass: "SX"
+    iorflags:
+          ior_flags:
+            - "-v -W -w -r -R"
+            - "-v -W -w -r -R -F"
+          ior_api:
+            - DAOS
+            - MPIIO
+            - POSIX
+          transfer_block_size:
+            - [256B, 4M]
+            - [1M, 32M]
+          obj_class:
+            - "SX"
 # Commenting it out until DAOS-3097/3143 is resolved.
-#            oclass_RP_2GX:
-#              daos_oclass: "RP_2GX"
-        fpp:
-          flags: "-v -W -w -r -R -F"
-          api: DAOS
-          transfer_size: '1M'
-          block_size: '32M'
-          daos_oclass: "SX"
-# Uncomment when DAOS-1733 is resolved
-#        random:
-#          flags: "-v -W -w -r -z"
-#          api: MPIIO
-#          transfer_size: '1M'
-#          block_size: '32M'
-#          daos_oclass: "RP_2GX"
+#            - "RP_2GX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"

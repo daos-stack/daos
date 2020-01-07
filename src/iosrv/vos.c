@@ -65,7 +65,7 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 }
 
 static int
-is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
+is_sgl_full(struct dss_enum_arg *arg, daos_size_t size)
 {
 	d_sg_list_t *sgl = arg->sgl;
 
@@ -94,10 +94,9 @@ is_sgl_kds_full(struct dss_enum_arg *arg, daos_size_t size)
 		sgl->sg_nr_out = arg->sgl_idx + 1;
 
 	/* Check if the sgl is full */
-	if (arg->sgl_idx >= sgl->sg_nr || arg->kds_len >= arg->kds_cap) {
-		D_DEBUG(DB_IO, "sgl or kds full sgl %d/%d kds %d/%d size "
-			DF_U64"\n", arg->sgl_idx, sgl->sg_nr,
-			arg->kds_len, arg->kds_cap, size);
+	if (arg->sgl_idx >= sgl->sg_nr) {
+		D_DEBUG(DB_IO, "full sgl %d/%d size " DF_U64"\n", arg->sgl_idx,
+			sgl->sg_nr, size);
 		return 1;
 	}
 
@@ -113,12 +112,13 @@ fill_obj(daos_handle_t ih, vos_iter_entry_t *entry, struct dss_enum_arg *arg,
 
 	D_ASSERTF(vos_type == VOS_ITER_OBJ, "%d\n", vos_type);
 
-	if (is_sgl_kds_full(arg, sizeof(entry->ie_oid)))
+	/* Check if sgl or kds is full */
+	if (is_sgl_full(arg, sizeof(entry->ie_oid)) ||
+	    arg->kds_len >= arg->kds_cap)
 		return 1;
 
 	type = vos_iter_type_2pack_type(vos_type);
 	/* Append a new descriptor to kds. */
-	D_ASSERT(arg->kds_len < arg->kds_cap);
 	memset(&arg->kds[arg->kds_len], 0, sizeof(arg->kds[arg->kds_len]));
 	arg->kds[arg->kds_len].kd_key_len = sizeof(entry->ie_oid);
 	arg->kds[arg->kds_len].kd_val_type = type;
@@ -144,18 +144,25 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	d_iov_t		*iov;
 	daos_size_t	total_size;
 	int		type;
+	int		kds_cap;
 
 	D_ASSERT(vos_type == VOS_ITER_DKEY || vos_type == VOS_ITER_AKEY);
 
 	total_size = key_ent->ie_key.iov_len;
-	if (key_ent->ie_key_punch)
-		total_size += sizeof(key_ent->ie_key_punch);
+	if (key_ent->ie_punch)
+		total_size += sizeof(key_ent->ie_punch);
 
 	type = vos_iter_type_2pack_type(vos_type);
 	/* for tweaking kds_len in fill_rec() */
 	arg->last_type = type;
 
-	if (is_sgl_kds_full(arg, total_size)) {
+	/* Check if sgl or kds is full */
+	if (arg->need_punch && key_ent->ie_punch != 0)
+		kds_cap = arg->kds_cap - 1; /* one extra kds for punch eph */
+	else
+		kds_cap = arg->kds_cap;
+
+	if (is_sgl_full(arg, total_size) || arg->kds_len >= kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
 		 * (kds_len < 2) before return KEY2BIG.
@@ -185,8 +192,8 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 	iov->iov_len += key_ent->ie_key.iov_len;
 
-	if (key_ent->ie_key_punch != 0) {
-		int pi_size = sizeof(key_ent->ie_key_punch);
+	if (key_ent->ie_punch != 0 && arg->need_punch) {
+		int pi_size = sizeof(key_ent->ie_punch);
 
 		arg->kds[arg->kds_len].kd_key_len = pi_size;
 		arg->kds[arg->kds_len].kd_csum_len = 0;
@@ -199,7 +206,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds_len++;
 
 		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
-		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_key_punch,
+		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_punch,
 		       pi_size);
 
 		iov->iov_len += pi_size;
@@ -208,7 +215,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
 		DF_U64" punched eph num "DF_U64"\n", DP_KEY(&key_ent->ie_key),
 		iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
-		key_ent->ie_key_punch);
+		key_ent->ie_punch);
 	return 0;
 }
 
@@ -252,7 +259,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		bump_kds_len = true;
 	}
 
-	if (is_sgl_kds_full(arg, size)) {
+	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
 		 * check if both dkey & akey was already packed
 		 * (kds_len < 3) before return KEY2BIG.
@@ -377,7 +384,8 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	D_ASSERT(!arg->fill_recxs ||
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
-	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, arg);
+	rc = vos_iterate(param, type, recursive, anchors, enum_pack_cb, NULL,
+			 arg);
 
 	D_DEBUG(DB_IO, "enum type %d tag %d rc %d\n", type,
 		dss_get_module_info()->dmi_tgt_id, rc);

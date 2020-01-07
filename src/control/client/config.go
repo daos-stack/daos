@@ -24,6 +24,7 @@
 package client
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -42,7 +43,7 @@ const (
 	defaultLogFile    = "/tmp/daos_agent.log"
 	defaultConfigPath = "etc/daos.yml"
 	defaultSystemName = "daos_server"
-	defaultPort       = 10000
+	defaultPort       = 10001
 )
 
 // External interface provides methods to support various os operations.
@@ -84,9 +85,9 @@ type Configuration struct {
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:      defaultSystemName,
-		AccessPoints:    []string{"localhost"},
+		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultPort)},
 		Port:            defaultPort,
-		HostList:        []string{"localhost:10001"},
+		HostList:        []string{fmt.Sprintf("localhost:%d", defaultPort)},
 		RuntimeDir:      defaultRuntimeDir,
 		LogFile:         defaultLogFile,
 		Path:            defaultConfigPath,

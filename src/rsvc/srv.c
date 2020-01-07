@@ -125,9 +125,21 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		goto err_state_cv;
 	}
 
+	if (rsvc_class(class)->sc_map_dist != NULL) {
+		rc = ABT_cond_create(&svc->s_map_dist_cv);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("%s: failed to create map_dist_cv: %d\n",
+				svc->s_name, rc);
+			rc = dss_abterr2der(rc);
+			goto err_leader_ref_cv;
+		}
+	}
+
 	*svcp = svc;
 	return 0;
 
+err_leader_ref_cv:
+	ABT_cond_free(&svc->s_leader_ref_cv);
 err_state_cv:
 	ABT_cond_free(&svc->s_state_cv);
 err_mutex:
@@ -148,6 +160,8 @@ fini_free(struct ds_rsvc *svc)
 	D_ASSERT(d_list_empty(&svc->s_entry));
 	D_ASSERTF(svc->s_ref == 0, "%d\n", svc->s_ref);
 	D_ASSERTF(svc->s_leader_ref == 0, "%d\n", svc->s_leader_ref);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		ABT_cond_free(&svc->s_map_dist_cv);
 	ABT_cond_free(&svc->s_leader_ref_cv);
 	ABT_cond_free(&svc->s_state_cv);
 	ABT_mutex_free(&svc->s_mutex);
@@ -156,7 +170,7 @@ fini_free(struct ds_rsvc *svc)
 	rsvc_class(svc->s_class)->sc_free(svc);
 }
 
-static void
+void
 ds_rsvc_get(struct ds_rsvc *svc)
 {
 	svc->s_ref++;
@@ -384,10 +398,51 @@ change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 	ABT_cond_broadcast(svc->s_state_cv);
 }
 
+static void map_distd(void *arg);
+
+static int
+init_map_distd(struct ds_rsvc *svc)
+{
+	int rc;
+
+	svc->s_map_dist = false;
+	svc->s_map_distd_stop = false;
+
+	ds_rsvc_get(svc);
+	get_leader(svc);
+	rc = dss_ult_create(map_distd, svc, DSS_ULT_MISC, DSS_TGT_SELF, 0,
+			    &svc->s_map_distd);
+	if (rc != 0) {
+		D_ERROR("%s: failed to start map_distd: %d\n", svc->s_name, rc);
+		put_leader(svc);
+		ds_rsvc_put(svc);
+	}
+
+	return rc;
+}
+
+static void
+drain_map_distd(struct ds_rsvc *svc)
+{
+	svc->s_map_distd_stop = true;
+	ABT_cond_broadcast(svc->s_map_dist_cv);
+}
+
+static void
+fini_map_distd(struct ds_rsvc *svc)
+{
+	int rc;
+
+	rc = ABT_thread_join(svc->s_map_distd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&svc->s_map_distd);
+}
+
 static int
 rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 {
 	struct ds_rsvc *svc = arg;
+	bool		map_distd_initialized = false;
 	int		rc;
 
 	ABT_mutex_lock(svc->s_mutex);
@@ -402,6 +457,13 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	D_DEBUG(DB_MD, "%s: stepping up to "DF_U64"\n", svc->s_name,
 		svc->s_term);
 
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
+		rc = init_map_distd(svc);
+		if (rc != 0)
+			goto out_mutex;
+		map_distd_initialized = true;
+	}
+
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc == DER_UNINIT) {
 		change_state(svc, DS_RSVC_UP_EMPTY);
@@ -410,12 +472,16 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	} else if (rc != 0) {
 		D_ERROR("%s: failed to step up as leader "DF_U64": %d\n",
 			svc->s_name, term, rc);
+		if (map_distd_initialized)
+			drain_map_distd(svc);
 		goto out_mutex;
 	}
 
 	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
+	if (rc != 0 && map_distd_initialized)
+		fini_map_distd(svc);
 	return rc;
 }
 
@@ -436,11 +502,13 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
+	D_DEBUG(DB_MD, "%s: calling sc_bootstrap\n", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_bootstrap(svc, arg);
 	if (rc != 0)
 		goto out_mutex;
 
 	/* Try stepping up again. */
+	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc != 0) {
 		D_ASSERT(rc != DER_UNINIT);
@@ -470,6 +538,9 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		/* Stop accepting new leader references. */
 		change_state(svc, DS_RSVC_DRAINING);
 
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			drain_map_distd(svc);
+
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
 		/* TODO: Abort all in-flight RPCs we sent. */
@@ -484,6 +555,9 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		}
 
 		rsvc_class(svc->s_class)->sc_step_down(svc);
+
+		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+			fini_map_distd(svc);
 	}
 
 	change_state(svc, DS_RSVC_DOWN);
@@ -523,6 +597,58 @@ static struct rdb_cbs rsvc_rdb_cbs = {
 	.dc_step_down	= rsvc_step_down_cb,
 	.dc_stop	= rsvc_stop_cb
 };
+
+static void
+map_distd(void *arg)
+{
+	struct ds_rsvc *svc = arg;
+
+	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
+	for (;;) {
+		bool	stop;
+		int	rc;
+
+		ABT_mutex_lock(svc->s_mutex);
+		for (;;) {
+			stop = svc->s_map_distd_stop;
+			if (stop)
+				break;
+			if (svc->s_map_dist) {
+				svc->s_map_dist = false;
+				break;
+			}
+			ABT_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+		}
+		ABT_mutex_unlock(svc->s_mutex);
+		if (stop)
+			break;
+		rc = rsvc_class(svc->s_class)->sc_map_dist(svc);
+		if (rc != 0) {
+			/*
+			 * Try again, but back off a little bit to limit the
+			 * retry rate.
+			 */
+			svc->s_map_dist = true;
+			dss_sleep(3000 /* ms */);
+		}
+	}
+	put_leader(svc);
+	ds_rsvc_put(svc);
+	D_DEBUG(DB_MD, "%s: stop\n", svc->s_name);
+}
+
+/**
+ * Request an asynchronous map distribution. This eventually triggers
+ * ds_rsvc_class.sc_map_dist, which must be implemented by the rsvc class.
+ *
+ * \param[in]	svc	replicated service
+ */
+void
+ds_rsvc_request_map_dist(struct ds_rsvc *svc)
+{
+	svc->s_map_dist = true;
+	ABT_cond_broadcast(svc->s_map_dist_cv);
+}
 
 static bool
 self_only(d_rank_list_t *replicas)

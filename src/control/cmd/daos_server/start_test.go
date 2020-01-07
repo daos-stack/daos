@@ -52,17 +52,9 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
-func showBufOnFailure(t *testing.T, logBuf bytes.Buffer) {
-	if !t.Failed() || logBuf.Len() == 0 {
-		return
-	}
-	t.Logf("logged output: %s", logBuf.String())
-}
-
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
-		WithNvmeShmID(-1). // don't generate a ShmID in testing
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
@@ -234,18 +226,6 @@ func TestStartOptions(t *testing.T) {
 			argList: []string{"--group=foo"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
 				return cfg.WithSystemName("foo")
-			},
-		},
-		"Attach Info (short)": {
-			argList: []string{"-a", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
-		"Attach Info (long)": {
-			argList: []string{"--attach_info=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
 			},
 		},
 		"SocketDir (short)": {
