@@ -71,7 +71,7 @@ class DmgPoolQueryTest(TestWithServers):
         d_info["dmg_r_info"] = re.findall(
             r"Rebuild (.+), (.+) objs, (.+) recs", dmg_out.stdout)
 
-        # TODO: Get data from API to verify dmg output.
+        # Get data from API to verify dmg output.
         e_info = {}
         e_info["exp_t_cnt"] = None
         e_info["exp_t_size"] = None
@@ -105,7 +105,7 @@ class DmgPoolQueryTest(TestWithServers):
         dmg_out = pool_query(self.bin, host_p, uuid)
 
         # Verify
-        self.log.info("Test expected to finish with: %s",exp_out[-1])
+        self.log.info("Test expected to finish with: %s", exp_out[-1])
         if dmg_out.exit_status != exp_out[-1]:
             self.fail("Test failed, dmg pool query finished with: {}".format(
                 dmg_out.exit_status))
