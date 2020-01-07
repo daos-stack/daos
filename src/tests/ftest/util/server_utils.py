@@ -149,18 +149,6 @@ class DaosServer(DaosCommand):
                       time.time() - start_time)
         return True
 
-    def set_log_files(self, name):
-        """Set the logfile parameter for each daos server.
-
-        Args:
-            name (str): new log file name and path
-        """
-        for index, server_params in enumerate(self.yaml_params.server_params):
-            log_name = list(os.path.splitext(name))
-            if len(self.yaml_params.server_params) > 1:
-                log_name.insert("_{}".format(index))
-            server_params.log_file.update("".join(log_name), "log_file")
-
     class ServerStartSubCommand(CommandWithParameters):
         """Defines an object representing a daos_server start sub command."""
 
@@ -310,7 +298,6 @@ class DaosServerConfig(ObjectWithParameters):
 
         # Single server config parameters
         self.server_params = []
-        # self.server_params = [self.SingleServerConfig()]
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -334,15 +321,34 @@ class DaosServerConfig(ObjectWithParameters):
         for server_params in self.server_params:
             server_params.get_params(test)
 
-    def update_log_file(self, name, index=0):
-        """Update the logfile parameter for the daos server.
+    def update_log_files(self, control_log, helper_log, server_log):
+        """Update each log file name for the daos server.
+
+        If there are multiple server configurations defined the server_log value
+        will be made unique for each server's log_file parameter.
+
+        Any log file name set to None will result in no update to the respective
+        log file parameter value.
 
         Args:
-            name (str): new log file name and path
-            index (int, optional): server parameter index to update.
-                Defaults to 0.
+            control_log (str): control log file name
+            helper_log (str): control log file name
+            server_log (str): control log file name
         """
-        self.server_params[index].log_file.update(name, "log_file")
+        if control_log is not None:
+            self.control_log_file.update(
+                control_log, "server_config.control_log_file")
+        if helper_log is not None:
+            self.helper_log_file.update(
+                helper_log, "server_config.helper_log_file")
+        if server_log is not None:
+            for index, server_params in enumerate(self.server_params):
+                log_name = list(os.path.splitext(server_log))
+                if len(self.server_params) > 1:
+                    log_name.insert(1, "_{}".format(index))
+                server_params.log_file.update(
+                    "".join(log_name),
+                    "server_config.server[{}].log_file".format(index))
 
     def is_nvme(self):
         """Return if NVMe is provided in the configuration."""
@@ -483,8 +489,11 @@ class ServerManager(ExecutableCommand):
                 getattr(self.runner, name).value = getattr(self, name).value
 
         # Run daos_server with test variant specific log file names if specified
-        if hasattr(test, "server_log") and test.server_log is not None:
-            self.runner.job.set_log_files(test.server_log)
+        self.runner.job.yaml_params.update_log_files(
+            getattr(test, "control_log"),
+            getattr(test, "helper_log"),
+            getattr(test, "server_log")
+        )
 
     def run(self):
         """Execute the runner subprocess."""
@@ -714,8 +723,11 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_config.get_params(test)
         access_points = ":".join((servers[0], str(server_config.port)))
         server_config.access_points.value = access_points.split()
-        if hasattr(test, "server_log") and test.server_log is not None:
-            server_config.update_log_file(test.server_log)
+        server_config.update_log_files(
+            getattr(test, "control_log"),
+            getattr(test, "helper_log"),
+            getattr(test, "server_log")
+        )
         server_config.create_yaml(server_yaml)
 
         # first make sure there are no existing servers running
@@ -741,7 +753,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             raise ServerFailed("Can't find orterun")
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
-        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
+        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix", "0"])
         server_cmd.extend(["--mca", "btl", "tcp,self"])
         server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])

@@ -96,6 +96,18 @@ class DaosAgentConfig(ObjectWithParameters):
         super(DaosAgentConfig, self).get_params(test)
         self.transport_params.get_params(test)
 
+    def update_log_file(self, name):
+        """Update the log file name for the daos agent.
+
+        If the log file name is set to None the log file parameter value will
+        not be updated.
+
+        Args:
+            name (str): log file name
+        """
+        if name is not None:
+            self.log_file.update(name, "agent_config.log_file")
+
     def create_yaml(self, filename):
         """Create a yaml file from the parameter values.
 
@@ -173,7 +185,7 @@ def run_agent(test, server_list, client_list=None):
 
     access_point = ":".join((server_list[0], str(agent_config.port)))
     agent_config.access_points.value = access_point.split()
-
+    agent_config.update_log_file(getattr(test, "agent_log"))
     agent_config.create_yaml(agent_yaml)
 
     # Verify the domain socket directory is present and owned by this user

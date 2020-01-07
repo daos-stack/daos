@@ -124,8 +124,8 @@ class FioCommand(ExecutableCommand):
         self._jobs.clear()
         if self.names.value is not None:
             for name in self.names.value:
-                self._jobs[name] = FioJob(name)
-                self._jobs[name].get_params(self.namespace, test)
+                self._jobs[name] = FioJob(self.namespace, name)
+                self._jobs[name].get_params(test)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.

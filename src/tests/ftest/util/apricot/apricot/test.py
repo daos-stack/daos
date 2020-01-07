@@ -201,7 +201,10 @@ class TestWithServers(TestWithoutServers):
         self.agent_sessions = None
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.agent_log = None
         self.server_log = None
+        self.control_log = None
+        self.helper_log = None
         self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
@@ -496,7 +499,13 @@ class TestWithServers(TestWithoutServers):
         if test_name:
             self.test_id = test_name
 
+        self.agent_log = os.path.join(
+            self.log_dir, "{}_daos_agent.log".format(self.test_id))
         self.server_log = os.path.join(
-            self.log_dir, "{}_server_daos.log".format(self.test_id))
+            self.log_dir, "{}_daos_server.log".format(self.test_id))
+        self.control_log = os.path.join(
+            self.log_dir, "{}_daos_control.log".format(self.test_id))
+        self.helper_log = os.path.join(
+            self.log_dir, "{}_daos_admin.log".format(self.test_id))
         self.client_log = os.path.join(
-            self.log_dir, "{}_client_daos.log".format(self.test_id))
+            self.log_dir, "{}_daos_client.log".format(self.test_id))
