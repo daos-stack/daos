@@ -73,7 +73,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		rc = dfs_cont_create(dfp->dfp_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(dfs, "dfs_cont_create() failed: (%d)", rc);
+			DFUSE_TRA_ERROR(dfs,
+					"dfs_cont_create() failed: (%d)",
+					rc);
 			D_GOTO(err_unlock, rc);
 		}
 	} else {
@@ -86,12 +88,13 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 				DFUSE_TRA_DEBUG(parent, "Checking %p", dfsi);
 
-				if (uuid_compare(dfsi->dfs_cont, dfs->dfs_cont) != 0 )
+				if (uuid_compare(dfsi->dfs_cont, dfs->dfs_cont) != 0)
 					continue;
 
 				DFUSE_TRA_INFO(dfs, "Found existing container");
 
-				rc = dfuse_check_for_inode(fs_handle, dfsi, &ie);
+				rc = dfuse_check_for_inode(fs_handle, dfsi,
+							   &ie);
 				D_ASSERT(rc == -DER_SUCCESS);
 
 				DFUSE_TRA_INFO(ie,
@@ -103,7 +106,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj,
 					       &entry.attr);
 				if (rc) {
-					DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
+					DFUSE_TRA_ERROR(ie,
+							"dfs_ostat() failed: (%s)",
 							strerror(rc));
 					d_hash_rec_decref(&fs_handle->dpi_iet,
 							  &ie->ie_htl);

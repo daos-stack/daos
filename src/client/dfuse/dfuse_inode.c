@@ -136,7 +136,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		struct dfuse_dfs	*dfs = ie->ie_dfs;
 		struct dfuse_pool	*dfp = dfs->dfs_dfp;
 
-
 		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
 			       !daos_handle_is_inval(dfp->dfp_poh),
 			       !daos_handle_is_inval(dfs->dfs_coh));

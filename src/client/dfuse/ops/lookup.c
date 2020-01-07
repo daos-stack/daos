@@ -295,7 +295,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
 		DFUSE_TRA_INFO(ie,
-			"check_for_uns_ep() returned %d", rc);
+			       "check_for_uns_ep() returned %d", rc);
 		if (rc)
 			D_GOTO(err, rc);
 	}
