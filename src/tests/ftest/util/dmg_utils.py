@@ -347,7 +347,7 @@ def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
     return result
 
 
-def pool_query(path, host_port, pool_uuid, insecure=True, force=True):
+def pool_query(path, host_port, pool_uuid, insecure=True):
     """ Execute pool query command through dmg tool to servers provided.
 
     Args:
@@ -357,7 +357,6 @@ def pool_query(path, host_port, pool_uuid, insecure=True, force=True):
             daos_avocado_test.yaml
         pool_uuid (str): Pool UUID to destroy.
         insecure (bool, optional): Insecure mode. Defaults to True.
-        force (bool, optional): Force removal of DAOS pool. Defaults to True.
 
     Returns:
         CmdResult: Object that contains exit status, stdout, and other
@@ -376,7 +375,7 @@ def pool_query(path, host_port, pool_uuid, insecure=True, force=True):
     try:
         result = dmg.run()
     except CommandFailure as details:
-        print("Pool destroy command failed: {}".format(details))
+        print("Pool query command failed: {}".format(details))
         return None
 
     return result

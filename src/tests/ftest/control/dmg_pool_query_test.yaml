@@ -5,6 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
+
 server_config:
   name: daos_server
   servers:
@@ -12,6 +13,7 @@ server_config:
     bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
+
 pool:
   createmode:
     mode_RW:
@@ -23,7 +25,42 @@ pool:
     nvme_size: 2000000000
   createsvc:
     svcn: 1
+
 dmg:
   request: storage
   action: scan
   insecure: True
+
+pool_uuids: !mux
+  alpha_upper:
+    uuid:
+      - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
+      - 1
+  alpha_lower:
+    uuid:
+      - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
+      - 1
+  alphanumeric:
+    uuid:
+      - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
+      - 1
+  numeric_01:
+    uuid:
+      - "111-222-333-444-555"
+      - 1
+  numeric_02:
+    uuid:
+      - "0-0-0-0-0"
+      - 1
+  random:
+    uuid:
+      - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
+      - 1
+  special_chars:
+    uuid:
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - 1
+  special_aplanumeric_chars:
+    uuid:
+      - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
+      - 1
