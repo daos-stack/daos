@@ -512,8 +512,8 @@ oi_iter_match_probe(struct vos_iterator *iter)
 	}
 	return 0;
  failed:
-	if (rc == -DER_NONEXIST)
-		return 0; /* end of iteration, not a failure */
+	if (rc == -DER_NONEXIST) /* Non-existence isn't a failure */
+		return rc;
 
 	D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
 		 "iterator %s failed, rc="DF_RC"\n", str, DP_RC(rc));
@@ -592,7 +592,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 
 	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_obj_punch = oiter->oit_ilog_info.ii_next_punch;
+	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
 	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->oit_ilog_info.ii_create == 0) {
@@ -622,6 +622,69 @@ oi_iter_delete(struct vos_iterator *iter, void *args)
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: "DF_RC"\n", DP_RC(rc));
 exit:
+	return rc;
+}
+
+int
+oi_iter_aggregate(daos_handle_t ih, bool discard)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	daos_unit_oid_t		 oid;
+	d_iov_t			 rec_iov;
+	bool			 reprobe = false;
+	int			 rc;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+	oid = obj->vo_id;
+
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	if (rc != 0)
+		goto exit;
+
+	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
+				&oiter->oit_epr, discard, 0,
+				&oiter->oit_ilog_info);
+	if (rc == 1) {
+		/* Incarnation log is empty, delete the object */
+		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
+			DP_UOID(oid));
+		reprobe = true;
+		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
+			/* This can be an assert once we have sane under punch
+			 * detection.
+			 */
+			D_ERROR("Removing orphaned dkey tree\n");
+		}
+		/* Evict the object from cache */
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+					  oiter->oit_cont, oid);
+		if (rc != 0)
+			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
+		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
+		D_ASSERT(rc != -DER_NONEXIST);
+	} else if (rc == -DER_NONEXIST) {
+		/** ilog isn't visible in range but still has some enrtries */
+		reprobe = true;
+		rc = 0;
+	}
+
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+exit:
+	if (rc == 0 && reprobe)
+		return 1;
+
 	return rc;
 }
 

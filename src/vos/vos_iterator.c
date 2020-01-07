@@ -539,7 +539,8 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg)
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
 	vos_iter_entry_t	iter_ent;
@@ -550,6 +551,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
+	D_ASSERT(pre_cb || post_cb);
 
 	anchor = type2anchor(type, anchors);
 
@@ -601,18 +603,21 @@ probe:
 			break;
 		}
 
-		rc = cb(ih, &iter_ent, type, param, arg, &acts);
-		if (rc != 0)
-			break;
+		skipped = false;
+		if (pre_cb) {
+			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
 
-		set_reprobe(type, acts, anchors, param->ip_flags);
-		skipped = (acts & VOS_ITER_CB_SKIP);
-		acts = 0;
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			skipped = (acts & VOS_ITER_CB_SKIP);
+			acts = 0;
 
-		if (need_reprobe(type, anchors)) {
-			D_ASSERT(!daos_anchor_is_zero(anchor) &&
-				 !daos_anchor_is_eof(anchor));
-			goto probe;
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -639,17 +644,28 @@ probe:
 			}
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
-					 recursive, anchors, cb, arg);
+					 recursive, anchors, pre_cb, post_cb,
+					 arg);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
+		}
 
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
+		if (post_cb) {
+			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
+
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			acts = 0;
+
+		}
+
+		if (need_reprobe(type, anchors)) {
+			D_ASSERT(!daos_anchor_is_zero(anchor) &&
+				 !daos_anchor_is_eof(anchor));
+			goto probe;
 		}
 
 		rc = vos_iter_next(ih);

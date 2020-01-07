@@ -676,7 +676,7 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	iter_param.ip_hdl = pool_child->spc_hdl;
 	/* The quantity of container is small, no need to yield */
 	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
-			 cont_child_start_cb, (void *)pool_child);
+			 cont_child_start_cb, NULL, (void *)pool_child);
 	return rc;
 }
 
