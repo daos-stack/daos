@@ -79,12 +79,18 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		daos_handle_t		 toh;
 		int			 i;
 
-		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
-				      &krec, &toh);
+		/* For non-rebuild case, if the key does not exist,
+		 * don't create it.
+		 */
+		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey,
+				flags & VOS_OF_REPLAY_PC ? SUBTR_CREATE : 0,
+				DAOS_INTENT_PUNCH, &krec, &toh);
 		if (rc) {
-			D_ERROR("Error preparing dkey: rc="DF_RC"\n",
-				DP_RC(rc));
+			if (rc == -DER_NONEXIST && !(flags & VOS_OF_REPLAY_PC))
+				rc = 0;
+			else
+				D_ERROR("Error preparing dkey: rc="DF_RC"\n",
+					DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -161,15 +167,21 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		dth->dth_dti_cos_done = 1;
 	}
 
-	/* NB: punch always generate a new incarnation of the object */
+	/* NB: punch always generate a new incarnation of the object.
+	 *
+	 * For non-rebuild case, if the object does not exist, don't create it.
+	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  false, DAOS_INTENT_PUNCH, true, &obj);
+			  flags & VOS_OF_REPLAY_PC ? false : true,
+			  DAOS_INTENT_PUNCH, true, &obj);
 	if (rc == 0) {
 		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
 				       akey_nr, akeys, flags);
 		else /* object punch */
 			rc = obj_punch(coh, obj, epoch, flags);
+	} else if (rc == -DER_NONEXIST && !(flags & VOS_OF_REPLAY_PC)) {
+		rc = 0;
 	}
 
 	if (dth != NULL && rc == 0)
