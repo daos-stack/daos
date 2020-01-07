@@ -489,23 +489,19 @@ class TestWithServers(TestWithoutServers):
             return host_list, None
 
     def update_log_file_names(self, test_name=None):
-        """Get separate logs for both servers and clients.
+        """Define agent, server, and client log files that include the test id.
 
         Args:
             test_name (str, optional): name of test variant
         """
-        # Determine the path and name of the daos server log using the
-        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
         if test_name:
+            # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        self.agent_log = os.path.join(
-            self.log_dir, "{}_daos_agent.log".format(self.test_id))
-        self.server_log = os.path.join(
-            self.log_dir, "{}_daos_server.log".format(self.test_id))
-        self.control_log = os.path.join(
-            self.log_dir, "{}_daos_control.log".format(self.test_id))
-        self.helper_log = os.path.join(
-            self.log_dir, "{}_daos_admin.log".format(self.test_id))
-        self.client_log = os.path.join(
-            self.log_dir, "{}_daos_client.log".format(self.test_id))
+        # Update the log file names.  The path is defined throught the
+        # DAOS_TEST_LOG_DIR environment variable.
+        self.agent_log = "{}_daos_agent.log".format(self.test_id)
+        self.server_log = "{}_daos_server.log".format(self.test_id)
+        self.control_log = "{}_daos_control.log".format(self.test_id)
+        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.client_log = "{}_daos_client.log".format(self.test_id)
