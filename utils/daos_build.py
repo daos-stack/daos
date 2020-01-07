@@ -26,8 +26,24 @@ def install(env, subdir, files):
     path = "$PREFIX/%s" % subdir
     denv.Install(path, files)
 
+def _configure_mpi_pkg(env):
+    """Configure MPI using pkg-config"""
+    try:
+        env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
+    except OSError as e:
+        print("\n**********************************")
+        print("Could not find package MPI_PKG=%s\n" % env.subst("$MPI_PKG"))
+        print("Unset it or update PKG_CONFIG_PATH")
+        print("**********************************")
+        raise e
+
+    return env.subst("$MPI_PKG")
+
 def configure_mpi(prereqs, env, required=None):
     """Check if mpi exists and configure environment"""
+    if env.subst("$MPI_PKG") != "":
+        return _configure_mpi_pkg(env)
+
     mpis = ['ompi', 'mpich']
     if not required is None:
         if isinstance(required, str):

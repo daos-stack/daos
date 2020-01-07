@@ -28,19 +28,19 @@ typedef struct _Mgmt__ListContResp__Cont Mgmt__ListContResp__Cont;
 typedef struct _Mgmt__PoolQueryReq Mgmt__PoolQueryReq;
 typedef struct _Mgmt__StorageUsageStats Mgmt__StorageUsageStats;
 typedef struct _Mgmt__PoolRebuildStatus Mgmt__PoolRebuildStatus;
-typedef struct _Mgmt__PoolQueryResp Mgmt__PoolQueryResp;
 typedef struct _Mgmt__PoolSetPropReq Mgmt__PoolSetPropReq;
 typedef struct _Mgmt__PoolSetPropResp Mgmt__PoolSetPropResp;
+typedef struct _Mgmt__PoolQueryResp Mgmt__PoolQueryResp;
 
 
 /* --- enums --- */
 
-typedef enum _Mgmt__PoolRebuildStatus__RebuildState {
-  MGMT__POOL_REBUILD_STATUS__REBUILD_STATE__IDLE = 0,
-  MGMT__POOL_REBUILD_STATUS__REBUILD_STATE__DONE = 1,
-  MGMT__POOL_REBUILD_STATUS__REBUILD_STATE__BUSY = 2
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__REBUILD_STATE)
-} Mgmt__PoolRebuildStatus__RebuildState;
+typedef enum _Mgmt__PoolRebuildStatus__State {
+  MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 0,
+  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 1,
+  MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 2
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__STATE)
+} Mgmt__PoolRebuildStatus__State;
 
 /* --- messages --- */
 
@@ -299,57 +299,13 @@ struct  _Mgmt__PoolRebuildStatus
    * DAOS error code
    */
   int32_t status;
-  Mgmt__PoolRebuildStatus__RebuildState state;
+  Mgmt__PoolRebuildStatus__State state;
   uint64_t objects;
   uint64_t records;
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__REBUILD_STATE__IDLE, 0, 0 }
-
-
-/*
- * PoolQueryResp represents a pool query response.
- */
-struct  _Mgmt__PoolQueryResp
-{
-  ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
-  /*
-   * pool uuid
-   */
-  char *uuid;
-  /*
-   * total targets in pool
-   */
-  uint32_t totaltargets;
-  /*
-   * active targets in pool
-   */
-  uint32_t activetargets;
-  /*
-   * indicates pool disabled status
-   */
-  protobuf_c_boolean disabled;
-  /*
-   * pool rebuild status
-   */
-  Mgmt__PoolRebuildStatus *rebuild;
-  /*
-   * SCM storage usage stats
-   */
-  Mgmt__StorageUsageStats *scm;
-  /*
-   * NVMe storage usage stats
-   */
-  Mgmt__StorageUsageStats *nvme;
-};
-#define MGMT__POOL_QUERY_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__IDLE, 0, 0 }
 
 
 typedef enum {
@@ -454,6 +410,50 @@ struct  _Mgmt__PoolSetPropResp
 #define MGMT__POOL_SET_PROP_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_set_prop_resp__descriptor) \
     , 0, MGMT__POOL_SET_PROP_RESP__PROPERTY__NOT_SET, {0}, MGMT__POOL_SET_PROP_RESP__VALUE__NOT_SET, {0} }
+
+
+/*
+ * PoolQueryResp represents a pool query response.
+ */
+struct  _Mgmt__PoolQueryResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * pool uuid
+   */
+  char *uuid;
+  /*
+   * total targets in pool
+   */
+  uint32_t totaltargets;
+  /*
+   * active targets in pool
+   */
+  uint32_t activetargets;
+  /*
+   * number of disabled targets in pool
+   */
+  uint32_t disabledtargets;
+  /*
+   * pool rebuild status
+   */
+  Mgmt__PoolRebuildStatus *rebuild;
+  /*
+   * SCM storage usage stats
+   */
+  Mgmt__StorageUsageStats *scm;
+  /*
+   * NVMe storage usage stats
+   */
+  Mgmt__StorageUsageStats *nvme;
+};
+#define MGMT__POOL_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -671,25 +671,6 @@ Mgmt__PoolRebuildStatus *
 void   mgmt__pool_rebuild_status__free_unpacked
                      (Mgmt__PoolRebuildStatus *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolQueryResp methods */
-void   mgmt__pool_query_resp__init
-                     (Mgmt__PoolQueryResp         *message);
-size_t mgmt__pool_query_resp__get_packed_size
-                     (const Mgmt__PoolQueryResp   *message);
-size_t mgmt__pool_query_resp__pack
-                     (const Mgmt__PoolQueryResp   *message,
-                      uint8_t             *out);
-size_t mgmt__pool_query_resp__pack_to_buffer
-                     (const Mgmt__PoolQueryResp   *message,
-                      ProtobufCBuffer     *buffer);
-Mgmt__PoolQueryResp *
-       mgmt__pool_query_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   mgmt__pool_query_resp__free_unpacked
-                     (Mgmt__PoolQueryResp *message,
-                      ProtobufCAllocator *allocator);
 /* Mgmt__PoolSetPropReq methods */
 void   mgmt__pool_set_prop_req__init
                      (Mgmt__PoolSetPropReq         *message);
@@ -727,6 +708,25 @@ Mgmt__PoolSetPropResp *
                       const uint8_t       *data);
 void   mgmt__pool_set_prop_resp__free_unpacked
                      (Mgmt__PoolSetPropResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolQueryResp methods */
+void   mgmt__pool_query_resp__init
+                     (Mgmt__PoolQueryResp         *message);
+size_t mgmt__pool_query_resp__get_packed_size
+                     (const Mgmt__PoolQueryResp   *message);
+size_t mgmt__pool_query_resp__pack
+                     (const Mgmt__PoolQueryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_query_resp__pack_to_buffer
+                     (const Mgmt__PoolQueryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolQueryResp *
+       mgmt__pool_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_query_resp__free_unpacked
+                     (Mgmt__PoolQueryResp *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
@@ -769,14 +769,14 @@ typedef void (*Mgmt__StorageUsageStats_Closure)
 typedef void (*Mgmt__PoolRebuildStatus_Closure)
                  (const Mgmt__PoolRebuildStatus *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolQueryResp_Closure)
-                 (const Mgmt__PoolQueryResp *message,
-                  void *closure_data);
 typedef void (*Mgmt__PoolSetPropReq_Closure)
                  (const Mgmt__PoolSetPropReq *message,
                   void *closure_data);
 typedef void (*Mgmt__PoolSetPropResp_Closure)
                  (const Mgmt__PoolSetPropResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolQueryResp_Closure)
+                 (const Mgmt__PoolQueryResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -797,10 +797,10 @@ extern const ProtobufCMessageDescriptor mgmt__list_cont_resp__cont__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor;
-extern const ProtobufCEnumDescriptor    mgmt__pool_rebuild_status__rebuild_state__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_rebuild_status__state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_set_prop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_set_prop_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
