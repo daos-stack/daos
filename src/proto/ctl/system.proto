@@ -53,8 +53,9 @@ message SystemStartReq {}
 message SystemStartResp {
 	message Result {
 		string addr = 1; // restarted harness' address
-		bool errored = 2;
-		string msg = 3;
+		string action = 2;
+		bool errored = 3;
+		string msg = 4;
 	}
 	repeated Result results = 1;
 }

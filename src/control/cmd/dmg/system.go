@@ -226,7 +226,6 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 	return nil
 }
 
-// Execute is run when systemListPoolsCmd activates
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
 type systemListPoolsCmd struct {
 	logCmd

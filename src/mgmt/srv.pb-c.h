@@ -25,8 +25,9 @@ typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__KillRankReq Mgmt__KillRankReq;
-typedef struct _Mgmt__RestartRanksReq Mgmt__RestartRanksReq;
-typedef struct _Mgmt__RestartRanksResp Mgmt__RestartRanksResp;
+typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
+typedef struct _Mgmt__StartRanksReq Mgmt__StartRanksReq;
+typedef struct _Mgmt__StartRanksResp Mgmt__StartRanksResp;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
@@ -210,22 +211,45 @@ struct  _Mgmt__KillRankReq
     , 0, 0 }
 
 
-struct  _Mgmt__RestartRanksReq
+struct  _Mgmt__PingRankReq
 {
   ProtobufCMessage base;
+  /*
+   * DAOS IO server unique identifier.
+   */
+  uint32_t rank;
 };
-#define MGMT__RESTART_RANKS_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__restart_ranks_req__descriptor) \
-     }
+#define MGMT__PING_RANK_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__ping_rank_req__descriptor) \
+    , 0 }
 
 
-struct  _Mgmt__RestartRanksResp
+struct  _Mgmt__StartRanksReq
 {
   ProtobufCMessage base;
+  /*
+   * Start each of the ranks supplied.
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
 };
-#define MGMT__RESTART_RANKS_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__restart_ranks_resp__descriptor) \
-     }
+#define MGMT__START_RANKS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__start_ranks_req__descriptor) \
+    , 0,NULL }
+
+
+struct  _Mgmt__StartRanksResp
+{
+  ProtobufCMessage base;
+  /*
+   * DER one for each IO server start attempt.
+   */
+  size_t n_status;
+  int32_t *status;
+};
+#define MGMT__START_RANKS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__start_ranks_resp__descriptor) \
+    , 0,NULL }
 
 
 struct  _Mgmt__SetRankReq
@@ -436,43 +460,62 @@ Mgmt__KillRankReq *
 void   mgmt__kill_rank_req__free_unpacked
                      (Mgmt__KillRankReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__RestartRanksReq methods */
-void   mgmt__restart_ranks_req__init
-                     (Mgmt__RestartRanksReq         *message);
-size_t mgmt__restart_ranks_req__get_packed_size
-                     (const Mgmt__RestartRanksReq   *message);
-size_t mgmt__restart_ranks_req__pack
-                     (const Mgmt__RestartRanksReq   *message,
+/* Mgmt__PingRankReq methods */
+void   mgmt__ping_rank_req__init
+                     (Mgmt__PingRankReq         *message);
+size_t mgmt__ping_rank_req__get_packed_size
+                     (const Mgmt__PingRankReq   *message);
+size_t mgmt__ping_rank_req__pack
+                     (const Mgmt__PingRankReq   *message,
                       uint8_t             *out);
-size_t mgmt__restart_ranks_req__pack_to_buffer
-                     (const Mgmt__RestartRanksReq   *message,
+size_t mgmt__ping_rank_req__pack_to_buffer
+                     (const Mgmt__PingRankReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__RestartRanksReq *
-       mgmt__restart_ranks_req__unpack
+Mgmt__PingRankReq *
+       mgmt__ping_rank_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__restart_ranks_req__free_unpacked
-                     (Mgmt__RestartRanksReq *message,
+void   mgmt__ping_rank_req__free_unpacked
+                     (Mgmt__PingRankReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__RestartRanksResp methods */
-void   mgmt__restart_ranks_resp__init
-                     (Mgmt__RestartRanksResp         *message);
-size_t mgmt__restart_ranks_resp__get_packed_size
-                     (const Mgmt__RestartRanksResp   *message);
-size_t mgmt__restart_ranks_resp__pack
-                     (const Mgmt__RestartRanksResp   *message,
+/* Mgmt__StartRanksReq methods */
+void   mgmt__start_ranks_req__init
+                     (Mgmt__StartRanksReq         *message);
+size_t mgmt__start_ranks_req__get_packed_size
+                     (const Mgmt__StartRanksReq   *message);
+size_t mgmt__start_ranks_req__pack
+                     (const Mgmt__StartRanksReq   *message,
                       uint8_t             *out);
-size_t mgmt__restart_ranks_resp__pack_to_buffer
-                     (const Mgmt__RestartRanksResp   *message,
+size_t mgmt__start_ranks_req__pack_to_buffer
+                     (const Mgmt__StartRanksReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__RestartRanksResp *
-       mgmt__restart_ranks_resp__unpack
+Mgmt__StartRanksReq *
+       mgmt__start_ranks_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__restart_ranks_resp__free_unpacked
-                     (Mgmt__RestartRanksResp *message,
+void   mgmt__start_ranks_req__free_unpacked
+                     (Mgmt__StartRanksReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__StartRanksResp methods */
+void   mgmt__start_ranks_resp__init
+                     (Mgmt__StartRanksResp         *message);
+size_t mgmt__start_ranks_resp__get_packed_size
+                     (const Mgmt__StartRanksResp   *message);
+size_t mgmt__start_ranks_resp__pack
+                     (const Mgmt__StartRanksResp   *message,
+                      uint8_t             *out);
+size_t mgmt__start_ranks_resp__pack_to_buffer
+                     (const Mgmt__StartRanksResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__StartRanksResp *
+       mgmt__start_ranks_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__start_ranks_resp__free_unpacked
+                     (Mgmt__StartRanksResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__SetRankReq methods */
 void   mgmt__set_rank_req__init
@@ -544,11 +587,14 @@ typedef void (*Mgmt__PrepShutdownReq_Closure)
 typedef void (*Mgmt__KillRankReq_Closure)
                  (const Mgmt__KillRankReq *message,
                   void *closure_data);
-typedef void (*Mgmt__RestartRanksReq_Closure)
-                 (const Mgmt__RestartRanksReq *message,
+typedef void (*Mgmt__PingRankReq_Closure)
+                 (const Mgmt__PingRankReq *message,
                   void *closure_data);
-typedef void (*Mgmt__RestartRanksResp_Closure)
-                 (const Mgmt__RestartRanksResp *message,
+typedef void (*Mgmt__StartRanksReq_Closure)
+                 (const Mgmt__StartRanksReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__StartRanksResp_Closure)
+                 (const Mgmt__StartRanksResp *message,
                   void *closure_data);
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
@@ -573,8 +619,9 @@ extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__restart_ranks_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__restart_ranks_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__start_ranks_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__start_ranks_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor;
 

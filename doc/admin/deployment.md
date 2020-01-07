@@ -633,6 +633,36 @@ SCM storage format results:
 </details>
 </div>
 
+## Stop and Start a Formatted System
+
+A DAOS system can be restarted after a controlled shutdown providing
+no configurations changes have been made after initial format.
+
+The DAOS Control Server instance acting as access point records DAOS
+I/O Server instances that join the system in a "membership".
+
+When up and running, the entire system (all I/O Server instances)
+can be shutdown with the command
+`dmg -l <access_point_addr> system stop`, after which DAOS Control
+Servers will continue to operate and listen on the management network.
+
+To start the system again (with no configuration changes) after a
+controlled shutdown, run the command
+`dmg -l <access_point_addr> system start`, DAOS I/O Servers
+managed by DAOS Control Servers will be started.
+
+To query the system membership, run the command
+`dmg -l <access_point_addr> system query`, this lists details
+(rank/uuid/control address/state) of DAOS I/O Servers in the
+system membership.
+
+### Controlled Start/Stop Limitations (subject to change)
+
+* "start" restarts all configured instances on all harnesses that can
+  be located in the system membership, regardless of member state
+* supplying list of ranks to "start" is not yet supported
+* new feature; bugs will be resolved and fixed as and when found
+
 ## Agent Configuration
 
 This section addresses how to configure the DAOS agents on the storage
