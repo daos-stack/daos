@@ -24,7 +24,7 @@
 from logging import getLogger
 from time import time
 
-from test_utils_base import CallbackHandler, TestDaosApiBase
+from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter

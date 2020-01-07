@@ -27,7 +27,7 @@ import ctypes
 import getpass
 import grp
 
-from test_utils_base import CallbackHandler, TestDaosApiBase
+from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from avocado.utils import process

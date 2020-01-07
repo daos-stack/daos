@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from logging import getLogger
+from time import sleep
 
 from command_utils import ObjectWithParameters
 from pydaos.raw import DaosApiError

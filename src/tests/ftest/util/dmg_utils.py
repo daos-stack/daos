@@ -246,47 +246,26 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
     return result
 
 
-class DmgPoolCreateParameters:
-    def __init__(self, scm_size):
-        """Parameters for dmg pool create command. This class is created
-        because there are more than 10 parameters to pool_create so we get the
-        pylint error. Also, we can organize the parameters better this way.
-
-        Arguments:
-            scm_size (str) -- SCM size value passed into the command.
-        """
-        self.scm_size = scm_size
-        # Comma separated list of Host:Port where daos_server runs.
-        # e.g., wolf-31:10001,wolf-32:10001. Use 10001 for the default port
-        # number. This number is defined in daos_avocado_test.yaml
-        self.host_port=None
-        # Insecure mode. Defaults to True.
-        self.insecure=True
-        # Group with priviledges.
-        self.group=None
-        # User with priviledges.
-        self.user=None
-        # Access Control List file path for DAOS pool.
-        self.acl_file=None
-        # NVMe size. Defaults to None.
-        self.nvme_size=None
-        # Storage server unique identifiers (ranks) for DAOS pool.
-        self.ranks=None
-        # Number of pool service replicas. Defaults to None, in which case 1 is
-        # used in default.
-        self.nsvc=None
-        # DAOS system that pool is to be a part of. Defaults to None, in which
-        # case daos_server is used in default.
-        self.sys=None
+# pool_create_params dictionary keys.
+INSEUCRE = "insecure"
+HOST_PORT = "host_port"
+GROUP = "group"
+USER = "user"
+ACL_FILE = "acl_file"
+NVME_SIZE = "nvme_size"
+RANKS = "ranks"
+NSVC = "nsvc"
+SYS = "sys"
 
 
-def pool_create(path, dmg_pool_create_parameters):
+def pool_create(path, scm_size, pool_create_params=None):
     """Execute pool create command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        dmg_pool_create_parameters (DmgPoolCreateParameters): Object that
-            stores all the parameters for dmg pool create.
+        scm_size (str): SCM size value passed into the command.
+        pool_create_params (Dictionary): Parameters passed in to dmg pool
+            create. Use the keys defined above to use non-default value.
 
     Returns:
         CmdResult: Object that contains exit status, stdout, and other
@@ -294,19 +273,59 @@ def pool_create(path, dmg_pool_create_parameters):
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.insecure.value = dmg_pool_create_parameters.insecure
-    dmg.hostlist.value = dmg_pool_create_parameters.host_port
+    # Insecure mode. Defaults to True.
+    if pool_create_params is not None and INSEUCRE in pool_create_params:
+        dmg.insecure.value = pool_create_params[INSEUCRE]
+    else:
+        dmg.insecure.value = True
+    # Comma separated list of Host:Port where daos_server runs.
+    # e.g., wolf-31:10001,wolf-32:10001. Use 10001 for the default port number.
+    # This number is defined in daos_avocado_test.yaml
+    if pool_create_params is not None and HOST_PORT in pool_create_params:
+        dmg.hostlist.value = pool_create_params[HOST_PORT]
+    else:
+        dmg.hostlist.value = None
     dmg.request.value = "pool"
     dmg.action.value = "create"
     dmg.get_action_command()
-    dmg.action_command.group.value = dmg_pool_create_parameters.group
-    dmg.action_command.user.value = dmg_pool_create_parameters.user
-    dmg.action_command.acl_file.value = dmg_pool_create_parameters.acl_file
-    dmg.action_command.scm_size.value = dmg_pool_create_parameters.scm_size
-    dmg.action_command.nvme_size.value = dmg_pool_create_parameters.nvme_size
-    dmg.action_command.ranks.value = dmg_pool_create_parameters.ranks
-    dmg.action_command.nsvc.value = dmg_pool_create_parameters.nsvc
-    dmg.action_command.sys.value = dmg_pool_create_parameters.sys
+    # Group with priviledges.
+    if pool_create_params is not None and GROUP in pool_create_params:
+        dmg.action_command.group.value = pool_create_params[GROUP]
+    else:
+        dmg.action_command.group.value = None
+    # User with priviledges.
+    if pool_create_params is not None and USER in pool_create_params:
+        dmg.action_command.user.value = pool_create_params[USER]
+    else:
+        dmg.action_command.user.value = None
+    # Access Control List file path for DAOS pool.
+    if pool_create_params is not None and ACL_FILE in pool_create_params:
+        dmg.action_command.acl_file.value = pool_create_params[ACL_FILE]
+    else:
+        dmg.action_command.acl_file.value = None
+    dmg.action_command.scm_size.value = scm_size
+    # NVMe size. Defaults to None.
+    if pool_create_params is not None and NVME_SIZE in pool_create_params:
+        dmg.action_command.nvme_size.value = pool_create_params[NVME_SIZE]
+    else:
+        dmg.action_command.nvme_size.value = None
+    # Storage server unique identifiers (ranks) for DAOS pool.
+    if pool_create_params is not None and RANKS in pool_create_params:
+        dmg.action_command.ranks.value = pool_create_params[RANKS]
+    else:
+        dmg.action_command.ranks.value = None
+    # Number of pool service replicas. Defaults to None, in which case 1 is
+    # used in default.
+    if pool_create_params is not None and NSVC in pool_create_params:
+        dmg.action_command.nsvc.value = pool_create_params[NSVC]
+    else:
+        dmg.action_command.nsvc.value = None
+    # DAOS system that pool is to be a part of. Defaults to None, in which
+    # case daos_server is used in default.
+    if pool_create_params is not None and SYS in pool_create_params:
+        dmg.action_command.sys.value = pool_create_params[SYS]
+    else:
+        dmg.action_command.sys.value = None
 
     try:
         result = dmg.run()
