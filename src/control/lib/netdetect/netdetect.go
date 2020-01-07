@@ -513,8 +513,9 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 
 // GetDeviceAlias is a complete method to find an alias for the device name provided.
 // For example, the device alias for "ib0" is a sibling node in the hwloc topology
-// with the name "hfi1_0".
-func GetDeviceAlias(device string) (string, error) {
+// with the name "hfi1_0".  Any devices specified by additionalSystemDevices are added
+// to the system device list that is automatically determined.
+func GetDeviceAlias(device string, additionalSystemDevices []string) (string, error) {
 	var node C.hwloc_obj_t
 
 	log.Debugf("Searching for a device alias for: %s", device)
@@ -533,39 +534,8 @@ func GetDeviceAlias(device string) (string, error) {
 		return "lo", nil
 	}
 
-	node = getNodeAlias(deviceScanCfg)
-	if node == nil {
-		return "", errors.Errorf("unable to find an alias for: %s", deviceScanCfg.targetDevice)
-	}
-	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
-	return C.GoString(node.name), nil
-}
-
-// mockGetDeviceAlias is a complete method to find an alias for the device name provided.
-// Because this function uses the system device list to rule out proper matching siblings,
-// a mock system devices list is provided so that the testing environment can simulate
-// the topology under test.
-func mockGetDeviceAlias(device string, mockSystemDevices []string) (string, error) {
-	var node C.hwloc_obj_t
-
-	log.Debugf("Searching for a device alias for: %s", device)
-
-	deviceScanCfg, err := initDeviceScan()
-	if err != nil {
-		return "", errors.Errorf("unable to initialize device scan:  Error: %v", err)
-	}
-	defer cleanUp(deviceScanCfg.topology)
-
-	deviceScanCfg.targetDevice = device
-
-	// The loopback device isn't a physical device that hwloc will find in the topology
-	// If "lo" is specified, it is treated specially.
-	if deviceScanCfg.targetDevice == "lo" {
-		return "lo", nil
-	}
-
-	// Add the mock system devices to the map
-	for _, deviceName := range mockSystemDevices {
+	// Add any additional system devices to the map
+	for _, deviceName := range additionalSystemDevices {
 		deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
 	}
 

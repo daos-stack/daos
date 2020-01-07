@@ -176,6 +176,7 @@ func TestValidateNetworkConfig(t *testing.T) {
 // This test verifies that GetDeviceAlias() handles the error cases when a specified
 // device cannot be matched to a sibling.
 func TestDeviceAliasErrors(t *testing.T) {
+	mockSystemDevices := []string{}
 	for name, tc := range map[string]struct {
 		device   string
 		topology string
@@ -206,7 +207,7 @@ func TestDeviceAliasErrors(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := GetDeviceAlias(tc.device)
+			deviceAlias, err := GetDeviceAlias(tc.device, mockSystemDevices)
 			AssertTrue(t, err != nil,
 				"an error was expected but not received")
 			AssertEqual(t, deviceAlias, "",
@@ -293,7 +294,7 @@ func TestDeviceAlias(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := mockGetDeviceAlias(tc.device, mockSystemDevices)
+			deviceAlias, err := GetDeviceAlias(tc.device, mockSystemDevices)
 			if err != nil {
 				t.Fatal(err)
 			}
