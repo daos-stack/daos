@@ -229,16 +229,26 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	}
 
 	// if join successful, record membership
-	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		newMember := system.NewMember(resp.GetRank(), req.GetUuid(),
-			replyAddr, system.MemberStateStarted)
-
-		count, err := svc.membership.Add(newMember)
-		if err != nil {
-			return nil, errors.WithMessage(err, "adding to membership")
+	if resp.GetStatus() == 0 {
+		newState := system.MemberStateEvicted
+		if resp.GetState() == mgmtpb.JoinResp_IN {
+			newState = system.MemberStateStarted
 		}
 
-		svc.log.Debugf("new system member: %s (total %d)\n", newMember, count)
+		member := system.NewMember(resp.GetRank(), req.GetUuid(), replyAddr, newState)
+
+		created, oldState := svc.membership.AddOrUpdate(member)
+		if created {
+			svc.log.Debugf("new system member: rank %d, addr %s",
+				resp.GetRank(), replyAddr)
+		} else {
+			svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s",
+				member.Rank, replyAddr, *oldState, newState)
+			if *oldState == newState {
+				svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+					member.Rank, *oldState, newState)
+			}
+		}
 	}
 
 	return resp, nil
@@ -689,6 +699,28 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// StartRanks implements the method defined for the Management Service.
+//
+// Restart data-plane instances (DAOS system members) managed by harness.
+//
+// TODO: Current implementation sends restart signal to harness, restarting all
+//       ranks managed by harness, future implementations will allow individual
+//       ranks to be restarted.
+func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq) (*mgmtpb.StartRanksResp, error) {
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+
+	resp := &mgmtpb.StartRanksResp{}
+
+	// perform controlled restart of I/O Server harness
+	if err := svc.harness.RestartInstances(); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
