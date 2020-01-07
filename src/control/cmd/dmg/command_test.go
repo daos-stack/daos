@@ -183,8 +183,8 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
+func (tc *testConn) SystemQuery() (system.Members, error) {
+	tc.appendInvocation("SystemQuery")
 	return make(system.Members, 0), nil
 }
 
@@ -201,6 +201,11 @@ func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryR
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
 	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
 	return &client.ListPoolsResp{}, nil
+}
+
+func (tc *testConn) SystemStart() error {
+	tc.appendInvocation("SystemStart")
+	return nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
