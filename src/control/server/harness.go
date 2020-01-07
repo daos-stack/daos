@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/errors"
 
@@ -37,10 +38,12 @@ import (
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex
-	log       logging.Logger
-	instances []*IOServerInstance
-	started   bool
-	errChan   chan error
+	log         logging.Logger
+	instances   []*IOServerInstance
+	started     uint32
+	restartable uint32
+	restart     chan struct{}
+	errChan     chan error
 }
 
 // NewHarness returns an initialized *IOServerHarness
@@ -48,14 +51,9 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:       log,
 		instances: make([]*IOServerInstance, 0, maxIoServers),
+		restart:   make(chan struct{}, 1),
 		errChan:   make(chan error, maxIoServers),
 	}
-}
-
-func (h *IOServerHarness) IsStarted() bool {
-	h.RLock()
-	defer h.RUnlock()
-	return h.started
 }
 
 func (h *IOServerHarness) Instances() []*IOServerInstance {
@@ -89,7 +87,7 @@ func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	}
 
 	var err error
-	for _, mi := range h.Instances() {
+	for _, mi := range h.instances {
 		// try each instance, returning the first one that is a replica (if any are)
 		if err = checkIsMSReplica(mi); err == nil {
 			return mi, nil
@@ -149,7 +147,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 	h.RLock()
 	defer h.RUnlock()
 
-	if h.started {
+	if h.IsStarted() {
 		return errors.New("can't wait for storage: harness already started")
 	}
 
@@ -182,20 +180,23 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 
 // registerNewMember creates a new system.Member for given instance and adds it
 // to the system membership.
-func registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
+func (h *IOServerHarness) registerNewMember(membership *system.Membership, instance *IOServerInstance) error {
 	m, err := instance.newMember()
 	if err != nil {
 		return errors.Wrap(err, "failed to get member from instance")
 	}
 
-	count, err := membership.Add(m)
-	if err != nil {
-		return errors.Wrap(err, "failed to add MS replica to membership")
-	}
-
-	if count != 1 {
-		return errors.Errorf("expected MS replica to be first member "+
-			"(want 1, got %d)", count)
+	created, oldState := membership.AddOrUpdate(m)
+	if created {
+		h.log.Debugf("bootstrapping system member: rank %d, addr %s",
+			m.Rank, m.Addr)
+	} else {
+		h.log.Debugf("updated bootstrapping system member: rank %d, addr %s, %s->%s",
+			m.Rank, m.Addr, *oldState, m.State())
+		if *oldState == m.State() {
+			h.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+				m.Rank, *oldState, m.State())
+		}
 	}
 
 	return nil
@@ -206,13 +207,13 @@ func registerNewMember(membership *system.Membership, instance *IOServerInstance
 // but bootstrapping MS replicas will not join).
 func (h *IOServerHarness) startInstances(ctx context.Context, membership *system.Membership) error {
 	h.log.Debug("starting instances")
-	for _, instance := range h.instances {
+	for _, instance := range h.Instances() {
 		if err := instance.Start(ctx, h.errChan); err != nil {
 			return err
 		}
 
 		if instance.IsMSReplica() {
-			if err := registerNewMember(membership, instance); err != nil {
+			if err := h.registerNewMember(membership, instance); err != nil {
 				return err
 			}
 		}
@@ -226,7 +227,7 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 // I/O server modules are then loaded.
 func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 	h.log.Debug("waiting for instances to be ready")
-	for _, instance := range h.instances {
+	for _, instance := range h.Instances() {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -255,15 +256,14 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 	return nil
 }
 
-// monitorInstances listens for exit results from instances or harness and will
-// return only when all harness instances are stopped and restartInstances
+// monitor listens for exit results from instances or harness and will
+// return only when all harness instances are stopped and restart
 // signal is received.
-func (h *IOServerHarness) monitorInstances(ctx context.Context) error {
+func (h *IOServerHarness) monitor(ctx context.Context) error {
 	h.log.Debug("monitoring instances")
 	for {
 		select {
 		case <-ctx.Done(): // received when harness is exiting
-			h.log.Debug("harness exiting")
 			return ctx.Err()
 		case err := <-h.errChan: // received when instance exits
 			// TODO: Restart failed instances on unexpected exit.
@@ -271,8 +271,11 @@ func (h *IOServerHarness) monitorInstances(ctx context.Context) error {
 			msg := fmt.Sprintf("instance exited: %v", err)
 			if allInstancesStopped {
 				msg += ", all instances stopped!"
+				h.setRestartable()
 			}
 			h.log.Info(msg)
+		case <-h.restart: // trigger harness to restart instances
+			return nil
 		}
 	}
 
@@ -281,7 +284,7 @@ func (h *IOServerHarness) monitorInstances(ctx context.Context) error {
 
 // Start starts all configured instances, waits for them to be ready and then
 // loops monitoring instance exit, harness exit and harness restart signals.
-func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership) error {
+func (h *IOServerHarness) Start(parent context.Context, membership *system.Membership, cfg *Configuration) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -289,21 +292,26 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	// Now we want to block any RPCs that might try to mess with storage
 	// (format, firmware update, etc) before attempting to start I/O servers
 	// which are using the storage.
-	h.Lock()
-	h.started = true
-	h.Unlock()
+	h.setStarted()
+	defer h.setStopped()
 
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
 
 	for {
+		if cfg != nil {
+			// Single daos_server dRPC server to handle all iosrv requests
+			if err := drpcSetup(ctx, h.log, cfg.SocketDir, h.Instances(), cfg.TransportConfig); err != nil {
+				return errors.WithMessage(err, "dRPC setup")
+			}
+		}
 		if err := h.startInstances(ctx, membership); err != nil {
 			return err
 		}
 		if err := h.waitInstancesReady(ctx); err != nil {
 			return err
 		}
-		if err := h.monitorInstances(ctx); err != nil {
+		if err := h.monitor(ctx); err != nil {
 			return err
 		}
 	}
@@ -323,6 +331,26 @@ func (h *IOServerHarness) HasStartedInstances() bool {
 	}
 
 	return false
+}
+
+// RestartInstances will signal the harness to restart configured instances.
+func (h *IOServerHarness) RestartInstances() error {
+	h.RLock()
+	defer h.RUnlock()
+
+	if !h.IsStarted() {
+		return errors.New("can't start instances: harness not started")
+	}
+	if !h.IsRestartable() {
+		return errors.New("can't start instances: already running")
+	}
+	if h.HasStartedInstances() {
+		return errors.New("can't start instances: already started")
+	}
+
+	h.restart <- struct{}{} // trigger harness to restart its instances
+
+	return nil
 }
 
 // StartManagementService starts the DAOS management service on this node.
@@ -357,4 +385,28 @@ func getMgmtInfo(srv *IOServerInstance) (*mgmtInfo, error) {
 	}
 
 	return mi, nil
+}
+
+func (h *IOServerHarness) setStarted() {
+	atomic.StoreUint32(&h.started, 1)
+}
+
+func (h *IOServerHarness) setStopped() {
+	atomic.StoreUint32(&h.started, 0)
+}
+
+func (h *IOServerHarness) IsStarted() bool {
+	return atomic.LoadUint32(&h.started) == 1
+}
+
+func (h *IOServerHarness) setRestartable() {
+	atomic.StoreUint32(&h.restartable, 1)
+}
+
+func (h *IOServerHarness) setNotRestartable() {
+	atomic.StoreUint32(&h.restartable, 0)
+}
+
+func (h *IOServerHarness) IsRestartable() bool {
+	return atomic.LoadUint32(&h.restartable) == 1
 }

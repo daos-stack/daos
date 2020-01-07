@@ -49,7 +49,7 @@ class BasicTxTest(TestWithServers):
 
         :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
-        pool = None
+        self.pool = None
 
         try:
             # parameters used in pool create
@@ -62,16 +62,16 @@ class BasicTxTest(TestWithServers):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+            self.pool = DaosPool(self.context)
+            self.pool.create(createmode, createuid, creategid,
+                             createsize, createsetid, None)
 
             # need a connection to create container
-            pool.connect(1 << 1)
+            self.pool.connect(1 << 1)
 
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.handle)
 
             # now open it
             container.open()
@@ -139,8 +139,3 @@ class BasicTxTest(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            # cleanup the pool
-            if pool is not None:
-                pool.disconnect()
-                pool.destroy(1)
