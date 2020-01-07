@@ -989,34 +989,18 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*hdl = NULL;
 	struct ds_pool			*pool;
 	int				 rc;
 
-	/* If no handle provided, try looking up by pool UUID */
-	if (uuid_is_null(in->tqi_op.pi_hdl)) {
-		pool = ds_pool_lookup(in->tqi_op.pi_uuid);
-		if (pool == NULL) {
-			D_ERROR("Failed to find pool "DF_UUID"\n",
-				DP_UUID(in->tqi_op.pi_uuid));
-			D_GOTO(out, rc = -DER_NONEXIST);
-		}
-	} else {
-		hdl = ds_pool_hdl_lookup(in->tqi_op.pi_hdl);
-		if (hdl == NULL) {
-			D_ERROR("Failed to find pool hdl "DF_UUID"\n",
-				DP_UUID(in->tqi_op.pi_hdl));
-			D_GOTO(out, rc = -DER_NO_HDL);
-		}
-
-		D_ASSERT(hdl->sph_pool != NULL);
-		pool = hdl->sph_pool;
+	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
+	if (pool == NULL) {
+		D_ERROR("Failed to find pool "DF_UUID"\n",
+			DP_UUID(in->tqi_op.pi_uuid));
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	rc = pool_tgt_query(pool, &out->tqo_space);
 
-	if (hdl != NULL)
-		ds_pool_hdl_put(hdl);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
