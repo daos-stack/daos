@@ -109,7 +109,7 @@ func TestBdevRunnerPrepare(t *testing.T) {
 				},
 			}
 			b := newBackend(log, s)
-			p := NewProvider(log, b)
+			p := NewProvider(log, b).WithForwardingDisabled()
 
 			_, gotErr := p.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

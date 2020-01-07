@@ -9,7 +9,7 @@ def scons():
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
-    prereqs.require(denv, 'ompi', 'cart')
+    prereqs.require(denv, 'cart')
 
     daos_extra_files = denv.Object('daos_hdlr.c')
 

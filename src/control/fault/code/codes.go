@@ -47,6 +47,14 @@ const (
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
 	BdevFormatBadParam
+	BdevFormatFailure
+	BdevFormatBadPciAddress
+
+	// DAOS system fault codes
+	SystemUnknown Code = iota + 400
+	SystemMemberExists
+	SystemMemberMissing
+	SystemMemberChanged
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

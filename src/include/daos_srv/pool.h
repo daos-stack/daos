@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 
 /*
@@ -50,6 +51,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
 	struct ds_iv_ns	       *sp_iv_ns;
@@ -88,6 +90,17 @@ struct ds_pool_child {
 	struct ds_pool	*spc_pool;
 	uuid_t		spc_uuid;	/* pool UUID */
 	d_list_t	spc_cont_list;
+
+	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
+	 * vos aggregation can not cross this epoch during rebuild to avoid
+	 * interferring rebuild process.
+	 */
+	uint64_t	spc_rebuild_fence;
+
+	/* The HLC when current rebuild ends, which will be used to compare
+	 * with the aggregation full scan start HLC to know whether the 
+	 * aggregation needs to be restarted from 0. */
+	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 };
@@ -140,8 +153,8 @@ int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
-int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
-			     daos_prop_t **prop);
+int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
 int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
 int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
@@ -149,6 +162,9 @@ int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
+
+int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
+		      daos_pool_info_t *pool_info);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -198,4 +214,13 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
+
+int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
+			  struct daos_pool_cont_info **containers,
+			  uint64_t *ncontainers);
+void
+ds_pool_disable_evict(void);
+void
+ds_pool_enable_evict(void);
+
 #endif /* __DAOS_SRV_POOL_H__ */

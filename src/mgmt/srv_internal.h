@@ -39,6 +39,7 @@
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
 #include <daos_security.h>
+#include <daos_prop.h>
 
 #include "srv.pb-c.h"
 #include "storage_query.pb-c.h"
@@ -91,19 +92,25 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
 			d_rank_list_t **svcp);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
+int ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+			  daos_prop_t **result);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 void ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
 int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
 void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
-int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			       struct daos_acl **result);
+			       daos_prop_t **result);
 int ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
 int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
-			    struct daos_acl **result);
+			    daos_prop_t **result);
+int ds_mgmt_pool_list_cont(uuid_t uuid,
+			   struct daos_pool_cont_info **containers,
+			   uint64_t *ncontainers);
+int ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info);
 
 /** srv_query.c */
 

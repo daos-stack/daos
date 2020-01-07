@@ -182,10 +182,10 @@ update_or_fetch(bool update)
 		pack_dkey_iod_sgl(dkey, &dkey_iov, akeys, iods, recxs, sgls,
 				  sgl_iovs, sgl_bufs, iod_nr);
 		if (update)
-			daos_obj_update(oh, DAOS_TX_NONE, &dkey_iov, iod_nr,
+			daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
 					iods, sgls, NULL);
 		else
-			daos_obj_fetch(oh, DAOS_TX_NONE, &dkey_iov, iod_nr,
+			daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey_iov, iod_nr,
 				       iods, sgls, NULL, NULL);
 	}
 
@@ -298,17 +298,17 @@ punch_internal(int op)
 		return;
 
 	if (op == PUNCH_OBJ) {
-		daos_obj_punch(oh, DAOS_TX_NONE, NULL);
+		daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
 	} else {
 		sprintf(dkey, "%d", rand() % dkey_cnt);
 		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 		if (op == PUNCH_DKEY) {
-			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 1, &dkey_iov,
+			daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 0, 1, &dkey_iov,
 					     NULL);
 		} else {
 			sprintf(akey, "%d", rand() % max_akey_per_dkey);
 			d_iov_set(&akey_iov, akey, strlen(akey));
-			daos_obj_punch_akeys(oh, DAOS_TX_NONE, &dkey_iov, 1,
+			daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey_iov, 1,
 					     &akey_iov, NULL);
 		}
 	}
@@ -452,6 +452,7 @@ main(int argc, char **argv)
 			rc = uuid_parse(optarg, ts_ctx.tsc_cont_uuid);
 			if (rc)
 				return rc;
+			break;
 		case 't':
 			duration = strtoul(optarg, &endp, 0);
 			break;
@@ -464,17 +465,17 @@ main(int argc, char **argv)
 	}
 	srand(seed);
 
-	if (ts_ctx.tsc_mpi_rank == 0 && uuid_is_null(ts_ctx.tsc_pool_uuid))
-		uuid_generate(ts_ctx.tsc_pool_uuid);
-	if (ts_ctx.tsc_mpi_rank == 0 && uuid_is_null(ts_ctx.tsc_cont_uuid))
-		uuid_generate(ts_ctx.tsc_cont_uuid);
-
 	ts_ctx.tsc_svc.rl_nr = 1;
 	ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
+		if (uuid_is_null(ts_ctx.tsc_pool_uuid))
+			uuid_generate(ts_ctx.tsc_pool_uuid);
+		if (uuid_is_null(ts_ctx.tsc_cont_uuid))
+			uuid_generate(ts_ctx.tsc_cont_uuid);
+
 		fprintf(stdout,
 			"racer start with %d threads duration %u secs\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n",

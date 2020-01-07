@@ -700,7 +700,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	uuid_copy(xarg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, xarg);
+			 rebuild_obj_scan_cb, NULL, xarg);
 	vos_cont_close(coh);
 
 	/* Since dtx_resync might yield, let's reprobe anyway */
@@ -740,7 +740,7 @@ rebuild_scanner(void *data)
 	xarg.arg = arg;
 	xarg.yield_freq = DEFAULT_YIELD_FREQ;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 rebuild_container_scan_cb, &xarg);
+			 rebuild_container_scan_cb, NULL, &xarg);
 
 	ds_pool_child_put(child);
 
@@ -940,7 +940,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	scan_arg->rebuild_tgt_nr = rsi->rsi_tgts_num;
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;
-	/* step-3: start scann leader */
+	/* step-3: start scan leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, DSS_ULT_REBUILD,
 			    DSS_TGT_SELF, 0, NULL);
 	if (rc != 0) {
@@ -960,6 +960,7 @@ out:
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
+	ro->rso_stable_epoch = crt_hlc_get();
 	if (rc) {
 		/* If it failed, tell the master the target can not
 		 * start the rebuild, so master will put the target
@@ -982,10 +983,7 @@ out:
 	}
 
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	/* will fix cart to call co_post_reply() for this case, freeing
-	 * it immediately at here is potentially unsafe.
-	 */
-	/* d_rank_list_free(fail_list); */
+	d_rank_list_free(fail_list);
 }
 
 int
@@ -998,6 +996,10 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
+
+	if (src->rso_status == 0 &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
 
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)
@@ -1061,13 +1063,3 @@ out:
 	return rc;
 }
 
-int
-rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg)
-{
-	struct rebuild_scan_out *out = crt_reply_get(rpc);
-
-	if (out->rso_ranks_list != NULL)
-		d_rank_list_free(out->rso_ranks_list);
-
-	return 0;
-}

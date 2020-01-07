@@ -35,6 +35,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -127,6 +128,16 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
+func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
+	return nil, nil
+}
+
+func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
+	return &client.PoolSetPropResp{}, nil
+}
+
 func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
@@ -172,14 +183,14 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
-	tc.appendInvocation("SystemMemberQuery")
-	return make(common.SystemMembers, 0), nil
+func (tc *testConn) SystemQuery() (system.Members, error) {
+	tc.appendInvocation("SystemQuery")
+	return make(system.Members, 0), nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
+func (tc *testConn) SystemStop(req client.SystemStopReq) (system.MemberResults, error) {
 	tc.appendInvocation("SystemStop")
-	return make(common.SystemMemberResults, 0), nil
+	return make(system.MemberResults, 0), nil
 }
 
 func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
@@ -190,6 +201,11 @@ func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryR
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
 	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
 	return &client.ListPoolsResp{}, nil
+}
+
+func (tc *testConn) SystemStart() error {
+	tc.appendInvocation("SystemStart")
+	return nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
