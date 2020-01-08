@@ -2784,6 +2784,14 @@ dfs_write_iod(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
 
+	if (iod->iod_nr == 0) {
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
 	/** set array location */
 	arr_iod.arr_nr = iod->iod_nr;
 	arr_iod.arr_rgs = iod->iod_rgs;
