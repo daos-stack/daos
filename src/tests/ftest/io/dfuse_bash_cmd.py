@@ -144,7 +144,6 @@ class BashCmd(TestWithServers):
               Create a directory.
               Create a file under that directory.
               List the created file.
-              Change permissions of the directory created above.
               Remove the file.
               Write a file to the dfuse mounted location using dd.
               List the written file to verify if it's create.
