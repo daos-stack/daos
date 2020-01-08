@@ -31,7 +31,8 @@
 #define __VOS_ILOG_H__
 
 #include <daos/common.h>
-#include <ilog.h>
+#include "ilog.h"
+#include "vos_ts.h"
 
 struct vos_container;
 
@@ -214,5 +215,8 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 
 #endif
 
+struct vos_ts_entry *
+vos_ilog_ts_get(struct ilog_df *ilog, struct vos_ts_table *ts_table,
+		uint32_t type);
 
 #endif /* __VOS_ILOG_H__ */

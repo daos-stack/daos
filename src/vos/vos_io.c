@@ -572,6 +572,7 @@ out:
 static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
+	struct vos_ts_entry	*entry;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 val_epr = {0};
@@ -603,6 +604,11 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		}
 		goto out;
 	}
+
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				ioc->ic_cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_AKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 
 	rc = key_ilog_check(ioc, krec, &ioc->ic_dkey_info, &val_epr,
 			    &ioc->ic_akey_info);
@@ -687,6 +693,7 @@ iod_set_cursor(struct vos_io_context *ioc, unsigned int sgl_at)
 static int
 dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
@@ -713,6 +720,10 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 		goto out;
 	}
 
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				ioc->ic_cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_DKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = key_ilog_check(ioc, krec, &obj->obj_ilog_info, &ioc->ic_epr,
 			    &ioc->ic_dkey_info);
 
@@ -914,6 +925,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	struct vos_ts_entry	*entry;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
@@ -933,6 +945,10 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	if (rc != 0)
 		return rc;
 
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				ioc->ic_cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_AKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     &ioc->ic_dkey_info, &ioc->ic_akey_info);
 	if (rc != 0) {
@@ -981,6 +997,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	daos_handle_t		 ak_toh;
+	struct vos_ts_entry	*entry;
 	struct vos_krec_df	*krec;
 	bool			 subtr_created = false;
 	int			 i, rc;
@@ -997,6 +1014,10 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	}
 	subtr_created = true;
 
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				ioc->ic_cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_DKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     &obj->obj_ilog_info, &ioc->ic_dkey_info);
 	if (rc != 0) {

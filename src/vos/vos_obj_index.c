@@ -217,6 +217,7 @@ int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -255,6 +256,9 @@ do_log:
 	if (rc != 0)
 		return rc;
 
+	entry = vos_ilog_ts_get(&obj->vo_ilog, cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_OBJ);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = ilog_update(loh, NULL, epoch, false);
 
 	ilog_close(loh);
@@ -273,6 +277,7 @@ int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
 {
+	struct vos_ts_entry	*entry;
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	struct ilog_desc_cbs	 cbs;
 	int		 rc = 0;
@@ -282,6 +287,9 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 
 	/* Create a new incarnation of the log for punch */
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	entry = vos_ilog_ts_get(&obj->vo_ilog, cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_OBJ);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
 	if (rc != 0)
 		return rc;
@@ -363,9 +371,14 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 		   daos_epoch_range_t *epr, bool check_existence)
 {
 	struct umem_instance	*umm;
+	struct vos_ts_entry	*entry;
 	int			 rc;
 
 	umm = vos_cont2umm(oiter->oit_cont);
+	entry = vos_ilog_ts_get(&obj->vo_ilog,
+				oiter->oit_cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_OBJ);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
 			    oiter->oit_epr.epr_hi, 0, NULL,

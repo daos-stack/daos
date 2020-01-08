@@ -53,9 +53,15 @@ struct open_query {
 static int
 check_key(struct open_query *query, struct vos_krec_df *krec)
 {
+	struct vos_ts_entry	*entry;
 	daos_epoch_range_t	 epr = query->qt_epr;
 	int			 rc;
 
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				query->qt_obj->obj_cont->vc_pool->vp_ts_table,
+				krec->kr_bmap & KREC_BF_DKEY ?
+				VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,

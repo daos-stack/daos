@@ -968,6 +968,7 @@ int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       d_iov_t *key_iov, d_iov_t *val_iov, int flags)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
 	struct umem_instance	*umm;
@@ -1001,6 +1002,11 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			d_errstr(rc));
 		return rc;
 	}
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				obj->obj_cont->vc_pool->vp_ts_table,
+				krec->kr_bmap & KREC_BF_DKEY ?
+				VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = ilog_update(loh, NULL, epoch, true);
 	if (rc != 0)
 		D_ERROR("Failed to update incarnation log entry:"

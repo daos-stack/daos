@@ -86,6 +86,8 @@ static inline uint64_t vos_byte2blkoff(uint64_t bytes)
 	return bytes >> VOS_BLK_SHIFT;
 }
 
+struct vos_ts_table;
+
 /**
  * VOS pool (DRAM)
  */
@@ -109,6 +111,8 @@ struct vos_pool {
 	d_list_t		vp_gc_link;
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
+	/** Table for timestamps */
+	struct vos_ts_table	*vp_ts_table;
 	/** I/O context */
 	struct bio_io_context	*vp_io_ctxt;
 	/** In-memory free space tracking for NVMe device */

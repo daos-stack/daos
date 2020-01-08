@@ -235,9 +235,15 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 		    bool check_existence)
 {
 	struct umem_instance	*umm;
+	struct vos_ts_entry	*entry;
 	int			 rc;
 
 	umm = vos_obj2umm(oiter->it_obj);
+	entry = vos_ilog_ts_get(&krec->kr_ilog,
+				oiter->it_obj->obj_cont->vc_pool->vp_ts_table,
+				oiter->it_iter.it_type == VOS_ITER_AKEY ?
+				VOS_TS_TYPE_AKEY : VOS_TS_TYPE_DKEY);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
 			    oiter->it_epr.epr_hi, oiter->it_punched,

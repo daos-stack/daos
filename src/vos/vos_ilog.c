@@ -368,3 +368,15 @@ vos_ilog_init(void)
 
 	return 0;
 }
+
+struct vos_ts_entry *
+vos_ilog_ts_get(struct ilog_df *ilog, struct vos_ts_table *ts_table,
+		uint32_t type)
+{
+	uint32_t	*idx;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_lookup(ts_table, idx, type);
+}
+

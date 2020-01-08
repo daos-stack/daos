@@ -32,6 +32,7 @@
 #include <daos/btree.h>
 #include "vos_internal.h"
 #include "vos_layout.h"
+#include "vos_ts.h"
 #include "ilog.h"
 
 #define ILOG_TREE_ORDER 11
@@ -58,7 +59,7 @@ struct ilog_root {
 		struct ilog_id		lr_id;
 		struct ilog_tree	lr_tree;
 	};
-	bool				lr_punch;
+	uint32_t			lr_ts_idx;
 	uint32_t			lr_magic;
 };
 
@@ -323,9 +324,11 @@ ilog_init(void)
 }
 
 /* 4 bit magic number + version */
-#define ILOG_MAGIC		0x60000000
-#define ILOG_MAGIC_MASK		0xf0000000
-#define ILOG_VERSION_MASK	~(ILOG_MAGIC_MASK)
+#define ILOG_MAGIC		0x00000006
+#define ILOG_MAGIC_MASK		0x0000000f
+#define ILOG_PUNCH_MASK		0x00000010
+#define ILOG_VERSION_INC	0x00000020
+#define ILOG_VERSION_MASK	~(ILOG_MAGIC_MASK | ILOG_PUNCH_MASK)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
 static inline int
@@ -333,6 +336,12 @@ ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
 		return -DER_INVAL;
 	return (magic & ILOG_VERSION_MASK);
+}
+
+static inline bool
+ilog_root2punch(struct ilog_context *lctx)
+{
+	return (lctx->ic_root->lr_magic & ILOG_PUNCH_MASK) ? true : false;
 }
 
 /** Increment the version of the log.   The object tree in particular can
@@ -343,19 +352,20 @@ static inline uint32_t
 ilog_ver_inc(struct ilog_context *lctx)
 {
 	uint32_t        magic = lctx->ic_root->lr_magic;
-	uint32_t        next = (magic & ILOG_VERSION_MASK) + 1;
 
 	D_ASSERT(ILOG_MAGIC_VALID(magic));
 
-	if (next > ILOG_VERSION_MASK)
-		next = 1; /* Wrap around */
+	if ((magic & ILOG_VERSION_MASK) == ILOG_VERSION_MASK)
+		magic = (magic & ~ILOG_VERSION_MASK) + ILOG_VERSION_INC;
+	else
+		magic += ILOG_VERSION_INC;
 
 	/* This is only called when we will persist the new version so no need
 	* to update the version when finishing the transaction.
 	*/
 	lctx->ic_ver_inc = false;
 
-	return ILOG_MAGIC | next;
+	return magic;
 }
 
 /** Called when we know a txn is needed.  Subsequent calls are a noop. */
@@ -508,7 +518,7 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 	struct ilog_root	tmp = {0};
 	int			rc = 0;
 
-	tmp.lr_magic = ILOG_MAGIC + 1;
+	tmp.lr_magic = ILOG_MAGIC + ILOG_VERSION_INC;
 
 	rc = ilog_ptr_set(&lctx, root, &tmp);
 	lctx.ic_ver_inc = false;
@@ -658,7 +668,7 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	d_iov_set(&val_iov, &punch, sizeof(punch));
 
 	key = root->lr_id;
-	punch = root->lr_punch;
+	punch = ilog_root2punch(lctx);
 
 	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc != 0) {
@@ -738,6 +748,13 @@ update_inplace(struct ilog_context *lctx, struct ilog_id *id_out,
 {
 	umem_off_t	null_off = UMOFF_NULL;
 	int		rc;
+	uint32_t	magic;
+	bool		saved_punch;
+
+	if (punch_out)
+		saved_punch = *punch_out;
+	else
+		saved_punch = ilog_root2punch(lctx);
 
 	rc = check_equal(lctx, id_out, id_in, opc == ILOG_OP_UPDATE, is_equal);
 	if (rc != 0 || !*is_equal || opc == ILOG_OP_ABORT)
@@ -749,13 +766,18 @@ update_inplace(struct ilog_context *lctx, struct ilog_id *id_out,
 		return ilog_ptr_set(lctx, &id_out->id_tx_id, &null_off);
 	}
 
-	if (*punch_out || !punch_in)
+	if (saved_punch || !punch_in)
 		return 0;
 
 	/* New operation in old DTX is a punch.  Update the old entry
 	 * accordingly.
 	 */
 	D_DEBUG(DB_IO, "Updating "DF_U64" to a punch\n", id_in->id_epoch);
+	if (punch_out == NULL) {
+		magic = lctx->ic_root->lr_magic | ILOG_PUNCH_MASK;
+		return ilog_ptr_set(lctx, &lctx->ic_root->lr_magic, &magic);
+	}
+
 	return ilog_ptr_set(lctx, punch_out, &punch_in);
 }
 
@@ -801,7 +823,8 @@ set:
 
 	tmp.lr_magic = ilog_ver_inc(lctx);
 	tmp.lr_id = key;
-	tmp.lr_punch = punch;
+	if (punch)
+		tmp.lr_magic |= ILOG_PUNCH_MASK;
 	rc = ilog_ptr_set(lctx, root, &tmp);
 done:
 	return rc;
@@ -980,7 +1003,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 			id_in->id_epoch);
 		tmp.lr_magic = ilog_ver_inc(lctx);
 		tmp.lr_id.id_epoch = id_in->id_epoch;
-		tmp.lr_punch = punch;
+		if (punch)
+			tmp.lr_magic |= ILOG_PUNCH_MASK;
 		rc = ilog_ptr_set(lctx, root, &tmp);
 		if (rc != 0)
 			goto done;
@@ -990,7 +1014,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	} else if (root->lr_tree.it_embedded) {
 		bool	is_equal;
 
-		rc = update_inplace(lctx, &root->lr_id, &root->lr_punch,
+		rc = update_inplace(lctx, &root->lr_id, NULL,
 				    id_in, opc, punch, &is_equal);
 		if (rc != 0)
 			goto done;
@@ -1011,7 +1035,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 			goto done;
 		}
 
-		if (!punch && !root->lr_punch &&
+		if (!punch && !ilog_root2punch(lctx) &&
 		    id_in->id_epoch > root->lr_id.id_epoch &&
 		    visibility == ILOG_COMMITTED) {
 			D_DEBUG(DB_IO, "No update needed\n");
@@ -1307,7 +1331,8 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 			in_progress = true;
 		else if (status < 0)
 			D_GOTO(fail, rc = status);
-		rc = set_entry(entries, &root->lr_id, root->lr_punch, status);
+		rc = set_entry(entries, &root->lr_id, ilog_root2punch(lctx),
+			       status);
 
 		if (rc != 0)
 			goto fail;
@@ -1646,3 +1671,14 @@ done:
 	return empty;
 }
 
+uint32_t *
+ilog_ts_idx_get(struct ilog_df *ilog_df)
+{
+	struct ilog_root	*root;
+
+	ILOG_ASSERT_VALID(ilog_df);
+
+	root = (struct ilog_root *)ilog_df;
+
+	return &root->lr_ts_idx;
+}

@@ -151,10 +151,17 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
 	struct umem_attr	 uma;
+	int			 rc;
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
 		return -DER_NOMEM;
+
+	rc = vos_ts_table_alloc(&pool->vp_ts_table, crt_hlc_get());
+	if (rc == -DER_NOMEM) {
+		D_FREE(pool);
+		return -DER_NOMEM;
+	}
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);

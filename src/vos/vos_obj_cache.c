@@ -203,6 +203,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
 	     uint32_t intent, bool visible_only, struct vos_object **obj_p)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
 	struct obj_lru_key	 lkey;
@@ -282,6 +283,10 @@ check_object:
 		goto out;
 
 	if (no_create) {
+		entry = vos_ilog_ts_get(&obj->obj_df->vo_ilog,
+					cont->vc_pool->vp_ts_table,
+					VOS_TS_TYPE_OBJ);
+		D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
 				    0, NULL, &obj->obj_ilog_info);
@@ -301,6 +306,11 @@ check_object:
 		}
 		goto out;
 	}
+
+	entry = vos_ilog_ts_get(&obj->obj_df->vo_ilog,
+				cont->vc_pool->vp_ts_table,
+				VOS_TS_TYPE_OBJ);
+	D_DEBUG(DB_TRACE, "entry = %p\n", entry);
 
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
 			     NULL, &obj->obj_ilog_info);
