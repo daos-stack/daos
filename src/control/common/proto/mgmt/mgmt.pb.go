@@ -27,38 +27,37 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73) }
 
 var fileDescriptor_24cf82780fd24e73 = []byte{
-	// 493 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x94, 0x4b, 0x6f, 0xd3, 0x40,
-	0x10, 0x80, 0x39, 0x54, 0x40, 0xa7, 0x4d, 0x48, 0x37, 0x05, 0xa4, 0x1c, 0xb9, 0x70, 0x0b, 0x52,
-	0x79, 0x46, 0x70, 0xa1, 0xb1, 0x78, 0xa6, 0x22, 0xd4, 0xe2, 0x8c, 0x96, 0x78, 0x9a, 0x58, 0xd8,
-	0x5e, 0x77, 0x77, 0xe2, 0xaa, 0xff, 0x96, 0x9f, 0x82, 0x66, 0x1f, 0xf6, 0x26, 0x4d, 0x0f, 0xbd,
-	0xed, 0x7c, 0x99, 0x6f, 0x67, 0x77, 0x26, 0x6b, 0x80, 0x72, 0x59, 0xd2, 0xb8, 0xd6, 0x8a, 0x94,
-	0xd8, 0xe3, 0xf5, 0x08, 0x6a, 0xa5, 0x0a, 0x47, 0x46, 0xfb, 0x46, 0x37, 0x7e, 0x39, 0x34, 0xa4,
-	0xb4, 0x5c, 0xe2, 0xef, 0xcb, 0x35, 0xea, 0xeb, 0xf0, 0xbb, 0x5c, 0xf8, 0xd4, 0x93, 0x7f, 0xfb,
-	0xf0, 0xe0, 0x6c, 0x59, 0x52, 0xda, 0x2c, 0xc4, 0x73, 0xd8, 0xfb, 0xa6, 0xf2, 0x4a, 0xf4, 0xc6,
-	0x76, 0x77, 0x5e, 0x9f, 0xe3, 0xe5, 0xa8, 0x1f, 0x87, 0xa6, 0x7e, 0x76, 0x4f, 0x7c, 0x80, 0x83,
-	0x19, 0xca, 0x0c, 0xf5, 0x4f, 0xde, 0x54, 0x1c, 0xbb, 0x84, 0x08, 0xb1, 0xf6, 0x78, 0x07, 0xb5,
-	0xf6, 0x04, 0x60, 0xae, 0x54, 0x31, 0xd5, 0x28, 0x09, 0xc5, 0xd0, 0xa5, 0x75, 0x84, 0xdd, 0xe3,
-	0x9b, 0x30, 0x14, 0x66, 0x96, 0xa0, 0x21, 0xad, 0xda, 0xc2, 0x11, 0x8a, 0x0a, 0x6f, 0x50, 0x6b,
-	0xbf, 0x81, 0x7d, 0x86, 0xee, 0xd0, 0xa2, 0xcb, 0x6a, 0x8f, 0x3c, 0xbc, 0xc1, 0xe2, 0xaa, 0x29,
-	0xd2, 0x5c, 0xab, 0x3a, 0xae, 0xea, 0xd1, 0x56, 0xd5, 0x96, 0x5a, 0x7b, 0xec, 0xae, 0xfb, 0x19,
-	0xe9, 0xe3, 0x74, 0x26, 0x1e, 0xb9, 0x34, 0x17, 0xb1, 0xe7, 0x9b, 0x6d, 0x23, 0x9b, 0xff, 0x16,
-	0x06, 0x9c, 0xff, 0xa3, 0x41, 0x7d, 0xa5, 0x73, 0x42, 0xb6, 0xfc, 0x61, 0xcf, 0x54, 0x96, 0x5f,
-	0x5c, 0xdf, 0x26, 0xbe, 0x82, 0x1e, 0x8b, 0xbf, 0xea, 0x4c, 0xde, 0xdd, 0x4a, 0xb0, 0xc0, 0x0d,
-	0xab, 0x05, 0x3b, 0xad, 0x53, 0xe8, 0xf1, 0x15, 0x88, 0xe4, 0x62, 0xf5, 0xb5, 0xba, 0x50, 0xe2,
-	0x49, 0x77, 0xaf, 0x16, 0xb2, 0xf9, 0x74, 0x27, 0xb7, 0x7b, 0xbc, 0x87, 0xfe, 0x69, 0xae, 0xbe,
-	0xa0, 0x2c, 0x68, 0xb5, 0x31, 0x93, 0x96, 0x46, 0x33, 0x89, 0x98, 0x95, 0x4f, 0xe0, 0x20, 0x2d,
-	0xb3, 0x59, 0x6e, 0x28, 0xc1, 0xc6, 0x84, 0xb6, 0xa6, 0x65, 0x96, 0x60, 0xc3, 0xda, 0x60, 0x13,
-	0x58, 0xe7, 0x35, 0x1c, 0x7a, 0x87, 0x6f, 0x6c, 0x44, 0x97, 0xc3, 0x31, 0x5b, 0x47, 0x5b, 0xc4,
-	0x0f, 0xe4, 0x70, 0xae, 0xb1, 0x4e, 0x57, 0x6b, 0xca, 0xd4, 0x55, 0x25, 0xc2, 0xa4, 0x23, 0x16,
-	0x3d, 0x93, 0x44, 0x2a, 0xe3, 0xc5, 0x17, 0xf0, 0xf0, 0x7b, 0x5e, 0x14, 0xe7, 0xb2, 0xfa, 0x2b,
-	0xfc, 0xce, 0x21, 0xbe, 0x55, 0x98, 0xe7, 0xd5, 0x32, 0x16, 0x42, 0xbc, 0x5b, 0x98, 0x00, 0xa4,
-	0x24, 0x35, 0x71, 0x86, 0x09, 0x4f, 0xa9, 0x23, 0xd1, 0x53, 0x8a, 0x61, 0x78, 0x0c, 0x5d, 0x27,
-	0x7c, 0xe3, 0x5b, 0x10, 0x35, 0x3e, 0x62, 0xd6, 0x7b, 0x07, 0xbd, 0x04, 0x9b, 0x94, 0x24, 0xa1,
-	0x1b, 0xda, 0x51, 0xf8, 0xbf, 0x38, 0xc8, 0xaa, 0xd8, 0x46, 0x7e, 0xde, 0x83, 0xd4, 0x7d, 0x8c,
-	0x52, 0xa4, 0x4f, 0x72, 0x5d, 0xd0, 0x1d, 0xe4, 0x09, 0xf4, 0xf9, 0x24, 0x53, 0x55, 0x91, 0xcc,
-	0x2b, 0xd4, 0x26, 0xa8, 0x81, 0x46, 0x6a, 0x87, 0x58, 0xfd, 0x73, 0xdf, 0x7e, 0xe9, 0x5e, 0xfe,
-	0x0f, 0x00, 0x00, 0xff, 0xff, 0x62, 0x10, 0x23, 0x04, 0x34, 0x05, 0x00, 0x00,
+	// 478 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x94, 0x4d, 0x6f, 0xd3, 0x40,
+	0x10, 0x86, 0x39, 0x54, 0xa0, 0x4c, 0x9b, 0x34, 0xdd, 0x14, 0x90, 0x72, 0xe4, 0xc2, 0x2d, 0x88,
+	0xf2, 0x59, 0xc1, 0x85, 0xc6, 0xe2, 0x33, 0x15, 0xa1, 0x2b, 0xce, 0x68, 0x89, 0xa7, 0x89, 0x85,
+	0xed, 0x75, 0xd7, 0x13, 0x57, 0xfd, 0x93, 0xfc, 0x26, 0x34, 0xbb, 0x6b, 0x7b, 0x9d, 0x06, 0x29,
+	0xbd, 0xed, 0x3e, 0x79, 0x9f, 0x9d, 0x99, 0xb5, 0x1d, 0x80, 0x6c, 0x99, 0xd1, 0xa4, 0x30, 0x9a,
+	0xb4, 0xd8, 0xe3, 0xf5, 0x18, 0x0a, 0xad, 0x53, 0x47, 0xc6, 0xbd, 0xd2, 0x54, 0x7e, 0x39, 0x2a,
+	0x49, 0x1b, 0xb5, 0xc4, 0x5f, 0x57, 0x6b, 0x34, 0x37, 0xf5, 0xef, 0x6a, 0xe1, 0xa3, 0x27, 0x7f,
+	0x7b, 0xf0, 0xe0, 0x7c, 0x99, 0x91, 0xac, 0x16, 0xe2, 0x29, 0xec, 0x7d, 0xd5, 0x49, 0x2e, 0xfa,
+	0x13, 0x7b, 0x3a, 0xaf, 0x2f, 0xf0, 0x6a, 0x3c, 0x08, 0xb7, 0x65, 0xf1, 0xe4, 0x9e, 0x78, 0x0f,
+	0xfb, 0x33, 0x54, 0x31, 0x9a, 0x1f, 0x7c, 0xa8, 0x38, 0x76, 0x81, 0x00, 0xb1, 0xf6, 0x70, 0x0b,
+	0xb5, 0xf6, 0x29, 0xc0, 0x5c, 0xeb, 0x74, 0x6a, 0x50, 0x11, 0x8a, 0x91, 0x8b, 0xb5, 0x84, 0xdd,
+	0xe3, 0xdb, 0xb0, 0x2e, 0xcc, 0x2c, 0xc2, 0x92, 0x8c, 0x6e, 0x0a, 0x07, 0x28, 0x28, 0xdc, 0xa1,
+	0xd6, 0x7e, 0x0d, 0x3d, 0x86, 0xae, 0x69, 0xd1, 0xa6, 0x9a, 0x96, 0x47, 0xb7, 0x58, 0x58, 0x55,
+	0x22, 0xcd, 0x8d, 0x2e, 0xc2, 0xaa, 0x1e, 0x6d, 0x54, 0x6d, 0xa8, 0xb5, 0x27, 0x6e, 0xdc, 0x4f,
+	0x48, 0x1f, 0xa6, 0x33, 0x71, 0xe8, 0x62, 0x6e, 0xc7, 0x9e, 0xbf, 0x6c, 0xbb, 0xb3, 0xf9, 0x37,
+	0x30, 0xe4, 0xfc, 0xf7, 0x0a, 0xcd, 0xb5, 0x49, 0x08, 0xd9, 0xf2, 0xcd, 0x9e, 0xeb, 0x38, 0xb9,
+	0xbc, 0xf9, 0x9f, 0xf8, 0x12, 0xfa, 0x2c, 0xfe, 0x2c, 0x62, 0x75, 0x77, 0x2b, 0xc2, 0x14, 0x3b,
+	0x56, 0x03, 0xb6, 0x5a, 0x67, 0xd0, 0xe7, 0x11, 0x88, 0xd4, 0x62, 0xf5, 0x25, 0xbf, 0xd4, 0xe2,
+	0x51, 0x3b, 0x57, 0x03, 0xd9, 0x7c, 0xbc, 0x95, 0xdb, 0x33, 0xde, 0xc1, 0xe0, 0x2c, 0xd1, 0x9f,
+	0x51, 0xa5, 0xb4, 0xea, 0x3c, 0x93, 0x86, 0x06, 0xcf, 0x24, 0x60, 0x56, 0x3e, 0x81, 0x7d, 0x99,
+	0xc5, 0xb3, 0xa4, 0xa4, 0x08, 0xab, 0xb2, 0xbe, 0x56, 0x99, 0xc5, 0x11, 0x56, 0xac, 0x0d, 0xbb,
+	0xc0, 0x3a, 0xaf, 0xe0, 0xc0, 0x3b, 0x3c, 0x71, 0x29, 0xda, 0x0c, 0xef, 0xd9, 0x3a, 0xda, 0x20,
+	0xf5, 0x6b, 0xd3, 0x3a, 0xbe, 0xc5, 0x06, 0x04, 0x2d, 0x06, 0xcc, 0x7a, 0x6f, 0xa1, 0x1f, 0x61,
+	0x25, 0x49, 0x11, 0xba, 0xf1, 0x8e, 0xea, 0x9b, 0x75, 0x90, 0x55, 0xb1, 0x89, 0xfc, 0xcd, 0x0c,
+	0xa5, 0xfb, 0x6c, 0x25, 0xd2, 0x47, 0xb5, 0x4e, 0xe9, 0x0e, 0xf2, 0x29, 0x0c, 0xb8, 0x93, 0xa9,
+	0xce, 0x49, 0x25, 0x39, 0x9a, 0xb2, 0x56, 0x6b, 0x1a, 0xa8, 0x2d, 0xb2, 0xea, 0x73, 0x38, 0x98,
+	0x1b, 0x2c, 0xe4, 0x6a, 0x4d, 0xb1, 0xbe, 0xce, 0x85, 0xff, 0xf2, 0x2f, 0x54, 0xfe, 0xc7, 0x0e,
+	0x7a, 0xd8, 0xd9, 0xfb, 0xb7, 0xbb, 0xf7, 0x2d, 0x49, 0x53, 0x8b, 0x76, 0xcc, 0xcf, 0x93, 0x7c,
+	0xb9, 0x73, 0xfe, 0x19, 0x80, 0x24, 0x65, 0x68, 0x57, 0xe1, 0xf7, 0x7d, 0xfb, 0xbf, 0xf6, 0xe2,
+	0x5f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x4f, 0xad, 0xe1, 0x1a, 0x22, 0x05, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -102,14 +101,6 @@ type MgmtSvcClient interface {
 	SmdListDevs(ctx context.Context, in *SmdDevReq, opts ...grpc.CallOption) (*SmdDevResp, error)
 	// Get SMD pool list.
 	SmdListPools(ctx context.Context, in *SmdPoolReq, opts ...grpc.CallOption) (*SmdPoolResp, error)
-	// Prepare DAOS IO server identified by rank for controlled shutdown.
-	PrepShutdown(ctx context.Context, in *PrepShutdownReq, opts ...grpc.CallOption) (*DaosResp, error)
-	// Kill DAOS IO server identified by rank.
-	KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error)
-	// Ping DAOS IO server identified by rank.
-	PingRank(ctx context.Context, in *PingRankReq, opts ...grpc.CallOption) (*DaosResp, error)
-	// Start DAOS IO servers identified by rank.
-	StartRanks(ctx context.Context, in *StartRanksReq, opts ...grpc.CallOption) (*StartRanksResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error)
 	// Get the current state of the device
@@ -118,6 +109,14 @@ type MgmtSvcClient interface {
 	StorageSetFaulty(ctx context.Context, in *DevStateReq, opts ...grpc.CallOption) (*DevStateResp, error)
 	// List all containers in a pool
 	ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error)
+	// Prepare DAOS IO servers on a host for controlled shutdown.
+	PrepShutdown(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// Kill DAOS IO servers on a host.
+	KillRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// Ping DAOS IO servers on a host.
+	PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// Start DAOS IO servers on a host.
+	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -254,42 +253,6 @@ func (c *mgmtSvcClient) SmdListPools(ctx context.Context, in *SmdPoolReq, opts .
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PrepShutdown(ctx context.Context, in *PrepShutdownReq, opts ...grpc.CallOption) (*DaosResp, error) {
-	out := new(DaosResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PrepShutdown", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error) {
-	out := new(DaosResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/KillRank", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) PingRank(ctx context.Context, in *PingRankReq, opts ...grpc.CallOption) (*DaosResp, error) {
-	out := new(DaosResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PingRank", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) StartRanks(ctx context.Context, in *StartRanksReq, opts ...grpc.CallOption) (*StartRanksResp, error) {
-	out := new(StartRanksResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StartRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtSvcClient) ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error) {
 	out := new(ListPoolsResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListPools", in, out, opts...)
@@ -320,6 +283,42 @@ func (c *mgmtSvcClient) StorageSetFaulty(ctx context.Context, in *DevStateReq, o
 func (c *mgmtSvcClient) ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error) {
 	out := new(ListContResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListContainers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PrepShutdown(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
+	out := new(RanksResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PrepShutdown", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) KillRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
+	out := new(RanksResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/KillRanks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
+	out := new(RanksResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PingRanks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
+	out := new(RanksResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/StartRanks", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -357,14 +356,6 @@ type MgmtSvcServer interface {
 	SmdListDevs(context.Context, *SmdDevReq) (*SmdDevResp, error)
 	// Get SMD pool list.
 	SmdListPools(context.Context, *SmdPoolReq) (*SmdPoolResp, error)
-	// Prepare DAOS IO server identified by rank for controlled shutdown.
-	PrepShutdown(context.Context, *PrepShutdownReq) (*DaosResp, error)
-	// Kill DAOS IO server identified by rank.
-	KillRank(context.Context, *KillRankReq) (*DaosResp, error)
-	// Ping DAOS IO server identified by rank.
-	PingRank(context.Context, *PingRankReq) (*DaosResp, error)
-	// Start DAOS IO servers identified by rank.
-	StartRanks(context.Context, *StartRanksReq) (*StartRanksResp, error)
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error)
 	// Get the current state of the device
@@ -373,6 +364,14 @@ type MgmtSvcServer interface {
 	StorageSetFaulty(context.Context, *DevStateReq) (*DevStateResp, error)
 	// List all containers in a pool
 	ListContainers(context.Context, *ListContReq) (*ListContResp, error)
+	// Prepare DAOS IO servers on a host for controlled shutdown.
+	PrepShutdown(context.Context, *RanksReq) (*RanksResp, error)
+	// Kill DAOS IO servers on a host.
+	KillRanks(context.Context, *RanksReq) (*RanksResp, error)
+	// Ping DAOS IO servers on a host.
+	PingRanks(context.Context, *RanksReq) (*RanksResp, error)
+	// Start DAOS IO servers on a host.
+	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
 }
 
 // UnimplementedMgmtSvcServer can be embedded to have forward compatible implementations.
@@ -421,18 +420,6 @@ func (*UnimplementedMgmtSvcServer) SmdListDevs(ctx context.Context, req *SmdDevR
 func (*UnimplementedMgmtSvcServer) SmdListPools(ctx context.Context, req *SmdPoolReq) (*SmdPoolResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SmdListPools not implemented")
 }
-func (*UnimplementedMgmtSvcServer) PrepShutdown(ctx context.Context, req *PrepShutdownReq) (*DaosResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrepShutdown not implemented")
-}
-func (*UnimplementedMgmtSvcServer) KillRank(ctx context.Context, req *KillRankReq) (*DaosResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method KillRank not implemented")
-}
-func (*UnimplementedMgmtSvcServer) PingRank(ctx context.Context, req *PingRankReq) (*DaosResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PingRank not implemented")
-}
-func (*UnimplementedMgmtSvcServer) StartRanks(ctx context.Context, req *StartRanksReq) (*StartRanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartRanks not implemented")
-}
 func (*UnimplementedMgmtSvcServer) ListPools(ctx context.Context, req *ListPoolsReq) (*ListPoolsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPools not implemented")
 }
@@ -444,6 +431,18 @@ func (*UnimplementedMgmtSvcServer) StorageSetFaulty(ctx context.Context, req *De
 }
 func (*UnimplementedMgmtSvcServer) ListContainers(ctx context.Context, req *ListContReq) (*ListContResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListContainers not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PrepShutdown(ctx context.Context, req *RanksReq) (*RanksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepShutdown not implemented")
+}
+func (*UnimplementedMgmtSvcServer) KillRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KillRanks not implemented")
+}
+func (*UnimplementedMgmtSvcServer) PingRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PingRanks not implemented")
+}
+func (*UnimplementedMgmtSvcServer) StartRanks(ctx context.Context, req *RanksReq) (*RanksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartRanks not implemented")
 }
 
 func RegisterMgmtSvcServer(s *grpc.Server, srv MgmtSvcServer) {
@@ -702,78 +701,6 @@ func _MgmtSvc_SmdListPools_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_PrepShutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PrepShutdownReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PrepShutdown(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PrepShutdown",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PrepShutdown(ctx, req.(*PrepShutdownReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(KillRankReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).KillRank(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/KillRank",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).KillRank(ctx, req.(*KillRankReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_PingRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingRankReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PingRank(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PingRank",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PingRank(ctx, req.(*PingRankReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartRanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).StartRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/StartRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).StartRanks(ctx, req.(*StartRanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtSvc_ListPools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPoolsReq)
 	if err := dec(in); err != nil {
@@ -846,6 +773,78 @@ func _MgmtSvc_ListContainers_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_PrepShutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RanksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PrepShutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PrepShutdown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PrepShutdown(ctx, req.(*RanksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_KillRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RanksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).KillRanks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/KillRanks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).KillRanks(ctx, req.(*RanksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PingRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RanksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PingRanks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PingRanks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PingRanks(ctx, req.(*RanksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RanksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).StartRanks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/StartRanks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).StartRanks(ctx, req.(*RanksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "mgmt.MgmtSvc",
 	HandlerType: (*MgmtSvcServer)(nil),
@@ -907,22 +906,6 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_SmdListPools_Handler,
 		},
 		{
-			MethodName: "PrepShutdown",
-			Handler:    _MgmtSvc_PrepShutdown_Handler,
-		},
-		{
-			MethodName: "KillRank",
-			Handler:    _MgmtSvc_KillRank_Handler,
-		},
-		{
-			MethodName: "PingRank",
-			Handler:    _MgmtSvc_PingRank_Handler,
-		},
-		{
-			MethodName: "StartRanks",
-			Handler:    _MgmtSvc_StartRanks_Handler,
-		},
-		{
 			MethodName: "ListPools",
 			Handler:    _MgmtSvc_ListPools_Handler,
 		},
@@ -937,6 +920,22 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListContainers",
 			Handler:    _MgmtSvc_ListContainers_Handler,
+		},
+		{
+			MethodName: "PrepShutdown",
+			Handler:    _MgmtSvc_PrepShutdown_Handler,
+		},
+		{
+			MethodName: "KillRanks",
+			Handler:    _MgmtSvc_KillRanks_Handler,
+		},
+		{
+			MethodName: "PingRanks",
+			Handler:    _MgmtSvc_PingRanks_Handler,
+		},
+		{
+			MethodName: "StartRanks",
+			Handler:    _MgmtSvc_StartRanks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -64,14 +64,6 @@ service MgmtSvc {
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
 	// Get SMD pool list.
 	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
-	// Prepare DAOS IO server identified by rank for controlled shutdown.
-	rpc PrepShutdown(PrepShutdownReq) returns (DaosResp) {}
-	// Kill DAOS IO server identified by rank.
-	rpc KillRank(KillRankReq) returns (DaosResp) {}
-	// Ping DAOS IO server identified by rank.
-	rpc PingRank(PingRankReq) returns (DaosResp) {}
-	// Start DAOS IO servers identified by rank.
-	rpc StartRanks(StartRanksReq) returns (StartRanksResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
 	// Get the current state of the device
@@ -80,4 +72,12 @@ service MgmtSvc {
 	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
+	// Prepare DAOS IO servers on a host for controlled shutdown.
+	rpc PrepShutdown(RanksReq) returns (RanksResp) {}
+	// Kill DAOS IO servers on a host.
+	rpc KillRanks(RanksReq) returns (RanksResp) {}
+	// Ping DAOS IO servers on a host.
+	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// Start DAOS IO servers on a host.
+	rpc StartRanks(RanksReq) returns (RanksResp) {}
 }

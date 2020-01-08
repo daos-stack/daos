@@ -32,6 +32,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -141,6 +142,7 @@ type Members []*Member
 // its string representation "address/rank".
 type MemberResult struct {
 	Rank    uint32
+	Addr    string
 	Action  string
 	Errored bool
 	Msg     string
@@ -163,40 +165,6 @@ type MemberResults []*MemberResult
 // HasErrors returns true if any of the member results errored.
 func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
-		if res.Errored {
-			return true
-		}
-	}
-
-	return false
-}
-
-// HarnessResult refers to the result of an action on a harness identified
-// its address' string representation.
-type HarnessResult struct {
-	Addr    string
-	Action  string
-	Errored bool
-	Msg     string
-}
-
-// NewHarnessResult returns a reference to a new harness result struct.
-func NewHarnessResult(addr string, action string, err error) *HarnessResult {
-	result := HarnessResult{Addr: addr, Action: action}
-	if err != nil {
-		result.Errored = true
-		result.Msg = err.Error()
-	}
-
-	return &result
-}
-
-// HarnessResults is a type alias for a slice of harness result references.
-type HarnessResults []*HarnessResult
-
-// HasErrors returns true if any of the harness results errored.
-func (hrs HarnessResults) HasErrors() bool {
-	for _, res := range hrs {
 		if res.Errored {
 			return true
 		}
@@ -295,20 +263,87 @@ func (m *Membership) Ranks() (ranks []uint32) {
 	return
 }
 
-// Members returns slice of references to all system members.
-func (m *Membership) Members() (ms Members) {
+// Hosts returns slice of ordered member control addresses filtering any
+// addresses that only manage members with excluded states.
+func (m *Membership) Hosts(excludedStates ...MemberState) (addresses []string) {
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, r := range m.Ranks() {
-		m, err := m.Get(r)
-		if err != nil {
-			panic(err) // should never happen
+	for _, member := range m.members {
+		var exclude bool
+
+		for _, s := range excludedStates {
+			if member.State() == s {
+				exclude = true
+			}
 		}
+
+		if exclude || common.Includes(addresses, member.Addr.String()) {
+			continue
+		}
+
+		addresses = append(addresses, member.Addr.String())
+	}
+
+	sort.Strings(addresses)
+
+	return
+}
+
+// Members returns slice of references to all system members filtering members
+// with excluded states. Results ordered by member rank.
+func (m *Membership) Members(excludedStates ...MemberState) (ms Members) {
+	var ranks []uint32
+
+	m.RLock()
+	defer m.RUnlock()
+
+	for rank, _ := range m.members {
+		ranks = append(ranks, rank)
+	}
+
+	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
+
+	for _, r := range ranks {
+		var exclude bool
+
+		m := m.members[r]
+
+		for _, s := range excludedStates {
+			if m.State() == s {
+				exclude = true
+			}
+		}
+
+		if exclude {
+			continue
+		}
+
 		ms = append(ms, m)
 	}
 
 	return ms
+}
+
+// UpdateMemberStates updates member's state according to input MemberResults.
+func (m *Membership) UpdateMemberStates(targetState MemberState, results MemberResults) error {
+	m.Lock()
+	defer m.Unlock()
+
+	for _, result := range results {
+		state := targetState
+		if result.Errored {
+			state = MemberStateErrored
+		}
+
+		if _, found := m.members[result.Rank]; !found {
+			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
+		}
+
+		m.members[result.Rank].SetState(state)
+	}
+
+	return nil
 }
 
 // NewMembership returns a reference to a new DAOS system membership.

@@ -35,8 +35,9 @@ import (
 
 // SystemStopReq contains the inputs for the system stop command.
 type SystemStopReq struct {
-	Prep bool
-	Kill bool
+	Prep  bool
+	Kill  bool
+	Ranks []uint32
 }
 
 // SystemStopResp contains the request response.
@@ -73,11 +74,13 @@ func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 }
 
 // SystemStartReq contains the inputs for the system start request.
-type SystemStartReq struct{}
+type SystemStartReq struct {
+	Ranks []uint32
+}
 
 // SystemStartResp contains the request response.
 type SystemStartResp struct {
-	Results system.HarnessResults // results of harness starts
+	Results system.MemberResults // resulting from harness starts
 }
 
 // SystemStart will perform a start after a controlled shutdown of DAOS system.
@@ -112,7 +115,7 @@ type SystemQueryReq struct {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	Members system.Members
+	Results system.MemberResults
 }
 
 // SystemQuery requests DAOS system status.
@@ -143,26 +146,12 @@ func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
 }
 
 // KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
+// uuid.
 //
 // Currently this is not exposed by control/cmd/dmg as a user command.
 // TODO: consider usage model.
 func (c *connList) KillRank(rank uint32) ResultMap {
-	var resp *mgmtpb.DaosResp
-	var addr string
-	results := make(ResultMap)
-
-	mc, err := chooseServiceLeader(c.controllers)
-	if err == nil {
-		resp, err = mc.getSvcClient().KillRank(context.Background(),
-			&mgmtpb.KillRankReq{Rank: rank})
-		addr = mc.getAddress()
-	}
-
-	result := ClientResult{addr, resp, err}
-	results[result.Address] = result
-
-	return results
+	return nil
 }
 
 // LeaderQueryReq contains the inputs for the leader query command.

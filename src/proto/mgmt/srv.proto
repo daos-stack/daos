@@ -32,6 +32,20 @@ message DaosResp {
 	int32 status = 1;	// DAOS error code.
 }
 
+// Generic request indicating which ranks to operate on.
+message RanksReq {
+	repeated uint32 ranks = 1;
+}
+
+// Generic response containing DER result from multiple ranks.
+message RanksResp {
+	message RankResult {
+		uint32 rank = 1;
+		int32 status = 2;	// DAOS error code.
+	}
+	repeated RankResult results = 1;
+}
+
 message JoinReq {
 	string uuid = 1;	// Servee UUID.
 	uint32 rank = 2;	// Server rank desired, if not -1.
@@ -70,33 +84,6 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
-}
-
-message PrepShutdownReq {
-	uint32 rank = 1;	// DAOS IO server unique identifier.
-}
-
-// PrepShutdownResp is identical to DaosResp.
-
-message KillRankReq {
-	bool force = 1;		// Force service termination.
-	uint32 rank = 2;	// DAOS IO server unique identifier.
-}
-
-// KillRankResp is identical to DaosResp.
-
-message PingRankReq {
-	uint32 rank = 1;	// DAOS IO server unique identifier.
-}
-
-// PingRankResp is identical to DaosResp.
-
-message StartRanksReq {
-	repeated uint32 ranks = 1; // Start each of the ranks supplied.
-}
-
-message StartRanksResp {
-	repeated int32 status = 1; // DER one for each IO server start attempt.
 }
 
 message SetRankReq {

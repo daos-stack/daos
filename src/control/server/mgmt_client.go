@@ -163,8 +163,8 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.PrepShutdownReq) (resp *mgmtpb.DaosResp, stopErr error) {
-	stopErr = msc.withConnection(ctx, destAddr,
+func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, psErr error) {
+	psErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
 			prefix := fmt.Sprintf("prep shutdown(%s, %+v)", destAddr, *req)
@@ -180,7 +180,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 				default:
 				}
 
-				resp, err = pbClient.PrepShutdown(ctx, req)
+				resp, err = pbClient.PrepShutdown(ctx, req) // return error if any instance fails
 				if msc.retryOnErr(err, ctx, prefix) {
 					continue
 				}
@@ -202,7 +202,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 //
 // Shipped function issues KillRank requests using MgmtSvcClient over dRPC to
 // terminates given rank.
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
@@ -219,7 +219,7 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				default:
 				}
 
-				resp, err = pbClient.KillRank(ctx, req)
+				resp, err = pbClient.KillRanks(ctx, req) // return error if any instance fails
 				if msc.retryOnErr(err, ctx, prefix) {
 					continue
 				}
@@ -242,15 +242,15 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 //
 // Shipped function issues StartRanks requests using MgmtSvcClient to
 // restart the designated ranks as configured in persistent superblock.
-func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.StartRanksReq) (resp *mgmtpb.StartRanksResp, restartErr error) {
-	restartErr = msc.withConnection(ctx, destAddr,
+func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, startErr error) {
+	startErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
 			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, *req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
-			_, err := pbClient.StartRanks(ctx, req)
+			resp, err := pbClient.StartRanks(ctx, req)
 
 			return err
 		})
@@ -262,7 +262,7 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtp
 //
 // Shipped function issues PingRank requests using MgmtSvcClient to
 // query the designated ranks for activity.
-func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req *mgmtpb.PingRankReq) (resp *mgmtpb.DaosResp, statusErr error) {
+func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, statusErr error) {
 	statusErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
@@ -272,7 +272,7 @@ func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req *mgmt
 
 			ctx, _ = context.WithTimeout(ctx, retryDelay)
 
-			_, err := pbClient.PingRank(ctx, req)
+			resp, err := pbClient.PingRanks(ctx, req)
 
 			return err
 		})
