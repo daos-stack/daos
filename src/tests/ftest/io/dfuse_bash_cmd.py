@@ -76,6 +76,7 @@ class BashCmd(TestWithServers):
         # Create a pool
         self.pool.create()
 
+
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
@@ -183,7 +184,6 @@ class BashCmd(TestWithServers):
                     commands = ["mkdir -p {}".format(abs_dir_path),
                                 "touch {}".format(abs_file_path1),
                                 "ls -a {}".format(abs_file_path1),
-                                "chmod -R 0777 {}".format(abs_dir_path),
                                 "rm {}".format(abs_file_path1),
                                 "dd if=/dev/zero of={} count={} bs={}".format(
                                     abs_file_path1, self.dd_count,
