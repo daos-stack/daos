@@ -1223,6 +1223,17 @@ dfs_umount(dfs_t *dfs)
 	return 0;
 }
 
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	return 0;
+}
+
 /* Structure of global buffer for dfs */
 struct dfs_glob {
 	uint32_t		magic;
