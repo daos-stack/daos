@@ -24,6 +24,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/user"
@@ -31,7 +32,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
@@ -160,6 +163,22 @@ func TestPoolCommands(t *testing.T) {
 	}
 	createACLFile(t, testACLFile, testACL)
 
+	// An existing file with contents for tests that need to verify overwrite
+	testExistingFile := filepath.Join(tmpDir, "existing.txt")
+	createACLFile(t, testExistingFile, testACL)
+
+	// An existing file with write-only perms
+	testWriteOnlyFile := filepath.Join(tmpDir, "write.txt")
+	createACLFile(t, testWriteOnlyFile, testACL)
+	err = os.Chmod(testWriteOnlyFile, 0222)
+	if err != nil {
+		t.Fatalf("Couldn't set file writable only")
+	}
+
+	// Subdirectory with no write perms
+	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
+	os.Mkdir(testNoPermDir, 0444)
+
 	runCmdTests(t, []cmdTest{
 		{
 			"Create pool with missing arguments",
@@ -262,6 +281,38 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Set string pool property",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name reclaim --value lazy",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Property: "reclaim",
+					Value:    "lazy",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set numeric pool property",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name answer --value 42",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolSetProp-%+v", client.PoolSetPropReq{
+					UUID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Property: "answer",
+					Value:    42,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool property missing value",
+			"pool set-prop --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name whoops",
+			"",
+			errors.New("required flag"),
+		},
+		{
 			"Get pool ACL",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
@@ -271,6 +322,61 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Get pool ACL with output to bad file",
+			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile /foo/bar/acl.txt",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			errors.New("open /foo/bar/acl.txt: no such file or directory"),
+		},
+		{
+			"Get pool ACL with output to existing file",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testExistingFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			errors.New(fmt.Sprintf("file already exists: %s", testExistingFile)),
+		},
+		{
+			"Get pool ACL with output to existing file with write-only perms",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testWriteOnlyFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			errors.New(fmt.Sprintf("file already exists: %s", testWriteOnlyFile)),
+		},
+		{
+			"Get pool ACL with output to existing file with force",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s --force", testExistingFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool ACL with output to directory with no write perms",
+			fmt.Sprintf("pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", filepath.Join(testNoPermDir, "out.txt")),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			errors.New(fmt.Sprintf("open %s: permission denied", filepath.Join(testNoPermDir, "out.txt"))),
 		},
 		{
 			"Overwrite pool ACL with invalid ACL file",
@@ -357,4 +463,46 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("Unknown command"),
 		},
 	})
+}
+
+func TestPoolGetACLToFile_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	tmpDir, tmpCleanup := CreateTestDir(t)
+	defer tmpCleanup()
+
+	aclFile := filepath.Join(tmpDir, "out.txt")
+
+	conn := newTestConn(t)
+	err := runCmd(t, fmt.Sprintf("pool get-acl --pool 12345678-1234-1234-123456789abc --outfile %s", aclFile), log, conn)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+
+	expResult := []string{
+		"# Entries:",
+		"#   None",
+	}
+
+	// Verify the contents of the file
+	f, err := os.Open(aclFile)
+	if err != nil {
+		t.Fatalf("File '%s' not written", aclFile)
+	}
+	defer f.Close()
+
+	result := make([]string, 0)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			t.Fatalf("Error reading from file: %s", err)
+		}
+		result = append(result, scanner.Text())
+	}
+
+	if diff := cmp.Diff(expResult, result); diff != "" {
+		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
 }

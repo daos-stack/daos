@@ -185,39 +185,6 @@ failed:
 	return NULL;
 }
 
-static int
-map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
-		unsigned int nr)
-{
-	d_iov_t	iov;
-	d_sg_list_t	sgl;
-	int		rc;
-
-	*buf = pool_buf_alloc(nr);
-	if (*buf == NULL)
-		return -DER_NOMEM;
-
-	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-	if (rc != 0) {
-		pool_buf_free(*buf);
-		*buf = NULL;
-	}
-
-	return rc;
-}
-
-static void
-map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
-{
-	crt_bulk_free(bulk);
-	pool_buf_free(buf);
-}
-
 /* Assume dp_map_lock is locked before calling this function */
 static int
 pool_map_update(struct dc_pool *pool, struct pool_map *map,
@@ -292,21 +259,13 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
 	if (info != NULL) {
-		struct pool_target     *ts;
-		int			i;
+		unsigned int num_disabled = 0;
 
-		rc = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &ts);
-		D_ASSERTF(rc > 0, "%d\n", rc);
-		info->pi_ndisabled = 0;
-		for (i = 0; i < rc; i++) {
-			int status = ts[i].ta_comp.co_status;
-
-			if ((status == PO_COMP_ST_DOWN ||
-			     status == PO_COMP_ST_DOWNOUT))
-				info->pi_ndisabled++;
-			/* TODO: Take care of tgts. */
-		}
-		rc = 0;
+		rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
+		if (rc == 0)
+			info->pi_ndisabled = num_disabled;
+		else
+			D_ERROR("Couldn't get failed targets, rc=%d\n", rc);
 	}
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
@@ -315,19 +274,9 @@ out_unlock:
 	if (prop_req != NULL && rc == 0)
 		rc = daos_prop_copy(prop_req, prop_reply);
 
-	if (info != NULL && rc == 0) {
-		D_ASSERT(ps != NULL);
-		D_ASSERT(rs != NULL);
-		uuid_copy(info->pi_uuid, pool->dp_pool);
-		info->pi_ntargets	= map_buf->pb_target_nr;
-		info->pi_nnodes		= map_buf->pb_node_nr;
-		info->pi_map_ver	= map_version;
-		info->pi_leader		= leader_rank;
-		if (info->pi_bits & DPI_SPACE)
-			info->pi_space		= *ps;
-		if (info->pi_bits & DPI_REBUILD_STATUS)
-			info->pi_rebuild_st	= *rs;
-	}
+	if (info != NULL && rc == 0)
+		pool_query_reply_to_info(pool->dp_pool, map_buf, map_version,
+					 leader_rank, ps, rs, info);
 
 	return rc;
 }

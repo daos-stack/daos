@@ -69,6 +69,7 @@ type Connect interface {
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
 	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
+	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
@@ -81,7 +82,8 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
-	SystemMemberQuery() (system.Members, error)
+	SystemQuery() (system.Members, error)
+	SystemStart() error
 	SystemStop(SystemStopReq) (system.MemberResults, error)
 	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
 	ListPools(ListPoolsReq) (*ListPoolsResp, error)
@@ -151,7 +153,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 	controllers := c.controllers[:0]
 	for _, mc := range c.controllers {
 		address := mc.getAddress()
-		if common.Include(addresses, address) {
+		if common.Includes(addresses, address) {
 			continue // ignore duplicate
 		}
 

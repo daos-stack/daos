@@ -9,4 +9,4 @@ timeout: 240
 server_config:
     name: daos_server
 romio:
-    romio_repo: "/home/standan/mpiotest/build/src/mpi/romio/test/"
+    romio_repo: "/usr/lib64/romio/test/"
