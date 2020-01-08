@@ -24,6 +24,7 @@
 package txtfmt
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -42,7 +43,8 @@ func TestEntityFormatter(t *testing.T) {
 				{"c": "d"},
 				{"bananas": "grapes"},
 			},
-			expectedResult: `title
+			expectedResult: `
+title
 -----
 a       : b     
 c       : d     
@@ -57,7 +59,8 @@ bananas : grapes
 		},
 		"empty attrs": {
 			title: "empty",
-			expectedResult: `empty
+			expectedResult: `
+empty
 -----
 `,
 		},
@@ -67,7 +70,8 @@ bananas : grapes
 				{"a": "b"},
 				{"foo": "bar"},
 			},
-			expectedResult: `long title is long
+			expectedResult: `
+long title is long
 ------------------
 a   : b  
 foo : bar
@@ -77,7 +81,7 @@ foo : bar
 		t.Run(name, func(t *testing.T) {
 			result := FormatEntity(tc.title, tc.attrs)
 
-			if diff := cmp.Diff(tc.expectedResult, result); diff != "" {
+			if diff := cmp.Diff(strings.TrimLeft(tc.expectedResult, "\n"), result); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
 		})
