@@ -62,6 +62,10 @@ func cfgHasBdev(cfg *Configuration) bool {
 	return false
 }
 
+func instanceShmID(idx int) int {
+	return os.Getpid() + idx + 1
+}
+
 // define supported maximum number of I/O servers
 const maxIoServers = 2
 
@@ -110,8 +114,29 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
 	}
+	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 	if _, err := bdevProvider.Prepare(prepReq); err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	}
+
+	hugePages, err := getHugePageInfo()
+	if err != nil {
+		return errors.Wrap(err, "unable to read system hugepage info")
+	}
+
+	// Don't bother with these checks if there aren't any block devices configured.
+	if cfgHasBdev(cfg) {
+		if hugePages.Free != hugePages.Total {
+			// Not sure if this should be an error, per se, but I think we want to display it
+			// on the console to let the admin know that there might be something that needs
+			// to be cleaned up?
+			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
+		}
+
+		if hugePages.FreeMB() == 0 {
+			// Is this appropriate? Or should we bomb out?
+			log.Error("no free hugepages -- NVMe performance may suffer")
+		}
 	}
 
 	// If this daos_server instance ends up being the MS leader,
@@ -123,6 +148,21 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if i+1 > maxIoServers {
 			break
 		}
+
+		// If the configuration specifies that we should explicitly set hugepage values
+		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
+		if cfg.SetHugepages {
+			// If we have multiple I/O instances with block devices, then we need to apportion
+			// the hugepage memory among the instances.
+			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+			// reserve a little for daos_admin
+			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		}
+
+		// Each instance must have a unique shmid in order to run as SPDK primary.
+		// Use a stable identifier that's easy to construct elsewhere if we don't
+		// have access to the instance configuration.
+		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -139,11 +179,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
-	}
-
-	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
-		return errors.WithMessage(err, "dRPC setup")
 	}
 
 	// Create and setup control service.
@@ -197,5 +232,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 
-	return errors.Wrapf(harness.Start(ctx, membership), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

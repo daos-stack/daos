@@ -102,19 +102,43 @@ message StorageUsageStats {
 	uint64 mean = 5;
 }
 
-// PoolRebuildState indicates the pool's rebuild state.
-enum PoolRebuildState {
-	IDLE = 0;
-	DONE = 1;
-	BUSY = 2;
-}
-
 // PoolRebuildStatus represents a pool's rebuild status.
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
-	PoolRebuildState state = 2;
+	enum State {
+		IDLE = 0;
+		DONE = 1;
+		BUSY = 2;
+	}
+	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
+}
+
+// PoolSetPropReq represents a request to set a pool property.
+message PoolSetPropReq {
+	string uuid = 1; // uuid of pool to modify
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
+}
+
+// PoolSetPropResp represents the result of setting a property.
+message PoolSetPropResp {
+	int32 status = 1; // DAOS error code
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
 }
 
 // PoolQueryResp represents a pool query response.
@@ -123,8 +147,9 @@ message PoolQueryResp {
 	string uuid = 2; // pool uuid
 	uint32 totaltargets = 3; // total targets in pool
 	uint32 activetargets = 4; // active targets in pool
-	bool disabled = 5; // indicates pool disabled status
+	uint32 disabledtargets = 5; // number of disabled targets in pool
 	PoolRebuildStatus rebuild = 6; // pool rebuild status
 	StorageUsageStats scm = 7; // SCM storage usage stats
 	StorageUsageStats nvme = 8; // NVMe storage usage stats
 }
+

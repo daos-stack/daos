@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strconv"
 	"strings"
@@ -52,6 +53,7 @@ type PoolCmd struct {
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
 	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -93,13 +95,13 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolQueryCmd struct {
 	logCmd
 	connectedCmd
-	Uuid string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool to query"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (c *PoolQueryCmd) Execute(args []string) error {
 	req := client.PoolQueryReq{
-		UUID: c.Uuid,
+		UUID: c.UUID,
 	}
 
 	resp, err := c.conns.PoolQuery(req)
@@ -113,8 +115,8 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 
 	// Maintain output compability with the `daos pool query` output.
 	var bld strings.Builder
-	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%t\n",
-		resp.UUID, resp.TotalTargets, resp.Disabled)
+	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%d\n",
+		resp.UUID, resp.TotalTargets, resp.DisabledTargets)
 	bld.WriteString("Pool space info:\n")
 	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
 	if resp.Scm != nil {
@@ -144,12 +146,44 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	return nil
 }
 
+// PoolSetPropCmd represents the command to set a property on a pool.
+type PoolSetPropCmd struct {
+	logCmd
+	connectedCmd
+	UUID     string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Property string `short:"n" long:"name" required:"1" description:"Name of property to be set"`
+	Value    string `short:"v" long:"value" required:"1" description:"Value of property to be set"`
+}
+
+// Execute is run when PoolSetPropCmd subcommand is activated.
+func (c *PoolSetPropCmd) Execute(_ []string) error {
+	req := client.PoolSetPropReq{
+		UUID:     c.UUID,
+		Property: c.Property,
+	}
+
+	req.SetString(c.Value)
+	if numVal, err := strconv.ParseUint(c.Value, 10, 64); err == nil {
+		req.SetNumber(numVal)
+	}
+
+	resp, err := c.conns.PoolSetProp(req)
+	if err != nil {
+		return errors.Wrap(err, "pool set-prop failed")
+	}
+
+	c.log.Infof("pool set-prop succeeded (%s=%q)", resp.Property, resp.Value)
+	return nil
+}
+
 // PoolGetACLCmd represents the command to fetch an Access Control List of a
 // DAOS pool.
 type PoolGetACLCmd struct {
 	logCmd
 	connectedCmd
-	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	File  string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	Force bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
 }
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
@@ -162,8 +196,44 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 		return err
 	}
 
-	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	d.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
+
+	acl := formatACL(resp.ACL)
+
+	if d.File != "" {
+		err = d.writeACLToFile(acl)
+		if err != nil {
+			return err
+		}
+		d.log.Infof("Wrote ACL to output file: %s", d.File)
+	} else {
+		d.log.Info(acl)
+	}
+
+	return nil
+}
+
+func (d *PoolGetACLCmd) writeACLToFile(acl string) error {
+	if !d.Force {
+		// Keep the user from clobbering existing files
+		_, err := os.Stat(d.File)
+		if err == nil {
+			return errors.New(fmt.Sprintf("file already exists: %s", d.File))
+		}
+	}
+
+	f, err := os.Create(d.File)
+	if err != nil {
+		d.log.Errorf("Unable to create file: %s", d.File)
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(acl)
+	if err != nil {
+		d.log.Errorf("Failed to write to file: %s", d.File)
+		return err
+	}
 
 	return nil
 }

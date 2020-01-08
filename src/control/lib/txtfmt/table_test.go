@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package txtfmt
 
 import (
 	"testing"
@@ -30,7 +30,7 @@ import (
 )
 
 func TestNewTableFormatter_NoTitles(t *testing.T) {
-	f := NewTableFormatter(nil)
+	f := NewTableFormatter()
 	if f.writer == nil {
 		t.Fatal("no tabwriter set!")
 	}
@@ -41,7 +41,7 @@ func TestNewTableFormatter_NoTitles(t *testing.T) {
 
 func TestNewTableFormatter_WithTitles(t *testing.T) {
 	titles := []string{"One", "Two", "Three"}
-	f := NewTableFormatter(titles)
+	f := NewTableFormatter(titles...)
 	if f.writer == nil {
 		t.Fatal("no tabwriter set!")
 	}
@@ -87,7 +87,7 @@ func TestTableFormatter_SetColumnTitles(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := &TableFormatter{titles: tt.startingTitles}
 
-			f.SetColumnTitles(tt.titles)
+			f.SetColumnTitles(tt.titles...)
 
 			if diff := cmp.Diff(tt.expectedTitles, f.titles); diff != "" {
 				t.Fatalf("unexpected titles (-want, +got):\n%s\n", diff)
@@ -148,7 +148,7 @@ func TestTableFormatter_Format(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			f := NewTableFormatter(tt.titles)
+			f := NewTableFormatter(tt.titles...)
 
 			result := f.Format(tt.table)
 
