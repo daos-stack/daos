@@ -69,7 +69,7 @@ class ChecksumContainerValidation(TestWithServers):
         self.container = DaosContainer(self.context)
         input_param = DaosInputParams()
         input_param.container_params.enable_chksum = self.csum
-        self.container.create(poh=self.pool.pool.handle, input=input_param)
+        self.container.create(poh=self.pool.pool.handle, inputs=input_param)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)

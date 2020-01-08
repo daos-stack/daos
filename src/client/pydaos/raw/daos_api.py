@@ -1465,6 +1465,7 @@ class DaosContainerInputParams(ctypes.Structure):
                     daos_property.dpp_entries[index].dpe_val = ctypes.c_uint64(
                         DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
+                # pylint: disable=no-member
                 daos_property.dpp_entries[index].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
 
