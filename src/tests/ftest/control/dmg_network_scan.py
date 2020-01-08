@@ -64,7 +64,7 @@ class DmgNetworkScanTest(TestWithServers):
 
     def get_numa_info(self):
         """Get expected values of numa nodes with lstopo."""
-        lstopo = os.path.join(self.bin, "lstopo")
+        lstopo = "lstopo-no-graphics"
         try:
             output = run_cmd(lstopo)
         except process.CmdError as error:
