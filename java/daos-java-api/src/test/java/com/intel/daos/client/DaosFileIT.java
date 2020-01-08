@@ -165,8 +165,11 @@ public class DaosFileIT {
 
     daosFile.write(buffer, 0, 0, length);
 
-    ByteBuffer buffer2 = ByteBuffer.allocateDirect(length);
-    daosFile.read(buffer2, 0, 0, length);
+    System.out.println(daosFile.length());
+
+    ByteBuffer buffer2 = ByteBuffer.allocateDirect(length+30);
+    long actualLen = daosFile.read(buffer2, 0, 0, length+30);
+    Assert.assertEquals(length, actualLen);
     byte[] bytes2 = new byte[length];
     buffer2.get(bytes2);
     Assert.assertTrue(Arrays.equals(bytes, bytes2));
@@ -181,7 +184,7 @@ public class DaosFileIT {
 
   @Test(expected = DaosIOException.class)
   public void testCreateNewFileWithCreateParentFalse()throws Exception{
-    DaosFile daosFile = client.getFile("/d4/d3/d2/file");
+    DaosFile daosFile = client.getFile("/d444/d3/d2/file");
     daosFile.createNewFile();
   }
 

@@ -524,7 +524,7 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
 		}
 	}
 
-	rc = dfs_open(dfs, parent, file_name, S_IFREG | mode, O_CREAT | mode, objectId, chunkSize, NULL, &file);
+	rc = dfs_open(dfs, parent, file_name, S_IFREG | mode, O_CREAT | accessFlags, objectId, chunkSize, NULL, &file);
 	if (rc) {
 		char *tmp = "Failed to create new file (%s) under directory (%s)";
 		char *msg = (char *)malloc(strlen(tmp) + strlen(file_name) + strlen(parent_path));

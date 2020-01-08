@@ -204,7 +204,7 @@ public final class DaosFsClient {
             builder.poolFlags);
     log.info("opened pool {}", poolPtr);
 
-    if (contId != null) {
+    if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
       contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
       log.info("opened container {}", contPtr);
       dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
