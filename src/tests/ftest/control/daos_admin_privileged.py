@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ class DaosAdminPrivTest(TestWithServers):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-    def test_daos_admin_scm_format(self):
+    def test_daos_admin_format(self):
         """
         JIRA ID: DAOS-2895
         Test Description: Test daso_admin functionality to perform format
@@ -74,13 +74,22 @@ class DaosAdminPrivTest(TestWithServers):
         server.runner.job.set_config(yamlfile)
         server.server_clean()
 
+        # Get user
+        user = getpass.getuser()
+
         # Prep server for format, run command under non-root user
         self.log.info("Performing SCM storage prepare")
-        user = getpass.getuser()
         try:
             storage_prepare(self.hostlist_servers, user, "dcpm")
         except ServerFailed as err:
             self.fail("Failed preparing SCM as non-root user: {}".format(err))
+
+        # Prep server for format, run command under non-root user
+        self.log.info("Performing NVMe storage prepare")
+        try:
+            storage_prepare(self.hostlist_servers, user, "nvme")
+        except ServerFailed as err:
+            self.fail("Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:

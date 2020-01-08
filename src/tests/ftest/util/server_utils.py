@@ -476,7 +476,7 @@ class ServerManager(ExecutableCommand):
 
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.daosbinpath, ",".join(servers_with_ports), True)
+            storage_format(self.daosbinpath, ",".join(servers_with_ports))
             self.runner.job.mode = "normal"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
@@ -576,7 +576,7 @@ def storage_prepare(hosts, user, device_type):
            .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
-        raise ServerFailed("Error preparing NVMe storage")
+        raise ServerFailed("Error preparing {} storage".format(device_type))
 
 
 def storage_reset(hosts):

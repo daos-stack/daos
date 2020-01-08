@@ -108,6 +108,7 @@ class DmgCommand(DaosCommand):
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
 
+
 def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
@@ -136,13 +137,12 @@ def storage_scan(path, hosts, insecure=True):
     return result
 
 
-def storage_format(path, hosts, sudo=False, insecure=True):
+def storage_format(path, hosts, insecure=True):
     """ Execute format command through dmg tool to servers provided.
 
     Args:
         path (str): path to tool's binary
         hosts (list): list of servers to run format on.
-        sudo (bool): toggle running command under root.
         insecure (bool): toggle insecure mode
 
     Returns:
@@ -151,7 +151,6 @@ def storage_format(path, hosts, sudo=False, insecure=True):
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.sudo = sudo
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
