@@ -175,6 +175,13 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatalf("Couldn't set file writable only")
 	}
 
+	testEmptyFile := filepath.Join(tmpDir, "empty.txt")
+	empty, err := os.Create(testEmptyFile)
+	if err != nil {
+		t.Fatalf("Failed to create empty file: %s", err)
+	}
+	empty.Close()
+
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
 	os.Mkdir(testNoPermDir, 0444)
@@ -267,6 +274,12 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testSizeStr),
 			"ConnectClients",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
+		},
+		{
+			"Create pool with empty ACL file",
+			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
 			"Destroy pool with force",
@@ -385,6 +398,12 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
+			"Overwrite pool ACL with empty ACL file",
+			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
+		},
+		{
 			"Overwrite pool ACL",
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
@@ -401,6 +420,12 @@ func TestPoolCommands(t *testing.T) {
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
 			"ConnectClients",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
+		},
+		{
+			"Update pool ACL with empty ACL file",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
 			"Update pool ACL without file or entry",

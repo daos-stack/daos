@@ -44,7 +44,15 @@ func readACLFile(aclFile string) (*client.AccessControlList, error) {
 	}
 	defer file.Close()
 
-	return parseACL(file)
+	acl, err := parseACL(file)
+	if err != nil {
+		return nil, err
+	}
+	if acl.Empty() {
+		return nil, errors.New(fmt.Sprintf("ACL file '%s' contains no entries", aclFile))
+	}
+
+	return acl, nil
 }
 
 // isACLFileComment checks whether the line is formatted as a comment for an
