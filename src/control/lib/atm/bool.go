@@ -43,12 +43,6 @@ func (b *Bool) SetTrue() {
 	atomic.StoreUint32((*uint32)(b), 1)
 }
 
-// SetTrueCond sets the Bool to true if it's false.
-// Returns a bool indicating whether or not the value changed.
-func (b *Bool) SetTrueCond() bool {
-	return atomic.CompareAndSwapUint32((*uint32)(b), 0, 1)
-}
-
 // IsTrue returns true if the value is true.
 func (b *Bool) IsTrue() bool {
 	return b.Load()
@@ -59,12 +53,6 @@ func (b *Bool) SetFalse() {
 	atomic.StoreUint32((*uint32)(b), 0)
 }
 
-// SetFalseCond sets the Bool to false if it's true.
-// Returns a bool indicating whether or not the value changed.
-func (b *Bool) SetFalseCond() bool {
-	return atomic.CompareAndSwapUint32((*uint32)(b), 1, 0)
-}
-
 // IsFalse returns false if the value is false.
 func (b *Bool) IsFalse() bool {
 	return !b.Load()
@@ -73,17 +61,4 @@ func (b *Bool) IsFalse() bool {
 // Load returns a bool representing the value.
 func (b *Bool) Load() bool {
 	return atomic.LoadUint32((*uint32)(b)) != 0
-}
-
-// Toggle attempts to flip the value and returns a bool indicating whether
-// or not the value changed.
-func (b *Bool) Toggle() bool {
-	// NB: This isn't perfect, but there isn't a truly atomic way to
-	// implement this.
-	old := atomic.LoadUint32((*uint32)(b))
-	var new uint32
-	if old == 0 {
-		new = 1
-	}
-	return atomic.CompareAndSwapUint32((*uint32)(b), old, new)
 }

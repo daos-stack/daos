@@ -66,17 +66,6 @@ func TestAtomicBool(t *testing.T) {
 			op:     "SetFalse",
 			expEnd: false,
 		},
-		"true-SetTrueCond": {
-			start:  true,
-			op:     "SetTrueCond",
-			expEnd: true,
-		},
-		"true-SetFalseCond": {
-			start:      true,
-			op:         "SetFalseCond",
-			expEnd:     false,
-			expChanged: true,
-		},
 		"false-SetTrue": {
 			start:  false,
 			op:     "SetTrue",
@@ -86,29 +75,6 @@ func TestAtomicBool(t *testing.T) {
 			start:  false,
 			op:     "SetFalse",
 			expEnd: false,
-		},
-		"false-SetTrueCond": {
-			start:      false,
-			op:         "SetTrueCond",
-			expEnd:     true,
-			expChanged: true,
-		},
-		"false-SetFalseCond": {
-			start:  false,
-			op:     "SetFalseCond",
-			expEnd: false,
-		},
-		"true-Toggle": {
-			start:      true,
-			op:         "Toggle",
-			expEnd:     false,
-			expChanged: true,
-		},
-		"false-Toggle": {
-			start:      false,
-			op:         "Toggle",
-			expEnd:     true,
-			expChanged: true,
 		},
 	} {
 		cmpBool := func(t *testing.T, expected, actual bool) {
@@ -126,25 +92,13 @@ func TestAtomicBool(t *testing.T) {
 			case "SetTrue":
 				b.SetTrue()
 				cmpBool(t, b.Load(), tc.expEnd)
-			case "SetTrueCond":
-				changed := b.SetTrueCond()
-				cmpBool(t, b.Load(), tc.expEnd)
-				cmpBool(t, tc.expChanged, changed)
 			case "IsTrue":
 				cmpBool(t, b.IsTrue(), tc.expEnd)
 			case "SetFalse":
 				b.SetFalse()
 				cmpBool(t, b.Load(), tc.expEnd)
-			case "SetFalseCond":
-				changed := b.SetFalseCond()
-				cmpBool(t, b.Load(), tc.expEnd)
-				cmpBool(t, tc.expChanged, changed)
 			case "IsFalse":
 				cmpBool(t, b.IsFalse(), tc.expEnd)
-			case "Toggle":
-				changed := b.Toggle()
-				cmpBool(t, b.Load(), tc.expEnd)
-				cmpBool(t, tc.expChanged, changed)
 			default:
 				t.Fatalf("unhandled op %q", tc.op)
 			}
