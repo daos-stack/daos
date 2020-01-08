@@ -99,7 +99,7 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
 			  size, flags);
 	if (rc == 0) {
-		DFUSE_REPLY_ZERO(req);
+		DFUSE_REPLY_ZERO(inode, req);
 		return;
 	}
 err:

@@ -46,11 +46,11 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	fi->fh = (uint64_t)oh;
 
-	DFUSE_REPLY_OPEN(req, fi);
+	DFUSE_REPLY_OPEN(oh, req, fi);
 	return;
 err:
 	D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, rc);
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
 void
@@ -62,7 +62,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
+		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(oh->doh_buf);

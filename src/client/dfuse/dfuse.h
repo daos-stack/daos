@@ -267,53 +267,48 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
 					O_CREAT | O_EXCL)
 
-#define DFUSE_REPLY_ERR_RAW(handle, req, status)			\
+#define DFUSE_REPLY_ERR_RAW(desc, req, status)				\
 	do {								\
 		int __err = status;					\
 		int __rc;						\
 		if (__err == 0) {					\
-			DFUSE_TRA_ERROR(handle,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
 		if (__err == ENOTSUP || __err == EIO)			\
-			DFUSE_TRA_WARNING(handle, "Returning %d '%s'",	\
+			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
-			DFUSE_TRA_DEBUG(handle, "Returning %d '%s'",	\
+			DFUSE_TRA_DEBUG(desc, "Returning %d '%s'",	\
 					__err, strerror(__err));	\
 		__rc = fuse_reply_err(req, __err);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(handle,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_FUSE_REPLY_ERR(req, status)		\
-	do {						\
-		DFUSE_REPLY_ERR_RAW(req, req, status);	\
-	} while (0)
-
-#define DFUSE_REPLY_ZERO(req)						\
+#define DFUSE_REPLY_ZERO(desc, req)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning 0");			\
+		DFUSE_TRA_DEBUG(desc, "Returning 0");			\
 		__rc = fuse_reply_err(req, 0);				\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(req, attr)					\
+#define DFUSE_REPLY_ATTR(desc, req, attr)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(desc, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr, 0);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -329,79 +324,80 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_BUF(handle, req, buf, size)				\
+#define DFUSE_REPLY_BUF(desc, req, buf, size)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(handle, "Returning buffer(%p %#zx)",	\
+		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)",	\
 				buf, size);				\
 		__rc = fuse_reply_buf(req, buf, size);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(handle,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_buf returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
 
-#define DFUSE_REPLY_WRITE(handle, req, bytes)				\
+#define DFUSE_REPLY_WRITE(desc, req, bytes)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(handle, "Returning write(%#zx)", bytes); \
+		DFUSE_TRA_DEBUG(desc, "Returning write(%#zx)", bytes); \
 		__rc = fuse_reply_write(req, bytes);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(handle,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_write returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(req, fi)					\
+#define DFUSE_REPLY_OPEN(desc, req, fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning open");			\
+		DFUSE_TRA_DEBUG(desc, "Returning open");		\
 		__rc = fuse_reply_open(req, fi);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(req, entry, fi)				\
+#define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning create");		\
+		DFUSE_TRA_DEBUG(desc, "Returning create");		\
 		__rc = fuse_reply_create(req, &entry, fi);		\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_create returned %d:%s",\
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ENTRY(req, entry)					\
+#define DFUSE_REPLY_ENTRY(desc, req, entry)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning entry %li mode %#x dir:%d", \
+		DFUSE_TRA_DEBUG(desc,					\
+				"Returning entry inode %li mode %#x dir:%d", \
 				(entry).attr.st_ino,			\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_entry returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL_SIZE(handle, req, arg, size)			\
+#define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)			\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
+		DFUSE_TRA_DEBUG(desc, "Returning ioctl");		\
 		__rc = fuse_reply_ioctl(req, 0, arg, size);		\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(handle,				\
+			DFUSE_TRA_ERROR(desc,				\
 					"fuse_reply_ioctl returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, arg)			\
-	DFUSE_REPLY_IOCTL_SIZE(handle, req, &(arg), sizeof(arg))
+#define DFUSE_REPLY_IOCTL(desc, req, arg)			\
+	DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.

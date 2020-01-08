@@ -60,7 +60,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
 		DFUSE_TRA_INFO(parent, "Invalid container uuid");
-		DFUSE_REPLY_ENTRY(req, entry);
+		DFUSE_REPLY_ENTRY(parent, req, entry);
 		D_FREE(dfs);
 		return;
 	}
@@ -118,7 +118,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				entry.attr.st_ino = ie->ie_stat.st_ino;
 				entry.generation = 1;
 				entry.ino = entry.attr.st_ino;
-				DFUSE_REPLY_ENTRY(req, entry);
+				DFUSE_REPLY_ENTRY(ie, req, entry);
 				D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 				D_FREE(dfs);
 				return;

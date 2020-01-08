@@ -91,12 +91,13 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		ie->ie_parent = 0;
 
 		ie_close(fs_handle, ie);
+		ie = inode;
 	}
 
 	if (fi_out)
-		DFUSE_REPLY_CREATE(req, entry, fi_out);
+		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
-		DFUSE_REPLY_ENTRY(req, entry);
+		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
