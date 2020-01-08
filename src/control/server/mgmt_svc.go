@@ -530,10 +530,13 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
 	for _, i := range svc.harness.Instances() {
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		resp := &mgmtpb.BioHealthResp{}
@@ -561,22 +564,24 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 	fullResp := new(mgmtpb.SmdDevResp)
 
+	// Iterate through the list of local I/O server instances, and aggregate
+	// results into a single response.
 	for _, i := range svc.harness.Instances() {
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
 		if err != nil {
 			return nil, err
 		}
 
-		tmpResp := new(mgmtpb.SmdDevResp)
-		if err = proto.Unmarshal(dresp.Body, tmpResp); err != nil {
+		instResp := new(mgmtpb.SmdDevResp)
+		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
 		}
 
-		if tmpResp.Status != 0 {
-			return tmpResp, nil
+		if instResp.Status != 0 {
+			return instResp, nil
 		}
 
-		fullResp.Devices = append(fullResp.Devices, tmpResp.Devices...)
+		fullResp.Devices = append(fullResp.Devices, instResp.Devices...)
 	}
 
 	return fullResp, nil
@@ -588,22 +593,24 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 
 	fullResp := new(mgmtpb.SmdPoolResp)
 
+	// Iterate through the list of local I/O server instances, and aggregate
+	// results into a single response.
 	for _, i := range svc.harness.Instances() {
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
 		if err != nil {
 			return nil, err
 		}
 
-		tmpResp := new(mgmtpb.SmdPoolResp)
-		if err = proto.Unmarshal(dresp.Body, tmpResp); err != nil {
+		instResp := new(mgmtpb.SmdPoolResp)
+		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal SmdListPools response")
 		}
 
-		if tmpResp.Status != 0 {
-			return tmpResp, nil
+		if instResp.Status != 0 {
+			return instResp, nil
 		}
 
-		fullResp.Pools = append(fullResp.Pools, tmpResp.Pools...)
+		fullResp.Pools = append(fullResp.Pools, instResp.Pools...)
 	}
 
 	return fullResp, nil
@@ -613,10 +620,13 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
 	svc.log.Debugf("MgmtSvc.DevStateQuery dispatch, req:%+v\n", *req)
 
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
 	for _, i := range svc.harness.Instances() {
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		resp := &mgmtpb.DevStateResp{}
@@ -636,10 +646,13 @@ func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) 
 func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
 	svc.log.Debugf("MgmtSvc.StorageSetFaulty dispatch, req:%+v\n", *req)
 
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
 	for _, i := range svc.harness.Instances() {
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		resp := &mgmtpb.DevStateResp{}
