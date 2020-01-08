@@ -20,12 +20,10 @@ srun_params:
 timeout: 8000
 logdir: /tmp/soak
 server_config:
-#    access_points: ['wolf-118:10001']
     name: daos_server
     provider: ofi+sockets
     control_log_mask: INFO
     control_log_file: /tmp/daos_control0.log
-#    socket_dir: /var/run/daos_server0
     servers:
         log_mask: ERR
         fabric_iface: ib0
@@ -184,7 +182,7 @@ fio_stress:
   global:
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
-    thread: 16
+    thread: 1
     group_reporting: 1
     direct: 1
     verify: 'crc64'
