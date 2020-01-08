@@ -72,7 +72,7 @@ func (b *Bool) IsFalse() bool {
 
 // Load returns a bool representing the value.
 func (b *Bool) Load() bool {
-	return atomic.LoadUint32((*uint32)(b)) == 1
+	return atomic.LoadUint32((*uint32)(b)) != 0
 }
 
 // Toggle attempts to flip the value and returns a bool indicating whether
