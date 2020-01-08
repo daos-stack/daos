@@ -164,6 +164,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return ENOMEM;
 	}
 
+	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
 	if (uuid_parse(pool, dfp->dfp_pool) < 0) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
 		D_GOTO(out_err, ret = EINVAL);
@@ -226,6 +228,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_umount, ret = rc);
 
 	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+
+	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
