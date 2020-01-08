@@ -37,6 +37,7 @@
 """Build crt_launch"""
 import os
 import sys
+from distutils.spawn import find_executable
 
 CRT_LAUNCH = 'crt_launch.c'
 
@@ -48,14 +49,23 @@ def scons():
     tenv = env.Clone()
 
     if tenv.subst("$MPI_PKG") != "":
-        tenv.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
-    elif not prereqs.check_component('ompi'):
-        sys.stdout.write("No MPI installed...skipping crt_launch build\n")
-        return
+        mpicc = find_executable('mpicc')
+        if not mpicc:
+            tenv.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
+        else:
+            print("Appending")
+            tenv.AppendENVPath("PATH", os.path.dirname(mpicc))
+            tenv.Replace(CC='mpicc')
+            tenv.Replace(LINK='mpicc')
+    else:
+        if not prereqs.check_component('ompi'):
+            sys.stdout.write("No MPI installed...skipping crt_launch build\n")
+            return
+        prereqs.require(tenv, 'ompi')
 
     tenv.AppendUnique(CPPPATH=['#/src/cart'])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'mpi'])
-    prereqs.require(tenv, 'mercury', 'ompi')
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
+    prereqs.require(tenv, 'mercury')
     tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(FLAGS='-pthread')
