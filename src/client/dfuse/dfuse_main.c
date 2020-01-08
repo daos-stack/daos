@@ -121,7 +121,9 @@ main(int argc, char **argv)
 	struct dfuse_info	*dfuse_info = NULL;
 	char			*svcl = NULL;
 	struct dfuse_pool	*dfp = NULL;
+	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
+	struct dfuse_dfs	*dfsn;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -332,9 +334,11 @@ out_pool:
 		daos_pool_disconnect(dfp->dfp_poh, NULL);
 out_dfs:
 
-	d_list_for_each_entry(dfp, &dfuse_info->di_dfp_list, dfp_list) {
+	d_list_for_each_entry_safe(dfp, dfpn, &dfuse_info->di_dfp_list,
+				   dfp_list) {
 		DFUSE_TRA_ERROR(dfp, "DFP left at the end");
-		d_list_for_each_entry(dfs, &dfp->dfp_dfs_list, dfs_cont_list) {
+		d_list_for_each_entry_safe(dfs, dfsn, &dfp->dfp_dfs_list,
+					   dfs_cont_list) {
 			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
 			if (!daos_handle_is_inval(dfs->dfs_coh)) {
 
@@ -352,6 +356,7 @@ out_dfs:
 				}
 			}
 			DFUSE_TRA_DOWN(dfs);
+			D_FREE(dfs);
 		}
 
 		if (!daos_handle_is_inval(dfp->dfp_poh)) {
@@ -363,6 +368,7 @@ out_dfs:
 			}
 		}
 		DFUSE_TRA_DOWN(dfp);
+		D_FREE(dfp);
 	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);

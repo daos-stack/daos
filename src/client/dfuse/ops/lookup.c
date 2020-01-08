@@ -178,6 +178,10 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
 
+	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
+
+	DFUSE_TRA_UP(dfs, dfp, "dfs");
+
 	/* Connect to DAOS pool */
 	rc = daos_pool_connect(dfp->dfp_pool, fs_handle->dpi_info->di_group,
 			       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
@@ -237,6 +241,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_umount, ret = rc);
 
 	dfs->dfs_root = ie->ie_stat.st_ino;
+	ie->ie_root = true;
+	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_INFO(ie, "UNS entry point activated, root %lu",
 		       dfs->dfs_root);
