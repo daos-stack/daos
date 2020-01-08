@@ -1037,8 +1037,8 @@ pipeline {
                                                test_tag=pr,-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           # set ENABLE_TARGET_OVERSUBSCRIBE env here
-                                           export ENABLE_TARGET_OVERSUBSCRIBE=0
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=0
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
@@ -1122,8 +1122,8 @@ pipeline {
                                                test_tag=pr,hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           # set ENABLE_TARGET_OVERSUBSCRIBE env here
-                                           export ENABLE_TARGET_OVERSUBSCRIBE=1
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME

@@ -241,17 +241,6 @@ dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 	return nr_default;
 }
 
-static bool
-enable_target_oversubscribe(void)
-{
-	bool oversub = false;
-
-	if (getenv("ENABLE_TARGET_OVERSUBSCRIBE") == NULL)
-		return oversub;
-	d_getenv_bool("ENABLE_TARGET_OVERSUBSCRIBE", &oversub);
-	return oversub;
-}
-
 static int
 dss_topo_init()
 {
@@ -261,7 +250,7 @@ dss_topo_init()
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
-	bool            oversubscribe_target;
+	bool            tgt_oversub = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -270,14 +259,14 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
-	oversubscribe_target = enable_target_oversubscribe();
+	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
-					    oversubscribe_target);
+					    tgt_oversub);
 
 		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %d "
@@ -332,7 +321,7 @@ dss_topo_init()
 	free(cpuset);
 
 	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    oversubscribe_target);
+				    tgt_oversub);
 	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
