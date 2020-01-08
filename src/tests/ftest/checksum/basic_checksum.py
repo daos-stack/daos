@@ -23,26 +23,28 @@
 """
 
 import ctypes
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj)
+from pydaos.raw import DaosContainer, IORequest, DaosObj, DaosInputParams
 from apricot import TestWithServers
 from test_utils import TestPool
 
 
 class ChecksumContainerValidation(TestWithServers):
-    """
-    Test Class Description: This test is enables
-    checksum container properties and performs
-    single object inserts and verifies
-    contents. This is a basic sanity
-    test for enabling checksum testing.
-    This test case doesn't use TestPool/
-    TestContainer for now. TestPool/TestContainer
-    needs changes to support checksum.
+    # pylint: disable=too-many-instance-attributes
+    """Container checksum test cases.
+
+    Test Class Description:
+        This test is enables checksum container properties and performs single
+        object inserts and verifies contents. This is a basic sanity test for
+        enabling checksum testing.
+
+    This test case doesn't use TestPool/TestContainer for now. TestPool/
+    TestContainer needs changes to support checksum.
+
     :avocado: recursive
     """
-    # pylint: disable=too-many-instance-attributes
+
     def setUp(self):
+        """Set up each test case."""
         super(ChecksumContainerValidation, self).setUp()
         self.agent_sessions = None
         self.pool = None
@@ -65,10 +67,9 @@ class ChecksumContainerValidation(TestWithServers):
 
         self.csum = self.params.get("enable_checksum", '/run/container/*')
         self.container = DaosContainer(self.context)
-        input_param = self.container.cont_input_values
-        input_param.enable_chksum = self.csum
-        self.container.create(poh=self.pool.pool.handle,
-                              con_prop=input_param)
+        input_param = DaosInputParams()
+        input_param.container_params.enable_chksum = self.csum
+        self.container.create(poh=self.pool.pool.handle, input=input_param)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -79,10 +80,12 @@ class ChecksumContainerValidation(TestWithServers):
                                self.obj, objtype=4)
 
     def test_single_object_with_checksum(self):
-        """
-        Test ID: DAOS-3927
-        Test Description: Write Avocado Test to verify single data after
-                          pool/container disconnect/reconnect.
+        """Test ID: DAOS-3927.
+
+        Test Description:
+            Write Avocado Test to verify single data after pool/container
+            disconnect/reconnect.
+
         :avocado: tags=all,full_regression,pr,basic_checksum_object
         """
         self.d_log.info("Writing the Single Dataset")

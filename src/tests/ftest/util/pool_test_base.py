@@ -60,29 +60,29 @@ class PoolTestBase(TestWithServers):
             default_value = default_value.value
 
         # Get the list of parameter values and pass/fail state from the yaml
-        param_list = self.params.get(
+        param_lists = self.params.get(
             "{}_list".format(name),
             self.pool.namespace,
             [[default_value, "PASS"]]
         )
 
         # Process the list data
-        for index in range(len(param_list)):
+        for param_list in param_lists:
             # Include the parameter name with the value and expected result
-            param_list[index].insert(0, name)
+            param_list.insert(0, name)
 
             # Replace any keyword values
-            if param_list[index][1] == "VALID" and name == "target_list":
-                param_list[index][1] = [0]
-            elif param_list[index][1] == "VALID" and name.endswith("id"):
-                param_list[index][1] = default_value
-            elif param_list[index][1] == "NULLPTR":
-                param_list[index][1] = None
+            if param_list[1] == "VALID" and name == "target_list":
+                param_list[1] = [0]
+            elif param_list[1] == "VALID" and name.endswith("id"):
+                param_list[1] = default_value
+            elif param_list[1] == "NULLPTR":
+                param_list[1] = None
 
-            # Convert the PASS/FAIL keywords into booleans
-            param_list[index][2] = str(param_list[index][2]).upper() == "PASS"
+            # Convert the PASS/FAIL keywords into a boolean
+            param_list[2] = str(param_list[2]).upper() == "PASS"
 
-        return param_list
+        return param_lists
 
     def run_pool_create_test(self, namespace=None):
         """Run all test variants of the pool create test.
@@ -161,4 +161,5 @@ class PoolTestBase(TestWithServers):
         # Determine if the overall test passed
         if error_count > 0:
             self.fail(
-                "Detected %s error(s) creating %s pools", error_count, total)
+                "Detected {} error(s) creating {} pools".format(
+                    error_count, total))

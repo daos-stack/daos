@@ -32,10 +32,10 @@ from avocado import fail_on
 from apricot import TestWithServers
 
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError, IOV
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
+
 
 class GlobalHandle(TestWithServers):
-
     """
     This class contains tests to verify the ability to share container
     handles amoung processes.
@@ -113,8 +113,8 @@ class GlobalHandle(TestWithServers):
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+            self.pool.create(
+                createmode, createuid, creategid, createsize, createsetid, None)
             self.pool.connect(1 << 1)
 
             # create a pool global handle
@@ -142,14 +142,14 @@ class GlobalHandle(TestWithServers):
 
             sct_pool_uuid = sharedctypes.RawArray(ctypes.c_byte, self.pool.uuid)
             # this should work in the future but need on-line server addition
-            #arg_list = (
-            #p = Process(target=check_handle, args=arg_list)
-            #p.start()
-            #p.join()
+            # arg_list = (
+            #     p = Process(target=check_handle, args=arg_list)
+            #     p.start()
+            #     p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            self.check_handle(sct_pool_handle, sct_pool_uuid,
-	                      sct_cont_handle, 0)
+            self.check_handle(
+                sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
 
         except DaosApiError as excep:
             print(excep)
