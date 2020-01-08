@@ -39,6 +39,7 @@ from env_modules import load_mpi
 class CommandFailure(Exception):
     """Base exception for this module."""
 
+
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
@@ -668,17 +669,17 @@ class JobManager(ExecutableCommand):
 
         return " ".join(commands)
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(subprocess)
+        return self.job.check_subprocess_status(sub_process)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the job manager command with common inputs.

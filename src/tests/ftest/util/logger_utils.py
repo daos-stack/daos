@@ -24,7 +24,7 @@
 
 
 class TestLogger(object):
-    """Defines a Logger that that also logs messages to DaosLog."""
+    """Defines a Logger that also logs messages to DaosLog."""
 
     def __init__(self, logger, daos_logger):
         """Initialize the logger with a name and an optional level.

@@ -146,4 +146,5 @@ class BadConnectTest(TestWithServers):
                 ctypes.memmove(pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
                     pool.get_uuid_str()))
+                pool.disconnect()
                 pool.destroy(1)

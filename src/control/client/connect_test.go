@@ -276,10 +276,10 @@ func TestPoolQuery(t *testing.T) {
 				addresses: MockServers,
 				svcClientCfg: mockMgmtSvcClientConfig{
 					poolQueryResult: &mgmtpb.PoolQueryResp{
-						Uuid:          MockUUID,
-						Totaltargets:  42,
-						Activetargets: 16,
-						Disabled:      true,
+						Uuid:            MockUUID,
+						Totaltargets:    42,
+						Activetargets:   16,
+						Disabledtargets: 17,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -303,10 +303,10 @@ func TestPoolQuery(t *testing.T) {
 				},
 			},
 			expResp: &PoolQueryResp{
-				UUID:          MockUUID,
-				TotalTargets:  42,
-				ActiveTargets: 16,
-				Disabled:      true,
+				UUID:            MockUUID,
+				TotalTargets:    42,
+				ActiveTargets:   16,
+				DisabledTargets: 17,
 				Rebuild: &PoolRebuildStatus{
 					State:   PoolRebuildStateBusy,
 					Objects: 1,

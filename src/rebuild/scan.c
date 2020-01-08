@@ -700,7 +700,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	uuid_copy(xarg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, xarg);
+			 rebuild_obj_scan_cb, NULL, xarg);
 	vos_cont_close(coh);
 
 	/* Since dtx_resync might yield, let's reprobe anyway */
@@ -740,7 +740,7 @@ rebuild_scanner(void *data)
 	xarg.arg = arg;
 	xarg.yield_freq = DEFAULT_YIELD_FREQ;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 rebuild_container_scan_cb, &xarg);
+			 rebuild_container_scan_cb, NULL, &xarg);
 
 	ds_pool_child_put(child);
 

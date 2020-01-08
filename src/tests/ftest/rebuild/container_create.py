@@ -292,6 +292,7 @@ class ContainerCreate(TestWithServers):
 
             # Destroy the pools
             for pool in self.pool:
+                pool.disconnect()
                 pool.destroy(1)
 
             self.log.info(

@@ -31,6 +31,7 @@
 #include <cmocka.h>
 
 #include <daos/drpc.h>
+#include <daos_pool.h>
 #include <daos_security.h>
 #include <uuid/uuid.h>
 #include "../acl.pb-c.h"
@@ -49,6 +50,76 @@
 static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 					"A::niceuser@:rw",
 					"A:G:GROUP@:r"};
+
+static Drpc__Call *
+new_drpc_call_with_bad_body(void)
+{
+	Drpc__Call	*call;
+	uint8_t		*bad_bytes;
+	size_t		bad_bytes_len = 16; /* arbitrary */
+	size_t		i;
+
+	D_ALLOC(call, sizeof(Drpc__Call));
+	assert_non_null(call);
+	drpc__call__init(call);
+
+	D_ALLOC_ARRAY(bad_bytes, bad_bytes_len);
+	assert_non_null(bad_bytes);
+
+	/* Fill out with junk that won't translate to a PB struct */
+	for (i = 0; i < bad_bytes_len; i++)
+		bad_bytes[i] = i;
+
+	call->body.data = bad_bytes;
+	call->body.len = bad_bytes_len;
+
+	return call;
+}
+
+static void
+expect_failure_for_bad_call_payload(drpc_handler_t func)
+{
+	Drpc__Call	*call;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	call = new_drpc_call_with_bad_body();
+
+	func(call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+
+	drpc_call_free(call);
+}
+
+static void
+test_mgmt_drpc_handlers_bad_call_payload(void **state)
+{
+	/*
+	 * Any dRPC call that accepts an input payload should be added here
+	 * to test for proper handling of garbage in the payload
+	 */
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_prep_shutdown);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_kill_rank);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_create_mgmt_svc);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_get_attach_info);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_join);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_destroy);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_overwrite_acl);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_update_acl);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_delete_acl);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_query);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_devs);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_smd_list_pools);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_bio_health_query);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_list_pools);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_list_cont);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
+}
 
 static daos_prop_t *
 new_access_prop(struct daos_acl *acl, const char *owner, const char *group)
@@ -144,47 +215,6 @@ drpc_pool_acl_teardown(void **state)
 /*
  * dRPC Get ACL tests
  */
-static Drpc__Call *
-new_drpc_call_with_bad_body(void)
-{
-	Drpc__Call	*call;
-	uint8_t		*bad_bytes;
-	size_t		bad_bytes_len = 16; /* arbitrary */
-	size_t		i;
-
-	D_ALLOC(call, sizeof(Drpc__Call));
-	assert_non_null(call);
-	drpc__call__init(call);
-
-	D_ALLOC_ARRAY(bad_bytes, bad_bytes_len);
-	assert_non_null(bad_bytes);
-
-	/* Fill out with junk that won't translate to a PB struct */
-	for (i = 0; i < bad_bytes_len; i++)
-		bad_bytes[i] = i;
-
-	call->body.data = bad_bytes;
-	call->body.len = bad_bytes_len;
-
-	return call;
-}
-
-static void
-test_drpc_pool_get_acl_bad_request(void **state)
-{
-	Drpc__Call	*call;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	call = new_drpc_call_with_bad_body();
-
-	ds_mgmt_drpc_pool_get_acl(call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-
-	drpc_call_free(call);
-}
 
 static void
 pack_get_acl_req(Drpc__Call *call, Mgmt__GetACLReq *req)
@@ -329,28 +359,8 @@ test_drpc_pool_get_acl_success(void **state)
 }
 
 /*
- * TODO: Add owner/group results
- */
-
-/*
  * dRPC overwrite ACL tests
  */
-static void
-test_drpc_pool_overwrite_acl_bad_request(void **state)
-{
-	Drpc__Call	*call;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	call = new_drpc_call_with_bad_body();
-
-	ds_mgmt_drpc_pool_overwrite_acl(call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-
-	drpc_call_free(call);
-}
 
 static void
 pack_modify_acl_req(Drpc__Call *call, Mgmt__ModifyACLReq *req)
@@ -460,22 +470,6 @@ test_drpc_pool_overwrite_acl_success(void **state)
 /*
  * dRPC Update ACL tests
  */
-static void
-test_drpc_pool_update_acl_bad_request(void **state)
-{
-	Drpc__Call	*call;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	call = new_drpc_call_with_bad_body();
-
-	ds_mgmt_drpc_pool_update_acl(call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-
-	drpc_call_free(call);
-}
 
 static void
 test_drpc_pool_update_acl_bad_uuid(void **state)
@@ -555,22 +549,6 @@ test_drpc_pool_update_acl_success(void **state)
 /*
  * dRPC Delete ACL tests
  */
-static void
-test_drpc_pool_delete_acl_bad_request(void **state)
-{
-	Drpc__Call	*call;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-
-	call = new_drpc_call_with_bad_body();
-
-	ds_mgmt_drpc_pool_delete_acl(call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-
-	drpc_call_free(call);
-}
 
 static void
 pack_delete_acl_req(Drpc__Call *call, Mgmt__DeleteACLReq *req)
@@ -673,27 +651,6 @@ drpc_list_pools_teardown(void **state)
 /*
  * dRPC List Pools tests
  */
-static void
-test_drpc_list_pools_bad_request(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	uint8_t		bad_bytes[16];
-	size_t		i;
-
-	/* Fill out with junk that won't translate to a ListPoolsReq */
-	for (i = 0; i < sizeof(bad_bytes); i++)
-		bad_bytes[i] = i;
-
-	call.body.data = bad_bytes;
-	call.body.len = sizeof(bad_bytes);
-
-	ds_mgmt_drpc_list_pools(&call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-}
 
 static void
 setup_list_pools_drpc_call(Drpc__Call *call, char *sys_name)
@@ -943,29 +900,6 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 }
 
 static void
-test_drpc_list_cont_bad_request(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	uint8_t		bad_bytes[16];
-	size_t		i;
-
-	/* Fill out with junk that won't translate to a ListContReq */
-	for (i = 0; i < sizeof(bad_bytes); i++)
-		bad_bytes[i] = i;
-
-	call.body.data = bad_bytes;
-	call.body.len = sizeof(bad_bytes);
-
-	ds_mgmt_drpc_pool_list_cont(&call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-}
-
-static void
 test_drpc_pool_list_cont_bad_uuid(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
@@ -1058,28 +992,6 @@ drpc_pool_set_prop_teardown(void **state)
 /*
  * dRPC Pool SetProp tests
  */
-static void
-test_drpc_pool_set_prop_bad_request(void **state)
-{
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	uint8_t		bad_bytes[16];
-	size_t		i;
-
-	/* Fill out with junk that won't translate to a PoolSetPropReq */
-	for (i = 0; i < sizeof(bad_bytes); i++)
-		bad_bytes[i] = i;
-
-	call.body.data = bad_bytes;
-	call.body.len = sizeof(bad_bytes);
-
-	ds_mgmt_drpc_pool_set_prop(&call, &resp);
-
-	assert_int_equal(resp.status, DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD);
-
-	assert_null(resp.body.data);
-	assert_int_equal(resp.body.len, 0);
-}
 
 static void
 setup_pool_set_prop_drpc_call(Drpc__Call *call, Mgmt__PoolSetPropReq *req)
@@ -1224,6 +1136,299 @@ test_drpc_pool_set_prop_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * Pool query test setup
+ */
+static int
+drpc_pool_query_setup(void **state)
+{
+	mock_ds_mgmt_pool_query_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool query tests
+ */
+static void
+pack_pool_query_req(Drpc__Call *call, Mgmt__PoolQueryReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__pool_query_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_query_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
+{
+	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
+
+	req.uuid = uuid;
+	pack_pool_query_req(call, &req);
+}
+
+static void
+expect_drpc_pool_query_resp_with_error(Drpc__Response *resp, int expected_err)
+{
+	Mgmt__PoolQueryResp *pq_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pq_resp = mgmt__pool_query_resp__unpack(NULL, resp->body.len,
+						resp->body.data);
+	assert_non_null(pq_resp);
+	assert_int_equal(pq_resp->status, expected_err);
+
+	mgmt__pool_query_resp__free_unpacked(pq_resp, NULL);
+}
+
+static void
+test_drpc_pool_query_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_pool_query_drpc_call(&call, "BAD");
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_drpc_pool_query_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID);
+	ds_mgmt_pool_query_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_drpc_pool_query_resp_with_error(&resp,
+					       ds_mgmt_pool_query_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+init_test_pool_info(daos_pool_info_t *pool_info)
+{
+	/* Set up pool info to be returned */
+	uuid_parse(TEST_UUID, pool_info->pi_uuid);
+
+	pool_info->pi_bits = DPI_ALL;
+
+	/* Values are arbitrary, just want to see that they are copied over */
+	pool_info->pi_ntargets = 100;
+	pool_info->pi_ndisabled = 36;
+
+	pool_info->pi_space.ps_ntargets = 51;
+
+	pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM] = 1;
+	pool_info->pi_space.ps_space.s_free[DAOS_MEDIA_SCM] = 2;
+	pool_info->pi_space.ps_free_max[DAOS_MEDIA_SCM] = 3;
+	pool_info->pi_space.ps_free_min[DAOS_MEDIA_SCM] = 4;
+	pool_info->pi_space.ps_free_mean[DAOS_MEDIA_SCM] = 5;
+
+	pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] = 6;
+	pool_info->pi_space.ps_space.s_free[DAOS_MEDIA_NVME] = 7;
+	pool_info->pi_space.ps_free_max[DAOS_MEDIA_NVME] = 8;
+	pool_info->pi_space.ps_free_min[DAOS_MEDIA_NVME] = 9;
+	pool_info->pi_space.ps_free_mean[DAOS_MEDIA_NVME] = 10;
+}
+
+static void
+init_test_rebuild_status(struct daos_rebuild_status *rebuild)
+{
+	rebuild->rs_obj_nr = 101;
+	rebuild->rs_rec_nr = 102;
+}
+
+static void
+expect_storage_usage(struct daos_pool_space *exp, int media_type,
+		     Mgmt__StorageUsageStats *actual)
+{
+	assert_int_equal(actual->total,
+			 exp->ps_space.s_total[media_type]);
+	assert_int_equal(actual->free,
+			 exp->ps_space.s_free[media_type]);
+	assert_int_equal(actual->max,
+			 exp->ps_free_max[media_type]);
+	assert_int_equal(actual->min,
+			 exp->ps_free_min[media_type]);
+	assert_int_equal(actual->mean,
+			 exp->ps_free_mean[media_type]);
+}
+
+static void
+expect_rebuild_status(struct daos_rebuild_status *exp,
+		      Mgmt__PoolRebuildStatus__State exp_state,
+		      Mgmt__PoolRebuildStatus *actual)
+{
+	assert_int_equal(actual->status, exp->rs_errno);
+	assert_int_equal(actual->objects, exp->rs_obj_nr);
+	assert_int_equal(actual->records, exp->rs_rec_nr);
+	assert_int_equal(actual->state, exp_state);
+}
+
+static void
+expect_query_resp_with_info(daos_pool_info_t *exp_info,
+			    Mgmt__PoolRebuildStatus__State exp_state,
+			    Drpc__Response *resp)
+{
+	Mgmt__PoolQueryResp	*pq_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pq_resp = mgmt__pool_query_resp__unpack(NULL, resp->body.len,
+						resp->body.data);
+	assert_non_null(pq_resp);
+	assert_int_equal(pq_resp->status, 0);
+	assert_string_equal(pq_resp->uuid, TEST_UUID);
+	assert_int_equal(pq_resp->totaltargets, exp_info->pi_ntargets);
+	assert_int_equal(pq_resp->disabledtargets, exp_info->pi_ndisabled);
+	assert_int_equal(pq_resp->activetargets,
+			 exp_info->pi_space.ps_ntargets);
+
+	assert_non_null(pq_resp->scm);
+	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM, pq_resp->scm);
+
+	assert_non_null(pq_resp->nvme);
+	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
+			     pq_resp->nvme);
+
+	assert_non_null(pq_resp->rebuild);
+	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
+			      pq_resp->rebuild);
+
+	mgmt__pool_query_resp__free_unpacked(pq_resp, NULL);
+}
+
+static void
+test_drpc_pool_query_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	uuid_t			exp_uuid;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	init_test_rebuild_status(&exp_info.pi_rebuild_st);
+	ds_mgmt_pool_query_info_out = exp_info;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	/* Make sure inputs to the mgmt svc were sane */
+	uuid_parse(TEST_UUID, exp_uuid);
+	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
+	assert_non_null(ds_mgmt_pool_query_info_ptr);
+	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DPI_ALL);
+
+	expect_query_resp_with_info(&exp_info,
+				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
+				    &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_success_rebuild_busy(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	init_test_rebuild_status(&exp_info.pi_rebuild_st);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	ds_mgmt_pool_query_info_out = exp_info;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info,
+				    MGMT__POOL_REBUILD_STATUS__STATE__BUSY,
+				    &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_success_rebuild_done(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	init_test_rebuild_status(&exp_info.pi_rebuild_st);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_done = 1;
+	ds_mgmt_pool_query_info_out = exp_info;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info,
+				    MGMT__POOL_REBUILD_STATUS__STATE__DONE,
+				    &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_success_rebuild_err(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_errno = -DER_UNKNOWN;
+
+	ds_mgmt_pool_query_info_out = exp_info;
+	/*
+	 * rebuild results returned to us shouldn't include the number of
+	 * objects/records if there's an error.
+	 */
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info,
+				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
+				    &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -1240,46 +1445,50 @@ test_drpc_pool_set_prop_success(void **state)
 						drpc_pool_set_prop_setup, \
 						drpc_pool_set_prop_teardown)
 
+
+#define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
+						drpc_pool_query_setup)
+
 int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		ACL_TEST(test_drpc_pool_get_acl_bad_request),
+		cmocka_unit_test(test_mgmt_drpc_handlers_bad_call_payload),
 		ACL_TEST(test_drpc_pool_get_acl_bad_uuid),
 		ACL_TEST(test_drpc_pool_get_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_get_acl_cant_translate_acl),
 		ACL_TEST(test_drpc_pool_get_acl_success),
-		ACL_TEST(test_drpc_pool_overwrite_acl_bad_request),
 		ACL_TEST(test_drpc_pool_overwrite_acl_bad_uuid),
 		ACL_TEST(test_drpc_pool_overwrite_acl_bad_acl),
 		ACL_TEST(test_drpc_pool_overwrite_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_overwrite_acl_success),
-		ACL_TEST(test_drpc_pool_update_acl_bad_request),
 		ACL_TEST(test_drpc_pool_update_acl_bad_uuid),
 		ACL_TEST(test_drpc_pool_update_acl_bad_acl),
 		ACL_TEST(test_drpc_pool_update_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_update_acl_success),
-		ACL_TEST(test_drpc_pool_delete_acl_bad_request),
 		ACL_TEST(test_drpc_pool_delete_acl_bad_uuid),
 		ACL_TEST(test_drpc_pool_delete_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_delete_acl_success),
-		LIST_POOLS_TEST(test_drpc_list_pools_bad_request),
 		LIST_POOLS_TEST(test_drpc_list_pools_mgmt_svc_fails),
 		LIST_POOLS_TEST(test_drpc_list_pools_svc_results_invalid),
 		LIST_POOLS_TEST(test_drpc_list_pools_success_no_pools),
 		LIST_POOLS_TEST(test_drpc_list_pools_success_with_pools),
-		LIST_CONT_TEST(test_drpc_list_cont_bad_request),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_bad_uuid),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_mgmt_svc_fails),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_no_containers),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_with_containers),
-		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_request),
 		POOL_SET_PROP_TEST(
 			test_drpc_pool_set_prop_invalid_property_type),
 		POOL_SET_PROP_TEST(
 			test_drpc_pool_set_prop_invalid_value_type),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+		QUERY_TEST(test_drpc_pool_query_bad_uuid),
+		QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
+		QUERY_TEST(test_drpc_pool_query_success),
+		QUERY_TEST(test_drpc_pool_query_success_rebuild_busy),
+		QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
+		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

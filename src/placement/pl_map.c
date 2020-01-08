@@ -177,26 +177,20 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					       myrank);
 }
 
-/**
- * Check if the provided object shard needs to be built on the reintegrated
- * targets @tgp_reint.
- *
- * \return      1       Build the object on the returned target @tgt_reint.
- *              0       Skip this object.
- *              -ve     error code.
- */
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
-		  struct daos_obj_shard_md *shard_md,
-		  struct pl_target_grp *tgp_reint, uint32_t *tgt_reint)
+		    struct daos_obj_shard_md *shard_md,
+		    uint32_t reint_ver, uint32_t *tgt_rank,
+		    uint32_t *shard_id, unsigned int array_size, int myrank)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
 
-	return map->pl_ops->o_obj_find_reint(map, md, shard_md, tgp_reint,
-					     tgt_reint);
+	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
+					       tgt_rank, shard_id, array_size,
+					       myrank);
 }
 
 void
@@ -208,15 +202,20 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 }
 
 int
-pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
+pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
+		struct pl_obj_layout **layout_pp)
 {
 	struct pl_obj_layout *layout;
+	unsigned int shard_nr = grp_size * grp_nr;
 
 	D_ALLOC_PTR(layout);
 	if (layout == NULL)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
+	layout->ol_grp_nr = grp_nr;
+	layout->ol_grp_size = grp_size;
+
 	D_ALLOC_ARRAY(layout->ol_shards, layout->ol_nr);
 	if (layout->ol_shards == NULL)
 		goto failed;

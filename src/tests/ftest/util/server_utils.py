@@ -849,7 +849,7 @@ class DaosServerManager(SubprocessManager):
 
         """
         cmd = DaosServerCommand(self.job.path)
-        cmd.sudo = True
+        cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")
         cmd.sub_command_class.set_sub_command("prepare")
@@ -872,7 +872,7 @@ class DaosServerManager(SubprocessManager):
     def reset_storage(self):
         """Reset the server storage."""
         cmd = DaosServerCommand(self.job.path)
-        cmd.sudo = True
+        cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")
         cmd.sub_command_class.set_sub_command("prepare")

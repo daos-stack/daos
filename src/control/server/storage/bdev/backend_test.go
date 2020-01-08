@@ -76,14 +76,14 @@ func mockSpdkDeviceHealth(varIdx ...int32) spdk.DeviceHealth {
 	return *s
 }
 
-func TestBdevBackendGetFormattedController(t *testing.T) {
+func TestBdevBackendGetController(t *testing.T) {
 	type input struct {
 		pciAddr         string
 		spdkControllers []spdk.Controller
 	}
 
-	// We don't get device health back after a format, so the expected
-	// controller results shouldn't include it.
+	spdkNormalNoHealth := mockSpdkController()
+	spdkNormalNoHealth.HealthStats = nil
 	scNormalNoHealth := storage.MockNvmeController()
 	scNormalNoHealth.HealthStats = nil
 
@@ -103,16 +103,37 @@ func TestBdevBackendGetFormattedController(t *testing.T) {
 			},
 			expErr: errors.New("unable to resolve"),
 		},
-		"two controllers": {
+		"correct pciAddr": {
 			input: input{
 				pciAddr:         mockSpdkController().PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController(), mockSpdkController(2)},
+				spdkControllers: []spdk.Controller{mockSpdkController()},
+			},
+			expSc: storage.MockNvmeController(),
+		},
+		"missing health stats": {
+			input: input{
+				pciAddr:         spdkNormalNoHealth.PCIAddr,
+				spdkControllers: []spdk.Controller{spdkNormalNoHealth},
 			},
 			expSc: scNormalNoHealth,
 		},
+		"two controllers select first": {
+			input: input{
+				pciAddr:         mockSpdkController(1).PCIAddr,
+				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
+			},
+			expSc: storage.MockNvmeController(1),
+		},
+		"two controllers select second": {
+			input: input{
+				pciAddr:         mockSpdkController(2).PCIAddr,
+				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
+			},
+			expSc: storage.MockNvmeController(2),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotSc, gotErr := getFormattedController(tc.input.pciAddr, tc.input.spdkControllers)
+			gotSc, gotErr := getController(tc.input.pciAddr, tc.input.spdkControllers)
 
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
