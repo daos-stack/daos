@@ -1,6 +1,6 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
-timeout: 50
+timeout: 600
 hosts:
   test_servers:
     - server-A
@@ -12,55 +12,19 @@ server_config:
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 pool:
-  # MODE - required; must be an integer
   mode: 473
-  # Server Group NAME - required; None is invalid\
   name: daos_server
-  # SVCN - optional; should be an integer
-  svcns: !mux
-    good_svcn:
-      svcn:
-        - 1
-        - PASS
-    bad_svcn:
-      svcn:
-        - 9999
-        - FAIL
-    null_svcn:
-      svcn:
-        - NULLPTR
-        - FAIL
-  # TARGET_LIST - optional; should be a list or None
-  target_lists: !mux
-    good_target_list:
-      target_list:
-        - VALID
-        - PASS
-    bad_target_list:
-      target_list:
-        - [9999]
-        - FAIL
-    null_target_list:
-      target_list:
-        - NULLPTR
-        - PASS
-  # SCM_SIZE - required; should be an integer
-  scm_sizes: !mux
-    good_scm_size:
-      scm_size:
-        - 1073741824
-        - PASS
-    bad_scm_size:
-      scm_size:
-        - 9999999999999999999999
-        - FAIL
-  # NVME_SIZE - optional; should be an integer or None
-  nvme_sizes: !mux
-    good_nvme_size:
-      nvme_size:
-        - 1073741824
-        - PASS
-    bad_nvme_size:
-      nvme_size:
-        - 9999999999999999999999
-        - FAIL
+  svcn_list:
+    - [1, PASS]
+    - [9999, FAIL]
+    - [NULLPTR, FAIL]
+  target_list_list:
+    - [VALID, PASS]
+    - [[9999], FAIL]
+    - [NULLPTR, PASS]
+  scm_size_list:
+    - [1073741824, PASS]
+    - [9999999999999999999999, FAIL]
+  nvme_size_list:
+    - [1073741824, PASS]
+    - [9999999999999999999999, FAIL]

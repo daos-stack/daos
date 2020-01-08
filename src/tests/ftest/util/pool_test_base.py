@@ -21,9 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from itertools import product
+
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
+from command_utils import BasicParameter
 from test_utils import TestPool
 
 
@@ -39,63 +42,123 @@ class PoolTestBase(TestWithServers):
         self.update_log_file_names()
         super(PoolTestBase, self).setUp()
 
-    def create_pool_test(self, namespace=None):
-        """Test creating a pool with valid and invalid create arguments."""
-        self.pool = TestPool(self.context, debug=True)
+    def get_param_list(self, name):
+        """Get the list of param values and expected result for the param name.
 
-        # Optionally find the pool parameters in a different yaml file namespace
+        Args:
+            name (str): parameter name
+
+        Returns:
+            list: a list of lists containing the parameter name, value, and a
+                boolean indicating whether or not this value will succeed in
+                creating a pool.
+
+        """
+        # Get the default value for the parameter to use if a list is not set
+        default_value = getattr(self.pool, name)
+        if isinstance(default_value, BasicParameter):
+            default_value = default_value.value
+
+        # Get the list of parameter values and pass/fail state from the yaml
+        param_list = self.params.get(
+            "{}_list".format(name),
+            self.pool.namespace,
+            [[default_value, "PASS"]]
+        )
+
+        # Process the list data
+        for index in range(len(param_list)):
+            # Include the parameter name with the value and expected result
+            param_list[index].insert(0, name)
+
+            # Replace any keyword values
+            if param_list[index][1] == "VALID" and name == "target_list":
+                param_list[index][1] = [0]
+            elif param_list[index][1] == "VALID" and name.endswith("id"):
+                param_list[index][1] = default_value
+            elif param_list[index][1] == "NULLPTR":
+                param_list[index][1] = None
+
+            # Convert the PASS/FAIL keywords into booleans
+            param_list[index][2] = str(param_list[index][2]).upper() == "PASS"
+
+        return param_list
+
+    def run_pool_create_test(self, namespace=None):
+        """Run all test variants of the pool create test.
+
+        Args:
+            namespace (str, optional): [description]. Defaults to None.
+        """
+        # Create a TestPool object
+        self.pool = TestPool(self.context, debug=True)
         if namespace is not None:
             self.pool.namespace = namespace
+        self.pool.get_params(self)
 
-        # Get the parameters for the pool create command and determine if this
-        # combination of arguments is expected to pass or fail.
-        expected_to_pass = True
-        for name in self.pool.get_param_names():
-            pool_param = getattr(self.pool, name)
-            pool_param.get_yaml_value(
-                name, self, self.pool.namespace)
-            if isinstance(pool_param.value, list) and len(pool_param.value) > 1:
-                # The test yaml defines each TestPool parameter as a list of the
-                # actual value to be assigned and a boolean indicating if this
-                # value will cause the pool create to pass or fail.  Extract the
-                # pass/fail state from the parameter list assignment and set the
-                # parameter value to the intended value.
-                expected_to_pass &= str(pool_param.value[1]).upper() == "PASS"
-                if pool_param.value[0] == "VALID":
-                    if name == "target_list":
-                        pool_param.update([0], name)
-                    else:
-                        self.fail(
-                            "Test needs to be updated with a VALID pool {} "
-                            "parameter value".format(name))
-                elif pool_param.value[0] == "NULLPTR":
-                    pool_param.update(None, name)
+        # Obtain the lists of arguments to use
+        param_names = (
+            "mode",
+            "uid",
+            "gid",
+            "scm_size",
+            "name",
+            "target_list",
+            "svcn",
+            "nvme_size"
+        )
+        param_lists = [self.get_param_list(key) for key in param_names]
+
+        # Determine the number of test variants
+        test_variants = list(product(*param_lists))
+        for variant in test_variants:
+            self.log.debug("  %s", variant)
+        total = len(test_variants)
+        self.log.info("Testing %s different pool create variants", total)
+
+        # Run all the variants of the test
+        error_count = 0
+        for index, test in enumerate(test_variants):
+            self.log.info("[%03d/%03d] - START TEST VARIANT", index + 1, total)
+
+            # Set the pool attributes
+            expected_to_pass = True
+            for data in test:
+                pool_attribute = getattr(self.pool, data[0])
+                if isinstance(pool_attribute, BasicParameter):
+                    pool_attribute.update(data[1], data[0])
                 else:
-                    pool_param.update(pool_param.value[0], name)
+                    pool_attribute = data[1]
+                    self.log.debug("Updated param %s => %s", data[0], data[1])
+                expected_to_pass &= data[2]
+            self.log.info(
+                "[%03d/%03d] - expected to pass: %s",
+                index + 1, total, str(expected_to_pass))
 
-        # Support allowing non-standard TestPool parameters: uid and gid
-        for name in ["uid", "gid"]:
-            value = self.params.get(
-                name, self.pool.namespace, getattr(self.pool, name))
-            if isinstance(value, list) and len(value) > 1:
-                expected_to_pass &= str(value[1]).upper() == "PASS"
-                if value[0] != "VALID":
-                    # By default the valid value is set, so only invalid values
-                    # need to be assigned
-                    setattr(self.pool, name, value[0])
-                    self.log.debug("Updated param %s => %s", name, value[0])
+            # Attempt to create the pool
+            try:
+                self.pool.create()
+                exception = None
+            except TestFail as error:
+                exception = error
 
-        # Attempt to create the pool with the arguments in this test variant
-        try:
-            self.pool.create()
-            exception = None
-        except TestFail as error:
-            exception = error
+            # Verify the result
+            if expected_to_pass and exception is not None:
+                error_count += 1
+                self.log.error(
+                    "[%03d/%03d] - The pool create test was expected to pass, "
+                    "but failed: %s", index + 1, total, exception)
+            elif not expected_to_pass and exception is None:
+                error_count += 1
+                self.log.error(
+                    "[%03d/%03d] - The pool create test was expected to fail, "
+                    "but passed", index + 1, total)
 
-        # Verify the result
-        if expected_to_pass and exception is not None:
+            # Destroy any successful pools
+            if not exception:
+                self.pool.destroy()
+
+        # Determine if the overall test passed
+        if error_count > 0:
             self.fail(
-                "The pool create test was expected to pass, but failed: "
-                "{}".format(exception))
-        elif not expected_to_pass and exception is None:
-            self.fail("The pool create test was expected to fail, but passed")
+                "Detected %s error(s) creating %s pools", error_count, total)

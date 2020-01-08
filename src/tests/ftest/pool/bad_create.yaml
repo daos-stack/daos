@@ -1,75 +1,29 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
-timeout: 50
+timeout: 600
 hosts:
   test_servers:
     - server-A
 server_config:
   name: daos_server
 pool:
-  # MODE - required; must be an integer
   mode: 473
-  # UID - required; should be an integer
-  uids: !mux
-    good_uid:
-      uid:
-        - VALID
-        - PASS
-    bad_uid:
-      uid:
-        - 99999999999999
-        - FAIL
-  # GID - required; should be an integer
-  gids: !mux
-    good_gid:
-      gid:
-        - VALID
-        - PASS
-    bad_gid:
-      gid:
-        - 99999999999999
-        - FAIL
-  # Server Group NAME - required; None is invalid
-  names: !mux
-    good_name:
-      name:
-        - daos_server
-        - PASS
-    bad_name:
-      name:
-        - complete_rubbish
-        - FAIL
-  # SVCN - optional; should be an integer
-  svcns: !mux
-    good_svcn:
-      svcn:
-        - 1
-        - PASS
-    bad_svcn:
-      svcn:
-        - 9999
-        - FAIL
-  # TARGET_LIST - optional; should be a list or None
-  target_lists: !mux
-    good_target_list:
-      target_list:
-        - VALID
-        - PASS
-    bad_target_list:
-      target_list:
-        - [9999]
-        - FAIL
-    null_target_list:
-      target_list:
-        - NULLPTR
-        - PASS
-  # SCM_SIZE - required; should be an integer
-  scm_sizes: !mux
-    good_scm_size:
-      scm_size:
-        - 1073741824
-        - PASS
-    bad_scm_size:
-      scm_size:
-        - 9999999999999999999999
-        - FAIL
+  uid_list:
+    - [VALID, PASS]
+    - [99999999999999, FAIL]
+  gid_list:
+    - [VALID, PASS]
+    - [99999999999999, FAIL]
+  name_list:
+    - [daos_server, PASS]
+    - [complete_rubbish, FAIL]
+  svcn_list:
+    - [1, PASS]
+    - [9999, FAIL]
+  target_list_list:
+    - [VALID, PASS]
+    - [9999, FAIL]
+    - [NULLPTR, PASS]
+  scm_size_list:
+    - [1073741824, PASS]
+    - [9999999999999999999999, FAIL]

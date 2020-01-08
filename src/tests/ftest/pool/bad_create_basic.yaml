@@ -1,67 +1,28 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
-timeout: 50
+timeout: 300
 hosts:
   test_servers:
     - server-A
 server_config:
   name: daos_server
-pool_namespaces: !mux
-  null_mode:
-    pool_namespace: /run/pool/null_mode/*
-  null_uid:
-    pool_namespace: /run/pool/null_uid/*
-  null_gid:
-    pool_namespace: /run/pool/null_gid/*
-  null_group:
-    pool_namespace: /run/pool/null_group/*
-  null_scm_size:
-    pool_namespace: /run/pool/null_scm_size/*
-  null_nvme_size:
-    pool_namespace: /run/pool/null_nvme_size/*
 pool:
-  null_mode:
-    mode:
-      - NULLPTR
-      - FAIL
-    name: daos_server
-    svcn: 1
-    scm_size: 1073741824
-  null_uid:
-    mode: 473
-    uid:
-      - NULLPTR
-      - FAIL
-    name: daos_server
-    svcn: 1
-    scm_size: 1073741824
-  null_gid:
-    mode: 473
-    gid:
-      - NULLPTR
-      - FAIL
-    name: daos_server
-    svcn: 1
-    scm_size: 1073741824
-  null_group:
-    mode: 473
-    name:
-      - NULLPTR
-      - PASS
-    svcn: 1
-    scm_size: 1073741824
-  null_scm_size:
-    mode: 473
-    name: daos_server
-    svcn: 1
-    scm_size:
-      - NULLPTR
-      - FAIL
-  null_nvme_size:
-    mode: 473
-    name: daos_server
-    svcn: 1
-    scm_size: 1073741824
-    nvme_size:
-      - NULLPTR
-      - FAIL
+  mode_list:
+    - [473, PASS]
+    - [NULLPTR, FAIL]
+  uid_list:
+    - [VALID, PASS]
+    - [NULLPTR, FAIL]
+  gid_list:
+    - [VALID, PASS]
+    - [NULLPTR, FAIL]
+  name_list:
+    - [daos_server, PASS]
+    - [NULLPTR, PASS]
+  svcn: 1
+  scm_size_list:
+    - [1073741824, PASS]
+    - [NULLPTR, FAIL]
+  nvme_size_list:
+    - [0, PASS]
+    - [NULLPTR, FAIL]

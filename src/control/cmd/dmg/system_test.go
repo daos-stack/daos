@@ -31,9 +31,9 @@ import (
 func TestSystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"system member query with no arguments",
-			"system member-query",
-			"ConnectClients SystemMemberQuery",
+			"system query with no arguments",
+			"system query",
+			"ConnectClients SystemQuery",
 			nil,
 		},
 		{

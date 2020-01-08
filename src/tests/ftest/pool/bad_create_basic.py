@@ -47,5 +47,4 @@ class BadCreateTest(PoolTestBase):
 
         :avocado: tags=all,pool,full_regression,tiny,badcreate,basic
         """
-        namespace = self.params.get("pool_namespace", "/run/pool_namespaces/*")
-        self.create_pool_test(namespace)
+        self.run_pool_create_test()

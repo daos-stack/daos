@@ -44,4 +44,4 @@ class BadCreate(PoolTestBase):
 
         :avocado: tags=all,pool,full_regression,hw,tiny,badcreate
         """
-        self.create_pool_test()
+        self.run_pool_create_test()
