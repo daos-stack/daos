@@ -89,6 +89,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		atomic_fetch_sub(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
+		ie->ie_root = 0;
 		ie_close(fs_handle, ie);
 		ie = inode;
 	}
@@ -183,13 +184,13 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 			      &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
 
-		DFUSE_TRA_DEBUG(dfp, "Checking dfp %p", dfpi);
+		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
 
 		if (uuid_compare(dfp->dfp_pool, dfpi->dfp_pool) != 0) {
 			continue;
 		}
 
-		DFUSE_TRA_DEBUG(dfp, "Reusing dfp %p", dfpi);
+		DFUSE_TRA_DEBUG(ie, "Reusing dfp %p", dfpi);
 		D_FREE(dfp);
 		break;
 	}
@@ -222,13 +223,13 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		uuid_unparse(dfs->dfs_cont, str);
 		uuid_unparse(dfsi->dfs_cont, str2);
 
-		DFUSE_TRA_DEBUG(dfs, "Checking dfs %p %s", dfsi, str);
-		DFUSE_TRA_DEBUG(dfs, "Checking dfs %p %s", dfsi, str2);
+		DFUSE_TRA_DEBUG(ie, "Checking dfs %p %s", dfsi, str);
+		DFUSE_TRA_DEBUG(ie, "Checking dfs %p %s", dfsi, str2);
 
 		if (uuid_compare(dfsi->dfs_cont, dfs->dfs_cont) != 0)
 			continue;
 
-		DFUSE_TRA_DEBUG(dfs, "Reusing dfs %p", dfsi);
+		DFUSE_TRA_DEBUG(ie, "Reusing dfs %p", dfsi);
 		D_FREE(dfs);
 		break;
 	}

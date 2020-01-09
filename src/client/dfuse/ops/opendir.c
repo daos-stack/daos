@@ -35,6 +35,8 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
+	DFUSE_TRA_UP(oh, ie, "open handle");
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
 		     &oh->doh_obj);

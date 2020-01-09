@@ -27,7 +27,7 @@
 /* Check if buffer contains a UUID
  */
 static bool
-check_uuid(const char *value, size_t size)
+check_uuid(void *arg, const char *value, size_t size)
 {
 	char uuid_str[40] = {};
 	uuid_t uuid;
@@ -40,7 +40,7 @@ check_uuid(const char *value, size_t size)
 	 */
 	strncpy(uuid_str, value, size);
 
-	DFUSE_TRA_DEBUG(NULL, "%zi '%s'", size, uuid_str);
+	DFUSE_TRA_DEBUG(arg, "%zi '%s'", size, uuid_str);
 
 	if (uuid_parse(uuid_str, uuid) < 0)
 		return false;
@@ -66,7 +66,7 @@ check_uns_attr(struct dfuse_inode_entry *inode)
 	if (rc || size != 36)
 		return false;
 
-	if (!check_uuid(uuid_str, size)) {
+	if (!check_uuid(inode, uuid_str, size)) {
 		DFUSE_TRA_DEBUG(inode, "pool attr failed check");
 		return false;
 	}
@@ -84,12 +84,12 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
 	if (strcmp(name, DFUSE_UNS_POOL_ATTR) == 0) {
-		if (!check_uuid(value, size))
+		if (!check_uuid(inode, value, size))
 			D_GOTO(err, rc = EINVAL);
 	}
 
 	if (strcmp(name, DFUSE_UNS_CONTAINER_ATTR) == 0) {
-		if (!check_uuid(value, size))
+		if (!check_uuid(inode, value, size))
 			D_GOTO(err, rc = EINVAL);
 
 		if (!check_uns_attr(inode))
