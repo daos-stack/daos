@@ -32,7 +32,9 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
@@ -63,52 +65,10 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemQueryCmd is the struct representing the command to query system status.
-type systemQueryCmd struct {
-	logCmd
-	connectedCmd
-	Rank *uint32 `long:"rank" short:"r" description:"System member rank to query"`
-}
-
-// Execute is run when systemQueryCmd activates
-func (cmd *systemQueryCmd) Execute(_ []string) error {
-	nilRank := ioserver.NilRank
-	req := client.SystemQueryReq{
-		Rank: nilRank.Uint32(),
-	}
-	if cmd.Rank != nil {
-		req.Rank = *cmd.Rank
-	}
-	resp, err := cmd.conns.SystemQuery(req)
-	if err != nil {
-		return errors.Wrap(err, "System-Query command failed")
-	}
-
-	cmd.log.Debug("System-Query command succeeded")
-	if len(resp.Members) == 0 {
-		cmd.log.Info("No members in system")
-		return nil
-	}
-
-	if cmd.Rank != nil {
-		if len(resp.Members) != 1 {
-			return errors.Errorf("expected 1 member in result, got %d", len(resp.Members))
-		}
-		m := resp.Members[0]
-		table := []txtfmt.TableRow{
-			{"address": m.Addr.String()},
-			{"uuid": m.UUID},
-			{"status": m.State().String()},
-			{"reason": "unknown"},
-		}
-		title := fmt.Sprintf("Rank %d", *cmd.Rank)
-		cmd.log.Info(txtfmt.FormatEntity(title, table))
-		return nil
-	}
-
+func displaySystemQuery(log logging.Logger, members system.Members) error {
 	rankPrefix := "r-"
 	groups := make(hostlist.HostGroups)
-	for _, m := range resp.Members {
+	for _, m := range members {
 		if err := groups.AddHost(m.State().String(), fmt.Sprintf("%s%d", rankPrefix, m.Rank)); err != nil {
 			return err
 		}
@@ -122,9 +82,91 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	// kind of a hack, but don't want to modify the hostlist library to
 	// accept invalid hostnames.
 	out = strings.ReplaceAll(out, rankPrefix, "")
-	cmd.log.Info(out)
+	log.Info(out)
 
 	return nil
+}
+
+func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	var table []txtfmt.TableRow
+
+	for _, m := range members {
+		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	log.Info(formatter.Format(table))
+}
+
+func displaySystemQuerySingle(log logging.Logger, members system.Members) error {
+	if len(members) != 1 {
+		return errors.Errorf("expected 1 member in result, got %d", len(members))
+	}
+
+	m := members[0]
+
+	table := []txtfmt.TableRow{
+		{"address": m.Addr.String()},
+		{"uuid": m.UUID},
+		{"status": m.State().String()},
+		{"reason": "unknown"},
+	}
+
+	title := fmt.Sprintf("Rank %d", m.Rank)
+	log.Info(txtfmt.FormatEntity(title, table))
+
+	return nil
+}
+
+// systemQueryCmd is the struct representing the command to query system status.
+type systemQueryCmd struct {
+	logCmd
+	connectedCmd
+	Verbose bool    `long:"verbose" short:"v" description:"Display more member details"`
+	Rank    *uint32 `long:"rank" short:"r" description:"System member rank to query"`
+}
+
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(_ []string) error {
+	nilRank := ioserver.NilRank
+	req := client.SystemQueryReq{
+		Rank: nilRank.Uint32(),
+	}
+	if cmd.Rank != nil {
+		req.Rank = *cmd.Rank
+	}
+
+	resp, err := cmd.conns.SystemQuery(req)
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
+	}
+
+	cmd.log.Debug("System-Query command succeeded")
+	if len(resp.Members) == 0 {
+		cmd.log.Info("No members in system")
+		return nil
+	}
+
+	if cmd.Rank != nil {
+		return displaySystemQuerySingle(cmd.log, resp.Members)
+	}
+
+	if cmd.Verbose {
+		displaySystemQueryVerbose(cmd.log, resp.Members)
+		return nil
+	}
+
+	return displaySystemQuery(cmd.log, resp.Members)
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
