@@ -58,7 +58,21 @@ class DaosServerConfigTest(TestWithServers):
         # Get the input to verify
         config_val = self.params.get("config_val", "/run/server_config_val/*/")
 
-        # Identify which
+        # Identify the attribute and modify its value to test value
+        setattr(server.runner.job.yaml_params, config_val[0], config_val[1])
 
-        # Get the server
+        self.log.info(
+            "Starting server changing %s with %s", config_val[0], config_val[1])
+        try:
+            yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+            server.start(yamlfile)
+        except ServerFailed as err:
+            if config_val[2] == 1:
+                self.log.info("Server was expected to fail. Test passed.")
+            self.fail("Server was expected start. Test failed: {}".format(err))
 
+        # Stop servers
+        try:
+            server.stop()
+        except ServerFailed as err:
+            self.fail("Error stopping the server: {}".format(err))
