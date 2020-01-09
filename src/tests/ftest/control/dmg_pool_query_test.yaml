@@ -26,11 +26,6 @@ pool:
   createsvc:
     svcn: 1
 
-dmg:
-  request: storage
-  action: scan
-  insecure: True
-
 pool_uuids: !mux
   alpha_upper:
     uuid:

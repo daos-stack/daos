@@ -47,7 +47,7 @@ class DmgPoolQueryTest(TestWithServers):
         Test Description: Test basic dmg functionality to query pool info on
         the system. Provided a valid pool UUID, verify the output received from
         pool query command.
-        :avocado: tags=all,tiny,pr,dmg,pool_query,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
         """
         self.pool = TestPool(self.context)
         self.pool.get_params(self)
@@ -89,7 +89,7 @@ class DmgPoolQueryTest(TestWithServers):
         Test Description: Test basic dmg functionality to query pool info on
         the system. Verify the inputs that can be provided to 'query --pool'
         argument of the dmg pool subcommand.
-        :avocado: tags=all,tiny,pr,dmg,pool_query,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
         """
         # Get test UUID
         exp_out = []
