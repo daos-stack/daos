@@ -4,5 +4,88 @@ hosts:
   test_servers:
     - server-A
 timeout: 200
+
 server_config:
   name: daos_server
+
+server_config_val: !mux
+  name_special_chars:
+    config_val:
+      - "name"
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - 1
+  name_alphanumeric:
+    config_val:
+      - "name"
+      - "ABCD1234abcd"
+      - 0
+  name_numeric:
+    config_val:
+      - "name"
+      - "12345678"
+      - 0
+  name_combo:
+    config_val:
+      - "name"
+      - "AB-C&__dal1234"
+      - 0
+  name_list:
+    config_val:
+      - "name"
+      - "amjustin, 12345, abcdef"
+      - 1
+  access_point_repeated:
+    config_val:
+      - "access_points"
+      - "[localhost:10001, localhost:10001]"
+      - 1
+  access_point_wrong_port:
+    config_val:
+      - "access_points"
+      - "[localhost:12345]"
+      - 1
+  access_point_wrong_name:
+    config_val:
+      - "access_points"
+      - "[wrongName:10001]"
+      - 1
+  access_point_alphanumeric:
+    config_val:
+      - "access_points"
+      - "[AB12cd:10001]"
+      - 1
+  control_log_file_does_not_exist:
+    config_val:
+      - "control_log_file"
+      - "/tmp/does_not_exist.log"
+      - 1
+  control_log_file_special_str:
+    config_val:
+      - "control_log_file"
+      - "ABC12cd*()_-"
+      - 1
+  control_log_mask_wrong_mask:
+    config_val:
+      - "control_log_mask"
+      - "NOTDEBUG"
+      - 1
+  control_log_mask_list:
+    config_val:
+      - "control_log_mask"
+      - "INFO,DEBUG,ERR"
+      - 1
+  control_log_mask_special_str:
+    config_val:
+      - "control_log_mask"
+      - "ABC12cd*()_-"
+      - 1
+  nr_hugepages_str:
+    config_val:
+      - "control_log_mask"
+      - "ABCdef"
+      - 1
+  nr_hugepages_wrong_int:
+    config_val:
+      - "control_log_mask"
+      - "12345"
+      - 1

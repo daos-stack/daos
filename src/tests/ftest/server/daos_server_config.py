@@ -25,9 +25,8 @@ from __future__ import print_function
 
 import os
 
-from dmg_utils import DmgCommand
 from apricot import TestWithServers
-from avocado.utils import process
+from server_utils import ServerManager, ServerFailed
 
 
 class DaosServerConfigTest(TestWithServers):
@@ -48,7 +47,6 @@ class DaosServerConfigTest(TestWithServers):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-        
 
     def test_daos_server_config_basic(self):
         """
@@ -57,8 +55,14 @@ class DaosServerConfigTest(TestWithServers):
         on the system.
         :avocado: tags=all,tiny,control,pr,server_start,basic
         """
-        # Start the servers
-        self.start_servers()
+        # Setup the servers
+        server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
+        server.get_params(self)
+        server.hosts = (
+            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
+
+        # Get the input to verify
+        config_val = self.params.get("config_val", "/run/server_config_val/*/")
 
         # Get the server
 
