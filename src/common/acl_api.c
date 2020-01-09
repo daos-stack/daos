@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -659,7 +659,8 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 			daos_ace_get_size(ace),
 			&entry->entry, true);
 	if (rc != 0) {
-		D_ERROR("Failed to insert new hash entry, rc=%d\n", rc);
+		D_ERROR("Failed to insert new hash entry, rc="DF_RC"\n",
+			DP_RC(rc));
 		D_FREE(entry);
 	}
 
@@ -687,7 +688,7 @@ validate_aces(struct daos_acl *acl)
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
 			8, NULL, &ops, &found);
 	if (rc != 0) {
-		D_ERROR("Failed to create hash table, rc=%d\n", rc);
+		D_ERROR("Failed to create hash table, rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
