@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -107,10 +107,15 @@ flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
 	pen = buffer;
 	for (i = 0; i < num_aces; i++) {
 		ssize_t ace_size = daos_ace_get_size(aces[i]);
+		/*
+		 * Should have checked the ACE size validity during allocation
+		 * of the input buffer.
+		 */
+		D_ASSERTF(ace_size > 0, "ACE size became invalid");
 
 		/* Internal error if we walk outside the buffer */
 		D_ASSERTF((pen + ace_size) <= (buffer + buf_len),
-				"ACEs too long for buffer size %u", buf_len);
+			  "ACEs too long for buffer size %u", buf_len);
 
 		memcpy(pen, aces[i], ace_size);
 		pen += ace_size;
@@ -654,7 +659,8 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 			daos_ace_get_size(ace),
 			&entry->entry, true);
 	if (rc != 0) {
-		D_ERROR("Failed to insert new hash entry, rc=%d\n", rc);
+		D_ERROR("Failed to insert new hash entry, rc="DF_RC"\n",
+			DP_RC(rc));
 		D_FREE(entry);
 	}
 
@@ -682,7 +688,7 @@ validate_aces(struct daos_acl *acl)
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
 			8, NULL, &ops, &found);
 	if (rc != 0) {
-		D_ERROR("Failed to create hash table, rc=%d\n", rc);
+		D_ERROR("Failed to create hash table, rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

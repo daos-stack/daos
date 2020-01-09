@@ -24,11 +24,9 @@
 package server
 
 import (
-	"hash/fnv"
+	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -40,6 +38,10 @@ import (
 )
 
 const (
+	defaultRuntimeDir        = "/var/run/daos_server"
+	defaultConfigPath        = "etc/daos_server.yml"
+	defaultSystemName        = "daos_server"
+	defaultPort              = 10001
 	configOut                = ".daos_server.active.yml"
 	relConfExamplesPath      = "utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
@@ -62,9 +64,11 @@ type Configuration struct {
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
+	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
 	UserName            string                    `yaml:"user_name"`
 	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
@@ -74,7 +78,6 @@ type Configuration struct {
 	SocketDir  string                `yaml:"socket_dir"`
 	Fabric     ioserver.FabricConfig `yaml:",inline"`
 	Modules    string
-	Attach     string
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -85,11 +88,6 @@ type Configuration struct {
 
 	Path string   // path to config file
 	ext  External // interface to os utilities
-	// Shared memory segment ID to enable SPDK multiprocess mode,
-	// SPDK application processes can then access the same shared
-	// memory and therefore NVMe controllers.
-	// TODO: Is it also necessary to provide distinct coremask args?
-	NvmeShmID int
 
 	//a pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
@@ -141,30 +139,11 @@ func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
 	return c
 }
 
-// WithNvmeShmID sets the common shmID used for SPDK multiprocess mode.
-func (c *Configuration) WithNvmeShmID(id int) *Configuration {
-	c.NvmeShmID = id
-	for _, srv := range c.Servers {
-		srv.WithShmID(id)
-	}
-	return c
-}
-
 // WithModules sets a list of server modules to load.
 func (c *Configuration) WithModules(mList string) *Configuration {
 	c.Modules = mList
 	for _, srv := range c.Servers {
 		srv.WithModules(mList)
-	}
-	return c
-}
-
-// WithAttach sets attachment info path.
-func (c *Configuration) WithAttachInfo(aip string) *Configuration {
-	c.Attach = aip
-	// TODO: Should all instances share this? Thinking probably not...
-	for _, srv := range c.Servers {
-		srv.WithAttachInfoPath(aip)
 	}
 	return c
 }
@@ -185,10 +164,8 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 	srvCfg.Fabric.Update(c.Fabric)
 	srvCfg.SystemName = c.SystemName
-	srvCfg.WithShmID(c.NvmeShmID)
 	srvCfg.SocketDir = c.SocketDir
 	srvCfg.Modules = c.Modules
-	srvCfg.AttachInfoPath = c.Attach // TODO: Is this correct?
 }
 
 // WithServers sets the list of IOServer configurations.
@@ -284,6 +261,12 @@ func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 	return c
 }
 
+// WithHelperLogFile sets the path to the daos_admin logfile.
+func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
+	c.HelperLogFile = filePath
+	return c
+}
+
 // WithUserName sets the user to run as.
 func (c *Configuration) WithUserName(name string) *Configuration {
 	c.UserName = name
@@ -305,15 +288,13 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         "daos_server",
-		SocketDir:          "/var/run/daos_server",
-		AccessPoints:       []string{"localhost"},
-		ControlPort:        10000,
+		SystemName:         defaultSystemName,
+		SocketDir:          defaultRuntimeDir,
+		AccessPoints:       []string{fmt.Sprintf("localhost:%d", defaultPort)},
+		ControlPort:        defaultPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
-		NrHugepages:        1024,
-		Path:               "etc/daos_server.yml",
-		NvmeShmID:          0,
+		Path:               defaultConfigPath,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
@@ -348,7 +329,7 @@ func (c *Configuration) Load() error {
 		c.updateServerConfig(srvCfg)
 	}
 
-	return c.Validate()
+	return nil
 }
 
 // SaveToFile serializes the configuration and saves it to the specified filename.
@@ -360,20 +341,6 @@ func (c *Configuration) SaveToFile(filename string) error {
 	}
 
 	return ioutil.WriteFile(filename, bytes, 0644)
-}
-
-// hash produces unique int from string, mask MSB on conversion to signed int
-func hash(s string) int {
-	h := fnv.New32a()
-	if _, err := h.Write([]byte(s)); err != nil {
-		panic(err) // should never happen
-	}
-
-	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
-}
-
-func (c *Configuration) SetNvmeShmID(base string) {
-	c.WithNvmeShmID(hash(base + strconv.Itoa(os.Getpid())))
 }
 
 // SetPath sets the default path to the configuration file.

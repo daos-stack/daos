@@ -129,13 +129,15 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self):
+    def run_ior_with_pool(self, intercept=None, test_file_suffix=""):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
         override the values read from the yaml file.
 
         Args:
+            intercept (str): path to the interception library. Shall be used
+                             only for POSIX through DFUSE.
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
@@ -152,13 +154,17 @@ class IorTestBase(TestWithServers):
             # self.pool.connect()
             # self.create_cont()
             if self.ior_cmd.transfer_size.value == "256B":
-                self.cancelForTicket("DAOS-3449")
+                return "Skipping the case for transfer_size=256B"
             self.start_dfuse()
-            self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
-                                          + "/testfile")
+            testfile = os.path.join(self.dfuse.mount_dir.value,
+                                    "testfile{}".format(test_file_suffix))
 
-        # Run IOR
-        self.run_ior(self.get_job_manager_command(), self.processes)
+            self.ior_cmd.test_file.update(testfile)
+
+        out = self.run_ior(self.get_job_manager_command(), self.processes,
+                           intercept)
+
+        return out
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
@@ -176,20 +182,24 @@ class IorTestBase(TestWithServers):
             self.fail("Unsupported IOR API")
 
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
-        return Mpirun(self.ior_cmd, mpirun_path)
+        return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
 
-    def run_ior(self, manager, processes):
+    def run_ior(self, manager, processes, intercept=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
+            intercept (str): path to interception library.
         """
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
+        if intercept:
+            env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
-            manager.run()
+            out = manager.run()
+            return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
@@ -214,7 +224,6 @@ class IorTestBase(TestWithServers):
             self.log.info(
                 "Size is < 4K,Size verification will be done with SCM size")
             storage_index = 0
-
         actual_pool_size = \
             original_pool_info.pi_space.ps_space.s_free[storage_index] - \
             current_pool_info.pi_space.ps_space.s_free[storage_index]

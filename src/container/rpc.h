@@ -76,9 +76,6 @@
 	X(CONT_EPOCH_DISCARD,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_COMMIT,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
@@ -215,6 +212,7 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
 	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
+	((daos_epoch_t)		(cqo_hae)		CRT_VAR) \
 	((daos_prop_t)		(cqo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
@@ -267,7 +265,8 @@ CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 	((daos_epoch_t)		(cei_epoch)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_EPOCH_OP	/* output fields */		 \
-	((struct cont_op_out)	(ceo_op)		CRT_VAR)
+	((struct cont_op_out)	(ceo_op)		CRT_VAR) \
+	((daos_epoch_t)		(ceo_epoch)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 
@@ -319,7 +318,7 @@ CRT_RPC_DECLARE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 #define DAOS_OSEQ_TGT_QUERY	/* output fields */		 \
 	((int32_t)		(tqo_rc)		CRT_VAR) \
 	((int32_t)		(tqo_pad32)		CRT_VAR) \
-	((daos_epoch_t)		(tqo_min_purged_epoch)	CRT_VAR)
+	((daos_epoch_t)		(tqo_hae)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
 

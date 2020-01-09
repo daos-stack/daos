@@ -25,7 +25,10 @@ package pbin
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -62,6 +65,11 @@ type (
 	}
 )
 
+func IsFailedRequest(err error) bool {
+	_, ok := err.(*RequestFailure)
+	return ok
+}
+
 func (rf *RequestFailure) Error() string {
 	if rf == nil {
 		return "nil *RequestFailure"
@@ -81,6 +89,32 @@ func (cl *cmdLogger) Write(data []byte) (int, error) {
 	msg += string(data)
 	cl.logFn(msg)
 	return len(data), nil
+}
+
+func decodeResponse(resBuf []byte) (*Response, error) {
+	res := new(Response)
+	err := json.Unmarshal(resBuf, res)
+	if err == nil {
+		return res, nil
+	}
+
+	switch err.(type) {
+	case *json.SyntaxError:
+		// Try to pull out a valid JSON payload.
+		start := strings.Index(string(resBuf), "{")
+		end := strings.LastIndex(string(resBuf), "}")
+		if end < 0 {
+			break
+		}
+		end += 1
+		resBuf = resBuf[start:end]
+		err = json.Unmarshal(resBuf, res)
+		if err == nil {
+			return res, nil
+		}
+	}
+
+	return nil, errors.Wrapf(err, "pbin failed to decode response data(%q)", resBuf)
 }
 
 func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Request) (res *Response, err error) {
@@ -106,6 +140,10 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	}
 	conn := NewStdioConn("server", binPath, fromChild, toChild)
 
+	// ensure that /usr/sbin is in $PATH
+	os.Setenv("PATH", os.Getenv("PATH")+":/usr/sbin")
+	child.Env = os.Environ()
+
 	if err := child.Start(); err != nil {
 		return nil, err
 	}
@@ -130,19 +168,28 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 		return nil, errors.Wrap(err, "pbin write failed")
 	}
 
-	recvData := make([]byte, MaxMessageSize)
-	recvLen, err := conn.Read(recvData)
-	if err != nil {
-		return nil, errors.Wrap(err, "pbin read failed")
-	}
+	maxReadAttempts := 5
+	readCount := 0
+	for {
+		recvData := make([]byte, MaxMessageSize)
+		recvLen, err := conn.Read(recvData)
+		if err != nil {
+			return nil, errors.Wrap(err, "pbin read failed")
+		}
 
-	res = &Response{}
-	if err := json.Unmarshal(recvData[:recvLen], res); err != nil {
-		return nil, err
-	}
-	if res.Error != nil {
-		return nil, res.Error
-	}
+		res, err = decodeResponse(recvData[:recvLen])
+		if err != nil && err != io.EOF {
+			log.Debugf("discarding garbage response %q", recvData[:recvLen])
+			readCount++
+			if readCount < maxReadAttempts {
+				continue
+			}
+			return nil, err
+		}
+		if res.Error != nil {
+			return nil, res.Error
+		}
 
-	return res, nil
+		return res, nil
+	}
 }

@@ -69,7 +69,7 @@ Raft request timeout used by RDBs in milliseconds. `INTEGER`. Default to 3000 ms
 
 ### `RDB_COMPACT_THRESHOLD`
 
-Raft log compaction threshold in applied entries. `INTEGER`. Default to 0 entries.
+Raft log compaction threshold in applied entries. `INTEGER`. Default to 256 entries.
 
 If set to 0, Raft log entries will never be compacted.
 
@@ -89,17 +89,9 @@ Whether to start existing pool services when starting a `daos_server`. `BOOL`. D
 
 Whether to aggregate unreferenced epochs. `BOOL`. Default to false.
 
-### `DAOS_PMIXLESS`
-
-Whether to disable PMIx. `BOOL`. Default to false.
-
 ## Client
 
 Environment variables in this section only apply to the client side.
-
-### `DAOS_SINGLETON_CLI`
-
-Whether to run in the singleton mode, in which the client does not need to be launched by orterun. `BOOL`. Default to false.
 
 ### `DAOS_IO_SRV_DISPATCH`
 

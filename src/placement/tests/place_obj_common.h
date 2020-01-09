@@ -34,7 +34,11 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 		struct pl_map *pl_map);
 
 void
-plt_obj_layout_check(struct pl_obj_layout *layout);
+plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size);
+
+void
+plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
+		uint32_t pool_size);
 
 bool
 pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2,
@@ -49,6 +53,10 @@ plt_fail_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg);
 
 void
+plt_reint_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg);
+
+void
 plt_add_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
 		bool pl_debug_msg);
 
@@ -58,5 +66,13 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   uint32_t *shard_ids, uint32_t *spare_cnt, uint32_t *po_ver,
 		   pl_map_type_t map_type, uint32_t spare_max_nr,
 		   struct pool_map *po_map, struct pl_map *pl_map);
+
+void
+plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
+		   int failed_cnt, uint32_t *reint_tgts, int reint_cnt,
+		   uint32_t *spare_tgt_ranks, uint32_t *shard_ids,
+		   uint32_t *spare_cnt, pl_map_type_t map_type,
+		   uint32_t spare_max_nr, struct pool_map *po_map,
+		   struct pl_map *pl_map, uint32_t *po_ver, bool pl_debug_msg);
 
 #endif /*   PL_MAP_COMMON_H   */

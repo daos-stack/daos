@@ -91,6 +91,8 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		     dtx_sub_comp_cb_t comp_cb)
 {
 	struct ds_obj_exec_arg		*obj_exec_arg = data;
+	struct obj_ec_split_req		*split_req = obj_exec_arg->args;
+	struct obj_tgt_oiod		*tgt_oiod;
 	struct daos_shard_tgt		*shard_tgt;
 	crt_endpoint_t			 tgt_ep;
 	crt_rpc_t			*parent_req = obj_exec_arg->rpc;
@@ -100,6 +102,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct obj_remote_cb_arg	*remote_arg = NULL;
 	struct obj_rw_in		*orw;
 	struct obj_rw_in		*orw_parent;
+	uint32_t			 tgt_idx;
 	int				 rc = 0;
 
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
@@ -131,13 +134,23 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 			    DAOS_OBJ_RPC_TGT_UPDATE, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	orw_parent = crt_req_get(parent_req);
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
+	if (split_req != NULL) {
+		tgt_idx = shard_tgt->st_shard;
+		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
+					       dlh->dlh_sub_cnt + 1,
+					       tgt_idx);
+		D_ASSERT(tgt_oiod != NULL);
+		orw->orw_iod_array.oia_oiods = tgt_oiod->oto_oiods;
+		orw->orw_iod_array.oia_oiod_nr = orw->orw_iod_array.oia_iod_nr;
+		orw->orw_iod_array.oia_offs = tgt_oiod->oto_offs;
+	}
 	orw->orw_oid.id_shard = shard_tgt->st_shard;
 	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
 	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
@@ -151,7 +164,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
 	if (rc != 0) {
-		D_ERROR("crt_req_send failed, rc %d.\n", rc);
+		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 		crt_req_decref(req);
 		D_GOTO(out, rc);
 	}
@@ -251,7 +264,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -272,7 +285,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
 	if (rc != 0) {
-		D_ERROR("crt_req_send failed, rc %d.\n", rc);
+		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 		crt_req_decref(req);
 		D_GOTO(out, rc);
 	}

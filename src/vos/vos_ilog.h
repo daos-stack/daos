@@ -82,10 +82,11 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  *		0		Successful fetch
  *		other		Appropriate error code
  */
+#define vos_ilog_fetch vos_ilog_fetch_
 int
-vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
-	       const struct vos_ilog_info *parent, struct vos_ilog_info *info);
+vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
+		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
+		const struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /**
  * Check the incarnation log if an update is needed and update it.  Refreshes
@@ -102,10 +103,11 @@ vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  * \return	0		Successful update
  *		other		Appropriate error code
  */
+#define vos_ilog_update vos_ilog_update_
 int
-vos_ilog_update(struct vos_container *cont, struct ilog_df *ilog,
-		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		struct vos_ilog_info *info);
+vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
+		 const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		 struct vos_ilog_info *info);
 
 
 /**
@@ -122,12 +124,95 @@ vos_ilog_update(struct vos_container *cont, struct ilog_df *ilog,
  *					there is no covered entries either.
  *		0			success
  */
+#define vos_ilog_check vos_ilog_check_
 int
-vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
-	       daos_epoch_range_t *epr_out, bool visible_only);
+vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
+		daos_epoch_range_t *epr_out, bool visible_only);
 
 /** Initialize callbacks for vos incarnation log */
 void
 vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
+
+/** Aggregate (or discard) the incarnation log in the specified range
+ *
+ * \param	coh[IN]		container handle
+ * \param	ilog[IN]	Incarnation log
+ * \param	epr[IN]		Aggregation range
+ * \param	discard[IN]	Discard all entries in range
+ * \param	punched[IN]	Highest epoch where parent is punched
+ * \param	info[IN]	Incarnation log info
+ *
+ * \return	0		Success
+ *		1		Indicates log is empty
+ *		-DER_NONEXIST	Indicates log no longer visible
+ *		< 0		Failure
+ */
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr, bool discard,
+		   daos_epoch_t punched, struct vos_ilog_info *info);
+
+#define ILOG_TRACE
+#ifdef ILOG_TRACE
+#undef vos_ilog_fetch
+#undef vos_ilog_update
+#undef vos_ilog_check
+/* Useful for debugging the incarnation log but too much information for
+ * normal debugging.
+ */
+#define vos_ilog_fetch(umm, coh, intent, ilog, epoch, punched, parent, info)\
+({									\
+	int __rc;							\
+									\
+	D_DEBUG(DB_TRACE, "vos_ilog_fetch: log="DF_X64" intent=%d"	\
+		" epoch="DF_U64" punched="DF_U64"\n",			\
+		umem_ptr2off(umm, ilog), intent, epoch,			\
+		(uint64_t)punched);					\
+	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, punched,	\
+			       parent, info);				\
+	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
+		DF_U64" pp="DF_U64" pap="DF_U64" np="DF_U64" %s\n",	\
+		DP_RC(__rc), (info)->ii_create, (info)->ii_prior_punch,	\
+		(info)->ii_prior_any_punch, (info)->ii_next_punch,	\
+		(info)->ii_empty ? "is empty" : "");			\
+	__rc;								\
+})
+
+#define vos_ilog_update(cont, ilog, epr, parent, info)			\
+({									\
+	struct umem_instance	*__umm = vos_cont2umm(cont);		\
+	int			 __rc;					\
+									\
+	D_DEBUG(DB_TRACE, "vos_ilog_update: log="DF_X64" epr="		\
+		DF_U64"-"DF_U64"\n", umem_ptr2off(__umm, ilog),		\
+		(epr)->epr_lo, (epr)->epr_hi);				\
+	__rc = vos_ilog_update_(cont, ilog, epr, parent, info);		\
+	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
+		DF_U64" pap="DF_U64"\n", DP_RC(__rc), (info)->ii_create,\
+		(info)->ii_prior_any_punch);				\
+	__rc;								\
+})
+
+#define vos_ilog_check(info, epr_in, epr_out, visible_only)		\
+({									\
+	int __rc;							\
+									\
+	_Pragma("GCC diagnostic push")					\
+	_Pragma("GCC diagnostic ignored \"-Waddress\"")			\
+	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_U64"-"DF_U64	\
+		" %s\n", (epr_in)->epr_lo, (epr_in)->epr_hi,		\
+		(visible_only) ? "visible" : "all");			\
+	__rc = vos_ilog_check_(info, epr_in, epr_out, visible_only);	\
+	D_DEBUG(DB_TRACE, "vos_ilog_check: returned "DF_RC" %s"		\
+		DF_U64"-"DF_U64"\n", DP_RC(__rc),			\
+		((epr_out) != NULL) ? " epr_out=" : " #",		\
+		((epr_out) != NULL) ? (epr_out)->epr_lo : 0,		\
+		((epr_out) != NULL) ? (epr_out)->epr_hi : 0);		\
+	_Pragma("GCC diagnostic pop")					\
+	__rc;								\
+})
+
+#endif
+
 
 #endif /* __VOS_ILOG_H__ */

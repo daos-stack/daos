@@ -28,7 +28,6 @@ import re
 
 from command_utils import DaosCommand, CommandWithParameters, CommandFailure
 from command_utils import FormattedParameter
-from general_utils import get_file_path
 
 
 class DmgCommand(DaosCommand):
@@ -46,7 +45,7 @@ class DmgCommand(DaosCommand):
         self.json = FormattedParameter("-j", False)
 
     def get_action_command(self):
-        """Assign a command object for the specified request and action."""
+        """Get the action command object based on the yaml provided value."""
         # pylint: disable=redefined-variable-type
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
@@ -66,7 +65,7 @@ class DmgCommand(DaosCommand):
             """Create a dmg Command object."""
             super(DmgCommand.DmgFormatSubCommand, self).__init__(
                 "/run/dmg/format/*", "format")
-            self.force = FormattedParameter("-f", False)
+            self.reformat = FormattedParameter("--reformat", False)
 
     class DmgPrepareSubCommand(CommandWithParameters):
         """Defines a object representing a prepare sub dmg command."""
@@ -109,18 +108,20 @@ class DmgCommand(DaosCommand):
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
 
-def storage_scan(hosts, insecure=True):
+def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run scan on.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/dmg"))
+    dmg = DmgCommand(path)
     dmg.request.value = "storage"
     dmg.action.value = "scan"
     dmg.insecure.value = insecure
@@ -135,27 +136,29 @@ def storage_scan(hosts, insecure=True):
     return result
 
 
-def storage_format(hosts, insecure=True):
+def storage_format(path, hosts, insecure=True):
     """ Execute format command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run format on.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/dmg"))
+    dmg = DmgCommand(path)
+    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "format"
     dmg.get_action_command()
-    dmg.action_command.force.value = True
 
     try:
-        result = dmg.run(sudo=True)
+        result = dmg.run()
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
         return None
@@ -163,23 +166,25 @@ def storage_format(hosts, insecure=True):
     return result
 
 
-def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
+def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
                  scm=False, insecure=True):
     """Execute prepare command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run prepare on.
         user (str, optional): User with priviledges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         nvme (bool, optional): Perform prep on nvme. Defaults to False.
         scm (bool, optional): Perform prep on scm. Defaults to False.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/dmg"))
+    dmg = DmgCommand(path)
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -201,28 +206,33 @@ def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
     return result
 
 
-def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
+def storage_reset(path, hosts, nvme=False, scm=False, user=None,
+                  hugepages="4096", insecure=True):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary.
         hosts (list): list of servers to run prepare on.
+        nvme (bool): if true, nvme flag will be appended to command.
+        scm (bool): if true, scm flag will be appended to command.
         user (str, optional): User with priviledges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/dmg"))
+    dmg = DmgCommand(path)
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
     dmg.get_action_command()
-    dmg.action_command.nvmeonly.value = True
-    dmg.action_command.targetuser.value = getpass.getuser() \
-        if user is None else user
+    dmg.action_command.nvmeonly.value = nvme
+    dmg.action_command.scmonly.value = scm
+    dmg.action_command.targetuser.value = user
     dmg.action_command.hugepages.value = hugepages
     dmg.action_command.reset.value = True
     dmg.action_command.force.value = True
@@ -345,7 +355,10 @@ def get_pool_uuid_from_stdout(stdout_str):
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to
     # get the returned value.
-    matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
-    if len(matches) > 0:
-        return matches[0]
-    return None
+    uuid = None
+    svc = None
+    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
+    if match:
+        uuid = match.group(1)
+        svc = match.group(2)
+    return uuid, svc

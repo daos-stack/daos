@@ -175,8 +175,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	dst_iv->riv_global_done = src_iv->riv_global_done;
 	dst_iv->riv_global_scan_done = src_iv->riv_global_scan_done;
+	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
 
-	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done) {
+	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
+	    dst_iv->riv_stable_epoch) {
 		struct rebuild_tgt_pool_tracker *rpt;
 		d_rank_t	rank;
 		int		rc;
@@ -190,11 +192,18 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return 0;
 		}
 
-		D_DEBUG(DB_REBUILD, DF_UUID" rebuild finished"
-			" sgl/gl %d/%d\n",
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild status gsd/gd %d/%d"
+			" stable eph "DF_U64"\n",
 			 DP_UUID(src_iv->riv_pool_uuid),
 			 dst_iv->riv_global_scan_done,
-			 dst_iv->riv_global_done);
+			 dst_iv->riv_global_done, dst_iv->riv_stable_epoch);
+
+		if (rpt->rt_stable_epoch == 0)
+			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
+		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
+			D_WARN("leader change stable epoch from "DF_U64" to "
+			       DF_U64 "\n", rpt->rt_stable_epoch,
+			       dst_iv->riv_stable_epoch);
 
 		/* on svc nodes update the rebuild status completed list
 		 * to serve rebuild status querying in case of master
@@ -267,9 +276,9 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_fetch(ns, &key, &sgl);
+	rc = ds_iv_fetch(ns, &key, &sgl, true /* retry */);
 	if (rc)
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -292,9 +301,10 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_REBUILD;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
+			  true /* retry */);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

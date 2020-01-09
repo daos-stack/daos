@@ -28,24 +28,24 @@ import (
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
-	c := defaultMockConfig(t)
-	return mockControlService(t, log, c, nil, nil)
+	cfg := defaultMockConfig(t)
+	return mockControlService(t, log, cfg, nil, nil, nil)
 }
 
 // mockControlService takes cfgs for tuneable scm and sys provider behaviour but
 // default nvmeStorage behaviour (cs.nvoe can be subsequently replaced in test).
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, mbc *scm.MockBackendConfig, msc *scm.MockSysConfig) *ControlService {
+func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, bmbc *bdev.MockBackendConfig, smbc *scm.MockBackendConfig, smsc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
 	cs := ControlService{
-		StorageControlService: *NewStorageControlService(log, cfg.ext,
-			defaultMockNvmeStorage(log, cfg.ext),
-			scm.NewMockProvider(log, mbc, msc),
+		StorageControlService: *NewStorageControlService(log,
+			bdev.NewMockProvider(log, bmbc),
+			scm.NewMockProvider(log, smbc, smsc),
 			cfg.Servers,
 		),
 		harness: &IOServerHarness{
@@ -55,7 +55,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, mb
 
 	scmProvider := cs.StorageControlService.scm
 	for _, srvCfg := range cfg.Servers {
-		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
+		bp, err := bdev.NewClassProvider(log, "", &srvCfg.Storage.Bdev)
 		if err != nil {
 			t.Fatal(err)
 		}

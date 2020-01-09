@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -65,7 +64,7 @@ const (
 type (
 	// PrepareRequest defines the parameters for a Prepare opration.
 	PrepareRequest struct {
-		Forwarded bool
+		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
 		Reset bool
 	}
@@ -79,8 +78,8 @@ type (
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Forwarded bool
-		Rescan    bool
+		pbin.ForwardableRequest
+		Rescan bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -104,7 +103,7 @@ type (
 
 	// FormatRequest defines the parameters for a Format operation or query.
 	FormatRequest struct {
-		Forwarded  bool
+		pbin.ForwardableRequest
 		Reformat   bool
 		Mountpoint string
 		OwnerUID   int
@@ -117,28 +116,24 @@ type (
 	FormatResponse struct {
 		Mountpoint string
 		Formatted  bool
+		Mounted    bool
+		Mountable  bool
 	}
 
 	// MountRequest defines the parameters for a Mount operation.
 	MountRequest struct {
-		Forwarded bool
-		Source    string
-		Target    string
-		FsType    string
-		Flags     uintptr
-		Data      string
+		pbin.ForwardableRequest
+		Source string
+		Target string
+		FsType string
+		Flags  uintptr
+		Data   string
 	}
 
 	// MountResponse contains the results of a successful Mount operation.
 	MountResponse struct {
 		Target  string
 		Mounted bool
-	}
-
-	// forwardableRequest defines an interface for any request that
-	// could have been forwarded.
-	forwardableRequest interface {
-		isForwarded() bool
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
@@ -173,11 +168,10 @@ type (
 		modules       storage.ScmModules
 		namespaces    storage.ScmNamespaces
 
-		log               logging.Logger
-		backend           Backend
-		sys               SystemProvider
-		fwd               *Forwarder
-		disableForwarding bool
+		log     logging.Logger
+		backend Backend
+		sys     SystemProvider
+		fwd     *Forwarder
 	}
 )
 
@@ -210,48 +204,32 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 }
 
 // Validate checks the request for validity.
-func (fr FormatRequest) Validate() error {
-	if fr.Mountpoint == "" {
+func (r FormatRequest) Validate() error {
+	if r.Mountpoint == "" {
 		return FaultFormatMissingMountpoint
 	}
 
-	if fr.Ramdisk != nil && fr.Dcpm != nil {
+	if r.Ramdisk != nil && r.Dcpm != nil {
 		return FaultFormatConflictingParam
 	}
 
-	if fr.Ramdisk == nil && fr.Dcpm == nil {
+	if r.Ramdisk == nil && r.Dcpm == nil {
 		return FaultFormatMissingParam
 	}
 
-	if fr.Ramdisk != nil {
-		if fr.Ramdisk.Size == 0 {
+	if r.Ramdisk != nil {
+		if r.Ramdisk.Size == 0 {
 			return FaultFormatInvalidSize
 		}
 	}
 
-	if fr.Dcpm != nil {
-		if fr.Dcpm.Device == "" {
+	if r.Dcpm != nil {
+		if r.Dcpm.Device == "" {
 			return FaultFormatInvalidDeviceCount
 		}
 	}
 
 	return nil
-}
-
-func (fr FormatRequest) isForwarded() bool {
-	return fr.Forwarded
-}
-
-func (sr ScanRequest) isForwarded() bool {
-	return sr.Forwarded
-}
-
-func (pr PrepareRequest) isForwarded() bool {
-	return pr.Forwarded
-}
-
-func (mr MountRequest) isForwarded() bool {
-	return mr.Forwarded
 }
 
 func checkDevice(device string) error {
@@ -297,7 +275,7 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	return nil
 }
 
-// GetFs probes the specified device in an attempt to determine the
+// Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
 func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
@@ -346,33 +324,21 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	p := &Provider{
+	return &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     &Forwarder{log: log},
+		fwd:     NewForwarder(log),
 	}
-
-	if val, set := os.LookupEnv(pbin.DisableReqFwdEnvVar); set {
-		disabled, err := strconv.ParseBool(val)
-		if err != nil {
-			log.Errorf("%s was set to non-boolean value (%q); not disabling",
-				pbin.DisableReqFwdEnvVar, val)
-			return p
-		}
-		p.disableForwarding = disabled
-	}
-
-	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
-	p.disableForwarding = true
+	p.fwd.Disabled = true
 	return p
 }
 
-func (p *Provider) shouldForward(req forwardableRequest) bool {
-	return !p.disableForwarding && !req.isForwarded()
+func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
+	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
 func (p *Provider) isInitialized() bool {
@@ -435,6 +401,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		}
 		p.Lock()
 		p.scanCompleted = true
+		p.lastState = res.State
 		p.modules = res.Modules
 		p.namespaces = res.Namespaces
 		p.Unlock()
@@ -496,6 +463,27 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 	}
 
 	if req.Reset {
+		// Ensure that namespace block devices are unmounted first.
+		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
+			for _, ns := range sr.Namespaces {
+				nsDev := "/dev/" + ns.BlockDevice
+				isMounted, err := p.sys.IsMounted(nsDev)
+				if err != nil {
+					if os.IsNotExist(errors.Cause(err)) {
+						continue
+					}
+					return nil, err
+				}
+				if isMounted {
+					p.log.Debugf("Unmounting %s", nsDev)
+					if err := p.sys.Unmount(nsDev, 0); err != nil {
+						p.log.Errorf("Unmount error: %s", err)
+						return nil, err
+					}
+				}
+			}
+		}
+
 		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
 		if err != nil {
 			res = nil
@@ -549,22 +537,33 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
 	}
 	if isMounted {
+		res.Mounted = true
 		return res, nil
 	}
 
-	if req.Dcpm != nil {
-		fsType, err := p.sys.Getfs(req.Dcpm.Device)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
-		}
-
-		p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-		if fsType != fsTypeNone {
-			return res, nil
-		}
+	if req.Dcpm == nil {
+		// ramdisk
+		res.Formatted = false
+		return res, nil
 	}
 
-	res.Formatted = false
+	fsType, err := p.sys.Getfs(req.Dcpm.Device)
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+		}
+		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
+	}
+
+	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
+
+	switch fsType {
+	case fsTypeExt4:
+		res.Mountable = true
+	case fsTypeNone:
+		res.Formatted = false
+	}
+
 	return res, nil
 }
 
@@ -630,6 +629,10 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -637,7 +640,9 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
@@ -664,6 +669,10 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -671,7 +680,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 

@@ -46,7 +46,6 @@ type startCmd struct {
 	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
 	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
-	Attach              *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client)"`
 	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
 	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
@@ -72,17 +71,11 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if cmd.Modules != nil {
 		cmd.config.WithModules(*cmd.Modules)
 	}
-	if cmd.Attach != nil {
-		cmd.config.WithAttachInfo(*cmd.Attach)
-	}
 	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
 
 	host, err := os.Hostname()
 	if err != nil {
 		return err
-	}
-	if cmd.config.NvmeShmID == 0 {
-		cmd.config.SetNvmeShmID(host)
 	}
 
 	for _, srv := range cmd.config.Servers {

@@ -103,6 +103,22 @@ void
 tse_sched_fini(tse_sched_t *sched);
 
 /**
+ * Take reference of the scheduler.
+ *
+ * \param sched [input]		the scheduler pointer.
+ */
+void
+tse_sched_addref(tse_sched_t *sched);
+
+/**
+ * Release reference of the scheduler.
+ *
+ * \param sched [input]		the scheduler pointer.
+ */
+void
+tse_sched_decref(tse_sched_t *sched);
+
+/**
  * Wait for all tasks in the scheduler to complete and finalize it.
  * If another thread is completing the scheduler, this returns immediately.
  *

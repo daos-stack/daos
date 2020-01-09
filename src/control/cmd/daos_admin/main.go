@@ -24,39 +24,65 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+var daosVersion string
 
 func exitWithError(log logging.Logger, err error) {
 	if err == nil {
 		err = errors.New("Unknown error")
 	}
-	log.Errorf("ERROR: %s", err)
+	log.Error(err.Error())
 	os.Exit(1)
+}
+
+func configureLogging(binName string) logging.Logger {
+	logLevel := logging.LogLevelError
+	combinedOut := ioutil.Discard
+	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
+		lf, err := common.AppendFile(logPath)
+		if err == nil {
+			combinedOut = lf
+			logLevel = logging.LogLevelDebug
+		}
+	}
+
+	// By default, we only want to log errors to stderr.
+	return logging.NewCombinedLogger(binName, combinedOut).
+		WithErrorLogger(logging.NewCommandLineErrorLogger(os.Stderr)).
+		WithLogLevel(logLevel)
+}
+
+func checkParentName(log logging.Logger) {
+	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
+	if err != nil {
+		exitWithError(log, errors.Wrap(err, "failed to check parent process binary"))
+	}
+	daosServer := "daos_server"
+	if !strings.HasSuffix(pPath, daosServer) {
+		exitWithError(log, errors.Errorf("%s (version %s) may only be invoked by %s",
+			os.Args[0], daosVersion, daosServer))
+	}
 }
 
 func main() {
 	binName := filepath.Base(os.Args[0])
-	// send all log output to stderr for now
-	// FIXME: only send errors to stderr; send debug logging to file?
-	log := logging.NewCombinedLogger(binName, os.Stderr).
-		WithLogLevel(logging.LogLevelDebug)
+	log := configureLogging(binName)
 
-	lf, err := common.AppendFile("/tmp/daos_admin.log")
-	if err != nil {
-		exitWithError(log, err)
-	}
-	log.WithErrorLogger(logging.NewErrorLogger("admin", lf)).
-		WithInfoLogger(logging.NewInfoLogger("admin", lf)).
-		WithDebugLogger(logging.NewDebugLogger(lf))
+	checkParentName(log)
 
 	if os.Geteuid() != 0 {
 		exitWithError(log, errors.Errorf("%s not setuid root", binName))
@@ -74,7 +100,8 @@ func main() {
 	}
 
 	scmProvider := scm.DefaultProvider(log).WithForwardingDisabled()
-	if err := handleRequest(log, scmProvider, req, conn); err != nil {
+	bdevProvider := bdev.DefaultProvider(log).WithForwardingDisabled()
+	if err := handleRequest(log, scmProvider, bdevProvider, req, conn); err != nil {
 		exitWithError(log, err)
 	}
 }

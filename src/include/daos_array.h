@@ -50,6 +50,14 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
+	/*
+	 * On read only: return the number of records that are short fetched
+	 * from the largest dkey(s). This helps for checking for short reads. If
+	 * this values is not zero, then a short read is possible and should be
+	 * checked with daos_array_get_size() compared with the indexes being
+	 * read.
+	 */
+	daos_size_t		arr_nr_short_read;
 } daos_array_iod_t;
 
 /**

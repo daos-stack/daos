@@ -34,6 +34,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -264,5 +265,60 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 
 	if diff := cmp.Diff(result, expectedACL); diff != "" {
 		t.Errorf("Unexpected ACE list: %v\n", diff)
+	}
+}
+
+func TestFormatACL(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl    *client.AccessControlList
+		expStr string
+	}{
+		"nil": {
+			expStr: "# Entries:\n#   None\n",
+		},
+		"empty": {
+			acl:    &client.AccessControlList{},
+			expStr: "# Entries:\n#   None\n",
+		},
+		"single": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr: "# Entries:\nA::user@:rw\n",
+		},
+		"multiple": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
+		},
+		"with owner user": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+				},
+				Owner: "bob@",
+			},
+			expStr: "# Owner: bob@\n# Entries:\nA::OWNER@:rw\n",
+		},
+		"with owner group": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A:G:GROUP@:rw",
+				},
+				OwnerGroup: "admins@",
+			},
+			expStr: "# Owner Group: admins@\n# Entries:\nA:G:GROUP@:rw\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, formatACL(tc.acl), tc.expStr, "string output didn't match")
+		})
 	}
 }

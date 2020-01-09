@@ -181,8 +181,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	if (rc != 0) {
 		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 			d_list_del(&dev_info->sdi_link);
-			if (dev_info != NULL)
-				smd_free_dev_info(dev_info);
+			smd_free_dev_info(dev_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
@@ -297,5 +296,167 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 	resp->n_pools = pool_list_cnt;
 
 out:
+	return rc;
+}
+
+int
+ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+{
+	struct smd_dev_info	*dev_info;
+	int			 buflen = 10;
+	int			 rc = 0;
+
+	if (uuid_is_null(dev_uuid))
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT, "Querying SMD device state for dev:"DF_UUID"\n",
+		DP_UUID(dev_uuid));
+
+	/*
+	 * Query per-server metadata (SMD) to get NVMe device info for given
+	 * device UUID.
+	 */
+	rc = smd_dev_get_by_id(dev_uuid, &dev_info);
+	if (rc != 0) {
+		D_ERROR("Device UUID:"DF_UUID" not found\n", DP_UUID(dev_uuid));
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_state, buflen);
+	if (resp->dev_state == NULL) {
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	if (dev_info->sdi_state == SMD_DEV_NORMAL)
+		strncpy(resp->dev_state, "NORMAL\n", buflen);
+	else if (dev_info->sdi_state == SMD_DEV_FAULTY)
+		strncpy(resp->dev_state, "FAULTY\n", buflen);
+	else {
+		D_ERROR("Device state cannot be determined\n");
+		rc = -1;
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
+
+out:
+	smd_free_dev_info(dev_info);
+
+	if (rc != 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	return rc;
+}
+
+static void
+bio_faulty_state_set(void *arg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	int			 rc;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO health state set on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	rc = bio_dev_set_faulty(bxc);
+	if (rc != 0) {
+		D_ERROR("Error setting FAULTY BIO device state\n");
+		return;
+	}
+}
+
+int
+ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+{
+	struct smd_dev_info	*dev_info;
+	ABT_thread		 thread;
+	int			 tgt_id;
+	int			 buflen = 10;
+	int			 rc = 0;
+
+	if (uuid_is_null(dev_uuid))
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT, "Setting FAULTY SMD device state for dev:"DF_UUID"\n",
+		DP_UUID(dev_uuid));
+
+	/*
+	 * Query per-server metadata (SMD) to get NVMe device info for given
+	 * device UUID.
+	 */
+	rc = smd_dev_get_by_id(dev_uuid, &dev_info);
+	if (rc != 0) {
+		D_ERROR("Device UUID:"DF_UUID" not found\n", DP_UUID(dev_uuid));
+		return rc;
+	}
+	if (dev_info->sdi_tgts == NULL) {
+		D_ERROR("No targets mapped to device\n");
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+	/* Default tgt_id is the first mapped tgt */
+	tgt_id = dev_info->sdi_tgts[0];
+
+	D_ALLOC(resp->dev_state, buflen);
+	if (resp->dev_state == NULL) {
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
+
+	/* Create a ULT on the tgt_id */
+	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
+	/* TODO Add a new DSS_ULT_BIO tag */
+	rc = dss_ult_create(bio_faulty_state_set, NULL, DSS_ULT_AGGREGATE,
+			    tgt_id, 0, &thread);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
+		goto out;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+out:
+	strncpy(resp->dev_state, "FAULTY\n", buflen);
+	smd_free_dev_info(dev_info);
+
+	if (rc != 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
 	return rc;
 }

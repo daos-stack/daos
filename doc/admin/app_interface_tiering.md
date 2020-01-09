@@ -243,9 +243,7 @@ To build the MPI-IO driver:
 -   make -j8; make install
 
 Switch the PATH and LD_LIBRARY_PATH to where you want to build your client apps or libs
-that use MPI to the installed MPICH. Note that the DAOS server will still
-need to be launched with OMPI's orterun. This is a unique situation where the
-server uses OMPI, and the clients will be launched with MPICH.
+that use MPI to the installed MPICH.
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc and mpich
 library installed above (see child pages).

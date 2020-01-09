@@ -28,6 +28,20 @@ extern "C" {
 
 #include <daos_event.h>
 #include <daos_types.h>
+#include <daos_pool.h>
+
+/*
+ * DAOS management pool information
+ */
+typedef struct {
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
+	uuid_t				 mgpi_uuid;
+	/** List of current pool service replica ranks */
+	d_rank_list_t			*mgpi_svc;
+} daos_mgmt_pool_info_t;
 
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
@@ -209,23 +223,6 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev);
 
 /**
- * Set parameter on servers.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
- * \param key_id [IN]	key ID of the parameter.
- * \param value [IN]	value of the parameter.
- * \param value [IN]	optional extra value to set the fail value when
- *			\a key_id is DSS_KEY_FAIL_LOC and \a value is in
- *			DAOS_FAIL_VALUE mode.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
-		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
-
-/**
  * Exclude completely a set of storage targets from a pool. Compared with
  * daos_pool_tgt_exclude(), this API will mark the targets to be DOWNOUT, i.e.
  * the rebuilding for this target is done, while daos_pool_tgt_exclude() only
@@ -327,6 +324,9 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  * List all pools created in the specified DAOS system.
  *
  * \param group	[IN]		Name of DAOS system managing the service.
+ * \param npools
+ *		[IN,OUT]	[in] \a pools length in items.
+ *				[out] Number of pools in the DAOS system.
  * \param pools	[OUT]		Array of pool mgmt information structures.
  *				NULL is permitted in which case only the
  *				number of pools will be returned in \a npools.
@@ -334,16 +334,46 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  *				service replica rank list (mgpi_svc) is
  *				allocated for each item in \pools.
  *				The rank lists must be freed by the caller.
- * \param npools
- *		[IN,OUT]	[in] \a pools length in items.
- *				[out] Number of pools in the DAOS system.
  * \param ev	[IN]		Completion event. Optional and can be NULL.
  *				The function will run in blocking mode
  *				if \a ev is NULL.
+ *
+ * \return			0		Success
+ *				-DER_TRUNC	\a pools cannot hold \a npools
+ *						items
  */
 int
-daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
-		     daos_size_t *npools, daos_event_t *ev);
+daos_mgmt_list_pools(const char *group, daos_size_t *npools,
+		     daos_mgmt_pool_info_t *pools, daos_event_t *ev);
+
+/**
+ * The operation code for DAOS client to set different parameters globally
+ * on all servers.
+ */
+enum {
+	DMG_KEY_FAIL_LOC	 = 0,
+	DMG_KEY_FAIL_VALUE,
+	DMG_KEY_FAIL_NUM,
+	DMG_KEY_REBUILD_THROTTLING,
+	DMG_KEY_NUM,
+};
+
+/**
+ * Set parameter on servers.
+ *
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
+ * \param key_id [IN]	key ID of the parameter.
+ * \param value [IN]	value of the parameter.
+ * \param value [IN]	optional extra value to set the fail value when
+ *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
+ *			DAOS_FAIL_VALUE mode.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
+		     uint64_t value, uint64_t value_extra, daos_event_t *ev);
 
 /**
  * Add mark to servers.
