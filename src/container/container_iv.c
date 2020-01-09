@@ -579,7 +579,7 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 		return -DER_NOMEM;
 
 	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry,
-			   iv_entry_size, false);
+			   iv_entry_size, true);
 	if (rc)
 		D_GOTO(free, rc);
 

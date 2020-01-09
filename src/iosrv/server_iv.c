@@ -908,8 +908,12 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
-	if (retry && daos_rpc_retryable_rc(rc)) {
-		D_DEBUG(DB_TRACE, "retry upon %d\n", rc);
+	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry upon %d\n", rc);
 		goto retry;
 	}
 	return rc;

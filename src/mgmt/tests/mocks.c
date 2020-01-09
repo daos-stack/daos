@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -307,6 +307,7 @@ void
 mock_ds_mgmt_pool_set_prop_teardown(void)
 {
 	daos_prop_free(ds_mgmt_pool_set_prop_result);
+	daos_prop_free(ds_mgmt_pool_set_prop_prop);
 }
 
 /*

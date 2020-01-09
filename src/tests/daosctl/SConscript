@@ -6,14 +6,14 @@ def scons():
 
     Import('env', 'prereqs')
 
-    libs = ['daos', 'gurt', 'daos_common', 'mpi', 'uuid',
+    libs = ['daos', 'gurt', 'daos_common', 'uuid',
             'cart', 'pmem', 'pmemobj', 'daos_tests']
     sources = ['daosctl.c', 'help.c', 'common_utils.c', 'test-pool.c',
                'pool-cmds.c', 'cont-cmds.c', 'io-cmds.c']
 
     denv = env.Clone()
 
-    mpi = daos_build.configure_mpi(prereqs, denv)
+    mpi = daos_build.configure_mpi(prereqs, denv, libs)
     if mpi is None:
         return
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@ package scm
 import (
 	"os"
 	"strings"
+	"sync"
 
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -42,7 +44,8 @@ type (
 	}
 
 	MockSysProvider struct {
-		cfg MockSysConfig
+		cfg       MockSysConfig
+		isMounted atm.Bool
 	}
 )
 
@@ -50,21 +53,21 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	// hack... don't fail the format tests which also want
 	// to make sure that the device isn't already formatted.
 	if os.IsNotExist(msp.cfg.IsMountedErr) && strings.HasPrefix(target, "/dev") {
-		return msp.cfg.IsMountedBool, nil
+		return msp.isMounted.Load(), nil
 	}
-	return msp.cfg.IsMountedBool, msp.cfg.IsMountedErr
+	return msp.isMounted.Load(), msp.cfg.IsMountedErr
 }
 
 func (msp *MockSysProvider) Mount(_, _, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
-		msp.cfg.IsMountedBool = true
+		msp.isMounted.SetTrue()
 	}
 	return msp.cfg.MountErr
 }
 
 func (msp *MockSysProvider) Unmount(_ string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
-		msp.cfg.IsMountedBool = false
+		msp.isMounted.SetFalse()
 	}
 	return msp.cfg.UnmountErr
 }
@@ -82,7 +85,8 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 		cfg = &MockSysConfig{}
 	}
 	return &MockSysProvider{
-		cfg: *cfg,
+		cfg:       *cfg,
+		isMounted: atm.NewBool(cfg.IsMountedBool),
 	}
 }
 
@@ -107,6 +111,7 @@ type MockBackendConfig struct {
 }
 
 type MockBackend struct {
+	sync.RWMutex
 	curState storage.ScmState
 	cfg      MockBackendConfig
 }
@@ -123,19 +128,25 @@ func (mb *MockBackend) GetState() (storage.ScmState, error) {
 	if mb.cfg.GetStateErr != nil {
 		return storage.ScmStateUnknown, mb.cfg.GetStateErr
 	}
+	mb.RLock()
+	defer mb.RUnlock()
 	return mb.curState, nil
 }
 
 func (mb *MockBackend) Prep(_ storage.ScmState) (bool, storage.ScmNamespaces, error) {
 	if mb.cfg.PrepErr == nil {
+		mb.Lock()
 		mb.curState = mb.cfg.NextState
+		mb.Unlock()
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepNamespaceRes, mb.cfg.PrepErr
 }
 
 func (mb *MockBackend) PrepReset(_ storage.ScmState) (bool, error) {
 	if mb.cfg.PrepErr == nil {
+		mb.Lock()
 		mb.curState = mb.cfg.NextState
+		mb.Unlock()
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepErr
 }

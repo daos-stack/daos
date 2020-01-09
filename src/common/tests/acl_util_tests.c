@@ -42,6 +42,33 @@
  */
 
 static void
+expect_string_for_principal(enum daos_acl_principal_type type, const char *name,
+			    const char *exp_str)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(type, name);
+	assert_string_equal(daos_ace_get_principal_str(ace),
+			    exp_str);
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_get_principal_str(void **state)
+{
+	expect_string_for_principal(DAOS_ACL_OWNER, NULL,
+				    DAOS_ACL_PRINCIPAL_OWNER);
+	expect_string_for_principal(DAOS_ACL_OWNER_GROUP, NULL,
+				    DAOS_ACL_PRINCIPAL_OWNER_GRP);
+	expect_string_for_principal(DAOS_ACL_EVERYONE, NULL,
+				    DAOS_ACL_PRINCIPAL_EVERYONE);
+	expect_string_for_principal(DAOS_ACL_USER, "acl_user@",
+				    "acl_user@");
+	expect_string_for_principal(DAOS_ACL_GROUP, "acl_grp@",
+				    "acl_grp@");
+}
+
+static void
 test_ace_from_str_null_str(void **state)
 {
 	struct daos_ace *ace = NULL;
@@ -768,6 +795,7 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_ace_get_principal_str),
 		cmocka_unit_test(test_ace_from_str_null_str),
 		cmocka_unit_test(test_ace_from_str_null_ptr),
 		cmocka_unit_test(test_ace_from_str_owner),
