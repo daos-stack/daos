@@ -173,7 +173,7 @@ def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
     Args:
         path (str): path to tool's binary
         hosts (list): list of servers to run prepare on.
-        user (str, optional): User with priviledges. Defaults to False.
+        user (str, optional): User with privileges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         nvme (bool, optional): Perform prep on nvme. Defaults to False.
         scm (bool, optional): Perform prep on scm. Defaults to False.
@@ -215,7 +215,7 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
         hosts (list): list of servers to run prepare on.
         nvme (bool): if true, nvme flag will be appended to command.
         scm (bool): if true, scm flag will be appended to command.
-        user (str, optional): User with priviledges. Defaults to False.
+        user (str, optional): User with privileges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         insecure (bool): toggle insecure mode
 
@@ -260,8 +260,8 @@ def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
             daos_avocado_test.yaml
         scm_size (str): SCM size value passed into the command.
         insecure (bool, optional): Insecure mode. Defaults to True.
-        group (str, otional): Group with priviledges. Defaults to None.
-        user (str, optional): User with priviledges. Defaults to None.
+        group (str, otional): Group with privileges. Defaults to None.
+        user (str, optional): User with privileges. Defaults to None.
         acl_file (str, optional): Access Control List file path for DAOS pool.
             Defaults to None.
         nvme_size (str, optional): NVMe size. Defaults to None.
