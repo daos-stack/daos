@@ -443,7 +443,8 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC uint		ie_ref;
 
-	bool ie_root;
+	/** Set to true if this is the root of the container */
+	bool			ie_root;
 };
 
 /**
