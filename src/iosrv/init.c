@@ -102,7 +102,7 @@ dss_self_rank(void)
 	int		rc;
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
 }
 
@@ -118,7 +118,8 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -126,21 +127,24 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -148,7 +152,8 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -501,14 +506,16 @@ server_init(int argc, char *argv[])
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
+			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		rc = pl_init();
@@ -523,13 +530,14 @@ server_init(int argc, char *argv[])
 
 	rc = server_init_state_init();
 	if (rc != 0) {
-		D_ERROR("failed to init server init state: %d\n", rc);
+		D_ERROR("failed to init server init state: "DF_RC"\n",
+			DP_RC(rc));
 		goto exit_daos_fini;
 	}
 
 	rc = drpc_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: %d\n", rc);
+		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
 	}
 

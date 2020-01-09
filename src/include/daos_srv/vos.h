@@ -826,7 +826,8 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
- * \param[in]		cb		iteration callback
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
  *
  * \retval		0	iteration complete
@@ -835,7 +836,8 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

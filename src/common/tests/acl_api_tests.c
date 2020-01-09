@@ -1933,6 +1933,9 @@ test_acl_is_valid_duplicate_user(void **state)
 	ace[0] = daos_ace_create(DAOS_ACL_USER, "user1@");
 	ace[1] = daos_ace_create(DAOS_ACL_USER, "anotheruser@");
 	ace[2] = daos_ace_create(DAOS_ACL_USER, "user1@");
+	/* Give the duplicate instance different perms */
+	ace[2]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace[2]->dae_allow_perms = DAOS_ACL_PERM_READ;
 	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);

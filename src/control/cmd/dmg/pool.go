@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strconv"
 	"strings"
@@ -180,7 +181,10 @@ func (c *PoolSetPropCmd) Execute(_ []string) error {
 type PoolGetACLCmd struct {
 	logCmd
 	connectedCmd
-	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	File    string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	Force   bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
+	Verbose bool   `short:"v" long:"verbose" required:"0" description:"Add descriptive comments to ACL entries"`
 }
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
@@ -193,8 +197,44 @@ func (d *PoolGetACLCmd) Execute(args []string) error {
 		return err
 	}
 
-	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	d.log.Debugf("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
+
+	acl := formatACL(resp.ACL, d.Verbose)
+
+	if d.File != "" {
+		err = d.writeACLToFile(acl)
+		if err != nil {
+			return err
+		}
+		d.log.Infof("Wrote ACL to output file: %s", d.File)
+	} else {
+		d.log.Info(acl)
+	}
+
+	return nil
+}
+
+func (d *PoolGetACLCmd) writeACLToFile(acl string) error {
+	if !d.Force {
+		// Keep the user from clobbering existing files
+		_, err := os.Stat(d.File)
+		if err == nil {
+			return errors.New(fmt.Sprintf("file already exists: %s", d.File))
+		}
+	}
+
+	f, err := os.Create(d.File)
+	if err != nil {
+		d.log.Errorf("Unable to create file: %s", d.File)
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(acl)
+	if err != nil {
+		d.log.Errorf("Failed to write to file: %s", d.File)
+		return err
+	}
 
 	return nil
 }
@@ -227,7 +267,7 @@ func (d *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	d.log.Info(formatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -273,7 +313,7 @@ func (d *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	d.log.Info(formatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -301,7 +341,7 @@ func (d *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
-	d.log.Info(formatACL(resp.ACL))
+	d.log.Info(formatACLDefault(resp.ACL))
 
 	return nil
 }

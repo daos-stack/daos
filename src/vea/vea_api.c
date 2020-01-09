@@ -43,14 +43,16 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
 	if (rc == 0) {
 		rc = dbtree_destroy(free_btr, NULL);
 		if (rc)
-			D_ERROR("destroy free extent tree error: %d\n", rc);
+			D_ERROR("destroy free extent tree error: "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 	rc = dbtree_open_inplace(&md->vsd_vec_tree, &uma, &vec_btr);
 	if (rc == 0) {
 		rc = dbtree_destroy(vec_btr, NULL);
 		if (rc)
-			D_ERROR("destroy vector tree error: %d\n", rc);
+			D_ERROR("destroy vector tree error: "DF_RC"\n",
+				DP_RC(rc));
 	}
 }
 
