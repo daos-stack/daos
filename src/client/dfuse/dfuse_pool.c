@@ -82,7 +82,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 		d_list_for_each_entry(dfsi,
 				      &dfpi->dfp_dfs_list,
-				      dfs_cont_list) {
+				      dfs_list) {
 			{
 				if (uuid_is_null(dfsi->dfs_cont) != 1)
 					continue;
@@ -110,10 +110,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!dfs)
 		D_GOTO(err_unlock, rc = ENOMEM);
 
-	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 	dfs->dfs_dfp = dfp;
-
-	d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 
 	DFUSE_TRA_UP(dfp, parent->ie_dfs->dfs_dfp, "dfp");
 

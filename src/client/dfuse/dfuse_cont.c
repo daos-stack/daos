@@ -82,7 +82,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 		d_list_for_each_entry(dfsi,
 				      &dfp->dfp_dfs_list,
-				      dfs_cont_list) {
+				      dfs_list) {
 			{
 				struct fuse_entry_param	entry = {0};
 
@@ -96,7 +96,12 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 				rc = dfuse_check_for_inode(fs_handle, dfsi,
 							   &ie);
-				D_ASSERT(rc == -DER_SUCCESS);
+				if (rc == -DER_NONEXIST) {
+					D_FREE(dfs);
+					dfs = dfsi;
+					D_GOTO(alloc_ie, 0);
+				} else
+					D_ASSERT(rc == -DER_SUCCESS);
 
 				DFUSE_TRA_INFO(ie,
 					       "Reusing existing container entry without reconnect");
@@ -137,6 +142,17 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err_unlock, rc = daos_der2errno(rc));
 	}
 
+	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
+		D_GOTO(close, rc);
+	}
+
+	dfs->dfs_ns = ddfs;
+
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+
+alloc_ie:
 	D_ALLOC_PTR(ie);
 	if (!ie) {
 		D_GOTO(close, rc = ENOMEM);
@@ -145,14 +161,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_root = true;
 
 	DFUSE_TRA_UP(ie, parent, "inode");
-
-	rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR, &ddfs);
-	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_mount() failed: (%s)", strerror(rc));
-		D_GOTO(close, rc);
-	}
-
-	dfs->dfs_ns = ddfs;
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
 			&ie->ie_stat);
@@ -167,8 +175,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
-
-	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);

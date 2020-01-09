@@ -254,7 +254,7 @@ main(int argc, char **argv)
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
 
 	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
-	d_list_add(&dfs->dfs_cont_list, &dfp->dfp_dfs_list);
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 
 	dfs->dfs_dfp = dfp;
 
@@ -338,7 +338,7 @@ out_dfs:
 				   dfp_list) {
 		DFUSE_TRA_ERROR(dfp, "DFP left at the end");
 		d_list_for_each_entry_safe(dfs, dfsn, &dfp->dfp_dfs_list,
-					   dfs_cont_list) {
+					   dfs_list) {
 			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
 			if (!daos_handle_is_inval(dfs->dfs_coh)) {
 

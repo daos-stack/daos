@@ -173,8 +173,7 @@ struct dfuse_dfs {
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
 	/* List of dfuse_dfs entries in the dfuse_pool */
-	/* RENAME once code compiles */
-	d_list_t		dfs_cont_list;
+	d_list_t		dfs_list;
 };
 
 /*
