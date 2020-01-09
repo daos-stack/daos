@@ -106,7 +106,7 @@ entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
 
 	DFUSE_LOG_INFO("entry %p closing array fd_count %d",
-		entry, ioil_ioc.ioc_open_fd_count);
+		       entry, ioil_ioc.ioc_open_fd_count);
 	daos_array_close(entry->fd_aoh, NULL);
 
 	ioil_ioc.ioc_open_fd_count -= 1;

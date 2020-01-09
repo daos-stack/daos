@@ -180,8 +180,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	 * and drop the locally allocated one.  If there is no match then
 	 * properly initialize the local one ready for use.
 	 */
-	d_list_for_each_entry(dfpi,
-			      &fs_handle->dpi_info->di_dfp_list,
+	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
 			      dfp_list) {
 
 		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
@@ -201,10 +200,11 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
 
 		/* Connect to DAOS pool */
-		rc = daos_pool_connect(dfp->dfp_pool, fs_handle->dpi_info->di_group,
-				fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
-				&dfp->dfp_poh, &dfp->dfp_pool_info,
-				NULL);
+		rc = daos_pool_connect(dfp->dfp_pool,
+				       fs_handle->dpi_info->di_group,
+				       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+				       &dfp->dfp_poh, &dfp->dfp_pool_info,
+				       NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
 			D_GOTO(out_err, ret = rc);
@@ -214,17 +214,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		dfp = dfpi;
 	}
 
-	d_list_for_each_entry(dfsi,
-			&dfp->dfp_dfs_list,
-			dfs_list) {
-		char str[40];
-		char str2[40];
-
-		uuid_unparse(dfs->dfs_cont, str);
-		uuid_unparse(dfsi->dfs_cont, str2);
-
-		DFUSE_TRA_DEBUG(ie, "Checking dfs %p %s", dfsi, str);
-		DFUSE_TRA_DEBUG(ie, "Checking dfs %p %s", dfsi, str2);
+	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
 
 		if (uuid_compare(dfsi->dfs_cont, dfs->dfs_cont) != 0)
 			continue;
@@ -239,8 +229,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
-				&dfs->dfs_coh, &dfs->dfs_co_info,
-				NULL);
+				    &dfs->dfs_coh, &dfs->dfs_co_info,
+				    NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
 					rc);
@@ -248,7 +238,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		}
 
 		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
-			&dfs->dfs_ns);
+			       &dfs->dfs_ns);
 		if (rc) {
 			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
 			D_GOTO(out_cont, ret = rc);
