@@ -59,7 +59,8 @@ class DaosServerConfigTest(TestWithServers):
         config_val = self.params.get("config_val", "/run/server_config_val/*/")
 
         # Identify the attribute and modify its value to test value
-        setattr(server.runner.job.yaml_params, config_val[0], config_val[1])
+        getattr(
+            server.runner.job.yaml_params, config_val[0]).value = config_val[1]
 
         self.log.info(
             "Starting server changing %s with %s", config_val[0], config_val[1])
@@ -69,7 +70,9 @@ class DaosServerConfigTest(TestWithServers):
         except ServerFailed as err:
             if config_val[2] == 1:
                 self.log.info("Server was expected to fail. Test passed.")
-            self.fail("Server was expected start. Test failed: {}".format(err))
+            else:
+                self.fail("Server was expected to start. Test failed:{}".format(
+                    err))
 
         # Stop servers
         try:

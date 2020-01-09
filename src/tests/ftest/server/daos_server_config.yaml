@@ -76,16 +76,46 @@ server_config_val: !mux
       - 1
   control_log_mask_special_str:
     config_val:
-      - "control_log_mask"
+      - "nr_hugepages"
       - "ABC12cd*()_-"
       - 1
   nr_hugepages_str:
     config_val:
-      - "control_log_mask"
+      - "nr_hugepages"
       - "ABCdef"
       - 1
-  nr_hugepages_wrong_int:
+  # nr_hugepages_overflow_int:
+  #   config_val:
+  #     - "control_log_mask"
+  #     - "1000000000000000000"
+  #     - 1
+  # nr_hugepages_negative_int:
+  #   config_val:
+  #     - "control_log_mask"
+  #     - "-100"
+  #     - 1
+  port_str:
     config_val:
-      - "control_log_mask"
-      - "12345"
+      - "port"
+      - "ABCdef"
+      - 1
+  port_special_str:
+    config_val:
+      - "port"
+      - "*(_ABCdef123"
+      - 1
+  provider_special_str:
+    config_val:
+      - "provider"
+      - "*(_ABCdef123"
+      - 1
+  provider_wrong_str:
+    config_val:
+      - "provider"
+      - "ABCdef123"
+      - 1
+  provider_numerical:
+    config_val:
+      - "provider"
+      - "12345678"
       - 1
