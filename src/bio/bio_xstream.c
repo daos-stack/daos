@@ -99,7 +99,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 
 	rc = smd_init(storage_path);
 	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. %d\n", rc);
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -121,8 +121,8 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		D_WARN("Open %s failed(%d), skip DAOS NVMe setup.\n",
-		       nvme_conf, daos_errno2der(errno));
+		D_WARN("Open %s failed("DF_RC"), skip DAOS NVMe setup.\n",
+		       nvme_conf, DP_RC(daos_errno2der(errno)));
 		nvme_glb.bd_nvme_conf = NULL;
 		return 0;
 	}
@@ -628,8 +628,8 @@ assign_device(int tgt_id)
 	/* Update mapping for this target in NVMe device table */
 	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
-		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. %d\n",
-			DP_UUID(chosen_bdev->bb_uuid), tgt_id, rc);
+		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
+			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
 		return rc;
 	}
 
@@ -672,12 +672,13 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc) {
-			D_ERROR("Failed to get dev mapped to tgt %d. %d\n",
-				tgt_id, rc);
+			D_ERROR("Failed to get dev mapped to tgt %d. "DF_RC"\n",
+				tgt_id, DP_RC(rc));
 			return rc;
 		}
 	} else if (rc) {
-		D_ERROR("Failed to get dev for tgt %d. %d\n", tgt_id, rc);
+		D_ERROR("Failed to get dev for tgt %d. "DF_RC"\n", tgt_id,
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -901,15 +902,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		rc = spdk_conf_read(config, nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
-			D_ERROR("failed to read %s, rc:%d\n",
-				nvme_glb.bd_nvme_conf, rc);
 			rc = -DER_INVAL; /* spdk_conf_read() returns -1 */
+			D_ERROR("failed to read %s, "DF_RC"\n",
+				nvme_glb.bd_nvme_conf, DP_RC(rc));
 			goto out;
 		}
 
 		if (spdk_conf_first_section(config) == NULL) {
-			D_ERROR("invalid format %s, rc:%d\n",
-				nvme_glb.bd_nvme_conf, rc);
+			D_ERROR("invalid format %s\n", nvme_glb.bd_nvme_conf);
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -933,15 +933,17 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		rc = spdk_env_init(&opts);
 		if (rc != 0) {
-			D_ERROR("failed to initialize SPDK env, rc:%d\n", rc);
 			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
+			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
 		rc = spdk_thread_lib_init(NULL, 0);
 		if (rc != 0) {
-			D_ERROR("failed to init SPDK thread lib, rc:%d\n", rc);
 			rc = -DER_INVAL;
+			D_ERROR("failed to init SPDK thread lib, "DF_RC"\n",
+				DP_RC(rc));
 			spdk_env_fini();
 			goto out;
 		}
@@ -997,7 +999,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
 		rc = init_bio_bdevs(ctxt);
 		if (rc != 0) {
-			D_ERROR("failed to init bio_bdevs, rc:%d\n", rc);
+			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}

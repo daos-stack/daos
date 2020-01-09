@@ -34,7 +34,11 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 		struct pl_map *pl_map);
 
 void
-plt_obj_layout_check(struct pl_obj_layout *layout);
+plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size);
+
+void
+plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
+		uint32_t pool_size);
 
 bool
 pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2,

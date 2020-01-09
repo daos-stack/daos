@@ -373,7 +373,8 @@ handle_incoming_call(struct drpc *session_ctx)
 	rc = dss_ult_create(drpc_handler_ult, (void *)call_ctx,
 			    DSS_ULT_DRPC_HANDLER, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create drpc handler ULT: %d\n", rc);
+		D_ERROR("Failed to create drpc handler ULT: "DF_RC"\n",
+			DP_RC(rc));
 		free_call_ctx(call_ctx);
 		return rc;
 	}
@@ -476,7 +477,7 @@ drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
 	rc = drpc_progress_context_to_unixcomms(ctx, &comms);
 	if (rc < 0) {
 		D_ERROR("Failed to convert drpc_progress_context to unixcomm "
-			"structures, rc=%d\n", rc);
+			"structures, rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

@@ -138,7 +138,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D_ERROR("failed to init %s: %d\n", modname, rc);
+		D_ERROR("failed to init %s: "DF_RC"\n", modname, DP_RC(rc));
 		D_GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
@@ -149,16 +149,16 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	rc = daos_rpc_register(smod->sm_proto_fmt, smod->sm_cli_count,
 			       smod->sm_handlers, smod->sm_mod_id);
 	if (rc) {
-		D_ERROR("failed to register RPC for %s: %d\n",
-			modname, rc);
+		D_ERROR("failed to register RPC for %s: "DF_RC"\n",
+			modname, DP_RC(rc));
 		D_GOTO(err_mod_init, rc);
 	}
 
 	/* register dRPC handlers */
 	rc = drpc_hdlr_register_all(smod->sm_drpc_handlers);
 	if (rc) {
-		D_ERROR("failed to register dRPC for %s: %d\n",
-			modname, rc);
+		D_ERROR("failed to register dRPC for %s: "DF_RC"\n",
+			modname, DP_RC(rc));
 		D_GOTO(err_rpc, rc);
 	}
 
@@ -194,13 +194,13 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* unregister RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_proto_fmt);
 	if (rc) {
-		D_ERROR("failed to unregister RPC %d\n", rc);
+		D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	rc = drpc_hdlr_unregister_all(smod->sm_drpc_handlers);
 	if (rc != 0) {
-		D_ERROR("Failed to unregister dRPC %d\n", rc);
+		D_ERROR("Failed to unregister dRPC "DF_RC"\n", DP_RC(rc));
 	}
 
 	dss_unregister_key(smod->sm_key);
@@ -209,7 +209,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
-		D_ERROR("module finalization failed for: %d\n", rc);
+		D_ERROR("module finalization failed for: "DF_RC"\n", DP_RC(rc));
 		return rc;
 
 	}
@@ -281,8 +281,8 @@ dss_module_cleanup_all(void)
 			continue;
 		rc = m->sm_cleanup();
 		if (rc != 0) {
-			D_ERROR("failed to clean up module %s: %d\n",
-				m->sm_name, rc);
+			D_ERROR("failed to clean up module %s: "DF_RC"\n",
+				m->sm_name, DP_RC(rc));
 			break;
 		}
 	}

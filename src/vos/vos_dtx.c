@@ -551,8 +551,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = %d\n",
-		DP_DTI(dti), rc);
+	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+		DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
 			D_FREE_PTR(dce);
@@ -590,7 +590,8 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		dtx_rec_release(cont, dae, true, NULL);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = %d\n", DP_DTI(dti), rc);
+	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
+		DP_RC(rc));
 
 	return rc;
 }
@@ -1522,8 +1523,8 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
 			  DAOS_INTENT_DEFAULT, true, &obj);
 	if (rc != 0) {
-		D_ERROR(DF_UOID" fail to mark sync: rc = %d\n",
-			DP_UOID(oid), rc);
+		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
 		return rc;
 	}
 
