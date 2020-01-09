@@ -42,12 +42,6 @@ class DaosServerConfigTest(TestWithServers):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-    def setUp(self):
-        super(DaosServerConfigTest, self).setUp()
-        self.setup_start_agents = False
-        self.setup_start_servers = False
-
-
     def test_daos_server_config_basic(self):
         """
         JIRA ID: DAOS-1525
@@ -63,6 +57,8 @@ class DaosServerConfigTest(TestWithServers):
 
         # Get the input to verify
         config_val = self.params.get("config_val", "/run/server_config_val/*/")
+
+        # Identify which
 
         # Get the server
 
