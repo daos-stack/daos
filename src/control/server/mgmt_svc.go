@@ -46,7 +46,7 @@ const (
 	pingTimeoutStatus = -1
 	startTimeout      = 3 * time.Second
 	notStartedStatus  = -1
-	stopTimeout       = 3 * time.Second
+	stopTimeout       = 5 * time.Second
 	notStoppedStatus  = -1
 )
 
@@ -646,19 +646,25 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 }
 
 // validateInstanceRank checks instance rank in superblock matches supplied list.
-func validateInstanceRank(i *IOServerInstance, ranks []uint32) (*uint32, bool) {
-	if len(ranks) == 0 || !i.hasSuperblock() {
-		return nil, false
+func validateInstanceRank(log logging.Logger, i *IOServerInstance, ranks []uint32) (*uint32, bool) {
+	if !i.hasSuperblock() {
+		log.Debugf("validateInstanceRank() no superblock")
+		return nil, false // cannot validate, no rank
 	}
 	rank := i.getSuperblock().Rank.Uint32()
 
+	if len(ranks) == 0 {
+		return &rank, true // no ranks to filter, allow all
+	}
 	for _, r := range ranks {
 		if r == rank {
 			return &rank, true
 		}
 	}
 
-	return nil, false
+	log.Debugf("validateInstanceRank() skipping rank %d", rank)
+
+	return &rank, false
 }
 
 // PrepShutdown implements the method defined for the Management Service.
@@ -676,7 +682,7 @@ func (svc *mgmtSvc) PrepShutdown(ctx context.Context, req *mgmtpb.RanksReq) (*mg
 	resp := &mgmtpb.RanksResp{}
 
 	for _, i := range svc.harness.Instances() {
-		rank, ok := validateInstanceRank(i, req.Ranks)
+		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
 		if !ok {
 			continue
 		}
@@ -725,29 +731,34 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	resp := &mgmtpb.RanksResp{}
 
-	for _, i := range svc.harness.Instances() {
-		rank, ok := validateInstanceRank(i, req.Ranks)
+	for _, i := range svc.harness.instances {
+		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
 		if !ok {
 			continue
 		}
 
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank, &mgmtpb.KillRankReq{})
+		if !i.IsStarted() {
+			continue
+		}
+
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank,
+			&mgmtpb.KillRankReq{Rank: *rank, Force: false})
 		if err != nil {
 			// just log failure to allow retries and other instances to be processed
-			svc.log.Errorf("rank %d drpc failed: %s", *rank, err)
+			svc.log.Debugf("rank %d drpc failed: %s", *rank, err)
 		}
 		if dresp.Status != 0 {
-			svc.log.Errorf("rank %d KillRank drpc status returned %d", *rank, int32(dresp.Status))
+			svc.log.Debugf("rank %d KillRank drpc status returned %d", *rank, int32(dresp.Status))
 		}
 	}
 
-	stopChan := make(chan struct{})
+	stopChan := make(chan struct{}, 1)
 	// select until instances stop or timeout occurs (at which point get results of each instance)
 	go func() {
 		for {
 			allStopped := true
 
-			for _, instance := range svc.harness.Instances() {
+			for _, instance := range svc.harness.instances {
 				if instance.IsStarted() {
 					allStopped = false
 					continue
@@ -758,10 +769,10 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 				break
 			}
 
-			time.Sleep(500 * time.Microsecond)
+			time.Sleep(1 * time.Second)
 		}
 
-		close(stopChan)
+		stopChan <- struct{}{}
 	}()
 
 	select {
@@ -771,7 +782,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	var errored bool
 	// either all instances started or Timeout
-	for _, i := range svc.harness.Instances() {
+	for _, i := range svc.harness.instances {
 		if !i.hasSuperblock() {
 			continue // FIXME: do we need to report this?
 		}
@@ -808,7 +819,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	resp := &mgmtpb.RanksResp{}
 
 	for _, i := range svc.harness.Instances() {
-		rank, ok := validateInstanceRank(i, req.Ranks)
+		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
 		if !ok {
 			continue
 		}

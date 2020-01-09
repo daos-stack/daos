@@ -169,6 +169,35 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	return displaySystemQuery(cmd.log, resp.Members)
 }
 
+func displaySystemAction(log logging.Logger, results system.MemberResults) error {
+	rankPrefix := "r-"
+	groups := make(hostlist.HostGroups)
+
+	for _, r := range results {
+		msg := "OK"
+		if r.Errored {
+			msg = r.Msg
+		}
+
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if err := groups.AddHost(resStr, fmt.Sprintf("%s%d", rankPrefix, r.Rank)); err != nil {
+			return errors.Wrap(err, "adding rank result to group")
+		}
+	}
+
+	out, err := tabulateHostGroups(groups, "Rank", "Operation", "Result")
+	if err != nil {
+		return errors.Wrap(err, "printing result table")
+	}
+
+	// kind of a hack, but don't want to modify the hostlist library to
+	// accept invalid hostnames.
+	out = strings.ReplaceAll(out, rankPrefix, "")
+	log.Info(out)
+
+	return nil
+}
+
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
@@ -191,37 +220,12 @@ func (cmd *systemStopCmd) Execute(_ []string) error {
 	}
 
 	if len(resp.Results) == 0 {
-		cmd.log.Debug("System-Stop no member results returned\n")
+		cmd.log.Debug("System-Stop no results returned")
 		return nil
 	}
-	cmd.log.Debug("System-Stop command succeeded\n")
+	cmd.log.Debug("System-Stop command succeeded")
 
-	rankPrefix := "r-"
-	groups := make(hostlist.HostGroups)
-
-	for _, r := range resp.Results {
-		msg := "OK"
-		if r.Errored {
-			msg = r.Msg
-		}
-
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
-		if err = groups.AddHost(resStr, fmt.Sprintf("%s%d", rankPrefix, r.Rank)); err != nil {
-			return errors.Wrap(err, "adding rank result to group")
-		}
-	}
-
-	out, err := tabulateHostGroups(groups, "Rank", "Operation", "Result")
-	if err != nil {
-		return errors.Wrap(err, "printing result table")
-	}
-
-	// kind of a hack, but don't want to modify the hostlist library to
-	// accept invalid hostnames.
-	out = strings.ReplaceAll(out, rankPrefix, "")
-	cmd.log.Info(out)
-
-	return nil
+	return displaySystemAction(cmd.log, resp.Results)
 }
 
 // systemStartCmd is the struct representing the command to start system.
@@ -239,33 +243,13 @@ func (cmd *systemStartCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "System-Start command failed")
 	}
 
-	cmd.log.Debug("System-Start command succeeded")
 	if len(resp.Results) == 0 {
-		cmd.log.Info("No harnesses restarted")
+		cmd.log.Info("No results returned")
 		return nil
 	}
+	cmd.log.Debug("System-Start command succeeded")
 
-	groups := make(hostlist.HostGroups)
-	for _, r := range resp.Results {
-		msg := "OK"
-		if r.Errored {
-			msg = r.Msg
-		}
-
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
-		if err := groups.AddHost(resStr, r.Addr); err != nil {
-			return err
-		}
-	}
-
-	out, err := tabulateHostGroups(groups, "Host", "Operation", "Result")
-	if err != nil {
-		return err
-	}
-
-	cmd.log.Info(out)
-
-	return nil
+	return displaySystemAction(cmd.log, resp.Results)
 }
 
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
