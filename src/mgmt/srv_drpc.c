@@ -373,6 +373,10 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 
+		rc = daos_acl_validate(out_acl);
+		if (rc != 0)
+			D_GOTO(err_out, rc);
+
 		entries++;
 	}
 

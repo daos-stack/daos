@@ -270,8 +270,9 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 
 func TestFormatACL(t *testing.T) {
 	for name, tc := range map[string]struct {
-		acl    *client.AccessControlList
-		expStr string
+		acl     *client.AccessControlList
+		verbose bool
+		expStr  string
 	}{
 		"nil": {
 			expStr: "# Entries:\n#   None\n",
@@ -280,6 +281,11 @@ func TestFormatACL(t *testing.T) {
 			acl:    &client.AccessControlList{},
 			expStr: "# Entries:\n#   None\n",
 		},
+		"empty verbose": {
+			acl:     &client.AccessControlList{},
+			expStr:  "# Entries:\n#   None\n",
+			verbose: true,
+		},
 		"single": {
 			acl: &client.AccessControlList{
 				Entries: []string{
@@ -287,6 +293,15 @@ func TestFormatACL(t *testing.T) {
 				},
 			},
 			expStr: "# Entries:\nA::user@:rw\n",
+		},
+		"single verbose": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr:  "# Entries:\n# Allow::user@:Read/Write\nA::user@:rw\n",
+			verbose: true,
 		},
 		"multiple": {
 			acl: &client.AccessControlList{
@@ -297,6 +312,19 @@ func TestFormatACL(t *testing.T) {
 				},
 			},
 			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
+		},
+		"multiple verbose": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\n# Allow::Owner:Read/Write\nA::OWNER@:rw\n" +
+				"# Allow:Group:Owner-Group:Read/Write\nA:G:GROUP@:rw\n" +
+				"# Allow:Group:readers@:Read\nA:G:readers@:r\n",
+			verbose: true,
 		},
 		"with owner user": {
 			acl: &client.AccessControlList{
@@ -318,7 +346,107 @@ func TestFormatACL(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, formatACL(tc.acl), tc.expStr, "string output didn't match")
+			common.AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
+		})
+	}
+}
+
+func TestFormatACLDefault(t *testing.T) {
+	acl := &client.AccessControlList{
+		Entries: []string{
+			"A::OWNER@:rw",
+			"A::someuser@:rw",
+			"A:G:GROUP@:rw",
+			"A:G:writers@:rw",
+			"A::EVERYONE@:r",
+		},
+	}
+
+	// Just need to make sure it doesn't use verbose mode
+	expStr := formatACL(acl, false)
+
+	common.AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
+}
+
+func TestGetVerboseACE(t *testing.T) {
+	for name, tc := range map[string]struct {
+		shortACE string
+		expStr   string
+	}{
+		"empty": {
+			expStr: "",
+		},
+		"owner": {
+			shortACE: "A::OWNER@:r",
+			expStr:   "Allow::Owner:Read",
+		},
+		"named user": {
+			shortACE: "A::friendlyuser@:r",
+			expStr:   "Allow::friendlyuser@:Read",
+		},
+		"owner group": {
+			shortACE: "A:G:GROUP@:r",
+			expStr:   "Allow:Group:Owner-Group:Read",
+		},
+		"named group": {
+			shortACE: "A:G:mynicegroup@:r",
+			expStr:   "Allow:Group:mynicegroup@:Read",
+		},
+		"everyone": {
+			shortACE: "A::EVERYONE@:r",
+			expStr:   "Allow::Everyone:Read",
+		},
+		"no identity": {
+			shortACE: "A:::r",
+			expStr:   "Allow::None:Read",
+		},
+		"write perms": {
+			shortACE: "A::friendlyuser@:w",
+			expStr:   "Allow::friendlyuser@:Write",
+		},
+		"read-write perms": {
+			shortACE: "A::friendlyuser@:rw",
+			expStr:   "Allow::friendlyuser@:Read/Write",
+		},
+		"same order as short perms": {
+			shortACE: "A::friendlyuser@:wr",
+			expStr:   "Allow::friendlyuser@:Write/Read",
+		},
+		"no perms": {
+			shortACE: "A::friendlyuser@:",
+			expStr:   "Allow::friendlyuser@:None",
+		},
+		"unrecognized perms": {
+			shortACE: "A::friendlyuser@:rvwx",
+			expStr:   "Allow::friendlyuser@:Read/Unknown/Write/Unknown",
+		},
+		"unrecognized flags": {
+			shortACE: "A:CGI:someone@:rw",
+			expStr:   "Allow:Unknown/Group/Unknown:someone@:Read/Write",
+		},
+		"unrecognized access type": {
+			shortACE: "XA:G:someone@:rw",
+			expStr:   "Unknown/Allow:Group:someone@:Read/Write",
+		},
+		"no access type": {
+			shortACE: ":G:someone@:rw",
+			expStr:   "None:Group:someone@:Read/Write",
+		},
+		"not an ACE": {
+			shortACE: "the quick brown fox jumped over the lazy dog",
+			expStr:   "invalid ACE",
+		},
+		"not all fields": {
+			shortACE: "A::friendlyuser@",
+			expStr:   "invalid ACE",
+		},
+		"too many fields": {
+			shortACE: "A::friendlyuser@:rw:xyz",
+			expStr:   "invalid ACE",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
 		})
 	}
 }

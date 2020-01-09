@@ -31,6 +31,13 @@
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
+/*
+ * Period to query raw device health stats, auto detect faulty and transition
+ * device state. 60 seconds by default. Once FAULTY state has occured, reduce
+ * monitor period to something more reasonable like 10 seconds.
+ */
+#define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
+#define NVME_MONITOR_SHORT_PERIOD   (10ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
 /* DMA buffer is managed in chunks */
 struct bio_dma_chunk {
@@ -86,6 +93,8 @@ struct bio_dev_health {
 	void			*bdh_error_buf; /* device error logs */
 	uint64_t		 bdh_stat_age;
 	unsigned int		 bdh_inflights;
+	/* period to query health stats */
+	unsigned int		 bdh_monitor_pd;
 };
 
 /*
