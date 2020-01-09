@@ -42,7 +42,7 @@ class MdtestSmall(MdtestBase):
             write bytes: 0|4K
             read bytes: 0|4K
             depth of hierarchical directory structure: 0|5
-        :avocado: tags=all,pr,hw,mdtest,mdtestsmall
+        :avocado: tags=all,pr,hw,small,mdtest,mdtestsmall
         """
         # local params
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
