@@ -278,7 +278,8 @@ vos_dtx_cos_register(void)
 
 	rc = dbtree_class_register(VOS_BTR_DTX_COS, 0, &dtx_btr_cos_ops);
 	if (rc != 0)
-		D_ERROR("Failed to register DTX CoS dbtree: rc = %d\n", rc);
+		D_ERROR("Failed to register DTX CoS dbtree: rc = "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }
@@ -439,10 +440,10 @@ add:
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
 	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
-		"intent %s, %s ilog entry: rc = %d\n",
+		"intent %s, %s ilog entry: rc = "DF_RC"\n",
 		DP_DTI(dti), (unsigned long long)dkey_hash,
 		flags & DCF_FOR_PUNCH ? "Punch" : "Update",
-		flags & DCF_HAS_ILOG ? "has" : "has not", rc);
+		flags & DCF_HAS_ILOG ? "has" : "has not", DP_RC(rc));
 
 	return rc;
 }

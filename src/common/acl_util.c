@@ -25,7 +25,7 @@
  * Utility functions that may be used when interacting with Access Control
  * Lists
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -482,7 +482,7 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 
 	rc = daos_ace_to_str(current, buf, sizeof(buf));
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACE to string: %d\n", rc);
+		D_ERROR("Couldn't convert ACE to string: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

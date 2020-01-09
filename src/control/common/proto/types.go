@@ -108,7 +108,12 @@ func (pb NvmeControllers) ToNative() (storage.NvmeControllers, error) {
 }
 
 func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	stat := c.Healthstats
+	stat := c.GetHealthstats()
+
+	if stat == nil {
+		fmt.Fprintf(buf, "\t\tHealth Stats Unavailable\n")
+		return
+	}
 
 	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
 
