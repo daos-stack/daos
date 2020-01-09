@@ -379,6 +379,8 @@ cont_uns_insert_hdlr(struct cmd_args_s *ap)
 	}
 
 	printf("Setup UNS entry point\n");
+	close(nfd);
+	close(fd);
 	return 0;
 
 close_two:

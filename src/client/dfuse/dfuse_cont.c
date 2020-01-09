@@ -92,7 +92,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 						 dfs->dfs_cont) != 0)
 					continue;
 
-				DFUSE_TRA_INFO(dfs, "Found existing container");
+				DFUSE_TRA_INFO(parent,
+					       "Found existing container dfs %p", dfsi);
 
 				rc = dfuse_check_for_inode(fs_handle, dfsi,
 							   &ie);

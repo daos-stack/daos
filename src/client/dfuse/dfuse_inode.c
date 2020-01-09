@@ -131,7 +131,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_root) {
 		struct dfuse_dfs	*dfs = ie->ie_dfs;
-		struct dfuse_dfs	*dfsi;
 		struct dfuse_pool	*dfp = dfs->dfs_dfp;
 
 		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
@@ -156,16 +155,8 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 			}
 		}
 
-		d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list, dfs_list) {
-			DFUSE_TRA_DEBUG(dfp, "Pre on list dfs %p", dfsi);
-		}
-
 		d_list_del(&dfs->dfs_list);
 		D_FREE(dfs);
-
-		d_list_for_each_entry(dfs, &dfp->dfp_dfs_list, dfs_list) {
-			DFUSE_TRA_DEBUG(dfp, "Still on list dfs %p", dfs);
-		}
 
 		if (d_list_empty(&dfp->dfp_dfs_list)) {
 			if (!daos_handle_is_inval(dfp->dfp_poh)) {

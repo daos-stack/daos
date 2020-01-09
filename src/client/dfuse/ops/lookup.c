@@ -71,7 +71,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_INFO(inode,
-			       "Maybe updating parent %lu %lu",
+			       "Maybe updating parent inode %lu dfs_root %lu",
 			       entry.ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
@@ -254,6 +254,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 			D_GOTO(out_cont, ret = rc);
 		}
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		ie->ie_root = true;
 	} else {
 
 		dfs = dfsi;
@@ -286,7 +287,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_umount, ret = rc);
 
 	dfs->dfs_root = ie->ie_stat.st_ino;
-	ie->ie_root = true;
 	dfs->dfs_dfp = dfp;
 
 	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
