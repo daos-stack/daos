@@ -115,7 +115,7 @@ type SystemQueryReq struct {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	Results system.MemberResults
+	Members system.Members
 }
 
 // SystemQuery requests DAOS system status.

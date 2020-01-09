@@ -237,7 +237,7 @@ func TestKillRank(t *testing.T) {
 
 		resultMap := cc.KillRank(0)
 
-		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
+		checkResults(t, Addresses{}, resultMap, tt.killRet)
 	}
 }
 

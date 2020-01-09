@@ -47,11 +47,6 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 		system.MemberStateUnknown, system.MemberStateStopped)
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
-	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
-	if err != nil {
-		return errors.WithMessage(err, "retrieving system leader from membership")
-	}
-
 	for _, addr := range hostAddrs {
 		hResults, err := harnessAction(ctx, leader.msClient,
 			NewRemoteHarnessReq(HarnessQuery, addr))
