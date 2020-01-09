@@ -378,9 +378,9 @@ class DaosServerConfig(ObjectWithParameters):
                 if value is not None and value is not False:
                     if name.endswith("log_file"):
                         yaml_data[name] = os.path.join(
-                            log_dir, getattr(self, name).value)
+                            log_dir, value)
                     else:
-                        yaml_data[name] = getattr(self, name).value
+                        yaml_data[name] = value
         for server_params in self.server_params:
             yaml_data["servers"].append({})
             for name in server_params.get_param_names():
@@ -388,7 +388,7 @@ class DaosServerConfig(ObjectWithParameters):
                 if value is not None and value is not False:
                     if name.endswith("log_file"):
                         yaml_data["servers"][-1][name] = os.path.join(
-                            log_dir, getattr(self, name).value)
+                            log_dir, value)
                     else:
                         yaml_data["servers"][-1][name] = value
 

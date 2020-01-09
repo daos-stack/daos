@@ -122,10 +122,9 @@ class DaosAgentConfig(ObjectWithParameters):
             value = getattr(self, name).value
             if value is not None and value is not False:
                 if name.endswith("log_file"):
-                    yaml_data[name] = os.path.join(
-                        log_dir, getattr(self, name).value)
+                    yaml_data[name] = os.path.join(log_dir, value)
                 else:
-                    yaml_data[name] = getattr(self, name).value
+                    yaml_data[name] = value
 
         # transport_config
         yaml_data["transport_config"] = {}

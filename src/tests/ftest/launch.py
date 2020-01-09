@@ -105,8 +105,11 @@ def get_temporary_directory(base_dir=None):
     return tmp_dir
 
 
-def set_test_environment():
+def set_test_environment(args):
     """Set up the test environment.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         None
@@ -162,6 +165,13 @@ def set_test_environment():
     # already defined.
     if "DAOS_TEST_LOG_DIR" not in os.environ:
         os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+
+    # Ensure the daos log files directory exists on each possible test node
+    test_hosts = NodeSet(socket.gethostname().split(".")[0])
+    test_hosts.update(args.test_clients)
+    test_hosts.update(args.test_servers)
+    spawn_commands(
+        test_hosts, "mkdir -p {}".format(os.environ["DAOS_TEST_LOG_DIR"]))
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -241,7 +251,10 @@ def spawn_commands(host_list, command, timeout=120):
 
     """
     # Create a ClusterShell Task to run the command in parallel on the hosts
-    nodes = NodeSet.fromlist(host_list)
+    if isinstance(host_list, list):
+        nodes = NodeSet.fromlist(host_list)
+    else:
+        nodes = NodeSet(host_list)
     task = task_self()
     # task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
@@ -774,7 +787,7 @@ def main():
     print("Arguments: {}".format(args))
 
     # Setup the user environment
-    set_test_environment()
+    set_test_environment(args)
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
