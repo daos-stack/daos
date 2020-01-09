@@ -370,7 +370,29 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	}
 
 	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	strcpy(str, "UNKNOWN");
 	return -1;
+}
+
+/** Return the list of registered oclass names */
+size_t
+daos_oclass_names_list(size_t size, char *str)
+{
+	struct daos_obj_class   *oc;
+	size_t len = 0;
+
+	if (size <= 0 || str == NULL)
+		return -1;
+
+	*str = '\0';
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		len += strlen(oc->oc_name) + 2;
+		if (len < size) {
+			strcat(str, oc->oc_name);
+			strcat(str, ", ");
+		}
+	}
+	return len;
 }
 
 /** Return the redundancy group size of @oc_attr */
