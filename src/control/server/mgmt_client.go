@@ -198,7 +198,10 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				default:
 				}
 
-				resp, err = pbClient.KillRanks(ctx, req) // return error if any instance lives
+				// returns on time out or when all instances are stopped
+				// error returned if any instance is still running so that
+				// we retry until all are terminated on host
+				resp, err = pbClient.KillRanks(ctx, req)
 				if msc.retryOnErr(err, ctx, prefix) {
 					continue
 				}
@@ -232,7 +235,9 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtp
 
 			ctx, _ = context.WithTimeout(ctx, retryDelay)
 
-			resp, err = pbClient.StartRanks(ctx, req) // should only return when instances are running
+			// returns on time out or when all instances are running
+			// don't retry
+			resp, err = pbClient.StartRanks(ctx, req)
 
 			return
 		})

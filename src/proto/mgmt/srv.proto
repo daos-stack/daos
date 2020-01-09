@@ -86,6 +86,19 @@ message GetAttachInfoResp {
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
 }
 
+message PrepShutdownReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// PrepShutdownResp is identical to DaosResp.
+
+message KillRankReq {
+	bool force = 1;		// Force service termination.
+	uint32 rank = 2;	// DAOS IO server unique identifier.
+}
+
+// KillRankResp is identical to DaosResp.
+
 message SetRankReq {
 	uint32 rank = 1;	// DAOS IO server unique identifier.
 }

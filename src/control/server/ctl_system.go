@@ -47,6 +47,8 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 		system.MemberStateUnknown, system.MemberStateStopped)
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
+	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
+
 	for _, addr := range hostAddrs {
 		hResults, err := harnessAction(ctx, leader.msClient,
 			NewRemoteHarnessReq(HarnessQuery, addr))
@@ -139,6 +141,8 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 	hostAddrs := svc.membership.Hosts()
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
+	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostAddrs)
+
 	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving system leader from membership")
@@ -183,6 +187,8 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
+
+	svc.log.Debugf("stopping ranks on hosts: %v", hostAddrs)
 
 	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
 	if err != nil {
@@ -239,8 +245,6 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 	// TODO: consider locking to prevent join attempts when shutting down
 
 	if req.Prep {
-		svc.log.Debug("Preparing to shutdown DAOS system")
-
 		// prepare system members for shutdown
 		prepResults, err := svc.prepShutdown(ctx, mi)
 		if err != nil {
@@ -255,8 +259,6 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 	}
 
 	if req.Kill {
-		svc.log.Debug("Stopping system members")
-
 		// shutdown by stopping system members
 		stopResults, err := svc.shutdown(ctx, mi)
 		if err != nil {
@@ -286,6 +288,8 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
+
+	svc.log.Debugf("starting ranks on hosts: %v", hostAddrs)
 
 	// member can still be retrieved because superblock can be accessed from
 	// storage even if leader instance is not started
@@ -349,7 +353,7 @@ func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemSta
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemStart RPC; starting system members")
+	svc.log.Debug("Received SystemStart RPC")
 
 	// start stopped system members
 	startResults, err := svc.restart(ctx, mi)

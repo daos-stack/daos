@@ -731,7 +731,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank, nil)
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank, &mgmtpb.KillRankReq{})
 		if err != nil {
 			// just log failure to allow retries and other instances to be processed
 			svc.log.Errorf("rank %d drpc failed: %s", *rank, err)
