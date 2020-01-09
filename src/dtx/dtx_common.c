@@ -507,7 +507,7 @@ out:
 	D_FREE(commit_ids);
 	D_FREE(abort_dtes);
 
-	D_ASSERTF(rc <= 0, "unexpected return value %d\n", rc);
+	D_ASSERTF(rc <= 0, "unexpected return value "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -980,7 +980,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, ult_arg, DSS_ULT_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("ult create failed %d.\n", rc);
+		D_ERROR("ult create failed "DF_RC"\n", DP_RC(rc));
 		D_FREE_PTR(ult_arg);
 		ABT_future_free(&dlh->dlh_future);
 		D_GOTO(out, rc);

@@ -183,7 +183,7 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 		rc = umem_tx_commit(umm);
 
 	if (rc) {
-		D_ERROR("Failed to delete entry: %d\n", rc);
+		D_ERROR("Failed to delete entry: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -380,7 +380,7 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 delete:
 	rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
 	if (rc) {
-		D_ERROR("Failed to delete SV entry: %d\n", rc);
+		D_ERROR("Failed to delete SV entry: "DF_RC"\n", DP_RC(rc));
 	} else if (vos_iter_empty(ih) == 1 && agg_param->ap_discard) {
 		/* Trigger re-probe in akey iteration */
 		*acts |= VOS_ITER_CB_YIELD;
@@ -566,7 +566,8 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, &io->ic_nvme_exts);
 	if (rc) {
-		D_ERROR("Reserve %u blocks on NVMe failed: %d\n", blk_cnt, rc);
+		D_ERROR("Reserve %u blocks on NVMe failed: "DF_RC"\n", blk_cnt,
+		DP_RC(rc));
 		return rc;
 	}
 
@@ -632,7 +633,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	rc = reserve_segment(obj, io, seg_size, &ent_in->ei_addr);
 	if (rc) {
-		D_ERROR("Reserve "DF_U64" segment error: %d\n", seg_size, rc);
+		D_ERROR("Reserve "DF_U64" segment error: "DF_RC"\n", seg_size,
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -646,7 +648,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	rc = bio_sgl_init(&bsgl, lgc_seg->ls_idx_end -
 			  lgc_seg->ls_idx_start + 1);
 	if (rc) {
-		D_ERROR("Init bsgl error: %d\n", rc);
+		D_ERROR("Init bsgl error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -700,8 +702,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	sgl.sg_iovs = &iov;
 	rc = bio_readv(bio_ctxt, &bsgl, &sgl);
 	if (rc) {
-		D_ERROR("Readv for "DF_RECT" error: %d\n",
-			DP_RECT(&ent_in->ei_rect), rc);
+		D_ERROR("Readv for "DF_RECT" error: "DF_RC"\n",
+			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 		bio_sgl_fini(&bsgl);
 		return rc;
 	}
@@ -716,8 +718,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	iov.iov_len = seg_size;
 	rc = bio_write(bio_ctxt, addr_dst, &iov);
 	if (rc)
-		D_ERROR("Write "DF_RECT" error: %d\n",
-			DP_RECT(&ent_in->ei_rect), rc);
+		D_ERROR("Write "DF_RECT" error: "DF_RC"\n",
+			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 
 	bio_sgl_fini(&bsgl);
 	return rc;
@@ -756,10 +758,11 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = fill_one_segment(ih, mw, lgc_seg, acts);
 		if (rc) {
-			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: %d\n",
+			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: "DF_RC"\n",
 				lgc_seg->ls_idx_start, lgc_seg->ls_idx_end,
 				lgc_seg->ls_phy_ent,
-				DP_RECT(&lgc_seg->ls_ent_in.ei_rect), rc);
+				DP_RECT(&lgc_seg->ls_ent_in.ei_rect),
+					DP_RC(rc));
 			break;
 		}
 	}
@@ -793,8 +796,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 				     io->ic_scm_cnt);
 		io->ic_scm_cnt = 0;
 		if (rc) {
-			D_ERROR("Publish %u SCM extents error: %d\n",
-				io->ic_scm_cnt, rc);
+			D_ERROR("Publish %u SCM extents error: "DF_RC"\n",
+				io->ic_scm_cnt, DP_RC(rc));
 			goto abort;
 		}
 	}
@@ -848,8 +851,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: %d\n",
-				DP_RECT(&rect), phy_ent->pe_off, rc);
+			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
+				""DF_RC"\n", DP_RECT(&rect), phy_ent->pe_off,
+				DP_RC(rc));
 			goto abort;
 		}
 
@@ -880,8 +884,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_insert(oiter->it_hdl, ent_in);
 		if (rc) {
-			D_ERROR("Insert segment "DF_RECT" error: %d\n",
-				DP_RECT(&ent_in->ei_rect), rc);
+			D_ERROR("Insert segment "DF_RECT" error: "DF_RC"\n",
+				DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 			goto abort;
 		}
 	}
@@ -890,7 +894,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
 				VOS_IOS_AGGREGATION);
 	if (rc) {
-		D_ERROR("Publish NVMe extents error: %d\n", rc);
+		D_ERROR("Publish NVMe extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
 	}
 abort:
@@ -1000,24 +1004,24 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
-		D_ERROR("Prepare segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Prepare segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 
 	/* Transfer data from old logical records to reserved new segments */
 	rc = fill_segments(ih, mw, acts);
 	if (rc) {
-		D_ERROR("Fill segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Fill segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 
 	/* Replace the old logical records with new segments in EV tree */
 	rc = insert_segments(ih, mw, acts);
 	if (rc) {
-		D_ERROR("Insert segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Insert segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 out:
@@ -1240,8 +1244,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete EV entry "DF_RECT" error: %d\n",
-				DP_RECT(&rect), rc);
+			D_ERROR("Delete EV entry "DF_RECT" error: "DF_RC"\n",
+				DP_RECT(&rect), DP_RC(rc));
 			return rc;
 		}
 
@@ -1252,8 +1256,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	if (visible && trigger_flush(mw, &lgc_ext)) {
 		rc = flush_merge_window(ih, mw, acts);
 		if (rc) {
-			D_ERROR("Flush window "DF_EXT" error: %d\n",
-				DP_EXT(&mw->mw_ext), rc);
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
 			return rc;
 		}
 		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
@@ -1270,8 +1274,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent == NULL) {
 			rc = -DER_NOMEM;
 			D_ERROR("Enqueue phy_ent win:"DF_EXT", ent:"DF_EXT" "
-				"error: %d\n", DP_EXT(&mw->mw_ext),
-				DP_EXT(&phy_ext), rc);
+				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
+				DP_EXT(&phy_ext), DP_RC(rc));
 			return rc;
 		}
 	} else {
@@ -1284,8 +1288,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = enqueue_lgc_ent(mw, &lgc_ext, phy_ent);
 		if (rc) {
 			D_ERROR("Enqueue lgc_ent win: "DF_EXT", ent:"DF_EXT" "
-				"error: %d\n", DP_EXT(&mw->mw_ext),
-				DP_EXT(&lgc_ext), rc);
+				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
+				DP_EXT(&lgc_ext), DP_RC(rc));
 			return rc;
 		}
 	} else {
@@ -1297,8 +1301,8 @@ out:
 	if (last) {
 		rc = flush_merge_window(ih, mw, acts);
 		if (rc)
-			D_ERROR("Flush window "DF_EXT" error: %d\n",
-				DP_EXT(&mw->mw_ext), rc);
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
 		close_merge_window(mw, rc);
 	}
 
@@ -1368,8 +1372,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
 			if (rc)
-				D_ERROR("Delete EV entry "DF_RECT" error: %d\n",
-					DP_RECT(&rect), rc);
+				D_ERROR("Delete EV entry "DF_RECT" error: "
+					""DF_RC"\n", DP_RECT(&rect), DP_RC(rc));
 		}
 
 		/*
@@ -1396,8 +1400,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = join_merge_window(ih, mw, entry, acts);
 	if (rc)
-		D_ERROR("Join window "DF_EXT"/"DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), rc);
+		D_ERROR("Join window "DF_EXT"/"DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), DP_RC(rc));
 out:
 	if (rc)
 		close_merge_window(mw, rc);
@@ -1441,7 +1445,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("VOS aggregation failed: %d\n", rc);
+		D_ERROR("VOS aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
