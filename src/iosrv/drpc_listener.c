@@ -89,7 +89,8 @@ drpc_listener_run(void *arg)
 		/* wait a second */
 		rc = drpc_progress(ctx, 1000);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
-			D_ERROR("dRPC listener progress error: %d\n", rc);
+			D_ERROR("dRPC listener progress error: "DF_RC"\n",
+				DP_RC(rc));
 		}
 
 		ABT_thread_yield();
@@ -147,7 +148,8 @@ drpc_listener_start_ult(ABT_thread *thread)
 	rc = dss_ult_create(drpc_listener_run, (void *)ctx,
 			    DSS_ULT_DRPC_LISTENER, 0, 0, thread);
 	if (rc != 0) {
-		D_ERROR("Failed to create drpc listener ULT: %d\n", rc);
+		D_ERROR("Failed to create drpc listener ULT: "DF_RC"\n",
+			DP_RC(rc));
 		drpc_progress_context_close(ctx);
 		return rc;
 	}

@@ -235,7 +235,8 @@ obj_utils_init(void)
 	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
 				   &recx_btr_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_RECX: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	return 0;
