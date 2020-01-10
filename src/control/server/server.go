@@ -181,11 +181,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
-	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
-		return errors.WithMessage(err, "dRPC setup")
-	}
-
 	// Create and setup control service.
 	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
 	if err != nil {
@@ -202,12 +197,29 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
+	var opts []grpc.ServerOption
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
+	opts = append(opts, tcOpt)
 
-	grpcServer := grpc.NewServer(tcOpt)
+	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if uintOpt != nil {
+		opts = append(opts, uintOpt)
+	}
+	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if sintOpt != nil {
+		opts = append(opts, sintOpt)
+	}
+
+	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
 
@@ -237,5 +249,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 
-	return errors.Wrapf(harness.Start(ctx, membership), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

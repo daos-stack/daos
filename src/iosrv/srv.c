@@ -530,7 +530,8 @@ dss_srv_handler(void *arg)
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
 		if (rc != 0) {
-			D_ERROR("failed to create crt ctxt: %d\n", rc);
+			D_ERROR("failed to create crt ctxt: "DF_RC"\n",
+				DP_RC(rc));
 			goto tls_fini;
 		}
 
@@ -538,14 +539,16 @@ dss_srv_handler(void *arg)
 						   dss_process_rpc,
 						   dx->dx_pools);
 		if (rc != 0) {
-			D_ERROR("failed to register process cb %d\n", rc);
+			D_ERROR("failed to register process cb "DF_RC"\n",
+				DP_RC(rc));
 			goto crt_destroy;
 		}
 
 		/** Get context index from cart */
 		rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_ctx_id);
 		if (rc != 0) {
-			D_ERROR("failed to get xtream index: rc %d\n", rc);
+			D_ERROR("failed to get xtream index: rc "DF_RC"\n",
+				DP_RC(rc));
 			goto crt_destroy;
 		}
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
@@ -792,7 +795,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
-		D_ERROR("create scheduler fails: %d\n", rc);
+		D_ERROR("create scheduler fails: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
 

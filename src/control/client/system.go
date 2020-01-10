@@ -63,20 +63,41 @@ func (c *connList) SystemStop(req SystemStopReq) (system.MemberResults, error) {
 	return proto.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
 
-// SystemMemberQuery will return the list of members joined to DAOS system.
+// SystemStart will perform a restart after a controlled shutdown of DAOS system.
+func (c *connList) SystemStart() error {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return err
+	}
+
+	rpcReq := &ctlpb.SystemStartReq{}
+
+	c.log.Debugf("DAOS system restart request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getCtlClient().SystemStart(context.Background(), rpcReq)
+	if err != nil {
+		return err
+	}
+
+	c.log.Debugf("DAOS system restart response: %s\n", rpcResp)
+
+	return nil
+}
+
+// SystemQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemMemberQuery() (system.Members, error) {
+func (c *connList) SystemQuery() (system.Members, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemMemberQueryReq{}
+	rpcReq := &ctlpb.SystemQueryReq{}
 
 	c.log.Debug("Sending DAOS system member query request\n")
 
-	rpcResp, err := mc.getCtlClient().SystemMemberQuery(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}

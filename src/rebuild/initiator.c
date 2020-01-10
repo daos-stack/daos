@@ -115,7 +115,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 				   rdone->ro_iod_num, rdone->ro_iods, sgls,
 				   NULL);
 		if (rc) {
-			D_ERROR("dsc_obj_fetch %d\n", rc);
+			D_ERROR("dsc_obj_fetch "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
@@ -145,7 +145,8 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 					    &rdone->ro_iods[start],
 					    &sgls[start]);
 			if (rc) {
-				D_ERROR("rebuild failed: rc %d\n", rc);
+				D_ERROR("rebuild failed: rc "DF_RC"\n",
+					DP_RC(rc));
 				break;
 			}
 			iod_cnt = 0;
@@ -1174,7 +1175,7 @@ rebuild_puller_ult(void *arg)
 				    DAOS_INTENT_REBUILD, false,
 				    puller_cont_iter_cb, iter_arg);
 		if (rc) {
-			D_ERROR("dbtree iterate fails %d\n", rc);
+			D_ERROR("dbtree iterate fails "DF_RC"\n", DP_RC(rc));
 			if (tls->rebuild_pool_status == 0)
 				tls->rebuild_pool_status = rc;
 			break;
@@ -1209,7 +1210,7 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl)
 	rc = dbtree_iterate(btr_hdl, DAOS_INTENT_REBUILD, false,
 			    rebuilt_btr_destory_cb, NULL);
 	if (rc) {
-		D_ERROR("dbtree iterate fails %d\n", rc);
+		D_ERROR("dbtree iterate fails "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -1233,7 +1234,8 @@ rebuild_btr_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl,
 					   &rpt->rt_tobe_rb_root,
 					   &rpt->rt_tobe_rb_root_hdl);
 		if (rc != 0) {
-			D_ERROR("failed to create rebuild tree: %d\n", rc);
+			D_ERROR("failed to create rebuild tree: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1246,7 +1248,8 @@ rebuild_btr_hdl_get(struct rebuild_tgt_pool_tracker *rpt, daos_handle_t *hdl,
 					   &rpt->rt_rebuilt_root,
 					   &rpt->rt_rebuilt_root_hdl);
 		if (rc != 0) {
-			D_ERROR("failed to create rebuild tree: %d\n", rc);
+			D_ERROR("failed to create rebuild tree: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
