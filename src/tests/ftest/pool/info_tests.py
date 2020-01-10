@@ -51,7 +51,6 @@ class InfoTests(TestWithServers):
         self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
-        # pool_targets = len(self.hostlist_servers) * targets
 
         # Create a pool
         self.pool.create()
@@ -73,7 +72,7 @@ class InfoTests(TestWithServers):
         self.assertTrue(status, "Invlaid pool information detected prior")
         checks = {
             "s_total": (self.pool.scm_size.value, 0),
-            #"s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
+            "s_free": ("<{}".format(self.pool.scm_size.value), 0),
         }
         status = self.pool.check_pool_daos_space(**checks)
         self.assertTrue(status, "Invlaid pool space information detected")

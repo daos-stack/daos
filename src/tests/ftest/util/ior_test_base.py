@@ -24,14 +24,15 @@
 import os
 
 from ClusterShell.NodeSet import NodeSet
+
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import Mpirun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import Mpich
 from mpio_utils import MpioUtils
 from test_utils import TestPool
 from dfuse_utils import Dfuse
 from daos_utils import create_container
-from write_host_file import write_host_file
 
 
 class IorTestBase(TestWithServers):
@@ -98,15 +99,16 @@ class IorTestBase(TestWithServers):
             self.ior_cmd.daos_svcl.value,
             "POSIX",
             self.server_managers[0].get_interface_envs())
-        if result is not None:
-            cont_uuid = result.stdout.split()[3]
-            self.log.debug("daos cont create stdout:\n  %s", result.stdout)
-            self.log.debug(
-                "daos cont create stdot_text:\n  %s", result.stdout_text)
-            self.log.info("Container created with UUID %s", cont_uuid)
-            return cont_uuid
-        else:
+
+        if result is None:
             self.fail("Container create failed")
+
+        cont_uuid = result.stdout.split()[3]
+        self.log.debug("daos cont create stdout:\n  %s", result.stdout)
+        self.log.debug("daos cont create stdot_text:\n  %s", result.stdout_text)
+        self.log.info("Container created with UUID %s", cont_uuid)
+
+        return cont_uuid
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -131,7 +133,7 @@ class IorTestBase(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          hostfile=None):
+                          slots=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -141,9 +143,8 @@ class IorTestBase(TestWithServers):
             intercept (str): path to the interception library. Shall be used
                              only for POSIX through DFUSE.
             test_file_suffix (str, optional): Defaults to "".
-            hostfile (str, optional): path to the hostfile. Defaults to None
-                which will create a hostfile using all of the hostfile_client
-                hosts w/o any slots specified.
+            slots (int, optional): slots per host to specify in the hostfile.
+                Defaults to None
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -166,7 +167,7 @@ class IorTestBase(TestWithServers):
             self.ior_cmd.test_file.update(testfile)
 
         out = self.run_ior(
-            self.get_job_manager_command(), self.processes, intercept, hostfile)
+            self.get_job_manager_command(), self.processes, intercept, slots)
 
         return out
 
@@ -185,28 +186,26 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Unsupported IOR API")
 
-        mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
-        return Mpirun(self.ior_cmd, mpirun_path, mpitype="mpich")
+        return Mpich(self.ior_cmd)
 
-    def run_ior(self, manager, processes, intercept=None, hostfile=None):
+    def run_ior(self, manager, processes, intercept=None, slots=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
             intercept (str): path to interception library.
-            hostfile (str, optional): path to the hostfile. Defaults to None
-                which will create a hostfile using all of the hostfile_client
-                hosts w/o any slots specified.
+            slots (int, optional): slots per host to specify in the hostfile.
+                Defaults to None
         """
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
-        if hostfile is None:
-            hostfile = write_host_file(
-                self.hostlist_clients, self.workdir, None)
-        manager.setup_command(env, hostfile, processes)
+
+        manager.assign_hosts(self.hostlist_clients, self.workdir, slots)
+        manager.assign_processes(processes)
+        manager.assign_environment(env)
         try:
             out = manager.run()
             return out

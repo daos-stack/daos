@@ -23,9 +23,9 @@
 """
 import socket
 
-from command_utils import BasicParameter, FormattedParameter, YamlParameters
-from command_utils import YamlCommand, SubprocessManager, CommandFailure
-from command_utils import TransportCredentials
+from command_utils import BasicParameter, FormattedParameter, CommandFailure
+from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
+                                TransportCredentials)
 
 
 def include_local_host(hosts):
@@ -80,7 +80,7 @@ class DaosAgentYamlParameters(YamlParameters):
         #   - log_file: <str>, e.g. /tmp/daos_agent.log
         #       Full path and name of the DAOS agent logfile.
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
-        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+        self.log_file = BasicParameter(None, "daos_agent.log")
 
     def get_params(self, test):
         """Get values for the daos agent yaml config file.
@@ -93,6 +93,18 @@ class DaosAgentYamlParameters(YamlParameters):
         # Override the log file file name with the test log file name
         if hasattr(test, "client_log") and test.client_log is not None:
             self.log_file.value = test.client_log
+
+    def update_log_file(self, name):
+        """Update the log file name for the daos agent.
+
+        If the log file name is set to None the log file parameter value will
+        not be updated.
+
+        Args:
+            name (str): log file name
+        """
+        if name is not None:
+            self.log_file.update(name, "agent_config.log_file")
 
 
 class DaosAgentCommand(YamlCommand):
@@ -133,19 +145,35 @@ class DaosAgentCommand(YamlCommand):
         self.runtime_dir = FormattedParameter("--runtime_dir=={}")
         self.logfile = FormattedParameter("--logfile={}")
 
+    def get_params(self, test):
+        """Get values for the daos command and its yaml config file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosAgentCommand, self).get_params(test)
+
+        # Run daos_agent with test variant specific log file names if specified
+        self.yaml.update_log_file(getattr(test, "agent_log"))
+
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts using orterun."""
 
-    def __init__(self, ompi_path, agent_command):
-        """Initialize an DaosAgentManager object.
+    @hosts.setter
+    def hosts(self, value):
+        """Set the hosts used to execute the daos command.
 
         Args:
-            ompi_path (str): path to location of orterun binary.
-            agent_command (AgentCommand): server command object
+            value (tuple): a tuple of a list of hosts, a path in which to create
+                the hostfile, and a number of slots to specify per host in the
+                hostfile (can be None)
         """
-        super(DaosAgentManager, self).__init__(
-            "/run/agent_config", agent_command, ompi_path)
+        super(DaosAgentManager, self).hosts(value)
+
+        # Update the expected number of messages to reflect the number of
+        # daos_agent processes that will be started by the command
+        self.manager.job.pattern_count = len(self._hosts)
 
     def stop(self):
         """Stop the agent through the runner.
@@ -170,6 +198,6 @@ class DaosAgentManager(SubprocessManager):
         self.kill()
 
         # Report any errors after all stop actions have been attempted
-        if len(messages) > 0:
+        if messages:
             raise CommandFailure(
                 "Failed to stop agents:\n  {}".format("\n  ".join(messages)))

@@ -22,10 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from ior_test_base import IorTestBase
-from write_host_file import write_host_file
 
 
 class SegCount(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with different segment counts.
 
     :avocado: recursive
@@ -43,10 +43,6 @@ class SegCount(IorTestBase):
 
         :avocado: tags=all,mpiio,large,ior_segcount
         """
-        # Update the hostfile with the requested number of slots per host
-        hostfile = write_host_file(
-            self.hostlist_clients, self.workdir, self.processes)
-
         # Set the IOR segment count
         if self.ior_cmd.block_size.value == '4k' and self.processes == 16:
             self.ior_cmd.segment_count.update(491500)
@@ -67,5 +63,6 @@ class SegCount(IorTestBase):
         elif self.ior_cmd.block_size.value == '4m' and self.processes == 64:
             self.ior_cmd.segment_count.update(120)
 
-        # Create a pool and run IOR
-        self.run_ior_with_pool(hostfile=hostfile)
+        # Create a pool and run IOR using a hostfile with the requested number
+        # of slots per host
+        self.run_ior_with_pool(slots=self.processes)

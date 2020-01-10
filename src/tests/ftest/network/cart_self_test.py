@@ -25,8 +25,9 @@ import os
 
 from apricot import TestWithServers
 
-from command_utils import EnvironmentVariables, ExecutableCommand
-from command_utils import FormattedParameter, Orterun, CommandFailure
+from command_utils import (EnvironmentVariables, ExecutableCommand,
+                           FormattedParameter, CommandFailure)
+from job_manager_utils import OpenMPI
 from server_utils import DaosServerTransportCredentials
 
 
@@ -99,7 +100,7 @@ class CartSelfTest(TestWithServers):
             self.server_managers[0].job.get_server_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
             self.server_managers[0].job.get_server_config_value("fabric_iface")
-        self.server_managers[0].add_environment_variables(self.cart_env)
+        self.server_managers[0].assign_environment(self.cart_env, True)
 
         # Start the daos server
         self.start_server_managers()
@@ -110,7 +111,7 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(SelfTest(self.cart_bin), self.ompi_bin)
+        orterun = OpenMPI(SelfTest(self.cart_bin))
         orterun.ompi_server.update(
             "file:{}".format(self.uri_file), "orterun/ompi_server")
         orterun.map_by.update(None, "orterun/map_by")
@@ -121,7 +122,7 @@ class CartSelfTest(TestWithServers):
         orterun.job.group_name.value = self.server_group
 
         # Setup the environment variables for the self_test orterun command
-        orterun.add_environment_variables(self.cart_env)
+        orterun.assign_environment(self.cart_env)
 
         # Run the test
         try:

@@ -35,7 +35,8 @@ from distutils.spawn import find_executable
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from configuration_utils import Configuration
-from command_utils import CommonConfig, CommandFailure
+from command_utils import CommandFailure, EnvironmentVariables
+from command_daos_utils import CommonConfig
 from agent_utils import DaosAgentYamlParameters, DaosAgentCommand
 from agent_utils import DaosAgentManager, DaosAgentTransportCredentials
 from agent_utils import include_local_host
@@ -194,6 +195,7 @@ class TestWithServers(TestWithoutServers):
         self.debug = False
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.manager_class = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.agent_managers = []
@@ -204,6 +206,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_log = None
         self.server_log = None
         self.control_log = None
+        self.helper_log = None
         self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
@@ -216,6 +219,9 @@ class TestWithServers(TestWithoutServers):
 
         self.server_group = self.params.get(
             "name", "/server_config/", "daos_server")
+
+        # Support using different job managers to launch the daos agent/servers
+        self.manager_class = self.params.get("manager_class", "/", "OpenMPI")
 
         # Determine which hosts to use as servers and optionally clients.
         test_servers = self.params.get("test_servers", "/run/hosts/*")
@@ -390,7 +396,7 @@ class TestWithServers(TestWithoutServers):
             hosts = self.hostlist_servers
 
         common_cfg = CommonConfig(group, transport)
-        common_cfg.update_hosts(hosts)
+        common_cfg.update_hosts(hosts[:1])
         return common_cfg
 
     def add_agent_manager(self, config_file=None, common_cfg=None, timeout=60):
@@ -417,13 +423,9 @@ class TestWithServers(TestWithoutServers):
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
-        if self.agent_log is not None:
-            self.log.info(
-                "Using a test-specific daos_agent log file: %s",
-                self.agent_log)
-            agent_cfg.log_file.value = self.agent_log
         agent_cmd = DaosAgentCommand(self.bin, agent_cfg, timeout)
-        self.agent_managers.append(DaosAgentManager(self.ompi_bin, agent_cmd))
+        self.agent_managers.append(
+            DaosAgentManager(agent_cmd, self.manager_class))
 
     def add_server_manager(self, config_file=None, common_cfg=None, timeout=60):
         """Add a new daos server manager object to the server manager list.
@@ -452,19 +454,9 @@ class TestWithServers(TestWithoutServers):
 
         # Create an ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
-        if self.server_log is not None:
-            self.log.info(
-                "Using a test-specific daos_server log file: %s",
-                self.server_log)
-            server_cfg.update_server_log_files(self.server_log)
-        if self.control_log is not None:
-            self.log.info(
-                "Using a test-specific daos_server control log file: %s",
-                self.control_log)
-            server_cfg.update_control_log_file(self.control_log)
         server_cmd = DaosServerCommand(self.bin, server_cfg, timeout)
         self.server_managers.append(
-            DaosServerManager(self.ompi_bin, server_cmd))
+            DaosServerManager(server_cmd, self.manager_class))
 
     def configure_manager(self, name, manager, hosts, slots):
         """Configure the agent/server manager object.
@@ -474,13 +466,14 @@ class TestWithServers(TestWithoutServers):
 
         Args:
             name (str): manager name
-            manager (SubprocessManager): [description]
+            manager (SubprocessManager): the daos agent/server process manager
             hosts (list): list of hosts on which to start the daos agent/server
             slots (int): number of slots per server to define in the hostfile
         """
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
+        # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.add_environment_list(["PATH"])
+        manager.manager.assign_environment(EnvironmentVariables({"PATH": None}))
         manager.hosts = (hosts, self.workdir, slots)
 
     @fail_on(CommandFailure)
@@ -656,19 +649,17 @@ class TestWithServers(TestWithoutServers):
         return error_list
 
     def update_log_file_names(self, test_name=None):
-        """Set unique log file names for agents, servers, and clients.
+        """Define agent, server, and client log files that include the test id.
 
         Args:
             test_name (str, optional): name of test variant. Defaults to None.
         """
         if test_name:
+            # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        self.agent_log = os.path.join(
-            self.log_dir, "{}_agent_daos.log".format(self.test_id))
-        self.server_log = os.path.join(
-            self.log_dir, "{}_server_daos.log".format(self.test_id))
-        self.control_log = os.path.join(
-            self.log_dir, "{}_control_daos.log".format(self.test_id))
-        self.client_log = os.path.join(
-            self.log_dir, "{}_client_daos.log".format(self.test_id))
+        self.agent_log = "{}_daos_agent.log".format(self.test_id)
+        self.server_log = "{}_daos_server.log".format(self.test_id)
+        self.control_log = "{}_daos_control.log".format(self.test_id)
+        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.client_log = "{}_daos_client.log".format(self.test_id)

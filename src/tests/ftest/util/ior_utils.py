@@ -39,11 +39,12 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd = IorCommand()
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
-        >>> mpirun = Mpirun()
-        >>> env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
-        >>> hostfile = write_host_file(self.hostlist_clients, self.workdir)
-        >>> processes = len(self.hostlist_clients)
-        >>> mpirun.setup_command(env, hostfile, processes)
+        >>> mpirun = Mpich(ior_cmd)
+        >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir)
+        >>> mpirun.assign_processes(len(self.hostlist_clients))
+        >>> mpirun.assign_environment(
+                self.ior_cmd.get_default_env(
+                    mpirun.command, self.tmp, self.client_log))
         >>> mpirun.run()
     """
 
@@ -265,9 +266,9 @@ class IorCommand(ExecutableCommand):
 
         return (write_metrics, read_metrics)
 
+
 class IorMetrics(IntEnum):
-    """Index Name and Number of each column in IOR result summary.
-    """
+    """Index Name and Number of each column in IOR result summary."""
 
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)

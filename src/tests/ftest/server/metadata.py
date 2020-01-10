@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 import threading
@@ -39,7 +38,8 @@ except ImportError:
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
-from command_utils import Orterun, CommandFailure
+from command_utils import CommandFailure
+from job_manager_utils import OpenMPI
 from test_utils import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
@@ -213,12 +213,11 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                path = os.path.join(self.ompi_prefix, "bin")
-                manager = Orterun(ior_cmd, path)
-                env = ior_cmd.get_default_env(str(manager), self.tmp)
-                hostfile = self.agent_managers[0].create_hostfile(
-                    self.workdir, None)
-                manager.setup_command(env, hostfile, processes)
+                manager = OpenMPI(ior_cmd)
+                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+                manager.assign_processes(processes)
+                manager.assign_environment(
+                    ior_cmd.get_default_env(manager.command, self.tmp))
 
                 # Add a thread for these IOR arguments
                 threads.append(

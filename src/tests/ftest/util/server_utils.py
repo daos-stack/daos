@@ -26,15 +26,13 @@ from __future__ import print_function
 import os
 import getpass
 
-from command_utils import YamlParameters, BasicParameter, FormattedParameter
-from command_utils import YamlCommand, SubprocessManager, CommandWithSubCommand
-from command_utils import CommandWithParameters, TransportCredentials
-from command_utils import CommandFailure, EnvironmentVariables
+from command_utils import (BasicParameter, FormattedParameter,
+                           CommandWithParameters, CommandWithSubCommand,
+                           CommandFailure, EnvironmentVariables)
+from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
+                                TransportCredentials)
 from general_utils import pcmd
 from dmg_utils import storage_format
-
-# This is out of date and should not be used
-AVOCADO_FILE = "daos_avocado_test.yaml"
 
 
 class ServerFailed(Exception):
@@ -203,45 +201,35 @@ class DaosServerYamlParameters(YamlParameters):
                 return True
         return False
 
-    def update_control_log_file(self, name):
-        """Update the daos server control log file parameter.
+    def update_log_files(self, control_log, helper_log, server_log):
+        """Update the logfile parameter for the daos server.
+
+        If there are multiple server configurations defined the server_log value
+        will be made unique for each server's log_file parameter.
+
+        Any log file name set to None will result in no update to the respective
+        log file parameter value.
 
         Args:
-            name (str): new log file name
+            control_log (str): control log file name
+            helper_log (str): helper (admin) log file name
+            server_log (str): per server log file name
         """
-        if name is not None:
-            self.control_log_file.update(name, "control_log_file")
-
-    def update_server_log_files(self, names):
-        """Update the daos server log file parameter.
-
-        Args:
-            names (list|str): list of new server log file names.  A single
-                string is also supported, where if needed, the string will be
-                used to auto-generate a unique log file for each individual
-                server parameter section.
-        """
-        # Support specifying a single log file name as a template
-        if not isinstance(names, list):
-            if len(self.server_params) == 1:
-                # If there is only one set of server parameters, use the string
-                names = [names]
-            else:
-                # For multiple server parameters create a list of unique log
-                # file names for each set of server parameters, e.g.
-                #   Convert '/path/to/file/log_file_name.log' into:
-                #       /path/to/file/log_file_name_0.log,
-                #       /path/to/file/log_file_name_1.log,
-                #       etc.
-                file_split = list(os.path.splitext(names))
-                names = [
-                    "".join(file_split.copy().insert("_{}".format(index)))
-                    for index, _ in enumerate(self.server_params)]
-
-        # Assign the log file names for each set of server parameters
-        for index, name in enumerate(names):
-            if name is not None and index < len(self.server_params):
-                self.server_params[index].update_log_file(name)
+        if control_log is not None:
+            self.control_log_file.update(
+                control_log, "server_config.control_log_file")
+        if helper_log is not None:
+            self.helper_log_file.update(
+                helper_log, "server_config.helper_log_file")
+        if server_log is not None:
+            for index, server_params in enumerate(self.server_params):
+                log_name = list(os.path.splitext(server_log))
+                if len(self.server_params) > 1:
+                    # Create unique log file names for each daos_io_server
+                    log_name.insert(1, "_{}".format(index))
+                server_params.log_file.update(
+                    "".join(log_name),
+                    "server_config.server[{}].log_file".format(index))
 
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
@@ -272,11 +260,19 @@ class DaosServerYamlParameters(YamlParameters):
     class PerServerYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
-        def __init__(self):
-            """Create a SingleServerConfig object."""
+        def __init__(self, index=None):
+            """Create a SingleServerConfig object.
+
+            Args:
+                index (int, optional): index number for the namespace path used
+                    when specifying multiple servers per host. Defaults to None.
+            """
+            namespace = "/run/server_config/servers/*"
+            if isinstance(index, int):
+                namespace = "/run/server_config/servers/{}/*".format(index)
             super(
                 DaosServerYamlParameters.PerServerYamlParameters,
-                self).__init__("/run/server_config/servers/*")
+                self).__init__(namespace)
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
@@ -303,7 +299,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
-            self.log_file = BasicParameter(None, "/tmp/server.log")
+            self.log_file = BasicParameter(None, "daos_server.log")
             self.env_vars = BasicParameter(
                 None,
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",
@@ -477,6 +473,13 @@ class DaosServerCommand(YamlCommand):
         """
         super(DaosServerCommand, self).get_params(test)
         self.update_pattern()
+
+        # Run daos_server with test variant specific log file names if specified
+        self.yaml.update_log_files(
+            getattr(test, "control_log"),
+            getattr(test, "helper_log"),
+            getattr(test, "server_log")
+        )
 
     def update_pattern(self, override=None):
         """Update the pattern used to determine if the daos_server started.
@@ -682,17 +685,34 @@ class DaosServerCommand(YamlCommand):
 class DaosServerManager(SubprocessManager):
     """Manages the daos_server execution on one or more hosts using orterun."""
 
-    def __init__(self, ompi_path, server_command):
+    def __init__(self, server_command, manager="OpenMPI"):
         """Initialize a DaosServerManager object.
 
         Args:
-            ompi_path (str): path to location of orterun binary.
             server_command (ServerCommand): server command object
+            manager (str, optional): the name of the JobManager class used to
+                manage the YamlCommand defined through the "job" attribute.
+                Defaults to "OpenMpi"
         """
-        super(DaosServerManager, self).__init__(
-            "/run/server_config", server_command, ompi_path)
-        self.job.sub_command_override = "start"
+        super(DaosServerManager, self).__init__(server_command, manager)
+        self.manager.job.sub_command_override = "start"
         self._exe_names.append("daos_io_server")
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the hosts used to execute the daos command.
+
+        Args:
+            value (tuple): a tuple of a list of hosts, a path in which to create
+                the hostfile, and a number of slots to specify per host in the
+                hostfile (can be None)
+        """
+        super(DaosServerManager, self).hosts(value)
+
+        # Update the expected number of messages to reflect the number of
+        # daos_io_server processes that will be started by the command
+        self.manager.job.pattern_count = \
+            len(self._hosts) * len(self.manager.job.yaml.server_params)
 
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
@@ -707,7 +727,7 @@ class DaosServerManager(SubprocessManager):
                 configuration file.
 
         """
-        return self.job.get_interface_envs(index)
+        return self.manager.job.get_interface_envs(index)
 
     def prepare(self):
         """Prepare the host to run the server."""
@@ -722,17 +742,17 @@ class DaosServerManager(SubprocessManager):
         self.clean_files()
 
         # Make sure log file has been created for ownership change
-        if self.job.using_nvme:
-            log_file = self.job.get_config_value("log_file")
+        if self.manager.job.using_nvme:
+            log_file = self.manager.job.get_config_value("log_file")
             if log_file is not None:
                 self.log.info("Creating log file: %s", log_file)
                 pcmd(self._hosts, "touch {}".format(log_file), False)
 
         # Prepare server storage
-        if self.job.using_nvme or self.job.using_dcpm:
+        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
             self.log.info("Preparing storage in <format> mode")
             self.prepare_storage("root")
-            self.mca.value = {"plm_rsh_args": "-l root"}
+            self.manager.mca.value = {"plm_rsh_args": "-l root"}
 
     def start(self):
         """Start the server through the runner."""
@@ -744,25 +764,26 @@ class DaosServerManager(SubprocessManager):
             "--- STARTING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
         try:
-            self.run()
+            self.manager.run()
         except CommandFailure as details:
             self.log.info("<SERVER> Exception occurred: %s", str(details))
             # Kill the subprocess, anything that might have started
             self.kill()
             raise ServerFailed(
-                "Failed to start server in {} mode.".format(self.job.mode))
+                "Failed to start server in {} mode.".format(
+                    self.manager.job.mode))
 
-        if self.job.using_nvme or self.job.using_dcpm:
+        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
             # Setup the hostlist to pass to dmg command
-            port = self.job.get_config_value("port")
+            port = self.manager.job.get_config_value("port")
             ported_hosts = ["{}:{}".format(host, port) for host in self._hosts]
 
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.job.path, ",".join(ported_hosts))
-            self.job.update_pattern("normal")
+            storage_format(self.manager.job.path, ",".join(ported_hosts))
+            self.manager.job.update_pattern("normal")
             try:
-                self.job.check_subprocess_status(self.process)
+                self.manager.job.check_subprocess_status(self.manager.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
 
@@ -785,7 +806,7 @@ class DaosServerManager(SubprocessManager):
         # Kill any leftover processes that may not have been stopped correctly
         self.kill()
 
-        if self.job.using_nvme:
+        if self.manager.job.using_nvme:
             # Reset the storage
             try:
                 self.reset_storage()
@@ -796,7 +817,7 @@ class DaosServerManager(SubprocessManager):
             self.set_scm_mount_ownership()
 
         # Report any errors after all stop actions have been attempted
-        if len(messages) > 0:
+        if messages:
             raise ServerFailed(
                 "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
@@ -806,8 +827,8 @@ class DaosServerManager(SubprocessManager):
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        scm_list = self.job.get_config_value("scm_list")
-        scm_mount = self.job.get_config_value("scm_mount")
+        scm_list = self.manager.job.get_config_value("scm_list")
+        scm_mount = self.manager.job.get_config_value("scm_mount")
 
         # Support single or multiple scm_mount points
         if not isinstance(scm_mount, list):
@@ -826,12 +847,12 @@ class DaosServerManager(SubprocessManager):
         #         clean_cmds.append("sudo rm -rf {}".format(mount))
 
         # Add unmounting all SCM mount points if using SCM or NVMe
-        if self.job.using_nvme or self.job.using_dcpm:
+        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
             for mount in scm_mount:
                 clean_cmds.append("sudo umount {}".format(mount))
 
         # Add wiping the filesystem from each SCM device if using SCM
-        if self.job.using_dcpm:
+        if self.manager.job.using_dcpm:
             for value in scm_list:
                 clean_cmds.append("sudo wipefs -a {}".format(value))
 
@@ -848,7 +869,7 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage.
 
         """
-        cmd = DaosServerCommand(self.job.path)
+        cmd = DaosServerCommand(self.manager.job.path)
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")
@@ -856,12 +877,12 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        if self.job.using_dcpm and not self.job.using_nvme:
+        if self.manager.job.using_dcpm and not self.manager.job.using_nvme:
             cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif not self.job.using_dcpm and self.job.using_nvme:
+        elif not self.manager.job.using_dcpm and self.manager.job.using_nvme:
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
-        if self.job.using_nvme:
+        if self.manager.job.using_nvme:
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
@@ -871,7 +892,7 @@ class DaosServerManager(SubprocessManager):
 
     def reset_storage(self):
         """Reset the server storage."""
-        cmd = DaosServerCommand(self.job.path)
+        cmd = DaosServerCommand(self.manager.job.path)
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")
@@ -892,7 +913,7 @@ class DaosServerManager(SubprocessManager):
             user (str, optional): user name. Defaults to None - current user.
         """
         user = getpass.getuser() if user is None else user
-        scm_mount = self.job.get_config_value("scm_mount")
+        scm_mount = self.manager.job.get_config_value("scm_mount")
 
         # Support single or multiple scm_mount points
         if not isinstance(scm_mount, list):
