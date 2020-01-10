@@ -263,7 +263,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map, &targets,
 					     &failed_tgts_cnt);
 		if (rc != 0) {
-			D_ERROR("failed create failed tgt list rc %d\n", rc);
+			D_ERROR("failed create failed tgt list rc "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 
@@ -372,7 +373,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	rc = dbtree_create_inplace(tree_class, 0, 32, &uma,
 				   broot, &root.root_hdl);
 	if (rc) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_FREE(broot);
 		D_GOTO(out, rc);
 	}
@@ -933,7 +934,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
 			   &scan_arg->rebuild_tree_hdl);
 	if (rc != 0) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_lock, rc);
 	}
 
