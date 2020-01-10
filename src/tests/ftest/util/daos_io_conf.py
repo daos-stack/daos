@@ -113,9 +113,13 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
                 rand_ofs_end,
                 record_size),
         "pool --query")
-    file_hd = open(filename, "w+")
-    file_hd.write("\n".join(file_data))
-    file_hd.close()
+
+    try:
+        file_hd = open(filename, "w+")
+        file_hd.write("\n".join(file_data))
+        file_hd.close()
+    except DaosApiError as error:
+        raise error
 
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
