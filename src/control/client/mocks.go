@@ -306,7 +306,7 @@ func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+func (m *mockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
 	return &mgmtpb.RanksResp{}, nil
 }
 

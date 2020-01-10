@@ -169,7 +169,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 
 			msc.log.Debugf("prep shutdown(%s, %+v)", destAddr, *req)
 
-			resp, err = pbClient.PrepShutdown(ctx, req)
+			resp, err = pbClient.PrepShutdownRanks(ctx, req)
 
 			return
 		})

@@ -25,6 +25,7 @@ typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__KillRankReq Mgmt__KillRankReq;
+typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
@@ -206,6 +207,19 @@ struct  _Mgmt__KillRankReq
 #define MGMT__KILL_RANK_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__kill_rank_req__descriptor) \
     , 0, 0 }
+
+
+struct  _Mgmt__PingRankReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS IO server unique identifier.
+   */
+  uint32_t rank;
+};
+#define MGMT__PING_RANK_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__ping_rank_req__descriptor) \
+    , 0 }
 
 
 struct  _Mgmt__SetRankReq
@@ -416,6 +430,25 @@ Mgmt__KillRankReq *
 void   mgmt__kill_rank_req__free_unpacked
                      (Mgmt__KillRankReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PingRankReq methods */
+void   mgmt__ping_rank_req__init
+                     (Mgmt__PingRankReq         *message);
+size_t mgmt__ping_rank_req__get_packed_size
+                     (const Mgmt__PingRankReq   *message);
+size_t mgmt__ping_rank_req__pack
+                     (const Mgmt__PingRankReq   *message,
+                      uint8_t             *out);
+size_t mgmt__ping_rank_req__pack_to_buffer
+                     (const Mgmt__PingRankReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PingRankReq *
+       mgmt__ping_rank_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__ping_rank_req__free_unpacked
+                     (Mgmt__PingRankReq *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__SetRankReq methods */
 void   mgmt__set_rank_req__init
                      (Mgmt__SetRankReq         *message);
@@ -486,6 +519,9 @@ typedef void (*Mgmt__PrepShutdownReq_Closure)
 typedef void (*Mgmt__KillRankReq_Closure)
                  (const Mgmt__KillRankReq *message,
                   void *closure_data);
+typedef void (*Mgmt__PingRankReq_Closure)
+                 (const Mgmt__PingRankReq *message,
+                  void *closure_data);
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
                   void *closure_data);
@@ -509,6 +545,7 @@ extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor;
 

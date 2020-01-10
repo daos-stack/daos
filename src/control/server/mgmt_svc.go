@@ -675,7 +675,7 @@ func validateInstanceRank(log logging.Logger, i *IOServerInstance, ranks []uint3
 // Iterate over instances, issuing PrepShutdown dRPCs and record results.
 // Return error in addition to response if any instance requests not successful
 // so retries can be performed at sender.
-func (svc *mgmtSvc) PrepShutdown(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, req:%+v\n", *req)
 
 	var errored bool

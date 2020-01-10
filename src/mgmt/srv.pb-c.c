@@ -418,6 +418,51 @@ void   mgmt__kill_rank_req__free_unpacked
   assert(message->base.descriptor == &mgmt__kill_rank_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__ping_rank_req__init
+                     (Mgmt__PingRankReq         *message)
+{
+  static const Mgmt__PingRankReq init_value = MGMT__PING_RANK_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__ping_rank_req__get_packed_size
+                     (const Mgmt__PingRankReq *message)
+{
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__ping_rank_req__pack
+                     (const Mgmt__PingRankReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__ping_rank_req__pack_to_buffer
+                     (const Mgmt__PingRankReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PingRankReq *
+       mgmt__ping_rank_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PingRankReq *)
+     protobuf_c_message_unpack (&mgmt__ping_rank_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__ping_rank_req__free_unpacked
+                     (Mgmt__PingRankReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__ping_rank_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__set_rank_req__init
                      (Mgmt__SetRankReq         *message)
 {
@@ -1044,6 +1089,44 @@ const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor =
   mgmt__kill_rank_req__field_indices_by_name,
   1,  mgmt__kill_rank_req__number_ranges,
   (ProtobufCMessageInit) mgmt__kill_rank_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__ping_rank_req__field_descriptors[1] =
+{
+  {
+    "rank",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PingRankReq, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__ping_rank_req__field_indices_by_name[] = {
+  0,   /* field[0] = rank */
+};
+static const ProtobufCIntRange mgmt__ping_rank_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PingRankReq",
+  "PingRankReq",
+  "Mgmt__PingRankReq",
+  "mgmt",
+  sizeof(Mgmt__PingRankReq),
+  1,
+  mgmt__ping_rank_req__field_descriptors,
+  mgmt__ping_rank_req__field_indices_by_name,
+  1,  mgmt__ping_rank_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__ping_rank_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[1] =
