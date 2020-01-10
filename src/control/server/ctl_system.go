@@ -330,7 +330,8 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 		}
 	}
 
-	if err := svc.membership.UpdateMemberStates(system.MemberStateErrored, results); err != nil {
+	if err := svc.membership.UpdateMemberStates(system.MemberStateErrored,
+		filteredResults); err != nil {
 
 		return nil, err
 	}
