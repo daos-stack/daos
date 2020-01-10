@@ -21,17 +21,17 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-many-lines
 from logging import getLogger
 import os
 from time import sleep, time
 
 from avocado import fail_on
-from avocado.utils import process
 from command_utils import BasicParameter, ObjectWithParameters
+from job_manager_utils import OpenMPI
 from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
                         c_uuid_to_str)
 from general_utils import check_pool_files, get_random_string, DaosTestError
-from env_modules import load_mpi
 
 
 class CallbackHandler(object):
@@ -562,13 +562,13 @@ class TestPool(TestDaosApiBase):
         """
         return check_pool_files(self.log, hosts, self.uuid.lower())
 
-    def write_file(self, orterun, processes, hostfile, size, timeout=60):
+    def write_file(self, processes, hosts, path, size, timeout=60):
         """Write a file to the pool.
 
         Args:
-            orterun (str): full path to the orterun command
             processes (int): number of processes to launch
             hosts (list): list of clients from which to write the file
+            path (str): path in which to create a hostfile
             size (int): size of the file to create in bytes
             timeout (int, optional): number of seconds before timing out the
                 command. Defaults to 60 seconds.
@@ -578,18 +578,23 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        env = {
+        current_path = os.path.dirname(os.path.abspath(__file__))
+        command = " ".join(
+            [os.path.join(current_path, "write_some_data.py"), size, "testfile"]
+        )
+        manager = OpenMPI(command)
+        manager.assign_hosts(hosts, path)
+        manager.assign_processes(processes)
+        manager.timeout = timeout
+        manager.verbose = True
+        manager.exit_status_exception = True
+        manager.env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
             "DAOS_SINGLETON_CLI": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", ""),
         }
-        load_mpi("openmpi")
-        current_path = os.path.dirname(os.path.abspath(__file__))
-        command = "{} --np {} --hostfile {} {} {} testfile".format(
-            orterun, processes, hostfile,
-            os.path.join(current_path, "write_some_data.py"), size)
-        return process.run(command, timeout, True, False, "both", True, env)
+        return manager.run()
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -697,6 +702,7 @@ class TestContainerData(object):
 
         Returns:
             list: a list of all the used akeys
+
         """
         return [record["akey"] for record in self.records]
 
@@ -735,6 +741,7 @@ class TestContainerData(object):
 
         Raises:
             DaosTestError: if there was an error writing the record
+
         """
         self.records.append({"akey": akey, "dkey": dkey, "data": data})
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "rank": rank}
@@ -773,6 +780,7 @@ class TestContainerData(object):
 
         Raises:
             DaosTestError: if there was an error writing the object
+
         """
         for _ in range(record_qty):
             akey = get_random_string(akey_size, self.get_akeys())
@@ -808,6 +816,7 @@ class TestContainerData(object):
 
         Returns:
             str: the data read for the container
+
         """
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "txn": self.txn}
         try:
@@ -838,6 +847,7 @@ class TestContainerData(object):
         Returns:
             bool: True if ll the records where read successfully and matched
                 what was originally written; False otherwise
+
         """
         status = len(self.records) > 0
         for record_info in self.records:
@@ -1055,6 +1065,7 @@ class TestContainer(TestDaosApiBase):
 
         Raises:
             DaosTestError: if there was an error writing the object
+
         """
         self.open()
         self.log.info(
@@ -1080,7 +1091,8 @@ class TestContainer(TestDaosApiBase):
                 to False.
 
         Returns:
-            bool: True if
+            bool: True if the objects were read and verified successfully
+
         """
         self.open()
         self.log.info(
@@ -1195,7 +1207,7 @@ class TestContainer(TestDaosApiBase):
             "Punching %s objects from container %s with %s written objects",
             len(indices), self.uuid, len(self.written_data))
         count = 0
-        if len(self.written_data) > 0:
+        if self.written_data:
             for index in indices:
                 # Find the object to punch at the specified index
                 txn = 0

@@ -148,11 +148,9 @@ class OpenMPI(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts}
+        kwargs = {"hostlist": hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
-        if slots is not None:
-            kwargs["slots"] = slots
         self.hostfile.value = write_host_file(**kwargs)
 
     def assign_processes(self, processes):
@@ -231,11 +229,9 @@ class Mpich(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts}
+        kwargs = {"hostlist": hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
-        if slots is not None:
-            kwargs["slots"] = slots
         self.hostfile.value = write_host_file(**kwargs)
 
     def assign_processes(self, processes):
@@ -302,6 +298,7 @@ class Srun(JobManager):
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
+        self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
@@ -312,12 +309,11 @@ class Srun(JobManager):
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        kwargs = {"hostlist": hosts}
+        kwargs = {"hostlist": hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
-        if slots is not None:
-            kwargs["slots"] = slots
         self.nodefile.value = write_host_file(**kwargs)
+        self.ntasks_per_node.value = slots
 
     def assign_processes(self, processes):
         """Assign the number of processes per node (--ntasks).

@@ -160,16 +160,17 @@ class DaosAgentCommand(YamlCommand):
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts using orterun."""
 
-    @hosts.setter
-    def hosts(self, value):
+    def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
 
+        Update the number of daos_agents to expect in the process output.
+
         Args:
-            value (tuple): a tuple of a list of hosts, a path in which to create
-                the hostfile, and a number of slots to specify per host in the
-                hostfile (can be None)
+            hosts (list): list of hosts on which to run the command
+            path (str): path in which to create the hostfile
+            slots (int): number of slots per host to specify in the hostfile
         """
-        super(DaosAgentManager, self).hosts(value)
+        super(DaosAgentManager, self)._set_hosts(hosts, path, slots)
 
         # Update the expected number of messages to reflect the number of
         # daos_agent processes that will be started by the command
@@ -201,3 +202,12 @@ class DaosAgentManager(SubprocessManager):
         if messages:
             raise CommandFailure(
                 "Failed to stop agents:\n  {}".format("\n  ".join(messages)))
+
+    def get_user_file(self):
+        """Get the file defined in the yaml file that must be owned by the user.
+
+        Returns:
+            str: file defined in the yaml file that must be owned by the user
+
+        """
+        return self.get_config_value("runtime_dir")

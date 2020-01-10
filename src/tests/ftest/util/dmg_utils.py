@@ -44,6 +44,19 @@ class DmgCommand(CommandWithSubCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
+    def set_hostlist(self, manager):
+        """Set the dmg hostlist parameter with the daos server/agent info.
+
+        Use the daos server/agent access points port and list of hosts to define
+        the dmg --hostlist command line parameter.
+
+        Args:
+            manager (SubprocessManager): daos server/agent process manager
+        """
+        port = manager.get_config_value("port")
+        hostlist = [":".join([host, str(port)]) for host in manager.hosts]
+        self.hostlist.update(",".join(hostlist), "dmg.hostlist")
+
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the dmg sub command object based upon the sub-command."""

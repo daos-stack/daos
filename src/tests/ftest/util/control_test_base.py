@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-
 from avocado.utils import process
 
 from apricot import TestWithServers
@@ -43,14 +41,9 @@ class ControlTestBase(TestWithServers):
     def run_dmg_command(self):
         """Run the dmg command."""
         # Create dmg command
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        dmg = DmgCommand(self.bin)
         dmg.get_params(self)
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+        dmg.set_hostlist(self.server_managers[0])
 
         try:
             dmg.run()

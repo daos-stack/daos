@@ -37,6 +37,7 @@ from general_utils import pcmd
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
+
 def acl_entry(usergroup, name, permission):
     '''
     Deascription:
@@ -59,6 +60,7 @@ def acl_entry(usergroup, name, permission):
         entry = "A::" + name + "@:" + permission
     return entry
 
+
 def add_del_user(hosts, ba_cmd, user):
     '''
     Deascription:
@@ -77,12 +79,39 @@ def add_del_user(hosts, ba_cmd, user):
     cmd = " ".join(("sudo", bash_cmd, homedir, user))
     pcmd(hosts, cmd, False)
 
+
 class PoolSecurityTest(TestWithServers):
     '''
     Test Class Description:
     Tests to verify the Pool security with dmg and daos tools on daos_server.
     :avocado: recursive
     '''
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super(PoolSecurityTest, self).__init__(*args, **kwargs)
+        self.dmg = None
+        self.uuid = None
+
+    def setUp(self):
+        """Set up each test case."""
+        super(PoolSecurityTest, self).setUp()
+
+        # Create a DmgCommand object for issuing dmg commands
+        self.dmg = DmgCommand(self.bin)
+        self.dmg.set_hostlist(self.server_managers[0])
+
+    def tearDown(self):
+        """Tear down each test case."""
+        try:
+            if self.uuid is not None:
+                # Destroy the pool created during the test
+                self.dmg.sub_command_class.set_sub_command("destroy")
+                self.dmg.sub_command_class.sub_command_class.pool.value = \
+                    self.uuid
+                self.dmg.run()
+        finally:
+            super(PoolSecurityTest, self).tearDown()
 
     def get_pool_acl_list(self, uuid):
         '''
@@ -93,14 +122,10 @@ class PoolSecurityTest(TestWithServers):
         Return:
             pool_permission_list: daos pool acl list.
         '''
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        dmg.request.value = "pool"
-        dmg.action.value = "get-acl --pool " + uuid
-        port = self.params.get("port", "/run/server_config/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        result = dmg.run()
+        self.dmg.set_sub_command("pool")
+        self.dmg.sub_command_class.set_sub_command("get-acl")
+        self.dmg.sub_command_class.sub_command_class.pool.value = uuid
+        result = self.dmg.run()
 
         pool_permission_list = []
         for line in result.stdout.splitlines():
@@ -130,15 +155,16 @@ class PoolSecurityTest(TestWithServers):
         '''
         if expect.lower() == 'pass':
             if result.exit_status != 0 or result.stderr != "":
-                self.fail("##Test Fail on verify_daos_pool %s, "
-                          "expected Pass, but Failed.", action)
+                self.fail(
+                    "##Test Fail on verify_daos_pool {}, expected Pass, but "
+                    "Failed.".format(action))
             else:
                 self.log.info(" =Test Passed on verify_daos_pool %s, "
                               "Succeed.\n", action)
         elif err_code not in result.stderr:
-            self.fail("##Test Fail on verify_daos_pool %s,"
-                      " expected Failure of %s, but Passed.",
-                      action, expect)
+            self.fail(
+                "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
+                "but Passed.".format(action, expect))
         else:
             self.log.info(" =Test Passed on verify_daos_pool %s"
                           " expected error of %s.\n", action, expect)
@@ -171,6 +197,8 @@ class PoolSecurityTest(TestWithServers):
 
         daos_cmd.sub_command_class.sub_command_class.pool.value = uuid
         daos_cmd.sub_command_class.sub_command_class.svc.value = svc
+        daos_cmd.sub_command_class.sub_command_class.sys_name.value = \
+            self.server_managers[0].get_config_value("name")
         result = daos_cmd.run()
         self.log.info("  In verify_pool_readwrite %s.\n =daos_cmd.run()"
                       " result:\n%s", action, result)
@@ -228,7 +256,7 @@ class PoolSecurityTest(TestWithServers):
 
     def pool_acl_verification(self, current_user_acl, read, write):
         '''
-        Deascription:
+        Description:
             Daos pool security verification with acl file.
             Steps:
                 (1)Setup dmg tool for creating a pool
@@ -247,20 +275,16 @@ class PoolSecurityTest(TestWithServers):
             pass to continue.
             fail to report the testlog and stop.
         '''
-
-        # (1)Create daos_shell command
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        dmg.get_params(self)
-        port = self.params.get("port", "/run/server_config/*", 10001)
-        get_acl_file = self.params.get("acl_file", "/run/pool_acl/*",
-                                       "acl_test.txt")
-        acl_file = os.path.join(self.tmp, get_acl_file)
+        acl_file = os.path.join(
+            self.tmp,
+            self.params.get("acl_file", "/run/pool_acl/*", "acl_test.txt"))
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        self.log.info("  (1)dmg= %s", dmg)
+
+        # (1)Create daos_shell command
+        self.dmg.get_params(self)
+        self.dmg.set_hostlist(self.server_managers[0])
+        self.log.info("  (1)dmg= %s", str(self.dmg))
 
         # (2)Generate acl file with permissions
         self.log.info("  (2)Generate acl file with user/group permissions")
@@ -271,14 +295,14 @@ class PoolSecurityTest(TestWithServers):
 
         # (3)Create a pool with acl
         self.log.info("  (3)Create a pool with acl")
-        dmg.action_command.acl_file.value = acl_file
-        dmg.exit_status_exception = False
-        result = dmg.run()
+        self.dmg.sub_command_class.sub_command_class.acl_file.value = acl_file
+        self.dmg.exit_status_exception = False
+        result = self.dmg.run()
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", result)
         if result.stderr == "":
-            uuid, svc = dmg_utils.get_pool_uuid_from_stdout(result.stdout)
+            self.uuid, svc = dmg_utils.get_pool_uuid_from_stdout(result.stdout)
         else:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
@@ -286,7 +310,7 @@ class PoolSecurityTest(TestWithServers):
         #    dmg pool get-acl --pool <UUID>
         self.log.info("  (5)Get a pool's acl list by: "
                       "dmg pool get-acl --pool --hostlist")
-        pool_acl_list = self.get_pool_acl_list(uuid)
+        pool_acl_list = self.get_pool_acl_list(self.uuid)
         self.log.info(
             "   pool original permission_list: %s", permission_list)
         self.log.info(
@@ -295,22 +319,16 @@ class PoolSecurityTest(TestWithServers):
         # (6)Verify pool read operation
         #    daos pool query --pool <uuid>
         self.log.info("  (6)Verify pool read by: daos pool query --pool")
-        self.verify_pool_readwrite(svc, uuid, "read", expect=read)
+        self.verify_pool_readwrite(svc, self.uuid, "read", expect=read)
 
         # (7)Verify pool write operation
         #    daos continer create --pool <uuid>
         self.log.info("  (7)Verify pool write by: daos continer create --pool")
-        self.verify_pool_readwrite(svc, uuid, "write", expect=write)
+        self.verify_pool_readwrite(svc, self.uuid, "write", expect=write)
 
         # (8)Cleanup user and destroy pool
         self.log.info("  (8)Cleanup user and destroy pool")
         self.cleanup_user_group(num_user, num_group)
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        dmg.request.value = "pool"
-        dmg.action.value = "destroy --pool={}".format(uuid)
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        result = dmg.run()
-        return
 
     def test_pool_acl_enforcement(self):
         '''
@@ -349,17 +367,19 @@ class PoolSecurityTest(TestWithServers):
         if permission.lower() == "none":
             permission = ""
         if permission not in PERMISSIONS:
-            self.fail("##permission %s is invalid, valid permissions are:"
-                      "'none', 'r', w', 'rw'", permission)
+            self.fail(
+                "##permission {} is invalid, valid permissions are: 'none', "
+                "'r', w', 'rw'".format(permission))
         if user_type not in user_types:
-            self.fail("##user_type %s is invalid, valid user_types are: "
-                      "%s", user_type, user_types)
+            self.fail(
+                "##user_type {} is invalid, valid user_types are: {}".format(
+                    user_type, user_types))
         user_type_ind = user_types.index(user_type)
         self.log.info("===>Start DAOS pool acl enforcement order Testcase: "
                       " user_type: %s, permission: %s, expect_read: %s,"
                       " expect_write: "
                       "%s.", user_type, permission, read, write)
-        #take care of the user_type which have higher priviledge
+        # take care of the user_type which have higher priviledge
         for ind in range(5):
             if ind < user_type_ind:
                 test_acl_entries[ind] = ""
@@ -368,19 +388,19 @@ class PoolSecurityTest(TestWithServers):
             else:
                 test_acl_entries[ind] = default_acl_entries[ind]
         test_permission = permission
-        #take care of rest of the user-type permission
+        # take care of rest of the user-type permission
         group_acl = ""
         for ind in range(user_type_ind, 5):
             if ind != user_type_ind:
-                #setup opposite test_permission with permission
+                # setup opposite test_permission with permission
                 test_permission = "rw"
                 if permission == "rw":
                     test_permission = ""
                 if user_types[ind] == "group":
                     group_acl = test_permission
-            #"A::OWNER@:" + permission
+            # "A::OWNER@:" + permission
             test_acl_entries[ind] = default_acl_entries[ind] + test_permission
-        #union of ownergroup and group permission
+        # union of ownergroup and group permission
         if user_type == "ownergroup":
             if permission != group_acl:
                 union_acl = "".join(list(set().union(permission, group_acl)))

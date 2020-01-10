@@ -19,10 +19,11 @@ daos_server:
   start:
      insecure: False
 dmg:
-  request: pool
-  action: create
-  create:
-    scm_size: 16000000
+  dmg_sub_command: pool
+  pool:
+    pool_sub_command: create
+    create:
+      scm_size: 16000000
 pool_acl:
   user_prefix: daos_ci
   num_user: 5

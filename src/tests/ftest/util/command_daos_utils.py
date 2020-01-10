@@ -30,8 +30,12 @@ import yaml
 
 from command_utils import (CommandFailure, BasicParameter, ObjectWithParameters,
                            CommandWithSubCommand)
-import job_manager_utils
 from general_utils import check_file_exists, stop_processes
+
+# pylint: disable=unused-import
+# Supported JobManager classes for SubprocessManager.__init__()
+from job_manager_utils import OpenMPI, Mpich, Srun
+# pylint: enable=unused-import
 
 
 class AccessPoints(object):
@@ -434,17 +438,16 @@ class SubprocessManager(object):
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
-        manager_class = getattr(job_manager_utils, manager)
-        if not isinstance(manager_class, job_manager_utils.JobManager):
+        if manager not in globals():
             raise CommandFailure(
                 "Invalid job manager class: {}".format(manager))
-        self.manager = manager_class(command, True)
+        self.manager = globals()[manager](command, subprocess=True)
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
 
         # Define the list of executable names to terminate in the kill() method
-        self._exe_names = [self.manager.command, self.manager.job.command]
+        self._exe_names = [self.manager.job.command]
 
     @property
     def hosts(self):
@@ -460,7 +463,19 @@ class SubprocessManager(object):
                 the hostfile, and a number of slots to specify per host in the
                 hostfile (can be None)
         """
-        self._hosts, path, slots = value
+        self._set_hosts(*value)
+
+    def _set_hosts(self, hosts, path, slots):
+        """Set the hosts used to execute the daos command.
+
+        Defined as a private method to enable overriding the setter method.
+
+        Args:
+            hosts (list): list of hosts on which to run the command
+            path (str): path in which to create the hostfile
+            slots (int): number of slots per host to specify in the hostfile
+        """
+        self._hosts = hosts
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -514,7 +529,7 @@ class SubprocessManager(object):
 
         """
         if self._hosts and hasattr(self.manager.job, "yaml"):
-            directory = self.manager.job.yaml.socket_dir.value
+            directory = self.get_user_file()
             status, nodes = check_file_exists(self._hosts, directory, user)
             if not status:
                 raise CommandFailure(
@@ -536,3 +551,12 @@ class SubprocessManager(object):
         if self.manager.job and hasattr(self.manager.job, "get_config_value"):
             value = self.manager.job.get_config_value(name)
         return value
+
+    def get_user_file(self):
+        """Get the file defined in the yaml file that must be owned by the user.
+
+        Returns:
+            str: file defined in the yaml file that must be owned by the user
+
+        """
+        return self.get_config_value("socket_dir")

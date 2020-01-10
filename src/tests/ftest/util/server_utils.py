@@ -698,16 +698,17 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.sub_command_override = "start"
         self._exe_names.append("daos_io_server")
 
-    @hosts.setter
-    def hosts(self, value):
+    def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
 
+        Update the number of daos_io_servers to expect in the process output.
+
         Args:
-            value (tuple): a tuple of a list of hosts, a path in which to create
-                the hostfile, and a number of slots to specify per host in the
-                hostfile (can be None)
+            hosts (list): list of hosts on which to run the command
+            path (str): path in which to create the hostfile
+            slots (int): number of slots per host to specify in the hostfile
         """
-        super(DaosServerManager, self).hosts(value)
+        super(DaosServerManager, self)._set_hosts(hosts, path, slots)
 
         # Update the expected number of messages to reflect the number of
         # daos_io_server processes that will be started by the command
@@ -780,7 +781,8 @@ class DaosServerManager(SubprocessManager):
 
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.manager.job.path, ",".join(ported_hosts))
+            storage_format(
+                self.manager.job.command_path, ",".join(ported_hosts))
             self.manager.job.update_pattern("normal")
             try:
                 self.manager.job.check_subprocess_status(self.manager.process)
@@ -869,7 +871,7 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage.
 
         """
-        cmd = DaosServerCommand(self.manager.job.path)
+        cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")
@@ -892,7 +894,7 @@ class DaosServerManager(SubprocessManager):
 
     def reset_storage(self):
         """Reset the server storage."""
-        cmd = DaosServerCommand(self.manager.job.path)
+        cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("storage")

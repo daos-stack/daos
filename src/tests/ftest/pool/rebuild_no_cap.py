@@ -23,7 +23,6 @@
 '''
 from apricot import TestWithServers, skipForTicket
 from test_utils import TestPool
-from write_host_file import write_host_file
 
 
 class RebuildNoCap(TestWithServers):
@@ -62,9 +61,9 @@ class RebuildNoCap(TestWithServers):
 
         # Write enough data to the pool that will not be able to be rebuilt
         data = self.pool.scm_size.value * (targets - 1)
-        hostfile = write_host_file(self.hostlist_clients, self.workdir)
         self.pool.write_file(
-            self.orterun, len(self.hostlist_clients), hostfile, data)
+            len(self.hostlist_clients), self.hostlist_clients, self.workdir,
+            data)
 
         # Display pool size after write
         self.pool.display_pool_daos_space("after write")

@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from distutils.spawn import find_executable
 
 from avocado.utils import process
 from apricot import TestWithServers
@@ -45,7 +46,6 @@ class DaosCoreBase(TestWithServers):
 
     def setUp(self):
         """Set up before each test."""
-
         self.subtest_name = self.params.get("test_name",
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
@@ -62,19 +62,23 @@ class DaosCoreBase(TestWithServers):
                                        '/run/daos_tests/num_replicas/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
+        load_mpi('openmpi')
+        orterun = find_executable('orterun')
+        if orterun is None:
+            self.fail("Could not find orterun")
+
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
-            self.orterun, self.client_mca, num_clients, self.client_log,
+            orterun, self.client_mca, num_clients, self.client_log,
             self.daos_test, num_replicas, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
         env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
 
-        load_mpi("openmpi")
         try:
             process.run(cmd, env=env)
         except process.CmdError as result:
-            if result.result.exit_status is not 0:
+            if result.result.exit_status != 0:
                 # fake a JUnit failure output
                 with open(self.subtest_name +
                           "_results.xml", "w") as results_xml:

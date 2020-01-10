@@ -165,11 +165,9 @@ class MdtestBase(TestWithServers):
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            manager_class = Mpich(self.mdtest_cmd)
-        else:
-            manager_class = OpenMPI(self.mdtest_cmd)
+            return Mpich(self.mdtest_cmd)
 
-        return manager_class
+        return OpenMPI(self.mdtest_cmd)
 
     def run_mdtest(self, manager, processes, slots=None):
         """Run the Mdtest command.

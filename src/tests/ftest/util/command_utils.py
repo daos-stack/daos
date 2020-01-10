@@ -236,7 +236,7 @@ class CommandWithParameters(ObjectWithParameters):
         return self._command
 
     @property
-    def path(self):
+    def command_path(self):
         """Get the path used for the command."""
         return self._path
 
