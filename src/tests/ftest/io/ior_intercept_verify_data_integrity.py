@@ -23,7 +23,6 @@
 """
 
 import os
-import threading
 import write_host_file
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -46,7 +45,6 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
         # IorTestBase is resolved. #DAOS-3320
         self.hostlist_clients = self.params.get(
             "test_clients", "/run/hosts/*")
-        self.lock = threading.Lock()
 
     def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.

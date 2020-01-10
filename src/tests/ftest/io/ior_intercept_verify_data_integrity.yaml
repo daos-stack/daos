@@ -25,7 +25,6 @@ pool:
     createset:
         group: daos_server
     createsize:
-        # 200 G
         scm_size: 30000000000
         nvme_size: 200000000000
     createsvc:
