@@ -29,6 +29,22 @@ import "srv.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
 import "acl.proto"; // ACL-related requests
 
+// Generic request indicating which ranks to operate on.
+// Used in gRPC fanout to operate on hosts with multiple ranks.
+message RanksReq {
+	repeated uint32 ranks = 1;
+}
+
+// Generic response containing DER result from multiple ranks.
+// Used in gRPC fanout to operate on hosts with multiple ranks.
+message RanksResp {
+	message RankResult {
+		uint32 rank = 1;
+		int32 status = 2;	// DAOS error code.
+	}
+	repeated RankResult results = 1;
+}
+
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
 // service.
@@ -72,12 +88,12 @@ service MgmtSvc {
 	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
-	// Prepare DAOS IO servers on a host for controlled shutdown.
-	rpc PrepShutdown(RanksReq) returns (RanksResp) {}
-	// Kill DAOS IO servers on a host.
+	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
+	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
+	// Kill DAOS IO servers on a host. (gRPC fanout)
 	rpc KillRanks(RanksReq) returns (RanksResp) {}
-	// Ping DAOS IO servers on a host.
+	// Ping DAOS IO servers on a host. (gRPC fanout)
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
-	// Start DAOS IO servers on a host.
+	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 }

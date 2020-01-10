@@ -32,20 +32,6 @@ message DaosResp {
 	int32 status = 1;	// DAOS error code.
 }
 
-// Generic request indicating which ranks to operate on.
-message RanksReq {
-	repeated uint32 ranks = 1;
-}
-
-// Generic response containing DER result from multiple ranks.
-message RanksResp {
-	message RankResult {
-		uint32 rank = 1;
-		int32 status = 2;	// DAOS error code.
-	}
-	repeated RankResult results = 1;
-}
-
 message JoinReq {
 	string uuid = 1;	// Servee UUID.
 	uint32 rank = 2;	// Server rank desired, if not -1.
