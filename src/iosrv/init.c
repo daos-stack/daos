@@ -592,7 +592,7 @@ exit_debug_init:
 static void
 server_fini(bool force)
 {
-	D_INFO("Service is shutting down\n");
+	D_INFO("Service is shutting down force %d\n", force);
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
@@ -609,6 +609,18 @@ server_fini(bool force)
 	dss_module_fini(force);
 	abt_fini();
 	daos_debug_fini();
+        if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
+                /* unlink spdk shared memory files for this stream */
+                char buffer[NAME_MAX];
+
+                snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d", dss_nvme_shm_id);
+		D_INFO("unlinking %s\n", buffer);
+                if (unlink(buffer)) {
+                        D_ERROR("Unable to unlink shared memory file: %s.\n",
+                                buffer);
+                }
+        }
+	
 }
 
 static void
