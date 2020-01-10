@@ -72,9 +72,154 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (c *PoolCreateCmd) Execute(args []string) error {
-	return poolCreate(c.log, c.conns,
-		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
-		c.GroupName, c.UserName, c.Sys, c.ACLFile)
+	msg := "SUCCEEDED: "
+
+	scmBytes, nvmeBytes, err := calcStorage(c.log, c.ScmSize, c.NVMeSize)
+	if err != nil {
+		return errors.Wrap(err, "calculating pool storage sizes")
+	}
+
+	var acl *client.AccessControlList
+	if c.ACLFile != "" {
+		acl, err = readACLFile(c.ACLFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.NumSvcReps > maxNumSvcReps {
+		return errors.Errorf("max number of service replicas is %d, got %d",
+			maxNumSvcReps, c.NumSvcReps)
+	}
+
+	usr, grp, err := formatNameGroup(c.UserName, c.GroupName)
+	if err != nil {
+		return errors.WithMessage(err, "formatting user/group strings")
+	}
+
+	ranks := make([]uint32, 0)
+	if len(c.RankList) > 0 {
+		rankStr := strings.Split(c.RankList, ",")
+		for _, rank := range rankStr {
+			r, err := strconv.Atoi(rank)
+			if err != nil {
+				return errors.WithMessage(err, "parsing rank list")
+			}
+			if r < 0 {
+				return errors.Errorf("invalid rank: %d", r)
+			}
+			ranks = append(ranks, uint32(r))
+		}
+	}
+
+	req := &client.PoolCreateReq{
+		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
+		RankList: ranks, NumSvcReps: c.NumSvcReps, Sys: c.Sys,
+		Usr: usr, Grp: grp, ACL: acl,
+	}
+
+	resp, err := c.conns.PoolCreate(req)
+	if err != nil {
+		msg = errors.WithMessage(err, "FAILED").Error()
+	} else {
+		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
+			resp.UUID, formatPoolSvcReps(resp.SvcReps))
+	}
+
+	c.log.Infof("Pool-create command %s\n", msg)
+
+	return err
+}
+
+// getSize retrieves number of bytes from human readable string representation
+func getSize(sizeStr string) (bytesize.ByteSize, error) {
+	if sizeStr == "" {
+		return bytesize.New(0.00), nil
+	}
+	if common.IsAlphabetic(sizeStr) {
+		return bytesize.New(0.00), errors.New(msgSizeNoNumber)
+	}
+
+	// change any alphabetic characters to upper before ByteSize.parse()
+	sizeStr = strings.ToUpper(sizeStr)
+
+	// append "B" character if absent (required by ByteSize.parse())
+	if !strings.HasSuffix(sizeStr, "B") {
+		sizeStr += "B"
+	}
+
+	return bytesize.Parse(sizeStr)
+}
+
+// calcStorage calculates SCM & NVMe size for pool from user supplied parameters
+func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
+	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
+
+	scmBytes, err = getSize(scmSize)
+	if err != nil {
+		err = errors.WithMessagef(
+			err, "illegal scm size: %s", scmSize)
+		return
+	}
+
+	if scmBytes == 0 {
+		err = errors.New(msgSizeZeroScm)
+		return
+	}
+
+	nvmeBytes, err = getSize(nvmeSize)
+	if err != nil {
+		err = errors.WithMessagef(
+			err, "illegal nvme size: %s", nvmeSize)
+		return
+	}
+
+	ratio := 1.00
+	if nvmeBytes > 0 {
+		ratio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if ratio < 0.01 {
+		log.Infof(
+			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
+				"will suffer!\n")
+	}
+	log.Infof(
+		"Creating DAOS pool with %s SCM and %s NvMe storage "+
+			"(%.3f ratio)\n",
+		scmBytes.Format("%.0f", "", false),
+		nvmeBytes.Format("%.0f", "", false),
+		ratio)
+
+	return scmBytes, nvmeBytes, nil
+}
+
+// formatNameGroup converts system names to principal and if both user and group
+// are unspecified, takes effective user name and that user's primary group.
+func formatNameGroup(usr string, grp string) (string, string, error) {
+	if usr == "" && grp == "" {
+		eUsr, err := user.Current()
+		if err != nil {
+			return "", "", err
+		}
+
+		eGrp, err := user.LookupGroupId(eUsr.Gid)
+		if err != nil {
+			return "", "", err
+		}
+
+		usr, grp = eUsr.Username, eGrp.Name
+	}
+
+	if usr != "" && !strings.Contains(usr, "@") {
+		usr += "@"
+	}
+
+	if grp != "" && !strings.Contains(grp, "@") {
+		grp += "@"
+	}
+
+	return usr, grp, nil
 }
 
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
@@ -82,13 +227,24 @@ type PoolDestroyCmd struct {
 	logCmd
 	connectedCmd
 	// TODO: implement --sys & --svc options (currently unsupported server side)
-	Uuid  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
+	UUID  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (d *PoolDestroyCmd) Execute(args []string) error {
-	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
+	msg := "succeeded"
+
+	req := &client.PoolDestroyReq{UUID: d.UUID, Force: d.Force}
+
+	err := d.conns.PoolDestroy(req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	d.log.Infof("Pool-destroy command %s\n", msg)
+
+	return err
 }
 
 // PoolQueryCmd is the struct representing the command to destroy a DAOS pool.
@@ -344,175 +500,4 @@ func (d *PoolDeleteACLCmd) Execute(args []string) error {
 	d.log.Info(formatACLDefault(resp.ACL))
 
 	return nil
-}
-
-// getSize retrieves number of bytes from human readable string representation
-func getSize(sizeStr string) (bytesize.ByteSize, error) {
-	if sizeStr == "" {
-		return bytesize.New(0.00), nil
-	}
-	if common.IsAlphabetic(sizeStr) {
-		return bytesize.New(0.00), errors.New(msgSizeNoNumber)
-	}
-
-	// change any alphabetic characters to upper before ByteSize.parse()
-	sizeStr = strings.ToUpper(sizeStr)
-
-	// append "B" character if absent (required by ByteSize.parse())
-	if !strings.HasSuffix(sizeStr, "B") {
-		sizeStr += "B"
-	}
-
-	return bytesize.Parse(sizeStr)
-}
-
-// calcStorage calculates SCM & NVMe size for pool from user supplied parameters
-func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
-	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
-
-	scmBytes, err = getSize(scmSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal scm size: %s", scmSize)
-		return
-	}
-
-	if scmBytes == 0 {
-		err = errors.New(msgSizeZeroScm)
-		return
-	}
-
-	nvmeBytes, err = getSize(nvmeSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal nvme size: %s", nvmeSize)
-		return
-	}
-
-	ratio := 1.00
-	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(nvmeBytes)
-	}
-
-	if ratio < 0.01 {
-		log.Infof(
-			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
-				"will suffer!\n")
-	}
-	log.Infof(
-		"Creating DAOS pool with %s SCM and %s NvMe storage "+
-			"(%.3f ratio)\n",
-		scmBytes.Format("%.0f", "", false),
-		nvmeBytes.Format("%.0f", "", false),
-		ratio)
-
-	return scmBytes, nvmeBytes, nil
-}
-
-// formatNameGroup converts system names to principal and if both user and group
-// are unspecified, takes effective user name and that user's primary group.
-func formatNameGroup(usr string, grp string) (string, string, error) {
-	if usr == "" && grp == "" {
-		eUsr, err := user.Current()
-		if err != nil {
-			return "", "", err
-		}
-
-		eGrp, err := user.LookupGroupId(eUsr.Gid)
-		if err != nil {
-			return "", "", err
-		}
-
-		usr, grp = eUsr.Username, eGrp.Name
-	}
-
-	if usr != "" && !strings.Contains(usr, "@") {
-		usr += "@"
-	}
-
-	if grp != "" && !strings.Contains(grp, "@") {
-		grp += "@"
-	}
-
-	return usr, grp, nil
-}
-
-// poolCreate with specified parameters.
-func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
-	nvmeSize string, rankList string, numSvcReps uint32, groupName string,
-	userName string, sys string, aclFile string) error {
-
-	msg := "SUCCEEDED: "
-
-	scmBytes, nvmeBytes, err := calcStorage(log, scmSize, nvmeSize)
-	if err != nil {
-		return errors.Wrap(err, "calculating pool storage sizes")
-	}
-
-	var acl *client.AccessControlList
-	if aclFile != "" {
-		acl, err = readACLFile(aclFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	if numSvcReps > maxNumSvcReps {
-		return errors.Errorf("max number of service replicas is %d, got %d",
-			maxNumSvcReps, numSvcReps)
-	}
-
-	usr, grp, err := formatNameGroup(userName, groupName)
-	if err != nil {
-		return errors.WithMessage(err, "formatting user/group strings")
-	}
-
-	ranks := make([]uint32, 0)
-	if len(rankList) > 0 {
-		rankStr := strings.Split(rankList, ",")
-		for _, rank := range rankStr {
-			r, err := strconv.Atoi(rank)
-			if err != nil {
-				return errors.WithMessage(err, "parsing rank list")
-			}
-			if r < 0 {
-				return errors.Errorf("invalid rank: %d", r)
-			}
-			ranks = append(ranks, uint32(r))
-		}
-	}
-
-	req := &client.PoolCreateReq{
-		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
-		RankList: ranks, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp, ACL: acl,
-	}
-
-	resp, err := conns.PoolCreate(req)
-	if err != nil {
-		msg = errors.WithMessage(err, "FAILED").Error()
-	} else {
-		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.UUID, formatPoolSvcReps(resp.SvcReps))
-	}
-
-	log.Infof("Pool-create command %s\n", msg)
-
-	return err
-}
-
-// poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
-	msg := "succeeded"
-
-	req := &client.PoolDestroyReq{UUID: poolUUID, Force: force}
-
-	err := conns.PoolDestroy(req)
-	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
-	}
-
-	log.Infof("Pool-destroy command %s\n", msg)
-
-	return err
 }
