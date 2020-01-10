@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019 Intel Corporation
+/* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,6 +76,8 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
+                        returnStatus: true)
         SSH_KEY_ARGS="-ici_key"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
@@ -98,6 +100,7 @@ pipeline {
                 allOf {
                     not { branch 'weekly-testing' }
                     expression { env.CHANGE_TARGET != 'weekly-testing' }
+                    expression { return env.QUICKBUILD == '1' }
                 }
             }
             parallel {
@@ -232,161 +235,6 @@ pipeline {
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/centos7/**'
-                        }
-                    }
-                }
-                stage('Build RPM on SLES 12.3') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { false }
-                            environment name: 'SLES12_3_DOCKER', value: 'true'
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            args '--privileged=true'
-                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
-                        }
-                    }
-                    steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/sles12.3/
-                              mkdir -p artifacts/sles12.3/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="suse-12.3-x86_64" -C utils/rpms chrootbuild'''
-                    }
-                    post {
-                        success {
-                            sh label: "Build Log",
-                               script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
-                                          (cd $mockroot/result/ &&
-                                           cp -r . $OLDPWD/artifacts/sles12.3/)
-                                          createrepo artifacts/sles12.3/
-                                          cat $mockroot/result/{root,build}.log'''
-                            publishToRepository product: 'cart',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'sles-12',
-                                                repo_dir: 'artifacts/sles12.3/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
-                        }
-                        unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
-                        }
-                        failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
-                        }
-                        unsuccessful {
-                            sh label: "Build Log",
-                               script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
-                                          cat $mockroot/result/{root,build}.log
-                                          artdir=$PWD/artifacts/sles12.3
-                                          if srpms=$(ls _topdir/SRPMS/*); then
-                                              cp -af $srpms $artdir
-                                          fi
-                                          (if cd $mockroot/result/; then
-                                               cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
-                        }
-                        cleanup {
-                            archiveArtifacts artifacts: 'artifacts/sles12.3/**'
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 42.3') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { false }
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                        }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            args '--privileged=true'
-                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
-                        }
-                    }
-                    steps {
-                        githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                      description: env.STAGE_NAME,
-                                      context: "build" + "/" + env.STAGE_NAME,
-                                      status: "PENDING"
-                        checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/leap42.3/
-                              mkdir -p artifacts/leap42.3/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="opensuse-leap-42.3-x86_64" -C utils/rpms chrootbuild'''
-                    }
-                    post {
-                        success {
-                            sh label: "Build Log",
-                               script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
-                                          (cd $mockroot/result/ &&
-                                           cp -r . $OLDPWD/artifacts/leap42.3/)
-                                          createrepo artifacts/leap42.3/
-                                          cat $mockroot/result/{root,build}.log'''
-                            publishToRepository product: 'cart',
-                                                format: 'yum',
-                                                maturity: 'stable',
-                                                tech: 'leap-42',
-                                                repo_dir: 'artifacts/leap42.3/'
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "SUCCESS"
-                        }
-                        unstable {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
-                        }
-                        failure {
-                            stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
-                        }
-                        unsuccessful {
-                            sh label: "Build Log",
-                               script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
-                                          cat $mockroot/result/{root,build}.log
-                                          artdir=$PWD/artifacts/leap42.3
-                                          if srpms=$(ls _topdir/SRPMS/*); then
-                                              cp -af $srpms $artdir
-                                          fi
-                                          (if cd $mockroot/result/; then
-                                               cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
-                        }
-                        cleanup {
-                            archiveArtifacts artifacts: 'artifacts/leap42.3/**'
                         }
                     }
                 }
@@ -566,7 +414,9 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                                '$BUILDARGS'
+                                                '$BUILDARGS ' +
+                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
+                                                ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -799,6 +649,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             environment name: 'SLES12_3_DOCKER', value: 'true'
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
@@ -862,6 +713,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             environment name: 'LEAP42_3_DOCKER', value: 'true'
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
@@ -980,7 +832,6 @@ pipeline {
                 }
                 stage('Build on Leap 15 with Clang') {
                     when {
-                        beforeAgent true
                         branch 'master'
                     }
                     agent {
@@ -1106,6 +957,69 @@ pipeline {
                 expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
             }
             parallel {
+                stage('Coverity on CentOS 7') {
+                    // Eventually this will only run on Master builds.
+                    // Unfortunately for now, a PR build could break
+                    // the quickbuild, which would not be detected until
+                    // the master build fails.
+//                    when {
+//                        beforeAgent true
+//                        anyOf {
+//                            branch 'master'
+//                            not {
+//                                // expression returns false on grep match
+//                                expression {
+//                                    sh script: 'git show -s --format=%B |' +
+//                                               ' grep "^Coverity-test: true"',
+//                                    returnStatus: true
+//                                }
+//                            }
+//                        }
+//                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.centos.7'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                                '$BUILDARGS ' +
+                                                '--build-arg QUICKBUILD=0' +
+                                                ' --build-arg REPOS="' + cart_repos + '"'
+                        }
+                    }
+                    steps {
+                        sh "rm -f coverity/cart_coverity.tgz"
+                        sconsBuild scons_exe: "scons-3",
+                                   coverity: "daos-stack/daos",
+                                   clean: "_build.external${arch}",
+                                   failure_artifacts: 'config.log-centos7-cov'
+                    }
+                    post {
+                        success {
+                            sh """rm -rf _build.external${arch}
+                                  mkdir -p coverity
+                                  rm -f coverity/*
+                                  if [ -e cov-int ]; then
+                                      tar czf coverity/cart_coverity.tgz cov-int
+                                  fi"""
+                            archiveArtifacts artifacts: 'coverity/cart_coverity.tgz',
+                                             allowEmptyArchive: true
+                        }
+                        unsuccessful {
+                            sh """mkdir -p coverity
+                                  if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log coverity/config.log-centos7-cov
+                                  fi
+                                  if [ -f cov-int/build-log.txt ]; then
+                                      mv cov-int/build-log.txt coverity/cov-build-log.txt
+                                  fi"""
+                            archiveArtifacts artifacts: 'coverity/cov-build-log.txt',
+                                             allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'coverity/config.log-centos7-cov',
+                                             allowEmptyArchive: true
+                      }
+                    }
+                }
                 stage('Single-node') {
                     when {
                         beforeAgent true
