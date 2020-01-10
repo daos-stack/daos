@@ -1703,12 +1703,11 @@ crt_hdlr_iv_sync_aux(void *arg)
 	switch (sync_type->ivs_event) {
 	case CRT_IV_SYNC_EVENT_UPDATE:
 	{
-		d_sg_list_t tmp_iv;
+		d_sg_list_t	tmp_iv;
+		d_iov_t		*tmp_iovs;
 
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
-				0, CRT_IV_PERM_WRITE, &iv_value, &user_priv);
-
-		tmp_iv = iv_value;
+				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_get() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
@@ -1716,14 +1715,26 @@ crt_hdlr_iv_sync_aux(void *arg)
 
 		need_put = true;
 
+		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+		if (tmp_iovs == NULL) {
+			D_ERROR("Failed to allocate temporary iovs\n");
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+
+		tmp_iv.sg_nr = iv_value.sg_nr;
+		tmp_iv.sg_iovs = tmp_iovs;
+
+		/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
 		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
 		if (rc != 0) {
+			D_FREE(tmp_iovs);
 			D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 					0, &tmp_iv, false, 0, user_priv);
+		D_FREE(tmp_iovs);
 		if (rc != 0) {
 			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
@@ -1863,6 +1874,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops	*iv_ops;
 	d_sg_list_t		 iv_value;
 	d_sg_list_t		 tmp_iv;
+	d_iov_t			*tmp_iovs;
 	void			*user_priv;
 	bool			 need_put = false;
 	int			 rc;
@@ -1871,17 +1883,27 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	D_ASSERT(iv_ops != NULL);
 
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key, 0,
-				CRT_IV_PERM_WRITE, &iv_value,
+				CRT_IV_PERM_READ, &iv_value,
 				&user_priv);
-	tmp_iv = iv_value;
 	if (rc != 0) {
 		D_ERROR("ivo_on_get() failed; rc=%d\n", rc);
 		D_GOTO(exit, rc);
 	}
 	need_put = true;
 
+	D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+	if (tmp_iovs == NULL) {
+		D_ERROR("Failed to allocate temporary iovs\n");
+		D_GOTO(exit, rc);
+	}
+
+	tmp_iv.sg_nr = iv_value.sg_nr;
+	tmp_iv.sg_iovs = tmp_iovs;
+
+	/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
 	rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
 	if (rc != 0) {
+		D_FREE(tmp_iovs);
 		D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
 		D_GOTO(exit, rc);
 	}
@@ -1891,6 +1913,8 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 				  &iv_value, user_priv);
 	if (rc != 0)
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
+
+	D_FREE(tmp_iovs);
 
 exit:
 	if (need_put)
