@@ -23,10 +23,8 @@
 """
 
 import os
-import write_host_file
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from command_utils import CommandFailure
 
 
 class IorInterceptVerifyDataIntegrity(IorTestBase):
