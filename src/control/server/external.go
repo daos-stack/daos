@@ -76,7 +76,7 @@ func (e *ext) getHistory() []string {
 }
 
 func (e *ext) getAbsInstallPath(path string) (string, error) {
-	return common.GetAbsInstallPath(path)
+	return common.GetAdjacentPath(path)
 }
 
 func (e *ext) lookupUser(userName string) (*user.User, error) {

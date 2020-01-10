@@ -168,12 +168,16 @@ func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.
 	return &ctlpb.ProviderListReply{}, nil
 }
 
-func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
-	return &ctlpb.SystemMemberQueryResp{}, nil
+func (m *mockMgmtCtlClient) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq, o ...grpc.CallOption) (*ctlpb.SystemQueryResp, error) {
+	return &ctlpb.SystemQueryResp{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
 	return &ctlpb.SystemStopResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq, o ...grpc.CallOption) (*ctlpb.SystemStartResp, error) {
+	return &ctlpb.SystemStartResp{}, nil
 }
 
 type mockACLResult struct {
@@ -308,6 +312,10 @@ func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.PrepSh
 
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq, o ...grpc.CallOption) (*mgmtpb.StartRanksResp, error) {
+	return &mgmtpb.StartRanksResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {

@@ -113,6 +113,17 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Query attributes of a DFS mount.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	attr	Attributes on the DFS container.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr);
+
+/**
  * Convert a local dfs mount to global representation data which can be
  * shared with peer processes.
  * If glob->iov_buf is set to NULL, the actual size of the global handle is

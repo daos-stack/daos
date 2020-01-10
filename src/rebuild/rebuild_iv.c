@@ -278,7 +278,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_fetch(ns, &key, &sgl, true /* retry */);
 	if (rc)
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -304,7 +304,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv,
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
 			  true /* retry */);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

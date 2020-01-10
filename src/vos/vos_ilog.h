@@ -133,6 +133,26 @@ vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 void
 vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 
+/** Aggregate (or discard) the incarnation log in the specified range
+ *
+ * \param	coh[IN]		container handle
+ * \param	ilog[IN]	Incarnation log
+ * \param	epr[IN]		Aggregation range
+ * \param	discard[IN]	Discard all entries in range
+ * \param	punched[IN]	Highest epoch where parent is punched
+ * \param	info[IN]	Incarnation log info
+ *
+ * \return	0		Success
+ *		1		Indicates log is empty
+ *		-DER_NONEXIST	Indicates log no longer visible
+ *		< 0		Failure
+ */
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr, bool discard,
+		   daos_epoch_t punched, struct vos_ilog_info *info);
+
+#define ILOG_TRACE
 #ifdef ILOG_TRACE
 #undef vos_ilog_fetch
 #undef vos_ilog_update
@@ -180,7 +200,7 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 	_Pragma("GCC diagnostic push")					\
 	_Pragma("GCC diagnostic ignored \"-Waddress\"")			\
 	D_DEBUG(DB_TRACE, "vos_ilog_check: epr_in="DF_U64"-"DF_U64	\
-		"%s\n", (epr_in)->epr_lo, (epr_in)->epr_hi,		\
+		" %s\n", (epr_in)->epr_lo, (epr_in)->epr_hi,		\
 		(visible_only) ? "visible" : "all");			\
 	__rc = vos_ilog_check_(info, epr_in, epr_out, visible_only);	\
 	D_DEBUG(DB_TRACE, "vos_ilog_check: returned "DF_RC" %s"		\

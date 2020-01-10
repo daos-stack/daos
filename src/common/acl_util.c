@@ -25,7 +25,7 @@
  * Utility functions that may be used when interacting with Access Control
  * Lists
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -293,8 +293,8 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	return 0;
 }
 
-static const char *
-get_principal_name_str(struct daos_ace *ace)
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace)
 {
 	switch (ace->dae_principal_type) {
 	case DAOS_ACL_OWNER:
@@ -410,7 +410,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 		rc = write_char(&pen, FLAG_POOL_INHERIT_CH, &remaining_len);
 
 	written = snprintf(pen, remaining_len, ":%s:",
-			   get_principal_name_str(ace));
+			   daos_ace_get_principal_str(ace));
 	if (written > remaining_len) {
 		remaining_len = 0;
 	} else {
@@ -482,7 +482,7 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 
 	rc = daos_ace_to_str(current, buf, sizeof(buf));
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACE to string: %d\n", rc);
+		D_ERROR("Couldn't convert ACE to string: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

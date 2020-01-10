@@ -238,6 +238,13 @@ struct evt_root {
 	uint16_t			tr_csum_len;
 };
 
+static inline int
+evt_is_empty(struct evt_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
+}
+
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
 	EVT_FEAT_SORT_SOFF		= (1 << 0),
