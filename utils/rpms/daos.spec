@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       0.8.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -79,7 +79,7 @@ BuildRequires: libcurl4
 # have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
 BuildRequires: libpsm_infinipath1
 # support verbs
-BuildRequires: librdmacm librdmacm-dev
+BuildRequires: rdma-core-devel
 %endif # 0%{?is_opensuse}
 # have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
 # have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
@@ -129,6 +129,14 @@ Requires: libfabric >= 1.8.0
 %description server
 This is the package needed to run a DAOS server
 
+%package server-verbs
+Summary: The DAOS server with verbs support
+Requires: %{name}-server = %{version}-%{release}
+Requires: librdmacm
+
+%description server-verbs
+The DAOS server package that supports ofi+verbs transport.
+
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
@@ -141,13 +149,20 @@ Requires: libfabric >= 1.8.0
 %description client
 This is the package needed to run a DAOS client
 
+%package client-verbs
+Summary: The DAOS client with verbs support
+Requires: %{name}-client = %{version}-%{release}
+Requires: librdmacm
+
+%description client-verbs
+The DAOS client package that supports ofi+verbs transport.
+
 %package tests
 Summary: The DAOS test suite
-Requires: %{name}-client = %{version}-%{release}
+Requires: %{name}-client-verbs = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
-Requires: librdmacm
 %endif
 # ensure we get exactly the right cart RPM
 %if %{defined cart_sha1}
@@ -263,6 +278,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/daos-server.service
 
+%files server-verbs
+
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/dmg
@@ -314,6 +331,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_prefix}%{_sysconfdir}/daos_agent.yml
 %{_unitdir}/daos-agent.service
 
+%files client-verbs
+
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
@@ -338,10 +357,13 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Mon Jan 06 2020 Ravindran Padmanabhan <ravindran.padmanabhan@intel.com> - 0.8.0-2
-- Add: librdmacm, librdmacm-dev.
+* Fri Jan 10 2020 Ravindran Padmanabhan <ravindran.padmanabhan@intel.com> - 0.8.0-3
+- Add -verbs subpackages to bring in additional packages needed
+  to run DAOS with verbs.
+- tests package needs the -client-verbs package since we use verbs
+  if an IB interface is found.
 
-* Fri Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
+* Tue Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
 - Remove openmpi, pmix, and hwloc builds, use hwloc and openmpi packages
 
 * Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1
