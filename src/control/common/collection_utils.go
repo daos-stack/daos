@@ -25,8 +25,8 @@ package common
 
 import "unicode"
 
-// Include returns true if string target in slice.
-func Include(ss []string, target string) bool {
+// Includes returns true if string target in slice.
+func Includes(ss []string, target string) bool {
 	return Index(ss, target) >= 0
 }
 

@@ -497,7 +497,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_MISC, DSS_TGT_SELF,
 			    0, NULL);
 	if (rc)
-		D_ERROR("dss_ult_create failed, rc %d.\n", rc);
+		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -908,8 +908,12 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
-	if (retry && daos_rpc_retryable_rc(rc)) {
-		D_DEBUG(DB_TRACE, "retry upon %d\n", rc);
+	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry upon %d\n", rc);
 		goto retry;
 	}
 	return rc;

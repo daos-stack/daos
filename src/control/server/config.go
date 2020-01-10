@@ -26,11 +26,13 @@ package server
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -39,11 +41,11 @@ import (
 
 const (
 	defaultRuntimeDir        = "/var/run/daos_server"
-	defaultConfigPath        = "etc/daos_server.yml"
+	defaultConfigPath        = "../etc/daos_server.yml"
 	defaultSystemName        = "daos_server"
 	defaultPort              = 10001
 	configOut                = ".daos_server.active.yml"
-	relConfExamplesPath      = "utils/config/examples/"
+	relConfExamplesPath      = "../utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
 	msgConfigNoProvider      = "provider not specified in config"
 	msgConfigNoPath          = "no config path set"
@@ -344,20 +346,18 @@ func (c *Configuration) SaveToFile(filename string) error {
 }
 
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(path string) error {
-	if path != "" {
-		c.Path = path
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
+	if err != nil {
+		return err
+	}
+	c.Path = newPath
+
+	if _, err = os.Stat(c.Path); err != nil {
+		return err
 	}
 
-	if !filepath.IsAbs(c.Path) {
-		newPath, err := c.ext.getAbsInstallPath(c.Path)
-		if err != nil {
-			return err
-		}
-		c.Path = newPath
-	}
-
-	return nil
+	return err
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
