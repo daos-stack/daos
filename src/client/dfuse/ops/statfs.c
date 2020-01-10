@@ -32,7 +32,6 @@ dfuse_cb_statfs(fuse_req_t req, struct dfuse_inode_entry *inode)
 	int rc;
 
 	if (!daos_handle_is_inval(inode->ie_dfs->dfs_poh)) {
-
 		rc = daos_pool_query(inode->ie_dfs->dfs_poh, NULL, &info,
 				     NULL, NULL);
 		if (rc != -DER_SUCCESS)
