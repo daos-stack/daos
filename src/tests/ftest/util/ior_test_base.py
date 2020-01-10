@@ -22,6 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -47,6 +49,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.dfuse = None
+        self.lock = None
 
     def setUp(self):
         """Set up each test case."""
@@ -63,6 +66,9 @@ class IorTestBase(TestWithServers):
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
             self.hostlist_clients = [self.hostlist_clients[0]]
+
+        # lock is needed for run_multiple_ior method.
+        self.lock = threading.Lock()
 
     def tearDown(self):
         """Tear down each test case."""
@@ -146,12 +152,7 @@ class IorTestBase(TestWithServers):
             slots (int, optional): slots per host to specify in the hostfile.
                 Defaults to None
         """
-        # Create a pool if one does not already exist
-        if self.pool is None:
-            self.create_pool()
-        # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
-
+        self.update_ior_cmd_with_pool()
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
@@ -170,6 +171,14 @@ class IorTestBase(TestWithServers):
             self.get_job_manager_command(), self.processes, intercept, slots)
 
         return out
+
+    def update_ior_cmd_with_pool(self):
+        """Update ior_cmd with pool."""
+        # Create a pool if one does not already exist
+        if self.pool is None:
+            self.create_pool()
+        # Update IOR params with the pool
+        self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
@@ -209,6 +218,97 @@ class IorTestBase(TestWithServers):
         try:
             out = manager.run()
             return out
+        except CommandFailure as error:
+            self.log.error("IOR Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
+
+    def run_multiple_ior_with_pool(self, results, intercept=None):
+        """Execute ior with optional overrides for ior flags and object_class.
+
+        If specified the ior flags and ior daos object class parameters will
+        override the values read from the yaml file.
+
+        Args:
+            intercept (str): path to the interception library. Shall be used
+                             only for POSIX through DFUSE.
+            ior_flags (str, optional): ior flags. Defaults to None.
+            object_class (str, optional): daos object class. Defaults to None.
+        """
+        self.update_ior_cmd_with_pool()
+
+        # start dfuse for POSIX api. This is specific to interception
+        # library test requirements.
+        self.start_dfuse()
+
+        # Create two jobs and run in parallel.
+        # Job1 will have 3 client set up to use dfuse + interception
+        # library
+        # Job2 will have 1 client set up to use only dfuse.
+        job1 = self.get_new_job(self.hostlist_clients[:-1], 1,
+                                results, intercept)
+        job2 = self.get_new_job([self.hostlist_clients[-1]], 2,
+                                results, None)
+
+        job1.start()
+        # Since same ior_cmd is used to trigger the MPIRUN
+        # with different parameters, pausing for 2 seconds to
+        # avoid data collisions.
+        time.sleep(2)
+        job2.start()
+        job1.join()
+        job2.join()
+
+    def get_new_job(self, clients, job_num, results, intercept=None):
+        """Create a new thread for ior run.
+
+        Args:
+            clients (lst): Number of clients the ior would run against.
+            job_num (int): Assigned job number
+            results (dict): A dictionary object to store the ior metrics
+            intercept (path): Path to interception library
+        """
+        job = threading.Thread(target=self.run_multiple_ior, args=[
+            clients, self.workdir, self.hostfile_clients_slots, len(clients),
+            results, job_num, intercept])
+        return job
+
+    def run_multiple_ior(self, hosts, path, slots, num_clients,
+                         results, job_num, intercept=None):
+        # pylint: disable=too-many-arguments
+        """Run the IOR command.
+
+        Args:
+            hosts (list): list of hosts on which to run ior
+            path (str): path for the hostfile
+            slots (int): slots for the hostfile
+            num_clients (int): number of host processes
+            results (dict): A dictionary object to store the ior metrics
+            job_num (int): Assigned job number
+            intercept (str, optional): path to interception library. Defaults to
+                None.
+        """
+        self.lock.acquire(True)
+        tsize = self.ior_cmd.transfer_size.value
+        testfile = os.path.join(self.dfuse.mount_dir.value,
+                                "testfile{}{}".format(tsize, job_num))
+        if intercept:
+            testfile += "intercept"
+        self.ior_cmd.test_file.update(testfile)
+        manager = self.get_job_manager_command()
+        procs = (self.processes // len(self.hostlist_clients)) * num_clients
+        env = self.ior_cmd.get_default_env(
+            str(manager), self.tmp, self.client_log)
+        if intercept:
+            env["LD_PRELOAD"] = intercept
+        manager.assign_hosts(hosts, path, slots)
+        manager.assign_processes(procs)
+        manager.assign_environment(env)
+        self.lock.release()
+        try:
+            out = manager.run()
+            self.lock.acquire(True)
+            results[job_num] = IorCommand.get_ior_metrics(out)
+            self.lock.release()
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")

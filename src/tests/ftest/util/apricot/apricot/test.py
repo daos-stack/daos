@@ -460,7 +460,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.manager.assign_environment(EnvironmentVariables({"PATH": None}))
+        manager.manager.assign_environment(
+            EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
 
     @fail_on(CommandFailure)

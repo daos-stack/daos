@@ -23,7 +23,8 @@
 """
 import socket
 
-from command_utils import BasicParameter, FormattedParameter, CommandFailure
+from command_utils import (BasicParameter, FormattedParameter, CommandFailure,
+                           EnvironmentVariables)
 from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
                                 TransportCredentials)
 
@@ -159,6 +160,21 @@ class DaosAgentCommand(YamlCommand):
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts using orterun."""
+
+    def __init__(self, agent_command, manager="OpenMPI"):
+        """Create a DaosAgentManager object.
+
+        Args:
+            agent_command (DaosAgentCommand): daos_agent command class
+            manager (str, optional): the name of the JobManager class used to
+                manage the YamlCommand defined through the "job" attribute.
+                Defaults to "OpenMpi"
+        """
+        super(DaosAgentManager, self).__init__(agent_command, manager)
+
+        # Set default agent debug levels
+        self.manager.assign_environment_default(EnvironmentVariables(
+            {"D_LOG_MASK": "DEBUG", "DD_MASK": "mgmt,io,md,epc,rebuild"}))
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.

@@ -109,6 +109,15 @@ class JobManager(ExecutableCommand):
         """
         pass
 
+    def assign_environment_default(self, env_vars):
+        """Assign the default environment variables for the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to
+                assign as the default
+        """
+        pass
+
 
 class OpenMPI(JobManager):
     """A class for the OpenMPI job manager command."""
@@ -176,14 +185,26 @@ class OpenMPI(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a list for the parameter assignment.
+            print("ORIGINAL-1: {}".format(self.export.value))
             original = EnvironmentVariables({
                 item.split("=")[0]: item.split("=")[1] if "=" in item else None
                 for item in self.export.value})
+            print("ORIGINAL-2: {}".format(original))
             original.update(env_vars)
+            print("ORIGINAL-3: {}".format(original))
             self.export.value = original.get_list()
         else:
             # Overwrite the environmental variable assignment
             self.export.value = env_vars.get_list()
+
+    def assign_environment_default(self, env_vars):
+        """Assign the default environment variables for the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to
+                assign as the default
+        """
+        self.export.update_default(env_vars.get_list())
 
     def run(self):
         """Run the orterun command.
@@ -266,6 +287,15 @@ class Mpich(JobManager):
             # Overwrite the environmental variable assignment
             self.envlist.value = ",".join(env_vars.get_list())
 
+    def assign_environment_default(self, env_vars):
+        """Assign the default environment variables for the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to
+                assign as the default
+        """
+        self.envlist.update_default(env_vars.get_list())
+
     def run(self):
         """Run the Mpich command.
 
@@ -347,3 +377,12 @@ class Srun(JobManager):
         else:
             # Overwrite the environmental variable assignment
             self.export.value = ",".join(env_vars.get_list())
+
+    def assign_environment_default(self, env_vars):
+        """Assign the default environment variables for the command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to
+                assign as the default
+        """
+        self.export.update_default(env_vars.get_list())

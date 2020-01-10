@@ -601,8 +601,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ap->type = dattr.da_type;
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-		ap->oclass = dattr.da_oclass_id;
-		ap->chunk_size = dattr.da_chunk_size;
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}

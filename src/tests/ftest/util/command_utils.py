@@ -81,6 +81,14 @@ class BasicParameter(object):
         if name is not None:
             self.log.debug("Updated param %s => %s", name, self.value)
 
+    def update_default(self, value):
+        """Update the BasicParameter default value.
+
+        Args:
+            value (object): new default value
+        """
+        self._default = value
+
 
 class NamedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
