@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,7 +297,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 32,
 		},
 	},
 	{
@@ -370,7 +370,29 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	}
 
 	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	strcpy(str, "UNKNOWN");
 	return -1;
+}
+
+/** Return the list of registered oclass names */
+size_t
+daos_oclass_names_list(size_t size, char *str)
+{
+	struct daos_obj_class   *oc;
+	size_t len = 0;
+
+	if (size <= 0 || str == NULL)
+		return -1;
+
+	*str = '\0';
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		len += strlen(oc->oc_name) + 2;
+		if (len < size) {
+			strcat(str, oc->oc_name);
+			strcat(str, ", ");
+		}
+	}
+	return len;
 }
 
 /** Return the redundancy group size of @oc_attr */
@@ -499,6 +521,21 @@ obj_ec_codec_init()
 		ec_codec = &oc_ec_codecs[i++].ec_codec;
 		k = oc->oc_attr.ca_ec_k;
 		p = oc->oc_attr.ca_ec_p;
+		if (k > OBJ_EC_MAX_K || p > OBJ_EC_MAX_P) {
+			D_ERROR("invalid k %d p %d (max k %d, max p %d)\n",
+				k, p, OBJ_EC_MAX_K, OBJ_EC_MAX_P);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
+		if (k < 2 || p < 1) {
+			D_ERROR("invalid k %d / p %d (min k 2, min p 1).\n",
+				k, p);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
+		if (p > k) {
+			D_ERROR("invalid k %d p %d (parity target number cannot"
+				" exceed data target number).\n", k, p);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 		m = k + p;
 		/* 32B needed for data generated for each input coefficient */
 		D_ALLOC(ec_codec->ec_gftbls, k * p * 32);
@@ -558,7 +595,8 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
  */
 int
 obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
-		       size_t *sg_off, struct obj_ec_parity *parity, int p_idx)
+		       size_t *sg_off, struct obj_ec_parity *parity,
+		       uint32_t p_idx)
 {
 	struct obj_ec_codec		*codec = obj_ec_codec_get(
 							daos_obj_id2class(oid));

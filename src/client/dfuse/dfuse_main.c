@@ -99,6 +99,21 @@ cleanup:
 	return false;
 }
 
+static void
+show_help(char *name)
+{
+	printf("usage: %s -m=PATHSTR -s=RANKS\n"
+		"\n"
+		"	-m --mountpoint=PATHSTR	Mount point to use\n"
+		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
+		"	   --pool=UUID		pool UUID\n"
+		"	   --container=UUID	container UUID\n"
+		"	   --sys-name=STR	DAOS system name context for servers\n"
+		"	-S --singlethreaded	Single threaded\n"
+		"	-f --foreground		Run in foreground\n",
+		name);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -109,27 +124,41 @@ main(int argc, char **argv)
 	int			ret = -DER_SUCCESS;
 	int			rc;
 
+	/* The 'daos' command uses -m as an alias for --scv however
+	 * dfuse uses -m for --mountpoint so this is inconsistent
+	 * but probably better than changing the meaning of the -m
+	 * option here.h
+	 */
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
-		{"svcl",		required_argument, 0, 's'},
-		{"group",		required_argument, 0, 'g'},
+		{"svc",			required_argument, 0, 's'},
+		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
-		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(out_fini, ret = -DER_NOMEM);
+		D_GOTO(out, ret = -DER_NOMEM);
+
+	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(out, ret = rc);
+	}
 
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
+		c = getopt_long(argc, argv, "s:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -145,7 +174,7 @@ main(int argc, char **argv)
 		case 's':
 			svcl = optarg;
 			break;
-		case 'g':
+		case 'G':
 			dfuse_info->di_group = optarg;
 			break;
 		case 'm':
@@ -158,9 +187,11 @@ main(int argc, char **argv)
 			dfuse_info->di_foreground = true;
 			break;
 		case 'h':
+			show_help(argv[0]);
 			exit(0);
 			break;
 		case '?':
+			show_help(argv[0]);
 			exit(1);
 			break;
 		}
@@ -172,19 +203,19 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_mountpoint) {
-		DFUSE_LOG_ERROR("Mountpoint is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Mountpoint is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
 
 	/* Is this required, or can we assume some kind of default for
 	 * this.
 	 */
 	if (!svcl) {
-		DFUSE_LOG_ERROR("Svcl is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Svcl is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
-
-	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	if (!dfuse_info->di_foreground) {
 		rc = daemon(0, 0);
@@ -194,7 +225,9 @@ main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
+		D_GOTO(out_debug, ret = rc);
+
+	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
@@ -206,6 +239,10 @@ main(int argc, char **argv)
 	if (!dfs) {
 		D_GOTO(out_svcl, 0);
 	}
+
+	DFUSE_TRA_UP(dfs, dfuse_info, "dfs");
+
+	d_list_add(&dfs->dfs_list, &dfuse_info->di_dfs_list);
 
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
@@ -263,6 +300,8 @@ main(int argc, char **argv)
 
 	fuse_session_destroy(dfuse_info->di_session);
 
+	D_GOTO(out_dfs, 0);
+
 out_cont:
 	if (dfuse_info->di_cont) {
 		dfs_umount(dfs->dfs_ns);
@@ -272,19 +311,62 @@ out_pool:
 	if (dfuse_info->di_pool)
 		daos_pool_disconnect(dfs->dfs_poh, NULL);
 out_dfs:
-	D_FREE(dfs);
+	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
+				       struct dfuse_dfs, dfs_list))) {
+		/* Try and close/disconnect all container/pool handles and free
+		 * the dfs struct.
+		 *
+		 * dfuse_destroy_fuse() has already been called here which will
+		 * have iterated the inode table and should have dropped all
+		 * references to the dfs entries, however depending on the order
+		 * some pools/containers may be left open here so check for this
+		 * and try them again.
+		 */
+		if (!daos_handle_is_inval(dfs->dfs_coh)) {
+
+			if (dfs->dfs_ns) {
+				rc = dfs_umount(dfs->dfs_ns);
+				if (rc != 0)
+					DFUSE_TRA_ERROR(dfs,
+							"dfs_umount() failed (%d)",
+							rc);
+			}
+
+			rc = daos_cont_close(dfs->dfs_coh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_cont_close() failed: (%d)",
+						rc);
+			}
+
+		} else if (!daos_handle_is_inval(dfs->dfs_poh)) {
+			rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_pool_disconnect() failed: (%d)",
+						rc);
+			}
+		}
+
+		D_FREE(dfs);
+	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
+	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	D_FREE(dfuse_info);
-out_fini:
 	daos_fini();
+out_debug:
+	daos_debug_fini();
 out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
-	return -(ret + DER_ERR_GURT_BASE);
+	if (ret)
+		return -(ret + DER_ERR_GURT_BASE);
+	else
+		return 0;
 }

@@ -23,10 +23,9 @@
 '''
 import os
 import traceback
-import json
 
 from apricot import TestWithServers
-from daos_api import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosContext, DaosPool, DaosApiError
 
 
 class BadQueryTest(TestWithServers):
@@ -78,14 +77,9 @@ class BadQueryTest(TestWithServers):
                 break
 
         try:
-            # setup the DAOS python API
-            with open('../../../.build_vars.json') as build_file:
-                data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib/')
-
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 

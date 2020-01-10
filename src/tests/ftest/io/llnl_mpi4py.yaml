@@ -1,0 +1,26 @@
+hosts:
+    test_servers:
+        - boro-A
+    test_clients:
+        - boro-B
+        - boro-C
+        - boro-D
+        - boro-E
+timeout: 300
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 1000000000
+    createsvc:
+        svcn: 1
+client_processes:
+    np: 8
+test_repo:
+    llnl: "/usr/lib64/testmpio"
+    mpi4py: "/usr/lib64/python2.7/site-packages/mpi4py/tests"

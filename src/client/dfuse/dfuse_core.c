@@ -163,6 +163,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!fs_handle)
 		return false;
 
+	DFUSE_TRA_ROOT(fs_handle, "fs_handle");
+
 	fs_handle->dpi_info = dfuse_info;
 
 	/* Max read and max write are handled differently because of the way
@@ -215,6 +217,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	D_ALLOC_PTR(ie);
 	if (!ie)
 		D_GOTO(err, 0);
+
+	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;

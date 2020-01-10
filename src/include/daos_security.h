@@ -51,6 +51,13 @@ extern "C" {
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
+ * String values for the special principal types
+ */
+#define DAOS_ACL_PRINCIPAL_OWNER	"OWNER@"
+#define DAOS_ACL_PRINCIPAL_OWNER_GRP	"GROUP@"
+#define DAOS_ACL_PRINCIPAL_EVERYONE	"EVERYONE@"
+
+/**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
 #define DAOS_ACL_MAX_ACE_LEN		(8192)
@@ -429,6 +436,17 @@ int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 /**
+ * Get the principal name string from an Access Control Entry.
+ *
+ * \param[in]	ace	Access Control Entry
+ *
+ * \return	Either the string from the principal name field, or one of the
+ *		special principal names: OWNER@, GROUP@, EVERYONE@
+ */
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace);
+
+/**
  * Convert an Access Control Entry formatted as a string to a daos_ace
  * structure.
  *
@@ -491,6 +509,31 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
  */
 int
 daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
+
+/**
+ * Convert a formatted principal string to an ACL principal type and name
+ * suitable for creating or looking up an Access Control Entry.
+ *
+ * The format of the input string is:
+ * - For named user: "u:username@"
+ * - For named group: "g:groupname@"
+ * - For special types: "OWNER@", "GROUP@", or "EVERYONE@"
+ *
+ * \param[in]	principal_str	Formatted principal string
+ * \param[out]	type		Type determined from the string
+ * \param[out]	name		Newly-allocated name string. Caller is
+ *				responsible for freeing.
+ *				Result may be NULL if the principal is one of
+ *				the special types.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_principal_from_str(const char *principal_str,
+			    enum daos_acl_principal_type *type,
+			    char **name);
 
 #if defined(__cplusplus)
 }

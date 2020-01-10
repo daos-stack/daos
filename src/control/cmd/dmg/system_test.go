@@ -31,15 +31,39 @@ import (
 func TestSystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"system member query with no arguments",
-			"system member-query",
-			"ConnectClients SystemMemberQuery",
+			"system query with no arguments",
+			"system query",
+			"ConnectClients SystemQuery",
 			nil,
 		},
 		{
 			"system stop with no arguments",
 			"system stop",
 			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"system stop with kill",
+			"system stop --kill",
+			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"system stop with prep",
+			"system stop --prep",
+			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"leader query",
+			"system leader-query",
+			"ConnectClients LeaderQuery-daos_server",
+			nil,
+		},
+		{
+			"system list-pools with default config",
+			"system list-pools",
+			"ConnectClients ListPools-{daos_server}",
 			nil,
 		},
 		{

@@ -1,19 +1,20 @@
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
   test_clients:
-    - boro-F
-timeout: 480
+    - client-F
+timeout: 700
 server_config:
   name: daos_server
-  targets: 1
+  servers:
+    targets: 1
 pool:
   mode: 511
-  group: daos_server
+  name: daos_server
   scm_size: 8589934592
   svcn: 3
 container:
@@ -43,3 +44,5 @@ test:
     last_rank:
       rank: 4
   containers: 70
+  container_obj_class: "OC_RP_3GX"
+  use_ior: True

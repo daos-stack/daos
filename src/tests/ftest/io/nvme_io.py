@@ -26,11 +26,12 @@ from __future__ import print_function
 import os
 import avocado
 
-from daos_api import DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
 
 
 class NvmeIo(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -95,8 +96,7 @@ class NvmeIo(IorTestBase):
 
                 try:
                     if self.pool:
-                        self.pool.disconnect()
-                        self.pool.destroy(1)
+                        self.destroy_pools(self.pool)
                 except DaosApiError as error:
                     self.log.error(
                         "Pool disconnect/destroy error: %s", str(error))

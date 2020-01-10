@@ -67,6 +67,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
@@ -88,7 +90,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	oh->doh_dfs = parent->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	fi_out.direct_io = 1;
+	if (fi->direct_io)
+		fi_out.direct_io = 1;
 	fi_out.fh = (uint64_t)oh;
 
 	strncpy(ie->ie_name, name, NAME_MAX);

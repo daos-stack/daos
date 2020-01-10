@@ -387,6 +387,15 @@ enum {
 	OC_RESERVED		= (1U << 10),
 };
 
+/** Internal classes for testing & debugging */
+enum {
+	OC_INTERNAL		= OC_RESERVED + 1,
+	OC_RP_4G1,
+	OC_RP_4G2,
+	OC_RP_4G4,
+	OC_RP_4GX,
+};
+
 enum daos_obj_schema {
 	DAOS_OS_SINGLE,		/**< Single stripe object */
 	DAOS_OS_STRIPED,	/**< Fix striped object */
@@ -457,6 +466,17 @@ struct daos_oclass_list {
  */
 int
 daos_oclass_name2id(const char *name);
+
+/**
+ * Return the list of object class.
+ *
+ * \param[in]	size	length in bytes of str buffer.
+ * \param[out]	str	buffer to get all registered oclass names
+ *
+ * \return		>= 0 on success and required length of str, -1 if error.
+ */
+size_t
+daos_oclass_names_list(size_t size, char *str);
 
 /**
  * Return the object class name given it's ID.

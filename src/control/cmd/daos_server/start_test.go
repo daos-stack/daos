@@ -52,17 +52,9 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
-func showBufOnFailure(t *testing.T, logBuf bytes.Buffer) {
-	if !t.Failed() || logBuf.Len() == 0 {
-		return
-	}
-	t.Logf("logged output: %s", logBuf.String())
-}
-
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
-		WithNvmeShmID(-1). // don't generate a ShmID in testing
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
@@ -125,8 +117,6 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
 }
 
 func TestStartOptions(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
-
 	insecureTransport := server.NewConfiguration().TransportConfig
 	insecureTransport.AllowInsecure = true
 
@@ -238,18 +228,6 @@ func TestStartOptions(t *testing.T) {
 				return cfg.WithSystemName("foo")
 			},
 		},
-		"Attach Info (short)": {
-			argList: []string{"-a", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
-		"Attach Info (long)": {
-			argList: []string{"--attach_info=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
 		"SocketDir (short)": {
 			argList: []string{"-d", "/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
@@ -276,10 +254,8 @@ func TestStartOptions(t *testing.T) {
 		},
 	} {
 		t.Run(desc, func(t *testing.T) {
-			var logBuf bytes.Buffer
-			log := logging.NewCombinedLogger(t.Name(), &logBuf).
-				WithLogLevel(logging.LogLevelDebug)
-			defer showBufOnFailure(t, logBuf)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
 			var gotConfig *server.Configuration
 			var opts mainOpts

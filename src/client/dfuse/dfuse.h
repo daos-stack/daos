@@ -35,7 +35,9 @@
 #include "daos_fs.h"
 
 #include "dfuse_common.h"
-#include "dfuse.h"
+
+#define DFUSE_UNS_POOL_ATTR "user.uns.pool"
+#define DFUSE_UNS_CONTAINER_ATTR "user.uns.container"
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
@@ -47,6 +49,8 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	d_list_t			di_dfs_list;
+	pthread_mutex_t			di_lock;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -58,7 +62,6 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
-	struct dfuse_dfs		*dpi_ddfs;
 	uint32_t			dpi_max_read;
 	uint32_t			dpi_max_write;
 	/** Hash table of open inodes */
@@ -160,6 +163,7 @@ struct dfuse_dfs {
 	daos_pool_info_t	dfs_pool_info;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	d_list_t		dfs_list;
 };
 
 /* dfuse_core.c */
@@ -254,7 +258,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_FUSE_REPLY_ERR(req, status)		\
 	do {						\
 		DFUSE_REPLY_ERR_RAW(req, req, status);	\
-		DFUSE_TRA_DOWN(req);			\
 	} while (0)
 
 #define DFUSE_REPLY_ZERO(req)						\
@@ -266,7 +269,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
 #define DFUSE_REPLY_ATTR(req, attr)					\
@@ -291,7 +293,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
 #define DFUSE_REPLY_BUF(handle, req, buf, size)				\
@@ -353,17 +354,19 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, arg)				\
+#define DFUSE_REPLY_IOCTL_SIZE(handle, req, arg, size)			\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(arg),			\
-					sizeof(arg));			\
+		__rc = fuse_reply_ioctl(req, 0, arg, size);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
+
+#define DFUSE_REPLY_IOCTL(handle, req, arg)			\
+	DFUSE_REPLY_IOCTL_SIZE(handle, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.

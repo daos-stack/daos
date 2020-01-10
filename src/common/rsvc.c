@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,15 @@
 			(c)->sc_leader_aliveness, (c)->sc_leader_term,	\
 			(c)->sc_leader_index, (c)->sc_next
 
+static inline void
+rsvc_client_reset_leader(struct rsvc_client *client)
+{
+	client->sc_leader_known = false;
+	client->sc_leader_aliveness = 0;
+	client->sc_leader_term = -1;
+	client->sc_leader_index = -1;
+}
+
 /**
  * Initialize \a client.
  *
@@ -52,10 +61,7 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
 	if (rc != 0)
 		return rc;
-	client->sc_leader_known = false;
-	client->sc_leader_aliveness = 0;
-	client->sc_leader_term = -1;
-	client->sc_leader_index = -1;
+	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
 	return 0;
 }
@@ -80,21 +86,27 @@ rsvc_client_fini(struct rsvc_client *client)
 void
 rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
-	int chosen;
+	int chosen = -1;
 
 	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
-	} else {
+	} else if (client->sc_ranks->rl_nr > 0) {
 		chosen = client->sc_next;
 		/* The hintless search is a round robin of all replicas. */
 		client->sc_next++;
 		client->sc_next %= client->sc_ranks->rl_nr;
 	}
-	D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr, "%d\n",
-		  chosen);
-	ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
+
 	ep->ep_tag = 0;
+	if (chosen == -1) {
+		ep->ep_rank = -1;
+		D_WARN("No ranks in rank-list");
+	} else {
+		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
+			  "%d\n", chosen);
+		ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
+	}
 }
 
 /* Process an error without any leadership hint. */
@@ -104,8 +116,31 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 {
 	int leader_index = client->sc_leader_index;
 
-	if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
-	    ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
+	if (rc == -DER_NOTREPLICA) {
+		int pos;
+		bool found;
+		d_rank_list_t *rl = client->sc_ranks;
+
+		rsvc_client_reset_leader(client);
+		found = daos_rank_list_find(rl, ep->ep_rank, &pos);
+		if (!found) {
+			D_DEBUG(DB_MD, "rank %u not found in list of replicas",
+				ep->ep_rank);
+			return;
+		}
+		rl->rl_nr--;
+		if (pos < rl->rl_nr) {
+			memmove(&rl->rl_ranks[pos], &rl->rl_ranks[pos + 1],
+				(rl->rl_nr - pos) * sizeof(*rl->rl_ranks));
+			client->sc_next = pos;
+		} else {
+			client->sc_next = 0;
+		}
+
+		/** TODO: Request list of replicas from management service.  **/
+
+	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
+		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
 		if (rc == -DER_NOTLEADER)
 			client->sc_leader_aliveness = 0;
 		else
@@ -161,7 +196,8 @@ rsvc_client_process_hint(struct rsvc_client *client,
 		/* Append the unknown rank to tolerate user mistakes. */
 		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
 		if (rc != 0) {
-			D_DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
+			D_DEBUG(DB_MD, "failed to append new rank: "DF_RC"\n",
+				DP_RC(rc));
 			return;
 		}
 		client->sc_leader_index = client->sc_ranks->rl_nr - 1;
@@ -221,6 +257,13 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		rsvc_client_process_hint(client, hint, false /* !from_leader */,
 					 ep);
 		return RSVC_CLIENT_RECHOOSE;
+	} else if (rc_svc == -DER_NOTREPLICA) {
+		/* This may happen when a service replica was destroyed. */
+		D_DEBUG(DB_MD, "service not found reply from rank %u: ",
+			ep->ep_rank);
+		rsvc_client_process_error(client, rc_svc, ep);
+		return client->sc_ranks->rl_nr == 0 ?
+			RSVC_CLIENT_PROCEED : RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
 		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "

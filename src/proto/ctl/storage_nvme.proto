@@ -34,25 +34,27 @@ message NvmeController {
 	// Namespace represents a namespace created on an NvmeController.
 	message Namespace {
 		int32 id = 1;		// namespace id
-		int32 capacity = 2;	// device capacity in GBytes
+		int32 size = 2;	// device capacity in GBytes
+		string ctrlrpciaddr = 3;
 	}
 
 	message Health {
 		uint32 temp = 1;
-		uint32 tempwarn = 2; // temperature warning duration
-		uint32 tempcrit = 3; // temperature critical duration
-		uint64 ctrlbusy = 4; // controller busy duration
+		uint32 tempwarntime = 2; // temperature warning duration
+		uint32 tempcrittime = 3; // temperature critical duration
+		uint64 ctrlbusytime = 4; // controller busy duration
 		uint64 powercycles = 5;
 		uint64 poweronhours = 6;
 		uint64 unsafeshutdowns = 7;
 		uint64 mediaerrors = 8;
-		uint64 errorlogs = 9; // error log entries
+		uint64 errorlogentries = 9; // error log entries
 		// critical warnings
-		bool tempwarning = 10;
-		bool availspare = 11;
-		bool reliability = 12;
-		bool readonly = 13;
-		bool volatilemem = 14;
+		bool tempwarn = 10;
+		bool availsparewarn = 11;
+		bool reliabilitywarn = 12;
+		bool readonlywarn = 13;
+		bool volatilewarn = 14;
+		string ctrlrpciaddr = 15;
 	}
 
 	string model = 1;	// model name
@@ -60,8 +62,8 @@ message NvmeController {
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
 	int32 socketid = 5;	// NUMA socket ID
-	repeated Namespace namespaces = 6;	// controller's namespaces
-	repeated Health healthstats = 7;	// controller's health stats
+	Health healthstats = 6;	// controller's health stats
+	repeated Namespace namespaces = 7;	// controller's namespaces
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
@@ -91,16 +93,3 @@ message ScanNvmeResp {
 message FormatNvmeReq {}
 
 // FormatNvmeResp isn't required because controller results are returned instead
-
-message UpdateNvmeReq {
-	string model = 1; // Only upgrade devices of specific model
-	string startrev = 2; // Only upgrade devices with starting revision
-	string path = 3;	// Filesystem path containing firmware image
-	int32 slot = 4;		// Firmware slot (register) to update
-}
-
-// TODO: provide facility to supply FIO config in params
-message BurninNvmeReq {
-	FilePath fioconfig = 1;	// FIO workload configuration file path
-}
-

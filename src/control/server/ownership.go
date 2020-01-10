@@ -28,7 +28,6 @@ import (
 	"os/user"
 	"strconv"
 
-	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
@@ -78,8 +77,6 @@ func chownAll(config *Configuration, usr *user.User, grp *user.Group) error {
 	if err != nil {
 		return errors.Wrap(err, "parsing gid to int")
 	}
-
-	log.Debugf("running as root, changing file ownership to uid/gid %d/%d", uid, gid)
 
 	paths := []string{
 		config.SocketDir,

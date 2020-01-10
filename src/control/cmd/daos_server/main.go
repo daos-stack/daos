@@ -24,16 +24,24 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server"
 )
 
+var daosVersion string
+
 type mainOpts struct {
+	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
@@ -45,6 +53,15 @@ type mainOpts struct {
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
 	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version versionCmd `command:"version" description:"Print daos_server version"`
+}
+
+type versionCmd struct{}
+
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("daos_server version %s\n", daosVersion)
+	os.Exit(0)
+	return nil
 }
 
 type cmdLogger interface {
@@ -64,6 +81,9 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 func exitWithError(log *logging.LeveledLogger, err error) {
 	log.Debugf("%+v", err)
 	log.Errorf("%v", err)
+	if fault.HasResolution(err) {
+		log.Error(fault.ShowResolutionFor(err))
+	}
 	os.Exit(1)
 }
 
@@ -71,6 +91,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
+		if !opts.AllowProxy {
+			common.ScrubProxyVariables()
+		}
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
@@ -116,6 +139,10 @@ func main() {
 	var opts mainOpts
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+		if errors.Cause(err) == context.Canceled {
+			log.Infof("%s (pid %d) shutting down", server.ControlPlaneName, os.Getpid())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }

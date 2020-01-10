@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,15 +94,6 @@ enum {
 	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
 				 * cell size 1MB.
 				 */
-};
-
-/** Internal classes for testing & debugging */
-enum {
-	OC_INTERNAL		= OC_RESERVED + 1,
-	OC_RP_4G1,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4GX,
 };
 
 static inline bool
@@ -281,6 +272,8 @@ daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 	return oid;
 }
 
+#define DAOS_OC_IS_EC(oca)	((oca)->ca_resil == DAOS_RES_EC)
+
 /* check if an oid is EC obj class, and return its daos_oclass_attr */
 static inline bool
 daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
@@ -293,7 +286,7 @@ daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 	if (oca == NULL)
 		return false;
 
-	return (oca->ca_resil == DAOS_RES_EC);
+	return DAOS_OC_IS_EC(oca);
 }
 
 static inline bool
@@ -335,8 +328,6 @@ daos_iod_csum(daos_iod_t *iod, int csum_index)
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
-
-#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
 int dc_obj_init(void);
 void dc_obj_fini(void);

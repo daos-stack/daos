@@ -25,8 +25,8 @@ package common
 
 import "unicode"
 
-// Include returns true if string target in slice.
-func Include(ss []string, target string) bool {
+// Includes returns true if string target in slice.
+func Includes(ss []string, target string) bool {
 	return Index(ss, target) >= 0
 }
 
@@ -88,4 +88,12 @@ func IsAlphabetic(s string) bool {
 		}
 	}
 	return true
+}
+
+// Pluralise appends "s" to input string unless n==1.
+func Pluralise(s string, n int) string {
+	if n == 1 {
+		return s
+	}
+	return s + "s"
 }

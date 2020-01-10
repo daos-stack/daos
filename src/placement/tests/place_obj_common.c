@@ -1,0 +1,247 @@
+/**
+ * (C) Copyright 2016-2018 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+#define D_LOGFAC	DD_FAC(tests)
+
+#include <daos/common.h>
+#include <daos/placement.h>
+#include <daos.h>
+#include "place_obj_common.h"
+
+void
+plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
+		struct pl_map *pl_map)
+{
+	struct daos_obj_md	 md;
+	int			 i;
+	int			 rc;
+
+	memset(&md, 0, sizeof(md));
+	md.omd_id  = oid;
+	md.omd_ver = 1;
+
+	D_PRINT("plt_obj_place\n");
+	rc = pl_obj_place(pl_map, &md, NULL, layout);
+	D_ASSERT(rc == 0);
+
+	D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
+	for (i = 0; i < (*layout)->ol_nr; i++)
+		D_PRINT("%d ", (*layout)->ol_shards[i].po_target);
+
+	D_PRINT("\n");
+}
+
+void
+plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size)
+{
+	int i;
+	int target_num;
+	uint8_t *target_set;
+
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		target_num = layout->ol_shards[i].po_target;
+
+		D_ASSERT(target_num != -1);
+		D_ASSERT(target_set[target_num] != 1);
+		target_set[target_num] = 1;
+	}
+}
+
+void
+plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
+		uint32_t pool_size)
+{
+	int i;
+	int  target_num;
+	uint8_t *target_set;
+
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	for (i = 0; i < num_shards; i++) {
+		target_num = shard_ids[i];
+
+		D_ASSERT(target_set[target_num] != 1);
+		target_set[target_num] = 1;
+	}
+}
+
+bool
+pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2,
+		uint32_t dom_nr)
+{
+	int	i;
+
+	D_ASSERT(lo_1->ol_nr == lo_2->ol_nr);
+	D_ASSERT(lo_1->ol_nr > 0 && lo_1->ol_nr <= dom_nr);
+
+	for (i = 0; i < lo_1->ol_nr; i++) {
+		if (lo_1->ol_shards[i].po_target !=
+		    lo_2->ol_shards[i].po_target)
+			return false;
+	}
+
+	return true;
+}
+
+void
+plt_set_tgt_status(uint32_t id, int status, uint32_t ver,
+		struct pool_map *po_map, bool pl_debug_msg)
+{
+	struct pool_target	*target;
+	char			*str;
+	int			 rc;
+
+	switch (status) {
+	case PO_COMP_ST_UP:
+		str = "PO_COMP_ST_UP";
+		break;
+	case PO_COMP_ST_UPIN:
+		str = "PO_COMP_ST_UPIN";
+		break;
+	case PO_COMP_ST_DOWN:
+		str = "PO_COMP_ST_DOWN";
+		break;
+	case PO_COMP_ST_DOWNOUT:
+		str = "PO_COMP_ST_DOWNOUT";
+		break;
+	default:
+		str = "unknown";
+		break;
+	};
+
+	rc = pool_map_find_target(po_map, id, &target);
+	D_ASSERT(rc == 1);
+	if (pl_debug_msg)
+		D_PRINT("set target id %d, rank %d as %s, ver %d.\n",
+			id, target->ta_comp.co_rank, str, ver);
+	target->ta_comp.co_status = status;
+	target->ta_comp.co_fseq = ver;
+	rc = pool_map_set_version(po_map, ver);
+	D_ASSERT(rc == 0);
+}
+
+void
+plt_fail_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg)
+{
+	(*po_ver)++;
+	plt_set_tgt_status(id, PO_COMP_ST_DOWN, *po_ver, po_map, pl_debug_msg);
+}
+
+void
+plt_reint_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg)
+{
+	(*po_ver)++;
+	plt_set_tgt_status(id, PO_COMP_ST_UP, *po_ver, po_map, pl_debug_msg);
+}
+
+void
+plt_add_tgt(uint32_t id, uint32_t *po_ver, struct pool_map *po_map,
+		bool pl_debug_msg)
+{
+	(*po_ver)++;
+	plt_set_tgt_status(id, PO_COMP_ST_UPIN, *po_ver, po_map, pl_debug_msg);
+}
+
+void
+plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
+		   int failed_cnt, uint32_t *spare_tgt_ranks, bool pl_debug_msg,
+		   uint32_t *shard_ids, uint32_t *spare_cnt, uint32_t *po_ver,
+		   pl_map_type_t map_type, uint32_t spare_max_nr,
+		   struct pool_map *po_map, struct pl_map *pl_map)
+{
+	struct daos_obj_md	md = { 0 };
+	int			i;
+	int			rc;
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_fail_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	rc = pl_map_update(pl_uuid, po_map, false, map_type);
+	D_ASSERT(rc == 0);
+	pl_map = pl_map_find(pl_uuid, oid);
+	D_ASSERT(pl_map != NULL);
+	dc_obj_fetch_md(oid, &md);
+	md.omd_ver = *po_ver;
+	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
+					 spare_tgt_ranks, shard_ids,
+					 spare_max_nr, -1);
+	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, *po_ver);
+	for (i = 0; i < *spare_cnt; i++)
+		D_PRINT("shard %d, spare target rank %d\n",
+			shard_ids[i], spare_tgt_ranks[i]);
+
+	pl_map_decref(pl_map);
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+}
+
+void
+plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
+		   int failed_cnt, uint32_t *reint_tgts, int reint_cnt,
+		   uint32_t *spare_tgt_ranks, uint32_t *shard_ids,
+		   uint32_t *spare_cnt, pl_map_type_t map_type,
+		   uint32_t spare_max_nr, struct pool_map *po_map,
+		   struct pl_map *pl_map, uint32_t *po_ver, bool pl_debug_msg)
+{
+	struct daos_obj_md	md = { 0 };
+	int			i;
+	int			rc;
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_fail_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	for (i = 0; i < reint_cnt; i++)
+		plt_reint_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	rc = pl_map_update(pl_uuid, po_map, false, map_type);
+	D_ASSERT(rc == 0);
+	pl_map = pl_map_find(pl_uuid, oid);
+	D_ASSERT(pl_map != NULL);
+	dc_obj_fetch_md(oid, &md);
+	md.omd_ver = *po_ver;
+	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver,
+					 spare_tgt_ranks, shard_ids,
+					 spare_max_nr, -1);
+
+	D_ASSERT(rc >= 0);
+	*spare_cnt = rc;
+
+	D_PRINT("reint_cnt %d for version %d -\n", *spare_cnt, *po_ver);
+	for (i = 0; i < *spare_cnt; i++)
+		D_PRINT("shard %d, spare target rank %d\n",
+			shard_ids[i], spare_tgt_ranks[i]);
+
+	pl_map_decref(pl_map);
+
+	for (i = 0; i < reint_cnt; i++)
+		plt_add_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
+}

@@ -125,6 +125,21 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
 
+    def get_param_names(self):
+        """Get a sorted list of the defined MdtestCommand parameters."""
+        # Sort the Mdtest parameter names to generate consistent ior commands
+        all_param_names = super(MdtestCommand, self).get_param_names()
+
+        # List all of the common ior params first followed by any dfs-specific
+        # params (except when using POSIX).
+        param_names = [name for name in all_param_names if "dfs" not in name]
+        if self.api.value != "POSIX":
+            param_names.extend(
+                [name for name in all_param_names if "dfs" in name])
+
+        return param_names
+
+
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 

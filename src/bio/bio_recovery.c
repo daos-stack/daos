@@ -34,7 +34,12 @@
  * the DAOS progress ULT will be blocked, and NVMe device qpair won't be
  * polled.
  */
-struct bio_reaction_ops	*ract_ops;
+static struct bio_reaction_ops	*ract_ops;
+
+void bio_register_ract_ops(struct bio_reaction_ops *ops)
+{
+	ract_ops = ops;
+}
 
 /*
  * Return value:	0: Faulty reaction is done;
@@ -61,7 +66,7 @@ on_faulty(struct bio_blobstore *bbs)
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
-		D_ERROR("Faulty reaction failed. %d\n", rc);
+		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -112,7 +117,8 @@ unload_bs_cp(void *arg, int rc)
 	struct bio_blobstore *bbs = arg;
 
 	if (rc != 0)
-		D_ERROR("Failed to unload bs:%p, %d\n", bbs, rc);
+		D_ERROR("Failed to unload blobstore:%p, "DF_RC"\n",
+			bbs, DP_RC(rc));
 	else
 		bbs->bb_bs = NULL;
 }
@@ -127,7 +133,7 @@ on_teardown(struct bio_blobstore *bbs)
 	int	i, rc = 0, ret;
 
 	/*
-	 * The blobstore is already closed, transit to next state.
+	 * The blobstore is already closed, transition to next state.
 	 * TODO: Need to cleanup bdev when supporting reintegration.
 	 */
 	if (bbs->bb_bs == NULL)
@@ -158,6 +164,21 @@ on_teardown(struct bio_blobstore *bbs)
 	}
 
 	return 1;
+}
+
+static char *
+bio_state_enum_to_str(enum bio_bs_state state)
+{
+	switch (state) {
+	case BIO_BS_STATE_NORMAL: return "NORMAL";
+	case BIO_BS_STATE_FAULTY: return "FAULTY";
+	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
+	case BIO_BS_STATE_OUT: return "OUT";
+	case BIO_BS_STATE_REPLACED: return "REPLACED";
+	case BIO_BS_STATE_REINT: return "REINT";
+	}
+
+	return "Undefined state";
 }
 
 int
@@ -191,22 +212,29 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	case BIO_BS_STATE_OUT:
 		if (bbs->bb_state != BIO_BS_STATE_TEARDOWN)
 			rc = -DER_INVAL;
+		break;
 	case BIO_BS_STATE_REPLACED:
 	case BIO_BS_STATE_REINT:
 		rc = -DER_NOSYS;
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state: %u\n", new_state);
+		D_ASSERTF(0, "Invalid blobstore state: %u (%s)\n",
+			  new_state, bio_state_enum_to_str(new_state));
 		break;
 	}
 
 	if (rc) {
-		D_ERROR("BS state transit error! tgt: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
+		D_ERROR("Blobstore state transition error! tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 	} else {
-		D_DEBUG(DB_MGMT, "BS state transited. tgt: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
+		D_DEBUG(DB_MGMT, "Blobstore state transitioned. "
+			"tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_NORMAL ||
@@ -222,7 +250,8 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 
 			rc = smd_dev_set_state(dev_id, dev_state);
 			if (rc)
-				D_ERROR("Set device state failed. %d\n", rc);
+				D_ERROR("Set device state failed. "DF_RC"\n",
+					DP_RC(rc));
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
@@ -243,6 +272,8 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		rc = 0;
 		break;
 	case BIO_BS_STATE_FAULTY:
+		/* reduce monitor period after faulty state has occured */
+		bbs->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_SHORT_PERIOD;
 		rc = on_faulty(bbs);
 		if (rc == 0)
 			rc = bio_bs_state_set(bbs, BIO_BS_STATE_TEARDOWN);
@@ -258,9 +289,53 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state:%u\n", bbs->bb_state);
+		D_ASSERTF(0, "Invalid blobstore state:%u (%s)\n",
+			 bbs->bb_state, bio_state_enum_to_str(bbs->bb_state));
 		break;
 	}
 
 	return (rc < 0) ? rc : 0;
+}
+
+/*
+ * MEDIA ERROR event.
+ * Store BIO I/O error in in-memory device state. Called from device owner
+ * xstream only.
+ */
+void
+bio_media_error(void *msg_arg)
+{
+	struct media_error_msg	*mem = msg_arg;
+	struct bio_dev_state	*dev_state;
+	int			 rc;
+
+	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
+
+	if (mem->mem_unmap) {
+		/* Update unmap error counter */
+		dev_state->bds_bio_unmap_errs++;
+		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
+	} else {
+		/* Update read/write I/O error counters */
+		if (mem->mem_update)
+			dev_state->bds_bio_write_errs++;
+		else
+			dev_state->bds_bio_read_errs++;
+		D_ERROR("%s error logged from xs_id:%d\n",
+			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
+	}
+
+	/* TODO Implement checksum error counter */
+	dev_state->bds_checksum_errs = 0;
+
+	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
+		goto out;
+	/* Notify admin through Control Plane of BIO error callback */
+	rc = ract_ops->ioerr_reaction(mem->mem_unmap, mem->mem_update,
+				      mem->mem_tgt_id);
+	if (rc < 0)
+		D_ERROR("Blobstore I/O error notification error. %d\n", rc);
+
+out:
+	D_FREE(mem);
 }

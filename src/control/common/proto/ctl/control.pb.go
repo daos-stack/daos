@@ -3,13 +3,14 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-
 import (
-	context "golang.org/x/net/context"
+	context "context"
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -21,7 +22,32 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+
+func init() { proto.RegisterFile("control.proto", fileDescriptor_0c5120591600887d) }
+
+var fileDescriptor_0c5120591600887d = []byte{
+	// 292 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0xcd, 0x4a, 0xc3, 0x40,
+	0x10, 0xc7, 0x5b, 0x14, 0x85, 0xd5, 0x78, 0x98, 0xc6, 0x2a, 0x39, 0xf6, 0x01, 0x42, 0xd1, 0x83,
+	0xe0, 0xd1, 0x4a, 0x0f, 0xa2, 0x52, 0x9b, 0x07, 0x90, 0x75, 0x1d, 0x4a, 0x30, 0xc9, 0xa6, 0xb3,
+	0xd3, 0x4a, 0x9e, 0xc3, 0x17, 0x96, 0xfd, 0xa8, 0x26, 0x4d, 0x8f, 0xf3, 0xdb, 0xff, 0x07, 0x93,
+	0x89, 0x88, 0x94, 0xae, 0x98, 0x74, 0x91, 0xd6, 0xa4, 0x59, 0xc3, 0x91, 0xe2, 0x22, 0x89, 0x0c,
+	0x6b, 0x92, 0x2b, 0xf4, 0x2c, 0x81, 0x0a, 0xf9, 0x5b, 0xd3, 0xd7, 0xbb, 0x51, 0xb2, 0x0a, 0xec,
+	0xdc, 0x34, 0x86, 0xb1, 0xf4, 0xd3, 0xcd, 0xcf, 0xb1, 0x38, 0x7d, 0x59, 0x95, 0x3c, 0xe3, 0x02,
+	0x66, 0xe2, 0x22, 0xf3, 0xf6, 0x05, 0x61, 0x2d, 0x09, 0x61, 0x9c, 0x2a, 0x2e, 0xd2, 0x2e, 0x5c,
+	0xe2, 0x3a, 0xb9, 0x3a, 0xc8, 0x4d, 0x3d, 0x19, 0xc0, 0xbd, 0x38, 0x0b, 0x3c, 0x53, 0xb2, 0x82,
+	0x51, 0x5b, 0x69, 0x89, 0xb5, 0xc7, 0x7d, 0xe8, 0xbc, 0x0f, 0x22, 0x0a, 0x70, 0xae, 0xa9, 0x94,
+	0x0c, 0x97, 0x6d, 0xa1, 0x67, 0xd6, 0x3f, 0x3e, 0x84, 0x6d, 0xc2, 0x74, 0xe8, 0xfa, 0xdd, 0x82,
+	0x6f, 0x1b, 0xa4, 0x66, 0xd7, 0xff, 0x4f, 0x5a, 0xfd, 0x6d, 0xe8, 0xfa, 0xef, 0x84, 0xf0, 0x30,
+	0x63, 0x5d, 0x03, 0xb4, 0x54, 0x16, 0x58, 0xe7, 0xa8, 0xc7, 0xfe, 0x96, 0x0e, 0x4c, 0x12, 0x43,
+	0x57, 0x25, 0x89, 0xf7, 0x4b, 0x03, 0x74, 0xde, 0x27, 0x11, 0xbf, 0xfa, 0x2b, 0x3d, 0xe7, 0x86,
+	0x17, 0xa4, 0xb7, 0xf9, 0x27, 0x92, 0x81, 0x6b, 0xa7, 0xdf, 0xcd, 0xf6, 0x6d, 0x89, 0xeb, 0x0d,
+	0x1a, 0x0e, 0xeb, 0x77, 0x5f, 0xea, 0xa2, 0x99, 0x0c, 0x60, 0x2e, 0x20, 0x64, 0xd9, 0xaf, 0xfa,
+	0x88, 0xdb, 0x5c, 0xa1, 0x09, 0x57, 0xf4, 0x53, 0x38, 0x81, 0xcb, 0x89, 0x7b, 0xdc, 0xa5, 0x4c,
+	0x87, 0x1f, 0x27, 0xee, 0xe7, 0xb8, 0xfd, 0x0d, 0x00, 0x00, 0xff, 0xff, 0xd1, 0xd3, 0xc5, 0x2b,
+	0x63, 0x02, 0x00, 0x00,
+}
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
@@ -41,14 +67,16 @@ type MgmtCtlClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
-	// Update nonvolatile storage device firmware
-	StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error)
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error)
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error)
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error)
+	// Query DAOS system membership (joined data-plane instances)
+	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
+	// Start DAOS system (restart data-plane instances)
+	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
+	// Retrieve a list of supported fabric providers
+	NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error)
+	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
+	NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error)
 }
 
 type mgmtCtlClient struct {
@@ -109,12 +137,48 @@ func (x *mgmtCtlStorageFormatClient) Recv() (*StorageFormatResp, error) {
 	return m, nil
 }
 
-func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/StorageUpdate", opts...)
+func (c *mgmtCtlClient) SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error) {
+	out := new(SystemQueryResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemQuery", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlStorageUpdateClient{stream}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error) {
+	out := new(SystemStopResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemStop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error) {
+	out := new(SystemStartResp)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemStart", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) NetworkListProviders(ctx context.Context, in *ProviderListRequest, opts ...grpc.CallOption) (*ProviderListReply, error) {
+	out := new(ProviderListReply)
+	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/NetworkListProviders", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtCtlClient) NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/NetworkScanDevices", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &mgmtCtlNetworkScanDevicesClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -124,113 +188,17 @@ func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq,
 	return x, nil
 }
 
-type MgmtCtl_StorageUpdateClient interface {
-	Recv() (*StorageUpdateResp, error)
+type MgmtCtl_NetworkScanDevicesClient interface {
+	Recv() (*DeviceScanReply, error)
 	grpc.ClientStream
 }
 
-type mgmtCtlStorageUpdateClient struct {
+type mgmtCtlNetworkScanDevicesClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtCtlStorageUpdateClient) Recv() (*StorageUpdateResp, error) {
-	m := new(StorageUpdateResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[2], "/ctl.MgmtCtl/StorageBurnIn", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlStorageBurnInClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_StorageBurnInClient interface {
-	Recv() (*StorageBurnInResp, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlStorageBurnInClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlStorageBurnInClient) Recv() (*StorageBurnInResp, error) {
-	m := new(StorageBurnInResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[3], "/ctl.MgmtCtl/FetchFioConfigPaths", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlFetchFioConfigPathsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_FetchFioConfigPathsClient interface {
-	Recv() (*FilePath, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlFetchFioConfigPathsClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsClient) Recv() (*FilePath, error) {
-	m := new(FilePath)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[4], "/ctl.MgmtCtl/ListFeatures", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlListFeaturesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_ListFeaturesClient interface {
-	Recv() (*Feature, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlListFeaturesClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlListFeaturesClient) Recv() (*Feature, error) {
-	m := new(Feature)
+func (x *mgmtCtlNetworkScanDevicesClient) Recv() (*DeviceScanReply, error) {
+	m := new(DeviceScanReply)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -245,14 +213,45 @@ type MgmtCtlServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
-	// Update nonvolatile storage device firmware
-	StorageUpdate(*StorageUpdateReq, MgmtCtl_StorageUpdateServer) error
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(*StorageBurnInReq, MgmtCtl_StorageBurnInServer) error
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(*EmptyReq, MgmtCtl_FetchFioConfigPathsServer) error
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(*EmptyReq, MgmtCtl_ListFeaturesServer) error
+	// Query DAOS system membership (joined data-plane instances)
+	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
+	// Stop DAOS system (shutdown data-plane instances)
+	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
+	// Start DAOS system (restart data-plane instances)
+	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
+	// Retrieve a list of supported fabric providers
+	NetworkListProviders(context.Context, *ProviderListRequest) (*ProviderListReply, error)
+	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
+	NetworkScanDevices(*DeviceScanRequest, MgmtCtl_NetworkScanDevicesServer) error
+}
+
+// UnimplementedMgmtCtlServer can be embedded to have forward compatible implementations.
+type UnimplementedMgmtCtlServer struct {
+}
+
+func (*UnimplementedMgmtCtlServer) StoragePrepare(ctx context.Context, req *StoragePrepareReq) (*StoragePrepareResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StoragePrepare not implemented")
+}
+func (*UnimplementedMgmtCtlServer) StorageScan(ctx context.Context, req *StorageScanReq) (*StorageScanResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StorageScan not implemented")
+}
+func (*UnimplementedMgmtCtlServer) StorageFormat(req *StorageFormatReq, srv MgmtCtl_StorageFormatServer) error {
+	return status.Errorf(codes.Unimplemented, "method StorageFormat not implemented")
+}
+func (*UnimplementedMgmtCtlServer) SystemQuery(ctx context.Context, req *SystemQueryReq) (*SystemQueryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemQuery not implemented")
+}
+func (*UnimplementedMgmtCtlServer) SystemStop(ctx context.Context, req *SystemStopReq) (*SystemStopResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemStop not implemented")
+}
+func (*UnimplementedMgmtCtlServer) SystemStart(ctx context.Context, req *SystemStartReq) (*SystemStartResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemStart not implemented")
+}
+func (*UnimplementedMgmtCtlServer) NetworkListProviders(ctx context.Context, req *ProviderListRequest) (*ProviderListReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NetworkListProviders not implemented")
+}
+func (*UnimplementedMgmtCtlServer) NetworkScanDevices(req *DeviceScanRequest, srv MgmtCtl_NetworkScanDevicesServer) error {
+	return status.Errorf(codes.Unimplemented, "method NetworkScanDevices not implemented")
 }
 
 func RegisterMgmtCtlServer(s *grpc.Server, srv MgmtCtlServer) {
@@ -316,87 +315,96 @@ func (x *mgmtCtlStorageFormatServer) Send(m *StorageFormatResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtCtl_StorageUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageUpdateReq)
+func _MgmtCtl_SystemQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemQuery(ctx, req.(*SystemQueryReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_SystemStop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemStopReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemStop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemStop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemStop(ctx, req.(*SystemStopReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_SystemStart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemStartReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).SystemStart(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/SystemStart",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).SystemStart(ctx, req.(*SystemStartReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_NetworkListProviders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProviderListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).NetworkListProviders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.MgmtCtl/NetworkListProviders",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).NetworkListProviders(ctx, req.(*ProviderListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtCtl_NetworkScanDevices_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DeviceScanRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtCtlServer).StorageUpdate(m, &mgmtCtlStorageUpdateServer{stream})
+	return srv.(MgmtCtlServer).NetworkScanDevices(m, &mgmtCtlNetworkScanDevicesServer{stream})
 }
 
-type MgmtCtl_StorageUpdateServer interface {
-	Send(*StorageUpdateResp) error
+type MgmtCtl_NetworkScanDevicesServer interface {
+	Send(*DeviceScanReply) error
 	grpc.ServerStream
 }
 
-type mgmtCtlStorageUpdateServer struct {
+type mgmtCtlNetworkScanDevicesServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtCtlStorageUpdateServer) Send(m *StorageUpdateResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_StorageBurnIn_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageBurnInReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).StorageBurnIn(m, &mgmtCtlStorageBurnInServer{stream})
-}
-
-type MgmtCtl_StorageBurnInServer interface {
-	Send(*StorageBurnInResp) error
-	grpc.ServerStream
-}
-
-type mgmtCtlStorageBurnInServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlStorageBurnInServer) Send(m *StorageBurnInResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_FetchFioConfigPaths_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).FetchFioConfigPaths(m, &mgmtCtlFetchFioConfigPathsServer{stream})
-}
-
-type MgmtCtl_FetchFioConfigPathsServer interface {
-	Send(*FilePath) error
-	grpc.ServerStream
-}
-
-type mgmtCtlFetchFioConfigPathsServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsServer) Send(m *FilePath) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).ListFeatures(m, &mgmtCtlListFeaturesServer{stream})
-}
-
-type MgmtCtl_ListFeaturesServer interface {
-	Send(*Feature) error
-	grpc.ServerStream
-}
-
-type mgmtCtlListFeaturesServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlListFeaturesServer) Send(m *Feature) error {
+func (x *mgmtCtlNetworkScanDevicesServer) Send(m *DeviceScanReply) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -412,6 +420,22 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			MethodName: "StorageScan",
 			Handler:    _MgmtCtl_StorageScan_Handler,
 		},
+		{
+			MethodName: "SystemQuery",
+			Handler:    _MgmtCtl_SystemQuery_Handler,
+		},
+		{
+			MethodName: "SystemStop",
+			Handler:    _MgmtCtl_SystemStop_Handler,
+		},
+		{
+			MethodName: "SystemStart",
+			Handler:    _MgmtCtl_SystemStart_Handler,
+		},
+		{
+			MethodName: "NetworkListProviders",
+			Handler:    _MgmtCtl_NetworkListProviders_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -420,48 +444,10 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "StorageUpdate",
-			Handler:       _MgmtCtl_StorageUpdate_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StorageBurnIn",
-			Handler:       _MgmtCtl_StorageBurnIn_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "FetchFioConfigPaths",
-			Handler:       _MgmtCtl_FetchFioConfigPaths_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ListFeatures",
-			Handler:       _MgmtCtl_ListFeatures_Handler,
+			StreamName:    "NetworkScanDevices",
+			Handler:       _MgmtCtl_NetworkScanDevices_Handler,
 			ServerStreams: true,
 		},
 	},
 	Metadata: "control.proto",
-}
-
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_d9568fdaa36d56d8) }
-
-var fileDescriptor_control_d9568fdaa36d56d8 = []byte{
-	// 258 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xc1, 0x4a, 0x03, 0x31,
-	0x10, 0x40, 0x95, 0x82, 0x42, 0xdc, 0xed, 0x21, 0xd5, 0x0a, 0x7b, 0xf4, 0x03, 0x56, 0xd1, 0x83,
-	0xe0, 0xb1, 0x8b, 0x01, 0x41, 0xa1, 0x58, 0xfc, 0x80, 0x18, 0xd3, 0xed, 0x42, 0x92, 0x89, 0xc9,
-	0xf4, 0xe0, 0xdf, 0xf9, 0x69, 0x92, 0x9d, 0x14, 0x76, 0xdd, 0x1e, 0xe7, 0xcd, 0xbc, 0x77, 0x19,
-	0x56, 0x2a, 0x70, 0x18, 0xc0, 0xd4, 0x3e, 0x00, 0x02, 0x9f, 0x29, 0x34, 0x55, 0xa1, 0xc0, 0x5a,
-	0x70, 0x84, 0xaa, 0x32, 0x22, 0x04, 0xd9, 0xea, 0x3c, 0xce, 0xb7, 0x5a, 0xe2, 0x3e, 0xe8, 0x48,
-	0xf3, 0xfd, 0xef, 0x8c, 0x9d, 0xbf, 0xb5, 0x16, 0x1b, 0x34, 0xbc, 0x61, 0xf3, 0x0d, 0x1d, 0xaf,
-	0x83, 0xf6, 0x32, 0x68, 0xbe, 0xac, 0x15, 0x9a, 0x7a, 0x0c, 0xdf, 0xf5, 0x77, 0x75, 0x7d, 0x94,
-	0x47, 0x7f, 0x73, 0xc2, 0x9f, 0xd8, 0x45, 0xe6, 0x1b, 0x25, 0x1d, 0x5f, 0x0c, 0x2f, 0x13, 0x49,
-	0xfa, 0xe5, 0x14, 0xf6, 0xee, 0x8a, 0x95, 0x19, 0x0a, 0x08, 0x56, 0x22, 0xbf, 0x1a, 0x1e, 0x12,
-	0x4b, 0xfe, 0xf2, 0x18, 0x4e, 0x85, 0xbb, 0xd3, 0x41, 0xe3, 0xc3, 0x7f, 0x49, 0xd4, 0xe3, 0x06,
-	0xb1, 0x49, 0xe3, 0x80, 0x27, 0x8d, 0xd5, 0x3e, 0xb8, 0x17, 0x37, 0x6e, 0x10, 0x9b, 0x34, 0x0e,
-	0x38, 0x37, 0x1e, 0xd9, 0x42, 0x68, 0x54, 0x3b, 0xd1, 0x41, 0x03, 0x6e, 0xdb, 0xb5, 0x6b, 0x89,
-	0xbb, 0xc8, 0xcb, 0x5e, 0x79, 0xb6, 0x1e, 0x7f, 0x52, 0x81, 0x46, 0xd1, 0x19, 0x9d, 0xd6, 0xbd,
-	0x78, 0xcb, 0x8a, 0xd7, 0x2e, 0xa2, 0xc8, 0x7f, 0xfa, 0x6f, 0x14, 0x64, 0xd0, 0x36, 0x09, 0x9f,
-	0x67, 0xfd, 0x27, 0x1f, 0xfe, 0x02, 0x00, 0x00, 0xff, 0xff, 0x2c, 0xf3, 0xee, 0xc6, 0x0c, 0x02,
-	0x00, 0x00,
 }

@@ -45,8 +45,22 @@ func NewRankPtr(in uint32) *Rank {
 	return &r
 }
 
-func (r Rank) String() string {
-	return strconv.FormatUint(uint64(r), 10)
+func (r *Rank) String() string {
+	switch {
+	case r == nil:
+		return "nil"
+	case *r == NilRank:
+		return "NilRank"
+	default:
+		return strconv.FormatUint(uint64(*r), 10)
+	}
+}
+
+func (r *Rank) Uint32() uint32 {
+	if r == nil {
+		return uint32(NilRank)
+	}
+	return uint32(*r)
 }
 
 func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
