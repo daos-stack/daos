@@ -162,14 +162,14 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status        int32
-		UUID          string
-		TotalTargets  uint32
-		ActiveTargets uint32
-		Disabled      bool
-		Rebuild       *PoolRebuildStatus
-		Scm           *StorageUsageStats
-		Nvme          *StorageUsageStats
+		Status          int32
+		UUID            string
+		TotalTargets    uint32
+		ActiveTargets   uint32
+		DisabledTargets uint32
+		Rebuild         *PoolRebuildStatus
+		Scm             *StorageUsageStats
+		Nvme            *StorageUsageStats
 	}
 )
 

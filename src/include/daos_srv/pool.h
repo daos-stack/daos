@@ -163,6 +163,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
+int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
+		      daos_pool_info_t *pool_info);
+
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its

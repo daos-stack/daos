@@ -112,12 +112,12 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		break;
 	case VOS_ITER_DKEY:
 		counts->num_dkeys++;
-		if (entry->ie_key_punch)
+		if (entry->ie_punch)
 			counts->num_punched_dkeys++;
 		break;
 	case VOS_ITER_AKEY:
 		counts->num_akeys++;
-		if (entry->ie_key_punch)
+		if (entry->ie_punch)
 			counts->num_punched_akeys++;
 		break;
 	case VOS_ITER_RECX:
@@ -127,7 +127,7 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		break;
 	case VOS_ITER_OBJ:
 		counts->num_objs++;
-		if (entry->ie_obj_punch)
+		if (entry->ie_punch)
 			counts->num_punched_objs++;
 		break;
 	}
@@ -143,7 +143,7 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 	struct vos_iter_anchors	 anchors = {0};
 	int			 rc;
 
-	rc = vos_iterate(param, type, true, &anchors, count_cb, &counts);
+	rc = vos_iterate(param, type, true, &anchors, count_cb, NULL, &counts);
 	assert_int_equal(rc, 0);
 	assert_int_equal(expected->num_objs, counts.num_objs);
 	assert_int_equal(expected->num_dkeys, counts.num_dkeys);
