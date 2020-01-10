@@ -118,7 +118,7 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         file_hd = open(filename, "w+")
         file_hd.write("\n".join(file_data))
         file_hd.close()
-    except DaosApiError as error:
+    except Exception as error:
         raise error
 
 class IoConfTestBase(TestWithServers):
