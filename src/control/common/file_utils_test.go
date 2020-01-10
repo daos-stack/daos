@@ -30,7 +30,42 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestResolvePath(t *testing.T) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adjacentDir := path.Dir(selfPath)
+
+	for name, tc := range map[string]struct {
+		inPath      string
+		defaultPath string
+		expected    string
+		expErrMsg   string
+	}{
+		"absolute path": {"/foo/bar", "some/default", "/foo/bar", ""},
+		"relative path": {"foo/bar", "some/default", path.Join(workingDir, "foo/bar"), ""},
+		"empty path":    {"", "some/default", path.Join(adjacentDir, "some/default"), ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			outPath, err := ResolvePath(tc.inPath, tc.defaultPath)
+			ExpectError(t, err, tc.expErrMsg, name)
+
+			if diff := cmp.Diff(tc.expected, outPath); diff != "" {
+				t.Fatalf("unexpected resolved path (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func TestFindBinaryInPath(t *testing.T) {
 	testDir, err := ioutil.TempDir("", t.Name())

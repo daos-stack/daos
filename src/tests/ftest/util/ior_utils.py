@@ -264,6 +264,22 @@ class IorCommand(ExecutableCommand):
 
         return (write_metrics, read_metrics)
 
+    @staticmethod
+    def log_metrics(logger, message, metrics):
+        """Log the ior metrics
+
+           Args:
+               logger (log): logger object handle
+               message (str) : Message to print before logging metrics
+               metric (lst) : IOR write and read metrics
+        """
+        logger.info("\n")
+        logger.info(message)
+        logger.info(metrics[0])
+        logger.info(metrics[1])
+        logger.info("\n")
+
+
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary.
     """
