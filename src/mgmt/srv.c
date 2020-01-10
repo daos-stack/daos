@@ -145,6 +145,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_SET_PROP:
 		ds_mgmt_drpc_pool_set_prop(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_QUERY:
+		ds_mgmt_drpc_pool_query(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");
@@ -270,7 +273,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -318,7 +321,7 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "mark hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }

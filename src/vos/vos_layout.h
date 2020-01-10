@@ -39,49 +39,13 @@
 #include "ilog.h"
 
 /**
- * VOS metadata structure declarations
- * TODO: use df (durable format) as postfix of structures.
- *
- * opaque structure expanded inside implementation
- * DAOS two-phase commit transaction table (DTX)
- * Object table for holding object IDs
- * B-Tree for Key Value stores
- * EV-Tree for Byte array stores
- * Garbage collection bin
- * Garbage collection bag
- */
-struct vos_cont_df;
-struct vos_dtx_act_ent_df;
-struct vos_dtx_cmt_ent_df;
-struct vos_dtx_record_df;
-struct vos_obj_df;
-struct vos_krec_df;
-struct vos_irec_df;
-struct vos_gc_bin_df;
-struct vos_gc_bag_df;
-
-/**
  * Typed Layout named using Macros from libpmemobj
- * Each structure is assigned a type number internally
- * in the macro libpmemobj has its own pointer type (PMEMoid)
- * and uses named unions to assign types to such pointers.
- * Type-number help identify the PMEMoid  pointer types
- * with an ID. This layout structure is used to consicely
- * represent the types associated with the vos_pool_layout.
- * In this case consecutive typeIDs are assigned to the
- * different pointers in the pool.
+ * for root object.  We don't need to define the TOIDs for
+ * other VOS structures because VOS uses umem_off_t for internal
+ * pointers rather than using typed allocations.
  */
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
-
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_record_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bin_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bag_df);
-
 POBJ_LAYOUT_END(vos_pool_layout);
 
 struct vos_gc_bin_df {
@@ -141,7 +105,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 #define POOL_DF_VER_1				1
-#define POOL_DF_VERSION				POOL_DF_VER_1
+#define POOL_DF_VERSION				2
 
 /**
  * Durable format for VOS pool

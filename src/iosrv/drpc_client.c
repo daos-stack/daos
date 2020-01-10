@@ -199,6 +199,6 @@ drpc_fini(void)
 
 	D_ASSERT(dss_drpc_ctx != NULL);
 	rc = drpc_close(dss_drpc_ctx);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	dss_drpc_ctx = NULL;
 }

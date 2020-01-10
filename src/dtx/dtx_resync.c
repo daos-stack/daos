@@ -139,7 +139,8 @@ next:
 	if (j > 0) {
 		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version);
 		if (rc < 0)
-			D_ERROR("Failed to commit the DTXs: rc = %d\n", rc);
+			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
+				DP_RC(rc));
 	} else {
 		rc = 0;
 	}

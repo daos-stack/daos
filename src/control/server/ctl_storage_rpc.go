@@ -194,6 +194,8 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
+	c.log.Debug("responding to StorageScan RPC")
+
 	return resp, nil
 }
 
