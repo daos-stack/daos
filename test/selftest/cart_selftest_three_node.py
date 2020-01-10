@@ -37,7 +37,7 @@ class CartSelfTwoNodeTest(Test):
     """
     Runs basic CaRT self test
 
-    :avocado: tags=all,selftest,two_node
+    :avocado: tags=all,selftest,three_node
     """
     def setUp(self):
         """ Test setup """
@@ -53,7 +53,7 @@ class CartSelfTwoNodeTest(Test):
         """
         Test CaRT Self Test
 
-        :avocado: tags=all,selftest,two_node
+        :avocado: tags=all,selftest,three_node
         """
 
         srvcmd = self.utils.build_cmd(self, self.env, "srv", True)

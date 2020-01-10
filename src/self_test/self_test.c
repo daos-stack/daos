@@ -1812,9 +1812,10 @@ int main(int argc, char *argv[])
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
-	if (ms_endpts == NULL)
-		printf("Warning: No --master-endpoint specified; using this"
-		       " command line application as the master endpoint\n");
+	if (ms_endpts == NULL || num_ms_endpts == 0) {
+		printf("No master endpoints specified\n");
+		D_GOTO(cleanup, ret = -DER_INVAL);
+	}
 	if (endpts == NULL || num_endpts == 0) {
 		printf("No endpoints specified\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);

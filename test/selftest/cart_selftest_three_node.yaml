@@ -22,10 +22,11 @@ hosts: !mux
     config: two_node
     srv:
       - boro-A
-    cli1:
       - boro-B
+    cli1:
+      - boro-C
     cli2:
-      - boro-A
+      - boro-C
 tests: !mux
   self_np:
     name: self_test_np
@@ -35,7 +36,7 @@ tests: !mux
     srv_ppn: "1"
 
     cli1_bin: ../bin/self_test
-    cli1_arg: "--group-name selftest_srv_grp --endpoint 0:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
+    cli1_arg: "--group-name selftest_srv_grp --endpoint 0-1:0 --master-endpoint 0-1:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
     cli1_env: ""
     cli1_ppn: "1"
 
