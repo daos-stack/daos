@@ -436,6 +436,17 @@ int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
 
 /**
+ * Get the principal name string from an Access Control Entry.
+ *
+ * \param[in]	ace	Access Control Entry
+ *
+ * \return	Either the string from the principal name field, or one of the
+ *		special principal names: OWNER@, GROUP@, EVERYONE@
+ */
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace);
+
+/**
  * Convert an Access Control Entry formatted as a string to a daos_ace
  * structure.
  *

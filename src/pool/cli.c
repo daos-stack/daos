@@ -58,7 +58,7 @@ dc_pool_init(void)
 	rc = daos_rpc_register(&pool_proto_fmt, POOL_PROTO_CLI_COUNT,
 				NULL, DAOS_POOL_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register pool RPCs: %d\n", rc);
+		D_ERROR("failed to register pool RPCs: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -218,7 +218,8 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
-		D_ERROR("Failed to refresh placement map: %d\n", rc);
+		D_ERROR("Failed to refresh placement map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -248,7 +249,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: %d\n", rc);
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -265,7 +267,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		if (rc == 0)
 			info->pi_ndisabled = num_disabled;
 		else
-			D_ERROR("Couldn't get failed targets, rc=%d\n", rc);
+			D_ERROR("Couldn't get failed targets, "DF_RC"\n",
+				DP_RC(rc));
 	}
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
@@ -338,7 +341,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	if (rc) {
-		D_ERROR("RPC error while connecting to pool: %d\n", rc);
+		D_ERROR("RPC error while connecting to pool: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -356,7 +360,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	} else if (rc != 0) {
 		if (rc == -DER_NOTREPLICA)
 			rc = -DER_NONEXIST;
-		D_ERROR("failed to connect to pool: %d\n", rc);
+		D_ERROR("failed to connect to pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -366,7 +370,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
-		D_ERROR("failed to create local pool map: %d\n", rc);
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -525,7 +530,7 @@ dc_pool_connect(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
 	/** for con_argss */
@@ -537,7 +542,8 @@ dc_pool_connect(tse_task_t *task)
 	/** request credentials */
 	rc = dc_sec_request_creds(&pci->pci_cred);
 	if (rc != 0) {
-		D_ERROR("failed to obtain security credential: %d\n", rc);
+		D_ERROR("failed to obtain security credential: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
@@ -606,13 +612,14 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	if (rc) {
-		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
+		D_ERROR("RPC error while disconnecting from pool: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = pdo->pdo_op.po_rc;
 	if (rc) {
-		D_ERROR("failed to disconnect from pool: %d\n", rc);
+		D_ERROR("failed to disconnect from pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -681,7 +688,7 @@ dc_pool_disconnect(tse_task_t *task)
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -869,7 +876,7 @@ out_pool:
 	dc_pool_put(pool);
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_l2g failed, rc: %d\n", rc);
+		D_ERROR("dc_pool_l2g failed, rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -935,7 +942,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: %d\n", rc);
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -954,7 +962,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 
 out:
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: %d.\n", rc);
+		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -989,7 +997,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 
 	rc = dc_pool_g2l(pool_glob, glob.iov_len, poh);
 	if (rc != 0)
-		D_ERROR("dc_pool_g2l failed, rc: %d.\n", rc);
+		D_ERROR("dc_pool_g2l failed, rc: "DF_RC"\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -1023,13 +1031,14 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		D_ERROR("RPC error while excluding targets: %d\n", rc);
+		D_ERROR("RPC error while excluding targets: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
-		D_ERROR("failed to exclude targets: %d\n", rc);
+		D_ERROR("failed to exclude targets: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1106,7 +1115,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 
@@ -1217,7 +1226,7 @@ pool_query_cb(tse_task_t *task, void *data)
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
 
 	if (rc) {
-		D_ERROR("RPC error while querying pool: %d\n", rc);
+		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1235,7 +1244,7 @@ pool_query_cb(tse_task_t *task, void *data)
 		rc = tse_task_reinit(task);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		D_ERROR("failed to query pool: %d\n", rc);
+		D_ERROR("failed to query pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1519,7 +1528,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		D_ERROR("RPC error while evicting pool handles: %d\n", rc);
+		D_ERROR("RPC error while evicting pool handles: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1527,7 +1537,7 @@ pool_evict_cp(tse_task_t *task, void *data)
 	if (rc != 0) {
 		if (rc == -DER_NOTREPLICA)
 			rc = -DER_NONEXIST;
-		D_ERROR("failed to evict pool handles: %d\n", rc);
+		D_ERROR("failed to evict pool handles: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1694,7 +1704,7 @@ pool_req_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D_ERROR("RPC error while querying pool: %d\n", rc);
+		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1746,7 +1756,7 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
 
 	rc = pool_req_create(ctx, &ep, opcode, &args->pra_rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: %d\n", rc);
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		pool_req_cleanup(CLEANUP_POOL, args);
 		D_GOTO(out, rc);
 	}
@@ -1823,7 +1833,8 @@ dc_pool_list_attr(tse_task_t *task)
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to list pool attributes: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to list pool attributes: "DF_RC"\n",
+		DP_RC(rc));
 	return rc;
 }
 
@@ -1966,7 +1977,7 @@ dc_pool_get_attr(tse_task_t *task)
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to get pool attributes: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to get pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -2023,7 +2034,7 @@ dc_pool_set_attr(tse_task_t *task)
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to set pool attributes: %d\n", rc);
+	D_DEBUG(DF_DSMC, "Failed to set pool attributes: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -2213,13 +2224,14 @@ pool_membership_update_cb(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		D_ERROR("RPC error while excluding targets: %d\n", rc);
+		D_ERROR("RPC error while excluding targets: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out_state, rc);
 	}
 
 	rc = out->pmo_rc;
 	if (rc != 0) {
-		D_ERROR("failed to exclude targets: %d\n", rc);
+		D_ERROR("failed to exclude targets: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_state, rc);
 	}
 

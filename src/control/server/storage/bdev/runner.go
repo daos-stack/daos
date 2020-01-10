@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
+	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
@@ -65,7 +65,7 @@ func run(env []string, cmdStr string, args ...string) (string, error) {
 	var cmdPath string
 	var err error
 	if cmdPath, err = exec.LookPath(cmdStr); err != nil {
-		cmdPath, err = common.GetAbsInstallPath(cmdStr)
+		cmdPath, err = common.GetAdjacentPath(cmdStr)
 		if err != nil {
 			return "", errors.Wrapf(err, "unable to resolve path to %s", cmdStr)
 		}
