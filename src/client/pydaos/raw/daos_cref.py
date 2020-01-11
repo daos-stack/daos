@@ -300,3 +300,6 @@ class Logfac:
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+#Transaction handle to update for an independent transaction
+DAOS_TX_NONE = Daos_handle_t(0)

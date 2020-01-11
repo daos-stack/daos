@@ -999,7 +999,7 @@ class IORequest(object):
         """Cleanup this request."""
         pass
 
-    def insert_array(self, dkey, akey, c_data, txn):
+    def insert_array(self, dkey, akey, c_data, txn=0):
         """Set up the I/O Vector and I/O descriptor for an array insertion.
 
         This function is limited to a single descriptor and a single
@@ -1023,7 +1023,10 @@ class IORequest(object):
         # self.epoch_range.epr_hi = ~0
 
         self.txn = txn
-        c_tx = ctypes.c_uint64(txn)
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
 
         extent = daos_cref.Extent()
         extent.rx_idx = 0
@@ -1061,9 +1064,13 @@ class IORequest(object):
         akey --2nd level key for the array value
         rec_count --how many array indices (records) to retrieve
         rec_size --size in bytes of a single record
-        txn --which transaction to read the value from
+        txn --which transaction to read the value from default is
+              independent transaction (DAOS_TX_NONE)
         """
-        c_tx = ctypes.c_uint64(txn)
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
 
         # setup the descriptor, we are only handling a single descriptor that
         # covers an arbitrary number of consecutive array entries
@@ -1114,17 +1121,20 @@ class IORequest(object):
                                            rec_size.value))
         return output
 
-    def single_insert(self, dkey, akey, value, size, txn):
+    def single_insert(self, dkey, akey, value, size, txn=0):
         """Update object with with a single value.
 
         dkey  --1st level key for the array value
         akey  --2nd level key for the array value
         value --string value to insert
         size  --size of the string
-        txn   --which transaction to write to
+        txn   --which transaction to write to default is independent transaction
+                (DAOS_TX_NONE)
         """
-        c_tx = ctypes.c_uint64(txn)
-
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
         # put the data into the scatter gather list
         sgl_iov = daos_cref.IOV()
         sgl_iov.iov_len = size
@@ -1175,7 +1185,8 @@ class IORequest(object):
         dkey --1st level key for the single value
         akey --2nd level key for the single value
         size --size of the string
-        txn --which transaction to read from
+        txn --which transaction to read from default is independent transaction
+              (DAOS_TX_NONE).
         test_hints --optional set of values that allow for error injection,
             supported values 'sglnull', 'iodnull'.
 
@@ -1185,7 +1196,10 @@ class IORequest(object):
         if test_hints is None:
             test_hints = []
 
-        c_tx = ctypes.c_uint64(txn)
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
 
         if any("sglnull" in s for s in test_hints):
             sgl_ptr = None
@@ -1239,7 +1253,7 @@ class IORequest(object):
                                .format(ret))
         return buf
 
-    def multi_akey_insert(self, dkey, data, txn):
+    def multi_akey_insert(self, dkey, data, txn=0):
         """Update object with with multiple values.
 
         Each value is tagged with an akey.  This is a bit of a mess but need to
@@ -1247,9 +1261,13 @@ class IORequest(object):
 
         dkey  --1st level key for the values
         data  --a list of tuples (akey, value)
-        txn --which transaction to write to
+        txn --which transaction to write to default is independent transaction
+              (DAOS_TX_NONE).
         """
-        c_tx = ctypes.c_uint64(txn)
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
 
         # put the data into the scatter gather list
         count = len(data)
@@ -1296,7 +1314,7 @@ class IORequest(object):
             raise DaosApiError("Object update returned non-zero. RC: {0}"
                                .format(ret))
 
-    def multi_akey_fetch(self, dkey, keys, txn):
+    def multi_akey_fetch(self, dkey, keys, txn=0):
         """Retrieve multiple akeys & associated data.
 
         This is kind of a mess but will refactor all the I/O functions at some
@@ -1305,11 +1323,15 @@ class IORequest(object):
         dkey --1st level key for the array value
         keys --a list of tuples where each tuple is an (akey, size), where size
              is the size of the data for that key
-        txn --which tx to read from
+        txn --which tx to read from default is independent transaction
+             (DAOS_TX_NONE)
 
         returns a dictionary containing the akey:value pairs
         """
-        c_tx = ctypes.c_uint64(txn)
+        if txn is not None:
+            c_tx = ctypes.c_uint64(txn)
+        else:
+            c_tx = daos_cref.DAOS_TX_NONE
 
         # create scatter gather list to hold the returned data also
         # create the descriptor
