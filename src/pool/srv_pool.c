@@ -1692,7 +1692,7 @@ out:
 
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		   const uuid_t pool_hdl, uint64_t capas,
+		   const uuid_t pool_hdl, uint64_t capas, d_iov_t creds,
 		   struct daos_pool_space *ps, crt_bulk_t map_buf_bulk)
 {
 	struct pool_tgt_connect_in     *in;
@@ -2010,7 +2010,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas,
+				in->pci_capas, in->pci_cred,
 				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
 				&out->pco_space : NULL, CRT_BULK_NULL);
 	if (rc != 0) {

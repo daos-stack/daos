@@ -30,9 +30,6 @@
 #include "srv_layout.h"
 
 /** Root KVS */
-RDB_STRING_KEY(ds_pool_prop_, uid);
-RDB_STRING_KEY(ds_pool_prop_, gid);
-RDB_STRING_KEY(ds_pool_prop_, mode);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
 RDB_STRING_KEY(ds_pool_prop_, map_uuids);
@@ -48,6 +45,9 @@ RDB_STRING_KEY(ds_pool_prop_, nhandles);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
+
+/** Security credential handle KVS */
+RDB_STRING_KEY(ds_pool_sec_, handles);
 
 /** user attributed KVS */
 RDB_STRING_KEY(ds_pool_attr_, user);
