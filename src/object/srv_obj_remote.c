@@ -134,7 +134,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 			    DAOS_OBJ_RPC_TGT_UPDATE, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -164,7 +164,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
 	if (rc != 0) {
-		D_ERROR("crt_req_send failed, rc %d.\n", rc);
+		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 		crt_req_decref(req);
 		D_GOTO(out, rc);
 	}
@@ -264,7 +264,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -285,7 +285,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
 	if (rc != 0) {
-		D_ERROR("crt_req_send failed, rc %d.\n", rc);
+		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 		crt_req_decref(req);
 		D_GOTO(out, rc);
 	}

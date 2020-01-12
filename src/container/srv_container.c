@@ -534,7 +534,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_create_kvs(tx, &svc->cs_conts, &key, &attr);
 	if (rc != 0) {
 		D_ERROR("failed to create container attribute KVS: "
-			"%d\n", rc);
+			""DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1306,7 +1306,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		rc = cont_iv_prop_fetch(pool_hdl->sph_pool->sp_iv_ns,
 					in->cqi_op.ci_hdl, iv_prop);
 		if (rc) {
-			D_ERROR("cont_iv_prop_fetch failed %d.\n", rc);
+			D_ERROR("cont_iv_prop_fetch failed "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 

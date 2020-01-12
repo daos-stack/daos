@@ -50,7 +50,7 @@ const (
 	fsTypeTmpfs = "tmpfs"
 
 	dcpmFsType    = fsTypeExt4
-	dcpmMountOpts = "dax"
+	dcpmMountOpts = "dax,nodelalloc"
 
 	ramFsType = fsTypeTmpfs
 
