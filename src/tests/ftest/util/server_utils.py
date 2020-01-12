@@ -186,7 +186,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.nr_xs_helpers = BasicParameter(None, 2)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
-            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
+            self.log_mask = BasicParameter(None, "DEBUG")
             self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(
                 None,
@@ -196,7 +196,8 @@ class DaosServerConfig(ObjectWithParameters):
                  "CRT_CTX_SHARE_ADDR=0",
                  "CRT_TIMEOUT=30",
                  "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000"]
+                 "FI_SOCKETS_CONN_TIMEOUT=2000",
+                 "DD_MASK=mgmt,io,md,epc,rebuild"]
             )
 
             # Storage definition parameters:

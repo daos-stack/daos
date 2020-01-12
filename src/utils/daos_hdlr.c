@@ -421,13 +421,29 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		if (ap->oclass == OC_UNKNOWN)
-			strcpy(oclass, "UNKNOWN");
-		else
-			daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
-		printf("Object Class:\t%s\n", oclass);
-		printf("Chunk Size:\t%zu\n", ap->chunk_size);
+
+		if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+			dfs_t		*dfs;
+			dfs_attr_t	attr;
+
+			rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
+			if (rc) {
+				fprintf(stderr, "dfs_mount failed (%d)\n", rc);
+				D_GOTO(err_out, rc);
+			}
+
+			dfs_query(dfs, &attr);
+			daos_oclass_id2name(attr.da_oclass_id, oclass);
+			printf("Object Class:\t%s\n", oclass);
+			printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
+
+			rc = dfs_umount(dfs);
+			if (rc) {
+				fprintf(stderr, "dfs_umount failed (%d)\n", rc);
+				D_GOTO(err_out, rc);
+			}
+		}
 	}
 
 	return 0;
