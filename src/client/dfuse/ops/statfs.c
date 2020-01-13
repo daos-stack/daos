@@ -45,15 +45,15 @@ dfuse_cb_statfs(fuse_req_t req, struct dfuse_inode_entry *inode)
 		DFUSE_TRA_INFO(inode, "blocks %#lx free %#lx",
 			       stbuf.f_blocks, stbuf.f_bfree);
 	} else {
-		stbuf.f_blocks = 1024 * 1024 * 2;
-		stbuf.f_bfree = 1024 * 1024;
+		stbuf.f_blocks = -1;
+		stbuf.f_bfree = -1;
 	}
 
 	stbuf.f_bsize = 1;
 	stbuf.f_frsize = 1;
 
-	stbuf.f_files = 1024 * 1024 * 2;
-	stbuf.f_ffree = 1024 * 1024;
+	stbuf.f_files = -1;
+	stbuf.f_ffree = -1;
 
 	stbuf.f_namemax = 255;
 
