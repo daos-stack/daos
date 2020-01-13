@@ -3,7 +3,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 500
+timeout: 300
 
 server_config:
   name: daos_server
@@ -101,13 +101,13 @@ server_config_val: !mux
       - "gen"
   # nr_hugepages_overflow_int:
   #   config_val:
-  #     - "control_log_mask"
+  #     - "nr_hugepages"
   #     - "1000000000000000000"
   #     - 1
   #     - "gen"
   # nr_hugepages_negative_int:
   #   config_val:
-  #     - "control_log_mask"
+  #     - "nr_hugepages"
   #     - "-100"
   #     - 1
   #     - "gen"
@@ -147,6 +147,36 @@ server_config_val: !mux
       - "54321ABDCD"
       - 1
       - "server"
+  fabric_iface_invalid:
+    config_val:
+      - "fabric_iface"
+      - "54321ABDCD"
+      - 1
+      - "server"
+  fabric_iface_port_str:
+    config_val:
+      - "fabric_iface_port"
+      - "ABDCD"
+      - 1
+      - "server"
+  first_core_str:
+    config_val:
+      - "first_core"
+      - "ABDCD"
+      - 1
+      - "server"
+  nr_xs_helpers_str:
+    config_val:
+      - "nr_xs_helpers"
+      - "ABCDE"
+      - 1
+      - "server"
+  # nr_xs_helpers_negative:
+  #   config_val:
+  #     - "nr_xs_helpers"
+  #     - "-10000"
+  #     - 1
+  #     - "server"
   # targets_negative:
   #   config_val:
   #     - "targets"
@@ -159,9 +189,4 @@ server_config_val: !mux
       - "ABDCD"
       - 1
       - "server"
-  first_core_str:
-    config_val:
-      - "first_core"
-      - "ABDCD"
-      - 1
-      - "server"
+
