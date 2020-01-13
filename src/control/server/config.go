@@ -397,7 +397,7 @@ func (c *Configuration) Validate() (err error) {
 	}
 	// apply configured control port if not supplied
 	for i := range c.AccessPoints {
-		if !hasPort(c.AccessPoints[i]) {
+		if !common.HasPort(c.AccessPoints[i]) {
 			c.AccessPoints[i] += fmt.Sprintf(":%d", c.ControlPort)
 		}
 		if strings.Split(c.AccessPoints[i], ":")[1] == "0" {

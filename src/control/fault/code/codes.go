@@ -56,8 +56,12 @@ const (
 	SystemMemberMissing
 	SystemMemberChanged
 
+	// Client fault codes
+	ClientUnknown Code = iota + 500
+	ClientConfigBadParam
+
 	// Server fault codes
-	ServerUnknown Code = iota + 400
+	ServerUnknown Code = iota + 600
 	ServerConfigBadParam
 
 	// security fault codes

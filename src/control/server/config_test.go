@@ -101,36 +101,21 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	return c
 }
 
-func TestConfigMarshalUnmarshal(t *testing.T) {
+func TestConfig_MarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
-		inExt  External
 		inPath string
-		errMsg string
+		expErr error
 	}{
-		"uncommented default config": {
-			defaultMockExt(),
-			"uncommentedDefault",
-			"",
-		},
-		"socket example config": {
-			defaultMockExt(),
-			socketsExample,
-			"",
-		},
-		"psm2 example config": {
-			defaultMockExt(),
-			psm2Example,
-			"",
-		},
+		"uncommented default config": {inPath: "uncommentedDefault"},
+		"socket example config":      {inPath: socketsExample},
+		"psm2 example config":        {inPath: psm2Example},
 		"default empty config": {
-			defaultMockExt(),
-			defaultConfig,
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigNoProvider,
+			inPath: defaultConfig,
+			expErr: FaultConfigNoProvider,
 		},
 		"nonexistent config": {
-			defaultMockExt(),
-			"/foo/bar/baz.yml",
-			"reading file: open /foo/bar/baz.yml: no such file or directory",
+			inPath: "/foo/bar/baz.yml",
+			expErr: errors.New("reading file: open /foo/bar/baz.yml: no such file or directory"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -146,7 +131,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt).
+			configA := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
@@ -155,8 +140,8 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				err = configA.Validate()
 			}
 
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, name)
+			CmpErr(t, tt.expErr, err)
+			if tt.expErr != nil {
 				return
 			}
 
@@ -164,7 +149,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt).
+			configB := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			if err := configB.SetPath(testFile); err != nil {
@@ -277,53 +262,53 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestConfigValidation(t *testing.T) {
+func TestConfig_Validation(t *testing.T) {
 	noopExtra := func(c *Configuration) *Configuration { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Configuration) *Configuration
-		errMsg      string
+		expErr      error
 	}{
 		"example config": {
 			noopExtra,
-			"",
+			nil,
 		},
 		"single access point": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4:1234")
 			},
-			"",
+			nil,
 		},
 		"multiple access points": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+			FaultConfigBadAccessPoints,
 		},
 		"no access points": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints()
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+			FaultConfigBadAccessPoints,
 		},
 		"single access point no port": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4")
 			},
-			"",
+			nil,
 		},
 		"single access point invalid port": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4").
 					WithControlPort(0)
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadPort,
+			FaultConfigBadControlPort,
 		},
 		"single access point including invalid port": {
 			func(c *Configuration) *Configuration {
-				return c.WithAccessPoints("1.2.3.4:0").
+				return c.WithAccessPoints("1.2.3.4:0")
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadPort,
+			FaultConfigBadControlPort,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -341,14 +326,61 @@ func TestConfigValidation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			err = config.Validate()
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, name)
-				return
-			}
+			CmpErr(t, tt.expErr, config.Validate())
+		})
+	}
+}
 
+func TestConfig_RelativeWorkingPath(t *testing.T) {
+	for name, tt := range map[string]struct {
+		inPath    string
+		expErrMsg string
+	}{
+		"path exists":       {inPath: "uncommentedDefault"},
+		"path doesnt exist": {expErrMsg: "no such file or directory"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+			defer os.RemoveAll(testDir)
 			if err != nil {
 				t.Fatal(err)
+			}
+			testFile := filepath.Join(testDir, "test.yml")
+
+			if tt.inPath == "uncommentedDefault" {
+				tt.inPath = filepath.Join(testDir, sConfigUncomment)
+				uncommentServerConfig(t, testFile)
+			}
+
+			cwd, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var pathToRoot string
+			depth := strings.Count(cwd, "/")
+			for i := 0; i < depth; i++ {
+				pathToRoot += "../"
+			}
+
+			relPath := filepath.Join(pathToRoot, testFile)
+			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
+
+			config := newDefaultConfiguration(defaultMockExt()).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
+
+			err = config.SetPath(relPath)
+			if err != nil {
+				if tt.expErrMsg == "" {
+					t.Fatal(err)
+				}
+				if !strings.Contains(err.Error(), tt.expErrMsg) {
+					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
+				}
+			} else {
+				if tt.expErrMsg != "" {
+					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
+				}
 			}
 		})
 	}
