@@ -319,6 +319,12 @@ func TestConfigValidation(t *testing.T) {
 			},
 			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadPort,
 		},
+		"single access point including invalid port": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:0").
+			},
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadPort,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
