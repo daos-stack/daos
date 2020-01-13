@@ -173,7 +173,7 @@ func TestValidateNetworkConfig(t *testing.T) {
 // TestDeviceAliasErrors uses XML topology data to simulate real systems.
 // hwloc will use this topology for queries instead of the local system
 // running the test.
-// This test verifies that GetDeviceAlias() handles the error cases when a specified
+// This test verifies that getDeviceAliasWithSystemList() handles the error cases when a specified
 // device cannot be matched to a sibling.
 func TestDeviceAliasErrors(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -206,7 +206,7 @@ func TestDeviceAliasErrors(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := GetDeviceAlias(tc.device)
+			deviceAlias, err := getDeviceAliasWithSystemList(tc.device, []string{})
 			AssertTrue(t, err != nil,
 				"an error was expected but not received")
 			AssertEqual(t, deviceAlias, "",
@@ -217,10 +217,11 @@ func TestDeviceAliasErrors(t *testing.T) {
 
 // TestDeviceAlias uses XML topology data to simulate real systems.
 // hwloc will use this topology for queries instead of the local system running the test.
-// This test verifies that GetDeviceAlias() is capable of performing this lookup
+// This test verifies that getDeviceAliasWithSystemList() is capable of performing this lookup
 // This particular test verifies the expected lookup path that uses a device found
 // on the system device list, and expected to find the related sibling.
 func TestDeviceAlias(t *testing.T) {
+	mockSystemDevices := []string{"ib0", "ib1", "ib2", "enp2s0", "eth0", "eth1"}
 	for name, tc := range map[string]struct {
 		device   string
 		topology string
@@ -266,40 +267,25 @@ func TestDeviceAlias(t *testing.T) {
 			topology: "testdata/wolf-133.xml",
 			expected: "hfi1_1",
 		},
-		"i40iw1 alias reverse lookup (boro 84 system topology)": {
-			device:   "i40iw1",
-			topology: "testdata/boro-84.xml",
-			expected: "eth0",
+		"ib0 alias lookup (multiport-hfi system topology)": {
+			device:   "ib0",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_0",
 		},
-		"i40iw0 alias reverse lookup (boro 84 system topology)": {
-			device:   "i40iw0",
-			topology: "testdata/boro-84.xml",
-			expected: "eth1",
+		"enp2s0 alias lookup (multiport-hfi system topology)": {
+			device:   "enp2s0",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_0",
 		},
-		"hfi1_0 alias reverse lookup (boro 84 system topology)": {
-			device:   "hfi1_0",
-			topology: "testdata/boro-84.xml",
-			expected: "ib0",
+		"ib1 alias lookup (multiport-hfi system topology": {
+			device:   "ib1",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_1",
 		},
-		"i40iw1 alias reverse lookup (wolf 133 system topology)": {
-			device:   "i40iw1",
-			topology: "testdata/wolf-133.xml",
-			expected: "eth0",
-		},
-		"i40iw0 alias reverse lookup (wolf 133 system topology)": {
-			device:   "i40iw0",
-			topology: "testdata/wolf-133.xml",
-			expected: "eth1",
-		},
-		"hfi1_0 alias reverse lookup (wolf 133 system topology)": {
-			device:   "hfi1_0",
-			topology: "testdata/wolf-133.xml",
-			expected: "ib0",
-		},
-		"hfi1_1 alias reverse lookup (wolf 133 system topology)": {
-			device:   "hfi1_1",
-			topology: "testdata/wolf-133.xml",
-			expected: "ib1",
+		"ib2 alias lookup (multiport-hfi system topology)": {
+			device:   "ib2",
+			topology: "testdata/multiport_hfi_topology.xml",
+			expected: "mlx4_1",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -307,7 +293,7 @@ func TestDeviceAlias(t *testing.T) {
 			AssertEqual(t, err, nil, "unable to load xmlTopology")
 			os.Setenv("HWLOC_XMLFILE", tc.topology)
 			defer os.Unsetenv("HWLOC_XMLFILE")
-			deviceAlias, err := GetDeviceAlias(tc.device)
+			deviceAlias, err := getDeviceAliasWithSystemList(tc.device, mockSystemDevices)
 			if err != nil {
 				t.Fatal(err)
 			}
