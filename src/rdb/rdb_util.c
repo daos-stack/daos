@@ -339,7 +339,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rc = bio_iod_prep(vos_ioh2desc(io));
 	if (rc) {
-		D_ERROR("prep io descriptor error:%d\n", rc);
+		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -366,10 +366,10 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	}
 
 	rc = bio_iod_post(vos_ioh2desc(io));
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, 0 /* err */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
 }

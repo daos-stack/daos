@@ -28,7 +28,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -41,7 +40,7 @@ import (
 const (
 	defaultRuntimeDir = "/var/run/daos_agent"
 	defaultLogFile    = "/tmp/daos_agent.log"
-	defaultConfigPath = "etc/daos.yml"
+	defaultConfigPath = "../etc/daos.yml"
 	defaultSystemName = "daos_server"
 	defaultPort       = 10001
 )
@@ -99,37 +98,37 @@ func newDefaultConfiguration(ext External) *Configuration {
 // GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(log logging.Logger, ConfigPath string) (*Configuration, error) {
-	config := NewConfiguration()
-	if ConfigPath != "" {
-		log.Debugf("Overriding default config path with: %s", ConfigPath)
-		config.Path = ConfigPath
+func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
+	c := NewConfiguration()
+	if err := c.SetPath(inPath); err != nil {
+		return nil, err
 	}
 
-	if !filepath.IsAbs(config.Path) {
-		newPath, err := common.GetAbsInstallPath(config.Path)
-		if err != nil {
-			return nil, errors.Wrap(err, "resolving install path")
-		}
-
-		config.Path = newPath
-	}
-
-	_, err := os.Stat(config.Path)
-	if err != nil {
-		if os.IsNotExist(err) && ConfigPath == "" {
+	if _, err := os.Stat(c.Path); err != nil {
+		if inPath == "" && os.IsNotExist(err) {
 			log.Debugf("No configuration file found; using default values")
-			return config, nil
+			c.Path = ""
+			return c, nil
 		}
-		return nil, errors.Wrapf(err, "failed to stat config file %s", config.Path)
+		return nil, err
 	}
 
-	if err := config.LoadConfig(); err != nil {
-		return nil, errors.Wrapf(err, "parsing config file %s", config.Path)
+	if err := c.LoadConfig(); err != nil {
+		return nil, errors.Wrapf(err, "parsing config file %s", c.Path)
 	}
-	log.Debugf("DAOS Client config read from %s", config.Path)
+	log.Debugf("DAOS Client config read from %s", c.Path)
 
-	return config, nil
+	return c, nil
+}
+
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
+	if err != nil {
+		return err
+	}
+	c.Path = newPath
+
+	return nil
 }
 
 // LoadConfig reads the configuration file specified by Configuration.Path

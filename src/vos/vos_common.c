@@ -84,8 +84,8 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 
 		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
-				blk_off, blk_cnt, rc);
+			D_ERROR("Error on block ["DF_U64", %u] free. "DF_RC"\n",
+				blk_off, blk_cnt, DP_RC(rc));
 	}
 	return rc;
 }
@@ -134,14 +134,16 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
-		D_ERROR("Error in creating POOL ref hash: %d\n", rc);
+		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
 	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
 			    &imem_inst->vis_cont_hhash);
 	if (rc) {
-		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
+		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
