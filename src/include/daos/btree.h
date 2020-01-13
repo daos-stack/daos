@@ -467,6 +467,13 @@ dbtree_key_cmp_rc(int rc)
 		return BTR_CMP_GT;
 }
 
+static inline int
+dbtree_is_empty_inplace(const struct btr_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
+}
+
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 			   btr_ops_t *ops);
 int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,

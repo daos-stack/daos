@@ -551,8 +551,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = %d\n",
-		DP_DTI(dti), rc);
+	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+		DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
 			D_FREE_PTR(dce);
@@ -590,7 +590,8 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		dtx_rec_release(cont, dae, true, NULL);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = %d\n", DP_DTI(dti), rc);
+	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
+		DP_RC(rc));
 
 	return rc;
 }
@@ -1379,10 +1380,10 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count)
 	D_ASSERT(cont != NULL);
 
 	/* Commit multiple DTXs via single PMDK transaction. */
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		rc = vos_dtx_commit_internal(cont, dtis, count, 0);
-		rc = vos_tx_end(vos_cont2umm(cont), rc);
+		rc = umem_tx_end(vos_cont2umm(cont), rc);
 	}
 
 	return rc;
@@ -1400,7 +1401,7 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	D_ASSERT(cont != NULL);
 
 	/* Abort multiple DTXs via single PMDK transaction. */
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		int	aborted = 0;
 
@@ -1418,7 +1419,7 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 		 * DRAM) even if we abort this PMDK transaction, then let's
 		 * commit the PMDK transaction anyway.
 		 */
-		rc = vos_tx_end(vos_cont2umm(cont), aborted > 0 ? 0 : rc);
+		rc = umem_tx_end(vos_cont2umm(cont), aborted > 0 ? 0 : rc);
 	}
 
 	return rc;
@@ -1447,7 +1448,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1483,7 +1484,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	umem_free(umm, dbd_off);
 
-	return vos_tx_end(umm, 0);
+	return umem_tx_end(umm, 0);
 }
 
 void
@@ -1522,8 +1523,8 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
 			  DAOS_INTENT_DEFAULT, true, &obj);
 	if (rc != 0) {
-		D_ERROR(DF_UOID" fail to mark sync: rc = %d\n",
-			DP_UOID(oid), rc);
+		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
 		return rc;
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 // splitPort separates port from compressed host string
@@ -156,11 +157,11 @@ func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, e
 	groupTitle := titles[0]
 	columnTitles := titles[1:]
 
-	formatter := NewTableFormatter(titles)
-	var table []TableRow
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
 
 	for _, result := range groups.Keys() {
-		row := TableRow{groupTitle: groups[result].RangedString()}
+		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
 
 		summary := strings.Split(result, rowFieldSep)
 		if len(summary) != len(columnTitles) {

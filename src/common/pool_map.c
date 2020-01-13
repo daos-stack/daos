@@ -1030,7 +1030,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 
 	return 0;
  failed:
-	D_DEBUG(DB_MGMT, "Failed to setup pool map %d\n", rc);
+	D_DEBUG(DB_MGMT, "Failed to setup pool map "DF_RC"\n", DP_RC(rc));
 	D_MUTEX_DESTROY(&map->po_lock);
 	pool_map_finalise(map);
 	return rc;
@@ -1413,13 +1413,13 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 
 	rc = pool_buf_parse(buf, &tree);
 	if (rc != 0) {
-		D_ERROR("pool_buf_parse failed, rc %d.\n", rc);
+		D_ERROR("pool_buf_parse failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	if (!pool_tree_sane(tree, version)) {
 		rc = -DER_INVAL;
-		D_ERROR("pool_tree_sane failed, rc %d.\n", rc);
+		D_ERROR("pool_tree_sane failed, rc "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 
@@ -1431,7 +1431,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 
 	rc = pool_map_initialise(map, true, tree);
 	if (rc != 0) {
-		D_ERROR("pool_map_initialise failed, rc %d.\n", rc);
+		D_ERROR("pool_map_initialise failed, rc "DF_RC"\n", DP_RC(rc));
 		/* pool_tree_free() did in pool_map_initialise */
 		tree = NULL;
 		goto failed;
@@ -1864,7 +1864,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_unavail(&dom->do_targets[i]))
+			if (pool_target_unavail(&dom->do_targets[i], false))
 				num_failed++;
 		}
 	} else {

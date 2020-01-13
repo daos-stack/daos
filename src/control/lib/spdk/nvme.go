@@ -65,13 +65,13 @@ type Nvme struct{}
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ctrlr_t
 type Controller struct {
-	Model      string
-	Serial     string
-	PCIAddr    string
-	FWRev      string
-	SocketID   int32
-	Namespaces []*Namespace
-	Health     *DeviceHealth
+	Model       string
+	Serial      string
+	PCIAddr     string
+	FWRev       string
+	SocketID    int32
+	Namespaces  []*Namespace
+	HealthStats *DeviceHealth
 }
 
 // Namespace struct mirrors C.struct_ns_t and
@@ -219,15 +219,20 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Contro
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
 		ctrlr := c2GoController(ctrlrPtr)
+
 		if nsPtr := ctrlrPtr.nss; nsPtr != nil {
 			for nsPtr != nil {
 				ctrlr.Namespaces = append(ctrlr.Namespaces, c2GoNamespace(nsPtr))
 				nsPtr = nsPtr.next
 			}
 		}
-		if healthPtr := ctrlrPtr.dev_health; healthPtr != nil {
-			ctrlr.Health = c2GoDeviceHealth(healthPtr)
+
+		healthPtr := ctrlrPtr.dev_health
+		if healthPtr == nil {
+			return nil, errors.New("empty health stats")
 		}
+		ctrlr.HealthStats = c2GoDeviceHealth(healthPtr)
+
 		ctrlrs = append(ctrlrs, ctrlr)
 
 		ctrlrPtr = ctrlrPtr.next

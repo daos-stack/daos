@@ -25,15 +25,14 @@ package server
 
 import (
 	"fmt"
-	"hash/fnv"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -42,11 +41,11 @@ import (
 
 const (
 	defaultRuntimeDir        = "/var/run/daos_server"
-	defaultConfigPath        = "etc/daos_server.yml"
+	defaultConfigPath        = "../etc/daos_server.yml"
 	defaultSystemName        = "daos_server"
 	defaultPort              = 10001
 	configOut                = ".daos_server.active.yml"
-	relConfExamplesPath      = "utils/config/examples/"
+	relConfExamplesPath      = "../utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
 	msgConfigNoProvider      = "provider not specified in config"
 	msgConfigNoPath          = "no config path set"
@@ -67,6 +66,7 @@ type Configuration struct {
 	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
 	NrHugepages         int                       `yaml:"nr_hugepages"`
+	SetHugepages        bool                      `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
@@ -90,11 +90,6 @@ type Configuration struct {
 
 	Path string   // path to config file
 	ext  External // interface to os utilities
-	// Shared memory segment ID to enable SPDK multiprocess mode,
-	// SPDK application processes can then access the same shared
-	// memory and therefore NVMe controllers.
-	// TODO: Is it also necessary to provide distinct coremask args?
-	NvmeShmID int
 
 	//a pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
@@ -146,15 +141,6 @@ func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
 	return c
 }
 
-// WithNvmeShmID sets the common shmID used for SPDK multiprocess mode.
-func (c *Configuration) WithNvmeShmID(id int) *Configuration {
-	c.NvmeShmID = id
-	for _, srv := range c.Servers {
-		srv.WithShmID(id)
-	}
-	return c
-}
-
 // WithModules sets a list of server modules to load.
 func (c *Configuration) WithModules(mList string) *Configuration {
 	c.Modules = mList
@@ -180,7 +166,6 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 	srvCfg.Fabric.Update(c.Fabric)
 	srvCfg.SystemName = c.SystemName
-	srvCfg.WithShmID(c.NvmeShmID)
 	srvCfg.SocketDir = c.SocketDir
 	srvCfg.Modules = c.Modules
 }
@@ -311,9 +296,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		ControlPort:        defaultPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
-		NrHugepages:        1024,
 		Path:               defaultConfigPath,
-		NvmeShmID:          0,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
 		ext:                ext,
 		validateProviderFn: netdetect.ValidateProviderStub,
@@ -362,35 +345,19 @@ func (c *Configuration) SaveToFile(filename string) error {
 	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-// hash produces unique int from string, mask MSB on conversion to signed int
-func hash(s string) int {
-	h := fnv.New32a()
-	if _, err := h.Write([]byte(s)); err != nil {
-		panic(err) // should never happen
-	}
-
-	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
-}
-
-func (c *Configuration) SetNvmeShmID(base string) {
-	c.WithNvmeShmID(hash(base + strconv.Itoa(os.Getpid())))
-}
-
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(path string) error {
-	if path != "" {
-		c.Path = path
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
+	if err != nil {
+		return err
+	}
+	c.Path = newPath
+
+	if _, err = os.Stat(c.Path); err != nil {
+		return err
 	}
 
-	if !filepath.IsAbs(c.Path) {
-		newPath, err := c.ext.getAbsInstallPath(c.Path)
-		if err != nil {
-			return err
-		}
-		c.Path = newPath
-	}
-
-	return nil
+	return err
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/

@@ -212,11 +212,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				rw_args->rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", rw_args->rpc, opc, DP_RC(rc));
 		else
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				rw_args->rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
+				rw_args->rpc, opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
@@ -474,7 +474,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	} else {
 		rc = daos_rpc_send(req, task);
 		if (rc != 0) {
-			D_ERROR("update/fetch rpc failed rc %d\n", rc);
+			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out_args, rc);
 		}
 	}
@@ -586,7 +587,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("punch rpc failed rc %d\n", rc);
+		D_ERROR("punch rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
@@ -646,11 +647,11 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
 		} else if (rc == -DER_INPROGRESS) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				enum_args->rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				enum_args->rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
+				enum_args->rpc, opc, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -839,7 +840,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("enumerate rpc failed rc %d\n", rc);
+		D_ERROR("enumerate rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_eaa, rc);
 	}
 
@@ -1048,7 +1049,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("query_key rpc failed rc %d\n", rc);
+		D_ERROR("query_key rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
@@ -1094,13 +1095,14 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 
 	if (rc == -DER_INPROGRESS) {
 		D_DEBUG(DB_TRACE,
-			"rpc %p OBJ_SYNC_RPC may need retry: rc = %d\n",
-			rpc, rc);
+			"rpc %p OBJ_SYNC_RPC may need retry: rc = "DF_RC"\n",
+			rpc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	if (rc != 0) {
-		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = %d\n", rpc, rc);
+		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = "DF_RC"\n", rpc,
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1173,7 +1175,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("OBJ_SYNC_RPC failed: rc = %d\n", rc);
+		D_ERROR("OBJ_SYNC_RPC failed: rc = "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
