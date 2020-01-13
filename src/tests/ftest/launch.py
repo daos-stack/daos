@@ -166,9 +166,7 @@ def set_test_environment():
     print("Before Environment:")
     for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
         print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
-    print("Daos Server : ")
-    out = get_output("command -v daos_server")
-    print(out)
+
     print("fi_info : ")
     out = get_output("command -v fi_info")
     print(out)
@@ -519,7 +517,7 @@ def run_tests(test_files, tag_filter, args):
             if args.clean:
                 if not clean_logs(test_file["yaml"], args):
                     return 128
-
+            display_libfabric(test_file["yaml"], args)
             # Execute this test
             test_command_list = list(command_list)
             test_command_list.append("--mux-yaml {}".format(test_file["yaml"]))
@@ -679,6 +677,34 @@ def clean_logs(test_yaml, args):
 
     return True
 
+def display_libfabric(test_yaml, args):
+    """[summary]
+    
+    Arguments:
+        test_yaml {[type]} -- [description]
+        args {[type]} -- [description]
+    
+    Returns:
+        [type] -- [description]
+    """
+    log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
+    host_list = get_hosts_from_yaml(test_yaml, args)
+    print("Daos Server : ")
+    out = get_output("command -v daos_server")
+    print(out)
+    cmd = "ldd {}".format(out)
+    spawn_commands(host_list, cmd)
+
+    out = get_output("command -v daos_io_server")
+    print(out)
+    cmd = "ldd {}".format(out)
+    spawn_commands(host_list, cmd)
+
+
+    out = get_output("command -v fi_info")
+    print(out)
+    cmd = "ldd {}".format(out)
+    spawn_commands(host_list, cmd)    
 
 def archive_logs(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
