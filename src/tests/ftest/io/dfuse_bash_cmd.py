@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import os
 import subprocess
 import general_utils
 
@@ -167,13 +168,10 @@ class BashCmd(TestWithServers):
             # perform test for multiple containers.
             for count in range(self.cont_count):
                 self.start_dfuse(count)
-                abs_dir_path = (
-                    self.dfuse.mount_dir.value + "/" + self.dir_name).\
-                    encode('ascii', 'ignore')
-                abs_file_path1 = (abs_dir_path + "/" + self.file_name1).\
-                                 encode('ascii', 'ignore')
-                abs_file_path2 = (abs_dir_path + "/" + self.file_name2).\
-                                 encode('ascii', 'ignore')
+                abs_dir_path = os.path.join(
+                    self.dfuse.mount_dir.valu, self.dir_name)
+                abs_file_path1 = os.path.join(abs_dir_path, self.file_name1)
+                abs_file_path2 = os.path.join(abs_dir_path, self.file_name2)
                 # check if the dir exists.
                 dir_exists, _ = general_utils.check_file_exists(
                     self.hostlist_clients[:-1], abs_dir_path, directory=True)
