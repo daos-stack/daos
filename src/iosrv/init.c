@@ -592,46 +592,46 @@ exit_debug_init:
 
 static int
 cleanup_cb(const char *path, const struct stat *sb, int flag,
-           struct FTW *ftwbuf)
+	   struct FTW *ftwbuf)
 {
-        int rc;
+	int rc;
 
-        if (ftwbuf->level == 0)
-                return 0;
+	if (ftwbuf->level == 0)
+		return 0;
 
-        if (flag == FTW_DP || flag == FTW_D)
-                rc = rmdir(path);
-        else
-                rc = unlink(path);
-        if (rc)
-                D_ERROR("failed to remove %s\n", path);
-        return rc;
+	if (flag == FTW_DP || flag == FTW_D)
+		rc = rmdir(path);
+	else
+		rc = unlink(path);
+	if (rc)
+		D_ERROR("failed to remove %s\n", path);
+	return rc;
 }
 
 static void
 shared_memory_file_cleanup(void)
 {
-        int rc;
+	int rc;
 
-        if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
-                /* unlink spdk shared memory files for this stream */
-                char buffer[NAME_MAX];
+	if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
+		/* unlink spdk shared memory files for this stream */
+		char buffer[NAME_MAX];
 
 		/* remove shared memory dir created byi each daos io searver
 		 * currently in /var/run/dpdk
 		 */
-                snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d",
+		snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d",
 			 dss_nvme_shm_id);
-                rc = nftw(buffer, cleanup_cb, 1, FTW_D);
-                if (rc == 0)
-			 rc = rmdir(buffer);
+		rc = nftw(buffer, cleanup_cb, 1, FTW_D);
+		if (rc == 0)
+			rc = rmdir(buffer);
 
-                if (rc) {
-                        D_ERROR("Failed to remove shared memory dir: %s "
+		if (rc) {
+			D_ERROR("Failed to remove shared memory dir: %s "
 				""DF_RC"\n", buffer, DP_RC(rc));
-                } else {
+		} else {
 			D_INFO("Removed shared memory dir: %s "DF_RC"\n",
-                                                buffer, DP_RC(rc));
+				buffer, DP_RC(rc));
 		}
 	}
 }
