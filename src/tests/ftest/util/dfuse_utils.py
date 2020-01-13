@@ -199,8 +199,6 @@ class Dfuse(DfuseCommand):
 
         # obtain any env variables to be exported
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = self.tmp
-        env["DAOS_SINGLETON_CLI"] = 1
 
         if self.dfuse_env:
             try:

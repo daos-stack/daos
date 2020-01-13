@@ -180,8 +180,7 @@ class MdtestBase(TestWithServers):
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
-        env = self.mdtest_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+        env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             manager.run()

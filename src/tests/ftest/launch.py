@@ -159,10 +159,8 @@ def set_test_environment():
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
-    os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(

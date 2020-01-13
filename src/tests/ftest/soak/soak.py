@@ -161,12 +161,9 @@ class Soak(TestWithServers):
                     exports = ["ALL"]
                     if ior_cmd.api.value == "MPIIO":
                         env = {
-                            "CRT_ATTACH_INFO_PATH": os.path.join(
-                                self.basepath, "install/tmp"),
                             "DAOS_POOL": str(ior_cmd.daos_pool.value),
                             "MPI_LIB": "\"\"",
                             "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
-                            "DAOS_SINGLETON_CLI": 1,
                             "FI_PSM2_DISCONNECT": 1
                         }
                         exports.extend(

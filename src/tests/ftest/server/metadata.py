@@ -222,7 +222,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the job manager for the IOR command
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
-                env = ior_cmd.get_default_env(str(manager), self.tmp)
+                env = ior_cmd.get_default_env(str(manager))
                 manager.setup_command(env, self.hostfile_clients, processes)
 
                 # Add a thread for these IOR arguments

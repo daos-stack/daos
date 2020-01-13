@@ -257,8 +257,6 @@ To run an example:
         export PATH=/path/to/mpich/install/bin:$PATH
         export LD_LIBRARY_PATH=/path/to/mpich/install/lib:$LD_LIBRARY_PATH
         export MPI_LIB=""
-        export CRT_ATTACH_INFO_PATH=/path/ (whatever was passed to daos_server start -a)
-        export DAOS_SINGLETON_CLI=1
 2.  export DAOS_POOL=puuid; export DAOS_SVCL=svcl
     This is just temporary till we have a better way of passing pool
     connect info to MPI-IO and other middleware over DAOS.
