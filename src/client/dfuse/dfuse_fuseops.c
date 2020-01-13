@@ -160,7 +160,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
-		DFUSE_REPLY_ATTR(req, &inode->ie_stat);
+		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -239,7 +239,7 @@ static void
 df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*parent_inode = NULL;
 	d_list_t			*rlink;
 	int				rc;
 
@@ -262,7 +262,7 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
 }
 
 static void
