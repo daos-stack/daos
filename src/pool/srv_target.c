@@ -161,16 +161,17 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
+	d_list_add(&child->spc_list, &tls->dt_pool_list);
+
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc) {
+		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 		return rc;
 	}
-
-	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	return 0;
 }
