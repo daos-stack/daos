@@ -56,23 +56,25 @@ class DaosServerConfigTest(TestWithServers):
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
 
         # Get the input to verify
-        config_val = self.params.get("config_val", "/run/server_config_val/*/")
+        c_val = self.params.get("config_val", "/run/server_config_val/*/")
 
         # Identify the attribute and modify its value to test value
-        getattr(
-            server.runner.job.yaml_params, config_val[0]).value = config_val[1]
+        yml_params = server.runner.job.yaml_params
+        if c_val[3] == "gen":
+            getattr(yml_params, c_val[0]).value = c_val[1]
+        elif c_val[3] == "server":
+            getattr(yml_params.server_params[-1], c_val[0]).value = c_val[1]
 
         self.log.info(
-            "Starting server changing %s with %s", config_val[0], config_val[1])
+            "Starting server changing %s with %s", c_val[0], c_val[1])
         try:
             yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
             server.start(yamlfile)
         except ServerFailed as err:
-            if config_val[2] == 1:
+            if c_val[2] == 1:
                 self.log.info("Server was expected to fail. Test passed.")
             else:
-                self.fail("Server was expected to start. Test failed:{}".format(
-                    err))
+                self.fail("Server was expected to start: {}".format(err))
 
         # Stop servers
         try:
