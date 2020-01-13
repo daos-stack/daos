@@ -129,39 +129,49 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		}
 	}
 
-	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
+	if (ie->ie_root) {
+		struct dfuse_dfs	*dfs = ie->ie_dfs;
+		struct dfuse_pool	*dfp = dfs->dfs_dfp;
+
+		D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
+
 		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
-			       !daos_handle_is_inval(ie->ie_dfs->dfs_poh),
-			       !daos_handle_is_inval(ie->ie_dfs->dfs_coh));
+			       !daos_handle_is_inval(dfp->dfp_poh),
+			       !daos_handle_is_inval(dfs->dfs_coh));
 
-		if (!daos_handle_is_inval(ie->ie_dfs->dfs_coh)) {
+		if (!daos_handle_is_inval(dfs->dfs_coh)) {
 
-			rc = dfs_umount(ie->ie_dfs->dfs_ns);
+			rc = dfs_umount(dfs->dfs_ns);
 			if (rc != 0)
-				DFUSE_TRA_ERROR(ie->ie_dfs,
+				DFUSE_TRA_ERROR(dfs,
 						"dfs_umount() failed (%d)",
 						rc);
 
-			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
-			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_coh = DAOS_HDL_INVAL;
-			} else {
-				DFUSE_TRA_ERROR(ie->ie_dfs,
+			rc = daos_cont_close(dfs->dfs_coh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
 						"daos_cont_close() failed: (%d)",
 						rc);
 			}
-			ie->ie_dfs->dfs_coh = DAOS_HDL_INVAL;
-		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
-			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
-			if (rc == -DER_SUCCESS) {
-				ie->ie_dfs->dfs_poh = DAOS_HDL_INVAL;
-			} else {
-				DFUSE_TRA_ERROR(ie->ie_dfs,
-						"daos_pool_disconnect() failed: (%d)",
-						rc);
-			}
-
 		}
+
+		d_list_del(&dfs->dfs_list);
+		D_FREE(dfs);
+
+		if (d_list_empty(&dfp->dfp_dfs_list)) {
+			if (!daos_handle_is_inval(dfp->dfp_poh)) {
+				rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+				if (rc != -DER_SUCCESS) {
+					DFUSE_TRA_ERROR(dfp,
+							"daos_pool_disconnect() failed: (%d)",
+							rc);
+				}
+			}
+			d_list_del(&dfp->dfp_list);
+
+			D_FREE(dfp);
+		}
+		D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	}
 
 	DFUSE_TRA_DOWN(ie);
