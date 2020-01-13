@@ -35,6 +35,7 @@
 #include <getopt.h>
 #include <errno.h>
 #include <execinfo.h>
+#include <ftw.h>
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
@@ -589,10 +590,57 @@ exit_debug_init:
 	return rc;
 }
 
+static int
+cleanup_cb(const char *path, const struct stat *sb, int flag,
+           struct FTW *ftwbuf)
+{
+        int rc;
+
+        if (ftwbuf->level == 0)
+                return 0;
+
+        if (flag == FTW_DP || flag == FTW_D)
+                rc = rmdir(path);
+        else
+                rc = unlink(path);
+        if (rc)
+                D_ERROR("failed to remove %s\n", path);
+        return rc;
+}
+
+static void
+shared_memory_file_cleanup(void)
+{
+        int rc;
+
+        if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
+                /* unlink spdk shared memory files for this stream */
+                char buffer[NAME_MAX];
+
+		/* remove shared memory dir created byi each daos io searver
+		 * currently in /var/run/dpdk
+		 */
+                snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d",
+			 dss_nvme_shm_id);
+                rc = nftw(buffer, cleanup_cb, 1, FTW_D);
+                if (rc == 0)
+			 rc = rmdir(buffer);
+
+                if (rc) {
+                        D_ERROR("Failed to remove shared memory dir: %s "
+				""DF_RC"\n", buffer, DP_RC(rc));
+                } else {
+			D_INFO("Removed shared memory dir: %s "DF_RC"\n",
+                                                buffer, DP_RC(rc));
+		}
+	}
+}
+
 static void
 server_fini(bool force)
 {
-	D_INFO("Service is shutting down force %d\n", force);
+	D_INFO("Service is shutting down\n");
+	shared_memory_file_cleanup();
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
@@ -609,18 +657,6 @@ server_fini(bool force)
 	dss_module_fini(force);
 	abt_fini();
 	daos_debug_fini();
-        if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
-                /* unlink spdk shared memory files for this stream */
-                char buffer[NAME_MAX];
-
-                snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d", dss_nvme_shm_id);
-		D_INFO("unlinking %s\n", buffer);
-                if (unlink(buffer)) {
-                        D_ERROR("Unable to unlink shared memory file: %s.\n",
-                                buffer);
-                }
-        }
-	
 }
 
 static void
