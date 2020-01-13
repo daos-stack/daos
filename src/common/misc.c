@@ -445,7 +445,8 @@ daos_hhash_init(void)
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
 	} else {
-		D_ERROR("failed to create handle hash table: %d\n", rc);
+		D_ERROR("failed to create handle hash table: "DF_RC"\n",
+			DP_RC(rc));
 	}
 
 unlock:

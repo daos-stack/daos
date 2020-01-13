@@ -50,30 +50,17 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 
 	ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
 
-	/* First check if the both parts of the OID match */
+	/* First check if it's the same container (dfs struct) */
+	if (ir->ir_id.irid_dfs != ir_id->irid_dfs)
+		return false;
+
+	/* Then check if the both parts of the OID match */
 	if (ir->ir_id.irid_oid.lo != ir_id->irid_oid.lo)
 		return false;
 
 	if (ir->ir_id.irid_oid.hi != ir_id->irid_oid.hi)
 		return false;
 
-	/* Then check if it's the same container (dfs struct) */
-	if (ir->ir_id.irid_dfs == ir_id->irid_dfs) {
-		return true;
-	}
-
-	if (uuid_compare(ir->ir_id.irid_dfs->dfs_pool,
-			 ir_id->irid_dfs->dfs_pool) != 0)
-		return false;
-
-	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
-			 ir_id->irid_dfs->dfs_cont) != 0)
-		return false;
-
-	/* This case means it's the same container name, but a different dfs
-	 * struct which can happen with repeated lookups of already open
-	 * containers
-	 */
 	return true;
 }
 
@@ -220,6 +207,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
 
+	ie->ie_root = true;
+
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);
@@ -283,7 +272,7 @@ ino_flush(d_list_t *rlink, void *arg)
 					      ie->ie_parent,
 					      ie->ie_name,
 					      strlen(ie->ie_name));
-	if (rc != 0)
+	if (rc != 0 && rc != -EBADF)
 		DFUSE_TRA_WARNING(ie,
 				  "%lu %lu '%s': %d %s",
 				  ie->ie_parent, ie->ie_stat.st_ino,
@@ -340,7 +329,7 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		handles++;
 	} while (rlink);
 
-	if (handles) {
+	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL) {
 		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
 				  refs, handles);
 	} else {

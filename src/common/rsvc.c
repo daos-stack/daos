@@ -196,7 +196,8 @@ rsvc_client_process_hint(struct rsvc_client *client,
 		/* Append the unknown rank to tolerate user mistakes. */
 		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
 		if (rc != 0) {
-			D_DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
+			D_DEBUG(DB_MD, "failed to append new rank: "DF_RC"\n",
+				DP_RC(rc));
 			return;
 		}
 		client->sc_leader_index = client->sc_ranks->rl_nr - 1;
