@@ -155,7 +155,7 @@ class BashCmd(TestWithServers):
               Rename file
               Verify renamed file exist using list.
               Remove a directory
-        :avocado: tags=all,daosio,small,hw,full_regression,bashcmd
+        :avocado: tags=all,daosio,small,full_regression,bashcmd
         """
         self.cont_count = self.params.get("cont_count", '/run/cont/*')
         self.pool_count = self.params.get("pool_count", '/run/pool/*')
@@ -169,11 +169,11 @@ class BashCmd(TestWithServers):
                 self.start_dfuse(count)
                 abs_dir_path = (
                     self.dfuse.mount_dir.value + "/" + self.dir_name).\
-                    decode("utf-8").encode("ascii", "ignore")
+                    encode('ascii', 'ignore')
                 abs_file_path1 = (abs_dir_path + "/" + self.file_name1).\
-                                 decode("utf-8").encode("ascii", "ignore")
+                                 encode('ascii', 'ignore')
                 abs_file_path2 = (abs_dir_path + "/" + self.file_name2).\
-                                 decode("utf-8").encode("ascii", "ignore")
+                                 encode('ascii', 'ignore')
                 # check if the dir exists.
                 dir_exists, _ = general_utils.check_file_exists(
                     self.hostlist_clients[:-1], abs_dir_path, directory=True)
