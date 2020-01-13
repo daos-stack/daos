@@ -1446,6 +1446,7 @@ class DaosContainerInputParams(ctypes.Structure):
             daos_property = daos_cref.DaosProperty(4)
 
         if daos_property:
+            # pylint: disable=no-member
             # The index is used to increment the dpp_entried array value. If the
             # layer_type is None and checksum is enabled the index will vary,
             # e.g.:
@@ -1454,7 +1455,6 @@ class DaosContainerInputParams(ctypes.Structure):
             index = 0
 
             if self.type != "Unknown":
-                # pylint: disable=no-member
                 daos_property.dpp_entries[index].dpe_type = ctypes.c_uint32(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
 
@@ -1465,13 +1465,11 @@ class DaosContainerInputParams(ctypes.Structure):
                     daos_property.dpp_entries[index].dpe_val = ctypes.c_uint64(
                         DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
-                # pylint: disable=no-member
                 daos_property.dpp_entries[index].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
 
             # Process the enable_chksum input
             if self.enable_chksum is True:
-                # pylint: disable=no-member
                 index += 1
                 daos_property.dpp_entries[index].dpe_type = ctypes.c_uint32(
                     DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
