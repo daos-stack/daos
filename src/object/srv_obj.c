@@ -775,7 +775,8 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 		if (iod->iod_type != DAOS_IOD_SINGLE || iod->iod_recxs == NULL)
 			continue;
 		/* for singv EC */
-		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
+		if (iod->iod_size == DAOS_REC_ANY) /* punch */
+			continue;
 		if (oca == NULL) {
 			oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
 			D_ASSERT(oca != NULL && DAOS_OC_IS_EC(oca));

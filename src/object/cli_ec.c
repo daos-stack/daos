@@ -294,13 +294,14 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	bool				 full_stripe_only = true;
 	bool				 parity_seg_counted = false;
 	bool				 frag_seg_counted = false;
-	bool				 singv_parity = false;
+	bool				 punch, singv_parity = false;
 	int				 i, j, idx, rc;
 
 	ec_recx_array = &reasb_req->orr_recxs[iod_idx];
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
+	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
 	/* for single value case */
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
@@ -318,9 +319,11 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 		/* evenly distributed singv */
 		if (update) {
 			ec_all_tgt_recx_nrs(oca, tgt_recx_nrs, j);
-			seg_nr = obj_ec_parity_tgt_nr(oca);
-			singv_parity = true;
-			ec_recx_array->oer_stripe_total = 1;
+			if (!punch) {
+				seg_nr = obj_ec_parity_tgt_nr(oca);
+				singv_parity = true;
+				ec_recx_array->oer_stripe_total = 1;
+			}
 		} else {
 			ec_data_tgt_recx_nrs(oca, tgt_recx_nrs, j);
 		}
@@ -432,13 +435,17 @@ data_init:
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */
-	rc = daos_sgl_init(&reasb_req->orr_sgls[iod_idx], seg_nr + sgl->sg_nr);
-	if (rc)
-		goto out;
-	rc = obj_ec_seg_sorter_init(&reasb_req->orr_sorters[iod_idx],
-				    obj_ec_tgt_nr(oca), seg_nr + sgl->sg_nr);
-	if (rc)
-		goto out;
+	if (!punch) {
+		rc = daos_sgl_init(&reasb_req->orr_sgls[iod_idx],
+				   seg_nr + sgl->sg_nr);
+		if (rc)
+			goto out;
+		rc = obj_ec_seg_sorter_init(&reasb_req->orr_sorters[iod_idx],
+					    obj_ec_tgt_nr(oca),
+					    seg_nr + sgl->sg_nr);
+		if (rc)
+			goto out;
+	}
 	if (update) {
 		cell_bytes = singv_parity ?
 			     obj_ec_singv_cell_bytes(iod->iod_size, oca) :
@@ -1043,6 +1050,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
 	uint64_t			 cell_bytes;
 	bool				 with_full_stripe, singv = false;
+	bool				 punch;
 	int				 rc = 0;
 
 	D_ASSERT(cell_rec_nr > 0);
@@ -1053,11 +1061,12 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		if (iovs == NULL)
 			return -DER_NOMEM;
 	}
+	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
 	/* for single value case */
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		singv = true;
-		if (obj_ec_singv_one_tgt(iod, sgl, oca)) {
+		if (obj_ec_singv_one_tgt(iod, sgl, oca) && !punch) {
 			idx = obj_ec_singv_small_idx(oca, iod);
 			/* PARITY_INDICATOR flag to indicate singv EC */
 			ec_recx_add(riod->iod_recxs, ridx, tgt_recx_idxs,
@@ -1079,6 +1088,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		for (i = 0; i < tgt_nr; i++)
 			ec_recx_add(riod->iod_recxs, ridx, tgt_recx_idxs, i,
 				    PARITY_INDICATOR, 1);
+		if (punch)
+			goto seg_pack;
 		if (update) {
 			daos_sgl_consume(sgl, iov_idx, iov_off, iod_size,
 					 iovs, seg_nr);
@@ -1149,7 +1160,8 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	}
 
 seg_pack:
-	obj_ec_seg_pack(sorter, rsgl);
+	if (!punch)
+		obj_ec_seg_pack(sorter, rsgl);
 
 	/* generate the oiod/siod */
 	tgt_nr = update ? obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);

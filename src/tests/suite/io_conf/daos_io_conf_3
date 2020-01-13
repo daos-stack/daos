@@ -85,6 +85,7 @@ iod_size 1024
 obj_class ec
 update --tx 10 -s -u 13
 fetch --tx 10 -s
+punch -d dkey_3 -a akey_single_1 --tx 10 -s
 
 # single value evenly distributed to all targets
 akey akey_single_2
@@ -92,4 +93,4 @@ iod_size 10240
 obj_class ec
 update --tx 11 -s -u 17
 fetch --tx 11 -s
-
+punch -d dkey_3 -a akey_single_2 --tx 11 -s
