@@ -38,7 +38,7 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	 * recompute it each time.
 	 */
 	stat.st_ino = ie->ie_stat.st_ino;
-	DFUSE_REPLY_ATTR(req, &stat);
+	DFUSE_REPLY_ATTR(ie, req, &stat);
 
 	return;
 err:
