@@ -42,7 +42,6 @@ class BashCmd(TestWithServers):
         """Initialize a BashCmd object."""
         super(BashCmd, self).__init__(*args, **kwargs)
         self.dfuse = None
-        self.container = None
         self.file_name = None
         self.dir_name = None
         self.pool_count = None
