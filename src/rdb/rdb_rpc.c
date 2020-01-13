@@ -371,6 +371,9 @@ rdb_recvd(void *arg)
 		if (rrpc == NULL) {
 			D_ASSERT(stop);
 			/* The queue is empty and we are asked to stop. */
+			/* kccain temporary debug logging */
+			D_DEBUG(DB_MD, DF_DB": queue now empty and stopping\n",
+				DP_DB(db));
 			break;
 		}
 		/*
@@ -380,6 +383,10 @@ rdb_recvd(void *arg)
 		 */
 		if (!stop)
 			rdb_raft_process_reply(db, rrpc->drc_rpc);
+		else
+			D_DEBUG(DB_MD, DF_DB": stopping but queue not yet "
+				"empty\n", DP_DB(db));
+
 		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();

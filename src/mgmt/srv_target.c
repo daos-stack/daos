@@ -689,14 +689,18 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
-	if (rc)
+	if (rc) {
+		D_ERROR(DF_UUID": failed to generate path to tgt dir\n",
+			DP_UUID(td_in->td_pool_uuid));
 		D_GOTO(out, rc);
-
+	}
 	/** check whether the target exists */
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
 		rc = tgt_destroy(td_req->cr_input, path);
+		D_INFO(DF_UUID": tgt_destroy rc: %d\n",
+		       DP_UUID(td_in->td_pool_uuid), rc);
 	} else if (errno == ENOENT) {
 		char	*zombie;
 
@@ -707,19 +711,28 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		 */
 		rc = path_gen(td_in->td_pool_uuid, zombies_path, NULL, NULL,
 			      &zombie);
-		if (rc)
+		if (rc) {
+			D_ERROR(DF_UUID": zombies path_gen failed, rc: %d\n",
+				DP_UUID(td_in->td_pool_uuid), rc);
 			D_GOTO(out, rc);
+		}
 		rc = dir_fsync(path);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D_FREE(zombie);
+		D_INFO(DF_UUID": target gone already report for idempotence: "
+		       "rc: %d", DP_UUID(td_in->td_pool_uuid), rc);
 	} else {
 		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": errno=%d, daos rc: %d\n",
+			DP_UUID(td_in->td_pool_uuid), errno, rc);
 	}
 
 	D_FREE(path);
 out:
 	td_out->td_rc = rc;
+	D_INFO(DF_UUID": pool target stop/destroy rc: %d\n",
+	       DP_UUID(td_in->td_pool_uuid), rc);
 	crt_reply_send(td_req);
 }
 
@@ -814,6 +827,9 @@ ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	D_DEBUG(DB_TRACE, "Mark trace %s.\n", in->m_mark);
+
+	/* kccain testing */
+	D_INFO("Mark trace %s.\n", in->m_mark);
 
 	out = crt_reply_get(rpc);
 	out->m_rc = 0;

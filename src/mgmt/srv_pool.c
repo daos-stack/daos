@@ -537,12 +537,18 @@ pool_destroy_prepare(struct mgmt_svc *svc, uuid_t uuid)
 			rc = -DER_AGAIN;
 			goto out_lock;
 		} else if (rec->pr_state == POOL_DESTROYING) {
+			/* kccain temporary debug logging */
+			D_INFO(DF_UUID": pool state already DESTROYING\n",
+			       DP_UUID(uuid));
 			goto out_lock;
 		}
 	} else if (rc == -DER_NONEXIST) {
+		D_ERROR(DF_UUID": pool record not found/NONEXIST\n",
+			DP_UUID(uuid));
 		rc = -DER_ALREADY;
 		goto out_lock;
 	} else {
+		D_ERROR(DF_UUID": pool_rec_lookup rc: %d\n", DP_UUID(uuid), rc);
 		goto out_lock;
 	}
 	size = pool_rec_size(rec->pr_nreplicas);
@@ -558,11 +564,15 @@ pool_destroy_prepare(struct mgmt_svc *svc, uuid_t uuid)
 	d_iov_set(&value, recbuf, size);
 	rc = rdb_tx_update(&tx, &svc->ms_pools, &key, &value);
 	D_FREE(recbuf);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_UUID": rdb_tx_update failed, rc: %d\n",
+			DP_UUID(uuid), rc);
 		goto out_lock;
+	}
 
 	rc = rdb_tx_commit(&tx);
-
+	D_INFO(DF_UUID": marking pool DESTROYING, rdb_tx_commit rc: %d\n",
+	       DP_UUID(uuid), rc);
 out_lock:
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);

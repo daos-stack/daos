@@ -375,6 +375,8 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 	poh = pool->poh;
 
 	if (daos_handle_is_inval(poh)) {
+		print_message(DF_UUID": in teardown, invalid handle, "
+			      "connect again\n", DP_UUID(pool->pool_uuid));
 		rc = daos_pool_connect(pool->pool_uuid, arg->group,
 				       &pool->svc, DAOS_PC_RW,
 				       &poh, &pool->pool_info,
@@ -397,7 +399,8 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		}
 
 		if (rstat->rs_done == 0) {
-			print_message("waiting for rebuild\n");
+			print_message(DF_UUID": waiting for rebuild\n",
+				      DP_UUID(pool->pool_uuid));
 			sleep(1);
 			continue;
 		}
@@ -406,13 +409,23 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	print_message("pool_destroy_safe: disconnect\n");
+	if (daos_pool_disconnect(poh, NULL) != 0) {
+		print_message(DF_UUID": teardwown: pool disconnect "
+			      "failed\n", DP_UUID(pool->pool_uuid));
+	} else {
+		print_message(DF_UUID": teardown: disconnected\n",
+			      DP_UUID(pool->pool_uuid));
+	}
 
 	rc = daos_pool_destroy(pool->pool_uuid, arg->group, 1, NULL);
 	if (rc && rc != -DER_TIMEDOUT)
 		print_message("daos_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)
 		print_message("teardown: destroyed pool "DF_UUIDF"\n",
+			      DP_UUID(pool->pool_uuid));
+	if (rc == -DER_TIMEDOUT)
+		print_message(DF_UUID": teardown: pool destroy -DER_TIMEDOUT\n",
 			      DP_UUID(pool->pool_uuid));
 	return rc;
 }

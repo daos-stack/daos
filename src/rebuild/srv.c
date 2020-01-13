@@ -1290,11 +1290,19 @@ ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version)
 	struct rebuild_task			*task;
 	struct rebuild_task			*task_tmp;
 
+	/* kccain temporary debugging */
+	D_INFO(DF_UUID": version=%u\n", DP_UUID(pool_uuid), version);
+
 	/* Remove the rebuild tasks from queue list */
 	d_list_for_each_entry_safe(task, task_tmp, &rebuild_gst.rg_queue_list,
 				   dst_list) {
+		D_INFO(DF_UUID": rebuild task dst_pool_uuid="DF_UUID
+		       " dst_map_ver=%u\n", DP_UUID(pool_uuid),
+		       task->dst_pool_uuid, task->dst_map_ver);
 		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
 		    (version == -1 || task->dst_map_ver == version)) {
+			D_INFO(DF_UUID": call rebuild_task_destroy\n",
+			       DP_UUID(pool_uuid));
 			rebuild_task_destroy(task);
 			if (version != -1)
 				break;
@@ -1306,8 +1314,11 @@ ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version)
 	 * running list.
 	 */
 	rgt = rebuild_global_pool_tracker_lookup(pool_uuid, version);
-	if (rgt == NULL)
+	if (rgt == NULL) {
+		D_INFO(DF_UUID": check running list returned rgt=NULL\n",
+		       DP_UUID(pool_uuid));
 		return;
+	}
 
 	D_DEBUG(DB_REBUILD, "abort rebuild "DF_UUID" version %d\n",
 		DP_UUID(pool_uuid), version);

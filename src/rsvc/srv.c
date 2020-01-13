@@ -834,12 +834,21 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	int			 rc;
 
 	rc = ds_rsvc_lookup(class, id, &svc);
-	if (rc != 0)
+	if (rc != 0) {
+		/* kccain temporary debug logging */
+		D_ERROR(DF_UUID": ds_rsvc_lookup failed, rc=%d: "
+			"return -DER_ALREADY\n", DP_UUID(id->iov_buf), rc);
 		return -DER_ALREADY;
+	}
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 	rc = stop(svc, destroy);
-	if (!rc && destroy)
+	D_INFO(DF_UUID": stop, destroy=%d, rc: %d\n", DP_UUID(id->iov_buf),
+	       destroy, rc);
+	if (!rc && destroy) {
 		rc = rsvc_class(class)->sc_delete_uuid(id);
+		D_INFO(DF_UUID": class=%d sc_delete_uuid method rc:%d\n",
+		       DP_UUID(id->iov_buf), class, rc);
+	}
 	return rc;
 }
 
@@ -1230,6 +1239,8 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 			goto out;
 	}
 
+	/* kccain temporary debug logging */
+	D_INFO(DF_UUID": call ds_rsvc_stop\n", DP_UUID(in->soi_svc_id.iov_buf));
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
 out:

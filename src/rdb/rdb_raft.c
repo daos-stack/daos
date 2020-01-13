@@ -2441,13 +2441,17 @@ rdb_raft_stop(struct rdb *db)
 	db->d_stop = true;
 
 	/* Wake up all daemons and TXs. */
+	/* kccain temporary debug logging */
 	ABT_cond_broadcast(db->d_applied_cv);
 	ABT_cond_broadcast(db->d_events_cv);
 	ABT_cond_broadcast(db->d_replies_cv);
 	ABT_cond_broadcast(db->d_compact_cv);
+	D_INFO(DF_DB": broadcasted cvs: applied, events, replies, compact\n",
+	       DP_DB(db));
 
 	/* Abort all in-flight RPCs. */
 	rdb_abort_raft_rpcs(db);
+	D_INFO(DF_DB": aborted in-flight RPCs\n", DP_DB(db));
 
 	/* Wait for all extra references to be released. */
 	for (;;) {
@@ -2460,21 +2464,31 @@ rdb_raft_stop(struct rdb *db)
 		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
 	}
 
+	D_INFO(DF_DB": done waiting for references released\n", DP_DB(db));
+
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
 	rc = ABT_thread_join(db->d_compactd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_INFO(DF_DB": joined compactd\n", DP_DB(db));
 	ABT_thread_free(&db->d_compactd);
+	D_INFO(DF_DB": freed compactd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_callbackd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_INFO(DF_DB": joined callbackd\n", DP_DB(db));
 	ABT_thread_free(&db->d_callbackd);
+	D_INFO(DF_DB": freed callbackd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_timerd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_INFO(DF_DB": joined timerd\n", DP_DB(db));
 	ABT_thread_free(&db->d_timerd);
+	D_INFO(DF_DB": freed timerd\n", DP_DB(db));
 	rc = ABT_thread_join(db->d_recvd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_INFO(DF_DB": joined recvd\n", DP_DB(db));
 	ABT_thread_free(&db->d_recvd);
+	D_INFO(DF_DB": freed recvd\n", DP_DB(db));
 
 	rdb_raft_unload_lc(db);
 	raft_free(db->d_raft);
@@ -2482,7 +2496,12 @@ rdb_raft_stop(struct rdb *db)
 	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_applied_cv);
+	D_INFO(DF_DB": freed cvs: applied, events, replies, compact\n",
+	       DP_DB(db));
+
 	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
+	D_INFO(DF_DB": destroyed d_results hash table - done\n",
+	       DP_DB(db));
 }
 
 /* Resign the leadership in term. */
