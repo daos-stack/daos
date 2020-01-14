@@ -2408,7 +2408,6 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	unsigned int tgt_shard, shard_cnt, shard_idx;
 	int rc = 0;
 
-
 	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
 			      &shard_idx, &shard_cnt);
 	if (rc != 0)
