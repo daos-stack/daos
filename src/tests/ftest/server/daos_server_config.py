@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -65,13 +65,12 @@ class DaosServerConfigTest(TestWithServers):
         elif c_val[3] == "server":
             getattr(yml_params.server_params[-1], c_val[0]).value = c_val[1]
 
-        self.log.info(
-            "Starting server changing %s with %s", c_val[0], c_val[1])
+        self.log.info("Starting server changing %s with %s", c_val[0], c_val[1])
         try:
             yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
             server.start(yamlfile)
         except ServerFailed as err:
-            if c_val[2] == 1:
+            if c_val[2] == "FAIL":
                 self.log.info("Server was expected to fail. Test passed.")
             else:
                 self.fail("Server was expected to start: {}".format(err))

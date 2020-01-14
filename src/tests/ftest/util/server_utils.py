@@ -412,7 +412,8 @@ class ServerManager(ExecutableCommand):
                 if name == "sudo":
                     setattr(self.runner.job, name, getattr(self, name).value)
                 elif name == "srv_timeout":
-                    setattr(self.runner.job, name, getattr(self, name).value)
+                    setattr(
+                        self.runner.job, "timeout", getattr(self, name).value)
                 else:
                     getattr(
                         self.runner.job, name).value = getattr(self, name).value
