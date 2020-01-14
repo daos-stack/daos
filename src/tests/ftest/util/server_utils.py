@@ -30,7 +30,7 @@ from command_utils import (BasicParameter, FormattedParameter,
                            CommandWithParameters, CommandWithSubCommand,
                            CommandFailure, EnvironmentVariables)
 from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
-                                TransportCredentials)
+                                TransportCredentials, LogParameter)
 from general_utils import pcmd
 from dmg_utils import storage_format
 
@@ -105,13 +105,17 @@ class DaosServerYamlParameters(YamlParameters):
         #
         default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
+        # All log files should be placed in the same directory on each host to
+        # enable easy log file archiving by launch.py
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
-        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
-        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
+        self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
+        self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
@@ -278,6 +282,10 @@ class DaosServerYamlParameters(YamlParameters):
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
 
+            # All log files should be placed in the same directory on each host
+            # to enable easy log file archiving by launch.py
+            log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
             # Parameters
             #   targets:                count of VOS targets
             #   first_core:             starting index for targets
@@ -299,7 +307,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG")
-            self.log_file = BasicParameter(None, "daos_server.log")
+            self.log_file = LogParameter(log_dir, None, "daos_server.log")
             self.env_vars = BasicParameter(
                 None,
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",

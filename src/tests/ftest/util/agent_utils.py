@@ -21,12 +21,13 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+import os
 import socket
 
 from command_utils import (BasicParameter, FormattedParameter, CommandFailure,
                            EnvironmentVariables)
 from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
-                                TransportCredentials)
+                                TransportCredentials, LogParameter)
 
 
 def include_local_host(hosts):
@@ -75,13 +76,17 @@ class DaosAgentYamlParameters(YamlParameters):
         super(DaosAgentYamlParameters, self).__init__(
             "/run/agent_config/*", filename, None, common_yaml)
 
+        # All log files should be placed in the same directory on each host to
+        # enable easy log file archiving by launch.py
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
         # daos_agent parameters:
         #   - runtime_dir: <str>, e.g. /var/run/daos_agent
         #       Use the given directory for creating unix domain sockets
         #   - log_file: <str>, e.g. /tmp/daos_agent.log
         #       Full path and name of the DAOS agent logfile.
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
-        self.log_file = BasicParameter(None, "daos_agent.log")
+        self.log_file = LogParameter(log_dir, None, "daos_agent.log")
 
     def get_params(self, test):
         """Get values for the daos agent yaml config file.

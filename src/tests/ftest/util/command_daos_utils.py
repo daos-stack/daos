@@ -29,13 +29,65 @@ import time
 import yaml
 
 from command_utils import (CommandFailure, BasicParameter, ObjectWithParameters,
-                           CommandWithSubCommand)
+                           CommandWithSubCommand, FormattedParameter)
 from general_utils import check_file_exists, stop_processes
 
 # pylint: disable=unused-import
 # Supported JobManager classes for SubprocessManager.__init__()
 from job_manager_utils import OpenMPI, Mpich, Srun
 # pylint: enable=unused-import
+
+
+class LogParameter(FormattedParameter):
+    """A class for a test log file parameter which is read from a yaml file."""
+
+    def __init__(self, directory, str_format, default=None):
+        """Create a LogParameter  object.
+
+        Args:
+            directory (str): fixed location for the log file name specified by
+                the yaml file
+            str_format (str): format string used to convert the value into an
+                command line argument string
+            default (object): default value for the param
+        """
+        super(LogParameter, self).__init__(str_format, default)
+        self._directory = directory
+
+    def _add_directory(self):
+        """Add the directory to the log file name assignment.
+
+        The initial value is restricted to just the log file name as the
+        location (directory) of the file is fixed.  This method updates the
+        initial log file value (just the log file name) to include the directory
+        and name for the log file.
+        """
+        if self.value is not None:
+            name = os.path.basename(self.value)
+            self.value = os.path.join(self._directory, name)
+            self.log.debug("  Added the directory: %s => %s", name, self.value)
+
+    def get_yaml_value(self, name, test, path):
+        """Get the value for the parameter from the test case's yaml file.
+
+        Args:
+            name (str): name of the value in the yaml file
+            test (Test): avocado Test object to use to read the yaml file
+            path (str): yaml path where the name is to be found
+        """
+        super(LogParameter, self).get_yaml_value(name, test, path)
+        self._add_directory()
+
+    def update(self, value, name=None):
+        """Update the value of the parameter.
+
+        Args:
+            value (object): value to assign
+            name (str, optional): name of the parameter which, if provided, is
+                used to display the update. Defaults to None.
+        """
+        super(LogParameter, self).update(value, name)
+        self._add_directory()
 
 
 class AccessPoints(object):
@@ -83,10 +135,6 @@ class YamlParameters(ObjectWithParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        # All log files should be placed in the same directory on each host to
-        # enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
-
         if isinstance(self.other_params, YamlParameters):
             yaml_data = self.other_params.get_yaml_data()
         else:
@@ -94,13 +142,7 @@ class YamlParameters(ObjectWithParameters):
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None and value is not False:
-                if name.endswith("log_file"):
-                    # Log files are expected to defined in the test yaml by name
-                    # only.  The command's yaml file needs the file's full path.
-                    yaml_data[name] = os.path.join(
-                        log_dir, os.path.basename(value))
-                else:
-                    yaml_data[name] = value
+                yaml_data[name] = value
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
