@@ -109,7 +109,7 @@ test_run(d_rank_t my_rank)
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 
-	if (test_g.t_save_cfg) {
+	if (test_g.t_save_cfg && my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
 		D_ASSERTF(rc == 0,
 			  "crt_group_config_remove() failed. rc: %d\n", rc);

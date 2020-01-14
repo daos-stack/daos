@@ -33,7 +33,7 @@ sys.path.append('./util')
 
 from cart_utils import CartUtils
 
-class CartSelfTwoNodeTest(Test):
+class CartSelfThreeNodeTest(Test):
     """
     Runs basic CaRT self test
 
@@ -73,6 +73,8 @@ class CartSelfTwoNodeTest(Test):
         clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
         clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
+        self.utils.launch_test(self, clicmd, srv_rtn)
+        clicmd = self.utils.build_cmd(self, self.env, "cli3", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":

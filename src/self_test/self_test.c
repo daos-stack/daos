@@ -116,6 +116,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	uint32_t	 grp_size;
 	d_rank_list_t	*rank_list = NULL;
 	int		 attach_retries = 40;
+	int		 i;
+	d_rank_t	 max_rank = 0;
 	int		 ret;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
@@ -191,6 +193,20 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	ret = tc_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
 				0, 1, 5, 150);
 	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
+
+	max_rank = rank_list->rl_ranks[0];
+	for (i = 1; i < rank_list->rl_nr; i++) {
+		if (rank_list->rl_ranks[i] > max_rank)
+			max_rank = rank_list->rl_ranks[i];
+	}
+
+	d_rank_list_free(rank_list);
+
+	ret = crt_rank_self_set(max_rank+1);
+	if (ret != 0) {
+		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
+		return ret;
+	}
 
 	return 0;
 }
@@ -1812,10 +1828,9 @@ int main(int argc, char *argv[])
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
-	if (ms_endpts == NULL || num_ms_endpts == 0) {
-		printf("No master endpoints specified\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
-	}
+	if (ms_endpts == NULL)
+		printf("Warning: No --master-endpoint specified; using this"
+		       " command line application as the master endpoint\n");
 	if (endpts == NULL || num_endpts == 0) {
 		printf("No endpoints specified\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
