@@ -138,7 +138,7 @@ server_config_val: !mux
   env_vars_junk:
     config_val:
       - "env_vars"
-      - "[12345, ()*_, ABDCD=1234]"
+      - [12345, ()*_, ABDCD=1234]
       - 0
       - "server"
   env_vars_str:
