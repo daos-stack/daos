@@ -179,7 +179,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 			D_FREE(current->iod.iod_recxs);
 			current->iod.iod_recxs = NULL;
 		}
-		if (current->sgl.sg_iovs) {
+		if (!current->user_sgl_used && current->sgl.sg_iovs) {
 			D_FREE(current->sgl.sg_iovs);
 			current->sgl.sg_iovs = NULL;
 		}
@@ -1091,6 +1091,16 @@ set_short_read_cb(tse_task_t *task, void *data)
 	while (current) {
 		daos_size_t len = 0, recs;
 		int i;
+		d_iov_t sg_iov;
+
+		if (current->user_sgl_used) {
+			D_ASSERT(args->sgl->sg_nr == 1);
+			current->sgl.sg_nr = args->sgl->sg_nr;
+			current->sgl.sg_nr_out = args->sgl->sg_nr_out;
+			sg_iov.iov_buf_len = args->sgl->sg_iovs[0].iov_buf_len;
+			sg_iov.iov_len = args->sgl->sg_iovs[0].iov_len;
+			current->sgl.sg_iovs = &sg_iov;
+		}
 
 		/*
 		 * if we moved to a lower dkey and the higher one is not empty

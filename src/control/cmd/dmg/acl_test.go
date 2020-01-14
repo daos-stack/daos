@@ -25,6 +25,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -116,6 +117,20 @@ func TestReadACLFile_Success(t *testing.T) {
 	if len(result.Entries) != expectedNumACEs {
 		t.Errorf("Expected %d items, got %d", expectedNumACEs, len(result.Entries))
 	}
+}
+
+func TestReadACLFile_Empty(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "empty.txt")
+	createTestFile(t, path, "")
+	defer os.Remove(path)
+
+	result, err := readACLFile(path)
+
+	if result != nil {
+		t.Errorf("expected no result, got: %+v", result)
+	}
+
+	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
 func TestParseACL_EmptyFile(t *testing.T) {

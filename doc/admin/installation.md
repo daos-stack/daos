@@ -28,6 +28,10 @@ Moreover, the DAOS stack leverages the following open source projects:
 
 -   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
 
+-   [*hwloc*](https://github.com/open-mpi/hwloc) for discovering system devices,         detecting their NUMA node affinity and for CPU binding
+
+-   [*libfabric*](https://github.com/ofiwg/libfabric) for detecting fabric               interfaces, providers and connection management.
+
 The DAOS build system can be configured to download and build any missing
 dependencies automatically.
 
