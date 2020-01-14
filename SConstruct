@@ -128,8 +128,10 @@ def scons():
         variables = Variables()
 
         variables.Add('RELEASE', 'Set to the release version to make', None)
-        variables.Add('RELEASE_BASE', 'Set to the release version to make', 'master')
-        variables.Add('ORG_NAME', 'The GitHub project to do the release on.', 'daos-stack')
+        variables.Add('RELEASE_BASE', 'Set to the release version to make',
+                      'master')
+        variables.Add('ORG_NAME', 'The GitHub project to do the release on.',
+                      'daos-stack')
         variables.Add('REMOTE_NAME', 'The remoten name release on.', 'origin')
 
         env = Environment(variables=variables)
@@ -144,7 +146,7 @@ def scons():
             print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
-        dash = tag.find('-')
+        dash = tag.find('-')    # pylint: disable=pylint-no-member
         if dash > 0:
             version = tag[0:dash]
         else:
@@ -186,13 +188,13 @@ def scons():
 
         # older pygit2 didn't have AlreadyExistsError
         try:
-            AlreadyExistsErrorException = pygit2.AlreadyExistsError
+            already_exists_error_exception = pygit2.AlreadyExistsError
         except AttributeError:
-            AlreadyExistsErrorException = ValueError
+            already_exists_error_exception = ValueError
 
         try:
             repo.branches.create(branch, repo[base_ref.target])
-        except AlreadyExistsErrorException:
+        except already_exists_error_exception:
             print("Branch {} exists locally already.\n"
                   "You need to delete it or rename it to try again.".format(
                       branch))
@@ -204,8 +206,8 @@ def scons():
 
         print("Updating the RPM specfile...")
         if not update_rpm_version(version, tag):
-            print("Branch has been left in the created state.  You will have to "
-                  "clean it up manually.")
+            print("Branch has been left in the created state.  You will have "
+                  "to clean it up manually.")
             exit(1)
 
         print("Updating the VERSION and TAG files...")
