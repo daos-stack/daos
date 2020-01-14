@@ -44,6 +44,7 @@ from configuration_utils import Configuration
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
+from general_utils import pcmd
 
 
 # pylint: disable=invalid-name
@@ -242,6 +243,11 @@ class TestWithServers(TestWithoutServers):
             self.hostlist_servers = test_servers[:server_count]
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
+
+        # Display debug memory usage
+        self.log.info("%s", "=" * 80)
+        pcmd(self.hostlist_servers, "free -tm; vmstat -s;df", True, None, None)
+        self.log.info("%s", "=" * 80)
 
         # Find a configuration that meets the test requirements
         self.config = Configuration(
