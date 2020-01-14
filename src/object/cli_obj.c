@@ -2256,8 +2256,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_auxi->io_retry = 1;
 		}
 
-		if (!obj_auxi->spec_shard && task->dt_result == -DER_CSUM)
-			obj_auxi->csum_retry = 1;
+		//if (!obj_auxi->spec_shard && task->dt_result == -DER_CSUM)
+		if (task->dt_result == -DER_CSUM) {
+			if (!obj_auxi->spec_shard &&
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+				obj_auxi->csum_retry = 1;
+			} else {
+				obj_auxi->io_retry = 0;
+			}
+		}
 
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
@@ -2413,6 +2420,7 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		goto out;
 
 	if (shard_cnt < 2) {
+		obj_auxi->spec_shard = 1;
 		rc = -DER_CSUM;
 		goto out;
 	}
