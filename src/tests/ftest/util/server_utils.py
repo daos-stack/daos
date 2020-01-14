@@ -112,7 +112,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        self.nr_hugepages = BasicParameter(None, 8192)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -766,6 +766,9 @@ class DaosServerManager(SubprocessManager):
 
     def start(self):
         """Start the server through the runner."""
+        # Create the daos_server yaml file
+        self.manager.job.create_yaml_file()
+
         # Prepare the servers
         self.prepare()
 

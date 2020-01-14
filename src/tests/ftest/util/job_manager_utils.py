@@ -185,13 +185,10 @@ class OpenMPI(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a list for the parameter assignment.
-            print("ORIGINAL-1: {}".format(self.export.value))
             original = EnvironmentVariables({
                 item.split("=")[0]: item.split("=")[1] if "=" in item else None
                 for item in self.export.value})
-            print("ORIGINAL-2: {}".format(original))
             original.update(env_vars)
-            print("ORIGINAL-3: {}".format(original))
             self.export.value = original.get_list()
         else:
             # Overwrite the environmental variable assignment

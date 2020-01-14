@@ -432,6 +432,16 @@ class YamlCommand(SubProcessCommand):
         super(YamlCommand, self).get_params(test)
         if isinstance(self.yaml, YamlParameters):
             self.yaml.get_params(test)
+
+    def create_yaml_file(self):
+        """Create the yaml file with the current yaml file parameters.
+
+        This should be called before running the daos command and after all the
+        yaml file parameters have been defined.  Any updates to the yaml file
+        parameter definitions would require calling this method before calling
+        the daos command in order for them to have any effect.
+        """
+        if isinstance(self.yaml, YamlParameters):
             self.yaml.create_yaml()
 
     def get_config_value(self, name):
@@ -543,6 +553,10 @@ class SubprocessManager(object):
             CommandFailure: if the daos command fails to start
 
         """
+        # Create the yaml file for the daos command
+        self.manager.job.create_yaml_file()
+
+        # Start the daos command
         try:
             self.manager.run()
         except CommandFailure:
