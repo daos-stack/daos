@@ -48,7 +48,8 @@ def update_rpm_version(version, tag):
                 release = current_release + 1
             else:
                 release = 1
-            spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".format(release)
+            spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
+                             format(release)
         if line == "%changelog\n":
             try:
                 packager = subprocess.Popen(
@@ -155,7 +156,7 @@ def scons():
                 answer = input(question).lower().strip()
             if answer != 'y':
                 exit(1)
-            
+
             version = tag
 
         try:
@@ -186,7 +187,7 @@ def scons():
         # older pygit2 didn't have AlreadyExistsError
         try:
             AlreadyExistsErrorException = pygit2.AlreadyExistsError
-        except:
+        except AttributeError:
             AlreadyExistsErrorException = ValueError
 
         try:
