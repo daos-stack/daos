@@ -2412,7 +2412,6 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			      &shard_idx, &shard_cnt);
 	if (rc != 0)
 		goto out;
-
 	if (obj_auxi->csum_retry_cnt >= shard_cnt) {
 		obj_auxi->spec_shard = 1;
 		rc = -DER_CSUM;
@@ -2421,7 +2420,6 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	tgt_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1)
 		% shard_cnt;
 	setbit(bitmap, tgt_shard);
-
 out:
 	return rc;
 }
