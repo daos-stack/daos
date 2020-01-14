@@ -2014,7 +2014,6 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 
 	D_ASSERT(d_list_empty(task_list));
 
-
 	/* for multi-targets, schedule it by tse sub-shard-tasks */
 	for (i = 0; i < tgts_nr; i++) {
 		rc = tse_task_create(shard_io_task, tse_task2sched(obj_task),
