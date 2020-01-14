@@ -81,7 +81,7 @@ struct obj_auxi_args {
 					 to_leader:1,
 					 spec_shard:1,
 					 req_reasbed:1,
-					 csum_retry:1;
+					 csum_retry_cnt:3;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
@@ -2257,7 +2257,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (task->dt_result == -DER_CSUM) {
 			if (!obj_auxi->spec_shard &&
 			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
-				obj_auxi->csum_retry = 1;
+				obj_auxi->csum_retry_cnt++;
 			else
 				obj_auxi->io_retry = 0;
 		}
@@ -2414,7 +2414,7 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	if (rc != 0)
 		goto out;
 
-	if (shard_cnt < 2) {
+	if (obj_auxi->csum_retry_cnt >= shard_cnt) {
 		obj_auxi->spec_shard = 1;
 		rc = -DER_CSUM;
 		goto out;
@@ -2479,7 +2479,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
 	 * (increment shard mod rdg-size, set appropriate bit).
 	 */
-	if (obj_auxi->csum_retry) {
+	if (obj_auxi->csum_retry_cnt) {
 		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
 				   &csum_bitmap);
 		if (rc)
