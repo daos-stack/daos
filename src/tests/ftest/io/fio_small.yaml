@@ -10,8 +10,8 @@ server_config:
   name: daos_server
   servers:
     0:
-      first_core: 0
       pinned_numa_node: 0
+      fabric_iface: ib0
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:5e:00.0"]
@@ -19,8 +19,8 @@ server_config:
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
     1:
-      first_core: 16
       pinned_numa_node: 1
+      fabric_iface: ib1
       log_file: daos_server1.log
       bdev_class: nvme
       bdev_list: ["0000:5f:00.0"]
