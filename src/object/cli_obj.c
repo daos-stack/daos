@@ -2252,20 +2252,16 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 
 		if (!obj_auxi->spec_shard ||
-		    task->dt_result != -DER_INPROGRESS) {
+		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
-		}
 
-		//if (!obj_auxi->spec_shard && task->dt_result == -DER_CSUM)
 		if (task->dt_result == -DER_CSUM) {
 			if (!obj_auxi->spec_shard &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
 				obj_auxi->csum_retry = 1;
-			} else {
+			else
 				obj_auxi->io_retry = 0;
-			}
 		}
-
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
 	}
