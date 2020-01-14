@@ -268,44 +268,98 @@ section of the server configuration file for best performance.
 
 ### Network Interface Detection and Selection
 
-To display the supported OFI provider, use the following command:
+To display the fabric interface, OFI provider and NUMA node
+combinations detected on the DAOS server, use the following command:
 ```
-$ fi_info -l
-psm2:
-version: 1.7
+$ daos_server network scan --all
 
-ofi_rxm:
-version: 1.0
+        fabric_iface: ib0
+        provider: ofi+psm2
+        pinned_numa_node: 0
 
-ofi_rxd:
-version: 1.0
 
-verbs:
-version: 1.0
+        fabric_iface: ib1
+        provider: ofi+psm2
+        pinned_numa_node: 1
 
-UDP:
-version: 1.1
 
-sockets:
-version: 2.0
+        fabric_iface: ib0
+        provider: ofi+verbs;ofi_rxm
+        pinned_numa_node: 0
 
-tcp:
-version: 0.1
 
-ofi_perf_hook:
-version: 1.0
+        fabric_iface: ib1
+        provider: ofi+verbs;ofi_rxm
+        pinned_numa_node: 1
 
-ofi_noop_hook:
-version: 1.0
 
-shm:
-version: 1.0
+        fabric_iface: ib0
+        provider: ofi+verbs
+        pinned_numa_node: 0
 
-ofi_mrail:
-version: 1.0
+
+        fabric_iface: ib1
+        provider: ofi+verbs
+        pinned_numa_node: 1
+
+
+        fabric_iface: ib0
+        provider: ofi+sockets
+        pinned_numa_node: 0
+
+
+        fabric_iface: ib1
+        provider: ofi+sockets
+        pinned_numa_node: 1
+
+
+        fabric_iface: eth0
+        provider: ofi+sockets
+        pinned_numa_node: 0
+
+
+        fabric_iface: lo
+        provider: ofi+sockets
+        pinned_numa_node: 0
 ```
-The fi_pingpong test (delivered as part of OFI/libfabric) can be used
-to verify that the targeted OFI provider works fine:
+The network scan leverages data from libfabric.  Results are ordered from
+highest performance at the top to lowest performance at the bottom of the list.
+Once the fabric_iface and provider pair has been chosen, those items and the
+pinned_numa_node may be inserted directly into the corresponding sections within
+daos_server.yml.  Note that the provider is currently the same for all DAOS
+IO server instances and is configured once in the server configuration.  The fabric_iface and pinned_numa_node are configured for each IO server instance.
+
+A list of providers that may be querried is found with the command:
+```
+$ daos_server network list
+
+Supported providers:
+        ofi+gni, ofi+psm2, ofi+tcp, ofi+sockets, ofi+verbs, ofi_rxm
+```
+
+Performing a network scan that filters on a specific provider is accomplished
+by issuing the following command:
+```
+$ daos_server network scan --provider 'ofi+verbs;ofi_rxm'
+
+Scanning fabric for cmdline specified provider: ofi+verbs;ofi_rxm
+Fabric scan found 2 devices matching the provider spec: ofi+verbs;ofi_rxm
+
+        fabric_iface: ib0
+        provider: ofi+verbs;ofi_rxm
+        pinned_numa_node: 0
+
+
+        fabric_iface: ib1
+        provider: ofi+verbs;ofi_rxm
+        pinned_numa_node: 1
+```
+To aid in provider configuration and debug, it may be helpful to run the
+fi_pingpong test (delivered as part of OFI/libfabric).  To run that test,
+determine the name of the provider to test usually by removing the "ofi+" prefix from the network scan provider data.  Do use the "ofi+" prefix in the
+daos_server.yml.  Do not use the "ofi+" prefix with fi_pingpong.
+
+Then, the fi_pingpong test can be used to verify that the targeted OFI provider works fine:
 ```
 node1$ fi_pingpong -p psm2
 
