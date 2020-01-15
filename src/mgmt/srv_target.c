@@ -35,6 +35,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_mgmt.h>
 
 #include "srv_internal.h"
 #include "srv_layout.h"		/* for a couple of constants only */
@@ -446,7 +447,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	/** initialize DAOS-M target and fetch uuid */
 	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
+		D_ERROR("ds_pool_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_tree, rc);
 	}
 
@@ -736,8 +737,8 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
-	if (rc == 0 && in->tps_key_id == DSS_KEY_FAIL_LOC)
-		rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC)
+		rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 					in->tps_value_extra);
 	if (rc)
 		D_ERROR("Set parameter failed key_id %d: rc %d\n",
@@ -776,7 +777,7 @@ tgt_profile_task(void *arg)
 			break;
 	}
 
-	D_DEBUG(DB_MGMT, "profile task: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 

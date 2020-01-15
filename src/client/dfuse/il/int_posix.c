@@ -55,8 +55,6 @@ struct ioil_common {
 	daos_handle_t	ioc_coh;
 	int		ioc_open_fd_count;
 	bool		ioc_initialized;
-	bool		ioc_poh_local;
-	bool		ioc_coh_local;
 };
 
 static vector_t	fd_table;
@@ -87,11 +85,36 @@ static const char * const bypass_status[] = {
 	"off-rsrc",
 };
 
+#define CONT_CLOSE(IO)						\
+	do {							\
+		if (!daos_handle_is_inval((IO).ioc_coh)) {	\
+			daos_cont_close((IO).ioc_coh, NULL);	\
+			(IO).ioc_coh = DAOS_HDL_INVAL;		\
+		}						\
+	} while (0)
+
+#define POOL_DISCONNECT(IO)						\
+	do {								\
+		if (!daos_handle_is_inval((IO).ioc_poh)) {		\
+			daos_pool_disconnect((IO).ioc_poh, NULL);	\
+			(IO).ioc_poh = DAOS_HDL_INVAL;			\
+		}							\
+	} while (0)
+
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
 
+	DFUSE_LOG_INFO("entry %p closing array fd_count %d",
+		       entry, ioil_ioc.ioc_open_fd_count);
 	daos_array_close(entry->fd_aoh, NULL);
+
+	ioil_ioc.ioc_open_fd_count -= 1;
+
+	if (ioil_ioc.ioc_open_fd_count == 0) {
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
+	}
 }
 
 int
@@ -209,8 +232,6 @@ ioil_init(void)
 	if (rc)
 		return;
 
-	ioil_ioc.ioc_coh_local = false;
-	ioil_ioc.ioc_poh_local = false;
 	ioil_ioc.ioc_initialized = true;
 }
 
@@ -220,15 +241,8 @@ ioil_fini(void)
 	ioil_ioc.ioc_initialized = false;
 
 	if (ioil_ioc.ioc_open_fd_count > 0) {
-		if (ioil_ioc.ioc_coh_local) {
-			daos_cont_close(ioil_ioc.ioc_coh, NULL);
-			ioil_ioc.ioc_coh_local = false;
-		}
-
-		if (ioil_ioc.ioc_poh_local) {
-			daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
-			ioil_ioc.ioc_poh_local = false;
-		}
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
 	}
 	daos_fini();
 
@@ -245,7 +259,9 @@ fetch_daos_handles(int fd)
 
 	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
-		DFUSE_LOG_INFO("ioctl returned %d", rc);
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
 		return rc;
 	}
 
@@ -319,19 +335,15 @@ connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 	if (rc)
 		return rc;
 
-	ioil_ioc.ioc_poh_local = true;
-
 	rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply->fir_cont, DAOS_COO_RW,
 			    &ioil_ioc.ioc_coh, NULL, NULL);
 	if (rc)
 		D_GOTO(pool_close, 0);
-	ioil_ioc.ioc_coh_local = true;
 
 	return 0;
 
 pool_close:
-	daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
-	ioil_ioc.ioc_poh_local = false;
+	POOL_DISCONNECT(ioil_ioc);
 	return rc;
 }
 
@@ -419,14 +431,8 @@ array_close:
 
 cont_close:
 	if (ioil_ioc.ioc_open_fd_count == 0) {
-		if (ioil_ioc.ioc_coh_local) {
-			daos_cont_close(ioil_ioc.ioc_coh, NULL);
-			ioil_ioc.ioc_coh_local = false;
-		}
-		if (ioil_ioc.ioc_poh_local) {
-			daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
-			ioil_ioc.ioc_poh_local = false;
-		}
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
 	}
 
 drop_lock:

@@ -601,8 +601,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ap->type = dattr.da_type;
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-		ap->oclass = dattr.da_oclass_id;
-		ap->chunk_size = dattr.da_chunk_size;
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -786,6 +784,35 @@ out:
 	return rc;
 }
 
+#define OCLASS_NAMES_LIST_SIZE 512
+
+static void
+print_oclass_names_list(FILE *stream)
+{
+	char *str;
+	size_t size = OCLASS_NAMES_LIST_SIZE, len;
+
+again:
+	str = malloc(size);
+	if (str == NULL) {
+		fprintf(stderr, "failed to malloc %zu bytes to gather oclass names list\n",
+			size);
+		return;
+	}
+	len = daos_oclass_names_list(size, str);
+	if (len <= 0)
+		goto out;
+	if (len < size)
+		fprintf(stream, "%s", str);
+	else {
+		size = len + 1;
+		free(str);
+		goto again;
+	}
+out:
+	free(str);
+}
+
 static int
 help_hdlr(struct cmd_args_s *ap)
 {
@@ -802,6 +829,7 @@ help_hdlr(struct cmd_args_s *ap)
 "resources:\n"
 "	  pool             pool\n"
 "	  container (cont) container\n"
+"	  version          print command version\n"
 "	  help             print this message and exit\n");
 
 	fprintf(stream, "\n"
@@ -870,7 +898,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	--path=PATHSTR     container namespace path\n"
 "	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 "	--oclass=OCLSSTR   container object class\n"
-"			   (tiny, small, large, R2, R2S, repl_max)\n"
+"			   (");
+	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
+	print_oclass_names_list(stream);
+	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "container options (destroy):\n"
@@ -909,12 +940,15 @@ main(int argc, char *argv[])
 	command_hdlr_t		hdlr = NULL;
 	struct cmd_args_s	dargs = {0};
 
-	/* argv[1] is RESOURCE or "help";
+	/* argv[1] is RESOURCE or "help" or "version";
 	 * argv[2] if provided is a resource-specific command
 	 */
-	if (argc <= 2 || strcmp(argv[1], "help") == 0)
+	if (argc < 2 || strcmp(argv[1], "help") == 0)
 		hdlr = help_hdlr;
-	else if ((strcmp(argv[1], "container") == 0) ||
+	else if (strcmp(argv[1], "version") == 0) {
+		fprintf(stdout, "daos version %s\n", DAOS_VERSION);
+		return 0;
+	} else if ((strcmp(argv[1], "container") == 0) ||
 		 (strcmp(argv[1], "cont") == 0))
 		hdlr = cont_op_hdlr;
 	else if (strcmp(argv[1], "pool") == 0)

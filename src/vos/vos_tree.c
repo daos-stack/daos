@@ -438,12 +438,13 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
 
-	if (biov->bi_data_len != rbund->rb_rsize)
+	if (bio_iov2len(biov) != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
-	irec->ir_size	 = biov->bi_data_len;
+	irec->ir_size	 = bio_iov2len(biov);
+	irec->ir_gsize	 = rbund->rb_gsize;
 	irec->ir_ex_addr = biov->bi_addr;
 	irec->ir_ver	 = rbund->rb_ver;
 
@@ -486,7 +487,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 		kbund->kb_epoch = skey->sv_epoch;
 
 	/* NB: return record address, caller should copy/rma data for it */
-	biov->bi_data_len = irec->ir_size;
+	bio_iov_set_len(biov, irec->ir_size);
 	biov->bi_addr = irec->ir_ex_addr;
 	biov->bi_buf = NULL;
 
@@ -502,6 +503,7 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	rbund->rb_rsize	= irec->ir_size;
+	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
 	return 0;
 }
@@ -668,8 +670,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-					  svt->ir_dtx, UMOFF_NULL, intent,
-					  DTX_RT_SVT);
+					  svt->ir_dtx, intent, DTX_RT_SVT);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -735,7 +736,7 @@ evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
 	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
-					  UMOFF_NULL, intent, DTX_RT_EVT);
+					  intent, DTX_RT_EVT);
 }
 
 int
@@ -811,7 +812,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 						    pool, sub_toh);
 		}
 		if (rc != 0)
-			D_ERROR("Failed to open tree: %d\n", rc);
+			D_ERROR("Failed to open tree: "DF_RC"\n", DP_RC(rc));
 
 		goto out;
 	}
@@ -828,7 +829,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
 				uma, &cbs, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create evtree: %d\n", rc);
+			D_ERROR("Failed to create evtree: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	} else {
@@ -858,7 +860,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 					      ta->ta_order, uma, &krec->kr_btr,
 					      coh, pool, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create btree: %d\n", rc);
+			D_ERROR("Failed to create btree: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -915,7 +917,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			  NULL, &riov);
 	switch (rc) {
 	default:
-		D_ERROR("fetch failed: %d\n", rc);
+		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
@@ -925,7 +927,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
 		if (rc) {
-			D_ERROR("Failed to upsert: %d\n", rc);
+			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	case 0:
@@ -981,7 +983,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
 		if (rc) {
-			D_ERROR("Failed to add new punch, rc=%d\n", rc);
+			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1074,7 +1077,8 @@ obj_tree_register(void)
 		rc = dbtree_class_register(ta->ta_class, ta->ta_feats,
 					   ta->ta_ops);
 		if (rc != 0) {
-			D_ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
+			D_ERROR("Failed to register %s: "DF_RC"\n", ta->ta_name,
+				DP_RC(rc));
 			break;
 		}
 		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);

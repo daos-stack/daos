@@ -139,7 +139,8 @@ next:
 	if (j > 0) {
 		rc = dtx_commit(po_uuid, cont->sc_uuid, dte, j, version);
 		if (rc < 0)
-			D_ERROR("Failed to commit the DTXs: rc = %d\n", rc);
+			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
+				DP_RC(rc));
 	} else {
 		rc = 0;
 	}
@@ -344,7 +345,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		resynced = true;
 	}
 	if (resynced || /* Someone just did the DTX resync*/
-	    cont->sc_destroying) { /* pool is being destroyed */
+	    cont->sc_stopping) {
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}

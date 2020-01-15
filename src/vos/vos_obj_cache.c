@@ -147,7 +147,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
-		D_ERROR("Error in creating lru cache: %d\n", rc);
+		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -214,7 +214,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
-		return -DER_SHUTDOWN; /* TODO: use a more targeted errno */
+		return -DER_SHUTDOWN;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -341,7 +341,7 @@ failed:
 failed_2:
 	if (rc != -DER_NONEXIST)
 		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-			 "failed to hold object, rc=%d\n", rc);
+			 "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
 	return	rc;
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,6 +188,8 @@ void pool_map_print(struct pool_map *map);
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
 
+int pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type);
+
 #define PO_COMP_ID_ALL		(-1)
 
 int pool_map_find_target(struct pool_map *map, uint32_t id,
@@ -200,6 +202,7 @@ int pool_map_find_up_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			  unsigned int *tgt_cnt);
 int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			    unsigned int *tgt_cnt);
+int pool_map_update_failed_cnt(struct pool_map *map);
 int pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 			      unsigned int *tgt_cnt);
 int pool_map_find_upin_tgts(struct pool_map *map, struct pool_target **tgt_pp,
@@ -260,9 +263,11 @@ pool_map_node_nr(struct pool_map *map)
 static inline bool
 pool_component_unavail(struct pool_component *comp, bool for_reint)
 {
-	return comp->co_status == PO_COMP_ST_DOWN ||
-	       comp->co_status == PO_COMP_ST_DOWNOUT ||
-	       (comp->co_status == PO_COMP_ST_UP && !for_reint);
+	uint8_t status = comp->co_status;
+
+	return	(status == PO_COMP_ST_DOWN) ||
+		(status == PO_COMP_ST_DOWNOUT) ||
+		(status == PO_COMP_ST_UP && !(for_reint));
 }
 
 static inline bool

@@ -71,6 +71,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
+/** NVMe mem_size for SPDK memory allocation when using primary mode */
+int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
+
 /** IO server instance index */
 unsigned int		dss_instance_idx;
 
@@ -99,7 +102,7 @@ dss_self_rank(void)
 	int		rc;
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
 }
 
@@ -115,7 +118,8 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -123,21 +127,24 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -145,7 +152,8 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -469,8 +477,7 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	rc = crt_init_opt(daos_sysname,
-			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE |
-			  CRT_FLAG_BIT_PMIX_DISABLE,
+			  CRT_FLAG_BIT_SERVER,
 			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
@@ -499,14 +506,16 @@ server_init(int argc, char *argv[])
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
+			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		rc = pl_init();
@@ -521,13 +530,14 @@ server_init(int argc, char *argv[])
 
 	rc = server_init_state_init();
 	if (rc != 0) {
-		D_ERROR("failed to init server init state: %d\n", rc);
+		D_ERROR("failed to init server init state: "DF_RC"\n",
+			DP_RC(rc));
 		goto exit_daos_fini;
 	}
 
 	rc = drpc_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: %d\n", rc);
+		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
 	}
 
@@ -633,6 +643,8 @@ Options:\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
       Bind to cores within the specified NUMA node\n\
+  --mem_size=mem_size, -r mem_size\n\
+      Allocates mem_size MB for SPDK when using primary process mode\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -652,6 +664,7 @@ parse(int argc, char **argv)
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
+		{ "mem_size",		required_argument,	NULL,	'r' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
@@ -663,8 +676,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
-				NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
+				opts, NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
 
@@ -734,6 +747,14 @@ parse(int argc, char **argv)
 			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
+			break;
+		case 'r':
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			dss_nvme_mem_size = nr;
 			break;
 		case 'h':
 			usage(argv[0], stdout);

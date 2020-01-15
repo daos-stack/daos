@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path"
 
@@ -34,6 +35,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+var daosVersion string
 
 type (
 	// this interface decorates a command which
@@ -94,43 +97,14 @@ type cliOptions struct {
 	System     SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	Version    versionCmd `command:"version" description:"Print dmg version"`
 }
 
-// appSetup processes cli overrides and connects clients.
-func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect, config *client.Configuration) error {
-	if opts.HostList != "" {
-		hostlist, err := flattenHostAddrs(opts.HostList)
-		if err != nil {
-			return err
-		}
-		config.HostList = hostlist
-	}
+type versionCmd struct{}
 
-	if opts.HostFile != "" {
-		return errors.New("hostfile option not implemented")
-	}
-
-	if opts.Insecure {
-		config.TransportConfig.AllowInsecure = true
-	}
-
-	err := config.TransportConfig.PreLoadCertData()
-	if err != nil {
-		return errors.Wrap(err, "Unable to load Cerificate Data")
-	}
-	conns.SetTransportConfig(config.TransportConfig)
-
-	connStates, err := checkConns(conns.ConnectClients(config.HostList))
-	if err != nil {
-		return err
-	}
-	if _, exists := connStates["connected"]; !exists {
-		log.Error(connStates.String())
-		return errors.New("no active connections")
-	}
-
-	log.Info(connStates.String())
-
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("dmg version %s\n", daosVersion)
+	os.Exit(0)
 	return nil
 }
 
@@ -168,16 +142,46 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			return errors.WithMessage(err, "processing config file")
 		}
 
+		if opts.HostList != "" {
+			hostlist, err := flattenHostAddrs(opts.HostList, config.Port)
+			if err != nil {
+				return err
+			}
+			config.HostList = hostlist
+		}
+
+		if opts.HostFile != "" {
+			return errors.New("hostfile option not implemented")
+		}
+
+		if opts.Insecure {
+			config.TransportConfig.AllowInsecure = true
+		}
+
+		err = config.TransportConfig.PreLoadCertData()
+		if err != nil {
+			return errors.Wrap(err, "Unable to load Certificate Data")
+		}
+		conns.SetTransportConfig(config.TransportConfig)
+
+		if wantsConn, ok := cmd.(connector); ok {
+			connStates, err := checkConns(conns.ConnectClients(config.HostList))
+			if err != nil {
+				return err
+			}
+			if _, exists := connStates["connected"]; !exists {
+				log.Error(connStates.String())
+				return errors.New("no active connections")
+			}
+
+			log.Info(connStates.String())
+			wantsConn.setConns(conns)
+		}
+
 		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
 			cfgCmd.setConfig(config)
 		}
 
-		if err := appSetup(log, opts, conns, config); err != nil {
-			return err
-		}
-		if wantsConn, ok := cmd.(connector); ok {
-			wantsConn.setConns(conns)
-		}
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}

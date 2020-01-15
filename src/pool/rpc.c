@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/rpc.h>
+#include <daos_pool.h>
 #include "rpc.h"
 
 static int
@@ -178,11 +179,9 @@ CRT_RPC_DEFINE(pool_tgt_connect, DAOS_ISEQ_POOL_TGT_CONNECT,
 		DAOS_OSEQ_POOL_TGT_CONNECT)
 CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 		DAOS_OSEQ_POOL_TGT_DISCONNECT)
-CRT_RPC_DEFINE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
-		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
-CRT_RPC_DEFINE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
+CRT_RPC_DEFINE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET, DAOS_OSEQ_POOL_PROP_GET)
 CRT_RPC_DEFINE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 		DAOS_OSEQ_POOL_ACL_UPDATE)
@@ -280,3 +279,147 @@ pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
 	if (addr_list->pta_addrs)
 		D_FREE(addr_list->pta_addrs);
 }
+
+uint64_t
+pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
+{
+	struct daos_prop_entry	*entry;
+	uint64_t		 bits = 0;
+	int			 i;
+
+	if (po_info != NULL) {
+		if (po_info->pi_bits & DPI_SPACE)
+			bits |= DAOS_PO_QUERY_SPACE;
+		if (po_info->pi_bits & DPI_REBUILD_STATUS)
+			bits |= DAOS_PO_QUERY_REBUILD_STATUS;
+	}
+
+	if (prop == NULL)
+		goto out;
+	if (prop->dpp_entries == NULL) {
+		bits |= DAOS_PO_QUERY_PROP_ALL;
+		goto out;
+	}
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		switch (entry->dpe_type) {
+		case DAOS_PROP_PO_LABEL:
+			bits |= DAOS_PO_QUERY_PROP_LABEL;
+			break;
+		case DAOS_PROP_PO_SPACE_RB:
+			bits |= DAOS_PO_QUERY_PROP_SPACE_RB;
+			break;
+		case DAOS_PROP_PO_SELF_HEAL:
+			bits |= DAOS_PO_QUERY_PROP_SELF_HEAL;
+			break;
+		case DAOS_PROP_PO_RECLAIM:
+			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
+			break;
+		case DAOS_PROP_PO_ACL:
+			bits |= DAOS_PO_QUERY_PROP_ACL;
+			break;
+		case DAOS_PROP_PO_OWNER:
+			bits |= DAOS_PO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_PO_OWNER_GROUP:
+			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
+			break;
+		default:
+			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			break;
+		}
+	}
+
+out:
+	return bits;
+}
+
+/**
+ * Translates the response from a pool query RPC to a pool_info structure.
+ *
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		map_buf		Map buffer for pool
+ * \param[in]		map_version	Pool map version
+ * \param[in]		leader_rank	Pool leader rank
+ * \param[in]		ps		Pool space
+ * \param[in]		rs		Rebuild status
+ * @param[in][out]	info		Pool info - pass in with pi_bits set
+ *					Returned populated with inputs
+ */
+void
+pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
+			 uint32_t map_version, uint32_t leader_rank,
+			 struct daos_pool_space *ps,
+			 struct daos_rebuild_status *rs,
+			 daos_pool_info_t *info)
+{
+	D_ASSERT(ps != NULL);
+	D_ASSERT(rs != NULL);
+
+	uuid_copy(info->pi_uuid, pool_uuid);
+	info->pi_ntargets	= map_buf->pb_target_nr;
+	info->pi_nnodes		= map_buf->pb_node_nr;
+	info->pi_map_ver	= map_version;
+	info->pi_leader		= leader_rank;
+	if (info->pi_bits & DPI_SPACE)
+		info->pi_space		= *ps;
+	if (info->pi_bits & DPI_REBUILD_STATUS)
+		info->pi_rebuild_st	= *rs;
+}
+
+int
+list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+void
+list_cont_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+
+int
+map_bulk_create(crt_context_t ctx, crt_bulk_t *bulk, struct pool_buf **buf,
+		unsigned int nr)
+{
+	d_iov_t	iov;
+	d_sg_list_t	sgl;
+	int		rc;
+
+	*buf = pool_buf_alloc(nr);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+	if (rc != 0) {
+		pool_buf_free(*buf);
+		*buf = NULL;
+	}
+
+	return rc;
+}
+
+void
+map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
+{
+	crt_bulk_free(bulk);
+	pool_buf_free(buf);
+}
+

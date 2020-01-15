@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,6 +34,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 // splitPort separates port from compressed host string
@@ -45,12 +48,19 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 		port = strconv.Itoa(defaultPort)
 	case 2:
 		port = hp[1]
+		if port == "" {
+			return "", "", errors.Errorf("invalid port %q", port)
+		}
+		if _, err := strconv.Atoi(port); err != nil {
+			return "", "", errors.WithMessagef(err, "cannot parse %q",
+				addrPattern)
+		}
 	default:
-		return "", "", errors.Errorf("cannot parse %s", addrPattern)
+		return "", "", errors.Errorf("cannot parse %q", addrPattern)
 	}
 
-	if port == "" || port == "0" {
-		return "", "", errors.Errorf("invalid port %q", port)
+	if hp[0] == "" {
+		return "", "", errors.Errorf("invalid host %q", hp[0])
 	}
 
 	return hp[0], port, nil
@@ -58,31 +68,38 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
 // of ports to HostSets.
-func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroups, error) {
-	portHosts := make(hostlist.HostGroups)
+func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostGroups, err error) {
+	var hostSet, port string
+	var inHostSet *hostlist.HostList
+	portHosts = make(hostlist.HostGroups)
 
-	for _, ptn := range addrPatterns {
-		hostSet, port, err := splitPort(ptn, defaultPort)
+	inHostSet, err = hostlist.Create(addrPatterns)
+	if err != nil {
+		return
+	}
+
+	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
+		hostSet, port, err = splitPort(ptn, defaultPort)
 		if err != nil {
-			return nil, err
+			return
 		}
 
-		if err := portHosts.AddHost(port, hostSet); err != nil {
-			return nil, err
+		if err = portHosts.AddHost(port, hostSet); err != nil {
+			return
 		}
 	}
 
-	return portHosts, nil
+	return
 }
 
 // flattenHostAddrs takes nodeset:port patterns and returns individual addresses
 // after expanding nodesets and mapping to ports.
-func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
+func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err error) {
 	var portHosts hostlist.HostGroups
 
 	// expand any compressed nodesets for specific ports, should fail if no
 	// port in pattern.
-	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), 0)
+	portHosts, err = hostsByPort(addrPatterns, defaultPort)
 	if err != nil {
 		return
 	}
@@ -94,6 +111,8 @@ func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
 			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
 		}
 	}
+
+	sort.Strings(addrs)
 
 	return
 }
@@ -117,4 +136,43 @@ func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err e
 	}
 
 	return
+}
+
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+	for _, res := range groups.Keys() {
+		hostset := groups[res].RangedString()
+		lineBreak := strings.Repeat("-", len(hostset))
+		fmt.Fprintf(buf, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
+	}
+
+	return buf.String()
+}
+
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
+
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
+
+	for _, result := range groups.Keys() {
+		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, rowFieldSep)
+		if len(summary) != len(columnTitles) {
+			return "", errors.New("unexpected summary format")
+		}
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
 }

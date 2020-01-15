@@ -479,7 +479,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
 	      d_sg_list_t *sgls);
 
-
 /**
  * Update records for the specfied object.
  * If input buffer is not provided in \a sgl, then this function returns
@@ -640,6 +639,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
  */
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
+
+daos_csum_buf_t *
+vos_ioh2dcbs(daos_handle_t ioh);
+
+uint32_t
+vos_ioh2dcbs_nr(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
@@ -821,7 +826,8 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
- * \param[in]		cb		iteration callback
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
  *
  * \retval		0	iteration complete
@@ -830,7 +836,8 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

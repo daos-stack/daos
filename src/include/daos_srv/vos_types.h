@@ -231,24 +231,30 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
+		/** Key, object, or DTX entry */
 		struct {
-			/** dkey or akey */
-			daos_key_t		ie_key;
 			/** Non-zero if punched */
-			daos_epoch_t		ie_key_punch;
+			daos_epoch_t		ie_punch;
+			union {
+				/** dkey or akey */
+				struct {
+					/** key value */
+					daos_key_t		ie_key;
+				};
+				/** object or DTX entry */
+				struct {
+					/** The DTX identifier. */
+					struct dtx_id		ie_xid;
+					/** oid */
+					daos_unit_oid_t		ie_oid;
+					/* The dkey hash for DTX iteration. */
+					uint64_t		ie_dtx_hash;
+					/* The DTX intent for DTX iteration. */
+					uint32_t		ie_dtx_intent;
+				};
+			};
 		};
-		struct {
-			/** The DTX identifier. */
-			struct dtx_id		ie_xid;
-			/** oid */
-			daos_unit_oid_t		ie_oid;
-			/** Non-zero if punched */
-			daos_epoch_t		ie_obj_punch;
-			/* The DTX dkey hash for DTX iteration. */
-			uint64_t		ie_dtx_hash;
-			/* The DTX intent for DTX iteration. */
-			uint32_t		ie_dtx_intent;
-		};
+		/** Array entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -289,6 +295,8 @@ enum {
  * Anchors for whole iteration, one for each entry type
  */
 struct vos_iter_anchors {
+	/** Anchor for container */
+	daos_anchor_t	ia_co;
 	/** Anchor for obj */
 	daos_anchor_t	ia_obj;
 	/** Anchor for dkey */
@@ -300,7 +308,8 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_obj:1,
+	unsigned int	ia_reprobe_co:1,
+			ia_reprobe_obj:1,
 			ia_reprobe_dkey:1,
 			ia_reprobe_akey:1,
 			ia_reprobe_sv:1,

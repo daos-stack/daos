@@ -105,6 +105,50 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Query attributes of a DFS mount.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	attr	Attributes on the DFS container.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr);
+
+/**
+ * Convert a local dfs mount to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs	valid dfs mount to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store mount information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_local2global(dfs_t *dfs, d_iov_t *glob);
+
+/**
+ * Create a dfs mount from global representation data. This has to be closed
+ * with dfs_umount().
+ *
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted
+ * \param[out]	dfs	Returned dfs mount
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
+		 dfs_t **dfs);
+
+/**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
  * are trimmed of that prefix. This is helpful when using DFS API with a dfuse
  * mount and the user would like to reference files in the dfuse mount instead
@@ -212,6 +256,38 @@ dfs_open(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  */
 int
 dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
+
+/**
+ * Convert a local DFS object to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs     Pointer to the mounted file system.
+ * \param[in]	obj	DFS Object to serialize
+ * \param[out]	glob	pointer to iov of the buffer to store obj information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob);
+
+/**
+ * Create a dfs object from global representation data. This has to be closed
+ * with dfs_release().
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	flags	Access flags (O_RDONLY/O_RDWR/O_WRONLY). If 0, inherit
+ *			flags of serialized object handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted
+ * \param[out]	obj	Returned open object handle
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **obj);
 
 /**
  * Close/release open object.

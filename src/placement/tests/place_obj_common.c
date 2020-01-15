@@ -51,12 +51,41 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 }
 
 void
-plt_obj_layout_check(struct pl_obj_layout *layout)
+plt_obj_layout_check(struct pl_obj_layout *layout, uint32_t pool_size)
 {
 	int i;
+	int target_num;
+	uint8_t *target_set;
 
-	for (i = 0; i < layout->ol_nr; i++)
-		D_ASSERT(layout->ol_shards[i].po_target != -1);
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		target_num = layout->ol_shards[i].po_target;
+
+		D_ASSERT(target_num != -1);
+		D_ASSERT(target_set[target_num] != 1);
+		target_set[target_num] = 1;
+	}
+}
+
+void
+plt_obj_rebuild_unique_check(uint32_t *shard_ids, uint32_t num_shards,
+		uint32_t pool_size)
+{
+	int i;
+	int  target_num;
+	uint8_t *target_set;
+
+	D_ALLOC_ARRAY(target_set, pool_size);
+	D_ASSERT(target_set != NULL);
+
+	for (i = 0; i < num_shards; i++) {
+		target_num = shard_ids[i];
+
+		D_ASSERT(target_set[target_num] != 1);
+		target_set[target_num] = 1;
+	}
 }
 
 bool
@@ -210,8 +239,9 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 
 	pl_map_decref(pl_map);
 
-	for (i = 0; i < failed_cnt; i++)
-		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 	for (i = 0; i < reint_cnt; i++)
 		plt_add_tgt(reint_tgts[i], po_ver, po_map, pl_debug_msg);
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_add_tgt(failed_tgts[i], po_ver, po_map, pl_debug_msg);
 }

@@ -177,14 +177,6 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 					       myrank);
 }
 
-/**
- * Check if the provided object shard needs to be built on the reintegrated
- * targets @tgp_reint.
- *
- * \return      1       Build the object on the returned target @tgt_reint.
- *              0       Skip this object.
- *              -ve     error code.
- */
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
@@ -210,15 +202,20 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 }
 
 int
-pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
+pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
+		struct pl_obj_layout **layout_pp)
 {
 	struct pl_obj_layout *layout;
+	unsigned int shard_nr = grp_size * grp_nr;
 
 	D_ALLOC_PTR(layout);
 	if (layout == NULL)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
+	layout->ol_grp_nr = grp_nr;
+	layout->ol_grp_size = grp_size;
+
 	D_ALLOC_ARRAY(layout->ol_shards, layout->ol_nr);
 	if (layout->ol_shards == NULL)
 		goto failed;
@@ -557,8 +554,10 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
-		/* For non-replicated object, elect current shard as leader. */
-		shard = pl_get_shard(data, shard_idx);
+		/* For EC object, elect last shard in the group (must to be
+		 * a parity node) as leader.
+		 */
+		shard = pl_get_shard(data, shard_idx + grp_size - 1);
 		if (for_tgt_id)
 			return shard->po_target;
 

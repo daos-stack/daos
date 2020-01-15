@@ -324,7 +324,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
 			map, version);
 		rc = pool_map_set_version(map, version);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}
 
 	return 0;
@@ -470,14 +470,14 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 	 */
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc) {
-		D_ERROR("Can not get rank %d\n", rc);
+		D_ERROR("Can not get rank "DF_RC"\n", DP_RC(rc));
 		D_GOTO(output, rc);
 	}
 
 	rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
 					       failed_tgts_cnt, myrank);
 	if (rc) {
-		D_ERROR("get failed tgts %d\n", rc);
+		D_ERROR("get failed tgts "DF_RC"\n", DP_RC(rc));
 		D_GOTO(output, rc);
 	}
 
@@ -695,7 +695,7 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
-		D_ERROR("Failed to list pools: %d\n", rc);
+		D_ERROR("Failed to list pools: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -713,13 +713,11 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 			break;
 		case 1:
 			/*
-			 * Some affected targets are still in DOWN, the NVMe
-			 * state needs to stick to BIO_BS_STATE_FAULTY.
+			 * All affected targets are in DOWN, it's safe to
+			 * transit NVMe state to BIO_BS_STATE_TEARDOWN now.
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are in excluding.\n",
 				DP_UUID(pool_info->spi_id));
-			if (rc == 0)
-				rc = 1;
 			break;
 		case 2:
 			/*
@@ -751,7 +749,18 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 	return rc;
 }
 
+static int
+nvme_bio_error(bool unmap, bool update, int tgt_id)
+{
+	int rc;
+
+	rc = notify_bio_error(unmap, update, tgt_id);
+
+	return rc;
+}
+
 struct bio_reaction_ops nvme_reaction_ops = {
 	.faulty_reaction	= nvme_faulty_reaction,
 	.reint_reaction		= NULL,
+	.ioerr_reaction		= nvme_bio_error,
 };

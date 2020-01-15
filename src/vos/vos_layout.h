@@ -39,49 +39,13 @@
 #include "ilog.h"
 
 /**
- * VOS metadata structure declarations
- * TODO: use df (durable format) as postfix of structures.
- *
- * opaque structure expanded inside implementation
- * DAOS two-phase commit transaction table (DTX)
- * Object table for holding object IDs
- * B-Tree for Key Value stores
- * EV-Tree for Byte array stores
- * Garbage collection bin
- * Garbage collection bag
- */
-struct vos_cont_df;
-struct vos_dtx_act_ent_df;
-struct vos_dtx_cmt_ent_df;
-struct vos_dtx_record_df;
-struct vos_obj_df;
-struct vos_krec_df;
-struct vos_irec_df;
-struct vos_gc_bin_df;
-struct vos_gc_bag_df;
-
-/**
  * Typed Layout named using Macros from libpmemobj
- * Each structure is assigned a type number internally
- * in the macro libpmemobj has its own pointer type (PMEMoid)
- * and uses named unions to assign types to such pointers.
- * Type-number help identify the PMEMoid  pointer types
- * with an ID. This layout structure is used to consicely
- * represent the types associated with the vos_pool_layout.
- * In this case consecutive typeIDs are assigned to the
- * different pointers in the pool.
+ * for root object.  We don't need to define the TOIDs for
+ * other VOS structures because VOS uses umem_off_t for internal
+ * pointers rather than using typed allocations.
  */
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
-
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_dtx_record_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bin_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_gc_bag_df);
-
 POBJ_LAYOUT_END(vos_pool_layout);
 
 struct vos_gc_bin_df {
@@ -138,28 +102,36 @@ enum vos_gc_type {
 	GC_MAX,
 };
 
+#define POOL_DF_MAGIC				0x5ca1ab1e
+
+#define POOL_DF_VER_1				1
+#define POOL_DF_VERSION				2
+
 /**
- * VOS Pool root object
+ * Durable format for VOS pool
  */
 struct vos_pool_df {
-	/* Structs stored in LE or BE representation */
+	/** Structs stored in LE or BE representation */
 	uint32_t				pd_magic;
-	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t					pd_id;
-	/* Flags for compatibility features */
+	/** durable-format version */
+	uint32_t				pd_version;
+	/** reserved: flags for compatibility features */
 	uint64_t				pd_compat_flags;
-	/* Flags for incompatibility features */
+	/** reserved: flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
-	/* Total space in bytes on SCM */
+	/** Unique PoolID for each VOS pool assigned on creation */
+	uuid_t					pd_id;
+	/** Total space in bytes on SCM */
 	uint64_t				pd_scm_sz;
-	/* Total space in bytes on NVMe */
+	/** Total space in bytes on NVMe */
 	uint64_t				pd_nvme_sz;
-	/* # of containers in this pool */
+	/** # of containers in this pool */
 	uint64_t				pd_cont_nr;
-	/* Typed PMEMoid pointer for the container index table */
+	/** Typed PMEMoid pointer for the container index table */
 	struct btr_root				pd_cont_root;
-	/* Free space tracking for NVMe device */
+	/** Free space tracking for NVMe device */
 	struct vea_space_df			pd_vea_df;
+	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
 };
 
@@ -211,7 +183,7 @@ struct vos_dtx_act_ent_df {
 	/** The intent of related modification. */
 	uint32_t			dae_intent;
 	/** The index in the current vos_dtx_blob_df. */
-	uint32_t			dae_index;
+	int32_t				dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
 	/** DTX flags, see enum vos_dtx_entry_flags. */
@@ -357,6 +329,11 @@ struct vos_irec_df {
 	umem_off_t			ir_dtx;
 	/** length of value */
 	uint64_t			ir_size;
+	/**
+	 * global length of value, it is needed for single value of EC object
+	 * class that the data will be distributed to multiple data cells.
+	 */
+	uint64_t			ir_gsize;
 	/** external payload address */
 	bio_addr_t			ir_ex_addr;
 	/** placeholder for the key checksum & internal value */

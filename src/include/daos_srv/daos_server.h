@@ -55,6 +55,9 @@ extern const char      *dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
 
+/** NVMe mem_size for SPDK memory allocation when using primary mode */
+extern int		dss_nvme_mem_size;
+
 /** IO server instance index */
 extern unsigned int	dss_instance_idx;
 
@@ -173,6 +176,7 @@ enum {
 struct dss_xstream;
 
 bool dss_xstream_exiting(struct dss_xstream *dxs);
+bool dss_xstream_is_busy(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -461,6 +465,33 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+/** RPC counter types */
+enum dss_rpc_cntr_id {
+	DSS_RC_OBJ	= 0,
+	DSS_RC_CONT,
+	DSS_RC_POOL,
+	DSS_RC_MAX,
+};
+
+/** RPC counter */
+struct dss_rpc_cntr {
+	/**
+	 * starting wall-clock time, it can be used to calculate average
+	 * workload.
+	 */
+	uint64_t		rc_stime;
+	/** number of active RPCs */
+	uint64_t		rc_active;
+	/** total number of processed RPCs since \a rc_stime */
+	uint64_t		rc_total;
+	/** total number of failed RPCs since \a rc_stime */
+	uint64_t		rc_errors;
+};
+
+void dss_rpc_cntr_enter(enum dss_rpc_cntr_id id);
+void dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool failed);
+struct dss_rpc_cntr *dss_rpc_cntr_get(enum dss_rpc_cntr_id id);
+
 int dss_rpc_send(crt_rpc_t *rpc);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
@@ -519,10 +550,11 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int nr,
 		daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_iom_t *maps);
-int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
+int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
+		daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
+		uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
+		daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
+		daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
@@ -618,6 +650,6 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-bool dss_aggregation_disabled(void);
+int notify_bio_error(bool unmap, bool update, int tgt_id);
 
 #endif /* __DSS_API_H__ */

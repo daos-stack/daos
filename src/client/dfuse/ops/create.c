@@ -67,6 +67,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+	DFUSE_TRA_UP(oh, ie, "open handle");
+
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 

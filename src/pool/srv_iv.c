@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,6 +203,9 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
 			&src_iv->piv_map.piv_pool_buf : NULL,
 			src_iv->piv_pool_map_ver);
+	else if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
+
 	ds_pool_put(pool);
 
 	return pool_iv_ent_copy(entry->iv_class->iv_class_id,
@@ -214,7 +217,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	struct pool_iv_entry	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
-	struct pool_iv_entry	*src_iv = src->sg_iovs[0].iov_buf;
+	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool;
 	int			rc;
 
@@ -228,9 +231,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	if (entry->iv_class->iv_class_id == IV_POOL_PROP)
-		return rc;
-
+	D_ASSERTF(src_iv != NULL, "%d\n", entry->iv_class->iv_class_id);
 	/* Update pool map version or pool map */
 	pool = ds_pool_lookup(src_iv->piv_pool_uuid);
 	if (pool == NULL) {
@@ -238,10 +239,13 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		return 0;
 	}
 
-	rc = ds_pool_tgt_map_update(pool,
-		src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
-		&src_iv->piv_map.piv_pool_buf : NULL,
-		src_iv->piv_pool_map_ver);
+	if (entry->iv_class->iv_class_id == IV_POOL_PROP)
+		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
+	else
+		rc = ds_pool_tgt_map_update(pool,
+				src_iv->piv_map.piv_pool_buf.pb_nr > 0 ?
+				&src_iv->piv_map.piv_pool_buf : NULL,
+				src_iv->piv_pool_map_ver);
 	ds_pool_put(pool);
 
 	return rc;
@@ -321,7 +325,7 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
 			 false /* retry */);
 	if (rc)
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -348,7 +352,7 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
 			  false /* retry */);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -397,7 +401,7 @@ pool_iv_map_invalidate(void *ns, unsigned int shortcut, unsigned int sync_mode)
 	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0,
 			      false /* retry */);
 	if (rc)
-		D_ERROR("iv invalidate failed %d\n", rc);
+		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -528,7 +532,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(iv_prop->pip_label) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_label);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (prop_entry->dpe_str)
 				label_alloc = prop_entry->dpe_str;
 			else
@@ -537,7 +542,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_alloc = prop_entry->dpe_str;
 			else
@@ -546,7 +552,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->pip_owner_grp);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str)
 				owner_grp_alloc = prop_entry->dpe_str;
 			else
@@ -616,7 +623,7 @@ pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, iv_entry, size,
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
 	if (rc)
-		D_ERROR("pool_iv_update failed %d.\n", rc);
+		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 	D_FREE(iv_entry);
 
 out:
@@ -655,19 +662,19 @@ pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	key.class_id = IV_POOL_PROP;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = pool_iv_prop_g2l(&iv_entry->piv_prop, prop_fetch);
 	if (rc) {
-		D_ERROR("pool_iv_prop_g2l failed %d.\n", rc);
+		D_ERROR("pool_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed %d.\n", rc);
+		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

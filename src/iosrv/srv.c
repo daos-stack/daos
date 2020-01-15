@@ -36,6 +36,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos_errno.h>
+#include <daos_mgmt.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
@@ -108,13 +109,6 @@ static void dss_gc_ult(void *args);
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
-bool		dss_agg_disabled;
-
-bool
-dss_aggregation_disabled(void)
-{
-	return dss_agg_disabled;
-}
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
@@ -337,8 +331,7 @@ check_sleep_list()
 		shutdown = true;
 
 	daos_gettime_coarse(&now);
-	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list,
-				   dsu_list) {
+	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list, dsu_list) {
 		if (dsu->dsu_expire_time <= now || shutdown)
 			dss_ult_wakeup(dsu);
 		else
@@ -428,6 +421,44 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
+struct dss_rpc_cntr *
+dss_rpc_cntr_get(enum dss_rpc_cntr_id id)
+{
+	struct dss_xstream  *dx = dss_xstream_get(DSS_XS_SELF);
+
+	D_ASSERT(id < DSS_RC_MAX);
+	return &dx->dx_rpc_cntrs[id];
+}
+
+/** increase the active and total counters for the RPC type */
+void
+dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
+{
+	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
+
+	/* TODO: add interface to calculate average workload and reset stime */
+	if (cntr->rc_stime == 0)
+		daos_gettime_coarse(&cntr->rc_stime);
+
+	cntr->rc_active++;
+	cntr->rc_total++;
+}
+
+/**
+ * Decrease the active counter for the RPC type, also increase error counter
+ * if @faield is true.
+ */
+void
+dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
+{
+	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
+
+	D_ASSERT(cntr->rc_active > 0);
+	cntr->rc_active--;
+	if (error)
+		cntr->rc_errors++;
+}
+
 /**
  * Process the rpc received, let's create a ABT thread for each request.
  */
@@ -499,7 +530,8 @@ dss_srv_handler(void *arg)
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
 		if (rc != 0) {
-			D_ERROR("failed to create crt ctxt: %d\n", rc);
+			D_ERROR("failed to create crt ctxt: "DF_RC"\n",
+				DP_RC(rc));
 			goto tls_fini;
 		}
 
@@ -507,14 +539,16 @@ dss_srv_handler(void *arg)
 						   dss_process_rpc,
 						   dx->dx_pools);
 		if (rc != 0) {
-			D_ERROR("failed to register process cb %d\n", rc);
+			D_ERROR("failed to register process cb "DF_RC"\n",
+				DP_RC(rc));
 			goto crt_destroy;
 		}
 
 		/** Get context index from cart */
 		rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_ctx_id);
 		if (rc != 0) {
-			D_ERROR("failed to get xtream index: rc %d\n", rc);
+			D_ERROR("failed to get xtream index: rc "DF_RC"\n",
+				DP_RC(rc));
 			goto crt_destroy;
 		}
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
@@ -761,7 +795,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
-		D_ERROR("create scheduler fails: %d\n", rc);
+		D_ERROR("create scheduler fails: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -900,6 +934,14 @@ static bool
 dss_xstreams_empty(void)
 {
 	return xstream_data.xd_xs_nr == 0;
+}
+
+bool
+dss_xstream_is_busy(void)
+{
+	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+
+	return cntr->rc_active != 0;
 }
 
 static int
@@ -1597,15 +1639,15 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	int rc = 0;
 
 	switch (key_id) {
-	case DSS_KEY_FAIL_LOC:
+	case DMG_KEY_FAIL_LOC:
 		daos_fail_loc_set(value);
 		break;
-	case DSS_KEY_FAIL_VALUE:
+	case DMG_KEY_FAIL_VALUE:
 		daos_fail_value_set(value);
 		break;
-	case DSS_KEY_FAIL_NUM:
+	case DMG_KEY_FAIL_NUM:
 		daos_fail_num_set(value);
-	case DSS_REBUILD_RES_PERCENTAGE:
+	case DMG_KEY_REBUILD_THROTTLING:
 		if (value >= 100) {
 			D_ERROR("invalid value "DF_U64"\n", value);
 			rc = -DER_INVAL;
@@ -1613,11 +1655,6 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		}
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
 		dss_rebuild_res_percentage = value;
-		break;
-	case DSS_DISABLE_AGGREGATION:
-		dss_agg_disabled = (value != 0);
-		D_WARN("online aggregation is %s\n",
-		       value != 0 ? "disabled" : "enabled");
 		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
@@ -1715,7 +1752,8 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id);
+	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
+		dss_nvme_mem_size);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

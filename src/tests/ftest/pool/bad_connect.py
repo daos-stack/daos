@@ -28,7 +28,7 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 from apricot import TestWithoutServers, skipForTicket
 
 class BadConnectTest(TestWithoutServers):
@@ -43,7 +43,7 @@ class BadConnectTest(TestWithoutServers):
         super(BadConnectTest, self).setUp()
         self.agent_sessions = None
         self.hostlist_servers = None
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
 
         # NULL is causing connect to blow up so skip that test for now
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
@@ -164,4 +164,5 @@ class BadConnectTest(TestWithoutServers):
                 ctypes.memmove(pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
                     pool.get_uuid_str()))
+                pool.disconnect()
                 pool.destroy(1)

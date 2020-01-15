@@ -30,6 +30,7 @@ import (
 
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -79,7 +80,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
 		// Prepare NVMe access through SPDK
-		if err := svc.NvmePrepare(server.NvmePrepareRequest{
+		if _, err := svc.NvmePrepare(bdev.PrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIWhitelist:  cmd.PCIWhiteList,
@@ -137,11 +138,11 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	controllers, err := svc.NvmeScan()
+	res, err := svc.NvmeScan()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Info(controllers.String())
+		cmd.log.Info(res.Controllers.String())
 	}
 
 	scmResp, err := svc.ScmScan()

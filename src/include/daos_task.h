@@ -37,6 +37,9 @@ extern "C" {
 #include <daos_array.h>
 #include <daos_errno.h>
 #include <daos_prop.h>
+#include <daos_cont.h>
+#include <daos_pool.h>
+#include <daos_mgmt.h>
 #include <daos/tse.h>
 
 /** DAOS operation codes for task creation */
@@ -410,11 +413,12 @@ typedef struct {
  *   to allocate multiple instances of this data structure.
  */
 typedef struct {
-	daos_handle_t		 oh;
-	daos_handle_t		 th;
+	daos_handle_t		oh;
+	daos_handle_t		th;
 	daos_key_t		*dkey;
 	daos_key_t		*akeys;
-	unsigned int		 akey_nr;
+	uint64_t		flags;
+	unsigned int		akey_nr;
 } daos_obj_punch_t;
 
 typedef struct {
@@ -430,12 +434,13 @@ typedef struct {
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
-	uint32_t		flags;
+	uint64_t		flags;
 } daos_obj_query_key_t;
 
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	daos_key_t		*dkey;
 	unsigned int		nr;
 	daos_iod_t		*iods;
@@ -598,6 +603,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 	daos_size_t		*buf_size;
 	void			*buf;
@@ -606,6 +612,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 	daos_size_t		buf_size;
 	const void		*buf;
@@ -614,6 +621,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
+	uint64_t		flags;
 	const char		*key;
 } daos_kv_remove_t;
 

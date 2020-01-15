@@ -39,6 +39,7 @@ import signal
 import fcntl
 import errno
 from avocado.utils import genio
+from distutils.spawn import find_executable
 # Remove above imports when depricating run_server and stop_server functions.
 
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
@@ -47,10 +48,12 @@ from command_utils import DaosCommand, Orterun, CommandWithParameters
 from general_utils import pcmd, get_file_path
 from dmg_utils import storage_format
 from write_host_file import write_host_file
+from env_modules import load_mpi
 
 SESSIONS = {}
 
 AVOCADO_FILE = "daos_avocado_test.yaml"
+
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
@@ -60,7 +63,7 @@ class DaosServer(DaosCommand):
     """Defines an object representing a server command."""
 
     def __init__(self, path=""):
-        """Create a server command object
+        """Create a server command object.
 
         Args:
             path (str): path to location of daos_server binary.
@@ -85,7 +88,6 @@ class DaosServer(DaosCommand):
 
     def get_action_command(self):
         """Set the action command object based on the yaml provided value."""
-        # pylint: disable=redefined-variable-type
         if self.action.value == "start":
             self.action_command = self.ServerStartSubCommand()
         else:
@@ -160,6 +162,10 @@ class DaosServerConfig(ObjectWithParameters):
             super(DaosServerConfig.SingleServerConfig, self).__init__(
                 "/run/server_config/servers/*")
 
+            # Use environment variables to get default parameters
+            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_port = os.environ.get("OFI_PORT", 31416)
+
             # Parameters
             #   targets:                count of VOS targets
             #   first_core:             starting index for targets
@@ -178,9 +184,9 @@ class DaosServerConfig(ObjectWithParameters):
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 2)
-            self.fabric_iface = BasicParameter(None, "eth0")
-            self.fabric_iface_port = BasicParameter(None, 31416)
-            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
+            self.fabric_iface = BasicParameter(None, default_interface)
+            self.fabric_iface_port = BasicParameter(None, default_port)
+            self.log_mask = BasicParameter(None, "DEBUG")
             self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(
                 None,
@@ -190,7 +196,8 @@ class DaosServerConfig(ObjectWithParameters):
                  "CRT_CTX_SHARE_ADDR=0",
                  "CRT_TIMEOUT=30",
                  "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000"]
+                 "FI_SOCKETS_CONN_TIMEOUT=2000",
+                 "DD_MASK=mgmt,io,md,epc,rebuild"]
             )
 
             # Storage definition parameters:
@@ -254,6 +261,7 @@ class DaosServerConfig(ObjectWithParameters):
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -332,7 +340,6 @@ class DaosServerConfig(ObjectWithParameters):
 
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
-    # pylint: disable=pylint-no-self-use
 
     def __init__(self, daosbinpath, runnerpath, timeout=300):
         """Create a ServerManager object.
@@ -373,7 +380,7 @@ class ServerManager(ExecutableCommand):
 
     @hosts.setter
     def hosts(self, value):
-        """Hosts attribute setter
+        """Hosts attribute setter.
 
         Args:
             value (tuple): (list of hosts, workdir, slots)
@@ -386,8 +393,10 @@ class ServerManager(ExecutableCommand):
         self.runner.job.server_list = self._hosts
 
     def get_params(self, test):
-        """Get values from the yaml file and assign them respectively
-            to the server command and the orterun command.
+        """Get values from the yaml file.
+
+        Assign the ServerManager parameters to their respective ServerCommand
+        and Orterun class parameters.
 
         Args:
             test (Test): avocado Test object
@@ -420,21 +429,34 @@ class ServerManager(ExecutableCommand):
 
     def start(self, yamlfile):
         """Start the server through the runner."""
+        storage_prep_flag = ""
         self.runner.job.set_config(yamlfile)
         self.server_clean()
+        # Prepare SCM storage in servers
+        if self.runner.job.yaml_params.is_scm():
+            storage_prep_flag = "dcpm"
+            self.log.info("Performing SCM storage prepare in <format> mode")
+        else:
+            storage_prep_flag = "ram"
 
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
-            self.log.info("Performing nvme storage prepare in <format> mode")
-            storage_prepare(self._hosts, "root")
-            self.runner.mca.value = {"plm_rsh_args": "-l root"}
-
+            if storage_prep_flag == "dcpm":
+                storage_prep_flag = "dcpm_nvme"
+            elif storage_prep_flag == "ram":
+                storage_prep_flag = "ram_nvme"
+            else:
+                storage_prep_flag = "nvme"
+            self.log.info("Performing NVMe storage prepare in <format> mode")
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
             if lfile is not None:
                 self.log.info("Creating log file")
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
+        if storage_prep_flag != "ram":
+            storage_prepare(self._hosts, getpass.getuser(), storage_prep_flag)
+            self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
             self.run()
@@ -504,41 +526,72 @@ class ServerManager(ExecutableCommand):
 
     def clean_files(self):
         """Clean the tmpfs on the servers."""
+        scm_mount = self.runner.job.yaml_params.server_params[-1].scm_mount
+        scm_list = self.runner.job.yaml_params.server_params[-1].scm_list.value
         clean_cmds = [
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
         ]
-
-        if self.runner.job.yaml_params.is_nvme() or \
-           self.runner.job.yaml_params.is_scm():
-            clean_cmds.append("sudo rm -rf /mnt/daos; sudo umount /mnt/daos")
-
-        self.log.info("Cleanup of /mnt/daos directory.")
+        if self.runner.job.yaml_params.is_nvme():
+            clean_cmds.append("sudo rm -rf {0};  \
+                               sudo umount {0}".format(scm_mount))
+        # scm_mount can be /mnt/daos0 or /mnt/daos1 for two daos_server
+        # instances. Presently, not supported in DAOS. The for loop needs
+        # to be updated in future to handle it. Single instance pmem
+        # device should work now.
+        if self.runner.job.yaml_params.is_scm():
+            for value in scm_list:
+                clean_cmds.append("sudo umount {}; \
+                                   sudo wipefs -a {}"
+                                  .format(scm_mount, value))
+        self.log.info("Cleanup of %s directory.", str(scm_mount))
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
-def storage_prepare(hosts, user):
-    """
-    Prepare the storage on servers using the DAOS server's yaml settings file.
+def storage_prepare(hosts, user, device_type):
+    """Prepare storage on servers using the DAOS server's yaml settings file.
+
     Args:
         hosts (str): a string of comma-separated host names
+        user (str): username for file permissions
+        device_type (str): storage type - scm or nvme
+
     Raises:
         ServerFailed: if server failed to prepare storage
+
     """
+    # Get the daos_server from the install path. Useful for testing
+    # with daos built binaries.
+    dev_param = ""
+    device_args = ""
     daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = ("sudo {} storage prepare -n -u \"{}\" --hugepages=4096 -f"
-           .format(daos_srv_bin[0], user))
+    if device_type == "dcpm":
+        dev_param = "-s"
+    elif device_type == "dcpm_nvme":
+        device_args = " --hugepages=4096"
+    elif device_type == "ram_nvme" or device_type == "nvme":
+        dev_param = "-n"
+        device_args = " --hugepages=4096"
+    else:
+        raise ServerFailed("Invalid device type")
+    cmd = ("{} storage prepare {} -u \"{}\" {} -f"
+           .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
 
 
 def storage_reset(hosts):
-    """
-    Reset the Storage on servers using the DAOS server's yaml settings file.
+    """Reset the Storage on servers using the DAOS server's yaml settings file.
+
+    NOTE: Don't enhance this method to reset SCM. SCM will not be in a useful
+    state for running next tests.
+
     Args:
         hosts (str): a string of comma-separated host names
+
     Raises:
         ServerFailed: if server failed to reset storage
+
     """
     daos_srv_bin = get_file_path("bin/daos_server")
     cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
@@ -603,12 +656,16 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                     "Error cleaning tmpfs on servers: {}".format(
                         ", ".join(
                             [str(result[key]) for key in result if key != 0])))
+        load_mpi('openmpi')
+        orterun_bin = find_executable('orterun')
+        if orterun_bin is None:
+            raise ServerFailed("Can't find orterun")
 
-        server_cmd = [
-            os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
-            "--np", str(server_count)]
-        if uri_path is not None:
-            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd = [orterun_bin, "--np", str(server_count)]
+        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix", "0"])
+        server_cmd.extend(["--mca", "btl", "tcp,self"])
+        server_cmd.extend(["--mca", "oob", "tcp"])
+        server_cmd.extend(["--mca", "pml", "ob1"])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
 
         # Add any user supplied environment
