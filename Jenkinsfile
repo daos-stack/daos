@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019 Intel Corporation
+/* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,11 +44,13 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
+def daos_packages_version = ""
 def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos_adio-rpm ior-hpc@PR-48"
+def functional_rpms  = "--exclude openmpi ndctl " +
+                       "ior-hpc-3.3.0-7.572.g83b2502.el7 mpich-autoload-3.3-4.el7"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -77,6 +79,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
+                            module load mpi/openmpi3-x86_64
                             coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
@@ -93,6 +96,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
+     !env.BRANCH_NAME.startsWith("releases/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
@@ -145,6 +149,12 @@ pipeline {
             }
             parallel {
                 stage('checkpatch') {
+                    when {
+                      beforeAgent true
+                      expression {
+                        ! commitPragma(pragma: 'Skip-checkpatch').contains('true')
+                      }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -232,9 +242,6 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
-                                          if git show -s --format=%B | grep "^Skip-build: true"; then
-                                              exit 0
-                                          fi
                                           make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
@@ -245,7 +252,9 @@ pipeline {
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
                                           createrepo artifacts/centos7/
+                                          rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm > centos7-rpm-version
                                           cat $mockroot/result/{root,build}.log'''
+                            stash name: 'CentOS-rpm-version', includes: 'centos7-rpm-version'
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -429,7 +438,6 @@ pipeline {
                             */
                         }
                         unsuccessful {
-                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
@@ -1023,12 +1031,18 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1098,20 +1112,28 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
                         // First snapshot provision the VM at beginning of list
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1183,7 +1205,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos
+                                       inst_repos: el7_daos_repos
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo yum -y install daos-client
