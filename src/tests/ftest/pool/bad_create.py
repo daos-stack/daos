@@ -117,8 +117,7 @@ class BadCreateTest(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
+            self.pool = TestPool(self.context, dmg_bin_path=self.bin)
             self.pool.get_params(self)
             # Manually set TestPool members before calling create
             self.pool.mode.value = mode

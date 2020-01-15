@@ -116,41 +116,34 @@ class BadConnectTest(TestWithoutServers):
         puuid = (ctypes.c_ubyte * 16)()
         psvc = RankList()
         pgroup = ctypes.create_string_buffer(0)
-        pool = None
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool.get_params(self)
+        self.pool.create()
+        # save this uuid since we might trash it as part of the test
+        ctypes.memmove(puuid, self.pool.pool.uuid, 16)
+
+        # trash the the pool service rank list
+        psvc.rl_ranks = self.pool.pool.svc.rl_ranks
+        psvc.rl_nr = self.pool.pool.svc.rl_nr
+        if not svc == 'VALID':
+            rl_ranks = ctypes.POINTER(ctypes.c_uint)()
+            self.pool.pool.svc = RankList(rl_ranks, 1)
+
+        # trash the pool group value
+        pgroup = self.pool.pool.group
+        if connectset == 'NULLPTR':
+            self.pool.pool.group = None
+
+        # trash the UUID value in various ways
+        if connectuuid == 'NULLPTR':
+            self.pool.pool.uuid = None
+        if connectuuid == 'JUNK':
+            self.pool.pool.uuid[4] = 244
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = TestPool(self.context,
-                            dmg_bin_path=self.basepath + '/install/bin')
-            pool.get_params(self)
-            pool.mode.value = createmode
-            pool.uid = createuid
-            pool.gid = creategid
-            pool.scm_size.value = createsize
-            pool.name.value = createsetid
-            pool.create()
-            # save this uuid since we might trash it as part of the test
-            ctypes.memmove(puuid, pool.pool.uuid, 16)
-
-            # trash the the pool service rank list
-            psvc.rl_ranks = pool.pool.svc.rl_ranks
-            psvc.rl_nr = pool.pool.svc.rl_nr
-            if not svc == 'VALID':
-                rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-                pool.pool.svc = RankList(rl_ranks, 1)
-
-            # trash the pool group value
-            pgroup = pool.pool.group
-            if connectset == 'NULLPTR':
-                pool.pool.group = None
-
-            # trash the UUID value in various ways
-            if connectuuid == 'NULLPTR':
-                pool.pool.uuid = None
-            if connectuuid == 'JUNK':
-                pool.pool.uuid[4] = 244
-
-            pool.connect(connectmode)
+            self.pool.connect(connectmode)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -163,12 +156,11 @@ class BadConnectTest(TestWithoutServers):
 
         # cleanup the pool
         finally:
-            if pool is not None and pool.pool.attached == 1:
+            if self.pool is not None and self.pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                pool.pool.svc.rl_ranks = psvc.rl_ranks
-                pool.pool.svc.rl_nr = psvc.rl_nr
-                pool.pool.group = pgroup
-                ctypes.memmove(pool.pool.uuid, puuid, 16)
+                self.pool.pool.svc.rl_ranks = psvc.rl_ranks
+                self.pool.pool.svc.rl_nr = psvc.rl_nr
+                self.pool.pool.group = pgroup
+                ctypes.memmove(self.pool.pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
-                    pool.pool.get_uuid_str()))
-                pool.destroy(1)
+                    self.pool.pool.get_uuid_str()))

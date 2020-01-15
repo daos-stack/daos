@@ -7,6 +7,9 @@ hosts:
     - server-A
 pool:
   control_method: dmg
+  mode: 511
+  scm_size: 1073741824
+  name: daos_server
 querytests:
    handles: !mux
      goodhandle:
@@ -28,10 +31,3 @@ querytests:
              - PASS
    connectmode:
      mode: 2
-   createmode:
-     mode: 511
-   createset:
-     setname: scott_server
-   createsize:
-     size: 1073741824
-

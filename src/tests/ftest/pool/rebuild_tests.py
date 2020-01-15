@@ -46,7 +46,7 @@ class RebuildTests(TestWithServers):
         containers = []
         for index in range(pool_quantity):
             pools.append(TestPool(self.context, self.log,
-                                  dmg_bin_path=self.basepath + '/install/bin'))
+                                  dmg_bin_path=self.bin))
             pools[index].get_params(self)
             containers.append(TestContainer(pools[index]))
             containers[index].get_params(self)

@@ -45,14 +45,10 @@ class Permission(TestWithServers):
 
         :avocado: tags=pool,permission,connectpermission
         """
-        # parameters used in pool create
+        # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
 
-        # parameters used for pool connect
+        # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
 
         if createmode == 73 or \
@@ -71,21 +67,16 @@ class Permission(TestWithServers):
         else:
             expected_result = 'FAIL'
 
-        try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
-            self.multi_log("Pool initialisation successful", "debug")
-            self.pool.get_params(self)
-            self.pool.mode.value = createmode
-            self.pool.uid = createuid
-            self.pool.gid = creategid
-            self.pool.scm_size.value = createsize
-            self.pool.name.value = createsetid
-            self.pool.create()
-            self.multi_log("Pool Creation successful", "debug")
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.multi_log("Pool initialisation successful", "debug")
+        self.pool.get_params(self)
+        self.pool.mode.value = createmode
+        self.pool.create()
+        self.multi_log("Pool Creation successful", "debug")
 
+        try:
             self.pool.connect(1 << permissions)
             self.multi_log("Pool Connect successful", "debug")
 
@@ -108,10 +99,6 @@ class Permission(TestWithServers):
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createuid = self.params.get("uid", '/run/createtests/createuid/')
-        creategid = self.params.get("gid", '/run/createtests/creategid/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
 
         if createmode == 73:
             expected_result = 'FAIL'
@@ -122,20 +109,15 @@ class Permission(TestWithServers):
             permissions = 2
             expected_result = 'PASS'
 
-        try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
-            self.multi_log("Pool initialisation successful", "debug")
-            self.pool.get_params(self)
-            self.pool.mode.value = createmode
-            self.pool.uid = createuid
-            self.pool.gid = creategid
-            self.pool.scm_size.value = createsize
-            self.pool.name.value = createsetid
-            self.multi_log("Pool Creation successful", "debug")
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.multi_log("Pool initialisation successful", "debug")
+        self.pool.get_params(self)
+        self.pool.mode.value = createmode
+        self.multi_log("Pool Creation successful", "debug")
 
+        try:
             self.pool.connect(1 << permissions)
             self.multi_log("Pool Connect successful", "debug")
 

@@ -90,32 +90,11 @@ class PoolAttributeTest(TestWithServers):
         super(PoolAttributeTest, self).setUp()
 
         self.large_data_set = {}
-
-        createmode = self.params.get("mode",
-                                     '/run/attrtests/createmode/')
-        createuid = os.geteuid()
-        creategid = os.getgid()
-        createsetid = self.params.get("setname",
-                                      '/run/attrtests/createset/')
-        createsize = self.params.get("size",
-                                     '/run/attrtests/createsize/')
-        try:
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
-            self.pool.get_params(self)
-            # Manually set TestPool members before calling create
-            self.pool.mode.value = createmode
-            self.pool.uid = createuid
-            self.pool.gid = creategid
-            self.pool.scm_size.value = createsize
-            self.pool.name.value = createsetid
-            self.pool.create()
-            self.pool.pool.connect(1 << 1)
-
-        except DaosApiError as excep:
-            print("In the setup exception handler\n")
-            print(excep)
-            print(traceback.format_exc())
+        
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool.get_params(self)
+        self.pool.create()
+        self.pool.pool.connect(1 << 1)
 
     def create_data_set(self):
         """

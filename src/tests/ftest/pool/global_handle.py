@@ -75,48 +75,29 @@ class GlobalHandle(TestWithServers):
 
         :avocado: tags=all,pool,pr,tiny,poolglobalhandle
         """
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool.get_params(self)
+        self.pool.create()
 
+        self.pool.pool.connect(1 << 1)
+
+        # create a container just to make sure handle is good
+        self.container = DaosContainer(self.context)
+        self.container.create(self.pool.pool.handle)
+
+        # create a global handle
+        iov_len, buf_len, buf = self.pool.pool.local2global()
+
+        # this should work in the future but need on-line server addition
+        #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
+        #p = Process(target=check_handle, args=arg_list)
+        #p.start()
+        #p.join()
+        # for now verifying global handle in the same process which is not
+        # the intended use case
         try:
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # parameters used in pool create that are in yaml
-            createmode = self.params.get("mode", '/run/testparams/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/testparams/createset/')
-            createsize = self.params.get("size", '/run/testparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
-            self.pool.get_params(self)
-            # Manually set TestPool members before calling create
-            self.pool.mode.value = createmode
-            self.pool.uid = createuid
-            self.pool.gid = creategid
-            self.pool.scm_size.value = createsize
-            self.pool.name.value = createsetid
-            self.pool.create()
-
-            self.pool.pool.connect(1 << 1)
-
-            # create a container just to make sure handle is good
-            self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
-
-            # create a global handle
-            iov_len, buf_len, buf = self.pool.pool.local2global()
-
-            # this should work in the future but need on-line server addition
-            #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
-            #p = Process(target=check_handle, args=arg_list)
-            #p.start()
-            #p.join()
-            # for now verifying global handle in the same process which is not
-            # the intended use case
             self.check_handle(buf_len, iov_len, buf,
                               self.pool.pool.get_uuid_str(), 0)
 

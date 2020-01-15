@@ -49,8 +49,7 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log,
-                        dmg_bin_path=self.basepath + '/install/bin')
+        pool = TestPool(self.context, self.log, dmg_bin_path=self.bin)
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets

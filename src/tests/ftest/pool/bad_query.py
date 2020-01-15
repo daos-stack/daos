@@ -47,13 +47,8 @@ class BadQueryTest(TestWithServers):
 
         :avocado: tags=all,pool,full_regression,tiny,badquery
         """
-        # parameters used in pool create/connect
+        # parameter used in pool create/connect
         connectmode = self.params.get("mode", '/run/querytests/connectmode/')
-        createmode = self.params.get("mode", '/run/querytests/createmode/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/querytests/createset/')
-        createsize = self.params.get("size", '/run/querytests/createsize/')
 
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -76,26 +71,18 @@ class BadQueryTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool.get_params(self)
+        self.pool.create()
+        self.pool.pool.connect(connectmode)
+
+        # trash the pool handle value
+        if not handle == 'VALID':
+            self.pool.pool.handle = handle
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_bin_path=self.basepath + '/install/bin')
-            self.pool.get_params(self)
-            # Manually set TestPool members before calling create
-            self.pool.mode.value = createmode
-            self.pool.uid = createuid
-            self.pool.gid = creategid
-            self.pool.scm_size.value = createsize
-            self.pool.name.value = createsetid
-            self.pool.create()
-
-            self.pool.pool.connect(connectmode)
-
-            # trash the pool handle value
-            if not handle == 'VALID':
-                self.pool.pool.handle = handle
-
             self.pool.pool.pool_query()
 
             if expected_result in ['FAIL']:

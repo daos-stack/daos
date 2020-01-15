@@ -140,10 +140,6 @@ class TestPool(TestDaosApiBase):
                 if value is not None:
                     kwargs[key] = value
             self._call_method(self.pool.create, kwargs)
-
-            self.svc_ranks = [
-                int(self.pool.svc.rl_ranks[index])
-                for index in range(self.pool.svc.rl_nr)]
         else:
             if self.dmg is None:
                 raise DaosTestError(
@@ -217,6 +213,9 @@ class TestPool(TestDaosApiBase):
             self.pool.set_uuid_str(new_uuid)
             self.pool.attached = 1
 
+        self.svc_ranks = [
+            int(self.pool.svc.rl_ranks[index])
+            for index in range(self.pool.svc.rl_nr)]
         self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
