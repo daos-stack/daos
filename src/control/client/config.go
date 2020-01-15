@@ -28,7 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"strings"
+	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -119,7 +119,7 @@ func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
 	}
 	log.Debugf("DAOS Client config read from %s", c.Path)
 
-	if err := c.Validate(); err != nil {
+	if err := c.Validate(log); err != nil {
 		return nil, errors.Wrapf(err, "validating config file %s", c.Path)
 	}
 
@@ -152,19 +152,30 @@ func (c *Configuration) Load() error {
 }
 
 // Validate asserts that config meets minimum requirements.
-func (c *Configuration) Validate() (err error) {
+func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// only single access point valid for now
 	if len(c.AccessPoints) > 1 {
 		return FaultConfigBadAccessPoints
 	}
 	// apply configured control port if not supplied
 	for i := range c.AccessPoints {
-		if !common.HasPort(c.AccessPoints[i]) {
-			c.AccessPoints[i] += fmt.Sprintf(":%d", c.ControlPort)
+		// apply configured control port if not supplied
+		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)
+		if err != nil {
+			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
 		}
-		if strings.Split(c.AccessPoints[i], ":")[1] == "0" {
+
+		// warn if access point port differs from config control port
+		if strconv.Itoa(c.ControlPort) != port {
+			log.Debugf("access point (%s) port (%s) differs from control port (%s)",
+				host, port, c.ControlPort)
+		}
+
+		if port == "0" {
 			return FaultConfigBadControlPort
 		}
+
+		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	return nil

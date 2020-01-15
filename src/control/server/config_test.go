@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -119,6 +120,9 @@ func TestConfig_MarshalUnmarshal(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
 			if err != nil {
@@ -137,7 +141,7 @@ func TestConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if err == nil {
-				err = configA.Validate()
+				err = configA.Validate(log)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -158,7 +162,7 @@ func TestConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate()
+				err = configB.Validate(log)
 			}
 
 			if err != nil {
@@ -312,6 +316,9 @@ func TestConfig_Validation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
 			if err != nil {
@@ -326,7 +333,7 @@ func TestConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expErr, config.Validate())
+			CmpErr(t, tt.expErr, config.Validate(log))
 		})
 	}
 }

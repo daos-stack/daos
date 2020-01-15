@@ -42,3 +42,34 @@ func TestUtils_HasPort(t *testing.T) {
 		})
 	}
 }
+
+func TestUtils_SplitPort(t *testing.T) {
+	for name, tc := range map[string]struct {
+		addr      string
+		dPort     int
+		expHost   string
+		expPort   string
+		expErrMsg string
+	}{
+		"host has port": {"localhost:10001", 10000, "localhost", "10001", ""},
+		"host no port":  {"localhost", 10000, "localhost", "10000", ""},
+		"ip has port":   {"192.168.1.1:10001", 10000, "192.168.1.1", "10001", ""},
+		"ip no port":    {"192.168.1.1", 10000, "192.168.1.1", "10000", ""},
+		"empty port":    {"192.168.1.1:", 10000, "", "", "invalid port \"\""},
+		"bad port": {"192.168.1.1:abc", 10000, "", "",
+			"cannot parse \"192.168.1.1:abc\": strconv.Atoi: parsing \"abc\": invalid syntax"},
+		"bad host":    {":10001", 10000, "", "", "invalid host \"\""},
+		"bad address": {"192.168.1.1:10001:", 10000, "", "", "cannot parse \"192.168.1.1:10001:\""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h, p, err := SplitPort(tc.addr, tc.dPort)
+			ExpectError(t, err, tc.expErrMsg, name)
+			if tc.expErrMsg != "" {
+				return
+			}
+
+			AssertEqual(t, tc.expHost, h, name)
+			AssertEqual(t, tc.expPort, p, name)
+		})
+	}
+}
