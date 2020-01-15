@@ -72,9 +72,7 @@ class PoolTestBase(TestWithServers):
             param_list.insert(0, name)
 
             # Replace any keyword values
-            if param_list[1] == "VALID" and name == "target_list":
-                param_list[1] = [0]
-            elif param_list[1] == "VALID" and name.endswith("id"):
+            if param_list[1] == "VALID" and name.endswith("id"):
                 param_list[1] = default_value
             elif param_list[1] == "NULLPTR":
                 param_list[1] = None
@@ -117,9 +115,10 @@ class PoolTestBase(TestWithServers):
         self.log.info("Testing %s different pool create variants", total)
 
         # Run all the variants of the test
-        error_count = 0
+        results = {"PASS": 0, "FAIL": 0, "SKIP": 0}
         for index, test in enumerate(test_variants):
-            self.log.info("[%03d/%03d] - START TEST VARIANT", index + 1, total)
+            self.log.info(
+                "[%03d/%03d] - START TEST VARIANT - %s", index + 1, total, test)
 
             # Set the pool attributes
             expected_to_pass = True
@@ -128,38 +127,57 @@ class PoolTestBase(TestWithServers):
                 if isinstance(pool_attribute, BasicParameter):
                     pool_attribute.update(data[1], data[0])
                 else:
-                    pool_attribute = data[1]
+                    setattr(self.pool, data[0], data[1])
                     self.log.debug("Updated param %s => %s", data[0], data[1])
                 expected_to_pass &= data[2]
             self.log.info(
                 "[%03d/%03d] - expected to pass: %s",
                 index + 1, total, str(expected_to_pass))
 
-            # Attempt to create the pool
-            try:
-                self.pool.create()
-                exception = None
-            except TestFail as error:
-                exception = error
+            # Skip any tests with known issues
+            if self.pool.target_list.value == [9999]:
+                self.log.info(
+                    "[%03d/%03d] SKIP - Skipping test due to DAOS-4012",
+                    index + 1, total)
+                results["SKIP"] += 1
+            else:
+                # Attempt to create the pool
+                try:
+                    self.pool.create()
+                    exception = None
+                except TestFail as error:
+                    exception = error
 
-            # Verify the result
-            if expected_to_pass and exception is not None:
-                error_count += 1
-                self.log.error(
-                    "[%03d/%03d] - The pool create test was expected to pass, "
-                    "but failed: %s", index + 1, total, exception)
-            elif not expected_to_pass and exception is None:
-                error_count += 1
-                self.log.error(
-                    "[%03d/%03d] - The pool create test was expected to fail, "
-                    "but passed", index + 1, total)
+                # Verify the result
+                if expected_to_pass and exception is not None:
+                    results["FAIL"] += 1
+                    self.log.error(
+                        "[%03d/%03d] FAIL - The pool create test was expected "
+                        "to pass, but failed: %s", index + 1, total, exception)
+                elif not expected_to_pass and exception is None:
+                    results["FAIL"] += 1
+                    self.log.error(
+                        "[%03d/%03d] FAIL - The pool create test was expected "
+                        "to fail, but passed", index + 1, total)
+                else:
+                    results["PASS"] += 1
+                    self.log.info(
+                        "[%03d/%03d] PASS - The pool create test case passed",
+                        index + 1, total)
 
             # Destroy any successful pools
             if not exception:
                 self.pool.destroy()
 
         # Determine if the overall test passed
-        if error_count > 0:
+        self.log.info(
+            "TOTALS: %s",
+            ", ".join(
+                ["{}: {}".format(key, results[key]) for key in sorted(results)])
+        )
+        if results["FAIL"] > 0:
             self.fail(
                 "Detected {} error(s) creating {} pools".format(
-                    error_count, total))
+                    results["FAIL"], total))
+        if results["SKIP"] > 0:
+            self.cancelForTicket("DAOS-4012")

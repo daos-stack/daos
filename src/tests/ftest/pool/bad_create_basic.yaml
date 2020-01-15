@@ -20,6 +20,9 @@ pool:
     - [daos_server, PASS]
     - [NULLPTR, PASS]
   svcn: 1
+  target_list_list:
+    - [[0], PASS]
+    - [0, FAIL]
   scm_size_list:
     - [1073741824, PASS]
     - [NULLPTR, FAIL]

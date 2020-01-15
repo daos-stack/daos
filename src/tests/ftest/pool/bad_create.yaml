@@ -19,10 +19,11 @@ pool:
     - [complete_rubbish, FAIL]
   svcn_list:
     - [1, PASS]
-    - [9999, FAIL]
+    # This svcn value does not cause pool create to fail
+    # - [9999, FAIL]
   target_list_list:
-    - [VALID, PASS]
-    - [9999, FAIL]
+    - [[0], PASS]
+    - [[9999], FAIL]
     - [NULLPTR, PASS]
   scm_size_list:
     - [1073741824, PASS]

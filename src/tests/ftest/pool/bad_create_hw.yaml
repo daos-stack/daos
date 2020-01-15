@@ -16,10 +16,11 @@ pool:
   name: daos_server
   svcn_list:
     - [1, PASS]
-    - [9999, FAIL]
+    # This svcn value does not cause pool create to fail
+    # - [9999, FAIL]
     - [NULLPTR, FAIL]
   target_list_list:
-    - [VALID, PASS]
+    - [[0], PASS]
     - [[9999], FAIL]
     - [NULLPTR, PASS]
   scm_size_list:

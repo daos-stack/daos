@@ -622,7 +622,13 @@ class DaosPool(object):
     @staticmethod
     def __pylist_to_array(pylist):
         """Convert a python list into an array."""
-        return (ctypes.c_uint32 * len(pylist))(*pylist)
+        try:
+            array = (ctypes.c_uint32 * len(pylist))(*pylist)
+        except TypeError as error:
+            raise DaosApiError(
+                "Error converting python list {} to an array: {}".format(
+                    pylist, error))
+        return array
 
 
 class DaosObjClassOld(enum.IntEnum):
