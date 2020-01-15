@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosApiError
+from pydaos.raw import DaosApiError
+from test_utils_pool import TestPool
+from avocado.core.exceptions import TestFail
 
 
 class BadCreateTest(TestWithServers):
@@ -116,13 +118,23 @@ class BadCreateTest(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(mode, uid, gid, size, group, targetptr)
+            self.pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
+            self.pool.get_params(self)
+            # Manually set TestPool members before calling create
+            self.pool.mode.value = mode
+            self.pool.uid = uid
+            self.pool.gid = gid
+            self.pool.scm_size.value = size
+            self.pool.name.value = group
+            self.pool.create()
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        # create with invalid parameter will cause test failure, so catch it if
+        # we expect it
+        except TestFail as excep:
             self.log.error(str(excep))
             self.log.error(traceback.format_exc())
             if expected_result == 'PASS':

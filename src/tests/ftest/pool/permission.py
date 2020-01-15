@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@
 import os
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
-
+from pydaos.raw import DaosContainer, DaosApiError
+from test_utils_pool import TestPool
 
 class Permission(TestWithServers):
     """Test pool permissions.
@@ -74,11 +74,15 @@ class Permission(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.context)
+            self.pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
             self.multi_log("Pool initialisation successful", "debug")
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
+            self.pool.get_params(self)
+            self.pool.mode.value = createmode
+            self.pool.uid = createuid
+            self.pool.gid = creategid
+            self.pool.scm_size.value = createsize
+            self.pool.name.value = createsetid
             self.multi_log("Pool Creation successful", "debug")
 
             self.pool.connect(1 << permissions)
@@ -120,14 +124,15 @@ class Permission(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.context)
+            self.pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
             self.multi_log("Pool initialisation successful", "debug")
-            self.pool.create(createmode,
-                             createuid,
-                             creategid,
-                             createsize,
-                             createsetid,
-                             None)
+            self.pool.get_params(self)
+            self.pool.mode.value = createmode
+            self.pool.uid = createuid
+            self.pool.gid = creategid
+            self.pool.scm_size.value = createsize
+            self.pool.name.value = createsetid
             self.multi_log("Pool Creation successful", "debug")
 
             self.pool.connect(1 << permissions)
@@ -136,7 +141,7 @@ class Permission(TestWithServers):
             self.container = DaosContainer(self.context)
             self.multi_log("Contianer initialisation successful", "debug")
 
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
             self.multi_log("Container create successful", "debug")
 
             # now open it

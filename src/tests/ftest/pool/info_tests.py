@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -47,7 +47,8 @@ class InfoTests(TestWithServers):
         :avocado: tags=all,tiny,pr,pool,smoke,infotest
         """
         # Get the test params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, self.log,
+                             dmg_bin_path=self.basepath + '/install/bin')
         self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")

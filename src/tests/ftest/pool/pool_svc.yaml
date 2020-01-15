@@ -7,6 +7,8 @@ hosts:
 server_config:
     name: daos_server
 timeout: 180
+pool:
+    control_method: dmg
 createtests:
     createmode:
         mode_RW:

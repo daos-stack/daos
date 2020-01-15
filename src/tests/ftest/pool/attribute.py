@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -31,7 +31,8 @@ import random
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
-from pydaos.raw import DaosPool, DaosApiError
+from pydaos.raw import DaosApiError
+from test_utils_pool import TestPool
 
 # pylint: disable=global-variable-not-assigned, global-statement
 
@@ -99,10 +100,17 @@ class PoolAttributeTest(TestWithServers):
         createsize = self.params.get("size",
                                      '/run/attrtests/createsize/')
         try:
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid, createsize,
-                             createsetid)
-            self.pool.connect(1 << 1)
+            self.pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
+            self.pool.get_params(self)
+            # Manually set TestPool members before calling create
+            self.pool.mode.value = createmode
+            self.pool.uid = createuid
+            self.pool.gid = creategid
+            self.pool.scm_size.value = createsize
+            self.pool.name.value = createsetid
+            self.pool.create()
+            self.pool.pool.connect(1 << 1)
 
         except DaosApiError as excep:
             print("In the setup exception handler\n")
@@ -131,13 +139,13 @@ class PoolAttributeTest(TestWithServers):
         attr_dict = self.large_data_set
 
         try:
-            self.pool.set_attr(data=attr_dict)
-            size, buf = self.pool.list_attr()
+            self.pool.pool.set_attr(data=attr_dict)
+            size, buf = self.pool.pool.list_attr()
 
             verify_list_attr(attr_dict, size.value, buf)
 
             results = {}
-            results = self.pool.get_attr(attr_dict.keys())
+            results = self.pool.pool.get_attr(attr_dict.keys())
             verify_get_attr(attr_dict, results)
         except DaosApiError as excep:
             print(excep)
@@ -166,8 +174,8 @@ class PoolAttributeTest(TestWithServers):
 
         attr_dict = {name[0]: value[0]}
         try:
-            self.pool.set_attr(data=attr_dict)
-            size, buf = self.pool.list_attr()
+            self.pool.pool.set_attr(data=attr_dict)
+            size, buf = self.pool.pool.list_attr()
 
             verify_list_attr(attr_dict, size.value, buf)
 
@@ -176,7 +184,7 @@ class PoolAttributeTest(TestWithServers):
                 if "Negative" in name[0]:
                     name[0] = "rubbish"
                 results = {}
-                results = self.pool.get_attr([name[0]])
+                results = self.pool.pool.get_attr([name[0]])
                 verify_get_attr(attr_dict, results)
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -217,7 +225,7 @@ class PoolAttributeTest(TestWithServers):
         attr_dict = {name[0]: value[0]}
         try:
             GLOB_SIGNAL = threading.Event()
-            self.pool.set_attr(attr_dict, None, cb_func)
+            self.pool.pool.set_attr(attr_dict, None, cb_func)
             GLOB_SIGNAL.wait()
             if expected_result == 'PASS' and GLOB_RC != 0:
                 self.fail("RC not as expected after set_attr {0}"

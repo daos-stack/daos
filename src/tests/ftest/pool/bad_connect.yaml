@@ -6,6 +6,8 @@ hosts:
   test_servers:
     - server-A
 timeout: 700
+pool:
+  control_method: dmg
 connecttests:
    createmode:
      mode: 511

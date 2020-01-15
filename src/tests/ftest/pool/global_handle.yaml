@@ -6,6 +6,8 @@ hosts:
 timeout: 5000
 server_config:
   name: daos_server
+pool:
+  control_method: dmg
 testparams:
   createmode:
     mode: 511

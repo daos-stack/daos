@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context, self.log,
+                        dmg_bin_path=self.basepath + '/install/bin')
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets

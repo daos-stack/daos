@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosApiError, RankList
 from apricot import TestWithoutServers, skipForTicket
+from test_utils_pool import TestPool
 
 class BadConnectTest(TestWithoutServers):
     """
@@ -119,29 +120,29 @@ class BadConnectTest(TestWithoutServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+            pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
+            pool.get_params(self)
             # save this uuid since we might trash it as part of the test
-            ctypes.memmove(puuid, pool.uuid, 16)
+            ctypes.memmove(puuid, pool.pool.uuid, 16)
 
             # trash the the pool service rank list
-            psvc.rl_ranks = pool.svc.rl_ranks
-            psvc.rl_nr = pool.svc.rl_nr
+            psvc.rl_ranks = pool.pool.svc.rl_ranks
+            psvc.rl_nr = pool.pool.svc.rl_nr
             if not svc == 'VALID':
                 rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-                pool.svc = RankList(rl_ranks, 1)
+                pool.pool.svc = RankList(rl_ranks, 1)
 
             # trash the pool group value
-            pgroup = pool.group
+            pgroup = pool.pool.group
             if connectset == 'NULLPTR':
-                pool.group = None
+                pool.pool.group = None
 
             # trash the UUID value in various ways
             if connectuuid == 'NULLPTR':
-                pool.uuid = None
+                pool.pool.uuid = None
             if connectuuid == 'JUNK':
-                pool.uuid[4] = 244
+                pool.pool.uuid[4] = 244
 
             pool.connect(connectmode)
 
@@ -156,13 +157,12 @@ class BadConnectTest(TestWithoutServers):
 
         # cleanup the pool
         finally:
-            if pool is not None and pool.attached == 1:
+            if pool is not None and pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                pool.svc.rl_ranks = psvc.rl_ranks
-                pool.svc.rl_nr = psvc.rl_nr
-                pool.group = pgroup
-                ctypes.memmove(pool.uuid, puuid, 16)
+                pool.pool.svc.rl_ranks = psvc.rl_ranks
+                pool.pool.svc.rl_nr = psvc.rl_nr
+                pool.pool.group = pgroup
+                ctypes.memmove(pool.pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
-                    pool.get_uuid_str()))
-                pool.disconnect()
+                    pool.pool.get_uuid_str()))
                 pool.destroy(1)

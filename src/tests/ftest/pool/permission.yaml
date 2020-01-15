@@ -13,7 +13,8 @@ hosts:
 timeout: 300
 server_config:
     name: daos_server
-
+pool:
+    control_method: dmg
 createtests:
     createmode: !mux
         mode_RO:

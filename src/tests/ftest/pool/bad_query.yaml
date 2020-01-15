@@ -5,6 +5,8 @@ server_config:
 hosts:
   test_servers:
     - server-A
+pool:
+  control_method: dmg
 querytests:
    handles: !mux
      goodhandle:

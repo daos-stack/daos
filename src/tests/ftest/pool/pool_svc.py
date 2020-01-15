@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@ import traceback
 
 from apricot import TestWithServers
 
-from pydaos.raw import DaosPool, DaosServer, DaosApiError
-
+from pydaos.raw import DaosServer, DaosApiError
+from test_utils_pool import TestPool
+from avocado.core.exceptions import TestFail
 
 class PoolSvc(TestWithServers):
     """
@@ -57,49 +58,58 @@ class PoolSvc(TestWithServers):
         try:
             # initialize a python pool object then create the underlying
             # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None, None, createsvc[0])
-            self.pool.connect(1 << 1)
+            self.pool = TestPool(self.context,
+                                 dmg_bin_path=self.basepath + '/install/bin')
+            self.pool.get_params(self)
+            # Manually set TestPool members before calling create
+            self.pool.mode.value = createmode
+            self.pool.scm_size.value = createsize
+            self.pool.name.update(createsetid)
+            self.pool.svcn.update(createsvc[0])
+            self.pool.create()
 
+            self.pool.pool.connect(1 << 1)
             # checking returned rank list for server more than 1
             iterator = 0
             while (
-                    int(self.pool.svc.rl_ranks[iterator]) > 0 and
-                    int(self.pool.svc.rl_ranks[iterator]) <= createsvc[0] and
-                    int(self.pool.svc.rl_ranks[iterator]) != 999999
+                    int(self.pool.pool.svc.rl_ranks[iterator]) > 0 and
+                    int(self.pool.pool.svc.rl_ranks[iterator]) <= createsvc[0] and
+                    int(self.pool.pool.svc.rl_ranks[iterator]) != 999999
             ):
                 iterator += 1
             if iterator != createsvc[0]:
                 self.fail("Length of Returned Rank list is not equal to "
-                          "the number of Pool Service members.\n")
+                        "the number of Pool Service members.\n")
             rank_list = []
             for iterator in range(createsvc[0]):
-                rank_list.append(int(self.pool.svc.rl_ranks[iterator]))
+                rank_list.append(int(self.pool.pool.svc.rl_ranks[iterator]))
                 if len(rank_list) != len(set(rank_list)):
                     self.fail("Duplicate values in returned rank list")
 
-            self.pool.pool_query()
-            leader = self.pool.pool_info.pi_leader
+            self.pool.pool.pool_query()
+            leader = self.pool.pool.pool_info.pi_leader
             if createsvc[0] == 3:
                 # kill pool leader and exclude it
-                self.pool.pool_svc_stop()
-                self.pool.exclude([leader])
+                self.pool.pool.pool_svc_stop()
+                self.pool.pool.exclude([leader])
                 # perform pool disconnect, try connect again and disconnect
-                self.pool.disconnect()
-                self.pool.connect(1 << 1)
-                self.pool.disconnect()
+                self.pool.pool.disconnect()
+                self.pool.pool.connect(1 << 1)
+                self.pool.pool.disconnect()
                 # kill another server which is not a leader and exclude it
                 server = DaosServer(self.context, self.server_group, 3)
                 server.kill(1)
-                self.pool.exclude([3])
+                self.pool.pool.exclude([3])
                 # perform pool connect
-                self.pool.connect(1 << 1)
+                self.pool.pool.connect(1 << 1)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        # Use TestFail instead of DaosApiError because create method has
+        # @fail_on
+        except TestFail as excep:
+            print("### TestFail exception caught")
             print(excep)
             print(traceback.format_exc())
             if expected_result == 'PASS':
