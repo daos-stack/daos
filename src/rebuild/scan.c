@@ -792,7 +792,7 @@ rebuild_scan_leader(void *data)
 	}
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	rc = dss_thread_collective(rebuild_scanner, arg, 0);
+	rc = dss_thread_collective(rebuild_scanner, arg, 0, DSS_ULT_REBUILD);
 	if (rc)
 		D_GOTO(put_plmap, rc);
 
@@ -811,7 +811,7 @@ rebuild_scan_leader(void *data)
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
+	rc = dss_task_collective(rebuild_scan_done, rpt, 0, DSS_ULT_REBUILD);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",

@@ -100,10 +100,38 @@ collective_reduce(void **arg)
 	}
 }
 
+static inline int
+sched_ult2pool(int ult_type)
+{
+	switch (ult_type) {
+	case DSS_ULT_DTX_RESYNC:
+	case DSS_ULT_IOFW:
+	case DSS_ULT_EC:
+	case DSS_ULT_CHECKSUM:
+	case DSS_ULT_COMPRESS:
+	case DSS_ULT_POOL_SRV:
+	case DSS_ULT_DRPC_LISTENER:
+	case DSS_ULT_RDB:
+	case DSS_ULT_DRPC_HANDLER:
+	case DSS_ULT_MISC:
+	case DSS_ULT_IO:
+		return DSS_POOL_IO;
+	case DSS_ULT_REBUILD:
+		return DSS_POOL_REBUILD;
+	case DSS_ULT_AGGREGATE:
+		return DSS_POOL_AGGREGATE;
+	case DSS_ULT_GC:
+		return DSS_POOL_GC;
+	default:
+		D_ASSERTF(0, "Invalid ULT type %d.\n", ult_type);
+		return -DER_INVAL;
+	}
+}
+
 static int
 dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			       struct dss_coll_args *args, bool create_ult,
-			       int flag)
+			       int flag, int ult_type)
 {
 	struct collective_arg		carg;
 	struct dss_coll_stream_args	*stream_args;
@@ -169,8 +197,8 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 
 	rc = ABT_future_set(future, (void *)&aggregator);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-
 	for (tid = 0; tid < xs_nr; tid++) {
+		ABT_pool pool;
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
@@ -190,13 +218,13 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
+		pool = dx->dx_pools[sched_ult2pool(ult_type)];
 		if (create_ult)
-			rc = ABT_thread_create(dx->dx_pools[DSS_POOL_IO],
-					       collective_func, stream,
+			rc = ABT_thread_create(pool, collective_func, stream,
 					       ABT_THREAD_ATTR_NULL, NULL);
 		else
-			rc = ABT_task_create(dx->dx_pools[DSS_POOL_IO],
-					     collective_func, stream, NULL);
+			rc = ABT_task_create(pool, collective_func, stream,
+					     NULL);
 
 		if (rc != ABT_SUCCESS) {
 			stream->st_rc = dss_abterr2der(rc);
@@ -234,14 +262,15 @@ out_streams:
  * \param[in] args		All arguments required for dss_collective
  *				including func args.
  * \param[in] flag		collective flag, reserved for future usage.
+ * \param[in] ult_type		type of the collective task/ult
  *
  * \return			number of failed xstreams or error code
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *args, int flag)
+			   struct dss_coll_args *args, int flag, int ult_type)
 {
-	return dss_collective_reduce_internal(ops, args, false, flag);
+	return dss_collective_reduce_internal(ops, args, false, flag, ult_type);
 }
 
 /**
@@ -261,13 +290,14 @@ dss_task_collective_reduce(struct dss_coll_ops *ops,
  */
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *args, int flag)
+			     struct dss_coll_args *args, int flag, int ult_type)
 {
-	return dss_collective_reduce_internal(ops, args, true, flag);
+	return dss_collective_reduce_internal(ops, args, true, flag, ult_type);
 }
 
 static int
-dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
+dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag,
+			int ult_type)
 {
 	int				rc;
 	struct dss_coll_ops		coll_ops = { 0 };
@@ -277,14 +307,15 @@ dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
 	coll_args.ca_func_args	= arg;
 
 	if (thread)
-		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, flag);
+		rc = dss_thread_collective_reduce(&coll_ops, &coll_args, flag,
+						  ult_type);
 	else
-		rc = dss_task_collective_reduce(&coll_ops, &coll_args, flag);
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args, flag,
+						ult_type);
 
 	return rc;
 }
 
-
 /**
  * Execute \a func(\a arg) collectively on all server xstreams. Can only be
  * called by ULTs. Can only execute tasklet-compatible functions.
@@ -292,13 +323,14 @@ dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
  * \param[in] flag	collective flag, reserved for future usage.
+ * \param[in] ult_type  the type for collective task.
  *
  * \return		number of failed xstreams or error code
  */
 int
-dss_task_collective(int (*func)(void *), void *arg, int flag)
+dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type)
 {
-	return dss_collective_internal(func, arg, false, flag);
+	return dss_collective_internal(func, arg, false, flag, ult_type);
 }
 
 /**
@@ -308,44 +340,18 @@ dss_task_collective(int (*func)(void *), void *arg, int flag)
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
  * \param[in] flag	collective flag, reserved for future usage.
+ * \param[in] ult_type  the type for collective ult.
  *
  * \return		number of failed xstreams or error code
  */
 
 int
-dss_thread_collective(int (*func)(void *), void *arg, int flag)
+dss_thread_collective(int (*func)(void *), void *arg, int flag, int ult_type)
 {
-	return dss_collective_internal(func, arg, true, flag);
+	return dss_collective_internal(func, arg, true, flag, ult_type);
 }
 
 /* ============== ULT create functions =================================== */
-
-static inline int
-sched_ult2pool(int ult_type)
-{
-	switch (ult_type) {
-	case DSS_ULT_DTX_RESYNC:
-	case DSS_ULT_IOFW:
-	case DSS_ULT_EC:
-	case DSS_ULT_CHECKSUM:
-	case DSS_ULT_COMPRESS:
-	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC_LISTENER:
-	case DSS_ULT_RDB:
-	case DSS_ULT_DRPC_HANDLER:
-	case DSS_ULT_MISC:
-		return DSS_POOL_IO;
-	case DSS_ULT_REBUILD:
-		return DSS_POOL_REBUILD;
-	case DSS_ULT_AGGREGATE:
-		return DSS_POOL_AGGREGATE;
-	case DSS_ULT_GC:
-		return DSS_POOL_GC;
-	default:
-		D_ASSERTF(0, "Invalid ULT type %d.\n", ult_type);
-		return -DER_INVAL;
-	}
-}
 
 static inline int
 sched_ult2xs(int ult_type, int tgt_id)
@@ -361,6 +367,7 @@ sched_ult2xs(int ult_type, int tgt_id)
 	case DSS_ULT_EC:
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
+	case DSS_ULT_IO:
 		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
 	case DSS_ULT_POOL_SRV:
 	case DSS_ULT_RDB:

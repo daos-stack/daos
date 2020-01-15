@@ -966,7 +966,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_thread_collective(cont_child_destroy_one, in, 0);
+	rc = dss_thread_collective(cont_child_destroy_one, in, 0, DSS_ULT_IO);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -1301,7 +1301,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		return rc;
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
+					  DSS_ULT_IO);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 
@@ -1413,7 +1414,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		ds_pool_put(pool);
 	}
 
-	rc = dss_thread_collective(cont_close_one, in, 0);
+	rc = dss_thread_collective(cont_close_one, in, 0, DSS_ULT_IO);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 out:
@@ -1552,7 +1553,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0, DSS_ULT_IO);
 
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
@@ -1620,7 +1621,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dss_thread_collective(cont_epoch_discard_one, in, 0);
+	rc = dss_thread_collective(cont_epoch_discard_one, in, 0, DSS_ULT_IO);
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
@@ -1704,7 +1705,8 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	args.snapshots = snapshots;
 	D_DEBUG(DB_TRACE, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_thread_collective(cont_snap_update_one, &args, 0);
+	return dss_thread_collective(cont_snap_update_one, &args, 0,
+				     DSS_ULT_IO);
 }
 
 void
@@ -1774,7 +1776,8 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
 	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
-	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
+	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0,
+					    DSS_ULT_IO);
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
@@ -1820,7 +1823,8 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0,
+				   DSS_ULT_IO);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
