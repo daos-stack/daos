@@ -86,14 +86,14 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "label property not found\n");;
+		fprintf(stderr, "label property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("label -> %s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL) {
-		fprintf(stderr, "rebuild space ratio property not found\n");;
+		fprintf(stderr, "rebuild space ratio property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("rebuild space ratio -> "DF_U64"\n", entry->dpe_val);
@@ -101,36 +101,36 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
 	if (entry == NULL) {
-		fprintf(stderr, "self-heal property not found\n");;
+		fprintf(stderr, "self-heal property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("self-heal -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
 	if (entry == NULL) {
-		fprintf(stderr, "reclaim property not found\n");;
+		fprintf(stderr, "reclaim property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("reclaim -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(stderr, "acl property not found\n");;
+		fprintf(stderr, "acl property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
-	D_PRINT("acl -> \n");
+	D_PRINT("acl ->\n");
 	daos_acl_dump(entry->dpe_val_ptr);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "owner property not found\n");;
+		fprintf(stderr, "owner property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("owner -> %s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "owner-group property not found\n");;
+		fprintf(stderr, "owner-group property not found\n");
 		D_GOTO(out_disconnect, rc = -DER_INVAL);
 	}
 	D_PRINT("owner-group -> %s\n", entry->dpe_str);
@@ -487,7 +487,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	snaps_count = 0;
 	memset(&anchor, 0, sizeof(anchor));
 	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor,
-				 NULL); 
+				 NULL);
 	if (rc != 0) {
 		fprintf(stderr, "cont list snaps failed: %d\n", rc);
 		D_GOTO(out, rc);
@@ -510,7 +510,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	expected_count = snaps_count;
 	memset(&anchor, 0, sizeof(anchor));
 	rc = daos_cont_list_snap(ap->cont, &snaps_count, buf, NULL, &anchor,
-				 NULL); 
+				 NULL);
 	if (rc != 0) {
 		fprintf(stderr, "cont list snaps failed: %d\n", rc);
 		D_GOTO(out, rc);
@@ -646,8 +646,8 @@ out:
 int
 cont_list_attrs_hdlr(struct cmd_args_s *ap)
 {
-	size_t				 size, total_size, expected_size, cur = 0,
-					 len;
+	size_t				 size, total_size, expected_size,
+					 cur = 0, len;
 	char				*buf;
 	int				rc = 0;
 
@@ -719,70 +719,71 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(stderr, "label property not found\n");;
+		fprintf(stderr, "label property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("label -> %s\n", entry->dpe_str);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL) {
-		fprintf(stderr, "layout type property not found\n");;
+		fprintf(stderr, "layout type property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("layout type -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_VER);
 	if (entry == NULL) {
-		fprintf(stderr, "layout version property not found\n");;
+		fprintf(stderr, "layout version property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("layout version -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
 	if (entry == NULL) {
-		fprintf(stderr, "checksum type property not found\n");;
+		fprintf(stderr, "checksum type property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("checksum type -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
 	if (entry == NULL) {
-		fprintf(stderr, "checksum chunck-size property not found\n");;
+		fprintf(stderr, "checksum chunck-size property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("checksum chunck-size -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
 	if (entry == NULL) {
-		fprintf(stderr, "checksum verification on server property not found\n");;
+		fprintf(stderr, "checksum verification on server property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
-	D_PRINT("checksum verification on server -> "DF_U64"\n", entry->dpe_val);
+	D_PRINT("checksum verification on server -> "DF_U64"\n",
+		entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_REDUN_FAC);
 	if (entry == NULL) {
-		fprintf(stderr, "redundancy factor property not found\n");;
+		fprintf(stderr, "redundancy factor property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("redundancy factor -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_REDUN_LVL);
 	if (entry == NULL) {
-		fprintf(stderr, "redundancy level property not found\n");;
+		fprintf(stderr, "redundancy level property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("redundancy level -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SNAPSHOT_MAX);
 	if (entry == NULL) {
-		fprintf(stderr, "max snapshots property not found\n");;
+		fprintf(stderr, "max snapshots property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("max snapshots -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(stderr, "acl property not found\n");;
+		fprintf(stderr, "acl property not found\n");
 		/* not an error */
 	} else {
 		D_PRINT("acl -> \n");
@@ -791,14 +792,14 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_COMPRESS);
 	if (entry == NULL) {
-		fprintf(stderr, "compression type property not found\n");;
+		fprintf(stderr, "compression type property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("compression type -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL) {
-		fprintf(stderr, "encryption type property not found\n");;
+		fprintf(stderr, "encryption type property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("encryption type -> "DF_U64"\n", entry->dpe_val);
