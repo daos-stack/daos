@@ -97,7 +97,7 @@ The current NVMe monitoring period for event polling is set at 60 seconds.
   - OUT: blobstore is torn down
   - REPLACED: new device is hot-plugged, initialize new blobstore and blobs (not implemented)
   - REINT: affected targets are in REINT state (not implemented)
-  
+
 **Per-Server Metadata (SMD):**
   - NORMAL
   - FAULTY
