@@ -615,23 +615,23 @@ shared_memory_file_cleanup(void)
 
 	if (dss_nvme_shm_id != DAOS_NVME_SHMID_NONE) {
 		/* unlink spdk shared memory files for this stream */
-		char buffer[NAME_MAX];
+		char path[NAME_MAX];
 
 		/* remove shared memory dir created byi each daos io searver
 		 * currently in /var/run/dpdk
 		 */
-		snprintf(buffer, NAME_MAX, "/var/run/dpdk/spdk%d",
+		snprintf(path, NAME_MAX, "/var/run/dpdk/spdk%d",
 			 dss_nvme_shm_id);
-		rc = nftw(buffer, cleanup_cb, 1, FTW_D);
+		rc = nftw(path, cleanup_cb, 1, FTW_D);
 		if (rc == 0)
-			rc = rmdir(buffer);
+			rc = rmdir(path);
 
 		if (rc) {
 			D_ERROR("Failed to remove shared memory dir: %s "
-				""DF_RC"\n", buffer, DP_RC(rc));
+				""DF_RC"\n", path, DP_RC(rc));
 		} else {
 			D_INFO("Removed shared memory dir: %s "DF_RC"\n",
-				buffer, DP_RC(rc));
+				path, DP_RC(rc));
 		}
 	}
 }
