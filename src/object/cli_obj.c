@@ -2425,7 +2425,9 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		rc = -DER_CSUM;
 		goto out;
 	}
-	setbit(bitmap, next_shard - shard_cnt);
+	D_ASSERT(next_shard - shard_idx >= 0 &&
+		 next_shard - shard_idx <= 7);
+	setbit(bitmap, next_shard - shard_idx);
 out:
 	return rc;
 }
