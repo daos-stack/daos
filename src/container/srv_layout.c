@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,9 @@ RDB_STRING_KEY(ds_cont_prop_, redun_lvl);
 RDB_STRING_KEY(ds_cont_prop_, snapshot_max);
 RDB_STRING_KEY(ds_cont_prop_, compress);
 RDB_STRING_KEY(ds_cont_prop_, encrypt);
+RDB_STRING_KEY(ds_cont_prop_, acl);
+RDB_STRING_KEY(ds_cont_prop_, owner);
+RDB_STRING_KEY(ds_cont_prop_, owner_group);
 RDB_STRING_KEY(ds_cont_prop_, lres);
 RDB_STRING_KEY(ds_cont_prop_, lhes);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
@@ -83,13 +86,19 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= 0, /* No limitation */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ACL,
-		.dpe_val_ptr	= NULL,
+		.dpe_val_ptr	= NULL, /* generated dynamically */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_COMPRESS,
 		.dpe_val	= DAOS_PROP_CO_COMPRESS_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ENCRYPT,
 		.dpe_val	= DAOS_PROP_CO_ENCRYPT_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_OWNER,
+		.dpe_str	= "NOBODY@",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_OWNER_GROUP,
+		.dpe_str	= "NOBODY@",
 	}
 };
 
@@ -97,3 +106,84 @@ daos_prop_t cont_prop_default = {
 	.dpp_nr		= CONT_PROP_NUM,
 	.dpp_entries	= cont_prop_entries_default,
 };
+
+/**
+ * The default ACL includes ACEs for owner and the assigned group. All others
+ * are denied by default.
+ */
+static struct daos_ace *
+alloc_ace_with_access(enum daos_acl_principal_type type, uint64_t permissions)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(type, NULL);
+	if (ace == NULL) {
+		D_ERROR("Failed to allocate default ACE type %d", type);
+		return NULL;
+	}
+
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = permissions;
+
+	return ace;
+}
+
+static struct daos_acl *
+get_default_daos_cont_acl(void)
+{
+	int		num_aces = 2;
+	int		i;
+	struct daos_ace	*default_aces[num_aces];
+	struct daos_acl	*default_acl;
+
+	/* container owner has full control */
+	default_aces[0] = alloc_ace_with_access(DAOS_ACL_OWNER,
+						DAOS_ACL_PERM_CONT_ALL);
+	/* owner-group has basic read/write access but not admin access */
+	default_aces[1] = alloc_ace_with_access(DAOS_ACL_OWNER_GROUP,
+						DAOS_ACL_PERM_READ |
+						DAOS_ACL_PERM_WRITE |
+						DAOS_ACL_PERM_GET_PROP |
+						DAOS_ACL_PERM_SET_PROP);
+
+	default_acl = daos_acl_create(default_aces, num_aces);
+	if (default_acl == NULL) {
+		D_ERROR("Failed to allocate default ACL for cont properties");
+	}
+
+	for (i = 0; i < num_aces; i++) {
+		daos_ace_free(default_aces[i]);
+	}
+
+	return default_acl;
+}
+
+int
+ds_cont_prop_default_init(void)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT,
+			"Initializing default ACL cont prop\n");
+		entry->dpe_val_ptr = get_default_daos_cont_acl();
+		if (entry->dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+void
+ds_cont_prop_default_fini(void)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop\n");
+		D_FREE(entry->dpe_val_ptr);
+	}
+}
+

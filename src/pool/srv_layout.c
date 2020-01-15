@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,10 +73,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL, /* generated dynamically */
 	}, {
 		.dpe_type	= DAOS_PROP_PO_OWNER,
-		.dpe_str	= "nobody@",
+		.dpe_str	= "NOBODY@",
 	}, {
 		.dpe_type	= DAOS_PROP_PO_OWNER_GROUP,
-		.dpe_str	= "nobody@",
+		.dpe_str	= "NOBODY@",
 	}
 };
 
