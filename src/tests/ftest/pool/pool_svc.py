@@ -28,7 +28,7 @@ import traceback
 
 from apricot import TestWithServers
 
-from pydaos.raw import DaosServer, DaosApiError
+from pydaos.raw import DaosServer
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
@@ -72,14 +72,14 @@ class PoolSvc(TestWithServers):
             # checking returned rank list for server more than 1
             iterator = 0
             while (
-                    int(self.pool.pool.svc.rl_ranks[iterator]) > 0 and
-                    int(self.pool.pool.svc.rl_ranks[iterator]) <= createsvc[0] and
-                    int(self.pool.pool.svc.rl_ranks[iterator]) != 999999
+                int(self.pool.pool.svc.rl_ranks[iterator]) > 0 and
+                int(self.pool.pool.svc.rl_ranks[iterator]) <= createsvc[0] and
+                int(self.pool.pool.svc.rl_ranks[iterator]) != 999999
             ):
                 iterator += 1
             if iterator != createsvc[0]:
                 self.fail("Length of Returned Rank list is not equal to "
-                        "the number of Pool Service members.\n")
+                          "the number of Pool Service members.\n")
             rank_list = []
             for iterator in range(createsvc[0]):
                 rank_list.append(int(self.pool.pool.svc.rl_ranks[iterator]))

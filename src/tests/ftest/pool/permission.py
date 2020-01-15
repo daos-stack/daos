@@ -83,6 +83,7 @@ class Permission(TestWithServers):
             self.pool.gid = creategid
             self.pool.scm_size.value = createsize
             self.pool.name.value = createsetid
+            self.pool.create()
             self.multi_log("Pool Creation successful", "debug")
 
             self.pool.connect(1 << permissions)
