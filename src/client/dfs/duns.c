@@ -48,8 +48,8 @@
 
 #define DUNS_XATTR_NAME		"user.daos"
 #define DUNS_MAX_XATTR_LEN	170
-#define DUNS_MIN_XATTR_LEN	90
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
+#define DUNS_MIN_XATTR_LEN	85
+#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
 #ifdef LUSTRE_INCLUDE
 #define LIBLUSTRE		"liblustreapi.so"
 
@@ -127,8 +127,6 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	 * with LMV, both LOV and LMV will need to be queried if ENODATA is
 	 * returned at 1st, as the file/dir type is hidden to help decide before
 	 * due to the symlink fake !!
-	 * Also, querying/checking container's type/oclass/chunk_size/...
-	 * vs EA content could be a good idea ?
 	 */
 
 	/* XXX if liblustreapi is not binded, do it now ! */
@@ -251,21 +249,10 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		return -DER_INVAL;
 	}
 
-	t = strtok_r(NULL, "/", &saveptr);
-	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
-		return -DER_INVAL;
-	}
-
 	/* path is DAOS-foreign and will need to be unlinked using
 	 * unlink_foreign API
 	 */
 	attr->da_on_lustre = true;
-
-	attr->da_oclass_id = daos_oclass_name2id(t);
-
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_chunk_size = strtoull(t, NULL, 10);
 
 	return 0;
 }
@@ -278,7 +265,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char	str[DUNS_MAX_XATTR_LEN];
 	char	*saveptr, *t;
 	struct statfs fs;
-	char *dir, *dirp;
+	char	*dir, *dirp;
 	int	rc;
 
 	dir = malloc(PATH_MAX);
@@ -355,12 +342,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			" parsed\n");
 		return -DER_INVAL;
 	}
-
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_oclass_id = daos_oclass_name2id(t);
-
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_chunk_size = strtoull(t, NULL, 10);
 
 	return 0;
 }
@@ -442,8 +423,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	/* XXX should file with foreign LOV be expected/supoorted here ? */
 
 	/** create dir and store the daos attributes in the path LMV */
-	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-		      attrp->da_chunk_size);
+	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
 	if (len < DUNS_MIN_XATTR_LEN) {
 		D_ERROR("Failed to create LMV value\n");
 		D_GOTO(err_cont, rc = -DER_INVAL);
@@ -567,8 +547,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		/** store the daos attributes in the path xattr */
-		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-			      attrp->da_chunk_size);
+		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
 		if (len < DUNS_MIN_XATTR_LEN) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_link, rc = -DER_INVAL);

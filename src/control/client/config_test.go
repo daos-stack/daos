@@ -30,22 +30,37 @@ import (
 	"path"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func getDefaultConfig(t *testing.T) *client.Configuration {
+func getDefaultConfig(t *testing.T) (*client.Configuration, *os.File, func()) {
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	absPath, err := common.GetAbsInstallPath(defaultConfig.Path)
+	newPath, err := common.GetAdjacentPath(defaultConfig.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaultConfig.Path = absPath
+	defaultConfig.Path = newPath
 
-	return defaultConfig
+	// create default config file
+	if err := os.MkdirAll(path.Dir(defaultConfig.Path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(defaultConfig.Path)
+	if err != nil {
+		os.RemoveAll(path.Dir(defaultConfig.Path))
+		t.Fatal(err)
+	}
+	cleanup := func() {
+		os.RemoveAll(path.Dir(defaultConfig.Path))
+	}
+
+	return defaultConfig, f, cleanup
 }
 
 func getTestFile(t *testing.T) *os.File {
@@ -63,33 +78,32 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig := getDefaultConfig(t)
+	defaultConfig, f, cleanup := getDefaultConfig(t)
+	f.Close()
+	defer cleanup()
 
 	cfg, err := client.GetConfig(log, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	common.AssertEqual(t, cfg, defaultConfig,
-		"loaded config doesn't match default config")
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestLoadConfigFromDefaultFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	defaultConfig := getDefaultConfig(t)
-	if err := os.MkdirAll(path.Dir(defaultConfig.Path), 0755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(defaultConfig.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path.Dir(defaultConfig.Path))
+	defaultConfig, f, cleanup := getDefaultConfig(t)
+	defer cleanup()
+
 	defaultConfig.SystemName = t.Name()
 
-	_, err = f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
+	_, err := f.WriteString(fmt.Sprintf("name: %s\n", t.Name()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +114,11 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	common.AssertEqual(t, cfg, defaultConfig,
-		"loaded config doesn't match written config")
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {
