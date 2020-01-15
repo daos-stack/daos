@@ -136,8 +136,11 @@ def set_test_environment():
         with open(os.path.join(net_path, device, "operstate"), "r") as buffer:
             state = buffer.read().strip()
         # Get the interface speed - used to select the fastest available
-        with open(os.path.join(net_path, device, "speed"), "r") as buffer:
-            speed = int(buffer.read().strip())
+        if state.lower != "up":
+            speed = 0
+        else:
+            with open(os.path.join(net_path, device, "speed"), "r") as buffer:
+                speed = int(buffer.read().strip())
         print(
             "  - {0:<5} (speed: {1:>6} state: {2})".format(
                 device, speed, state))
