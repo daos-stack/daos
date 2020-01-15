@@ -1,13 +1,13 @@
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
-    - boro-F
-    - boro-G
-    - boro-H
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+    - server-H
 timeout: 900
 server_config:
   name: daos_server
