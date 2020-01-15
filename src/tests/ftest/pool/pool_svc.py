@@ -88,7 +88,7 @@ class PoolSvc(TestWithServers):
                 if createsvc[0] == 3:
                     # kill pool leader and exclude it
                     self.pool.pool.pool_svc_stop()
-                    self.pool.exclude([leader])
+                    self.pool.exclude([leader], self.d_log)
                     # perform pool disconnect, try connect again and disconnect
                     self.pool.disconnect()
                     self.pool.connect(1)
