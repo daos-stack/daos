@@ -146,7 +146,7 @@ def scons():
             print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
-        dash = tag.find('-')    # pylint: disable=pylint-no-member
+        dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
             version = tag[0:dash]
         else:
