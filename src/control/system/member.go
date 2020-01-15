@@ -40,13 +40,23 @@ type MemberState int
 const (
 	MemberStateUnknown MemberState = iota
 	MemberStateStarted
-	MemberStateStopping
-	MemberStateErrored
-	MemberStateUnresponsive
+	MemberStateStopping     // prep-shutdown successfully run
+	MemberStateStopped      // process cleanly stopped
+	MemberStateEvicted      // rank has been evicted from DAOS system
+	MemberStateErrored      // process stopped with errors
+	MemberStateUnresponsive // e.g. zombie process
 )
 
 func (ms MemberState) String() string {
-	return [...]string{"Unknown", "Started", "Stopping", "Errored", "Unresponsive"}[ms]
+	return [...]string{
+		"Unknown",
+		"Started",
+		"Stopping",
+		"Stopped",
+		"Evicted",
+		"Errored",
+		"Unresponsive",
+	}[ms]
 }
 
 // Member refers to a data-plane instance that is a member of this DAOS
@@ -119,7 +129,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 	defer m.Unlock()
 
 	if value, found := m.members[member.Rank]; found {
-		return -1, errors.Errorf("member %s already exists", value)
+		return -1, errors.Wrapf(FaultMemberExists, "member %s", value)
 	}
 
 	m.members[member.Rank] = member
@@ -133,12 +143,32 @@ func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
 	defer m.Unlock()
 
 	if _, found := m.members[rank]; !found {
-		return errors.Errorf("member with rank %d not found", rank)
+		return errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	m.members[rank].SetState(state)
 
 	return nil
+}
+
+// AddOrUpdate adds member to membership or updates member state if member
+// already exists in membership. Returns flag for whether member was created and
+// the previous state if updated.
+func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
+	m.Lock()
+	defer m.Unlock()
+
+	oldMember, found := m.members[member.Rank]
+	if found {
+		os := oldMember.State()
+		m.members[member.Rank].SetState(member.State())
+
+		return false, &os
+	}
+
+	m.members[member.Rank] = member
+
+	return true, nil
 }
 
 // Remove removes member from membership, idempotent.
@@ -156,7 +186,7 @@ func (m *Membership) Get(rank uint32) (*Member, error) {
 
 	member, found := m.members[rank]
 	if !found {
-		return nil, errors.Errorf("member with rank %d not found", rank)
+		return nil, errors.Wrapf(FaultMemberMissing, "rank %d", rank)
 	}
 
 	return member, nil

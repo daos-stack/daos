@@ -366,7 +366,6 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
-ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t

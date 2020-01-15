@@ -30,7 +30,6 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, struct dfuse_inode_entry *newparent,
 		const char *newname, unsigned int flags)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	int rc;
 
 	if (flags != 0)
@@ -47,9 +46,9 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_INFO(parent, "Renamed %s to %s in %p",
 		       name, newname, newparent);
 
-	DFUSE_REPLY_ZERO(req);
+	DFUSE_REPLY_ZERO(parent, req);
 	return;
 
 out:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 }

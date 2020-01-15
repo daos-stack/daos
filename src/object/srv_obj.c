@@ -118,7 +118,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -821,8 +821,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				      orw->orw_epoch, dkey, orw->orw_nr,
 				      iods, &ioh, dth);
 		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 	} else {
@@ -833,8 +833,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
 
 		if (rc) {
-			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 
@@ -858,8 +858,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod);
 	if (rc) {
-		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto out;
 	}
 
@@ -890,8 +890,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	if (rc == -DER_OVERFLOW) {
 		rc = -DER_REC2BIG;
-		D_ERROR(DF_UOID" bio_iod_copy failed, rc %d",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID" bio_iod_copy failed, rc "DF_RC"",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto post;
 	}
 
@@ -1145,13 +1145,14 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		       orw->orw_dti_cos.ca_count, orw->orw_map_ver,
 		       DAOS_INTENT_UPDATE, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for update %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error=%d.\n", DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1219,7 +1220,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			   orw->orw_pool_uuid, orw->orw_co_hdl,
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0) {
-		D_ASSERTF(rc < 0, "unexpected error# %d\n", rc);
+		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
 		goto reply;
 	}
 
@@ -1241,8 +1242,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
 				  NULL, NULL, NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UOID": error=%d.\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID": error="DF_RC".\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		D_GOTO(out, rc);
@@ -1298,8 +1299,8 @@ renew:
 			      orw->orw_shard_tgts.ca_arrays,
 			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for update %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1358,7 +1359,7 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 	obj_reply_map_version_set(rpc, map_version);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
@@ -1666,7 +1667,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -1762,8 +1763,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		       opi->opi_dti_cos.ca_count, opi->opi_map_ver,
 		       DAOS_INTENT_PUNCH, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for punch %d.\n",
-			DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
+			DP_UOID(opi->opi_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1771,7 +1772,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), ioc.ioc_coh,
 			     ioc.ioc_coc, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error=%d.\n", DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -1862,8 +1864,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), ioc.ioc_coh,
 				     ioc.ioc_coc, NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UOID": error=%d.\n",
-				DP_UOID(opi->opi_oid), rc);
+			D_ERROR(DF_UOID": error="DF_RC".\n",
+				DP_UOID(opi->opi_oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -1912,8 +1914,8 @@ renew:
 			      opi->opi_shard_tgts.ca_arrays,
 			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for punch %d.\n",
-			DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
+			DP_UOID(opi->opi_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2003,7 +2005,7 @@ out:
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 void
@@ -2048,36 +2050,7 @@ out:
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
-}
-
-/**
- * Choose abt pools for object RPC. Because those update RPC might create pool
- * map refresh ULT, let's put it to share pool. For other RPC, it can be put to
- * the private pool. XXX we might just instruct the server create task for
- * inline I/O.
- */
-ABT_pool
-ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
-{
-	ABT_pool	pool;
-
-	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_ENUMERATE:
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_TGT_UPDATE:
-	case DAOS_OBJ_RPC_FETCH:
-		pool = pools[DSS_POOL_SHARE];
-		break;
-	default:
-		pool = pools[DSS_POOL_PRIV];
-		break;
-	};
-
-	return pool;
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 static int

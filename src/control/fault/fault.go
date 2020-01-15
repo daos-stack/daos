@@ -112,7 +112,7 @@ func (f *Fault) Equals(raw error) bool {
 	if !ok {
 		return false
 	}
-	return f.Code == other.Code
+	return f.Code == other.Code && f.Description == other.Description
 }
 
 // ShowResolutionFor attempts to return the resolution string for the
