@@ -72,15 +72,15 @@ class PoolSvc(TestWithServers):
             #self.log.debug("## self.pool.svc_ranks = %s" %
             #               self.pool.svc_ranks)
             self.assertTrue(999999 not in self.pool.svc_ranks,
-                "999999 is in the pool's service ranks.")
+                            "999999 is in the pool's service ranks.")
             self.assertEqual(len(self.pool.svc_ranks), self.pool.svcn.value,
-                "Length of Returned Rank list is not equal to the number of " + 
-                "Pool Service members.")
+                             "Length of Returned Rank list is not equal to " +
+                             "the number of Pool Service members.")
 
             # Verify there are no duplicate ranks in the rank list
             self.assertEqual(len(self.pool.svc_ranks),
-                            len(set(self.pool.svc_ranks)),
-                            "Duplicate values in returned rank list")
+                             len(set(self.pool.svc_ranks)),
+                             "Duplicate values in returned rank list")
 
             try:
                 self.pool.get_info()
@@ -96,7 +96,7 @@ class PoolSvc(TestWithServers):
                     # kill another server which is not a leader and exclude it
                     server = DaosServer(self.context, self.server_group, 3)
                     server.kill(1)
-                    self.pool.exclude([3])
+                    self.pool.exclude([3], self.d_log)
                     # perform pool connect
                     self.pool.connect(1)
 

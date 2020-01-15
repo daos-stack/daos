@@ -90,7 +90,7 @@ class PoolAttributeTest(TestWithServers):
         super(PoolAttributeTest, self).setUp()
 
         self.large_data_set = {}
-        
+
         self.pool = TestPool(self.context, dmg_bin_path=self.bin)
         self.pool.get_params(self)
         self.pool.create()
