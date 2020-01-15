@@ -75,7 +75,7 @@ In-memory (DRAM) data maintained by the Device Owner Xstream consisting of the f
   - I/O error counters (Read, Write, Unmap)
   - Checksum Error Counter (currently not implemented)
 
-   Useful Admin Commands to Query Device Health Data:
+ Useful Admin Commands to Query Device Health Data:
   - <a href="#81">dmg storage query blobstore-health</a> [used to query in-memory blobstore health data]
   - <a href="#82">dmg storage query nvme-health</a> [used to query raw SPDK SSD health stats]
 
@@ -89,19 +89,20 @@ The current NVMe monitoring period for event polling is set at 60 seconds.
 <a id="10"></a>
 ## Blobstore/Device State Transitions
 ![/doc/graph/Blobstore_State_Transitions.PNG](/doc/graph/Blobstore_State_Transitions.PNG "Device State Transitions")
-   **Blobstore:**
-    - NORMAL: healthy & functional
-    - FAULTY: meets certain faulty criteria
-    - TEARDOWN: affected targets are marked as DOWN
-    - OUT: blobstore is torn down
-    - REPLACED: new device is hot-plugged, initialize new blobstore and blobs (not implemented)
-    - REINT: affected targets are in REINT state (not implemented)
 
-   **Per-Server Metadata (SMD):**
-    - NORMAL
-    - FAULTY
+**Blobstore:**
+  - NORMAL: healthy & functional
+  - FAULTY: meets certain faulty criteria
+  - TEARDOWN: affected targets are marked as DOWN
+  - OUT: blobstore is torn down
+  - REPLACED: new device is hot-plugged, initialize new blobstore and blobs (not implemented)
+  - REINT: affected targets are in REINT state (not implemented)
+  
+**Per-Server Metadata (SMD):**
+  - NORMAL
+  - FAULTY
 
-   Useful Admin Commands to Query & Set Device State:
+ Useful Admin Commands to Query & Set Device State:
    - <a href="#111">dmg storage query device-state</a> [used to query SMD persistent device state]
    - <a href="#112">dmg storage set nvme-faulty</a> [used to manually set the device state to FAULTY, triggers faulty reaction callback]
 
