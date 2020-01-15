@@ -404,7 +404,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 
 		// warn if access point port differs from config control port
 		if strconv.Itoa(c.ControlPort) != port {
-			log.Debugf("access point (%s) port (%s) differs from control port (%s)",
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
 				host, port, c.ControlPort)
 		}
 
