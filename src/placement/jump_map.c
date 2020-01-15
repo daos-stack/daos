@@ -944,7 +944,6 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&reint_list);
 
 	/* Get original placement */
-	md->omd_ver = 1;
 	rc = get_object_layout(jmap, layout, &jop, &remap_list, false, md);
 	if (rc)
 		goto out;
@@ -954,7 +953,6 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&remap_list);
 
 	/* Get placement after reintegration. */
-	md->omd_ver = reint_ver;
 	rc = get_object_layout(jmap, reint_layout, &jop, &remap_list, true, md);
 	if (rc)
 		goto out;
