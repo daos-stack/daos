@@ -207,7 +207,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
-			D_GOTO(out_err, ret = rc);
+			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
 
 	} else {
@@ -234,7 +234,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
 					rc);
-			D_GOTO(out_pool, ret = rc);
+			D_GOTO(out_pool, ret = daos_der2errno(rc));
 		}
 
 		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
