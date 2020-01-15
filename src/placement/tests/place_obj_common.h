@@ -68,6 +68,16 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   struct pool_map *po_map, struct pl_map *pl_map);
 
 void
+gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
+			   int vos_per_target, pl_map_type_t pl_type,
+			   struct pool_map **po_map_out,
+			   struct pl_map **pl_map_out);
+
+void
+free_pool_and_placement_map(struct pool_map *po_map_in,
+			    struct pl_map *pl_map_in);
+
+void
 plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   int failed_cnt, uint32_t *reint_tgts, int reint_cnt,
 		   uint32_t *spare_tgt_ranks, uint32_t *shard_ids,
