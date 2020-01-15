@@ -27,7 +27,7 @@ import re
 
 from dmg_utils import pool_query
 from apricot import TestWithServers
-from test_utils import TestPool
+from test_utils import TestPool, check_pool_space
 
 
 class DmgPoolQueryTest(TestWithServers):
@@ -71,6 +71,7 @@ class DmgPoolQueryTest(TestWithServers):
         d_info["dmg_r_info"] = re.findall(
             r"Rebuild (.+), (.+) objs, (.+) recs", dmg_out.stdout)
 
+        print("d_info: {}".format(d_info))
         # Get data from API to verify dmg output.
         e_info = {}
         e_info["exp_t_cnt"] = None
@@ -109,3 +110,5 @@ class DmgPoolQueryTest(TestWithServers):
         if dmg_out.exit_status != exp_out[-1]:
             self.fail("Test failed, dmg pool query finished with: {}".format(
                 dmg_out.exit_status))
+        elif dmg_out is None:
+            self.fail("Test failed, dmg command failed while executing.")

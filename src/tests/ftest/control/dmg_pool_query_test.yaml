@@ -30,32 +30,32 @@ pool_uuids: !mux
   alpha_upper:
     uuid:
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
-      - 1
+      - 1 # FAIL
   alpha_lower:
     uuid:
       - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
-      - 1
+      - 1 # FAIL
   alphanumeric:
     uuid:
       - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
-      - 1
+      - 1 # FAIL
   numeric_01:
     uuid:
       - "111-222-333-444-555"
-      - 1
+      - 1 # FAIL
   numeric_02:
     uuid:
       - "0-0-0-0-0"
-      - 1
+      - 1 # FAIL
   random:
     uuid:
       - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
-      - 1
+      - 1 # FAIL
   special_chars:
     uuid:
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-      - 1
+      - 1 # FAIL
   special_aplanumeric_chars:
     uuid:
       - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
-      - 1
+      - 1 # FAIL
