@@ -2053,35 +2053,6 @@ out:
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
-/**
- * Choose abt pools for object RPC. Because those update RPC might create pool
- * map refresh ULT, let's put it to share pool. For other RPC, it can be put to
- * the private pool. XXX we might just instruct the server create task for
- * inline I/O.
- */
-ABT_pool
-ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
-{
-	ABT_pool	pool;
-
-	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_ENUMERATE:
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
-	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_TGT_UPDATE:
-	case DAOS_OBJ_RPC_FETCH:
-		pool = pools[DSS_POOL_SHARE];
-		break;
-	default:
-		pool = pools[DSS_POOL_PRIV];
-		break;
-	};
-
-	return pool;
-}
-
 static int
 cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 {

@@ -27,7 +27,7 @@ from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from command_utils import BasicParameter
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 
 class PoolTestBase(TestWithServers):

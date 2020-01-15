@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ struct dfuse_inode_ops {
 			  size_t size);
 	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			    const char *name);
-
+	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -384,6 +384,17 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
+#define DFUSE_REPLY_STATFS(desc, req, stat)				\
+	do {								\
+		int __rc;						\
+		DFUSE_TRA_DEBUG(desc, "Returning statfs");		\
+		__rc = fuse_reply_statfs(req, stat);			\
+		if (__rc != 0)						\
+			DFUSE_TRA_ERROR(desc,				\
+					"fuse_reply_statfs returned %d:%s", \
+					__rc, strerror(-__rc));		\
+	} while (0)
+
 #define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)			\
 	do {								\
 		int __rc;						\
@@ -564,6 +575,9 @@ dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
 dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
+
+void
+dfuse_cb_statfs(fuse_req_t, struct dfuse_inode_entry *);
 
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
