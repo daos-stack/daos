@@ -45,8 +45,8 @@ ior:
         daos_oclass: "SX"
         file_options: !mux
           ssf:
-            flags: "-v -w -W -r -R"
+            flags: "-k -e -D 600 -v -w -W -r -R"
           fpp:
-            flags: "-F -v -w -W -r -R"
+            flags: "-F -k -e -D 600 -v -w -W -r -R"
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
