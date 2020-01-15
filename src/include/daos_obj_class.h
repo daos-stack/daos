@@ -468,6 +468,17 @@ int
 daos_oclass_name2id(const char *name);
 
 /**
+ * Return the list of object class.
+ *
+ * \param[in]	size	length in bytes of str buffer.
+ * \param[out]	str	buffer to get all registered oclass names
+ *
+ * \return		>= 0 on success and required length of str, -1 if error.
+ */
+size_t
+daos_oclass_names_list(size_t size, char *str);
+
+/**
  * Return the object class name given it's ID.
  *
  * \param[in]	oc_id	Object class ID.

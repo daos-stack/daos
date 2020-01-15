@@ -75,5 +75,5 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		return;
 	}
 
-	DFUSE_REPLY_ATTR(req, attr);
+	DFUSE_REPLY_ATTR(ie, req, attr);
 }

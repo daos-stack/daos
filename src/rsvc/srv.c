@@ -413,7 +413,8 @@ init_map_distd(struct ds_rsvc *svc)
 	rc = dss_ult_create(map_distd, svc, DSS_ULT_MISC, DSS_TGT_SELF, 0,
 			    &svc->s_map_distd);
 	if (rc != 0) {
-		D_ERROR("%s: failed to start map_distd: %d\n", svc->s_name, rc);
+		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name,
+			DP_RC(rc));
 		put_leader(svc);
 		ds_rsvc_put(svc);
 	}
@@ -434,7 +435,7 @@ fini_map_distd(struct ds_rsvc *svc)
 	int rc;
 
 	rc = ABT_thread_join(svc->s_map_distd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&svc->s_map_distd);
 }
 
@@ -470,8 +471,8 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": %d\n",
-			svc->s_name, term, rc);
+		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
 		goto out_mutex;
@@ -518,7 +519,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
-	D_DEBUG(DB_MD, "%s: bootstrapped: %d\n", svc->s_name, rc);
+	D_DEBUG(DB_MD, "%s: bootstrapped: "DF_RC"\n", svc->s_name, DP_RC(rc));
 	return rc;
 }
 
@@ -586,8 +587,8 @@ rsvc_stop_cb(struct rdb *db, int err, void *arg)
 	rc = dss_ult_create(rsvc_stopper, svc, DSS_ULT_MISC, DSS_TGT_SELF,
 			    0, NULL);
 	if (rc != 0) {
-		D_ERROR("%s: failed to create service stopper: %d\n",
-			svc->s_name, rc);
+		D_ERROR("%s: failed to create service stopper: "DF_RC"\n",
+			svc->s_name, DP_RC(rc));
 		ds_rsvc_put(svc);
 	}
 }
@@ -657,7 +658,7 @@ self_only(d_rank_list_t *replicas)
 	int		rc;
 
 	rc = crt_group_rank(NULL /* grp */, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return replicas != NULL && replicas->rl_nr == 1 &&
 	       replicas->rl_ranks[0] == self;
 }
@@ -761,7 +762,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
 			       &svc->s_entry, true /* exclusive */);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: insert: %d\n", svc->s_name, rc);
+		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
 		stop(svc, create /* destroy */);
 		goto out;
 	}
@@ -777,7 +778,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	ds_rsvc_put(svc);
 out:
 	if (rc != 0 && rc != -DER_ALREADY && !(create && rc == -DER_EXIST))
-		D_ERROR("Failed to start replicated service: %d\n", rc);
+		D_ERROR("Failed to start replicated service: "DF_RC"\n",
+			DP_RC(rc));
 	return rc;
 }
 
@@ -916,7 +918,8 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 	}
 
 	if (rc != 0)
-		D_ERROR("failed to stop all replicated services: %d\n", rc);
+		D_ERROR("failed to stop all replicated services: "DF_RC"\n",
+			DP_RC(rc));
 	return rc;
 }
 
@@ -1100,8 +1103,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s replicas: %d\n",
-			DP_UUID(dbid), create ? "/create" : "", rc);
+		D_ERROR(DF_UUID": failed to start%s replicas: "DF_RC"\n",
+			DP_UUID(dbid), create ? "/create" : "", DP_RC(rc));
 		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
 		rc = -DER_IO;
 	}
@@ -1133,7 +1136,7 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 
 		/* Do nothing if I'm not one of the replicas. */
 		rc = crt_group_rank(NULL /* grp */, &rank);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		if (!daos_rank_list_find(in->sai_ranks, rank, &i))
 			goto out;
 	}
@@ -1208,8 +1211,8 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
 	if (rc != 0) {
-		D_ERROR("failed to stop%s replicas: %d\n",
-			destroy ? "/destroy" : "", rc);
+		D_ERROR("failed to stop%s replicas: "DF_RC"\n",
+			destroy ? "/destroy" : "", DP_RC(rc));
 		rc = -DER_IO;
 	}
 
@@ -1234,7 +1237,7 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 
 		/* Do nothing if I'm not one of the replicas. */
 		rc = crt_group_rank(NULL /* grp */, &rank);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		if (!daos_rank_list_find(in->soi_ranks, rank, &i))
 			goto out;
 	}
