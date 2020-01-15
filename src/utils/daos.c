@@ -101,6 +101,8 @@ pool_op_parse(const char *str)
 		return POOL_GET_PROP;
 	else if (strcmp(str, "get-attr") == 0)
 		return POOL_GET_ATTR;
+	else if (strcmp(str, "set-attr") == 0)
+		return POOL_SET_ATTR;
 	else if (strcmp(str, "list-attrs") == 0)
 		return POOL_LIST_ATTRS;
 	return -1;
@@ -381,11 +383,21 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			break;
 
 		case 'a':
+			if (ap->attrname_str != NULL) {
+				fprintf(stderr,
+					"only one attribute name is allowed\n");
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
 			D_STRNDUP(ap->attrname_str, optarg, strlen(optarg));
 			if (ap->attrname_str == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 'v':
+			if (ap->value_str != NULL) {
+				fprintf(stderr,
+					"only one attribute name is allowed\n");
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			}
 			D_STRNDUP(ap->value_str, optarg, strlen(optarg));
 			if (ap->value_str == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
@@ -466,10 +478,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
-	    (ap->p_op == POOL_STAT ||
-	     ap->p_op == POOL_GET_PROP ||
-	     ap->p_op == POOL_GET_ATTR ||
-	     ap->p_op == POOL_LIST_ATTRS)) {
+	    (ap->p_op == POOL_STAT)) {
 		fprintf(stderr,
 			"pool %s not yet implemented\n", cmdname);
 		D_GOTO(out_free, rc = RC_NO_HELP);
@@ -478,15 +487,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
 	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_GET_PROP ||
 	     ap->c_op == CONT_SET_PROP ||
-	     ap->c_op == CONT_LIST_ATTRS ||
 	     ap->c_op == CONT_DEL_ATTR ||
-	     ap->c_op == CONT_GET_ATTR ||
-	     ap->c_op == CONT_SET_ATTR ||
-	     ap->c_op == CONT_CREATE_SNAP ||
-	     ap->c_op == CONT_LIST_SNAPS ||
-	     ap->c_op == CONT_DESTROY_SNAP ||
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
 			"container %s not yet implemented\n", cmdname);
@@ -549,18 +551,21 @@ pool_op_hdlr(struct cmd_args_s *ap)
 		rc = pool_list_containers_hdlr(ap);
 		break;
 
-	/* TODO: implement the following ops */
+	/* TODO: implement when statistics available */
 	case POOL_STAT:
 		/* rc = pool_stat_hdlr(ap); */
 		break;
 	case POOL_GET_PROP:
-		/* rc = pool_get_prop_hdlr(ap); */
+		rc = pool_get_prop_hdlr(ap);
 		break;
 	case POOL_GET_ATTR:
-		/* rc = pool_get_attr_hdlr(ap); */
+		rc = pool_get_attr_hdlr(ap);
+		break;
+	case POOL_SET_ATTR:
+		rc = pool_set_attr_hdlr(ap);
 		break;
 	case POOL_LIST_ATTRS:
-		/* rc = pool_list_attrs_hdlr(ap); */
+		rc = pool_list_attrs_hdlr(ap);
 		break;
 	default:
 		break;
@@ -663,31 +668,31 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		/* rc = cont_stat_hdlr(ap); */
 		break;
 	case CONT_GET_PROP:
-		/* rc = cont_get_prop_hdlr(ap); */
+		rc = cont_get_prop_hdlr(ap);
 		break;
 	case CONT_SET_PROP:
 		/* rc = cont_set_prop_hdlr(ap); */
 		break;
 	case CONT_LIST_ATTRS:
-		/* rc = cont_list_attrs_hdlr(ap); */
+		rc = cont_list_attrs_hdlr(ap);
 		break;
 	case CONT_DEL_ATTR:
 		/* rc = cont_del_attr_hdlr(ap); */
 		break;
 	case CONT_GET_ATTR:
-		/* rc = cont_get_attr_hdlr(ap); */
+		rc = cont_get_attr_hdlr(ap);
 		break;
 	case CONT_SET_ATTR:
-		/* rc = cont_set_attr_hdlr(ap); */
+		rc = cont_set_attr_hdlr(ap);
 		break;
 	case CONT_CREATE_SNAP:
-		/* rc = cont_create_snap_hdlr(ap); */
+		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		/* rc = cont_list_snaps_hdlr(ap); */
+		rc = cont_list_snaps_hdlr(ap);
 		break;
 	case CONT_DESTROY_SNAP:
-		/* rc = cont_destroy_snap_hdlr(ap); */
+		rc = cont_destroy_snap_hdlr(ap);
 		break;
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */

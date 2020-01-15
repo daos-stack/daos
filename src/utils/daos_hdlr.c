@@ -54,10 +54,277 @@
 
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
- * int pool_get_prop_hdlr(struct cmd_args_s *ap);
- * int pool_get_attr_hdlr(struct cmd_args_s *ap);
- * int pool_list_attrs_hdlr(struct cmd_args_s *ap);
  */
+
+int
+pool_get_prop_hdlr(struct cmd_args_s *ap)
+{
+	daos_prop_t			*prop_query;
+	struct daos_prop_entry		*entry;
+	int				rc = 0;
+	int				rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_GET_PROP);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	prop_query = daos_prop_alloc(0);
+	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool query failed for properties: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	D_PRINT("Pool properties :\n");
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "label property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("label -> %s\n", entry->dpe_str);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
+	if (entry == NULL) {
+		fprintf(stderr, "rebuild space ratio property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("rebuild space ratio -> "DF_U64"\n", entry->dpe_val);
+
+	/* not set properties should get default value */
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
+	if (entry == NULL) {
+		fprintf(stderr, "self-heal property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("self-heal -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
+	if (entry == NULL) {
+		fprintf(stderr, "reclaim property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("reclaim -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		fprintf(stderr, "acl property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("acl -> \n");
+	daos_acl_dump(entry->dpe_val_ptr);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("owner -> %s\n", entry->dpe_str);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "owner-group property not found\n");;
+		D_GOTO(out_disconnect, rc = -DER_INVAL);
+	}
+	D_PRINT("owner-group -> %s\n", entry->dpe_str);
+
+out_disconnect:
+	daos_prop_free(prop_query);
+
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+}
+
+int
+pool_set_attr_hdlr(struct cmd_args_s *ap)
+{
+	size_t				value_size;
+	int				rc = 0;
+	int				rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_SET_ATTR);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RW, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	value_size = strlen(ap->value_str);
+	rc = daos_pool_set_attr(ap->pool, 1,
+				(const char * const*)&ap->attrname_str,
+				(const void * const*)&ap->value_str,
+				(const size_t *)&value_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool set attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+
+}
+
+int
+pool_get_attr_hdlr(struct cmd_args_s *ap)
+{
+	size_t				 attr_size, expected_size;
+	char				*buf;
+	int				rc = 0;
+	int				rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_GET_ATTR);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* evaluate required size to get attr */
+	attr_size = 0;
+	rc = daos_pool_get_attr(ap->pool, 1,
+				(const char * const*)&ap->attrname_str, NULL,
+				&attr_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool get attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	D_PRINT("Pool's %s attribute value: ", ap->attrname_str);
+	if (attr_size <= 0) {
+		D_PRINT("empty attribute\n");
+		D_GOTO(out_disconnect, rc);
+	}
+
+	D_ALLOC(buf, attr_size);
+	if (buf == NULL)
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
+
+	expected_size = attr_size;
+	rc = daos_pool_get_attr(ap->pool, 1,
+				(const char * const*)&ap->attrname_str,
+				(void * const*)&buf, &attr_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool get attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	if (expected_size < attr_size)
+		fprintf(stderr, "size required to get attributes has raised, value has been truncated\n");
+	D_PRINT("%s\n", buf);
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+
+}
+
+int
+pool_list_attrs_hdlr(struct cmd_args_s *ap)
+{
+	size_t				 total_size, expected_size, cur = 0,
+					 len;
+	char				*buf;
+	int				rc = 0;
+	int				rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_LIST_ATTRS);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* evaluate required size to get all attrs */
+	total_size = 0;
+	rc = daos_pool_list_attr(ap->pool, NULL, &total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool list attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	D_PRINT("Pool attributes:\n");
+	if (total_size == 0) {
+		D_PRINT("No attributes\n");
+		D_GOTO(out_disconnect, rc);
+	}
+
+	D_ALLOC(buf, total_size);
+	if (buf == NULL)
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
+
+	expected_size = total_size;
+	rc = daos_pool_list_attr(ap->pool, buf, &total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "pool list attr failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	if (expected_size < total_size)
+		fprintf(stderr, "size required to gather all attributes has raised, list has been truncated\n");
+	while (cur < total_size) {
+		len = strnlen(buf + cur, total_size - cur);
+		if (len == total_size - cur) {
+			fprintf(stderr,
+				"end of buf reached but no end of string encountered, ignoring\n");
+			break;
+		}
+		D_PRINT("%s\n", buf + cur);
+		cur += len + 1;
+	}
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+
+}
 
 int
 pool_list_containers_hdlr(struct cmd_args_s *ap)
@@ -203,19 +470,343 @@ out:
  * int cont_FN_hdlr(struct cmd_args_s *ap)
  *
  * cont_list_objs_hdlr()
- * int cont_query_hdlr()
  * int cont_stat_hdlr()
- * int cont_get_prop_hdlr()
  * int cont_set_prop_hdlr()
- * int cont_list_attrs_hdlr()
  * int cont_del_attr_hdlr()
- * int cont_get_attr_hdlr()
- * int cont_set_attr_hdlr()
- * int cont_create_snap_hdlr()
- * int cont_list_snaps_hdlr()
- * int cont_destroy_snap_hdlr()
  * int cont_rollback_hdlr()
  */
+
+int
+cont_list_snaps_hdlr(struct cmd_args_s *ap)
+{
+	daos_epoch_t *buf;
+	daos_anchor_t anchor;
+	int rc, i, snaps_count, expected_count;
+
+	/* evaluate size for listing */
+	snaps_count = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor,
+				 NULL); 
+	if (rc != 0) {
+		fprintf(stderr, "cont list snaps failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_PRINT("Container's snapshots :\n");
+	if (daos_anchor_is_eof < 0) {
+		fprintf(stderr, "invalid number of snapshots returned\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (snaps_count == 0) {
+		D_PRINT("no snapshots\n");
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_ARRAY(buf, snaps_count);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	expected_count = snaps_count;
+	memset(&anchor, 0, sizeof(anchor));
+	rc = daos_cont_list_snap(ap->cont, &snaps_count, buf, NULL, &anchor,
+				 NULL); 
+	if (rc != 0) {
+		fprintf(stderr, "cont list snaps failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	if (expected_count < snaps_count)
+		fprintf(stderr, "size required to gather all snapshots has raised, list has been truncated\n");
+
+	for (i = 0; i < min(expected_count, snaps_count); i++)
+		D_PRINT(DF_U64" ", buf[i]);
+	D_PRINT("\n");
+
+out:
+	return rc;
+}
+
+int
+cont_create_snap_hdlr(struct cmd_args_s *ap)
+{
+	int rc;
+
+	rc = daos_cont_create_snap(ap->cont, &ap->epc, NULL, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont create snap failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_PRINT("snapshot/epoch "DF_U64" has been created\n", ap->epc);
+out:
+	return rc;
+}
+
+int
+cont_destroy_snap_hdlr(struct cmd_args_s *ap)
+{
+	daos_epoch_range_t epr;
+	int rc;
+
+	if (ap->epc == 0 &&
+	    (ap->epcrange_begin == 0 || ap->epcrange_end == 0)) {
+		fprintf(stderr, "a single epoch or a range must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (ap->epc != 0 &&
+	    (ap->epcrange_begin != 0 || ap->epcrange_end != 0)) {
+		fprintf(stderr, "both a single epoch and a range not allowed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (ap->epc != 0) {
+		epr.epr_lo = ap->epc;
+		epr.epr_hi = ap->epc;
+	} else {
+		epr.epr_lo = ap->epcrange_begin;
+		epr.epr_hi = ap->epcrange_end;
+	}
+
+	rc = daos_cont_destroy_snap(ap->cont, epr, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont destroy snap failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
+}
+
+int
+cont_set_attr_hdlr(struct cmd_args_s *ap)
+{
+	size_t				value_size;
+	int				rc = 0;
+
+	value_size = strlen(ap->value_str);
+	rc = daos_cont_set_attr(ap->cont, 1,
+				(const char * const*)&ap->attrname_str,
+				(const void * const*)&ap->value_str,
+				(const size_t *)&value_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont set attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
+
+}
+
+int
+cont_get_attr_hdlr(struct cmd_args_s *ap)
+{
+	size_t				 attr_size, expected_size;
+	char				*buf;
+	int				rc = 0;
+
+	/* evaluate required size to get attr */
+	attr_size = 0;
+	rc = daos_cont_get_attr(ap->cont, 1,
+				(const char * const*)&ap->attrname_str, NULL,
+				&attr_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont get attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_PRINT("Container's %s attribute value: ", ap->attrname_str);
+	if (attr_size <= 0) {
+		D_PRINT("empty attribute\n");
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC(buf, attr_size);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	expected_size = attr_size;
+	rc = daos_cont_get_attr(ap->cont, 1,
+				(const char * const*)&ap->attrname_str,
+				(void * const*)&buf, &attr_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont get attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (expected_size < attr_size)
+		fprintf(stderr, "size required to get attributes has raised, value has been truncated\n");
+	D_PRINT("%s\n", buf);
+
+out:
+	return rc;
+
+}
+
+int
+cont_list_attrs_hdlr(struct cmd_args_s *ap)
+{
+	size_t				 size, total_size, expected_size, cur = 0,
+					 len;
+	char				*buf;
+	int				rc = 0;
+
+	/* evaluate required size to get all attrs */
+	total_size = 0;
+	rc = daos_cont_list_attr(ap->cont, NULL, &total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont list attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_PRINT("Container attributes:\n");
+	if (total_size == 0) {
+		D_PRINT("No attributes\n");
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC(buf, total_size);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	expected_size = total_size;
+	rc = daos_cont_list_attr(ap->cont, buf, &total_size, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "cont list attr failed: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (expected_size < total_size)
+		fprintf(stderr, "size required to gather all attributes has raised, list has been truncated\n");
+	size = min(expected_size, total_size);
+	while (cur < size) {
+		len = strnlen(buf + cur, size - cur);
+		if (len == size - cur) {
+			fprintf(stderr,
+				"end of buf reached but no end of string encountered, ignoring\n");
+			break;
+		}
+		D_PRINT("%s\n", buf + cur);
+		cur += len + 1;
+	}
+
+out:
+	return rc;
+
+}
+
+/* cont_get_prop_hdlr() - get container properties */
+int
+cont_get_prop_hdlr(struct cmd_args_s *ap)
+{
+	daos_prop_t		*prop_query;
+	struct daos_prop_entry	*entry;
+	int			rc = 0;
+
+	prop_query = daos_prop_alloc(0);
+	if (prop_query == NULL) {
+		D_ERROR("Failed to allocate prop.");
+		return ENOMEM;
+	}
+
+	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
+	if (rc) {
+		fprintf(stderr, "Container query failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	D_PRINT("Pool properties :\n");
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(stderr, "label property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("label -> %s\n", entry->dpe_str);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL) {
+		fprintf(stderr, "layout type property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("layout type -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_VER);
+	if (entry == NULL) {
+		fprintf(stderr, "layout version property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("layout version -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
+	if (entry == NULL) {
+		fprintf(stderr, "checksum type property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("checksum type -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	if (entry == NULL) {
+		fprintf(stderr, "checksum chunck-size property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("checksum chunck-size -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+	if (entry == NULL) {
+		fprintf(stderr, "checksum verification on server property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("checksum verification on server -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_REDUN_FAC);
+	if (entry == NULL) {
+		fprintf(stderr, "redundancy factor property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("redundancy factor -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_REDUN_LVL);
+	if (entry == NULL) {
+		fprintf(stderr, "redundancy level property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("redundancy level -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SNAPSHOT_MAX);
+	if (entry == NULL) {
+		fprintf(stderr, "max snapshots property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("max snapshots -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		fprintf(stderr, "acl property not found\n");;
+		/* not an error */
+	} else {
+		D_PRINT("acl -> \n");
+		daos_acl_dump(entry->dpe_val_ptr);
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_COMPRESS);
+	if (entry == NULL) {
+		fprintf(stderr, "compression type property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("compression type -> "DF_U64"\n", entry->dpe_val);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
+	if (entry == NULL) {
+		fprintf(stderr, "encryption type property not found\n");;
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+	D_PRINT("encryption type -> "DF_U64"\n", entry->dpe_val);
+
+err_out:
+	daos_prop_free(prop_query);
+	return rc;
+}
 
 /* cont_create_hdlr() - create container by UUID */
 int
