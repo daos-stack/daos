@@ -353,9 +353,11 @@ test_fetch_array(void **state)
 	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
 			    ctx.fetch_sgl.sg_iovs->iov_buf,
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
-
 	unset_csum_fi();
+	cleanup_data(&ctx);
 
+	/** 5. Replicated (complicated data) object with corruption */
+	set_fetch_csum_fi();
 	setup_multiple_extent_data(&ctx);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
@@ -370,7 +372,9 @@ test_fetch_array(void **state)
 			    ctx.update_sgl.sg_iovs->iov_buf_len);
 
 	/** Clean up */
+	unset_csum_fi();
 	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
 }
 
 /**
