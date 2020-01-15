@@ -776,6 +776,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				  !cli_disp && grp_size > 1;
 
 	if (bit_map != NIL_BITMAP) {
+		D_ASSERT(bit_map);
 		shard_nr = 0;
 		for (i = 0; i < shard_cnt; i++)
 			if (isset(bit_map, i))
