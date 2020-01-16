@@ -46,7 +46,7 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
-	mi, err := svc.harness.GetMSLeaderInstance()
+	_, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
