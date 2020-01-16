@@ -2701,8 +2701,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 }
 
 int
-dfs_read_iod(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	     daos_size_t *read_size, daos_event_t *ev)
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev)
 {
 	struct dfs_read_params	*args;
 	tse_task_t		*task;
@@ -2789,8 +2789,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 }
 
 int
-dfs_write_iod(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	      daos_event_t *ev)
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev)
 {
 	daos_array_iod_t	arr_iod;
 	int			rc;

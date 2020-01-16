@@ -330,7 +330,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
- * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	iod	IO descriptor for list-io.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[out]	read_size
  *			How much data is actually read.
@@ -340,8 +340,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_read_iod(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	     daos_size_t *read_size, daos_event_t *ev);
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -372,8 +372,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_write_iod(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
-	      daos_event_t *ev);
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev);
 
 /**
  * Query size of file data.
