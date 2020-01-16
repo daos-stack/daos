@@ -25,7 +25,7 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 
 
 class BadCreateTest(TestWithServers):
@@ -128,5 +128,4 @@ class BadCreateTest(TestWithServers):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if pool is not None and pool.attached:
-                pool.destroy(1)
+            self.destroy_pools(pool)

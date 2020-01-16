@@ -46,6 +46,8 @@ service MgmtSvc {
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
+	// Set a DAOS pool property.
+	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Fetch the Access Control List for a DAOS pool.
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.
@@ -66,6 +68,8 @@ service MgmtSvc {
 	rpc PrepShutdown(PrepShutdownReq) returns (DaosResp) {}
 	// Kill DAOS IO server identified by rank.
 	rpc KillRank(KillRankReq) returns (DaosResp) {}
+	// Start DAOS IO servers identified by rank.
+	rpc StartRanks(StartRanksReq) returns (StartRanksResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
 	// Get the current state of the device

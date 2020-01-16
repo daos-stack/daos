@@ -79,8 +79,8 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	td_out = crt_reply_get(td_req);
 	rc = td_out->td_rc;
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to update pool map on %d targets\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to update pool map on "DF_RC" "
+			"targets\n", DP_UUID(pool_uuid), DP_RC(rc));
 out_rpc:
 	crt_req_decref(td_req);
 
@@ -252,7 +252,7 @@ pool_create_prepare(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t *tgts_in,
 		int		i;
 
 		rc = crt_group_size(NULL, &n);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		*tgts_out = d_rank_list_alloc(n);
 		if (*tgts_out == NULL) {
 			rc = -DER_NOMEM;
@@ -343,8 +343,8 @@ pool_rec_delete(struct mgmt_svc *svc, uuid_t uuid)
 	d_iov_set(&key, uuid, sizeof(uuid_t));
 	rc = rdb_tx_delete(&tx, &svc->ms_pools, &key);
 	if (rc != 0) {
-		D_ERROR("failed to delete pool "DF_UUID" from directory: %d\n",
-			DP_UUID(uuid), rc);
+		D_ERROR("failed to delete pool "DF_UUID" from directory: "
+			""DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
 		goto out_lock;
 	}
 
@@ -456,15 +456,15 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	rc = ds_mgmt_pool_svc_create(pool_uuid, rank_list->rl_nr, tgt_uuids,
 				     group, rank_list, prop, *svcp);
 	if (rc) {
-		D_ERROR("create pool "DF_UUID" svc failed: rc %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_svcp;
 	}
 
 	rc = pool_create_complete(svc, pool_uuid, *svcp);
 	if (rc != 0) {
-		D_ERROR("failed to mark pool "DF_UUID" ready: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("failed to mark pool "DF_UUID" ready: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		ds_pool_svc_destroy(pool_uuid);
 	}
 
@@ -484,7 +484,8 @@ out_preparation:
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	D_DEBUG(DB_MGMT, "create pool "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
+	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -593,22 +594,22 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 
 	rc = ds_pool_svc_destroy(pool_uuid);
 	if (rc != 0) {
-		D_ERROR("Failed to destroy pool service "DF_UUID": %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to destroy pool service "DF_UUID": "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_svc;
 	}
 
 	rc = ds_mgmt_tgt_pool_destroy(pool_uuid);
 	if (rc != 0) {
-		D_ERROR("Destroying pool "DF_UUID" failed, rc: %d.\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Destroying pool "DF_UUID" failed, rc: "DF_RC".\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_svc;
 	}
 
 	rc = pool_rec_delete(svc, pool_uuid);
 	if (rc != 0) {
-		D_ERROR("Failed to delete pool "DF_UUID" from directory: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to delete pool "DF_UUID" from directory: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_svc;
 	}
 
@@ -635,7 +636,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 					     pd_in->pd_grp, pd_in->pd_force);
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
 }
 
 /* Free array of pools created in ds_mgmt_list_pools() iteration.
@@ -797,7 +798,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	/* TODO: bulk transfer for large responses */
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
 
 	ds_mgmt_free_pool_list(&pools, pools_len);
 }
@@ -824,6 +825,47 @@ ds_mgmt_pool_list_cont(uuid_t uuid, struct daos_pool_cont_info **containers,
 
 	/* call pool service function to issue CaRT RPC to the pool service */
 	rc = ds_pool_svc_list_cont(uuid, ranks, containers, ncontainers);
+
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+/**
+ * Calls into the pool svc to query a pool by UUID.
+ *
+ * \param[in]		pool_uuid	UUID of the pool
+ * \param[in][out]	pool_info	Query results
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid inputs
+ *			Negative value	Other error
+ */
+int
+ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+
+	if (pool_info == NULL) {
+		D_ERROR("pool_info was NULL\n");
+		return -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_query(pool_uuid, ranks, pool_info);
 
 	d_rank_list_free(ranks);
 out_svc:
@@ -1000,6 +1042,58 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 
 out_name:
 	D_FREE(name);
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
+		      daos_prop_t **result)
+{
+	int              rc;
+	d_rank_list_t   *ranks;
+	struct mgmt_svc	*svc;
+	size_t           i;
+	daos_prop_t	*res_prop;
+
+	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
+		D_ERROR("invalid property\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_DEBUG(DB_MGMT, "Setting property for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_set_prop(pool_uuid, ranks, prop);
+	if (rc != 0)
+		goto out_ranks;
+
+	res_prop = daos_prop_alloc(prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++)
+		res_prop->dpp_entries[i].dpe_type =
+			prop->dpp_entries[i].dpe_type;
+
+	rc = ds_pool_svc_get_prop(pool_uuid, ranks, res_prop);
+	if (rc != 0) {
+		daos_prop_free(res_prop);
+		goto out_ranks;
+	}
+
+	*result = res_prop;
+
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:

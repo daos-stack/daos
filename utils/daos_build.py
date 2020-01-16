@@ -1,6 +1,8 @@
 """Common DAOS build functions"""
 from SCons.Script import Literal
 from env_modules import load_mpi
+from distutils.spawn import find_executable
+import os
 
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
@@ -26,9 +28,38 @@ def install(env, subdir, files):
     path = "$PREFIX/%s" % subdir
     denv.Install(path, files)
 
-def configure_mpi(prereqs, env, required=None):
+def load_mpi_path(env):
+    """Load location of mpicc into path if MPI_PKG is set"""
+    mpicc = find_executable("mpicc")
+    if mpicc:
+        env.AppendENVPath("PATH", os.path.dirname(mpicc))
+
+def _configure_mpi_pkg(env, libs):
+    """Configure MPI using pkg-config"""
+    mpicc = find_executable("mpicc")
+    if mpicc:
+        env.Replace(CC="mpicc")
+        env.Replace(LINK="mpicc")
+        return env.subst("$MPI_PKG")
+    try:
+        env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
+    except OSError as e:
+        print("\n**********************************")
+        print("Could not find package MPI_PKG=%s\n" % env.subst("$MPI_PKG"))
+        print("Unset it or update PKG_CONFIG_PATH")
+        print("**********************************")
+        raise e
+
+    # assume mpi is needed in the fallback case
+    libs.append('mpi')
+    return env.subst("$MPI_PKG")
+
+def configure_mpi(prereqs, env, libs, required=None):
     """Check if mpi exists and configure environment"""
-    mpis = ['ompi', 'mpich']
+    if env.subst("$MPI_PKG") != "":
+        return _configure_mpi_pkg(env, libs)
+
+    mpis = ['openmpi', 'mpich']
     if not required is None:
         if isinstance(required, str):
             mpis = [required]
@@ -37,10 +68,14 @@ def configure_mpi(prereqs, env, required=None):
 
     for mpi in mpis:
         load_mpi(mpi)
-        if prereqs.check_component(mpi):
-            prereqs.require(env, mpi)
+        comp = mpi
+        if mpi == "openmpi":
+            comp = "ompi"
+        if prereqs.check_component(comp):
+            prereqs.require(env, comp)
             print("%s is installed" % mpi)
-            return mpi
+            libs.append('mpi')
+            return comp
         print("No %s installed and/or loaded" % mpi)
     print("No OMPI installed")
     return None

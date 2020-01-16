@@ -186,7 +186,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.nr_xs_helpers = BasicParameter(None, 2)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
-            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
+            self.log_mask = BasicParameter(None, "DEBUG")
             self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(
                 None,
@@ -196,7 +196,8 @@ class DaosServerConfig(ObjectWithParameters):
                  "CRT_CTX_SHARE_ADDR=0",
                  "CRT_TIMEOUT=30",
                  "FI_SOCKETS_MAX_CONN_RETRY=1",
-                 "FI_SOCKETS_CONN_TIMEOUT=2000"]
+                 "FI_SOCKETS_CONN_TIMEOUT=2000",
+                 "DD_MASK=mgmt,io,md,epc,rebuild"]
             )
 
             # Storage definition parameters:
@@ -576,7 +577,7 @@ def storage_prepare(hosts, user, device_type):
            .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
-        raise ServerFailed("Error preparing NVMe storage")
+        raise ServerFailed("Error preparing {} storage".format(device_type))
 
 
 def storage_reset(hosts):
@@ -661,7 +662,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             raise ServerFailed("Can't find orterun")
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
-        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix"])
+        server_cmd.extend(["--mca", "btl_openib_warn_default_gid_prefix", "0"])
         server_cmd.extend(["--mca", "btl", "tcp,self"])
         server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])

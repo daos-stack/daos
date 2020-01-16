@@ -149,7 +149,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
-	rc = vos_tx_begin(vos_cont2umm(cont));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc != 0)
 		goto reset;
 
@@ -175,7 +175,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
 
-	rc = vos_tx_end(vos_cont2umm(cont), rc);
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
@@ -210,7 +210,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		return rc;
 	}
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc)
 		goto out;
 
@@ -218,7 +218,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 	if (rc)
 		goto out;
 
@@ -358,7 +358,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		return rc;
 
 	ent->ie_epoch = epr.epr_hi;
-	ent->ie_key_punch = oiter->it_ilog_info.ii_next_punch;
+	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */
@@ -465,7 +465,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
 			      NULL, &toh);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "can't load the akey tree: %d\n", rc);
+		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -501,7 +502,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 		switch (rc) {
 		default:
 			D_ASSERT(rc < 0);
-			D_ERROR("match failed, rc=%d\n", rc);
+			D_ERROR("match failed, rc="DF_RC"\n", DP_RC(rc));
 			goto out;
 
 		case IT_OPC_NOOP:
@@ -918,7 +919,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
+		D_DEBUG(DB_IO, "Cannot prepare recx iterator : "DF_RC"\n",
+			DP_RC(rc));
 	}
 	key_tree_release(rx_toh, true);
  failed:
@@ -1130,7 +1132,7 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor "
-			"subtree: rc=%d\n", rc);
+			"subtree: rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1230,7 +1232,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 					vos_obj2pool(obj), &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = %d\n", rc);
+				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED,
@@ -1243,7 +1245,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = %d\n", rc);
+				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 		filter.fr_ex.ex_lo = 0;
@@ -1257,7 +1259,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	key_tree_release(toh, type == VOS_ITER_RECX);
 
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
@@ -1404,17 +1407,88 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 
 	umm = vos_obj2umm(oiter->it_obj);
 
-	rc = vos_tx_begin(umm);
+	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->it_hdl, args);
 
-	rc = vos_tx_end(umm, rc);
+	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_ERROR("Failed to delete iter entry: %d\n", rc);
+		D_ERROR("Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
+}
+
+int
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	struct umem_instance	*umm;
+	struct vos_krec_df	*krec;
+	struct vos_object	*obj;
+	daos_key_t		 key;
+	struct vos_rec_bundle	 rbund;
+	bool			 reprobe = false;
+	int			 rc;
+
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
+		  iter->it_type == VOS_ITER_DKEY,
+		  "Aggregation only supported on keys\n");
+
+	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Iterator should probe before aggregation\n");
+	if (rc != 0)
+		return rc;
+
+	obj = oiter->it_obj;
+	krec = rbund.rb_krec;
+	umm = vos_obj2umm(oiter->it_obj);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto exit;
+
+	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
+				&oiter->it_epr, discard, oiter->it_punched,
+				&oiter->it_ilog_info);
+
+	if (rc == 1) {
+		/* Incarnation log is empty so delete the key */
+		reprobe = true;
+		D_DEBUG(DB_IO, "Removing %s from tree\n",
+			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+		if (krec->kr_bmap & KREC_BF_BTR &&
+		    !dbtree_is_empty_inplace(&krec->kr_btr)) {
+			/* This should be an assert eventually but we can't
+			 * at present prevent underpunch
+			 */
+			D_ERROR("Removing orphaned single value tree\n");
+		} else if (krec->kr_bmap & KREC_BF_EVT &&
+			   !evt_is_empty(&krec->kr_evt)) {
+			/* This should be an assert eventually but we can't
+			 * at present prevent underpunch
+			 */
+			D_ERROR("Removing orphaned array value tree\n");
+		}
+		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
+		D_ASSERT(rc != -DER_NONEXIST);
+	} else if (rc == -DER_NONEXIST) {
+		/* Key no longer exists at epoch but isn't empty */
+		reprobe = true;
+		rc = 0;
+	}
+
+	rc = umem_tx_end(umm, rc);
+
+exit:
+	if (rc == 0 && reprobe)
+		return 1;
+
+	return rc;
+
 }
 
 static int

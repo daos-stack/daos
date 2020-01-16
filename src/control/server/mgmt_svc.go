@@ -229,16 +229,26 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	}
 
 	// if join successful, record membership
-	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		newMember := system.NewMember(resp.GetRank(), req.GetUuid(),
-			replyAddr, system.MemberStateStarted)
-
-		count, err := svc.membership.Add(newMember)
-		if err != nil {
-			return nil, errors.WithMessage(err, "adding to membership")
+	if resp.GetStatus() == 0 {
+		newState := system.MemberStateEvicted
+		if resp.GetState() == mgmtpb.JoinResp_IN {
+			newState = system.MemberStateStarted
 		}
 
-		svc.log.Debugf("new system member: %s (total %d)\n", newMember, count)
+		member := system.NewMember(resp.GetRank(), req.GetUuid(), replyAddr, newState)
+
+		created, oldState := svc.membership.AddOrUpdate(member)
+		if created {
+			svc.log.Debugf("new system member: rank %d, addr %s",
+				resp.GetRank(), replyAddr)
+		} else {
+			svc.log.Debugf("updated system member: rank %d, addr %s, %s->%s",
+				member.Rank, replyAddr, *oldState, newState)
+			if *oldState == newState {
+				svc.log.Errorf("unexpected same state in rank %d update (%s->%s)",
+					member.Rank, *oldState, newState)
+			}
+		}
 	}
 
 	return resp, nil
@@ -336,6 +346,84 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// resolvePoolPropVal resolves string-based property names and values to their C equivalents.
+func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, error) {
+	newReq := &mgmtpb.PoolSetPropReq{
+		Uuid: req.Uuid,
+	}
+
+	propName := strings.TrimSpace(req.GetName())
+	switch strings.ToLower(propName) {
+	case "reclaim":
+		newReq.SetPropertyNumber(drpc.PoolPropertySpaceReclaim)
+
+		recType := strings.TrimSpace(req.GetStrval())
+		switch strings.ToLower(recType) {
+		case "disabled":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimDisabled)
+		case "lazy":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimLazy)
+		case "time":
+			newReq.SetValueNumber(drpc.PoolSpaceReclaimTime)
+		default:
+			return nil, errors.Errorf("unhandled reclaim type %q", recType)
+		}
+
+		return newReq, nil
+	default:
+		return nil, errors.Errorf("unhandled pool property %q", propName)
+	}
+}
+
+// PoolSetProp forwards a request to the I/O server to set a pool property.
+func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	newReq, err := resolvePoolPropVal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", *newReq)
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolSetProp, newReq)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolSetPropResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, resp:%+v", *resp)
+
+	if resp.GetNumber() != newReq.GetNumber() {
+		return nil, errors.Errorf("Response number doesn't match request (%d != %d)",
+			resp.GetNumber(), newReq.GetNumber())
+	}
+	// Restore the string versions of the property/value
+	resp.Property = &mgmtpb.PoolSetPropResp_Name{
+		Name: req.GetName(),
+	}
+	if req.GetStrval() != "" {
+		if resp.GetNumval() != newReq.GetNumval() {
+			return nil, errors.Errorf("Response value doesn't match request (%d != %d)",
+				resp.GetNumval(), newReq.GetNumval())
+		}
+		resp.Value = &mgmtpb.PoolSetPropResp_Strval{
+			Strval: req.GetStrval(),
+		}
+	}
 
 	return resp, nil
 }
@@ -442,104 +530,142 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
+	for _, i := range svc.harness.Instances() {
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.BioHealthResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
+		}
+
+		if resp.Status == 0 {
+			return resp, nil
+		}
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
-	if err != nil {
-		return nil, err
+	reqID := func() string {
+		if req.DevUuid != "" {
+			return req.DevUuid
+		}
+		return req.TgtId
 	}
-
-	resp := &mgmtpb.BioHealthResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
-	}
-
-	return resp, nil
+	return nil, errors.Errorf("no rank matched request for %q", reqID())
 }
 
 // SmdListDevs implements the method defined for the Management Service.
 func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+	fullResp := new(mgmtpb.SmdDevResp)
+
+	// Iterate through the list of local I/O server instances, and aggregate
+	// results into a single response.
+	for _, i := range svc.harness.Instances() {
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
+		if err != nil {
+			return nil, err
+		}
+
+		instResp := new(mgmtpb.SmdDevResp)
+		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
+		}
+
+		if instResp.Status != 0 {
+			return instResp, nil
+		}
+
+		fullResp.Devices = append(fullResp.Devices, instResp.Devices...)
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.SmdDevResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
-	}
-
-	return resp, nil
+	return fullResp, nil
 }
 
 // SmdListPools implements the method defined for the Management Service.
 func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
+
+	fullResp := new(mgmtpb.SmdPoolResp)
+
+	// Iterate through the list of local I/O server instances, and aggregate
+	// results into a single response.
+	for _, i := range svc.harness.Instances() {
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
+		if err != nil {
+			return nil, err
+		}
+
+		instResp := new(mgmtpb.SmdPoolResp)
+		if err = proto.Unmarshal(dresp.Body, instResp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal SmdListPools response")
+		}
+
+		if instResp.Status != 0 {
+			return instResp, nil
+		}
+
+		fullResp.Pools = append(fullResp.Pools, instResp.Pools...)
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.SmdPoolResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
-	}
-
-	return resp, nil
+	return fullResp, nil
 }
 
 // DevStateQuery implements the method defined for the Management Service.
 func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+	svc.log.Debugf("MgmtSvc.DevStateQuery dispatch, req:%+v\n", *req)
+
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
+	for _, i := range svc.harness.Instances() {
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.DevStateResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+		}
+
+		if resp.Status == 0 {
+			return resp, nil
+		}
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DevStateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
-	}
-
-	return resp, nil
+	return nil, errors.Errorf("no rank matched request for %q", req.DevUuid)
 }
 
 // StorageSetFaulty implements the method defined for the Management Service.
 func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateReq) (*mgmtpb.DevStateResp, error) {
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
+	svc.log.Debugf("MgmtSvc.StorageSetFaulty dispatch, req:%+v\n", *req)
+
+	// Iterate through the list of local I/O server instances, looking for
+	// the first one that successfully fulfills the request. If none succeed,
+	// return an error.
+	for _, i := range svc.harness.Instances() {
+		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &mgmtpb.DevStateResp{}
+		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
+		}
+
+		if resp.Status == 0 {
+			return resp, nil
+		}
 	}
 
-	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DevStateResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal StorageSetFaulty response")
-	}
-
-	return resp, nil
+	return nil, errors.Errorf("no rank matched request for %q", req.DevUuid)
 }
 
 // PrepShutdown implements the method defined for the Management Service.
@@ -605,6 +731,28 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// StartRanks implements the method defined for the Management Service.
+//
+// Restart data-plane instances (DAOS system members) managed by harness.
+//
+// TODO: Current implementation sends restart signal to harness, restarting all
+//       ranks managed by harness, future implementations will allow individual
+//       ranks to be restarted.
+func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq) (*mgmtpb.StartRanksResp, error) {
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+
+	resp := &mgmtpb.StartRanksResp{}
+
+	// perform controlled restart of I/O Server harness
+	if err := svc.harness.RestartInstances(); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

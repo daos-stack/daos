@@ -1223,6 +1223,17 @@ dfs_umount(dfs_t *dfs)
 	return 0;
 }
 
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	return 0;
+}
+
 /* Structure of global buffer for dfs */
 struct dfs_glob {
 	uint32_t		magic;
@@ -1564,8 +1575,11 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			struct dfs_entry child_entry = {0};
 			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
+			int len;
 
-			snprintf(entry_name, kds[i].kd_key_len + 1, "%s", ptr);
+			len = snprintf(entry_name, kds[i].kd_key_len + 1,
+				       "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 
 			rc = fetch_entry(oh, th, entry_name, false,
@@ -1925,8 +1939,11 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			snprintf(dirs[key_nr].d_name, kds[i].kd_key_len + 1,
-				 "%s", ptr);
+			int len;
+
+			len = snprintf(dirs[key_nr].d_name,
+				       kds[i].kd_key_len + 1, "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 			key_nr++;
 		}
@@ -1999,9 +2016,12 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 
 		/** for every entry, issue the filler cb */
 		for (i = 0; i < num; i++) {
-			char name[DFS_MAX_PATH];
+			char name[DFS_MAX_PATH + 1];
+			int len;
 
-			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			len = snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
+
 			if (op) {
 				rc = op(dfs, obj, name, udata);
 				if (rc)
@@ -3721,7 +3741,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
-		d_iov_t	iov;
+		d_iov_t		iov;
 		char		enum_buf[ENUM_DESC_BUF] = {0};
 		d_sg_list_t	sgl;
 		char		*ptr;
@@ -3740,6 +3760,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
+			int len;
+
 			if (strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
@@ -3752,8 +3774,9 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			if (list_size < kds[i].kd_key_len - 2)
 				continue;
 
-			snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
-				 ptr + 2);
+			len = snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
+				       ptr + 2);
+			D_ASSERT(len >= kds[i].kd_key_len - 2);
 
 			list_size -= kds[i].kd_key_len - 1;
 			ptr_list += kds[i].kd_key_len - 1;
