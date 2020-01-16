@@ -53,11 +53,8 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 
 	svc.log.Debug("Received SystemQuery RPC")
 
-	if !mi.IsStarted() {
-		return nil, errors.New("management service is not running")
-	}
-
-	// TODO DAOS-3647: update status of each system member
+	// TODO DAOS-3647: update status of each system member if
+	// !mi.IsStarted()
 
 	var members []*system.Member
 	nilRank := ioserver.NilRank
