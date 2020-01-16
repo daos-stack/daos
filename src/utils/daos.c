@@ -395,7 +395,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'v':
 			if (ap->value_str != NULL) {
 				fprintf(stderr,
-					"only one attribute name is allowed\n");
+					"only one attribute value is allowed\n");
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
 			D_STRNDUP(ap->value_str, optarg, strlen(optarg));
