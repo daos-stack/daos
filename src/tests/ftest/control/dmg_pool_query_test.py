@@ -112,3 +112,13 @@ class DmgPoolQueryTest(TestWithServers):
                 dmg_out.exit_status))
         elif dmg_out is None:
             self.fail("Test failed, dmg command failed while executing.")
+
+    def test_pool_query_pool_size(self):
+        """
+        JIRA ID: DAOS-2976
+        Test Description: Test that pool query command will properly and
+        accurately show the size changes once there is content in the pool.
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
+        """
+        transfer_block_size = self.params.get("transfer_block_size",
+                                              '/run/ior/iorflags/*')
