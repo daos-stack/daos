@@ -28,7 +28,7 @@ import subprocess
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure

@@ -23,8 +23,8 @@
 """
 from apricot import TestWithServers
 from command_utils import ObjectWithParameters, BasicParameter
-from test_utils import TestPool, TestContainer
-
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 class RebuildTestParams(ObjectWithParameters):
     """Class for gathering test parameters."""
