@@ -31,7 +31,8 @@ from dfuse_utils import Dfuse
 from command_utils import Srun
 import slurm_utils
 from agent_utils import run_agent
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 import socket
 from avocado.utils import process
