@@ -32,7 +32,8 @@ OPS_SRC = ['create',
            'setattr',
            'symlink',
            'unlink',
-           'write']
+           'write',
+           'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
