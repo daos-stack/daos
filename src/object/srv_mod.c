@@ -153,7 +153,7 @@ struct dss_module_key obj_module_key = {
 };
 
 static struct dss_module_ops ds_obj_mod_ops = {
-	.dms_abt_pool_choose_cb = ds_obj_abt_pool_choose_cb,
+	.dms_abt_pool_choose_cb = NULL,
 	.dms_profile_start = ds_obj_profile_start,
 	.dms_profile_stop = ds_obj_profile_stop,
 };

@@ -1054,6 +1054,8 @@ pipeline {
                                                test_tag=pr,-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=0
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes''',
@@ -1146,6 +1148,8 @@ pipeline {
                                                test_tag=pr,hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes''',
