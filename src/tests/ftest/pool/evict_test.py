@@ -25,7 +25,8 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 import ctypes
 import uuid
 
