@@ -274,12 +274,23 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
-        hosts (list): hosts on which to stop the daos server processes
+        hosts (list): hosts on which to stop the processes
         pattern (str): regular expression used to find process names to stop
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60
             seconds.
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code for the pkill
+            command. The pkill return codes:
+                0   One or more processes matched the criteria.
+                1   No processes matched.
+                2   Syntax error in the command line.
+                3   Fatal error: out of memory etc.
+
     """
+    result = {}
     log = getLogger()
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
     if hosts is not None:
@@ -293,7 +304,8 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
             "fi",
             "exit 0",
         ]
-        pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
+    return result
 
 
 def get_partition_hosts(partition):

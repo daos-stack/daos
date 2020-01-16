@@ -902,7 +902,12 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
         if len(result) > 1 or 0 not in result:
-            raise ServerFailed("Error preparing NVMe storage")
+            dev_type = "nvme"
+            if self.manager.job.using_dcpm and self.manager.job.using_nvme:
+                dev_type = "dcpm & nvme"
+            elif self.manager.job.using_dcpm:
+                dev_type = "dcpm"
+            raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def reset_storage(self):
         """Reset the server storage."""

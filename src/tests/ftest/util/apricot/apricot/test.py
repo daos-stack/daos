@@ -507,8 +507,9 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         errors.extend(self.stop_servers())
 
-        # Stop any left over job managers
-        self.stop_job_managers()
+        # Kill any left over job manager processes - fail the test if any
+        # left over processes had to be terminated.
+        errors.extend(self.kill_job_managers())
 
         # Complete tear down actions from the inherited class
         try:
@@ -639,11 +640,29 @@ class TestWithServers(TestWithoutServers):
                         "Error stopping {}: {}".format(name, error))
         return error_list
 
-    def stop_job_managers(self):
-        """Stop the job manager command for each agent/server manager."""
+    def kill_job_managers(self):
+        """Kill the job manager command for each agent/server manager.
+
+        In addition, report any job manager command that was killed as a falure
+        criteria for this test.
+
+        Returns:
+            list: a list of killed job manager commands
+
+        """
+        error_list = []
         for manager in self.agent_managers + self.server_managers:
+            # Kill the job manager command on the hosts on which it was launched
             pattern = "'({})'".format(manager.manager.command)
-            stop_processes(manager.hosts, pattern)
+            result = stop_processes(manager.hosts, pattern)
+
+            # Report any killed job manager command.  Pkill returns a 0 return
+            # code if it killed the command.
+            if 0 in result:
+                error_list.append(
+                    "Killed a leftover {} process on {}".format(
+                        manager.manager.command, result[0]))
+        return error_list
 
     def update_log_file_names(self, test_name=None):
         """Define agent, server, and client log files that include the test id.

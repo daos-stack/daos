@@ -320,6 +320,7 @@ class DmgCommand(CommandWithSubCommand):
                 "/run/dmg/system/*", "system")
 
 
+
 def storage_scan(path, hosts, insecure=True):
     """Execute scan command through dmg tool to servers provided.
 
@@ -362,7 +363,6 @@ def storage_format(path, hosts, insecure=True):
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.set_sub_command("storage")
