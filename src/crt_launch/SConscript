@@ -54,7 +54,7 @@ def scons():
             tenv.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
         else:
             print("Appending")
-            tenv.AppendENVPath("PATH", os.path.dirname(mpicc))
+            tenv.PrependENVPath("PATH", os.path.dirname(mpicc))
             tenv.Replace(CC='mpicc')
             tenv.Replace(LINK='mpicc')
     else:
