@@ -356,7 +356,7 @@ test_fetch_array(void **state)
 	unset_csum_fi();
 	cleanup_data(&ctx);
 
-	/** 5. Replicated (complicated data) object with corruption */
+	/** 6. Replicated (complicated data) object with corruption */
 	set_fetch_csum_fi();
 	setup_multiple_extent_data(&ctx);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,

@@ -776,7 +776,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				  !cli_disp && grp_size > 1;
 
 	if (bit_map != NIL_BITMAP) {
-		D_ASSERT(bit_map);
 		shard_nr = 0;
 		for (i = 0; i < shard_cnt; i++)
 			if (isset(bit_map, i))
@@ -2411,22 +2410,32 @@ static int
 obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
 {
-	unsigned int next_shard, shard_cnt, shard_idx;
+	struct daos_oclass_attr	*oca;
+	unsigned int next_shard, retry_size, shard_cnt, shard_idx;
 	int rc = 0;
 
+	/* CSUM retry for EC object is not supported yet */
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+		obj_auxi->spec_shard = 1;
+		rc = -DER_CSUM;
+		goto out;
+	}
 	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
 			      &shard_idx, &shard_cnt);
 	if (rc != 0)
 		goto out;
+
+	/* bitmap has only 8 bits, so retry to the first eight replicas */
+	retry_size = shard_cnt <= 8 ? shard_cnt : 8;
 	next_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) %
-		shard_cnt + shard_idx;
+		retry_size + shard_idx;
+
+	/* all replicas have csum error for this fetch request */
 	if (next_shard == obj_auxi->initial_shard) {
 		obj_auxi->spec_shard = 1;
 		rc = -DER_CSUM;
 		goto out;
 	}
-	D_ASSERT(next_shard - shard_idx >= 0 &&
-		 next_shard - shard_idx <= 7);
 	setbit(bitmap, next_shard - shard_idx);
 out:
 	return rc;
@@ -2449,7 +2458,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 {
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
-	uint8_t                 *bitmap = NULL;
+	uint8_t                 *tgt_bitmap = NULL;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
@@ -2500,14 +2509,15 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 				   &csum_bitmap);
 		if (rc)
 			goto out_task;
-		bitmap = &csum_bitmap;
+		tgt_bitmap = &csum_bitmap;
 	} else {
 		obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
-		bitmap = obj_auxi->reasb_req.tgt_bitmap;
+		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
-			      dkey_hash, bitmap, map_ver, obj_auxi->to_leader,
-			      obj_auxi->spec_shard, &obj_auxi->req_tgts);
+			      dkey_hash, tgt_bitmap, map_ver,
+			      obj_auxi->to_leader, obj_auxi->spec_shard,
+			      &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
