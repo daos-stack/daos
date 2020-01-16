@@ -26,6 +26,7 @@ from __future__ import print_function
 import re
 
 from dmg_utils import pool_query
+from ior_utils import IorCommand
 from apricot import TestWithServers
 from test_utils import TestPool, check_pool_space
 
@@ -74,10 +75,10 @@ class DmgPoolQueryTest(TestWithServers):
         print("d_info: {}".format(d_info))
         # Get data from API to verify dmg output.
         e_info = {}
-        e_info["exp_t_cnt"] = None
-        e_info["exp_t_size"] = None
-        e_info["exp_mem_info"] = None
-        e_info["exp_r_info"] = None
+        e_info["exp_t_cnt"] = None # Get value from yaml
+        e_info["exp_t_size"] = None # Get values from yaml file
+        e_info["exp_mem_info"] = None # Get min, max, mean calculating yaml values
+        e_info["exp_r_info"] = None # from pool information?
 
         # Verify
         for k, e, d in zip(e_info, e_info.values(), d_info.values()):
@@ -122,3 +123,24 @@ class DmgPoolQueryTest(TestWithServers):
         """
         transfer_block_size = self.params.get("transfer_block_size",
                                               '/run/ior/iorflags/*')
+        # Create pool
+        self.pool = TestPool(self.context)
+        self.pool.get_params(self)
+        self.pool.create()
+        self.pool.connect(1 << 1)
+
+        #  Run ior
+        ior_cmd = IorCommand()
+        ior_cmd.get_params(self)
+        ior_cmd.set_daos_params(self.server_group, self.pool)
+        mpirun = Mpirun()
+        env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
+        processes = len(self.hostlist_clients)
+        mpirun.setup_command(env, self.hostfile_clients, processes)
+        mpirun.run()
+
+        # Get the aggregate amount of written data in bytes
+
+        # Compare the amount of written bytes against what is expected
+
+        # Compare if written data also matches the dmg pool query output.
