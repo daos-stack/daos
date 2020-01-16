@@ -120,7 +120,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 
 	results = append(results, hResults...)
 
-	if err := svc.membership.UpdateMemberStates(system.MemberStateStopping, results); err != nil {
+	if err := svc.membership.UpdateMemberStates(results); err != nil {
 
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstanc
 
 	results = append(results, hResults...)
 
-	if err := svc.membership.UpdateMemberStates(system.MemberStateStopped, results); err != nil {
+	if err := svc.membership.UpdateMemberStates(results); err != nil {
 
 		return nil, err
 	}
@@ -284,8 +284,7 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 	}
 
 	// target state will always be set in this scenario
-	if err := svc.membership.UpdateMemberStates(system.MemberStateErrored,
-		filteredResults); err != nil {
+	if err := svc.membership.UpdateMemberStates(filteredResults); err != nil {
 
 		return nil, err
 	}
