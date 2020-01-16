@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -429,6 +429,35 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 		uint32_t iv_ns_id, crt_iv_namespace_t *ivns);
 
 /**
+ * Create an incast variable namespace with associated user priv
+ *
+ * \param[in] crt_ctx		CRT transport namespace
+ * \param[in] grp		CRT group for the IV namespace
+ * \param[in] tree_topo		tree topology for the IV message propagation,
+ *				can be calculated by crt_tree_topo().
+ *				See \a enum crt_tree_type,
+ *				\a crt_tree_topo().
+ * \param[in] iv_classes	the array of IV class. User must ensure passing
+ *				same set of iv_classes when adding IV namespace
+ *				on all participating nodes.
+ * \param[in] num_class		the number of elements in the iv_classes array,
+ *				one IV namespace should have at least one IV
+ *				class.
+ * \param[in] iv_ns_id		Unique id, identifying the namespace within the
+ *				group.
+ * \param[in] user_priv		Optional private data to associate with IV
+ *				namespace
+ * \param[out] ivns		Local handle of the IV namespace
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_iv_namespace_create_priv(crt_context_t crt_ctx, crt_group_t *grp,
+		int tree_topo, struct crt_iv_class *iv_classes,
+		uint32_t num_classes, uint32_t iv_ns_id, void *user_priv,
+		crt_iv_namespace_t *ivns);
+
+/**
  * Retrieve IV namespace id from the handle.
  *
  * \param[in] ivns		Incast variable namespace handle
@@ -440,11 +469,32 @@ int
 crt_iv_namespace_id_get(crt_iv_namespace_t *ivns, uint32_t *id);
 
 /**
+ * Associate priv data with IV namespace
+ *
+ * \param[in] ivns		Incast variable namespace handle
+ * \param[in] priv		Private user data
+ *
+ * \return			DER_SUCCESS on success, negative value on error
+ */
+int
+crt_iv_namespace_priv_set(crt_iv_namespace_t *ivns, void *priv);
+
+/**
+ * Retrieve private data associated with IV namespace
+ *
+ * \param[in] ivns		Incast variable namespace handle
+ * \param[out] priv		Private user data
+ *
+ * \return			DER_SUCCESS on success, negative value on error
+ */
+int
+crt_iv_namespace_priv_get(crt_iv_namespace_t *ivns, void **priv);
+
+/**
  * Completion callback for \ref crt_iv_namespace_destroy.
  *
  * \param[in] ivns		the local handle of the IV namespace that has
- *				been destroyed. The value is an address, but
- *				can't be dereferenced.
+ *				been destroyed.
  * \param[in] cb_arg		pointer to argument provide by the user to
  *				crt_iv_namespace_destroy.
  */

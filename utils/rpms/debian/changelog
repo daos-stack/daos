@@ -1,3 +1,11 @@
+cart (4.4.0-1) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 4.4.0-1 version of CaRT
+  * New IV APIs added: crt_iv_namespace_priv_set/get
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 14 Jan 2020 16:53:01 +0000
+
 cart (4.3.1-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]
