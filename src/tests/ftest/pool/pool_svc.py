@@ -54,7 +54,7 @@ class PoolSvc(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.svcn.update(createsvc[0])
         try:

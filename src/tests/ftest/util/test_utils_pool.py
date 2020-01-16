@@ -47,7 +47,7 @@ class TestPool(TestDaosApiBase):
     USE_API = "API"
     USE_DMG = "dmg"
 
-    def __init__(self, context, log=None, cb_handler=None, dmg_bin_path=None):
+    def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -83,16 +83,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-        self.dmg = None
-        # Required to use dmg. It defined the directory where dmg is installed.
-        # Use self.basepath + '/install/bin' in the test
-        self.dmg_bin_path = dmg_bin_path
-        if dmg_bin_path is not None:
-            # We make dmg as the member of this class because the test would
-            # have more flexibility over the usage of the command.
-            self.dmg = DmgCommand(self.dmg_bin_path)
-            self.dmg.insecure.value = True
-            self.dmg.request.value = "pool"
+        self.dmg = dmg_command
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -143,8 +134,9 @@ class TestPool(TestDaosApiBase):
         else:
             if self.dmg is None:
                 raise DaosTestError(
-                    "self.dmg is None. dmg_bin_path needs to be set through "
+                    "self.dmg is None. dmg_command needs to be set through "
                     "the constructor of TestPool to create pool with dmg.")
+            self.dmg.request.value = "pool"
             # Currently, there is one test that creates the pool over the
             # subset of the server hosts; pool/evict_test. To do so, the test
             # needs to set the rank(s) to target_list.value starting from 0.

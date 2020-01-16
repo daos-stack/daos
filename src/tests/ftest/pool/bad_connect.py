@@ -118,7 +118,7 @@ class BadConnectTest(TestWithoutServers):
         pgroup = ctypes.create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg_bin_path=self.bin)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         # save this uuid since we might trash it as part of the test
