@@ -211,7 +211,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithAccessPoints("hostname1:10001").
+		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
