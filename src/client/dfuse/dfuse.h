@@ -49,6 +49,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	bool				di_caching;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
 	pthread_mutex_t			di_lock;
@@ -172,6 +173,7 @@ struct dfuse_dfs {
 	daos_handle_t		dfs_coh;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 };
@@ -299,15 +301,16 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(desc, req, attr)				\
+#define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
-		__rc = fuse_reply_attr(req, attr, 0);			\
+		__rc = fuse_reply_attr(req, attr,			\
+				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -453,6 +456,13 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
+
+	/** written region for truncated files (i.e. ie_truncated set) */
+	size_t			ie_start_off;
+	size_t			ie_end_off;
+
+	/** file was truncated from 0 to a certain size */
+	bool			ie_truncated;
 
 	/** Set to true if this is the root of the container */
 	bool			ie_root;
