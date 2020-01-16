@@ -302,7 +302,9 @@ class PoolSecurityTest(TestWithServers):
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", result)
         if result.stderr == "":
-            self.uuid, svc = dmg_utils.get_pool_uuid_from_stdout(result.stdout)
+            self.uuid, svc = \
+                dmg_utils.get_pool_uuid_service_replicas_from_stdout(
+                    result.stdout)
         else:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 

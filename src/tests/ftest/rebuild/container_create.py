@@ -26,7 +26,8 @@ from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
 from job_manager_utils import Mpich
 from ior_utils import IorCommand
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):

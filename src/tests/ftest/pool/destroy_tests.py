@@ -27,7 +27,9 @@ from server_utils import ServerFailed
 
 from apricot import TestWithServers, skipForTicket
 from avocado.core.exceptions import TestFail
-from test_utils import TestPool, CallbackHandler, TestContainer
+from test_utils_base import CallbackHandler
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from pydaos.raw import DaosApiError
 import ctypes
 

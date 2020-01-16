@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from apricot import TestWithServers, skipForTicket
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 
 class RebuildNoCap(TestWithServers):

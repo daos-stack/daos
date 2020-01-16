@@ -32,7 +32,7 @@ from ior_utils import IorCommand
 from command_utils import CommandFailure
 from job_manager_utils import Mpich
 from mpio_utils import MpioUtils
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 from daos_utils import create_container
 

@@ -40,7 +40,7 @@ from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import CommandFailure
 from job_manager_utils import OpenMPI
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
 
