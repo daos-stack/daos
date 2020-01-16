@@ -76,6 +76,11 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	}
 
 	prop_query = daos_prop_alloc(0);
+	if (prop_query == NULL) {
+		D_ERROR("Failed to allocate prop.\n");
+		return ENOMEM;
+	}
+
 	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "pool query failed for properties: %d\n", rc);
@@ -705,7 +710,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	prop_query = daos_prop_alloc(0);
 	if (prop_query == NULL) {
-		D_ERROR("Failed to allocate prop.");
+		D_ERROR("Failed to allocate prop.\n");
 		return ENOMEM;
 	}
 
