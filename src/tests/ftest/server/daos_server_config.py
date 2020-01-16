@@ -66,14 +66,20 @@ class DaosServerConfigTest(TestWithServers):
             getattr(yml_params.server_params[-1], c_val[0]).value = c_val[1]
 
         self.log.info("Starting server changing %s with %s", c_val[0], c_val[1])
+        yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
         try:
-            yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
             server.start(yamlfile)
+            exception = None
         except ServerFailed as err:
-            if c_val[2] == "FAIL":
-                self.log.info("Server was expected to fail. Test passed.")
-            else:
-                self.fail("Server was expected to start: {}".format(err))
+            exception = err
+
+        # Verify
+        if c_val[2] == "FAIL" and exception is None:
+            self.log.error("Server was expected to fail")
+            self.fail("{}".format(exception))
+        elif c_val[2] == "PASS" and exception is not None:
+            self.log.error("Server was expected to start")
+            self.fail("{}".format(exception))
 
         # Stop servers
         try:
