@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,9 +41,13 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const instanceUpdateDelay = 500 * time.Millisecond
+
 // NewRankResult returns a reference to a new member result struct.
-func NewRankResult(rank uint32, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
-	result := mgmtpb.RanksResp_RankResult{Rank: rank, State: uint32(state)}
+func NewRankResult(rank uint32, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
+	result := mgmtpb.RanksResp_RankResult{
+		Rank: rank, Action: action, State: uint32(state),
+	}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
@@ -56,7 +60,7 @@ func NewRankResult(rank uint32, state system.MemberState, err error) *mgmtpb.Ran
 //
 // RankResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToRankResult(rank uint32, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
+func drespToRankResult(rank uint32, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
 	var outErr error
 	state := system.MemberStateErrored
 
@@ -77,7 +81,7 @@ func drespToRankResult(rank uint32, dresp *drpc.Response, err error, tState syst
 		state = tState
 	}
 
-	return NewRankResult(rank, state, outErr)
+	return NewRankResult(rank, action, state, outErr)
 }
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
@@ -753,14 +757,16 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 		if !i.IsStarted() {
 			resp.Results = append(resp.Results,
-				NewRankResult(*rank, system.MemberStateStopped, nil))
+				NewRankResult(*rank, "prep shutdown",
+					system.MemberStateStopped, nil))
 			continue
 		}
 
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
 
 		resp.Results = append(resp.Results,
-			drespToRankResult(*rank, dresp, err, system.MemberStateStopping))
+			drespToRankResult(*rank, "prep shutdown", dresp, err,
+				system.MemberStateStopping))
 	}
 
 	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
@@ -806,7 +812,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			&mgmtpb.KillRankReq{Rank: *rank, Force: false})
 
 		// don't use RankResult but log errors
-		result := drespToRankResult(*rank, dresp, err, system.MemberStateUnknown)
+		result := drespToRankResult(*rank, "stop", dresp, err, system.MemberStateUnknown)
 		if result.Errored {
 			svc.log.Debug(result.Msg)
 		}
@@ -817,7 +823,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	go func() {
 		for {
 			if len(svc.harness.StartedRanks()) > 0 {
-				time.Sleep(500 * time.Microsecond)
+				time.Sleep(instanceUpdateDelay)
 				continue
 			}
 			close(stopped)
@@ -844,7 +850,8 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			rrErr = nil
 		}
 		resp.Results = append(resp.Results,
-			NewRankResult(i.getSuperblock().Rank.Uint32(), state, rrErr))
+			NewRankResult(i.getSuperblock().Rank.Uint32(), "stop",
+				state, rrErr))
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
@@ -879,7 +886,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	go func() {
 		for {
 			if len(svc.harness.StartedRanks()) != len(svc.harness.instances) {
-				time.Sleep(500 * time.Microsecond)
+				time.Sleep(instanceUpdateDelay)
 				continue
 			}
 			close(started)
@@ -906,7 +913,8 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 			rrErr = nil
 		}
 		resp.Results = append(resp.Results,
-			NewRankResult(i.getSuperblock().Rank.Uint32(), state, rrErr))
+			NewRankResult(i.getSuperblock().Rank.Uint32(), "start",
+				state, rrErr))
 	}
 
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)

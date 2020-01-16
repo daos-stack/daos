@@ -87,10 +87,9 @@ func harnessAction(ctx context.Context, msClient *mgmtSvcClient, req *RemoteHarn
 		requestFn = msClient.PrepShutdown
 	case HarnessStop:
 		requestFn = msClient.Stop
-		timeout = 5 * time.Second
 	case HarnessStart:
 		requestFn = msClient.Start
-		timeout = 3 * time.Second
+		timeout = 3 * time.Second // don't need long timeout
 	default:
 		return nil, errors.New("unknown harness action requested")
 	}

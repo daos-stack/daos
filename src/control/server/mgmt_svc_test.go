@@ -1602,26 +1602,28 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 		expResult   *mgmtpb.RanksResp_RankResult
 	}{
 		"rank success": {
-			expResult: &mgmtpb.RanksResp_RankResult{Rank: dRank, State: uint32(dStateGood)},
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, Action: "test", State: uint32(dStateGood),
+			},
 		},
 		"rank failure": {
 			daosResp: &mgmtpb.DaosResp{Status: -1},
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRpc: true,
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, State: uint32(dStateBad), Errored: true,
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
 			},
 		},
@@ -1647,7 +1649,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 				Body:   rb,
 			}
 
-			gotResult := drespToRankResult(dRank, resp, tc.inErr, tc.targetState)
+			gotResult := drespToRankResult(dRank, "test", resp, tc.inErr, tc.targetState)
 			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -1680,8 +1682,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 3},
-					{Rank: 2, State: 3},
+					{Rank: 1, Action: "prep shutdown", State: 3},
+					{Rank: 2, Action: "prep shutdown", State: 3},
 				},
 			},
 		},
@@ -1694,8 +1696,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 5, Errored: true},
-					{Rank: 2, State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
 				},
 			},
 		},
@@ -1704,8 +1706,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 5, Errored: true},
-					{Rank: 2, State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
 				},
 			},
 		},
@@ -1717,8 +1719,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 5, Errored: true},
-					{Rank: 2, State: 5, Errored: true},
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
 				},
 			},
 		},
@@ -1730,8 +1732,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 2},
-					{Rank: 2, State: 2},
+					{Rank: 1, Action: "prep shutdown", State: 2},
+					{Rank: 2, Action: "prep shutdown", State: 2},
 				},
 			},
 		},
@@ -1820,8 +1822,8 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 1, Errored: true},
-					{Rank: 2, State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
 				},
 			},
 		},
@@ -1830,8 +1832,8 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 			junkResp: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 1, Errored: true},
-					{Rank: 2, State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
 				},
 			},
 		},
@@ -1843,8 +1845,8 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 1, Errored: true},
-					{Rank: 2, State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
 				},
 			},
 		},
@@ -1856,8 +1858,8 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 1, Errored: true},
-					{Rank: 2, State: 1, Errored: true},
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
 				},
 			},
 		},
@@ -1870,8 +1872,8 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 			},
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 3},
-					{Rank: 2, State: 3},
+					{Rank: 1, Action: "stop", State: 3},
+					{Rank: 2, Action: "stop", State: 3},
 				},
 			},
 		},
@@ -1957,8 +1959,14 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &mgmtpb.RanksResp{
 				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, State: 3, Errored: true, Msg: "want Started, got Stopped"},
-					{Rank: 2, State: 3, Errored: true, Msg: "want Started, got Stopped"},
+					{
+						Rank: 1, Action: "start", State: 3,
+						Errored: true, Msg: "want Started, got Stopped",
+					},
+					{
+						Rank: 2, Action: "start", State: 3,
+						Errored: true, Msg: "want Started, got Stopped",
+					},
 				},
 			},
 		},
