@@ -782,7 +782,8 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	svc.log.Debugf("MgmtSvc.KillRanks dispatch, req:%+v\n", *req)
+	timeout := time.Duration(req.Timeout)
+	svc.log.Debugf("MgmtSvc.KillRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -826,7 +827,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	select {
 	case <-stopped:
-	case <-time.After(time.Duration(req.Timeout)):
+	case <-time.After(timeout):
 	}
 
 	// either all instances started or timeout occurred
@@ -863,7 +864,8 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+	timeout := time.Duration(req.Timeout)
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -887,7 +889,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	select {
 	case <-started:
-	case <-time.After(time.Duration(req.Timeout)):
+	case <-time.After(timeout):
 	}
 
 	// either all instances started or Timeout

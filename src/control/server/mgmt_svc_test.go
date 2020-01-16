@@ -29,6 +29,7 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
@@ -1997,5 +1998,14 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
+	}
+}
+
+func TestMgmtSvc_ConvertTimeout(t *testing.T) {
+	duration := 5 * time.Second
+	req := &mgmtpb.RanksReq{Timeout: float32(duration)}
+
+	if diff := cmp.Diff(duration.String(), time.Duration(req.Timeout).String()); diff != "" {
+		t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 	}
 }

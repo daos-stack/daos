@@ -96,7 +96,7 @@ func harnessAction(ctx context.Context, msClient *mgmtSvcClient, req *RemoteHarn
 	}
 
 	rpcResp, err := requestFn(ctx, req.Addr,
-		&mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: int32(timeout)})
+		&mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: float32(timeout)})
 	if err != nil {
 		return nil, err
 	}
