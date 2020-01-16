@@ -607,14 +607,16 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = lsetxattr(path, "user.uns.pool", pool,
 				       strlen(pool), XATTR_CREATE);
 			if (rc) {
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
 				D_GOTO(err_link, rc = -DER_IO);
 			}
 
 			rc = lsetxattr(path, "user.uns.container", cont,
 				       strlen(cont), XATTR_CREATE);
 			if (rc) {
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
 				D_GOTO(err_link, rc = -DER_IO);
 			}
 
@@ -627,8 +629,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
 				       len + 1, XATTR_CREATE);
 			if (rc) {
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
-				D_GOTO(err_link, rc = -DER_INVAL);
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
+				D_GOTO(err_link, rc = -DER_IO);
 			}
 		}
 
