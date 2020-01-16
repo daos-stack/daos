@@ -142,7 +142,6 @@ type Members []*Member
 // its string representation "address/rank".
 type MemberResult struct {
 	Rank    uint32
-	Addr    net.Addr
 	Action  string
 	Errored bool
 	Msg     string
@@ -154,11 +153,9 @@ func (mr *MemberResult) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON MemberResult
 	return json.Marshal(&struct {
-		Addr  string
 		State int
 		*toJSON
 	}{
-		Addr:   mr.Addr.String(),
 		State:  int(mr.State),
 		toJSON: (*toJSON)(mr),
 	})
@@ -173,7 +170,6 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON MemberResult
 	from := &struct {
-		Addr  string
 		State int
 		*fromJSON
 	}{
@@ -183,12 +179,6 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, from); err != nil {
 		return err
 	}
-
-	addr, err := net.ResolveTCPAddr("tcp", from.Addr)
-	if err != nil {
-		return err
-	}
-	mr.Addr = addr
 
 	mr.State = MemberState(from.State)
 
@@ -365,22 +355,19 @@ func (m *Membership) Members(excludedStates ...MemberState) (ms Members) {
 	return ms
 }
 
-// UpdateMemberStates updates member's state according to input MemberResults.
-func (m *Membership) UpdateMemberStates(targetState MemberState, results MemberResults) error {
+// UpdateMemberStates updates member's state according to result state.
+//
+// TODO: store error message in membership
+func (m *Membership) UpdateMemberStates(results MemberResults) error {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, result := range results {
-		state := targetState
-		if result.Errored {
-			state = MemberStateErrored
-		}
-
 		if _, found := m.members[result.Rank]; !found {
 			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
 		}
 
-		m.members[result.Rank].SetState(state)
+		m.members[result.Rank].SetState(result.State)
 	}
 
 	return nil

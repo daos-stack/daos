@@ -28,6 +28,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -42,6 +44,32 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 
 	return NewMember(idx, fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
 		addr, state)
+}
+
+func TestMember_Stringify(t *testing.T) {
+	states := []MemberState{
+		MemberStateUnknown,
+		MemberStateStarted,
+		MemberStateStopping,
+		MemberStateStopped,
+		MemberStateEvicted,
+		MemberStateErrored,
+		MemberStateUnresponsive,
+	}
+
+	strs := []string{
+		"Unknown",
+		"Started",
+		"Stopping",
+		"Stopped",
+		"Evicted",
+		"Errored",
+		"Unresponsive",
+	}
+
+	for i, state := range states {
+		AssertEqual(t, state.String(), strs[i], strs[i])
+	}
 }
 
 func TestMember_AddRemove(t *testing.T) {
@@ -218,4 +246,60 @@ func TestMember_RanksHostsMembers(t *testing.T) {
 	AssertEqual(t, []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 		ms.Hosts(), "hosts")
 	AssertEqual(t, members, ms.Members(), "members")
+}
+
+func TestMemberResult_Convert(t *testing.T) {
+	mrsIn := MemberResults{
+		NewMemberResult(1, "query", nil, MemberStateStopped),
+		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateUnknown),
+	}
+	mrsOut := MemberResults{}
+
+	AssertTrue(t, mrsIn.HasErrors(), "")
+	AssertFalse(t, mrsOut.HasErrors(), "")
+
+	if err := convert.Types(mrsIn, &mrsOut); err != nil {
+		t.Fatal(err)
+	}
+	AssertEqual(t, mrsIn, mrsOut, "")
+}
+
+func TestMember_UpdateMemberStates(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	ms := NewMembership(log)
+
+	members := Members{
+		mockMember(t, 1, MemberStateStarted),
+		mockMember(t, 2, MemberStateStopped),
+		mockMember(t, 3, MemberStateEvicted),
+		mockMember(t, 4, MemberStateStopped),
+	}
+	results := MemberResults{
+		NewMemberResult(1, "query", nil, MemberStateStopped),
+		NewMemberResult(2, "stop", errors.New("can't stop"), MemberStateErrored),
+		NewMemberResult(4, "start", nil, MemberStateStarted),
+	}
+	expStates := []MemberState{
+		MemberStateStopped,
+		MemberStateErrored,
+		MemberStateEvicted,
+		MemberStateStarted,
+	}
+
+	for _, m := range members {
+		if _, err := ms.Add(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// members should be updated with result state
+	if err := ms.UpdateMemberStates(results); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, m := range ms.Members() {
+		AssertEqual(t, expStates[i], m.State(), "")
+	}
 }

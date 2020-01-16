@@ -245,8 +245,7 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 
 	svc.log.Debugf("starting ranks on hosts: %v", hostAddrs)
 
-	// member can still be retrieved because superblock can be accessed from
-	// storage even if leader instance is not started
+	// retrieve rank from superblock to lookup stored member in membership
 	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving system leader from membership")
@@ -275,8 +274,8 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 		results = append(results, hResults...)
 	}
 
-	// in the case of start, we don't need to manually update member states,
-	// they will be updated as they join or bootstrap, only update state on error
+	// in the case of start, don't manually update member states, members
+	// are updated as they join or bootstrap, only update state on errors
 	filteredResults := make(system.MemberResults, 0, len(results))
 	for _, r := range results {
 		if r.Errored {
@@ -284,6 +283,7 @@ func (svc *ControlService) restart(ctx context.Context, leader *IOServerInstance
 		}
 	}
 
+	// target state will always be set in this scenario
 	if err := svc.membership.UpdateMemberStates(system.MemberStateErrored,
 		filteredResults); err != nil {
 
@@ -310,13 +310,13 @@ func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemSta
 
 	svc.log.Debug("Received SystemStart RPC")
 
-	// start stopped system members
+	// start any stopped system members, note that instances will only
+	// be started on hosts with all instances stopped
 	startResults, err := svc.restart(ctx, mi)
 	if err != nil {
 		return nil, err
 	}
 
-	// populate response
 	if err := convert.Types(startResults, &resp.Results); err != nil {
 		return nil, err
 	}
