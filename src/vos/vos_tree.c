@@ -1013,9 +1013,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov)
 {
-	/* Delete dkey or akey
-	 * TODO: incarnation log should be deleted as well.
-	 */
+	/* Delete a dkey or akey from tree @toh */
 	return dbtree_delete(toh, BTR_PROBE_EQ, key_iov, NULL);
 }
 

@@ -269,7 +269,10 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 	td.td_count = 0;
 	D_INIT_LIST_HEAD(&td.td_list);
 
+	smd_db_lock();
 	rc = smd_db_traverse(TABLE_DEV, smd_dev_list_cb, &td);
+	smd_db_unlock();
+
 	if (rc == 0) { /* success */
 		*devs = td.td_count;
 		d_list_splice_init(&td.td_list, dev_list);

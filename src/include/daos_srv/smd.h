@@ -30,6 +30,8 @@
 #include <uuid/uuid.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
+#include <daos/common.h>
+#include <daos_types.h>
 #include <daos_srv/daos_server.h>
 
 enum smd_dev_state {
