@@ -140,6 +140,7 @@ main(int argc, char **argv)
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"enable-caching",	no_argument,	   0, 'A'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -180,6 +181,9 @@ main(int argc, char **argv)
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
+			break;
+		case 'A':
+			dfuse_info->di_caching = true;
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
@@ -245,6 +249,9 @@ main(int argc, char **argv)
 	if (!dfs) {
 		D_GOTO(out_svcl, 0);
 	}
+
+	if (dfuse_info->di_caching)
+		dfs->dfs_attr_timeout = 5;
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp) {

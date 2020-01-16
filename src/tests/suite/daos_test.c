@@ -305,7 +305,7 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"reintegration",	no_argument,	NULL,	't'},
-		{"rebuild_simple",	no_argument,	NULL,	's'},
+		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
