@@ -271,31 +271,28 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char	*dir, *dirp;
 	int	rc;
 
-	dir = malloc(PATH_MAX);
+	dir = strdup(path);
 	if (dir == NULL) {
-		D_ERROR("Failed to allocate %d bytes for required copy of "
-			"path %s: %s\n", PATH_MAX, path, strerror(errno));
-		/** TODO - convert errno to rc */
-		return -DER_NOSPACE;
+		D_ERROR("Failed to copy path\n");
+		return -DER_NOMEM;
 	}
 
-	dirp = strcpy(dir, path);
-	/* dirname() may modify dir content or not, so use an
-	 * alternate pointer (see dirname() man page)
-	 */
 	dirp = dirname(dir);
 	rc = statfs(dirp, &fs);
 	if (rc == -1) {
 		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
 		/** TODO - convert errno to rc */
+		free(dir);
 		return -DER_INVAL;
 	}
 
 #ifdef LUSTRE_INCLUDE
 	if (fs.f_type == LL_SUPER_MAGIC) {
 		rc = duns_resolve_lustre_path(path, attr);
-		if (rc == 0)
+		if (rc == 0) {
+			free(dir);
 			return 0;
+		}
 		/* if Lustre specific method fails, fallback to try
 		 * the normal way...
 		 */
@@ -304,18 +301,23 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	s = lgetxattr(path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
 	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
-		if (s == ENOTSUP)
+		int err = errno;
+
+		if (err == ENOTSUP)
 			D_ERROR("Path is not in a filesystem that supports the"
 				" DAOS unified namespace\n");
-		else if (s == ENODATA)
+		else if (err == ENODATA)
 			D_ERROR("Path does not represent a DAOS link\n");
 		else if (s > DUNS_MAX_XATTR_LEN)
 			D_ERROR("Invalid xattr length\n");
 		else
 			D_ERROR("Invalid DAOS unified namespace xattr\n");
+
+		free(dir);
 		return -DER_INVAL;
 	}
 
+	free(dir);
 	return duns_parse_attr(&str[0], s, attr);
 }
 

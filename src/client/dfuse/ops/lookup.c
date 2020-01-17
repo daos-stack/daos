@@ -284,7 +284,8 @@ out_pool:
 	if (new_pool) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc)
-			DFUSE_TRA_ERROR(dfs, "daos_pool_disconnect() failed %d", rc);
+			DFUSE_TRA_ERROR(dfs,
+					"daos_pool_disconnect() failed %d", rc);
 	}
 out_err:
 	if (new_cont) {
