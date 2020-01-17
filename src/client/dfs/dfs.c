@@ -3088,7 +3088,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= &sg_iovs[i];
+	sgl.sg_iovs	= &sg_iovs[0];
 
 	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
