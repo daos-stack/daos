@@ -25,47 +25,16 @@ from __future__ import print_function
 
 import traceback
 import ctypes
-import agent_utils
-import server_utils
-import write_host_file
 from pydaos.raw import DaosApiError, RankList
-from apricot import TestWithoutServers, skipForTicket
+from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 
-class BadConnectTest(TestWithoutServers):
+class BadConnectTest(TestWithServers):
     """
     Tests pool connect calls passing NULL and otherwise inappropriate
     parameters.  This can't be done with daosctl, need to use the python API.
     :avocado: recursive
     """
-
-    # start servers, establish file locations, etc.
-    def setUp(self):
-        super(BadConnectTest, self).setUp()
-        self.agent_sessions = None
-        self.hostlist_servers = None
-        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
-
-        # NULL is causing connect to blow up so skip that test for now
-        uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
-        connectuuid = uuidlist[0]
-        if connectuuid == 'NULLPTR':
-            self.cancel("skipping null pointer test until DAOS-1781 is fixed")
-
-        # launch the server
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir)
-        server_group = self.params.get("name", '/server_config/',
-                                       'daos_server')
-        self.agent_sessions = agent_utils.run_agent(self,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self, self.hostfile_servers, server_group)
-
-    def tearDown(self):
-        if self.agent_sessions:
-            agent_utils.stop_agent(self.agent_sessions)
-        server_utils.stop_server(hosts=self.hostlist_servers)
-
     @skipForTicket("DAOS-3819")
     def test_connect(self):
         """
@@ -73,16 +42,6 @@ class BadConnectTest(TestWithoutServers):
 
         :avocado: tags=all,pool,full_regression,tiny,badconnect
         """
-
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/connecttests/createmode/')
-        createuid = self.params.get("uid", '/run/connecttests/uids/createuid/')
-        creategid = self.params.get("gid", '/run/connecttests/gids/creategid/')
-        createsetid = self.params.get("setname",
-                                      '/run/connecttests/setnames/createset/')
-        createsize = self.params.get("size",
-                                     '/run/connecttests/psize/createsize/')
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -103,6 +62,8 @@ class BadConnectTest(TestWithoutServers):
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
         connectuuid = uuidlist[0]
+        if connectuuid == 'NULLPTR':
+            self.cancel("skipping null pointer test until DAOS-1781 is fixed")
         expected_for_param.append(uuidlist[1])
 
         # if any parameter is FAIL then the test should FAIL, in this test

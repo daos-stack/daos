@@ -40,6 +40,7 @@ class EvictTests(TestWithServers):
     """
 
     def connected_pool(self, hostlist, targets=None):
+        # pylint: disable=unused-argument
         """Connect to pool.
 
         Args:
@@ -56,7 +57,8 @@ class EvictTests(TestWithServers):
             pool.target_list.value = targets
         # create pool
         pool.create()
-        # Commented out due to DAOS-3836.
+        # Commented out due to DAOS-3836. Remove the pylint disable at the top
+        # of this method when the following lines are uncommented.
         ## Check that the pool was created
         #status = pool.check_files(hostlist)
         #if not status:
@@ -179,7 +181,7 @@ class EvictTests(TestWithServers):
         """
         pool = []
         container = []
-        non_pool_servers = []
+        #non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
         pool_tgt = [num for num in range(len(self.hostlist_servers))]

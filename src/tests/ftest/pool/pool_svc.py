@@ -22,12 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-
-import os
 import traceback
 
 from apricot import TestWithServers
-
 from pydaos.raw import DaosServer
 from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail

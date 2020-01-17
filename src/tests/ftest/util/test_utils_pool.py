@@ -37,7 +37,7 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
 from general_utils import check_pool_files, DaosTestError
 from env_modules import load_mpi
 
-from dmg_utils import (get_pool_uuid_service_replicas_from_stdout, DmgCommand)
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):

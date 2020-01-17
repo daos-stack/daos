@@ -21,8 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-import os
-
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from test_utils_pool import TestPool

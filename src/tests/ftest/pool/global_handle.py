@@ -22,14 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-
-import os
 import traceback
 
 from apricot import TestWithServers
-
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 from test_utils_pool import TestPool
 
 class GlobalHandle(TestWithServers):

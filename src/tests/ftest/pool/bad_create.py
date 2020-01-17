@@ -79,12 +79,13 @@ class BadCreateTest(TestWithServers):
             group = setidlist[0]
         expected_for_param.append(setidlist[1])
 
-        targetlist = self.params.get("rankptr", '/run/createtests/target/*')
-        if targetlist[0] == 'NULL':
-            targetptr = None
-        else:
-            targetptr = [0]
-        expected_for_param.append(targetlist[1])
+        # Uncomment this block when we test targetptr.
+        # targetlist = self.params.get("rankptr", '/run/createtests/target/*')
+        # if targetlist[0] == 'NULL':
+        #     targetptr = None
+        # else:
+        #     targetptr = [0]
+        # expected_for_param.append(targetlist[1])
 
         # not ready for this yet
         # devicelist = self.params.get("devptr", '/run/createtests/device/*')
