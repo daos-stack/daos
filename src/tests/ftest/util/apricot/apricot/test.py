@@ -650,18 +650,19 @@ class TestWithServers(TestWithoutServers):
             list: a list of killed job manager commands
 
         """
+        self.log.info("Killing any leftover job manager processes")
         error_list = []
         for manager in self.agent_managers + self.server_managers:
             # Kill the job manager command on the hosts on which it was launched
             pattern = "'({})'".format(manager.manager.command)
             result = stop_processes(manager.hosts, pattern)
 
-            # Report any killed job manager command.  Pkill returns a 0 return
-            # code if it killed the command.
-            if 0 in result:
+            # Report any killed job manager command.  stop_processes yields a
+            # return code of 1 if it killed a command.
+            if 1 in result:
                 error_list.append(
                     "Killed a leftover {} process on {}".format(
-                        manager.manager.command, result[0]))
+                        manager.manager.command, result[1]))
         return error_list
 
     def update_log_file_names(self, test_name=None):

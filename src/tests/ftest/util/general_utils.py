@@ -282,12 +282,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
 
     Returns:
         dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code for the pkill
-            command. The pkill return codes:
-                0   One or more processes matched the criteria.
-                1   No processes matched.
-                2   Syntax error in the command line.
-                3   Fatal error: out of memory etc.
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No processes matched the criteria / No processes killed.
+                1   One or more processes matched the criteria and a kill was
+                    attempted.
 
     """
     result = {}
@@ -295,14 +294,16 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60):
     log.info("Killing any processes on %s that match: %s", hosts, pattern)
     if hosts is not None:
         commands = [
-            "if pgrep --list-name {}".format(pattern),
-            "then sudo pkill {}".format(pattern),
-            "if pgrep --list-name {}".format(pattern),
+            "rc=0",
+            "if pgrep --list-full {}".format(pattern),
+            "then rc=1",
+            "sudo pkill {}".format(pattern),
+            "if pgrep --list-full {}".format(pattern),
             "then sleep 5",
             "pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
-            "exit 0",
+            "exit $rc",
         ]
         result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
     return result
