@@ -1,0 +1,3 @@
+name: daos_server
+access_points: ['example:10001']
+port: 10001

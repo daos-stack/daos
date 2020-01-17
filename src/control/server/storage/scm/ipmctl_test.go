@@ -28,16 +28,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // MockDiscovery returns a mock SCM module of type exported from ipmctl.
 func MockDiscovery() ipmctl.DeviceDiscovery {
-	m := MockModulePB()
+	m := proto.MockScmModule()
 
 	return ipmctl.DeviceDiscovery{
 		Physical_id:          uint16(m.Physicalid),
@@ -49,12 +52,30 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 }
 
-type mockCmdRunner struct {
+// MockModule converts ipmctl type SCM module and returns storage/scm
+// internal type.
+func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
+	if d == nil {
+		md := MockDiscovery()
+		d = &md
+	}
+
+	return storage.ScmModule{
+		PhysicalID:      uint32(d.Physical_id),
+		ChannelID:       uint32(d.Channel_id),
+		ChannelPosition: uint32(d.Channel_pos),
+		ControllerID:    uint32(d.Memory_controller_id),
+		SocketID:        uint32(d.Socket_id),
+		Capacity:        d.Capacity,
+	}
+}
+
+type mockIpmctl struct {
 	discoverModulesRet error
 	modules            []ipmctl.DeviceDiscovery
 }
 
-func (m *mockCmdRunner) Discover() ([]ipmctl.DeviceDiscovery, error) {
+func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
 	return m.modules, m.discoverModulesRet
 }
 
@@ -68,7 +89,7 @@ func TestGetState(t *testing.T) {
    "dev":"namespace%d.0",
    "mode":"fsdax",
    "map":"dev",
-   "size":"2964.94 GiB (3183.58 GB)",
+   "size":3183575302144,
    "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
    "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
    "sector_size":512,
@@ -108,7 +129,7 @@ func TestGetState(t *testing.T) {
 		errMsg            string
 		showRegionOut     string
 		expRebootRequired bool
-		expNamespaces     []Namespace
+		expNamespaces     storage.ScmNamespaces
 		expCommands       []string
 		lookPathErrMsg    string
 	}{
@@ -165,12 +186,12 @@ func TestGetState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}
@@ -205,6 +226,77 @@ func TestGetState(t *testing.T) {
 	}
 }
 
+func TestParseNamespaces(t *testing.T) {
+	// template for `ndctl list -N` output
+	listTmpl := `{
+   "dev":"namespace%d.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":3183575302144,
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem%d",
+   "numa_node":%d
+}`
+
+	for name, tc := range map[string]struct {
+		in            string
+		expNamespaces storage.ScmNamespaces
+		expErr        error
+	}{
+		"empty": {
+			expNamespaces: storage.ScmNamespaces{},
+		},
+		"single": {
+			in: fmt.Sprintf(listTmpl, 0, 0, 0),
+			expNamespaces: storage.ScmNamespaces{
+				{
+					Name:        "namespace0.0",
+					BlockDevice: "pmem0",
+					NumaNode:    0,
+					Size:        3183575302144,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+			},
+		},
+		"double": {
+			in: strings.Join([]string{
+				"[", fmt.Sprintf(listTmpl, 0, 0, 0), ",",
+				fmt.Sprintf(listTmpl, 1, 1, 1), "]"}, ""),
+			expNamespaces: storage.ScmNamespaces{
+				{
+					Name:        "namespace0.0",
+					BlockDevice: "pmem0",
+					NumaNode:    0,
+					Size:        3183575302144,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+				{
+					Name:        "namespace1.0",
+					BlockDevice: "pmem1",
+					NumaNode:    1,
+					Size:        3183575302144,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+			},
+		},
+		"malformed": {
+			in:     `{"dev":"foo`,
+			expErr: errors.New("JSON input"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotNamespaces, gotErr := parseNamespaces(tc.in)
+
+			CmpErr(t, tc.expErr, gotErr)
+			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
+				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 // TestGetNamespaces tests the internals of prepScm, pass in mock runCmd to verify
 // behaviour. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetNamespaces(t *testing.T) {
@@ -214,7 +306,7 @@ func TestGetNamespaces(t *testing.T) {
    "dev":"namespace%d.0",
    "mode":"fsdax",
    "map":"dev",
-   "size":"2964.94 GiB (3183.58 GB)",
+   "size":3183575302144,
    "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
    "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
    "sector_size":512,
@@ -230,7 +322,7 @@ func TestGetNamespaces(t *testing.T) {
 		desc           string
 		errMsg         string
 		cmdOut         string
-		expNamespaces  []Namespace
+		expNamespaces  storage.ScmNamespaces
 		expCommands    []string
 		lookPathErrMsg string
 	}{
@@ -238,7 +330,7 @@ func TestGetNamespaces(t *testing.T) {
 			desc:          "no namespaces",
 			cmdOut:        "",
 			expCommands:   []string{cmdScmListNamespaces},
-			expNamespaces: []Namespace{},
+			expNamespaces: storage.ScmNamespaces{},
 		},
 		{
 			desc:          "single pmem device",
@@ -262,7 +354,7 @@ func TestGetNamespaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				if tt.lookPathErrMsg != "" {
@@ -278,7 +370,7 @@ func TestGetNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}

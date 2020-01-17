@@ -35,8 +35,8 @@
 /* Prototypes for static helper functions */
 static int request_credentials_via_drpc(Drpc__Response **response);
 static int process_credential_response(Drpc__Response *response,
-		d_iov_t *creds);
-static int sanity_check_credential_response(Drpc__Response *response);
+				       d_iov_t *creds);
+static int get_cred_from_response(Drpc__Response *response, d_iov_t *cred);
 
 int
 dc_sec_request_creds(d_iov_t *creds)
@@ -78,8 +78,8 @@ request_credentials_via_drpc(Drpc__Response **response)
 	}
 
 	request = drpc_call_create(agent_socket,
-			DRPC_MODULE_SECURITY_AGENT,
-			DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS);
+			DRPC_MODULE_SEC_AGENT,
+			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
 	if (request == NULL) {
 		D_ERROR("Couldn't allocate dRPC call\n");
 		drpc_close(agent_socket);
@@ -94,11 +94,8 @@ request_credentials_via_drpc(Drpc__Response **response)
 }
 
 static int
-process_credential_response(Drpc__Response *response,
-		d_iov_t *creds)
+process_credential_response(Drpc__Response *response, d_iov_t *creds)
 {
-	int rc = DER_SUCCESS;
-
 	if (response == NULL) {
 		D_ERROR("Response was null\n");
 		return -DER_NOREPLY;
@@ -111,46 +108,57 @@ process_credential_response(Drpc__Response *response,
 		return -DER_MISC;
 	}
 
-	rc = sanity_check_credential_response(response);
-	if (rc == DER_SUCCESS) {
-		uint8_t *bytes;
-
-		/*
-		 * Need to allocate a new buffer to return, since response->body
-		 * will be freed
-		 */
-		D_ALLOC(bytes, response->body.len);
-		if (bytes == NULL) {
-			D_ERROR("Could not allocate iov buffer\n");
-			return -DER_NOMEM;
-		}
-
-		memcpy(bytes, response->body.data, response->body.len);
-		d_iov_set(creds, bytes, response->body.len);
-	}
-
-	return rc;
+	return get_cred_from_response(response, creds);
 }
 
 static int
-sanity_check_credential_response(Drpc__Response *response)
+auth_cred_to_iov(Auth__Credential *cred, d_iov_t *iov)
 {
-	int rc = DER_SUCCESS;
+	size_t	len;
+	uint8_t	*packed;
 
-	/* Unpack the response body for a basic sanity check */
-	Auth__Credential *pb_cred = auth__credential__unpack(NULL,
-			response->body.len, response->body.data);
-	if (pb_cred == NULL) {
-		D_ERROR("Body was not a SecurityCredential\n");
-		return -DER_MISC;
-	}
+	len = auth__credential__get_packed_size(cred);
+	D_ALLOC(packed, len);
+	if (packed == NULL)
+		return -DER_NOMEM;
 
-	if (pb_cred->token == NULL) {
-		D_ERROR("Credential did not include token\n");
-		rc = -DER_MISC;
-	}
+	auth__credential__pack(cred, packed);
+	d_iov_set(iov, packed, len);
 
-	auth__credential__free_unpacked(pb_cred, NULL);
-	return rc;
+	return 0;
 }
 
+static int
+get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
+{
+	int			rc = 0;
+	Auth__GetCredResp	*cred_resp = NULL;
+
+	cred_resp = auth__get_cred_resp__unpack(NULL, response->body.len,
+						response->body.data);
+	if (cred_resp == NULL) {
+		D_ERROR("Body was not a GetCredentialResp");
+		return -DER_PROTO;
+	}
+
+	if (cred_resp->status != 0) {
+		D_ERROR("dRPC call reported failure, status=%d\n",
+			cred_resp->status);
+		D_GOTO(out, rc = cred_resp->status);
+	}
+
+	if (cred_resp->cred == NULL) {
+		D_ERROR("No cred included\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	if (cred_resp->cred->token == NULL) {
+		D_ERROR("Credential did not include token\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	rc = auth_cred_to_iov(cred_resp->cred, cred);
+out:
+	auth__get_cred_resp__free_unpacked(cred_resp, NULL);
+	return rc;
+}

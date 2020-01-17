@@ -17,9 +17,16 @@ else
 	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
-	chmod 777 /dev/hugepages
-	chmod 666 /dev/uio*
-	chmod 666 /sys/class/uio/uio*/device/config
-	chmod 666 /sys/class/uio/uio*/device/resource*
+	# build arglist manually to filter missing directories/files
+	# so we don't error on non-existent entities
+	for glob in '/dev/hugepages' '/dev/uio*'		\
+		'/sys/class/uio/uio*/device/config'	\
+		'/sys/class/uio/uio*/device/resource*'; do
+
+		if list=$(ls -d $glob); then
+			echo "RUN: ls -d $glob | xargs -r chown -R $_TARGET_USER"
+			echo "$list" | xargs -r chown -R "$_TARGET_USER"
+		fi
+	done
 fi
 

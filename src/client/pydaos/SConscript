@@ -1,65 +1,56 @@
 """Build pydaos client"""
 import daos_build
-import distutils.sysconfig
 
-def build_shim_module(py_env, svars, lib_prefix, version):
+def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
 
-    new_env = py_env.Clone()
+    new_env = env.Clone()
     extra_flags = ""
 
     if version == "2.7":
         tgt_name = 'pydaos_shim_27'
-        base_name = 'pydaos_shim_27'
         new_env.ParseConfig("pkg-config --cflags --libs python2")
     elif version == "3":
         tgt_name = 'pydaos_shim_3'
-        base_name = 'pydaos_shim_3'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:
-        print("Unsupported python version %s" % version)
-        return
+        raise Exception("Unsupported python version %s" % version)
 
-    new_env.AppendUnique(LIBS=['daos', 'duns'])
+    new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
-    new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../..')])
+    new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../..')])
 
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
-                               CC=svars["CC"],
-                               SHLINK=svars["LDSHARED"],
+                               CC='gcc -pthread',
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="",
-                               SHLIBSUFFIX=svars["SO"],
-                               CPPFLAGS=svars["BASECFLAGS"] + " " + \
-                               svars["OPT"] + " " + extra_flags)
-    base = daos_build.library(new_env, target=base_name, source=[obj],
-                              CC=svars["CC"],
-                              SHLINK=svars["LDSHARED"],
+                               CPPFLAGS=extra_flags)
+    base = daos_build.library(new_env, target=tgt_name, source=[obj],
+                              SHLINK='gcc -pthread -shared',
                               SHLINKFLAGS=[],
                               SHLIBPREFIX="",
-                              SHLIBSUFFIX=svars["SO"],
-                              CPPFLAGS=svars["BASECFLAGS"] + " " + \
-                              svars["OPT"] + " " + extra_flags)
-    install_path = lib_prefix + "/python" + version + "/site-packages"
+                              SHLIBSUFFIX='.so')
+    install_path = lib_prefix + "/python" + version + "/site-packages/pydaos"
     new_env.Install(install_path, base)
     # install new wrappers too
-    new_env.Install(install_path, "pydaos.py")
+    new_env.Install(install_path, "__init__.py")
+    new_env.Install(install_path, "pydaos_core.py")
+    new_env.Install(install_path, 'dbm.py')
+    # install raw wrappers
+    install_path += "/raw"
+    new_env.Install(install_path, "raw/__init__.py")
+    new_env.Install(install_path, "raw/daos_api.py")
+    new_env.Install(install_path, "raw/daos_io.py")
+    new_env.Install(install_path, "raw/conversion.py")
+    new_env.Install(install_path, "raw/daos_cref.py")
 
 def scons():
     """Execute build"""
     Import('env')
 
-    svars = {}
-    for item in ['CC', 'OPT', 'BASECFLAGS', 'LDSHARED', 'SO']:
-        svars[item] = distutils.sysconfig.get_config_var(item)
-        if svars[item] is None:
-            svars[item] = ""
-
-    py_env = env.Clone()
-
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "2.7")
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "3")
+    build_shim_module(env, '$PREFIX/lib64/', "3")
+    build_shim_module(env, '$PREFIX/lib64/', "2.7")
 
 if __name__ == "SCons.Script":
     scons()

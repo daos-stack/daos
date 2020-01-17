@@ -36,7 +36,8 @@ enum cont_op {
 	CONT_CREATE_SNAP,
 	CONT_LIST_SNAPS,
 	CONT_DESTROY_SNAP,
-	CONT_ROLLBACK
+	CONT_ROLLBACK,
+	CONT_UNS_INSERT,
 };
 
 enum pool_op {
@@ -166,6 +167,7 @@ typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
 /* Pool operations */
 int pool_query_hdlr(struct cmd_args_s *ap);
+int pool_list_containers_hdlr(struct cmd_args_s *ap);
 
 /* TODO: implement these pool op functions
  * int pool_list_cont_hdlr(struct cmd_args_s *ap);
@@ -178,6 +180,7 @@ int pool_query_hdlr(struct cmd_args_s *ap);
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
+int cont_uns_insert_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 

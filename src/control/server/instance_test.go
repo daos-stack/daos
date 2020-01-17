@@ -25,6 +25,7 @@ package server
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
 
 func TestIOServerInstance_NotifyReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	instance := getTestIOServerInstance(log)
 
@@ -78,6 +79,33 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 	}
 
 	waitForIosrvReady(t, instance)
+}
+
+func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
+	return &srvpb.BioErrorReq{
+		DrpcListenerSock: sockPath,
+		InstanceIdx:      idx,
+		TgtId:            tgt,
+		UnmapErr:         unmap,
+		ReadErr:          read,
+		WriteErr:         write,
+	}
+}
+
+func TestIOServerInstance_BioError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	instance := getTestIOServerInstance(log)
+
+	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
+
+	instance.BioErrorNotify(req)
+
+	expectedOut := "detected blob I/O error"
+	if !strings.Contains(buf.String(), expectedOut) {
+		t.Fatal("No I/O error notification detected")
+	}
 }
 
 func TestIOServerInstance_CallDrpc(t *testing.T) {
@@ -96,17 +124,17 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 			instance := getTestIOServerInstance(log)
 			if !tc.notReady {
-				mc := &mockDrpcClient{
-					SendMsgOutputResponse: tc.resp,
+				cfg := &mockDrpcClientConfig{
+					SendMsgResponse: tc.resp,
 				}
-				instance.setDrpcClient(mc)
+				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			_, err := instance.CallDrpc(mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
-			cmpErr(t, tc.expErr, err)
+			_, err := instance.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -189,19 +217,18 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, nil, ms)
+			mp := scm.NewMockProvider(log, nil, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
-			cmpErr(t, tc.expErr, gotErr)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -316,20 +343,18 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			mb := scm.NewMockBackend(tc.mbCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, mb, ms)
+			mp := scm.NewMockProvider(log, tc.mbCfg, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
-			cmpErr(t, tc.expErr, gotErr)
+			common.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNeedsFormat, gotNeedsFormat); diff != "" {
 				t.Fatalf("unexpected needs format (-want, +got):\n%s\n", diff)
 			}

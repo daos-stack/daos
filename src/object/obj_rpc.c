@@ -169,7 +169,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (csum->cs_buf_len < csum->cs_len) {
+	if (csum->cs_buf_len < csum->cs_len * csum->cs_nr) {
 		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
@@ -183,8 +183,8 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 		D_FREE(csum->cs_csum);
 	}
 
-	if (csum->cs_len > 0 && proc_op != CRT_PROC_FREE) {
-		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
+	if (csum->cs_buf_len > 0 && proc_op != CRT_PROC_FREE) {
+		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_buf_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
 				D_FREE(csum->cs_csum);
@@ -195,16 +195,69 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	return 0;
 }
 
+static int
+crt_proc_struct_obj_shard_iod(crt_proc_t proc, struct obj_shard_iod *siod)
+{
+	if (crt_proc_uint32_t(proc, &siod->siod_tgt_idx) != 0)
+		return -DER_HG;
+	if (crt_proc_uint32_t(proc, &siod->siod_idx) != 0)
+		return -DER_HG;
+	if (crt_proc_uint32_t(proc, &siod->siod_nr) != 0)
+		return -DER_HG;
+	if (crt_proc_uint64_t(proc, &siod->siod_off) != 0)
+		return -DER_HG;
+	return 0;
+}
+
+static int
+crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
+{
+	crt_proc_op_t	proc_op;
+	uint32_t	i;
+	int		rc;
+
+	rc = crt_proc_uint32_t(proc, &oiod->oiod_nr);
+	if (rc)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &oiod->oiod_flags);
+	if (rc)
+		return -DER_HG;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -DER_HG;
+	if (proc_op == CRT_PROC_DECODE && oiod->oiod_nr > 0) {
+		rc = obj_io_desc_init(oiod, oiod->oiod_nr, oiod->oiod_flags);
+		if (rc)
+			return rc;
+	}
+
+	for (i = 0; i < oiod->oiod_nr; i++) {
+		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				obj_io_desc_fini(oiod);
+			return -DER_HG;
+		}
+	}
+
+	if (proc_op == CRT_PROC_FREE && oiod->oiod_siods != NULL)
+		obj_io_desc_fini(oiod);
+
+	return 0;
+}
+
 #define IOD_REC_EXIST	(1 << 0)
 #define IOD_CSUM_EXIST	(1 << 1)
 #define IOD_EPRS_EXIST	(1 << 2)
 static int
-crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
+crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
+		    struct obj_io_desc *oiod)
 {
-	crt_proc_op_t	proc_op;
-	int		rc;
-	int		i;
+	uint32_t	i, start, nr;
+	bool		proc_one = false;
 	uint32_t	existing_flags = 0;
+	int		rc;
 
 	if (proc == NULL || dvi == NULL) {
 		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, dvi);
@@ -227,18 +280,37 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
+	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
+	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
+		proc_one = true;
+		start = oiod->oiod_siods[0].siod_idx;
+		nr = oiod->oiod_siods[0].siod_nr;
+		D_ASSERT(start < dvi->iod_nr &&
+			 start + nr <= dvi->iod_nr);
+		rc = crt_proc_uint32_t(proc, &nr);
+	} else {
+		start = 0;
+		rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
+		nr = dvi->iod_nr;
+	}
 	if (rc != 0)
 		return -DER_HG;
 
+#if 0
 	if (dvi->iod_nr == 0 && dvi->iod_type != DAOS_IOD_ARRAY) {
 		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
 		return -DER_HG;
 	}
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+#else
+	/* Zero nr is possible for EC (even for singv), as different IODs
+	 * possibly with different targets, so for one target server received
+	 * IO request, when it with multiple IODs then it is possible that one
+	 * IOD is valid (iod_nr > 0) but another IOD is invalid (iod_nr == 0).
+	 * The RW handler can just ignore those invalid IODs.
+	 */
+	if (nr == 0)
+		return 0;
+#endif
 
 	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
@@ -255,26 +327,26 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 
 	if (proc_op == CRT_PROC_DECODE) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_recxs, dvi->iod_nr);
+			D_ALLOC_ARRAY(dvi->iod_recxs, nr);
 			if (dvi->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_CSUM_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_csums, dvi->iod_nr);
+			D_ALLOC_ARRAY(dvi->iod_csums, nr);
 			if (dvi->iod_csums == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_EPRS_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_eprs, dvi->iod_nr);
+			D_ALLOC_ARRAY(dvi->iod_eprs, nr);
 			if (dvi->iod_eprs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
-		for (i = 0; i < dvi->iod_nr; i++) {
+		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
@@ -285,7 +357,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	}
 
 	if (existing_flags & IOD_CSUM_EXIST) {
-		for (i = 0; i < dvi->iod_nr; i++) {
+		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_csum_buf_t(proc, &dvi->iod_csums[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
@@ -296,7 +368,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	}
 
 	if (existing_flags & IOD_EPRS_EXIST) {
-		for (i = 0; i < dvi->iod_nr; i++) {
+		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_epoch_range_t(proc,
 							 &dvi->iod_eprs[i]);
 			if (rc != 0) {
@@ -304,6 +376,15 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 					D_GOTO(free, rc);
 				return rc;
 			}
+		}
+	}
+
+	if (oiod != NULL && !proc_one) {
+		rc = crt_proc_struct_obj_io_desc(proc, oiod);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				D_GOTO(free, rc);
+			return rc;
 		}
 	}
 
@@ -315,6 +396,98 @@ free:
 			D_FREE(dvi->iod_csums);
 		if (dvi->iod_eprs != NULL)
 			D_FREE(dvi->iod_eprs);
+	}
+
+	return rc;
+}
+
+static int
+crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
+{
+	struct obj_io_desc	*oiod;
+	void			*buf;
+	crt_proc_op_t		 proc_op;
+	daos_size_t		 iod_size, off_size, buf_size;
+	uint32_t		 off_nr;
+	bool			 proc_one = false;
+	int			 i, rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc)
+		return rc;
+
+	if (proc_op == CRT_PROC_ENCODE && iod_array->oia_oiods != NULL &&
+	    (iod_array->oia_oiods[0].oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
+		proc_one = true;
+		iod_array->oia_oiod_nr = 0;
+	}
+
+	if (crt_proc_uint32_t(proc, &iod_array->oia_iod_nr) != 0)
+		return -DER_HG;
+	if (crt_proc_uint32_t(proc, &iod_array->oia_oiod_nr) != 0)
+		return -DER_HG;
+	if (iod_array->oia_iod_nr == 0)
+		return 0;
+
+	D_ASSERT(iod_array->oia_oiod_nr == iod_array->oia_iod_nr ||
+		 iod_array->oia_oiod_nr == 0);
+
+	if (proc_op == CRT_PROC_ENCODE) {
+		off_nr = iod_array->oia_offs != NULL ?
+			 iod_array->oia_iod_nr : 0;
+		if (crt_proc_uint32_t(proc, &off_nr) != 0)
+			return -DER_HG;
+		for (i = 0; i < off_nr; i++) {
+			if (crt_proc_uint64_t(proc, &iod_array->oia_offs[i]))
+				return -DER_HG;
+		}
+	} else if (proc_op == CRT_PROC_DECODE) {
+		if (crt_proc_uint32_t(proc, &off_nr) != 0)
+			return -DER_HG;
+		iod_size = roundup(sizeof(daos_iod_t) * iod_array->oia_iod_nr,
+				   8);
+		off_size = sizeof(uint64_t) * off_nr;
+		buf_size = iod_size + off_size;
+		if (iod_array->oia_oiod_nr != 0)
+			buf_size += sizeof(struct obj_io_desc) *
+				    iod_array->oia_oiod_nr;
+		D_ALLOC(buf, buf_size);
+		if (buf == NULL)
+			return -DER_NOMEM;
+		iod_array->oia_iods = buf;
+		if (off_nr != 0) {
+			iod_array->oia_offs = buf + iod_size;
+			for (i = 0; i < off_nr; i++) {
+				if (crt_proc_uint64_t(proc,
+					&iod_array->oia_offs[i]))
+					return -DER_HG;
+			}
+		} else {
+			iod_array->oia_offs = NULL;
+		}
+		if (iod_array->oia_oiod_nr != 0)
+			iod_array->oia_oiods = buf + iod_size + off_size;
+		else
+			iod_array->oia_oiods = NULL;
+	}
+
+	for (i = 0; i < iod_array->oia_iod_nr; i++) {
+		if (iod_array->oia_oiod_nr != 0 || proc_one) {
+			D_ASSERT(iod_array->oia_oiods != NULL);
+			oiod = &iod_array->oia_oiods[i];
+		} else {
+			oiod = NULL;
+		}
+
+		rc = crt_proc_daos_iod_t(proc, proc_op, &iod_array->oia_iods[i],
+					 oiod);
+		if (rc)
+			break;
+	}
+
+	if (proc_op == CRT_PROC_FREE) {
+		D_FREE(iod_array->oia_iods);
+		return 0;
 	}
 
 	return rc;

@@ -8,13 +8,22 @@ import errno
 from SCons.Script import BUILD_TARGETS
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
                  '-Wno-ignored-attributes',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
+                 '-Wno-unused-command-line-argument',
                  '-Wframe-larger-than=4096']
+
+# Compiler flags to prevent optimizing out security checks
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
+                      '-fwrapv'])
+
+# Compiler flags for stack hardening
+DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
@@ -78,7 +87,9 @@ def set_defaults(env):
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
+    env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
@@ -126,7 +137,7 @@ def scons():
         try:
             version = env['RELEASE']
         except KeyError:
-            print ("Usage: scons RELEASE=x.y.z release")
+            print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
         # create a branch for the PR
@@ -238,13 +249,14 @@ def scons():
         exit(0)
 
     """Execute build"""
-    if os.path.exists('scons_local'):
-        try:
-            sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-            from prereq_tools import PreReqComponent
-            print ('Using scons_local build')
-        except ImportError:
-            print ('Using traditional build')
+    try:
+        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+        from prereq_tools import PreReqComponent
+        print ('Using scons_local build')
+    except ImportError:
+        print ('scons_local submodule is needed in order to do DAOS build')
+        print ('Use git submodule update --init')
+        sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -259,6 +271,7 @@ def scons():
         commits_file = None
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    daos_build.load_mpi_path(env)
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
@@ -283,11 +296,13 @@ def scons():
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
-    env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
-    env.InstallAs("$PREFIX/lib/daos/VERSION", "VERSION")
+    # also install to $PREFIX/lib to work with existing avocado test code
+    daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
+    env.Install("$PREFIX/lib64/daos", "VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
+                ['scons_local/env_modules.py'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')

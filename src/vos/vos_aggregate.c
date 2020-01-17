@@ -29,7 +29,6 @@
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include "vos_internal.h"
 
-#define AGG_CREDITS_MAX		256
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
  * the information like: physical entry it belongs to, visibility, is it the
@@ -129,14 +128,13 @@ struct agg_merge_window {
 };
 
 struct vos_agg_param {
-	uint32_t	ap_credits_max; /* # of tight loops to yield */
-	uint32_t	ap_credits;	/* # of tight loops */
-	daos_handle_t	ap_coh;		/* container handle */
-	daos_unit_oid_t	ap_oid;		/* current object ID */
-	daos_key_t	ap_dkey;	/* current dkey */
-	daos_key_t	ap_akey;	/* current akey */
-	unsigned int	ap_sub_tree_empty:1,
-			ap_discard:1;
+	uint32_t		ap_credits_max; /* # of tight loops to yield */
+	uint32_t		ap_credits;	/* # of tight loops */
+	daos_handle_t		ap_coh;		/* container handle */
+	daos_unit_oid_t		ap_oid;		/* current object ID */
+	daos_key_t		ap_dkey;	/* current dkey */
+	daos_key_t		ap_akey;	/* current akey */
+	unsigned int		ap_discard:1;
 	struct umem_instance	*ap_umm;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -147,6 +145,18 @@ struct vos_agg_param {
 static inline void
 mark_yield(bio_addr_t *addr, unsigned int *acts)
 {
+	/*
+	 * When read/write or reserve/delete a NVMe record, the BIO or VEA
+	 * call might yield (BIO read/write yield and wait for NVMe DMA done,
+	 * VEA reserve/free may trigger free extents reclaiming then yield
+	 * and wait on blob unmap done).
+	 *
+	 * But we can't tell if it really yield or not (BIO read/write could
+	 * skip DMA transfer on certain cases, free extents reclaiming isn't
+	 * necessarily being triggered on every VEA call), to ensure the
+	 * correctness, we always inform vos_iterate() yield, which may result
+	 * in some unnecessary re-probe.
+	 */
 	if (addr->ba_type == DAOS_MEDIA_NVME)
 		*acts |= VOS_ITER_CB_YIELD;
 }
@@ -173,7 +183,7 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 		rc = umem_tx_commit(umm);
 
 	if (rc) {
-		D_ERROR("Failed to delete entry: %d\n", rc);
+		D_ERROR("Failed to delete entry: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -181,75 +191,44 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 	return rc;
 }
 
-static int
-agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
-		   struct vos_agg_param *agg_param, unsigned int *acts)
+static inline void
+reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 {
-	int	rc;
-
-	D_ASSERT(agg_param && agg_param->ap_discard);
-	D_ASSERT(acts != NULL);
-
-	if (!agg_param->ap_sub_tree_empty)
-		return 0;
-
-	/*
-	 * All entries in sub-tree were deleted during the nested sub-tree
-	 * iteration, then vos_iterate() re-probed the key in outer iteration
-	 * to delete it.
-	 *
-	 * Since there can be at most 1 discard/aggregation ULT for each
-	 * container at any given time, the key won't be deleted by others even
-	 * if current ULT yield in sub-tree iteration, and re-probe will find
-	 * the exact matched key.
-	 */
-	agg_param->ap_sub_tree_empty = 0;
-	rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
-	if (rc) {
-		D_ERROR("Failed to delete key entry: %d\n", rc);
-	} else if (vos_iter_empty(ih) == 1) {
-		agg_param->ap_sub_tree_empty = 1;
-		/* Trigger re-probe in outer iteration */
-		*acts |= VOS_ITER_CB_YIELD;
+	switch (type) {
+	case VOS_ITER_OBJ:
+		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
+		break;
+	case VOS_ITER_DKEY:
+		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
+		break;
+	case VOS_ITER_AKEY:
+		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
+		break;
+	default:
+		break;
 	}
-
-	return rc;
 }
 
 static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	int	rc;
-
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
 		agg_param->ap_oid = entry->ie_oid;
-		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-	} else if (!agg_param->ap_discard) {
+		reset_agg_pos(VOS_ITER_DKEY, agg_param);
+		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+	} else {
 		/*
-		 * The aggregation ULT may yield while aggregating SV/EV tree,
-		 * that can trigger re-probe on the parent akey, dkey, object
-		 * trees, skip the dup aggregation on re-probe.
+		 * When recursive vos_iterate() yield in sub tree, re-probe
+		 * is required when it returns back to upper level tree, if
+		 * the just processed object is found on re-probe, we need
+		 * to notify vos_iterate() to not iterate into to sub tree
+		 * again.
 		 */
 		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" aggregation on re-probe\n",
 			DP_UOID(agg_param->ap_oid));
 		*acts |= VOS_ITER_CB_SKIP;
-	}
-
-	if (agg_param->ap_discard) {
-		if (agg_param->ap_sub_tree_empty) {
-			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-						vos_hdl2cont(agg_param->ap_coh),
-						entry->ie_oid);
-			if (rc != 0)
-				return rc;
-		}
-
-		rc = agg_discard_parent(ih, entry, agg_param, acts);
-		agg_param->ap_sub_tree_empty = 0;
-		return rc;
 	}
 
 	return 0;
@@ -271,15 +250,12 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
 		agg_param->ap_dkey = entry->ie_key;
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-	} else if (!agg_param->ap_discard) {
+		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+	} else {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
-
-	if (agg_param->ap_discard)
-		return agg_discard_parent(ih, entry, agg_param, acts);
 
 	return 0;
 }
@@ -344,47 +320,6 @@ merge_window_status(struct agg_merge_window *mw)
 	return MW_CLOSED;
 }
 
-static bool
-akey_empty(struct vos_agg_param *agg_param)
-{
-	vos_iter_param_t	iter_param = { 0 };
-	daos_handle_t		sub_ih;
-	bool			sv_empty = false, ev_empty = false;
-	int			rc;
-
-	iter_param.ip_hdl = agg_param->ap_coh;
-	iter_param.ip_ih = DAOS_HDL_INVAL;
-	iter_param.ip_oid = agg_param->ap_oid;
-	iter_param.ip_dkey = agg_param->ap_dkey;
-	iter_param.ip_akey = agg_param->ap_akey;
-	iter_param.ip_epr.epr_lo = 0;
-	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
-
-	rc = vos_iter_prepare(VOS_ITER_SINGLE, &iter_param, &sub_ih);
-	if (rc == 0) {
-		sv_empty = vos_iter_empty(sub_ih);
-		vos_iter_finish(sub_ih);
-	} else if (rc == -DER_NONEXIST) {
-		sv_empty = true;
-	} else {
-		D_ERROR("Failed to prepare SV iterator: %d\n", rc);
-	}
-
-	rc = vos_iter_prepare(VOS_ITER_RECX, &iter_param, &sub_ih);
-	if (rc == 0) {
-		ev_empty = vos_iter_empty(sub_ih);
-		vos_iter_finish(sub_ih);
-	} else if (rc == -DER_NONEXIST) {
-		ev_empty = true;
-	} else {
-		D_ERROR("Failed to prepare EV iterator: %d\n", rc);
-	}
-
-	return (sv_empty && ev_empty);
-}
-
 static int
 vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
@@ -392,21 +327,15 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		agg_param->ap_akey = entry->ie_key;
-	} else if (!agg_param->ap_discard) {
+	} else {
 		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
 	if (agg_param->ap_discard) {
-		/*
-		 * SV or EV tree is emptied during discard, we need to
-		 * verify again if the akey is empty, because new entries
-		 * could be inserted while the dicard ULT yielding.
-		 */
-		if (agg_param->ap_sub_tree_empty)
-			agg_param->ap_sub_tree_empty = akey_empty(agg_param);
-		return agg_discard_parent(ih, entry, agg_param, acts);
+		/* No merge window for discard path so bypass checks below. */
+		return 0;
 	}
 
 	/* Reset the max epoch for low-level SV tree iteration */
@@ -451,9 +380,8 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 delete:
 	rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
 	if (rc) {
-		D_ERROR("Failed to delete SV entry: %d\n", rc);
+		D_ERROR("Failed to delete SV entry: "DF_RC"\n", DP_RC(rc));
 	} else if (vos_iter_empty(ih) == 1 && agg_param->ap_discard) {
-		agg_param->ap_sub_tree_empty = 1;
 		/* Trigger re-probe in akey iteration */
 		*acts |= VOS_ITER_CB_YIELD;
 	}
@@ -638,7 +566,8 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 
 	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, &io->ic_nvme_exts);
 	if (rc) {
-		D_ERROR("Reserve %u blocks on NVMe failed: %d\n", blk_cnt, rc);
+		D_ERROR("Reserve %u blocks on NVMe failed: "DF_RC"\n", blk_cnt,
+		DP_RC(rc));
 		return rc;
 	}
 
@@ -704,7 +633,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	rc = reserve_segment(obj, io, seg_size, &ent_in->ei_addr);
 	if (rc) {
-		D_ERROR("Reserve "DF_U64" segment error: %d\n", seg_size, rc);
+		D_ERROR("Reserve "DF_U64" segment error: "DF_RC"\n", seg_size,
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -718,7 +648,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	rc = bio_sgl_init(&bsgl, lgc_seg->ls_idx_end -
 			  lgc_seg->ls_idx_start + 1);
 	if (rc) {
-		D_ERROR("Init bsgl error: %d\n", rc);
+		D_ERROR("Init bsgl error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -757,9 +687,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
-		bsgl.bs_iovs[biov_idx].bi_buf = NULL;
-		bsgl.bs_iovs[biov_idx].bi_addr = addr_src;
-		bsgl.bs_iovs[biov_idx].bi_data_len = copy_size;
+		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 		biov_idx++;
 
 		D_ASSERT(iov.iov_buf_len >= copy_size);
@@ -774,8 +702,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	sgl.sg_iovs = &iov;
 	rc = bio_readv(bio_ctxt, &bsgl, &sgl);
 	if (rc) {
-		D_ERROR("Readv for "DF_RECT" error: %d\n",
-			DP_RECT(&ent_in->ei_rect), rc);
+		D_ERROR("Readv for "DF_RECT" error: "DF_RC"\n",
+			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 		bio_sgl_fini(&bsgl);
 		return rc;
 	}
@@ -790,8 +718,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	iov.iov_len = seg_size;
 	rc = bio_write(bio_ctxt, addr_dst, &iov);
 	if (rc)
-		D_ERROR("Write "DF_RECT" error: %d\n",
-			DP_RECT(&ent_in->ei_rect), rc);
+		D_ERROR("Write "DF_RECT" error: "DF_RC"\n",
+			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 
 	bio_sgl_fini(&bsgl);
 	return rc;
@@ -830,10 +758,11 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = fill_one_segment(ih, mw, lgc_seg, acts);
 		if (rc) {
-			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: %d\n",
+			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: "DF_RC"\n",
 				lgc_seg->ls_idx_start, lgc_seg->ls_idx_end,
 				lgc_seg->ls_phy_ent,
-				DP_RECT(&lgc_seg->ls_ent_in.ei_rect), rc);
+				DP_RECT(&lgc_seg->ls_ent_in.ei_rect),
+					DP_RC(rc));
 			break;
 		}
 	}
@@ -867,8 +796,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 				     io->ic_scm_cnt);
 		io->ic_scm_cnt = 0;
 		if (rc) {
-			D_ERROR("Publish %u SCM extents error: %d\n",
-				io->ic_scm_cnt, rc);
+			D_ERROR("Publish %u SCM extents error: "DF_RC"\n",
+				io->ic_scm_cnt, DP_RC(rc));
 			goto abort;
 		}
 	}
@@ -922,8 +851,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: %d\n",
-				DP_RECT(&rect), phy_ent->pe_off, rc);
+			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
+				""DF_RC"\n", DP_RECT(&rect), phy_ent->pe_off,
+				DP_RC(rc));
 			goto abort;
 		}
 
@@ -954,8 +884,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_insert(oiter->it_hdl, ent_in);
 		if (rc) {
-			D_ERROR("Insert segment "DF_RECT" error: %d\n",
-				DP_RECT(&ent_in->ei_rect), rc);
+			D_ERROR("Insert segment "DF_RECT" error: "DF_RC"\n",
+				DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 			goto abort;
 		}
 	}
@@ -964,7 +894,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
 				VOS_IOS_AGGREGATION);
 	if (rc) {
-		D_ERROR("Publish NVMe extents error: %d\n", rc);
+		D_ERROR("Publish NVMe extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
 	}
 abort:
@@ -1074,24 +1004,24 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
-		D_ERROR("Prepare segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Prepare segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 
 	/* Transfer data from old logical records to reserved new segments */
 	rc = fill_segments(ih, mw, acts);
 	if (rc) {
-		D_ERROR("Fill segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Fill segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 
 	/* Replace the old logical records with new segments in EV tree */
 	rc = insert_segments(ih, mw, acts);
 	if (rc) {
-		D_ERROR("Insert segments "DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), rc);
+		D_ERROR("Insert segments "DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
 out:
@@ -1314,8 +1244,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete EV entry "DF_RECT" error: %d\n",
-				DP_RECT(&rect), rc);
+			D_ERROR("Delete EV entry "DF_RECT" error: "DF_RC"\n",
+				DP_RECT(&rect), DP_RC(rc));
 			return rc;
 		}
 
@@ -1326,8 +1256,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	if (visible && trigger_flush(mw, &lgc_ext)) {
 		rc = flush_merge_window(ih, mw, acts);
 		if (rc) {
-			D_ERROR("Flush window "DF_EXT" error: %d\n",
-				DP_EXT(&mw->mw_ext), rc);
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
 			return rc;
 		}
 		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
@@ -1344,8 +1274,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent == NULL) {
 			rc = -DER_NOMEM;
 			D_ERROR("Enqueue phy_ent win:"DF_EXT", ent:"DF_EXT" "
-				"error: %d\n", DP_EXT(&mw->mw_ext),
-				DP_EXT(&phy_ext), rc);
+				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
+				DP_EXT(&phy_ext), DP_RC(rc));
 			return rc;
 		}
 	} else {
@@ -1358,8 +1288,8 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = enqueue_lgc_ent(mw, &lgc_ext, phy_ent);
 		if (rc) {
 			D_ERROR("Enqueue lgc_ent win: "DF_EXT", ent:"DF_EXT" "
-				"error: %d\n", DP_EXT(&mw->mw_ext),
-				DP_EXT(&lgc_ext), rc);
+				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
+				DP_EXT(&lgc_ext), DP_RC(rc));
 			return rc;
 		}
 	} else {
@@ -1371,8 +1301,8 @@ out:
 	if (last) {
 		rc = flush_merge_window(ih, mw, acts);
 		if (rc)
-			D_ERROR("Flush window "DF_EXT" error: %d\n",
-				DP_EXT(&mw->mw_ext), rc);
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
 		close_merge_window(mw, rc);
 	}
 
@@ -1428,13 +1358,29 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Discard */
 	if (agg_param->ap_discard) {
-		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
-		rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
-		if (rc) {
-			D_ERROR("Delete EV entry "DF_EXT" error: %d\n",
-				DP_EXT(&phy_ext), rc);
-		} else if (vos_iter_empty(ih) == 1) {
-			agg_param->ap_sub_tree_empty = 1;
+		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+		struct evt_rect		 rect;
+
+		/*
+		 * Delete the physical entry when iterating to the first
+		 * logical entry
+		 */
+		if (phy_ext.ex_lo == lgc_ext.ex_lo) {
+			rect.rc_ex = phy_ext;
+			rect.rc_epc = entry->ie_epoch;
+			mark_yield(&entry->ie_biov.bi_addr, acts);
+
+			rc = evt_delete(oiter->it_hdl, &rect, NULL);
+			if (rc)
+				D_ERROR("Delete EV entry "DF_RECT" error: "
+					""DF_RC"\n", DP_RECT(&rect), DP_RC(rc));
+		}
+
+		/*
+		 * Sorted iteration doesn't support tree empty check, so we
+		 * always inform vos_iterate() to check if subtree is empty.
+		 */
+		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
 		}
@@ -1454,8 +1400,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = join_merge_window(ih, mw, entry, acts);
 	if (rc)
-		D_ERROR("Join window "DF_EXT"/"DF_EXT" error: %d\n",
-			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), rc);
+		D_ERROR("Join window "DF_EXT"/"DF_EXT" error: "DF_RC"\n",
+			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), DP_RC(rc));
 out:
 	if (rc)
 		close_merge_window(mw, rc);
@@ -1463,16 +1409,16 @@ out:
 }
 
 static int
-vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-		 vos_iter_type_t type, vos_iter_param_t *param,
-		 void *cb_arg, unsigned int *acts)
+vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		     vos_iter_type_t type, vos_iter_param_t *param,
+		     void *cb_arg, unsigned int *acts)
 {
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
 	int			 rc;
 
 	cont = vos_hdl2cont(param->ip_hdl);
-	D_DEBUG(DB_EPC, DF_CONT": Aggregate, type:%d, is_discard:%d\n",
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
 		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
 		agg_param->ap_discard);
 
@@ -1499,38 +1445,75 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("VOS aggregation failed: %d\n", rc);
+		D_ERROR("VOS aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
-		cont->vc_abort_aggregation = 0;
 		return 1;
 	}
 
 	agg_param->ap_credits++;
-	/*
-	 * TODO: Aggregation can't yield in object, dkey, akey tree
-	 * iteration so far, see comment in vos_agg_obj().
-	 */
-	if (!agg_param->ap_discard && type != VOS_ITER_SINGLE &&
-	    type != VOS_ITER_RECX) {
-		D_ASSERT(!(*acts & VOS_ITER_CB_YIELD));
-		return 0;
-	}
-
-	if (*acts & VOS_ITER_CB_YIELD)
-		agg_param->ap_credits = 0;
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
+
+		/*
+		 * Reset position if we yield while iterating in object, dkey
+		 * or akey level, so that subtree won't be skipped mistakenly,
+		 * see the comment in vos_agg_obj().
+		 */
+		reset_agg_pos(type, agg_param);
 		bio_yield();
 	}
 
 	return 0;
+}
+
+static int
+vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		      vos_iter_type_t type, vos_iter_param_t *param,
+		      void *cb_arg, unsigned int *acts)
+{
+	struct vos_agg_param	*agg_param = cb_arg;
+	struct vos_container	*cont;
+	int			 rc = 0;
+
+	cont = vos_hdl2cont(param->ip_hdl);
+	D_DEBUG(DB_EPC, DF_CONT": Aggregate post, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		break;
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
+		break;
+	case VOS_ITER_SINGLE:
+		return 0;
+	case VOS_ITER_RECX:
+		return 0;
+	default:
+		D_ASSERTF(false, "Invalid iter type\n");
+		return -DER_INVAL;
+	}
+
+	if (rc == 1) {
+		/* Reprobe flag is set */
+		*acts |= VOS_ITER_CB_YIELD;
+		rc = 0;
+	}
+
+	if (rc != 0)
+		D_ERROR("VOS aggregation failed: %d\n", rc);
+
+	return rc;
 }
 
 static int
@@ -1543,6 +1526,7 @@ aggregate_enter(struct vos_container *cont, bool discard)
 	}
 
 	cont->vc_in_aggregation = 1;
+	cont->vc_abort_aggregation = 0;
 	return 0;
 }
 
@@ -1597,22 +1581,23 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = AGG_CREDITS_MAX;
+	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = false;
 	merge_window_init(&agg_param.ap_window);
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 vos_aggregate_cb, &agg_param);
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
+			 &agg_param);
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
 	}
 
 	/*
-	 * Update LAE, when aggregating for snapshot deletion, the
-	 * @epr->epr_hi could be smaller than the LAE
+	 * Update HAE, when aggregating for snapshot deletion, the
+	 * @epr->epr_hi could be smaller than the HAE
 	 */
 	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
@@ -1655,19 +1640,21 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 		iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	else
 		iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	/* EV tree iterator returns all unsorted physical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
+	/* EV tree iterator returns all sorted logical rectangles */
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
+		VOS_IT_RECX_COVERED;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = AGG_CREDITS_MAX;
+	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 vos_aggregate_cb, &agg_param);
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
+			 &agg_param);
 
 	aggregate_exit(cont, true);
 	return rc;

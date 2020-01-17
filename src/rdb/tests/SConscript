@@ -7,7 +7,7 @@ def scons():
 
     # rdbt server
     librdbt = daos_build.library(denv, 'rdbt', ['rdb_test.c', 'rpc.c'])
-    denv.Install('$PREFIX/lib/daos_srv', librdbt)
+    denv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client
     rdbt = daos_build.program(denv, 'rdbt', ['rdbt.c', 'rpc.c'],

@@ -38,6 +38,17 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Refresh the DTX resync generation.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return		Zero on success.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_update_resync_gen(daos_handle_t coh);
+
+/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -45,9 +56,8 @@
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
- * \param punch		[IN]	For punch DTX or not.
- * \param check		[IN]	Check whether the DTX need restart because
- *				of sync epoch or not.
+ * \param gen		[IN]	The DTX generation.
+ * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
  * \return		-DER_INPROGRESS	retry with newer epoch.
@@ -55,7 +65,8 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		uint32_t flags);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -174,28 +185,22 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
- * \param force [IN]	Force abort even if some replica(s) have not
- *			'prepared' related DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count, bool force);
+	      int count);
 
 /**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param max	[IN]	The max count of DTXs to be aggregated.
- * \param age	[IN]	Not aggregate the DTX which age is newer than that.
  *
- * \return	Positive value if no more DTXs can be aggregated.
- * \return	Zero if the requested (@max) DTXs have been aggregated.
- * \return	Negative value if error.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
+vos_dtx_aggregate(daos_handle_t coh);
 
 /**
  * Query the container's DTXs information.
@@ -217,6 +222,20 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
  */
 int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
+
+/**
+ * Establish the indexed committed DTX table in DRAM.
+ *
+ * \param coh	[IN]		Container open handle.
+ * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
+ *				contains committed DTX entries to be handled.
+ *
+ * \return	Zero on success, need further re-index.
+ *		Positive, re-index is completed.
+ *		Negative value if error.
+ */
+int
+vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
  * Initialize the environment for a VOS instance
@@ -460,7 +479,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
 	      d_sg_list_t *sgls);
 
-
 /**
  * Update records for the specfied object.
  * If input buffer is not provided in \a sgl, then this function returns
@@ -621,6 +639,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
  */
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
+
+daos_csum_buf_t *
+vos_ioh2dcbs(daos_handle_t ioh);
+
+uint32_t
+vos_ioh2dcbs_nr(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
@@ -802,7 +826,8 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
- * \param[in]		cb		iteration callback
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
  *
  * \retval		0	iteration complete
@@ -811,7 +836,8 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
@@ -903,10 +929,10 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
 vos_gc_run(int *credits);
+int
+vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** reset HAE (Highest Aggregated Epoch) **/
-	VOS_CO_CTL_RESET_HAE,
 	/** abort VOS aggregation **/
 	VOS_CO_CTL_ABORT_AGG,
 };

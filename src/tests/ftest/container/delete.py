@@ -29,7 +29,7 @@ import uuid
 
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosApiError, DaosContainer
+from pydaos.raw import DaosPool, DaosApiError, DaosContainer
 
 class DeleteContainerTest(TestWithServers):
     """
@@ -131,9 +131,3 @@ class DeleteContainerTest(TestWithServers):
             self.d_log.error(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-
-        finally:
-            # clean up the pool
-            if self.pool is not None:
-                self.pool.destroy(1)
-                self.pool = None

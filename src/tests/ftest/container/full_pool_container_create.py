@@ -25,7 +25,7 @@ import random
 import string
 
 from apricot import TestWithServers, skipForTicket
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 
 class FullPoolContainerCreate(TestWithServers):

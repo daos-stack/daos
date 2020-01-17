@@ -28,10 +28,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -49,8 +51,9 @@ type (
 
 	// Runner starts and manages an instance of a DAOS I/O Server
 	Runner struct {
-		Config *Config
-		log    logging.Logger
+		Config  *Config
+		log     logging.Logger
+		started uint32
 	}
 )
 
@@ -77,7 +80,7 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 }
 
 func (r *Runner) run(ctx context.Context, args, env []string) error {
-	binPath, err := findBinary(ioServerBin)
+	binPath, err := common.FindBinary(ioServerBin)
 	if err != nil {
 		return errors.Wrapf(err, "can't start %s", ioServerBin)
 	}
@@ -96,15 +99,24 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	// can't go away until PMIx support is removed, though.
 	cmd.Env = mergeEnvVars(os.Environ(), env)
 
-	// I/O server should get a SIGKILL if this process dies.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// I/O server should get a SIGKILL if this process dies.
 		Pdeathsig: syscall.SIGKILL,
+		// I/O server should run with real uid/gid (drop egid).
+		Credential: &syscall.Credential{
+			Uid:         uint32(os.Getuid()),
+			Gid:         uint32(os.Getgid()),
+			NoSetGroups: true,
+		},
 	}
 
-	r.log.Debugf("%s:%d config: %#v", ioServerBin, r.Config.Index, r.Config)
 	r.log.Debugf("%s:%d args: %s", ioServerBin, r.Config.Index, args)
 	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
+
+	r.setStarted()
+	defer r.setStopped()
+
 	return errors.Wrapf(exitStatus(cmd.Run()), "%s (instance %d) exited", binPath, r.Config.Index)
 }
 
@@ -125,4 +137,21 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	}()
 
 	return nil
+}
+
+func (r *Runner) setStarted() {
+	atomic.StoreUint32(&r.started, 1)
+}
+
+func (r *Runner) setStopped() {
+	atomic.StoreUint32(&r.started, 0)
+}
+
+func (r *Runner) IsStarted() bool {
+	return atomic.LoadUint32(&r.started) == 1
+}
+
+// GetConfig returns the runner's configuration
+func (r *Runner) GetConfig() *Config {
+	return r.Config
 }

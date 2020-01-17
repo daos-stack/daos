@@ -93,16 +93,6 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 };
 
-/**
- * per-node container (memory) object
- */
-struct ds_cont {
-	struct daos_llink	sc_list;
-	uuid_t			sc_uuid;
-	uuid_t			sp_uuid;
-	struct ds_iv_ns		*sc_iv_ns;
-};
-
 /* Container IV structure */
 struct cont_iv_snapshot {
 	int snap_cnt;
@@ -139,6 +129,9 @@ struct cont_iv_entry {
 };
 
 struct cont_iv_key {
+	/* SNAP/PROP_IV the key is the container uuid.
+	 * CAPA the key is the container hdl uuid.
+	 */
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
@@ -171,9 +164,9 @@ int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			  struct cont *cont, struct container_hdl *hdl,
 			  crt_rpc_t *rpc);
-int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			 struct cont *cont, struct container_hdl *hdl,
-			 crt_rpc_t *rpc, bool snapshot);
+int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc);
 int ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			    struct cont *cont, struct container_hdl *hdl,
 			    crt_rpc_t *rpc);
@@ -214,14 +207,6 @@ int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
 
-int ds_cont_lookup_create(const uuid_t uuid, void *arg,
-			  struct ds_cont **cont_p);
-struct ds_cont *ds_cont_lookup(const uuid_t uuid);
-void ds_cont_put(struct ds_cont *cont);
-int ds_cont_cache_init(void);
-void ds_cont_cache_fini(void);
-void ds_cont_aggregate_ult(void *arg);
-
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t capas);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
@@ -241,6 +226,7 @@ int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			      uint64_t capas);
+int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid);
 int cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			daos_prop_t *prop);
 

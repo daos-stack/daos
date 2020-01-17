@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -107,10 +107,15 @@ flatten_aces(uint8_t *buffer, uint32_t buf_len, struct daos_ace *aces[],
 	pen = buffer;
 	for (i = 0; i < num_aces; i++) {
 		ssize_t ace_size = daos_ace_get_size(aces[i]);
+		/*
+		 * Should have checked the ACE size validity during allocation
+		 * of the input buffer.
+		 */
+		D_ASSERTF(ace_size > 0, "ACE size became invalid");
 
 		/* Internal error if we walk outside the buffer */
 		D_ASSERTF((pen + ace_size) <= (buffer + buf_len),
-				"ACEs too long for buffer size %u", buf_len);
+			  "ACEs too long for buffer size %u", buf_len);
 
 		memcpy(pen, aces[i], ace_size);
 		pen += ace_size;
@@ -577,6 +582,22 @@ ace_hash_entry(d_list_t *rlink)
 			struct ace_hash_entry, entry);
 }
 
+uint32_t
+hash_ace_key_hash(struct d_hash_table *htable, const void *key,
+		  unsigned int ksize)
+{
+	struct daos_ace			*ace = (struct daos_ace *)key;
+	const char			*str_key;
+	size_t				str_key_len;
+	unsigned int			idx;
+
+	str_key = daos_ace_get_principal_str(ace);
+	str_key_len = strnlen(str_key, DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+
+	idx = d_hash_string_u32(str_key, str_key_len);
+	return idx & ((1U << htable->ht_bits) - 1);
+}
+
 /*
  * Key comparison for hash table - Checks whether the principals match.
  * Body of the ACE doesn't need to match.
@@ -654,7 +675,8 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 			daos_ace_get_size(ace),
 			&entry->entry, true);
 	if (rc != 0) {
-		D_ERROR("Failed to insert new hash entry, rc=%d\n", rc);
+		D_ERROR("Failed to insert new hash entry, rc="DF_RC"\n",
+			DP_RC(rc));
 		D_FREE(entry);
 	}
 
@@ -672,6 +694,7 @@ validate_aces(struct daos_acl *acl)
 	int			rc;
 	struct d_hash_table	found;
 	d_hash_table_ops_t	ops = {
+			.hop_key_hash = hash_ace_key_hash,
 			.hop_key_cmp = hash_ace_key_cmp,
 			.hop_rec_addref = hash_ace_add_ref,
 			.hop_rec_decref = hash_ace_dec_ref,
@@ -682,7 +705,7 @@ validate_aces(struct daos_acl *acl)
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
 			8, NULL, &ops, &found);
 	if (rc != 0) {
-		D_ERROR("Failed to create hash table, rc=%d\n", rc);
+		D_ERROR("Failed to create hash table, rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1155,6 +1178,10 @@ daos_ace_is_valid(struct daos_ace *ace)
 	if (ace->dae_principal_len > 0 && !principal_is_null_terminated(ace)) {
 		return false;
 	}
+
+	if (ace->dae_principal_len > 0 &&
+	    !daos_acl_principal_is_valid(ace->dae_principal))
+		return false;
 
 	if (!permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALLOW) ||
 	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_AUDIT) ||

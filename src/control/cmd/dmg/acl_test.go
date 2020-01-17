@@ -25,11 +25,17 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -108,10 +114,23 @@ func TestReadACLFile_Success(t *testing.T) {
 	}
 
 	// Just sanity check - parsing is already tested more in-depth below
-	if len(result) != expectedNumACEs {
-		t.Errorf("Expected %d items, got %d",
-			expectedNumACEs, len(result))
+	if len(result.Entries) != expectedNumACEs {
+		t.Errorf("Expected %d items, got %d", expectedNumACEs, len(result.Entries))
 	}
+}
+
+func TestReadACLFile_Empty(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "empty.txt")
+	createTestFile(t, path, "")
+	defer os.Remove(path)
+
+	result, err := readACLFile(path)
+
+	if result != nil {
+		t.Errorf("expected no result, got: %+v", result)
+	}
+
+	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
 func TestParseACL_EmptyFile(t *testing.T) {
@@ -127,13 +146,14 @@ func TestParseACL_EmptyFile(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 0 {
-		t.Errorf("Expected empty result, got %d items", len(result))
+	if len(result.Entries) != 0 {
+		t.Errorf("Expected empty result, got %d items", len(result.Entries))
 	}
 }
 
 func TestParseACL_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
+	expectedACL := &client.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + "\n",
 	}
@@ -148,17 +168,14 @@ func TestParseACL_OneValidACE(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 result, got %d items", len(result))
-	}
-
-	if result[0] != expectedACE {
-		t.Errorf("Expected ACE '%s', got '%s'", expectedACE, result[0])
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
 func TestParseACL_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
+	expectedACL := &client.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + " \n\n",
 	}
@@ -173,12 +190,8 @@ func TestParseACL_WhitespaceExcluded(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 result, got %d items", len(result))
-	}
-
-	if result[0] != expectedACE {
-		t.Errorf("Expected ACE '%s', got '%s'", expectedACE, result[0])
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
@@ -189,6 +202,9 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 		"A:g:readers@:r",
 		"L:f:baduser@:rw",
 		"U:f:EVERYONE@:rw",
+	}
+	expectedACL := &client.AccessControlList{
+		Entries: expectedACEs,
 	}
 
 	mockFile := &mockReader{
@@ -205,16 +221,8 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 		t.Error("Expected result, got nil")
 	}
 
-	if len(result) != len(expectedACEs) {
-		t.Fatalf("Expected %d results, got %d items",
-			len(expectedACEs), len(result))
-	}
-
-	for i, resultACE := range result {
-		if resultACE != expectedACEs[i] {
-			t.Errorf("Expected ACE string '%s' at index %d, got '%s'",
-				expectedACEs[i], i, resultACE)
-		}
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACL: %v\n", diff)
 	}
 }
 
@@ -237,5 +245,223 @@ func TestParseACL_ErrorReadingFile(t *testing.T) {
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("Wrong error message '%s' (expected to contain '%s')",
 			err.Error(), expectedError)
+	}
+}
+
+func TestParseACL_MultiValidACEWithComment(t *testing.T) {
+	expectedACEs := []string{
+		"A:g:readers@:r",
+		"L:f:baduser@:rw",
+		"U:f:EVERYONE@:rw",
+	}
+	expectedACL := &client.AccessControlList{
+		Entries: expectedACEs,
+	}
+
+	input := []string{
+		"# This is a comment",
+	}
+	input = append(input, expectedACEs...)
+	input = append(input, " #another comment here")
+
+	mockFile := &mockReader{
+		text: strings.Join(input, "\n"),
+	}
+
+	result, err := parseACL(mockFile)
+
+	if err != nil {
+		t.Errorf("Expected no error, got '%s'", err.Error())
+	}
+
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+
+	if diff := cmp.Diff(result, expectedACL); diff != "" {
+		t.Errorf("Unexpected ACE list: %v\n", diff)
+	}
+}
+
+func TestFormatACL(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl     *client.AccessControlList
+		verbose bool
+		expStr  string
+	}{
+		"nil": {
+			expStr: "# Entries:\n#   None\n",
+		},
+		"empty": {
+			acl:    &client.AccessControlList{},
+			expStr: "# Entries:\n#   None\n",
+		},
+		"empty verbose": {
+			acl:     &client.AccessControlList{},
+			expStr:  "# Entries:\n#   None\n",
+			verbose: true,
+		},
+		"single": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr: "# Entries:\nA::user@:rw\n",
+		},
+		"single verbose": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr:  "# Entries:\n# Allow::user@:Read/Write\nA::user@:rw\n",
+			verbose: true,
+		},
+		"multiple": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
+		},
+		"multiple verbose": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\n# Allow::Owner:Read/Write\nA::OWNER@:rw\n" +
+				"# Allow:Group:Owner-Group:Read/Write\nA:G:GROUP@:rw\n" +
+				"# Allow:Group:readers@:Read\nA:G:readers@:r\n",
+			verbose: true,
+		},
+		"with owner user": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+				},
+				Owner: "bob@",
+			},
+			expStr: "# Owner: bob@\n# Entries:\nA::OWNER@:rw\n",
+		},
+		"with owner group": {
+			acl: &client.AccessControlList{
+				Entries: []string{
+					"A:G:GROUP@:rw",
+				},
+				OwnerGroup: "admins@",
+			},
+			expStr: "# Owner Group: admins@\n# Entries:\nA:G:GROUP@:rw\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
+		})
+	}
+}
+
+func TestFormatACLDefault(t *testing.T) {
+	acl := &client.AccessControlList{
+		Entries: []string{
+			"A::OWNER@:rw",
+			"A::someuser@:rw",
+			"A:G:GROUP@:rw",
+			"A:G:writers@:rw",
+			"A::EVERYONE@:r",
+		},
+	}
+
+	// Just need to make sure it doesn't use verbose mode
+	expStr := formatACL(acl, false)
+
+	common.AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
+}
+
+func TestGetVerboseACE(t *testing.T) {
+	for name, tc := range map[string]struct {
+		shortACE string
+		expStr   string
+	}{
+		"empty": {
+			expStr: "",
+		},
+		"owner": {
+			shortACE: "A::OWNER@:r",
+			expStr:   "Allow::Owner:Read",
+		},
+		"named user": {
+			shortACE: "A::friendlyuser@:r",
+			expStr:   "Allow::friendlyuser@:Read",
+		},
+		"owner group": {
+			shortACE: "A:G:GROUP@:r",
+			expStr:   "Allow:Group:Owner-Group:Read",
+		},
+		"named group": {
+			shortACE: "A:G:mynicegroup@:r",
+			expStr:   "Allow:Group:mynicegroup@:Read",
+		},
+		"everyone": {
+			shortACE: "A::EVERYONE@:r",
+			expStr:   "Allow::Everyone:Read",
+		},
+		"no identity": {
+			shortACE: "A:::r",
+			expStr:   "Allow::None:Read",
+		},
+		"write perms": {
+			shortACE: "A::friendlyuser@:w",
+			expStr:   "Allow::friendlyuser@:Write",
+		},
+		"read-write perms": {
+			shortACE: "A::friendlyuser@:rw",
+			expStr:   "Allow::friendlyuser@:Read/Write",
+		},
+		"same order as short perms": {
+			shortACE: "A::friendlyuser@:wr",
+			expStr:   "Allow::friendlyuser@:Write/Read",
+		},
+		"no perms": {
+			shortACE: "A::friendlyuser@:",
+			expStr:   "Allow::friendlyuser@:None",
+		},
+		"unrecognized perms": {
+			shortACE: "A::friendlyuser@:rvwx",
+			expStr:   "Allow::friendlyuser@:Read/Unknown/Write/Unknown",
+		},
+		"unrecognized flags": {
+			shortACE: "A:CGI:someone@:rw",
+			expStr:   "Allow:Unknown/Group/Unknown:someone@:Read/Write",
+		},
+		"unrecognized access type": {
+			shortACE: "XA:G:someone@:rw",
+			expStr:   "Unknown/Allow:Group:someone@:Read/Write",
+		},
+		"no access type": {
+			shortACE: ":G:someone@:rw",
+			expStr:   "None:Group:someone@:Read/Write",
+		},
+		"not an ACE": {
+			shortACE: "the quick brown fox jumped over the lazy dog",
+			expStr:   "invalid ACE",
+		},
+		"not all fields": {
+			shortACE: "A::friendlyuser@",
+			expStr:   "invalid ACE",
+		},
+		"too many fields": {
+			shortACE: "A::friendlyuser@:rw:xyz",
+			expStr:   "invalid ACE",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
+		})
 	}
 }

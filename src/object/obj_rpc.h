@@ -39,6 +39,8 @@
 #include <daos/dtx.h>
 #include <daos/object.h>
 
+#include "obj_ec.h"
+
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
@@ -122,6 +124,20 @@ enum obj_rpc_flags {
 	ORF_DTX_SYNC		= (1 << 2),
 };
 
+struct obj_iod_array {
+	/* number of iods (oia_iods) */
+	uint32_t		 oia_iod_nr;
+	/* number obj iods (oia_oiods) */
+	uint32_t		 oia_oiod_nr;
+	daos_iod_t		*oia_iods;
+	struct obj_io_desc	*oia_oiods;
+	/* byte offset array for target, need this info after RPC dispatched
+	 * to specific target server as there is no oiod info already.
+	 * one for each iod, NULL for replica.
+	 */
+	uint64_t		*oia_offs;
+};
+
 /* common for update/fetch */
 #define DAOS_ISEQ_OBJ_RW	/* input fields */		 \
 	((struct dtx_id)	(orw_dti)		CRT_VAR) \
@@ -136,8 +152,8 @@ enum obj_rpc_flags {
 	((uint32_t)		(orw_start_shard)	CRT_VAR) \
 	((uint32_t)		(orw_flags)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR)   \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
-	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
 	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
@@ -147,9 +163,11 @@ enum obj_rpc_flags {
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
 	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
-	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_iod_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
-	((uint32_t)		(orw_nrs)		CRT_ARRAY)
+	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
+	((daos_csum_buf_t)	(orw_csum)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
@@ -161,7 +179,7 @@ CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((uuid_t)		(oei_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(oei_co_hdl)		CRT_VAR) \
 	((uuid_t)		(oei_co_uuid)		CRT_VAR) \
-	((uint64_t)		(oei_epoch)		CRT_VAR) \
+	((daos_epoch_range_t)	(oei_epr)		CRT_VAR) \
 	((uint32_t)		(oei_map_ver)		CRT_VAR) \
 	((uint32_t)		(oei_nr)		CRT_VAR) \
 	((uint32_t)		(oei_rec_type)		CRT_VAR) \
@@ -185,7 +203,7 @@ CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_VAR) \
 	((daos_anchor_t)	(oeo_akey_anchor)	CRT_VAR) \
 	((daos_key_desc_t)	(oeo_kds)		CRT_ARRAY) \
-	((d_sg_list_t)	(oeo_sgl)		CRT_VAR) \
+	((d_sg_list_t)		(oeo_sgl)		CRT_VAR) \
 	((daos_recx_t)		(oeo_recxs)		CRT_ARRAY) \
 	((daos_epoch_range_t)	(oeo_eprs)		CRT_ARRAY)
 

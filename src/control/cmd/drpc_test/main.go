@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -35,7 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/drpc_test/hello"
 	"github.com/daos-stack/daos/src/control/drpc"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var (
@@ -44,13 +45,14 @@ var (
 )
 
 func main() {
+	log := logging.NewCommandLineLogger()
 	flag.Parse()
 
 	err := errors.New("")
 	if *server {
-		err = runDrpcServer()
+		err = runDrpcServer(log)
 	} else {
-		err = runDrpcClient()
+		err = runDrpcClient(log)
 	}
 	status := 0
 	if err != nil {
@@ -60,13 +62,16 @@ func main() {
 	os.Exit(status)
 }
 
-func runDrpcServer() error {
+func runDrpcServer(log logging.Logger) error {
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal, 1)
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(*unixSocket)
+	ctx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, *unixSocket)
 	if err != nil {
 		return errors.Wrap(err, "creating socket server")
 	}
@@ -94,7 +99,7 @@ func runDrpcServer() error {
 	return nil
 }
 
-func runDrpcClient() error {
+func runDrpcClient(log logging.Logger) error {
 	client := drpc.NewClientConnection(*unixSocket)
 
 	err := client.Connect()

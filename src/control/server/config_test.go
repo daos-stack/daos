@@ -151,6 +151,10 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
+			if err == nil {
+				err = configA.Validate()
+			}
+
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, name)
 				return
@@ -167,7 +171,12 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := configB.Load(); err != nil {
+			err = configB.Load()
+			if err == nil {
+				err = configB.Validate()
+			}
+
+			if err != nil {
 				t.Fatal(err)
 			}
 

@@ -85,11 +85,36 @@ static const char * const bypass_status[] = {
 	"off-rsrc",
 };
 
+#define CONT_CLOSE(IO)						\
+	do {							\
+		if (!daos_handle_is_inval((IO).ioc_coh)) {	\
+			daos_cont_close((IO).ioc_coh, NULL);	\
+			(IO).ioc_coh = DAOS_HDL_INVAL;		\
+		}						\
+	} while (0)
+
+#define POOL_DISCONNECT(IO)						\
+	do {								\
+		if (!daos_handle_is_inval((IO).ioc_poh)) {		\
+			daos_pool_disconnect((IO).ioc_poh, NULL);	\
+			(IO).ioc_poh = DAOS_HDL_INVAL;			\
+		}							\
+	} while (0)
+
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
 
+	DFUSE_LOG_INFO("entry %p closing array fd_count %d",
+		       entry, ioil_ioc.ioc_open_fd_count);
 	daos_array_close(entry->fd_aoh, NULL);
+
+	ioil_ioc.ioc_open_fd_count -= 1;
+
+	if (ioil_ioc.ioc_open_fd_count == 0) {
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
+	}
 }
 
 int
@@ -180,11 +205,11 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 
+	pthread_once(&init_links_flag, init_links);
+
 	rc = daos_init();
 	if (rc)
 		return;
-
-	pthread_once(&init_links_flag, init_links);
 
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
@@ -216,13 +241,110 @@ ioil_fini(void)
 	ioil_ioc.ioc_initialized = false;
 
 	if (ioil_ioc.ioc_open_fd_count > 0) {
-		daos_cont_close(ioil_ioc.ioc_coh, NULL);
-
-		daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
 	}
 	daos_fini();
 
 	vector_destroy(&fd_table);
+}
+
+static int
+fetch_daos_handles(int fd)
+{
+	struct dfuse_hs_reply	hs_reply;
+	d_iov_t			iov = {};
+	int			cmd;
+	int			rc;
+
+	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
+	if (rc != 0) {
+		int err = errno;
+
+		DFUSE_LOG_INFO("ioctl returned %d err %d", rc, err);
+		return rc;
+	}
+
+	DFUSE_LOG_INFO("ioctl returned %zi %zi",
+		       hs_reply.fsr_pool_size,
+		       hs_reply.fsr_cont_size);
+
+	D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
+	if (!iov.iov_buf)
+		return ENOMEM;
+
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+		   DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
+
+	rc = ioctl(fd, cmd, iov.iov_buf);
+	if (rc != 0) {
+		D_FREE(iov.iov_buf);
+		return rc;
+	}
+
+	iov.iov_buf_len = hs_reply.fsr_pool_size;
+	iov.iov_len = iov.iov_buf_len;
+
+	rc = daos_pool_global2local(iov, &ioil_ioc.ioc_poh);
+	if (rc) {
+		DFUSE_LOG_INFO("Failed to use pool handle %d", rc);
+		D_FREE(iov.iov_buf);
+		return rc;
+	}
+
+	D_FREE(iov.iov_buf);
+
+	D_ALLOC(iov.iov_buf, hs_reply.fsr_cont_size);
+	if (!iov.iov_buf)
+		return ENOMEM;
+
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+		   DFUSE_IOCTL_REPLY_COH, hs_reply.fsr_cont_size);
+
+	rc = ioctl(fd, cmd, iov.iov_buf);
+	if (rc != 0) {
+		D_FREE(iov.iov_buf);
+		return rc;
+	}
+
+	iov.iov_buf_len = hs_reply.fsr_cont_size;
+	iov.iov_len = iov.iov_buf_len;
+
+	rc = daos_cont_global2local(ioil_ioc.ioc_poh, iov, &ioil_ioc.ioc_coh);
+	if (rc) {
+		DFUSE_LOG_INFO("Failed to use cont handle %d", rc);
+		D_FREE(iov.iov_buf);
+		return rc;
+	}
+
+	D_FREE(iov.iov_buf);
+
+	return 0;
+}
+
+static int
+connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
+{
+	d_rank_list_t		*svcl;
+	int			rc;
+
+	svcl = daos_rank_list_parse("0", ":");
+
+	rc = daos_pool_connect(il_reply->fir_pool, NULL, svcl, DAOS_PC_RW,
+			       &ioil_ioc.ioc_poh, NULL, NULL);
+	if (rc)
+		return rc;
+
+	rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply->fir_cont, DAOS_COO_RW,
+			    &ioil_ioc.ioc_coh, NULL, NULL);
+	if (rc)
+		D_GOTO(pool_close, 0);
+
+	return 0;
+
+pool_close:
+	POOL_DISCONNECT(ioil_ioc);
+	return rc;
 }
 
 static bool
@@ -232,7 +354,6 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	daos_size_t		cell_size = 1;
 	daos_size_t		chunk_size = 1024 * 1024;
 	int			rc;
-	d_rank_list_t		*svcl;
 
 	if (fd == -1)
 		return false;
@@ -256,21 +377,15 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	if (ioil_ioc.ioc_open_fd_count == 0) {
 
-		svcl = daos_rank_list_parse("0", ":");
+		rc = fetch_daos_handles(fd);
+		if (rc) {
+			DFUSE_LOG_INFO("fetch handles failed");
 
-		rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl,
-				       DAOS_PC_RW, &ioil_ioc.ioc_poh, NULL,
-				       NULL);
-		if (rc)
-			D_GOTO(drop_lock, 0);
-
+			rc = connect_daos_cont(fd, &il_reply);
+			if (rc)
+				D_GOTO(drop_lock, 0);
+		}
 		uuid_copy(ioil_ioc.ioc_pool, il_reply.fir_pool);
-
-		rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply.fir_cont,
-				    DAOS_COO_RW, &ioil_ioc.ioc_coh, NULL, NULL);
-		if (rc)
-			D_GOTO(pool_close, 0);
-
 		uuid_copy(ioil_ioc.ioc_cont, il_reply.fir_cont);
 
 	} else {
@@ -316,13 +431,8 @@ array_close:
 
 cont_close:
 	if (ioil_ioc.ioc_open_fd_count == 0) {
-		daos_cont_close(ioil_ioc.ioc_coh, NULL);
-		uuid_clear(ioil_ioc.ioc_cont);
-	}
-pool_close:
-	if (ioil_ioc.ioc_open_fd_count == 0) {
-		daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
-		uuid_clear(ioil_ioc.ioc_pool);
+		CONT_CLOSE(ioil_ioc);
+		POOL_DISCONNECT(ioil_ioc);
 	}
 
 drop_lock:

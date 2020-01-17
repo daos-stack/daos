@@ -91,6 +91,11 @@ struct pool_map {
 	 * NB: All components must be stored in contiguous buffer.
 	 */
 	struct pool_domain	*po_tree;
+	/**
+	 * number of currently failed pool components of each type
+	 * of component found in the pool
+	 */
+	struct pool_fail_comp	*po_comp_fail_cnts;
 
 };
 
@@ -164,6 +169,15 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 
 #define comp_type_for_each(d)		\
 	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
+
+/**
+ * struct used to keep track of failed domain count
+ * keeps track of each domain separately for lookup.
+ */
+struct pool_fail_comp {
+	uint32_t fail_cnt;
+	pool_comp_type_t comp_type;
+};
 
 static void pool_map_destroy(struct pool_map *map);
 static bool pool_map_empty(struct pool_map *map);
@@ -696,6 +710,17 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 	}
 }
 
+int
+pool_map_comp_cnt(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+
+	D_ASSERT(map->po_tree != NULL);
+	pool_tree_count(&map->po_tree[1], &cntr);
+
+	return cntr.cc_domains + cntr.cc_targets;
+}
+
 /**
  * Calculate memory size of the component tree.
  */
@@ -884,6 +909,9 @@ pool_map_finalise(struct pool_map *map)
 
 	comp_sorter_fini(&map->po_target_sorter);
 
+	if (map->po_comp_fail_cnts != NULL)
+		D_FREE(map->po_comp_fail_cnts);
+
 	if (map->po_domain_sorters != NULL) {
 		D_ASSERT(map->po_domain_layers != 0);
 		for (i = 0; i < map->po_domain_layers; i++)
@@ -937,6 +965,13 @@ pool_map_initialise(struct pool_map *map, bool activate,
 		cntr.cc_layers, cntr.cc_domains, cntr.cc_targets);
 
 	map->po_domain_layers = cntr.cc_layers;
+
+	D_ALLOC_ARRAY(map->po_comp_fail_cnts, map->po_domain_layers);
+	if (map->po_comp_fail_cnts == NULL) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
 	D_ALLOC(map->po_domain_sorters,
 		map->po_domain_layers * sizeof(*map->po_domain_sorters));
 	if (map->po_domain_sorters == NULL) {
@@ -995,7 +1030,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 
 	return 0;
  failed:
-	D_DEBUG(DB_MGMT, "Failed to setup pool map %d\n", rc);
+	D_DEBUG(DB_MGMT, "Failed to setup pool map "DF_RC"\n", DP_RC(rc));
 	D_MUTEX_DESTROY(&map->po_lock);
 	pool_map_finalise(map);
 	return rc;
@@ -1378,13 +1413,13 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 
 	rc = pool_buf_parse(buf, &tree);
 	if (rc != 0) {
-		D_ERROR("pool_buf_parse failed, rc %d.\n", rc);
+		D_ERROR("pool_buf_parse failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	if (!pool_tree_sane(tree, version)) {
 		rc = -DER_INVAL;
-		D_ERROR("pool_tree_sane failed, rc %d.\n", rc);
+		D_ERROR("pool_tree_sane failed, rc "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 
@@ -1396,9 +1431,17 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 
 	rc = pool_map_initialise(map, true, tree);
 	if (rc != 0) {
-		D_ERROR("pool_map_initialise failed, rc %d.\n", rc);
+		D_ERROR("pool_map_initialise failed, rc "DF_RC"\n", DP_RC(rc));
 		/* pool_tree_free() did in pool_map_initialise */
 		tree = NULL;
+		goto failed;
+	}
+
+	/** Record the initial failed domain counts */
+	rc = pool_map_update_failed_cnt(map);
+	if (rc != 0) {
+		D_ERROR("could not update number of failed targets, rc %d.\n",
+				rc);
 		goto failed;
 	}
 
@@ -1796,6 +1839,75 @@ pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 }
 
 /**
+ * This function recursively scans the pool_map and records how many failures
+ * each domain contains. A domain is considered to have a failure if there are
+ * ANY failed targets within that domain. This is used to determine whether a
+ * pool meets a containers redundancy requirements when opening.
+ *
+ * \param dom		[in] The pool domain currently being scanned.
+ * \param fail_cnts	[in] The array used to track failures for each domain.
+ * \param domain_level	[in] the current domain level used to index fail_cnts.
+ *
+ * \return	returns the number of downstream failures found in "dom".
+ */
+static int
+update_failed_cnt_helper(struct pool_domain *dom,
+		struct pool_fail_comp *fail_cnts, int domain_level)
+{
+	struct pool_domain *next_dom;
+	int i;
+	int failed_children;
+	int num_failed = 0;
+
+	if (dom == NULL)
+		return 0;
+
+	if (dom->do_children == NULL) {
+		for (i = 0; i < dom->do_target_nr; ++i) {
+			if (pool_target_unavail(&dom->do_targets[i], false))
+				num_failed++;
+		}
+	} else {
+		for (i = 0; i < dom->do_child_nr; ++i) {
+			next_dom = &dom->do_children[i];
+
+			failed_children = update_failed_cnt_helper(next_dom,
+					fail_cnts, domain_level + 1);
+			if (failed_children > 0)
+				num_failed++;
+		}
+
+	}
+
+	if (num_failed > 0)
+		fail_cnts[domain_level].fail_cnt++;
+	fail_cnts[domain_level].comp_type = dom->do_comp.co_type;
+
+	return num_failed;
+}
+
+/**
+ * Update the failed target count for the pool map.
+ * This should be called anytime the pool map is updated.
+ */
+int
+pool_map_update_failed_cnt(struct pool_map *map)
+{
+	int rc;
+	struct pool_domain *root;
+	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
+
+	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
+
+	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
+	if (rc == 0)
+		return -DER_INVAL;
+
+	update_failed_cnt_helper(root, fail_cnts, 0);
+	return 0;
+}
+
+/**
  * Find all targets in DOWN|DOWNOUT state.
  */
 int
@@ -1959,6 +2071,24 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 	return 0;
 }
 
+int
+pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
+{
+	int i;
+	int fail_cnt = -1;
+
+	for (i = 0; i < map->po_domain_layers; ++i) {
+		if (map->po_comp_fail_cnts[i].comp_type == type) {
+			fail_cnt = map->po_comp_fail_cnts[i].comp_type;
+			break;
+		}
+	}
+
+	if (fail_cnt == -1)
+		return -DER_NONEXIST;
+
+	return fail_cnt;
+}
 /**
  * check if the pool map is empty
  */

@@ -271,6 +271,7 @@ small_io(void **state)
 	sgl.sg_iovs = &iov;
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
+	assert_int_equal(iod.arr_nr_short_read, 0);
 
 	rc = memcmp(buf, rbuf, BUFLEN);
 	assert_int_equal(rc, 0);
@@ -278,7 +279,7 @@ small_io(void **state)
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
-} /* End str_mem_str_arr_io */
+} /* End small_io */
 
 static int
 change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
@@ -436,6 +437,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
+	assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		if (wbuf[i] != rbuf[i]) {
 			printf("Data verification failed\n");
@@ -514,7 +516,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_handle_t	oh;
 	daos_array_iod_t iod;
 	d_sg_list_t	sgl;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	len, i;
 	daos_event_t	ev, *evp;
@@ -596,6 +598,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
+	assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_ELEMS; i++) {
 		if (wbuf[i] != rbuf[i]) {
 			printf("Data verification failed\n");
@@ -760,6 +763,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** Verify data */
+	assert_int_equal(iod.arr_nr_short_read, 0);
 	for (i = 0; i < NUM_SEGS; i++) {
 		for (j = 0; j < NUM_ELEMS/NUM_SEGS; j++) {
 			if (wbuf[i][j] != rbuf[i][j]) {
@@ -870,6 +874,7 @@ read_empty_records(void **state)
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
+	assert_int_equal(iod.arr_nr_short_read, NUM_ELEMS * sizeof(int));
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -885,7 +890,6 @@ read_empty_records(void **state)
 
 	/** Write segmented */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		iod.arr_rgs[i].rg_len = sizeof(int);
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
@@ -904,6 +908,7 @@ read_empty_records(void **state)
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
+	assert_int_equal(iod.arr_nr_short_read, (NUM_ELEMS-1) * sizeof(int));
 
 	/** Verify data */
 	assert_int_equal(wbuf[0], rbuf[0]);
@@ -984,6 +989,7 @@ strided_array(void **state)
 	/** Read */
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
+	assert_int_equal(iod.arr_nr_short_read, 0);
 
 	/** Verify data */
 	for (i = 0; i < NUM * 2; i++) {
@@ -1010,6 +1016,70 @@ strided_array(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
+static void
+truncate_array(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_array_iod_t iod = {};
+	daos_range_t	rg = {};
+	d_iov_t		iov = {};
+	d_sg_list_t	sgl = {};
+	void		*buf;
+	int		rc;
+	daos_size_t	size;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
+			       NULL);
+	assert_int_equal(rc, 0);
+
+	/* Set array size to be large */
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 1024 * 1024, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 1024 * 1024);
+
+	/* Set array size to zero */
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	D_ALLOC(buf, 1024);
+	assert_non_null(buf);
+
+	iod.arr_nr = 1;
+	iod.arr_rgs = &rg;
+	rg.rg_len = 6;
+
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, buf, 6);
+
+	/* perform small write */
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* check array size */
+	size = 0;
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 6);
+
+	D_FREE(buf);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+} /* End str_mem_str_arr_io */
+
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
@@ -1031,6 +1101,8 @@ static const struct CMUnitTest array_api_tests[] = {
 	 read_empty_records, async_disable, NULL},
 	{"Array API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
+	{"Array API: write after truncate",
+	 truncate_array, async_disable, NULL},
 };
 
 static int

@@ -24,48 +24,16 @@
 package server
 
 import (
-	"io/ioutil"
-	"net"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
-
-func createTestDir(t *testing.T) string {
-	tmpDir, err := ioutil.TempDir("", t.Name())
-	if err != nil {
-		t.Fatalf("Couldn't create temporary directory: %v", err)
-	}
-
-	return tmpDir
-}
-
-func createTestSocket(t *testing.T, sockPath string) *net.UnixListener {
-	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
-	sock, err := net.ListenUnix("unixpacket", addr)
-	if err != nil {
-		t.Fatalf("Couldn't set up test socket: %v", err)
-	}
-
-	err = os.Chmod(sockPath, 0777)
-	if err != nil {
-		cleanupTestSocket(sockPath, sock)
-		t.Fatalf("Unable to set permissions on test socket: %v", err)
-	}
-
-	return sock
-}
-
-func cleanupTestSocket(path string, sock *net.UnixListener) {
-	sock.Close()
-	syscall.Unlink(path)
-}
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
 	err := checkDrpcClientSocketPath("")
@@ -84,8 +52,8 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	err := os.Mkdir(path, 0755)
@@ -102,8 +70,8 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	f, err := os.Create(path)
@@ -121,12 +89,12 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
-	sock := createTestSocket(t, path)
-	defer cleanupTestSocket(path, sock)
+	_, cleanup := common.CreateTestSocket(t, path)
+	defer cleanup()
 
 	err := checkDrpcClientSocketPath(path)
 
@@ -167,8 +135,8 @@ func TestDrpcCleanup_BadSocketDir(t *testing.T) {
 }
 
 func TestDrpcCleanup_EmptyDir(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	err := drpcCleanup(tmpDir)
 
@@ -185,8 +153,8 @@ func expectDoesNotExist(t *testing.T, path string) {
 }
 
 func TestDrpcCleanup_Single(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"daos_server.sock",
@@ -195,8 +163,8 @@ func TestDrpcCleanup_Single(t *testing.T) {
 		"daos_io_server_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		sock := createTestSocket(t, sockPath)
-		defer cleanupTestSocket(sockPath, sock)
+		_, cleanup := common.CreateTestSocket(t, sockPath)
+		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
 
@@ -209,8 +177,8 @@ func TestDrpcCleanup_Single(t *testing.T) {
 }
 
 func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"someone_else.sock",
@@ -220,8 +188,8 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"daos_io_server",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		sock := createTestSocket(t, sockPath)
-		defer cleanupTestSocket(sockPath, sock)
+		_, cleanup := common.CreateTestSocket(t, sockPath)
+		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
 
@@ -237,8 +205,8 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 }
 
 func TestDrpcCleanup_Multiple(t *testing.T) {
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	sockNames := []string{
 		"daos_server.sock",
@@ -256,8 +224,8 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 		path := filepath.Join(tmpDir, sockName)
 		sockPaths = append(sockPaths, path)
 
-		sock := createTestSocket(t, path)
-		defer cleanupTestSocket(path, sock)
+		_, cleanup := common.CreateTestSocket(t, path)
+		defer cleanup()
 	}
 
 	err := drpcCleanup(tmpDir)
@@ -301,14 +269,15 @@ func TestDrpc_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			mc := &mockDrpcClient{
-				SendMsgOutputError:    tc.sendError,
-				SendMsgOutputResponse: tc.resp,
-				ConnectOutputError:    tc.connectError,
+			cfg := &mockDrpcClientConfig{
+				SendMsgError:    tc.sendError,
+				SendMsgResponse: tc.resp,
+				ConnectError:    tc.connectError,
 			}
+			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
-			cmpErr(t, tc.expErr, err)
+			_, err := makeDrpcCall(mc, drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

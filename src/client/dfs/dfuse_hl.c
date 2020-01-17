@@ -533,7 +533,7 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 	d_iov_set(&iov, buf, size);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_read(dfs, obj, sgl, offset, &actual);
+	rc = dfs_read(dfs, obj, &sgl, offset, &actual, NULL);
 	if (rc)
 		return -rc;
 
@@ -560,7 +560,7 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	d_iov_set(&iov, (void *)buf, size);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(dfs, obj, sgl, offset);
+	rc = dfs_write(dfs, obj, &sgl, offset, NULL);
 	if (rc)
 		return -rc;
 

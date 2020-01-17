@@ -1,9 +1,10 @@
 hosts:
   test_servers:
-    - boro-A
+    - server-A
 server_config:
   name: daos_server
-  targets: 1
+  servers:
+    targets: 1
 pool:
   createmode: !mux
     mode_all:

@@ -43,8 +43,8 @@
  * warning in sanity(...) with some newer compilers
  */
 static char *mount_dir = "/tmp";
-static uint64_t max_read_size;
-static uint64_t max_iov_read_size;
+static uint64_t max_read_size = 4096;
+static uint64_t max_iov_read_size = 4096;
 
 #define BUF_SIZE 4096
 
