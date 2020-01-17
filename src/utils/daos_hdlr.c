@@ -76,10 +76,8 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	}
 
 	prop_query = daos_prop_alloc(0);
-	if (prop_query == NULL) {
-		D_ERROR("Failed to allocate prop.\n");
-		return ENOMEM;
-	}
+	if (prop_query == NULL)
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
 
 	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
 	if (rc != 0) {
@@ -709,10 +707,8 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 	int			rc = 0;
 
 	prop_query = daos_prop_alloc(0);
-	if (prop_query == NULL) {
-		D_ERROR("Failed to allocate prop.\n");
-		return ENOMEM;
-	}
+	if (prop_query == NULL)
+		return -DER_NOMEM;
 
 	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
 	if (rc) {
@@ -791,7 +787,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "acl property not found\n");
 		/* not an error */
 	} else {
-		D_PRINT("acl -> \n");
+		D_PRINT("acl ->\n");
 		daos_acl_dump(entry->dpe_val_ptr);
 	}
 
