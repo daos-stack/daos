@@ -46,7 +46,6 @@
 #include "daos_fs.h"
 #include "daos_uns.h"
 
-#define DUNS_XATTR_NAME		"user.daos"
 #define DUNS_MAX_XATTR_LEN	170
 #define DUNS_MIN_XATTR_LEN	85
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
@@ -196,7 +195,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 			/** TODO - convert errno to rc */
 			return -DER_INVAL;
 		}
-	
+
 		lfm = (struct lmv_foreign_md *)buf;
 		/* sanity check */
 		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
@@ -268,7 +267,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
 	ssize_t	s;
 	char	str[DUNS_MAX_XATTR_LEN];
-	char	*saveptr, *t;
 	struct statfs fs;
 	char	*dir, *dirp;
 	int	rc;
@@ -318,37 +316,67 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		return -DER_INVAL;
 	}
 
-	t = strtok_r(str, ".", &saveptr);
+	return duns_parse_attr(&str[0], s, attr);
+}
+
+int
+duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
+{
+	char *local;
+	char	*saveptr, *t;
+	int rc;
+
+	D_STRNDUP(local, str, len);
+	if (!local)
+		return -DER_NOMEM;
+
+	t = strtok_r(local, ".", &saveptr);
 	if (t == NULL) {
 		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, ":", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 	daos_parse_ctype(t, &attr->da_type);
 	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
 		D_ERROR("Invalid DAOS xattr format: Container layout cannot be"
 			" unknown\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
+
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be"
 			" parsed\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be"
 			" parsed\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	return 0;
+err:
+	D_FREE(local);
+	return rc;
 }
 
 #ifdef LUSTRE_INCLUDE
@@ -565,7 +593,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
-			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+			int err = errno;
+
+			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", err);
 			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
@@ -594,43 +624,19 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (rc == -DER_SUCCESS && backend_dfuse) {
-			/* Setup the DFUSE entry points.  Do this after the
-			 * container has been created as the first access after
-			 * setting these will do a container attach and that
-			 * will fail if the container doesn't exist.
-			 *
-			 * Set both the extended attribures the DFUSE expects
-			 * as well as the Lustre version, which is used by
-			 * duns_resove_path() in container destroy.
-			 */
-
-			rc = lsetxattr(path, "user.uns.pool", pool,
-				       strlen(pool), XATTR_CREATE);
-			if (rc) {
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
-					rc);
-				D_GOTO(err_link, rc = -DER_IO);
-			}
-
-			rc = lsetxattr(path, "user.uns.container", cont,
-				       strlen(cont), XATTR_CREATE);
-			if (rc) {
-				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
-					rc);
-				D_GOTO(err_link, rc = -DER_IO);
-			}
-
 			/* This next setxattr will cause dfuse to lookup the
 			 * entry point and perform a container connect,
 			 * therefore this xattr will be set in the root of the
-			 * new container, not the directory
+			 * new container, not the directory.
 			 */
 
 			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
 				       len + 1, XATTR_CREATE);
 			if (rc) {
+				int err = errno;
+
 				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
-					rc);
+					err);
 				D_GOTO(err_link, rc = -DER_IO);
 			}
 		}

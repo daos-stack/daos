@@ -111,7 +111,8 @@ show_help(char *name)
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
-		"	-f --foreground		Run in foreground\n",
+		"	-f --foreground		Run in foreground\n"
+		"	   --enable-caching	Enable node-local caching (experimental)\n",
 		name);
 }
 
