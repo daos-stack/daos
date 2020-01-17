@@ -670,7 +670,7 @@ class ServerManager(ExecutableCommand):
             daos_srv_bin, dev_param, user, device_args)
         result = pcmd(self._hosts, cmd, timeout=120)
         if len(result) > 1 or 0 not in result:
-            raise ServerFailed("Error preparing NVMe storage")
+            raise ServerFailed("Error preparing {} storage".format(device_type))
 
     def storage_reset(self):
         """Reset the servers' storage.
