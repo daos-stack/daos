@@ -69,8 +69,7 @@ byte_array_simple_stack(void **state)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", STACK_BUF_LEN);
@@ -144,8 +143,7 @@ array_simple(void **state)
 	recx.rx_idx	= rand();
 	recx.rx_nr	= arg->nr;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",
@@ -225,8 +223,7 @@ array_partial(void **state)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= NUM_RECORDS;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",
@@ -378,8 +375,7 @@ replicator(void **state)
 	recx.rx_idx	= 27136;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", 192);
@@ -455,8 +451,7 @@ read_empty(void **state)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= buf_len;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** fetch */
 	print_message("reading empty object ...\n");
@@ -559,8 +554,7 @@ array_dkey_punch_enumerate(void **state)
 	recx.rx_nr	= SM_BUF_LEN;
 	recx.rx_idx	= 0;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	print_message("Inserting %d dkeys...\n", KEYS);
 	for (i = 0; i < KEYS; i++) {
@@ -643,8 +637,7 @@ array_akey_punch_enumerate(void **state)
 	recx.rx_nr	= SM_BUF_LEN;
 	recx.rx_idx	= 0;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	print_message("Inserting %d akeys...\n", KEYS);
 	for (i = 0; i < KEYS; i++) {
@@ -745,8 +738,7 @@ array_recx_punch_enumerate(void **state)
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** insert 100 extents */
 	for (i = 0; i < 100; i++) {
@@ -852,8 +844,7 @@ array_recx_read_incomplete(void **state)
 	iod.iod_size	= 1;
 	recx[0].rx_nr	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** insert 1 extent at location 2 */
 	recx[0].rx_idx = 2;

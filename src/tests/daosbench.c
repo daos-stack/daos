@@ -231,7 +231,6 @@ ioreq_init_basic(struct a_ioreq *ioreq, daos_iod_type_t iod_type)
 
 	ioreq->iod.iod_nr = 1;
 	ioreq->iod.iod_recxs = &ioreq->rex;
-	ioreq->iod.iod_eprs = &ioreq->erange;
 
 	ioreq->sgl.sg_nr = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;

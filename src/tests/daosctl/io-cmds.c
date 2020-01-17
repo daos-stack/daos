@@ -190,12 +190,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		/* I/O descriptor */
 		req->iod[i].iod_recxs = req->rex[i];
 		req->iod[i].iod_nr = IOREQ_IOD_NR;
-
-		/* epoch descriptor */
-		req->iod[i].iod_eprs = req->erange[i];
-
 		req->iod[i].iod_type = iod_type;
-
 	}
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
@@ -336,8 +331,6 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * 10485760;
 			iod[i].iod_recxs[0].rx_nr = 1;
 		}
-		iod[i].iod_eprs[0].epr_lo = 0;
-		iod[i].iod_eprs[0].epr_hi = DAOS_EPOCH_MAX;
 		iod[i].iod_nr = 1;
 	}
 }

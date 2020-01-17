@@ -634,9 +634,6 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
-		/* iod_csums freed by obj_update_csum_destroy() */
-		if (iod->iod_eprs != NULL)
-			D_FREE(iod->iod_eprs);
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);

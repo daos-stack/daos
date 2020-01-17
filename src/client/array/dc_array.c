@@ -483,8 +483,7 @@ set_md_params(struct md_params *params)
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
 	params->iod.iod_recxs	= NULL;
-	params->iod.iod_eprs	= NULL;
-	params->iod.iod_type	= DAOS_IOD_SINGLE;
+params->iod.iod_type	= DAOS_IOD_SINGLE;
 }
 
 static int
@@ -1300,7 +1299,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		/* set descriptor for KV object */
 		d_iov_set(&iod->iod_name, &params->akey_str, 1);
 		iod->iod_nr = 0;
-		iod->iod_eprs = NULL;
 		iod->iod_recxs = NULL;
 		iod->iod_type = DAOS_IOD_ARRAY;
 		if (op_type == DAOS_OPC_ARRAY_PUNCH)
@@ -1768,7 +1766,6 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	/* set descriptor for KV object */
 	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	iod->iod_nr = 1;
-	iod->iod_eprs = NULL;
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);
@@ -1922,7 +1919,6 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	/* set descriptor for KV object */
 	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	iod->iod_nr = 1;
-	iod->iod_eprs = NULL;
 	iod->iod_size = DAOS_REC_ANY;
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);
@@ -2003,7 +1999,6 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	/* set descriptor for KV object */
 	d_iov_set(&iod->iod_name, &params->akey_str, 1);
 	iod->iod_nr = 1;
-	iod->iod_eprs = NULL;
 	iod->iod_size = props->cell_size;
 	iod->iod_type = DAOS_IOD_ARRAY;
 	D_ALLOC_PTR(iod->iod_recxs);

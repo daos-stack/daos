@@ -230,8 +230,8 @@ typedef struct {
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
 	/*
-	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value.
+	 * Number of entries in the \a iod_recxs for arrays,
+	 * should be 1 if single value.
 	 */
 	unsigned int		iod_nr;
 	/*
@@ -240,12 +240,6 @@ typedef struct {
 	 * type of the iod is single, this is ignored.
 	 */
 	daos_recx_t		*iod_recxs;
-	/*
-	 * Checksum associated with each extent. If the type of the iod is
-	 * single, will only have a single checksum.
-	 */
-	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*iod_eprs;
 } daos_iod_t;
 
 /**

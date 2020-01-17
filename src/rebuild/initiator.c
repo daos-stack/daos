@@ -548,9 +548,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 	rdone->ro_rec_num += rec_cnt;
 	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
-	iod->iod_eprs = NULL;
-
-out:
+	out:
 	return 0;
 }
 
@@ -581,7 +579,6 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, daos_epoch_t eph)
 		rdone->ro_rec_punch_eph = eph;
 	rdone->ro_punch_iod_num++;
 	iod->iod_recxs = NULL;
-	iod->iod_eprs = NULL;
 	return 0;
 }
 

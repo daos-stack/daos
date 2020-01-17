@@ -83,7 +83,6 @@ daos_iod_copy(daos_iod_t *dst, daos_iod_t *src)
 	dst->iod_size	= src->iod_size;
 	dst->iod_nr	= src->iod_nr;
 	dst->iod_recxs	= src->iod_recxs;
-	dst->iod_eprs	= src->iod_eprs;
 
 	return 0;
 }
@@ -98,9 +97,6 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 		if (iods[i].iod_recxs)
 			D_FREE(iods[i].iod_recxs);
-
-		if (iods[i].iod_eprs)
-			D_FREE(iods[i].iod_eprs);
 	}
 
 	if (need_free)

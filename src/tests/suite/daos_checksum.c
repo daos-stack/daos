@@ -118,7 +118,6 @@ setup_simple_data(struct csum_test_ctx *ctx)
 	ctx->update_iod.iod_size = 1;
 	ctx->update_iod.iod_nr	= 1;
 	ctx->update_iod.iod_recxs = &ctx->recx[0];
-	ctx->update_iod.iod_eprs  = NULL;
 	ctx->update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	/** Setup Fetch IOD*/
@@ -165,7 +164,6 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 	ctx->update_iod.iod_size = rec_size;
 	ctx->update_iod.iod_nr	= recx_nr;
 	ctx->update_iod.iod_recxs = ctx->recx;
-	ctx->update_iod.iod_eprs  = NULL;
 	ctx->update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	for (i = 0; i < recx_nr; i++) {
@@ -179,7 +177,6 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
 	ctx->fetch_iod.iod_nr = ctx->update_iod.iod_nr;
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
-	ctx->fetch_iod.iod_eprs = NULL;
 }
 
 static void
@@ -515,7 +512,6 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 	/** These thest cases always use 1 recx at a time */
 	ctx.update_iod.iod_nr	= 1;
 	ctx.update_iod.iod_recxs = ctx.recx;
-	ctx.update_iod.iod_eprs  = NULL;
 	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	/** Setup Fetch IOD*/
@@ -524,7 +520,6 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 	ctx.fetch_iod.iod_recxs = &args->fetch_recx;
 	ctx.fetch_iod.iod_nr = ctx.update_iod.iod_nr;
 	ctx.fetch_iod.iod_type = ctx.update_iod.iod_type;
-	ctx.fetch_iod.iod_eprs = NULL;
 
 	setup_from_test_args(&ctx, test_arg);
 	setup_cont_obj(&ctx, args->csum_prop_type, args->server_verify,

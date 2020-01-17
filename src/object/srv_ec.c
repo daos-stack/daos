@@ -103,8 +103,6 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 		split_iod->iod_nr = siod->siod_nr;
 		if (iod->iod_recxs != NULL)
 			split_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
-		if (iod->iod_eprs != NULL)
-			split_iod->iod_eprs = &iod->iod_eprs[siod->siod_idx];
 	}
 
 	*split_req = req;

@@ -85,8 +85,7 @@ dc_kv_put(tse_task_t *task)
 		     strlen(args->key));
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
-	params->iod.iod_eprs	= NULL;
-	params->iod.iod_size	= args->buf_size;
+params->iod.iod_size	= args->buf_size;
 	params->iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** init sgl */
@@ -166,8 +165,7 @@ dc_kv_get(tse_task_t *task)
 		     strlen(args->key));
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
-	params->iod.iod_eprs	= NULL;
-	params->iod.iod_size	= *buf_size;
+params->iod.iod_size	= *buf_size;
 	params->iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** init sgl */

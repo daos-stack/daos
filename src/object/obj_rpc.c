@@ -197,8 +197,6 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 }
 
 #define IOD_REC_EXIST	(1 << 0)
-#define IOD_CSUM_EXIST	(1 << 1)
-#define IOD_EPRS_EXIST	(1 << 2)
 static int
 crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 		    struct obj_io_desc *oiod)
@@ -263,8 +261,6 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
-		if (dvi->iod_eprs != NULL)
-			existing_flags |= IOD_EPRS_EXIST;
 	}
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
@@ -277,29 +273,11 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 			if (dvi->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
-
-		if (existing_flags & IOD_EPRS_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_eprs, nr);
-			if (dvi->iod_eprs == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
-		}
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
 		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
-			if (rc != 0) {
-				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
-				return rc;
-			}
-		}
-	}
-
-	if (existing_flags & IOD_EPRS_EXIST) {
-		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_epoch_range_t(proc,
-							 &dvi->iod_eprs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
@@ -321,8 +299,6 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 free:
 		if (dvi->iod_recxs != NULL)
 			D_FREE(dvi->iod_recxs);
-		if (dvi->iod_eprs != NULL)
-			D_FREE(dvi->iod_eprs);
 	}
 
 	return rc;

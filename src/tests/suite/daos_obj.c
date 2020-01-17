@@ -83,12 +83,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		/* I/O descriptor */
 		req->iod[i].iod_recxs = req->rex[i];
 		req->iod[i].iod_nr = IOREQ_IOD_NR;
-
-		/* epoch descriptor */
-		req->iod[i].iod_eprs = req->erange[i];
-
 		req->iod[i].iod_type = iod_type;
-
 	}
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
@@ -192,8 +187,6 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
-		/** Try I/O with invalid epoch, which then suould be ignored */
-		iod[i].iod_eprs = &req->erange[i][0]; /* [ 0 - MAX_EPOCH ] */
 		iod[i].iod_nr = 1;
 	}
 }
@@ -210,7 +203,6 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 	if (req->iod_type == DAOS_IOD_ARRAY) {
 		iod->iod_nr = nr;
 		iod->iod_recxs = recxs;
-		iod->iod_eprs = NULL;
 	} else {
 		iod->iod_nr = 1;
 	}
@@ -1917,7 +1909,6 @@ next_step:
 	iod.iod_size	= 1;
 	iod.iod_nr	= 3;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -2034,7 +2025,6 @@ read_empty_records_internal(void **state, unsigned int size)
 	recx.rx_idx	= (size/2) * sizeof(int);
 	recx.rx_nr	= sizeof(int);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -2140,7 +2130,6 @@ fetch_size(void **state)
 		iod[i].iod_nr		= 1;
 		iod[i].iod_size		= size * (i+1);
 		iod[i].iod_recxs	= NULL;
-		iod[i].iod_eprs		= NULL;
 		iod[i].iod_type		= DAOS_IOD_SINGLE;
 	}
 
@@ -2986,8 +2975,7 @@ update_overlapped_recxs(void **state)
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing with overlapped recxs should get -DER_INVAL\n");
@@ -3286,8 +3274,7 @@ punch_then_lookup(void **state)
 	iod.iod_nr	= 10;
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
@@ -3343,8 +3330,7 @@ split_sgl_internal(void **state, int size)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= 1;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update by split sgls */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);

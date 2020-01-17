@@ -338,7 +338,6 @@ io_invalid_poh(void **state)
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -427,7 +426,6 @@ io_invalid_coh(void **state)
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -504,7 +502,6 @@ update_ro(void **state)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
