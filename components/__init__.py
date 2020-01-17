@@ -36,9 +36,16 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
 
 NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
 
+def exclude(reqs, name, use_value, exclude_value):
+    """Return True if in exclude list"""
+    if set([name, 'all']).intersection(set(reqs.exclude)):
+        print("Excluding %s from build" % name)
+        return exclude_value
+    return use_value
+
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
-    set([name, 'all']).intersection(set(reqs.installed))
+    return set([name, 'all']).intersection(set(reqs.installed))
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
@@ -97,15 +104,17 @@ def define_mercury(reqs):
                 retriever=retriever,
                 commands=['./autogen.sh',
                           './configure --prefix=$OFI_PREFIX ' +
-                          '--enable-psm2' +
-                          check(reqs, 'psm2',
-                                "=$PSM2_PREFIX "
-                                'LDFLAGS="-Wl,--enable-new-dtags '
-                                '-Wl,-rpath=$PSM2_PREFIX/lib" ', ''),
+                          exclude(reqs, 'psm2',
+                                  '--enable-psm2' +
+                                  check(reqs, 'psm2',
+                                        "=$PSM2_PREFIX "
+                                        'LDFLAGS="-Wl,--enable-new-dtags '
+                                        '-Wl,-rpath=$PSM2_PREFIX/lib" ', ''),
+                                  ''),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
-                requires=['psm2'],
+                requires=exclude(reqs, 'psm2', ['psm2'], []),
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None)
 
@@ -285,6 +294,7 @@ def define_components(reqs):
                           'Makefile compat/Makefile',
                           'make $JOBS_OPT',
                           'make DESTDIR=$PSM2_PREFIX install'],
+                headers=['psm2.h'],
                 libs=['psm2'])
 
 __all__ = ['define_components']

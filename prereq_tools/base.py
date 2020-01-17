@@ -36,6 +36,7 @@ import sys
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
+from SCons.Variables import ListVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import SetOption
@@ -754,6 +755,8 @@ class PreReqComponent():
         self.__opts.Add('USE_INSTALLED',
                         'Comma separated list of preinstalled dependencies',
                         'none')
+        self.add_opts(ListVariable('EXCLUDE', "Components to skip building",
+                                   'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
@@ -804,6 +807,7 @@ class PreReqComponent():
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
+        self.exclude = env.subst("$EXCLUDE").split(",")
 # pylint: enable=too-many-branches
 
     def _setup_intelc(self):
@@ -1083,9 +1087,9 @@ class PreReqComponent():
             self.require(env, comp)
 
     def modify_prefix(self, comp_def, env):
+        """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        """Overwrite the prefix in cases where we may be using the default"""
         prebuilt1 = os.path.join(env.subst("$PREBUILT_PREFIX"),
                                  comp_def.name)
         # prebuilt2 can be None so add a default
