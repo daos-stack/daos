@@ -8,18 +8,9 @@ user-specified DAOS pool and container. Rhis plugin is still under development.
 
 - Modify *FIO_DIR* and *DAOS_DIR* in the Makefile to the install directory of
   fio and DAOS, respectively.
-- make 
-       - This will generate a binary called `daos_fio` in this folder.
+- make
 
 ## Usage
-
-### Launch DAOS server and create target pool and container
-1. Launch DAOS server
-2. Launch DAOS agent
-3. Create a DAOS pool
-4. Create a DAOS POSIX type container
-
-### Prepare an fio job file with DAOS-specific options
 
 See `example.fio` for example:
 
