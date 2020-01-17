@@ -5,7 +5,7 @@ hosts:
     - server-A
 server_manager:
     srv_timeout: 30
-
+timeout: 120
 server_config:
   name: daos_server
 
@@ -46,35 +46,29 @@ server_config_val: !mux
       - "amjustin, 12345, abcdef"
       - "FAIL"
       - "gen"
-  access_point_repeated:
-    config_val:
-      - "access_points"
-      - "[localhost:10001, localhost:10001]"
-      - "FAIL"
-      - "gen"
-  access_point_wrong_port:
-    config_val:
-      - "access_points"
-      - "[localhost:12345]"
-      - "FAIL"
-      - "gen"
-  access_point_wrong_name:
-    config_val:
-      - "access_points"
-      - "[wrongName:10001]"
-      - "FAIL"
-      - "gen"
-  access_point_alphanumeric:
-    config_val:
-      - "access_points"
-      - "[AB12cd:10001]"
-      - "FAIL"
-      - "gen"
+  # access_point_repeated:
+  #   config_val:
+  #     - "access_points"
+  #     - "[localhost:10001, localhost:10001]"
+  #     - "FAIL"
+  #     - "gen"
+  # access_point_wrong_port:
+  #   config_val:
+  #     - "access_points"
+  #     - "[localhost:12345]"
+  #     - "FAIL"
+  #     - "gen"
+  # access_point_wrong_name:
+  #   config_val:
+  #     - "access_points"
+  #     - "[wrongName:10001]"
+  #     - "FAIL"
+  #     - "gen"
   control_log_file_does_not_exist:
     config_val:
       - "control_log_file"
       - "/tmp/does_not_exist.log"
-      - "FAIL"
+      - "PASS"
       - "gen"
   control_log_file_special_str:
     config_val:
