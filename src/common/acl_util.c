@@ -25,19 +25,10 @@
  * Utility functions that may be used when interacting with Access Control
  * Lists
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
-#include <pwd.h>
-#include <grp.h>
-
-/*
- * String values for special principal types
- */
-#define PRINCIPAL_OWNER_STR	"OWNER@"
-#define PRINCIPAL_OWNER_GRP_STR	"GROUP@"
-#define PRINCIPAL_EVERYONE_STR	"EVERYONE@"
 
 /*
  * Characters representing access flags
@@ -60,8 +51,6 @@
 #define PERM_READ_CH		'r'
 #define PERM_WRITE_CH		'w'
 
-static size_t DEFAULT_BUF_LEN = 1024;
-
 /*
  * States used to parse a formatted ACE string
  */
@@ -73,317 +62,6 @@ enum ace_str_state {
 	ACE_DONE,
 	ACE_INVALID
 };
-
-/*
- * States used to parse a principal name
- */
-enum validity_state {
-	STATE_START,
-	STATE_NAME,
-	STATE_DOMAIN,
-	STATE_DONE,
-	STATE_INVALID
-};
-
-static enum validity_state
-next_validity_state(enum validity_state current_state, char ch)
-{
-	switch (current_state) {
-	case STATE_START:
-		if (ch == '@')
-			return STATE_INVALID;
-		return STATE_NAME;
-	case STATE_NAME:
-		if (ch == '@')
-			return STATE_DOMAIN;
-		if (ch == '\0')
-			return STATE_INVALID;
-		break;
-	case STATE_DOMAIN:
-		if (ch == '\0')
-			return STATE_DONE;
-		if (ch == '@')
-			return STATE_INVALID;
-		break;
-	case STATE_DONE:
-	case STATE_INVALID:
-		break;
-	default:
-		D_ASSERTF(false, "Invalid state: %d\n", current_state);
-	}
-
-	return current_state;
-}
-
-bool
-daos_acl_principal_is_valid(const char *name)
-{
-	size_t			len;
-	size_t			i;
-	enum validity_state	state = STATE_START;
-
-	if (name == NULL) {
-		D_INFO("Name was NULL\n");
-		return false;
-	}
-
-	len = strnlen(name, DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
-	if (len == 0 || len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
-		D_INFO("Invalid len: %lu\n", len);
-		return false;
-	}
-
-	for (i = 0; i < (len + 1); i++) {
-		state = next_validity_state(state, name[i]);
-		if (state == STATE_INVALID) {
-			D_INFO("Name was badly formatted: %s\n", name);
-			return false;
-		}
-	}
-
-	return true;
-}
-
-static int
-local_name_to_principal_name(const char *local_name, char **name)
-{
-	D_ASPRINTF(*name, "%s@", local_name);
-	if (*name == NULL) {
-		D_ERROR("Failed to allocate string for name\n");
-		return -DER_NOMEM;
-	}
-
-	return 0;
-}
-
-int
-daos_acl_uid_to_principal(uid_t uid, char **name)
-{
-	int		rc;
-	struct passwd	user;
-	struct passwd	*result = NULL;
-	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
-
-	if (name == NULL) {
-		D_INFO("name pointer was NULL!\n");
-		return -DER_INVAL;
-	}
-
-	/*
-	 * No platform-agnostic way to fetch the max buflen - so let's try a
-	 * sane value and double until it's big enough.
-	 */
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't allocate memory for getpwuid_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getpwuid_r(uid, &user, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
-
-	if (rc != 0) {
-		D_ERROR("Error from getpwuid_r: %d\n", rc);
-		D_GOTO(out, rc = d_errno2der(rc));
-	}
-
-	if (result == NULL) {
-		D_INFO("No user for uid %u\n", uid);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-	rc = local_name_to_principal_name(result->pw_name, name);
-
-out:
-	D_FREE(buf);
-	return rc;
-}
-
-int
-daos_acl_gid_to_principal(gid_t gid, char **name)
-{
-	int		rc;
-	struct group	grp;
-	struct group	*result = NULL;
-	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
-
-	if (name == NULL) {
-		D_INFO("name pointer was NULL!\n");
-		return -DER_INVAL;
-	}
-
-	/*
-	 * No platform-agnostic way to fetch the max buflen - so let's try a
-	 * sane value and double until it's big enough.
-	 */
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't allocate memory for getgrgid_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getgrgid_r(gid, &grp, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
-
-	if (rc != 0) {
-		D_ERROR("Error from getgrgid_r: %d\n", rc);
-		D_GOTO(out, rc = d_errno2der(rc));
-	}
-
-	if (result == NULL) {
-		D_INFO("No group for gid %u\n", gid);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-	rc = local_name_to_principal_name(result->gr_name, name);
-
-out:
-	D_FREE(buf);
-	return rc;
-}
-
-/*
- * Extracts the user/group name from the "name@[domain]" formatted principal
- * string.
- */
-static int
-get_id_name_from_principal(const char *principal, char *name)
-{
-	int num_matches;
-
-	if (!daos_acl_principal_is_valid(principal)) {
-		D_INFO("Invalid name format\n");
-		return -DER_INVAL;
-	}
-
-	num_matches = sscanf(principal, "%[^@]", name);
-	if (num_matches == 0) {
-		/*
-		 * This is a surprise - if it's formatted properly, we should
-		 * be able to extract the name.
-		 */
-		D_ERROR("Couldn't extract ID name from '%s'\n", principal);
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-int
-daos_acl_principal_to_uid(const char *principal, uid_t *uid)
-{
-	char		username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
-	struct passwd	passwd;
-	struct passwd	*result = NULL;
-	int		rc;
-
-	if (uid == NULL) {
-		D_INFO("NULL uid pointer\n");
-		return -DER_INVAL;
-	}
-
-	rc = get_id_name_from_principal(principal, username);
-	if (rc != 0)
-		return rc;
-
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't alloc buffer for getpwnam_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getpwnam_r(username, &passwd, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
-
-	if (rc != 0) {
-		D_ERROR("Error from getpwnam_r: %d\n", rc);
-		D_GOTO(out, rc = d_errno2der(rc));
-	}
-
-	if (result == NULL) {
-		D_INFO("User '%s' not found\n", username);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-	*uid = result->pw_uid;
-	rc = 0;
-out:
-	D_FREE(buf);
-	return rc;
-}
-
-int
-daos_acl_principal_to_gid(const char *principal, gid_t *gid)
-{
-	char		grpname[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
-	struct group	grp;
-	struct group	*result = NULL;
-	int		rc;
-
-	if (gid == NULL) {
-		D_INFO("NULL gid pointer\n");
-		return -DER_INVAL;
-	}
-
-	rc = get_id_name_from_principal(principal, grpname);
-	if (rc != 0)
-		return rc;
-
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't alloc buffer for getgrnam_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getgrnam_r(grpname, &grp, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
-
-	if (rc != 0) {
-		D_ERROR("Error from getgrnam_r: %d\n", rc);
-		D_GOTO(out, rc = d_errno2der(rc));
-	}
-
-	if (result == NULL) {
-		D_INFO("Group '%s' not found\n", grpname);
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-	*gid = result->gr_gid;
-	rc = 0;
-out:
-	D_FREE(buf);
-	return rc;
-}
 
 static enum ace_str_state
 process_access_types(const char *str, uint8_t *access_types)
@@ -471,13 +149,13 @@ get_ace_from_identity(const char *identity, uint16_t flags)
 {
 	enum daos_acl_principal_type type;
 
-	if (strncmp(identity, PRINCIPAL_OWNER_STR,
+	if (strncmp(identity, DAOS_ACL_PRINCIPAL_OWNER,
 		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER;
-	else if (strncmp(identity, PRINCIPAL_OWNER_GRP_STR,
+	else if (strncmp(identity, DAOS_ACL_PRINCIPAL_OWNER_GRP,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER_GROUP;
-	else if (strncmp(identity, PRINCIPAL_EVERYONE_STR,
+	else if (strncmp(identity, DAOS_ACL_PRINCIPAL_EVERYONE,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_EVERYONE;
 	else if (flags & DAOS_ACL_FLAG_GROUP)
@@ -522,6 +200,11 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 			state = process_flags(field, &flags);
 			break;
 		case ACE_IDENTITY:
+			if (!daos_acl_principal_is_valid(field)) {
+				state = ACE_INVALID;
+				break;
+			}
+
 			new_ace = get_ace_from_identity(field, flags);
 			if (new_ace == NULL) {
 				D_ERROR("Couldn't alloc ACE structure\n");
@@ -610,16 +293,16 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	return 0;
 }
 
-static const char *
-get_principal_name_str(struct daos_ace *ace)
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace)
 {
 	switch (ace->dae_principal_type) {
 	case DAOS_ACL_OWNER:
-		return PRINCIPAL_OWNER_STR;
+		return DAOS_ACL_PRINCIPAL_OWNER;
 	case DAOS_ACL_OWNER_GROUP:
-		return PRINCIPAL_OWNER_GRP_STR;
+		return DAOS_ACL_PRINCIPAL_OWNER_GRP;
 	case DAOS_ACL_EVERYONE:
-		return PRINCIPAL_EVERYONE_STR;
+		return DAOS_ACL_PRINCIPAL_EVERYONE;
 	case DAOS_ACL_USER:
 	case DAOS_ACL_GROUP:
 	default:
@@ -727,7 +410,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 		rc = write_char(&pen, FLAG_POOL_INHERIT_CH, &remaining_len);
 
 	written = snprintf(pen, remaining_len, ":%s:",
-			   get_principal_name_str(ace));
+			   daos_ace_get_principal_str(ace));
 	if (written > remaining_len) {
 		remaining_len = 0;
 	} else {
@@ -799,7 +482,7 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 
 	rc = daos_ace_to_str(current, buf, sizeof(buf));
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACE to string: %d\n", rc);
+		D_ERROR("Couldn't convert ACE to string: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

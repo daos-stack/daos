@@ -1,12 +1,12 @@
 hosts:
-    test_servers:
-        - boro-A
-    test_clients:
-        - boro-B
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
 timeout: 240
 # below mentioned path should be replaced by path of
 # romio test suite directory in CI nodes when available.
 server_config:
     name: daos_server
 romio:
-    romio_repo: "/home/standan/mpiotest/build/src/mpi/romio/test/"
+    romio_repo: "/usr/lib64/romio/test/"

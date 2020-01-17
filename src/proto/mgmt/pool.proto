@@ -29,9 +29,9 @@ package mgmt;
 
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
-	uint64 scmbytes = 1;
-	uint64 nvmebytes = 2;
-	string ranks = 3; // comma separated integers
+	uint64 scmbytes = 1; // SCM size in bytes
+	uint64 nvmebytes = 2; // NVMe size in bytes
+	repeated uint32 ranks = 3; // target ranks
 	uint32 numsvcreps = 4; // desired number of pool service replicas
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
@@ -43,7 +43,7 @@ message PoolCreateReq {
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	string svcreps = 2; // comma separated integers
+	repeated uint32 svcreps = 2; // pool service replica ranks
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -57,3 +57,99 @@ message PoolDestroyReq {
 message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
+
+// ListPoolsReq represents a request to list pools on a given DAOS system.
+message ListPoolsReq {
+	string sys = 1; // DAOS system identifier
+}
+
+// ListPoolsResp returns the list of pools in the system.
+message ListPoolsResp {
+	message Pool {
+		string uuid = 1; // uuid of pool
+		repeated uint32 svcreps = 2; // pool service replica ranks
+	}
+	int32 status = 1; // DAOS error code
+	repeated Pool pools = 2; // pools list
+}
+
+// ListContainers
+// Initial implementation differs from C API
+// (numContainers not provided in request - get whole list)
+message ListContReq {
+	string uuid = 1; // uuid of pool
+}
+
+message ListContResp {
+	message Cont {
+		string uuid = 1; // uuid of container
+	}
+	int32 status = 1; // DAOS error code
+	repeated Cont containers = 2; // containers
+}
+
+// PoolQueryReq represents a pool query request.
+message PoolQueryReq {
+	string uuid = 1;
+}
+
+// StorageUsageStats represents usage statistics for a storage subsystem.
+message StorageUsageStats {
+	uint64 total = 1;
+	uint64 free = 2;
+	uint64 min = 3;
+	uint64 max = 4;
+	uint64 mean = 5;
+}
+
+// PoolRebuildStatus represents a pool's rebuild status.
+message PoolRebuildStatus {
+	int32 status = 1; // DAOS error code
+	enum State {
+		IDLE = 0;
+		DONE = 1;
+		BUSY = 2;
+	}
+	State state = 2;
+	uint64 objects = 3;
+	uint64 records = 4;
+}
+
+// PoolSetPropReq represents a request to set a pool property.
+message PoolSetPropReq {
+	string uuid = 1; // uuid of pool to modify
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
+}
+
+// PoolSetPropResp represents the result of setting a property.
+message PoolSetPropResp {
+	int32 status = 1; // DAOS error code
+	oneof property {
+		string name = 2;   // pool property name
+		uint32 number = 3; // pool property enum
+	}
+	oneof value {
+		string strval = 4; // pool property string value
+		uint64 numval = 5; // pool property numeric value
+	}
+}
+
+// PoolQueryResp represents a pool query response.
+message PoolQueryResp {
+	int32 status = 1; // DAOS error code
+	string uuid = 2; // pool uuid
+	uint32 totaltargets = 3; // total targets in pool
+	uint32 activetargets = 4; // active targets in pool
+	uint32 disabledtargets = 5; // number of disabled targets in pool
+	PoolRebuildStatus rebuild = 6; // pool rebuild status
+	StorageUsageStats scm = 7; // SCM storage usage stats
+	StorageUsageStats nvme = 8; // NVMe storage usage stats
+}
+

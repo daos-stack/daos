@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -58,20 +58,29 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch pylint python python-devel python36-devel         \
+        pandoc patch python python-devel python36-devel                \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
-        valgrind-devel
+        valgrind-devel python36-pylint
 
 # DAOS specific
 RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
            yum-plugin-copr python-pathlib                      \
-           python2-clustershell python2-Cython python2-pip;    \
+           ndctl ipmctl e2fsprogs                              \
+           python2-clustershell python2-Cython python2-pip     \
+           python36-clustershell python36-paramiko             \
+           python36-numpy python36-jira python3-pip;           \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
-    yum -y install libipmctl-devel
+    yum -y install libipmctl-devel openmpi3-devel hwloc-devel
+
+# DAOS python 3 packages required for pylint
+#  - excluding mpi4py as it depends on CORCI-635
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
 # Add DAOS user
 ENV USER daos
@@ -84,7 +93,7 @@ RUN mkdir /mnt/daos
 RUN chown daos.daos /mnt/daos
 
 # Dependencies
-# Packages for NVML, PMIx, hwloc and OpenMPI exist in CentOS, but are
+# Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
 ARG JENKINS_URL=""
 ARG QUICKBUILD=1
@@ -115,16 +124,16 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
         done;                                                                    \
         pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
               libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
-              fio-3.3-4.el7 libisa-l-devel mercury-devel-1.0.1-13.el7            \
+              fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-21.el7            \
               openpa-devel libfabric-devel                                       \
-              ompi-devel pmix-devel hwloc-devel dpdk-devel-18.02";               \
+              dpdk-devel";                     \
         echo "Installing: $pkgs";                                                \
         yum -y install $pkgs;                                                    \
     fi
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
+RUN yum -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
 
 # Switch to new user
 #USER $USER

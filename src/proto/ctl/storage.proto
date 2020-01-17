@@ -60,23 +60,3 @@ message StorageFormatResp {
 	repeated NvmeControllerResult crets = 1;	// One per controller format attempt
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
 }
-
-message StorageUpdateReq {
-	UpdateNvmeReq nvme = 1;
-	UpdateScmReq scm = 2;
-}
-
-message StorageUpdateResp {
-	repeated NvmeControllerResult crets = 1;	// One per SSD firmware update attempt
-	repeated ScmModuleResult mrets = 2;		// One per module firmware update attempt
-}
-
-message StorageBurnInReq {
-	BurninNvmeReq nvme = 1;
-	BurninScmReq scm = 2;
-}
-
-message StorageBurnInResp {
-	repeated NvmeControllerResult crets = 1;	// One per SSD burnin test, report in state.info
-	repeated ScmMountResult mrets = 2;		// One per SCM mount burnin test
-}

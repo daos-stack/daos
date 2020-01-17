@@ -22,8 +22,10 @@
 ctypes-based DAOS wrapper used mostly for testing
 """
 
-from conversion import *
-from daos_cref import *
-from daos_api import *
+# pylint: disable=wildcard-import
+from .conversion import *
+from .daos_cref import *
+from .daos_api import *
+# pylint: enable=wildcard-import
 
 __all__ = ["daos_api", "conversion", "daos_cref"]

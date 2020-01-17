@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -81,20 +82,20 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcSetup specifies socket path and starts drpc server.
-func drpcSetup(log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+func drpcSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err
 	}
 
 	sockPath := getDrpcServerSocketPath(sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
+	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
 

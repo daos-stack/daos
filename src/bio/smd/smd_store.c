@@ -47,7 +47,8 @@ smd_store_gen_fname(const char *path, char **store_fname)
 	rc = asprintf(store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
 		      SMD_STORE_FILE);
 	if (rc < 0) {
-		D_ERROR("Generate SMD store filename failed. %d\n", rc);
+		D_ERROR("Generate SMD store filename failed. "DF_RC"\n",
+			DP_RC(rc));
 		return -DER_NOMEM;
 	}
 
@@ -103,7 +104,6 @@ smd_store_check(char *fname, bool *existing)
 }
 
 #define SMD_FILE_SIZE	(128UL << 20)	/* 128MB */
-#define SMD_MAGIC	(0xdcab0918)
 #define SMD_TREE_ODR	32
 
 static int
@@ -172,13 +172,17 @@ smd_store_create(char *fname)
 		goto tx_end;
 
 	memset(smd_df, 0, sizeof(*smd_df));
-	smd_df->smd_magic = SMD_MAGIC;
+	smd_df->smd_magic = SMD_DF_MAGIC;
+	if (DAOS_FAIL_CHECK(FLC_SMD_DF_VER))
+		smd_df->smd_version = 0;
+	else
+		smd_df->smd_version = SMD_DF_VERSION;
 
 	/* Create device table */
 	rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, SMD_TREE_ODR, &uma,
 				   &smd_df->smd_dev_tab, &btr_hdl);
 	if (rc) {
-		D_ERROR("Create SMD device table failed: %d\n", rc);
+		D_ERROR("Create SMD device table failed: "DF_RC"\n", DP_RC(rc));
 		goto tx_end;
 	}
 	dbtree_close(btr_hdl);
@@ -187,7 +191,7 @@ smd_store_create(char *fname)
 	rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, SMD_TREE_ODR, &uma,
 				   &smd_df->smd_pool_tab, &btr_hdl);
 	if (rc) {
-		D_ERROR("Create SMD pool table failed: %d\n", rc);
+		D_ERROR("Create SMD pool table failed: "DF_RC"\n", DP_RC(rc));
 		goto tx_end;
 	}
 	dbtree_close(btr_hdl);
@@ -196,7 +200,7 @@ smd_store_create(char *fname)
 	rc = dbtree_create_inplace(DBTREE_CLASS_KV, 0, SMD_TREE_ODR, &uma,
 				   &smd_df->smd_tgt_tab, &btr_hdl);
 	if (rc) {
-		D_ERROR("Create SMD target table failed: %d\n", rc);
+		D_ERROR("Create SMD target table failed: "DF_RC"\n", DP_RC(rc));
 		goto tx_end;
 	}
 	dbtree_close(btr_hdl);
@@ -261,11 +265,24 @@ smd_store_open(char *fname)
 	}
 
 	smd_df = smd_pop2df(ph);
+	if (smd_df->smd_magic != SMD_DF_MAGIC) {
+		D_CRIT("Unknown DF magic %x\n", smd_df->smd_magic);
+		rc = -DER_DF_INVAL;
+		goto error;
+	}
+
+	if (smd_df->smd_version > SMD_DF_VERSION ||
+	    smd_df->smd_version < SMD_DF_VER_1) {
+		D_ERROR("Unsupported DF version %d\n", smd_df->smd_version);
+		rc = -DER_DF_INCOMPT;
+		goto error;
+	}
+
 	/* Open device table */
 	rc = dbtree_open_inplace(&smd_df->smd_dev_tab, &uma,
 				 &smd_store.ss_dev_hdl);
 	if (rc) {
-		D_ERROR("Open SMD device table failed: %d\n", rc);
+		D_ERROR("Open SMD device table failed: "DF_RC"\n", DP_RC(rc));
 		goto error;
 	}
 
@@ -273,7 +290,7 @@ smd_store_open(char *fname)
 	rc = dbtree_open_inplace(&smd_df->smd_pool_tab, &uma,
 				 &smd_store.ss_pool_hdl);
 	if (rc) {
-		D_ERROR("Open SMD pool table failed: %d\n", rc);
+		D_ERROR("Open SMD pool table failed: "DF_RC"\n", DP_RC(rc));
 		goto error;
 	}
 
@@ -281,7 +298,7 @@ smd_store_open(char *fname)
 	rc = dbtree_open_inplace(&smd_df->smd_tgt_tab, &uma,
 				 &smd_store.ss_tgt_hdl);
 	if (rc) {
-		D_ERROR("Open SMD target table failed: %d\n", rc);
+		D_ERROR("Open SMD target table failed: "DF_RC"\n", DP_RC(rc));
 		goto error;
 	}
 
@@ -335,7 +352,8 @@ smd_init(const char *path)
 
 	rc = smd_store_check(fname, &existing);
 	if (rc) {
-		D_ERROR("Check SMD store %s failed. %d\n", fname, rc);
+		D_ERROR("Check SMD store %s failed. "DF_RC"\n", fname,
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -343,14 +361,15 @@ smd_init(const char *path)
 	if (!existing) {
 		rc = smd_store_create(fname);
 		if (rc) {
-			D_ERROR("Create SMD store failed. %d\n", rc);
+			D_ERROR("Create SMD store failed. "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}
 
 	rc = smd_store_open(fname);
 	if (rc) {
-		D_ERROR("Open SMD store failed. %d\n", rc);
+		D_ERROR("Open SMD store failed. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 

@@ -47,7 +47,7 @@ class DmgNvmeScanTest(TestWithServers):
         on the system.
         :avocado: tags=all,tiny,pr,dmg,nvme_scan,basic
         """
-        # Create daos_shell command
+        # Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.get_params(self)
 
@@ -60,4 +60,4 @@ class DmgNvmeScanTest(TestWithServers):
         try:
             dmg.run()
         except process.CmdError as details:
-            self.fail("daos_shell command failed: {}".format(details))
+            self.fail("dmg command failed: {}".format(details))

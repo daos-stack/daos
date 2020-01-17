@@ -48,6 +48,7 @@ struct rebuild_one {
 	unsigned int	ro_punch_iod_num;
 	unsigned int	ro_iod_alloc_num;
 	unsigned int	ro_rec_num;
+	uint64_t	ro_size;
 	uint64_t	ro_version;
 };
 
@@ -75,6 +76,7 @@ struct rebuild_obj_key {
 struct rebuild_tgt_pool_tracker {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rt_pool;
+	struct dss_sleep_ult	*rt_ult;
 	/** active rebuild pullers for each xstream */
 	struct rebuild_puller	*rt_pullers;
 	/** # xstreams */
@@ -111,7 +113,13 @@ struct rebuild_tgt_pool_tracker {
 	/* reported # rebuilt objs */
 	uint64_t		rt_reported_obj_cnt;
 	uint64_t		rt_reported_rec_cnt;
-
+	uint64_t		rt_reported_size;
+	/* global stable epoch to use for rebuilding the data */
+	uint64_t		rt_stable_epoch;
+	/* local rebuild epoch mainly to constrain the VOS aggregation
+	 * to make sure aggreation will not cross the epoch
+	 */
+	uint64_t		rt_rebuild_fence;
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
@@ -127,6 +135,7 @@ struct rebuild_global_pool_tracker {
 	/* rebuild status */
 	struct daos_rebuild_status	rgt_status;
 
+	struct dss_sleep_ult		*rgt_ult;
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 
@@ -141,22 +150,26 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_rebuild_ver;
 
 	/* bits to track scan status for all targets */
-	uint32_t	*rgt_scan_bits;
+	uint8_t		*rgt_scan_bits;
 
 	/* bits to track pull status for all targets */
-	uint32_t	*rgt_pull_bits;
+	uint8_t		*rgt_pull_bits;
 
-	/* The size of rt_global_scan_bits and
-	 * rt_global_pull_bits in bit
+	/* The size of rgt_scan_bits and
+	 * rgt_pull_bits in bit
 	 */
 	uint32_t	rgt_bits_size;
 
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
 
-	unsigned int	rgt_scan_done:1,
-			rgt_done:1,
-			rgt_abort:1;
+	uint64_t	rgt_time_start;
+
+	/* stable epoch of the rebuild */
+	uint64_t	rgt_stable_epoch;
+
+	unsigned int	rgt_abort:1,
+			rgt_notify_stable_epoch:1;
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -229,6 +242,7 @@ struct rebuild_pool_tls {
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_rec_count;
+	uint64_t	rebuild_pool_size;
 	unsigned int	rebuild_pool_ver;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1;
@@ -251,6 +265,7 @@ struct rebuild_tgt_query_info {
 	int status;
 	uint64_t rec_count;
 	uint64_t obj_count;
+	uint64_t size;
 	bool rebuilding;
 	ABT_mutex lock;
 };
@@ -260,7 +275,9 @@ struct rebuild_iv {
 	uint64_t	riv_toberb_obj_count;
 	uint64_t	riv_obj_count;
 	uint64_t	riv_rec_count;
+	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
+	uint64_t	riv_stable_epoch;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;
@@ -270,6 +287,8 @@ struct rebuild_iv {
 			riv_pull_done:1;
 	int		riv_status;
 };
+
+#define DEFAULT_YIELD_FREQ	128
 
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
@@ -291,6 +310,7 @@ void rebuild_obj_handler(crt_rpc_t *rpc);
 void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 int rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
+int rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
 int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
@@ -298,6 +318,27 @@ int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
 int rebuild_iv_ns_create(struct ds_pool *pool, uint32_t map_ver,
 			 d_rank_list_t *exclude_tgts,
 			 unsigned int master_rank);
+
+static inline bool
+is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return isset_range(rgt->rgt_pull_bits, 0, rgt->rgt_bits_size - 1);
+}
+
+static inline bool
+is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return isset_range(rgt->rgt_scan_bits, 0, rgt->rgt_bits_size - 1);
+}
+
+static inline bool
+is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
+{
+	return is_rebuild_global_scan_done(rgt) &&
+	       is_rebuild_global_pull_done(rgt);
+
+}
+
 int rebuild_iv_init(void);
 int rebuild_iv_fini(void);
 

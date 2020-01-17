@@ -14,7 +14,7 @@ def scons():
     ds_rsvc = daos_build.library(denv, 'rsvc', ['srv.c',
                                                 'srv_common.c',
                                                 'rpc.c'])
-    denv.Install('$PREFIX/lib/daos_srv', ds_rsvc)
+    denv.Install('$PREFIX/lib64/daos_srv', ds_rsvc)
 
 if __name__ == "SCons.Script":
     scons()

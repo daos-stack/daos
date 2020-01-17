@@ -75,7 +75,7 @@ ctl_update(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
 		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
@@ -91,7 +91,7 @@ ctl_fetch(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
 		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
@@ -116,13 +116,13 @@ ctl_punch(struct dts_io_credit *cred)
 
 	if (daos_mode) {
 		if (!dkey) {
-			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, NULL);
+			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, 0, NULL);
 
 		} else if (!akey) {
-			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 1,
+			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 0, 1,
 						  dkey, NULL);
 		} else {
-			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, dkey,
+			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, 0, dkey,
 						  1, akey, NULL);
 		}
 	} else {
@@ -258,7 +258,8 @@ ctl_daos_list(struct dts_io_credit *cred)
 		}
 
 		if (rc) {
-			fprintf(stderr, "Failed to list keys: %d\n", rc);
+			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 
@@ -471,7 +472,8 @@ out:
 
 	switch (rc) {
 	case -2: /* real failure */
-		D_PRINT("Operation failed, rc=%d\n", rc);
+		D_PRINT("Operation failed, rc="DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case -1: /* invalid input */
@@ -533,7 +535,8 @@ main(int argc, char **argv)
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to initialize utility: %d\n", rc);
+		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

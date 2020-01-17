@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import re
 import uuid
+from enum import IntEnum
 
 from command_utils import FormattedParameter, ExecutableCommand
 from command_utils import EnvironmentVariables, CommandFailure
@@ -238,3 +239,79 @@ class IorCommand(ExecutableCommand):
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
 
         return env
+
+    @staticmethod
+    def get_ior_metrics(cmdresult):
+        """Parse the CmdResult (output of the test) and look for
+           the ior stdout and get the read and write metrics.
+
+        Args:
+            cmdresult (CmdResult): output of job manager
+
+       Returns:
+            metrics (tuple) : list of write and read metrics from ior run
+
+        """
+        ior_metric_summary = "Summary of all tests:"
+        messages = cmdresult.stdout.splitlines()
+        # Get the index whre the summary starts and add one to
+        # get to the header.
+        idx = messages.index(ior_metric_summary)
+        # idx + 1 is header.
+        # idx +2 and idx + 3 will give the write and read metrics.
+        write_metrics = (" ".join(messages[idx+2].split())).split()
+        read_metrics = (" ".join(messages[idx+3].split())).split()
+
+        return (write_metrics, read_metrics)
+
+    @staticmethod
+    def log_metrics(logger, message, metrics):
+        """Log the ior metrics
+
+           Args:
+               logger (log): logger object handle
+               message (str) : Message to print before logging metrics
+               metric (lst) : IOR write and read metrics
+        """
+        logger.info("\n")
+        logger.info(message)
+        logger.info(metrics[0])
+        logger.info(metrics[1])
+        logger.info("\n")
+
+
+class IorMetrics(IntEnum):
+    """Index Name and Number of each column in IOR result summary.
+    """
+
+    # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
+    # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
+    # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
+    # blksiz    xsize aggs(MiB)   API RefNum
+    Operation = 0
+    Max_MiB = 1
+    Min_MiB = 2
+    Mean_MiB = 3
+    StdDev = 4
+    Max_OPs = 5
+    Min_OPs = 6
+    Mean_OPs = 7
+    StdDev = 8
+    Mean_seconds = 9
+    Stonewall_seconds = 10
+    Stonewall_MiB = 11
+    Test_No = 12
+    Num_Tasks = 13
+    tPN = 14
+    reps = 15
+    fPP = 16
+    reord = 17
+    reordoff = 18
+    reordrand = 19
+    seed = 20
+    segcnt = 21
+    blksiz = 22
+    xsize = 23
+    aggs_MiB = 24
+    API = 25
+    RefNum = 26

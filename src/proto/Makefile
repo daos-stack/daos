@@ -25,9 +25,7 @@ DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 iosrv/srv.pb-c.h\
 		 mgmt/acl.pb-c.h\
-		 mgmt/mgmt.pb-c.h\
 		 mgmt/pool.pb-c.h\
-		 mgmt/system.pb-c.h\
 		 mgmt/storage_query.pb-c.h\
 		 mgmt/srv.pb-c.h\
 		 security/auth.pb-c.h\
@@ -35,9 +33,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 C_SOURCE_FILES = common/drpc.pb-c.c\
 		 iosrv/srv.pb-c.c\
 		 mgmt/acl.pb-c.c\
-		 mgmt/mgmt.pb-c.c\
 		 mgmt/pool.pb-c.c\
-		 mgmt/system.pb-c.c\
 		 mgmt/storage_query.pb-c.c\
 		 mgmt/srv.pb-c.c\
 		 security/auth.pb-c.c\
@@ -47,7 +43,6 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/srv.pb.go\
 		   common/proto/mgmt/storage_query.pb.go\
-		   common/proto/ctl/features.pb.go\
 		   common/proto/ctl/storage.pb.go\
 		   common/proto/ctl/common.pb.go\
 		   common/proto/ctl/storage_nvme.pb.go\

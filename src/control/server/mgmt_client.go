@@ -163,7 +163,46 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.DaosRank) (resp *mgmtpb.DaosResp, stopErr error) {
+func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.PrepShutdownReq) (resp *mgmtpb.DaosResp, stopErr error) {
+	stopErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+
+			prefix := fmt.Sprintf("prep shutdown(%s, %+v)", destAddr, *req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			for {
+				var err error
+
+				select {
+				case <-ctx.Done():
+					return errors.Wrap(ctx.Err(), prefix)
+				default:
+				}
+
+				resp, err = pbClient.PrepShutdown(ctx, req)
+				if msc.retryOnErr(err, ctx, prefix) {
+					continue
+				}
+				if resp == nil {
+					return errors.New("unexpected nil response status")
+				}
+				if msc.retryOnStatus(resp.Status, ctx, prefix) {
+					continue
+				}
+
+				return nil
+			}
+		})
+
+	return
+}
+
+// Stop calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues KillRank requests using MgmtSvcClient over dRPC to
+// terminates given rank.
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
@@ -194,6 +233,26 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 
 				return nil
 			}
+		})
+
+	return
+}
+
+// Start calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues StartRanks requests using MgmtSvcClient to
+// restart the designated ranks as configured in persistent superblock.
+func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.StartRanksReq) (resp *mgmtpb.StartRanksResp, restartErr error) {
+	restartErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+
+			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, *req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			_, err := pbClient.StartRanks(ctx, req)
+
+			return err
 		})
 
 	return

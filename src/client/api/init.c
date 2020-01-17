@@ -54,6 +54,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
 	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
+	{dc_mgmt_list_pools, sizeof(daos_mgmt_list_pools_t)},
 
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
@@ -67,6 +68,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
+	{dc_pool_list_cont, sizeof(daos_pool_list_cont_t)},
 
 	/** Container */
 	{dc_cont_create, sizeof(daos_cont_create_t)},
@@ -154,7 +156,7 @@ daos_init(void)
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
-		D_ERROR("failed to initialize eq_lib: %d\n", rc);
+		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_hhash, rc);
 	}
 
@@ -226,7 +228,7 @@ daos_fini(void)
 
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
-		D_ERROR("failed to finalize eq: %d\n", rc);
+		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 

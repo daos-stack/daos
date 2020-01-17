@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,11 @@ package scm
 import (
 	"os"
 	"strings"
+	"sync"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
@@ -42,7 +44,8 @@ type (
 	}
 
 	MockSysProvider struct {
-		cfg MockSysConfig
+		cfg       MockSysConfig
+		isMounted atm.Bool
 	}
 )
 
@@ -50,21 +53,21 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	// hack... don't fail the format tests which also want
 	// to make sure that the device isn't already formatted.
 	if os.IsNotExist(msp.cfg.IsMountedErr) && strings.HasPrefix(target, "/dev") {
-		return msp.cfg.IsMountedBool, nil
+		return msp.isMounted.Load(), nil
 	}
-	return msp.cfg.IsMountedBool, msp.cfg.IsMountedErr
+	return msp.isMounted.Load(), msp.cfg.IsMountedErr
 }
 
 func (msp *MockSysProvider) Mount(_, _, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
-		msp.cfg.IsMountedBool = true
+		msp.isMounted.SetTrue()
 	}
 	return msp.cfg.MountErr
 }
 
 func (msp *MockSysProvider) Unmount(_ string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
-		msp.cfg.IsMountedBool = false
+		msp.isMounted.SetFalse()
 	}
 	return msp.cfg.UnmountErr
 }
@@ -82,7 +85,8 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 		cfg = &MockSysConfig{}
 	}
 	return &MockSysProvider{
-		cfg: *cfg,
+		cfg:       *cfg,
+		isMounted: atm.NewBool(cfg.IsMountedBool),
 	}
 }
 
@@ -94,48 +98,55 @@ func DefaultMockSysProvider() *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      Modules
+	DiscoverRes      storage.ScmModules
 	DiscoverErr      error
-	GetNamespaceRes  Namespaces
+	GetNamespaceRes  storage.ScmNamespaces
 	GetNamespaceErr  error
 	GetStateErr      error
-	StartingState    types.ScmState
-	NextState        types.ScmState
+	StartingState    storage.ScmState
+	NextState        storage.ScmState
 	PrepNeedsReboot  bool
-	PrepNamespaceRes Namespaces
+	PrepNamespaceRes storage.ScmNamespaces
 	PrepErr          error
 }
 
 type MockBackend struct {
-	curState types.ScmState
+	sync.RWMutex
+	curState storage.ScmState
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() (Modules, error) {
+func (mb *MockBackend) Discover() (storage.ScmModules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() (Namespaces, error) {
+func (mb *MockBackend) GetNamespaces() (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
 }
 
-func (mb *MockBackend) GetState() (types.ScmState, error) {
+func (mb *MockBackend) GetState() (storage.ScmState, error) {
 	if mb.cfg.GetStateErr != nil {
-		return types.ScmStateUnknown, mb.cfg.GetStateErr
+		return storage.ScmStateUnknown, mb.cfg.GetStateErr
 	}
+	mb.RLock()
+	defer mb.RUnlock()
 	return mb.curState, nil
 }
 
-func (mb *MockBackend) Prep(_ types.ScmState) (bool, Namespaces, error) {
+func (mb *MockBackend) Prep(_ storage.ScmState) (bool, storage.ScmNamespaces, error) {
 	if mb.cfg.PrepErr == nil {
+		mb.Lock()
 		mb.curState = mb.cfg.NextState
+		mb.Unlock()
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepNamespaceRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) PrepReset(_ types.ScmState) (bool, error) {
+func (mb *MockBackend) PrepReset(_ storage.ScmState) (bool, error) {
 	if mb.cfg.PrepErr == nil {
+		mb.Lock()
 		mb.curState = mb.cfg.NextState
+		mb.Unlock()
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepErr
 }
@@ -155,9 +166,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc)).WithForwardingDisabled()
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider()).WithForwardingDisabled()
 }

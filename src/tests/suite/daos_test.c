@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrF"
+#define TESTS "mpceXVizADKCoROdrFNv"
 /**
  * These tests will only be run if explicity specified. They don't get
  * run if no test is specified.
@@ -75,6 +75,8 @@ print_usage(int rank)
 	print_message("daos_test -R|--MD_replication_tests\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
+	print_message("daos_test -v|--rebuild_simple\n");
+	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -223,6 +225,21 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_fs_test(rank, size, sub_tests,
 						      sub_tests_size);
 			break;
+		case 'N':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS NVMe recovery tests..");
+			daos_test_print(rank, "==================");
+			nr_failed += run_daos_nvme_recov_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'v':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS rebuild simple tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_rebuild_simple_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+
 		default:
 			D_ASSERT(0);
 		}
@@ -278,6 +295,8 @@ main(int argc, char **argv)
 		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
+		{"rebuild_simple",	no_argument,	NULL,	'v'},
+		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
 						CHECKSUM_ARG_VAL_TYPE},
@@ -305,7 +324,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hr",
+				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hrNv",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

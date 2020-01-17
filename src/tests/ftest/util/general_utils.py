@@ -30,10 +30,6 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
-from time import sleep
-
-from avocado import fail_on
-from pydaos.raw import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
@@ -55,6 +51,8 @@ def run_task(hosts, command, timeout=None):
 
     """
     task = task_self()
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
     kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
     if timeout is not None:
         kwargs["timeout"] = timeout
@@ -94,7 +92,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         # Display any errors or requested output
         if retcode != expect_rc or verbose:
             msg = "failure running" if retcode != expect_rc else "output from"
-            if len(list(task.iter_buffers(rc_nodes))) == 0:
+            if not list(task.iter_buffers(rc_nodes)):
                 print(
                     "{}: {} '{}': rc={}".format(
                         nodeset, msg, command, retcode))
@@ -171,7 +169,7 @@ def get_file_path(bin_name, dir_path=""):
     Raises:
         OSError: If failed to find the bin_name file
     """
-    with open('../../../.build_vars.json') as json_file:
+    with open('../../.build_vars.json') as json_file:
         build_paths = json.load(json_file)
     basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
                                 .format(dir_path))
@@ -188,7 +186,7 @@ def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
 
-    e.g. boro-[26-27] becomes a list with entries boro-26, boro-27
+    e.g. server-[26-27] becomes a list with entries server-26, server-27
 
     This works for every thing that has come up so far but I don't know what
     all slurmfinds acceptable so it might not parse everything possible.
@@ -242,190 +240,6 @@ def get_random_string(length, exclude=None):
             random.choice(string.ascii_uppercase + string.digits)
             for _ in range(length))
     return random_string
-
-
-@fail_on(DaosApiError)
-def get_pool(context, mode, size, name, svcn=1, log=None, connect=True):
-    """Return a DAOS pool that has been created an connected.
-
-    Args:
-        context (DaosContext): the context to use to create the pool
-        mode (int): the pool mode
-        size (int): the size of the pool
-        name (str): the name of the pool
-        svcn (int): the pool service leader quantity
-        log (DaosLog, optional): object for logging messages. Defaults to None.
-        connect (bool, optional): connect to the new pool. Defaults to True.
-
-    Returns:
-        DaosPool: an object representing a DAOS pool
-
-    """
-    if log:
-        log.info("Creating a pool")
-    pool = DaosPool(context)
-    pool.create(mode, os.geteuid(), os.getegid(), size, name, svcn=svcn)
-    if connect:
-        if log:
-            log.info("Connecting to the pool")
-        pool.connect(1 << 1)
-    return pool
-
-
-@fail_on(DaosApiError)
-def get_container(context, pool, log=None):
-    """Retrun a DAOS a container that has been created an opened.
-
-    Args:
-        context (DaosContext): the context to use to create the container
-        pool (DaosPool): pool in which to create the container
-        log (DaosLog|None): object for logging messages
-
-    Returns:
-        DaosContainer: an object representing a DAOS container
-
-    """
-    if log:
-        log.info("Creating a container")
-    container = DaosContainer(context)
-    container.create(pool.handle)
-    if log:
-        log.info("Opening a container")
-    container.open()
-    return container
-
-
-@fail_on(DaosApiError)
-def kill_server(server_group, context, rank, pool, log=None):
-    """Kill a specific server rank.
-
-    Args:
-        server_group (str): daos server group name
-        context (DaosContext): the context to use to create the DaosServer
-        rank (int): daos server rank to kill
-        pool (DaosPool): the DaosPool from which to exclude the rank
-        log (DaosLog|None): object for logging messages
-
-    Returns:
-        None
-
-    """
-    if log:
-        log.info("Killing DAOS server {} (rank {})".format(server_group, rank))
-    server = DaosServer(context, server_group, rank)
-    server.kill(1)
-    if log:
-        log.info("Excluding server rank {}".format(rank))
-    pool.exclude([rank])
-
-
-@fail_on(DaosApiError)
-def get_pool_status(pool, log):
-    """Determine if the pool rebuild is complete.
-
-    Args:
-        pool (DaosPool): pool for which to determine if rebuild is complete
-        log (logging): logging object used to report the pool status
-
-    Returns:
-        PoolInfo: the PoolInfo object returned by the pool's pool_query()
-            function
-
-    """
-    pool_info = pool.pool_query()
-    message = "Pool: pi_ntargets={}".format(pool_info.pi_ntargets)
-    message += ", pi_nnodes={}".format(
-        pool_info.pi_nnodes)
-    message += ", pi_ndisabled={}".format(
-        pool_info.pi_ndisabled)
-    message += ", rs_version={}".format(
-        pool_info.pi_rebuild_st.rs_version)
-    message += ", rs_done={}".format(
-        pool_info.pi_rebuild_st.rs_done)
-    message += ", rs_toberb_obj_nr={}".format(
-        pool_info.pi_rebuild_st.rs_toberb_obj_nr)
-    message += ", rs_obj_nr={}".format(
-        pool_info.pi_rebuild_st.rs_obj_nr)
-    message += ", rs_rec_nr={}".format(
-        pool_info.pi_rebuild_st.rs_rec_nr)
-    message += ", rs_errno={}".format(
-        pool_info.pi_rebuild_st.rs_errno)
-    log.info(message)
-    return pool_info
-
-
-def is_pool_rebuild_complete(pool, log):
-    """Determine if the pool rebuild is complete.
-
-    Args:
-        pool (DaosPool): pool for which to determine if rebuild is complete
-        log (logging): logging object used to report the pool status
-
-    Returns:
-        bool: pool rebuild completion status
-
-    """
-    get_pool_status(pool, log)
-    return pool.pool_info.pi_rebuild_st.rs_done == 1
-
-
-def wait_for_rebuild(pool, log, to_start, interval):
-    """Wait for the rebuild to start or end.
-
-    Args:
-        pool (DaosPool): pool for which to determine if rebuild is complete
-        log (logging): logging object used to report the pool status
-        to_start (bool): whether to wait for rebuild to start or end
-        interval (int): number of seconds to wait in between rebuild
-            completion checks
-
-    Returns:
-        None
-
-    """
-    log.info(
-        "Waiting for rebuild to %s ...",
-        "start" if to_start else "complete")
-    while is_pool_rebuild_complete(pool, log) == to_start:
-        log.info(
-            "  Rebuild %s ...",
-            "has not yet started" if to_start else "in progress")
-        sleep(interval)
-
-
-def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
-    """Confirm the number of rebuilt objects reported by the pool query.
-
-    Args:
-        pool (DaosPool): pool for which to determine if rebuild is complete
-        log (logging): logging object used to report the pool status
-        to_be_rebuilt (int): expected number of objects to be rebuilt
-        object_qty (int): expected number of rebuilt records
-        record_qty (int): expected total number of rebuilt records
-        errors (int): expected number of rebuild errors
-
-    Returns:
-        list: a list of error messages for each expected value that did not
-            match the actual value.  If all expected values were detected the
-            list will be empty.
-
-    """
-    messages = []
-    expected_pool_info = {
-        "rs_toberb_obj_nr": to_be_rebuilt,
-        "rs_obj_nr": object_qty,
-        "rs_rec_nr": record_qty,
-        "rs_errno": errors
-    }
-    log.info("Verifying the number of rebuilt objects and status")
-    pool_info = get_pool_status(pool, log)
-    for key, expected in expected_pool_info.items():
-        detected = getattr(pool_info.pi_rebuild_st, key)
-        if detected != expected:
-            messages.append(
-                "Unexpected {} value: expected={}, detected={}".format(
-                    key, expected, detected))
-    return messages
 
 
 def check_pool_files(log, hosts, uuid):

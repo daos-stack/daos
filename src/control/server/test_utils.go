@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -103,21 +104,49 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 	setupMockDrpcClientBytes(svc, respBytes, err)
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
-// properly set up as an MS.
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+// newTestIOServer returns an IOServerInstance configured for testing.
+func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
 	r := ioserver.NewRunner(log, ioserver.NewConfig())
 
 	var msCfg mgmtSvcClientCfg
-	msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+	if isAP {
+		msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+	}
 
-	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(nil, log, msCfg), r)
+	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
 	srv.setSuperblock(&Superblock{
-		MS: true,
+		MS: isAP,
 	})
 
+	return srv
+}
+
+// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
+// properly set up as an MS.
+func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+	srv := newTestIOServer(log, true)
+
 	harness := NewIOServerHarness(log)
-	harness.instances = append(harness.instances, srv)
+	if err := harness.AddInstance(srv); err != nil {
+		panic(err)
+	}
+
+	return newMgmtSvc(harness, nil)
+}
+
+// newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
+// number of IOServerInstances. If requested, the first instance is
+// configured as an access point.
+func newTestMgmtSvcMulti(log logging.Logger, count int, isAP bool) *mgmtSvc {
+	harness := NewIOServerHarness(log)
+
+	for i := 0; i < count; i++ {
+		srv := newTestIOServer(log, i == 0 && isAP)
+
+		if err := harness.AddInstance(srv); err != nil {
+			panic(err)
+		}
+	}
 
 	return newMgmtSvc(harness, nil)
 }

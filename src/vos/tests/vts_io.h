@@ -58,7 +58,7 @@
 					2 * UPDATE_CSUM_SIZE)
 #define VTS_IO_OIDS		1
 #define VTS_DB_KEYS		(D_LOG_ENABLED(DB_TRACE) ? 500 : 100000)
-#define VTS_IO_KEYS		(RUNNING_ON_VALGRIND ? 100 : VTS_DB_KEYS)
+#define VTS_IO_KEYS		(DAOS_ON_VALGRIND ? 100 : VTS_DB_KEYS)
 
 enum vts_test_flags {
 	TF_IT_ANCHOR		= (1 << 0),
@@ -69,6 +69,7 @@ enum vts_test_flags {
 	TF_FIXED_AKEY		= (1 << 5),
 	IF_USE_ARRAY		= (1 << 6),
 	TF_USE_CSUM		= (1 << 7),
+	TF_USE_VAL		= (1 << 8),
 	IF_DISABLED		= (1 << 30),
 };
 

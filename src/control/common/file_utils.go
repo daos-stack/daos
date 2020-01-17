@@ -29,31 +29,17 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
-
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	sudoUserEnv = "SUDO_USER"
-	rootUser    = "root"
-	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
-	// log message context refers to caller not callee.
-	UtilLogDepth = 4
-)
-
-// GetAbsInstallPath retrieves absolute path of files in daos install dir
-func GetAbsInstallPath(relPath string) (string, error) {
-	ex, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(filepath.Dir(ex), "..", relPath), nil
-}
+// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+// log message context refers to caller not callee.
+const UtilLogDepth = 4
 
 // GetFilePaths return full file paths in given directory with
 // matching file extensions
@@ -232,9 +218,7 @@ func SyncDir(path string) (err error) {
 }
 
 // Run executes command in os and builds useful error message.
-func Run(log logging.Logger, cmd string) error {
-	log.Debugf("exec '%s'\n", cmd)
-
+func Run(cmd string) error {
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
@@ -243,4 +227,77 @@ func Run(log logging.Logger, cmd string) error {
 	}
 
 	return err
+}
+
+// GetWorkingPath retrieves path relative to the current working directory when
+// invoking the current process.
+func GetWorkingPath(inPath string) (string, error) {
+	if path.IsAbs(inPath) {
+		return "", errors.New("unexpected absolute path, want relative")
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine working directory")
+	}
+
+	return path.Join(workingDir, inPath), nil
+}
+
+// GetAdjacentPath retrieves path relative to the binary used to launch the
+// currently running process.
+func GetAdjacentPath(inPath string) (string, error) {
+	if path.IsAbs(inPath) {
+		return "", errors.New("unexpected absolute path, want relative")
+	}
+
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+
+	return path.Join(path.Dir(selfPath), inPath), nil
+}
+
+// ResolvePath simply returns an absolute path, appends input path to current
+// working directory if input path not empty otherwise appends default path to
+// location of running binary (adjacent). Use case is specific to config files.
+func ResolvePath(inPath string, defaultPath string) (outPath string, err error) {
+	switch {
+	case inPath == "":
+		// no custom path specified, look up adjacent
+		outPath, err = GetAdjacentPath(defaultPath)
+	case filepath.IsAbs(inPath):
+		outPath = inPath
+	default:
+		// custom path specified, look up relative to cwd
+		outPath, err = GetWorkingPath(inPath)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return outPath, nil
+}
+
+// FindBinary attempts to locate the named binary by checking $PATH first.
+// If the binary is not found in $PATH, look in the directory containing the
+// running process' binary as well as the working directory.
+func FindBinary(binName string) (string, error) {
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	adjPath, err := GetAdjacentPath(binName)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err = os.Stat(adjPath); err != nil {
+		return "", err
+	}
+
+	return adjPath, nil
 }

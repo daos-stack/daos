@@ -238,6 +238,13 @@ struct evt_root {
 	uint16_t			tr_csum_len;
 };
 
+static inline int
+evt_is_empty(struct evt_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
+}
+
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
 	EVT_FEAT_SORT_SOFF		= (1 << 0),
@@ -289,7 +296,7 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** checksums of selected extent*/
+	/** checksums of the actual extent*/
 	daos_csum_buf_t			en_csum;
 	/** pool map version */
 	uint32_t			en_ver;

@@ -174,7 +174,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
-		D_ERROR("uuid hash table insert failed: %d\n", rc);
+		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	*poh = vos_pool2hdl(pool);
@@ -250,7 +250,6 @@ int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t nvme_sz)
 {
-	struct vea_space_df	*vea_md = NULL;
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
@@ -282,7 +281,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
 	if (rc) {
-		D_ERROR("Enable SCM usage statistics failed. rc:%d\n", rc);
+		D_ERROR("Enable SCM usage statistics failed. "DF_RC"\n",
+			DP_RC(rc));
 		rc = umem_tx_errno(rc);
 		goto close;
 	}
@@ -323,9 +323,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	dbtree_close(hdl);
 
 	uuid_copy(pool_df->pd_id, uuid);
-	pool_df->pd_scm_sz = scm_sz;
-	pool_df->pd_nvme_sz = nvme_sz;
-	vea_md = &pool_df->pd_vea_df;
+	pool_df->pd_scm_sz	= scm_sz;
+	pool_df->pd_nvme_sz	= nvme_sz;
+	pool_df->pd_magic	= POOL_DF_MAGIC;
+	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
+		pool_df->pd_version = 0;
+	else
+		pool_df->pd_version = POOL_DF_VERSION;
 
 	gc_init_pool(&umem, pool_df);
 end:
@@ -340,7 +344,7 @@ end:
 		rc = umem_tx_abort(&umem, rc);
 
 	if (rc != 0) {
-		D_ERROR("Initialize pool root error: %d\n", rc);
+		D_ERROR("Initialize pool root error: "DF_RC"\n", DP_RC(rc));
 		goto close;
 	}
 
@@ -353,8 +357,8 @@ end:
 		xs_ctxt, DP_UUID(uuid));
 	rc = bio_blob_create(uuid, xs_ctxt, nvme_sz);
 	if (rc != 0) {
-		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" rc:%d\n",
-			xs_ctxt, DP_UUID(uuid), rc);
+		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" "
+			""DF_RC"\n", xs_ctxt, DP_UUID(uuid), DP_RC(rc));
 		goto close;
 	}
 
@@ -364,13 +368,12 @@ end:
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
 	/* Format SPDK blob*/
-	D_ASSERT(vea_md != NULL);
-	rc = vea_format(&umem, vos_txd_get(), vea_md, VOS_BLK_SZ,
+	rc = vea_format(&umem, vos_txd_get(), &pool_df->pd_vea_df, VOS_BLK_SZ,
 			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
-		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" rc:%d\n",
-			xs_ctxt, DP_UUID(uuid), rc);
+		D_ERROR("Format blob error for xs:%p pool:"DF_UUID" "DF_RC"\n",
+			xs_ctxt, DP_UUID(uuid), DP_RC(rc));
 		/* Destroy the SPDK blob on error */
 		rc = bio_blob_delete(uuid, xs_ctxt);
 	}
@@ -547,7 +550,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem: %d\n", rc);
+		D_ERROR("Failed to instantiate umem: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -559,6 +562,17 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	pool_df = vos_pool_pop2df(uma->uma_pool);
+	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
+		D_GOTO(failed, rc = -DER_DF_INVAL);
+	}
+
+	if (pool_df->pd_version > POOL_DF_VERSION ||
+	    pool_df->pd_version < POOL_DF_VER_1) {
+		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		D_GOTO(failed, rc = -DER_DF_INCOMPT);
+	}
+
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
@@ -580,7 +594,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
 	if (rc) {
 		D_ERROR("Failed to open VOS I/O context for xs:%p "
-			"pool:"DF_UUID" rc=%d\n", xs_ctxt, DP_UUID(uuid), rc);
+			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),
+			DP_RC(rc));
 		goto failed;
 	}
 
@@ -593,7 +608,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
 			      &unmap_ctxt, &pool->vp_vea_info);
 		if (rc) {
-			D_ERROR("Failed to load block space info: %d\n", rc);
+			D_ERROR("Failed to load block space info: "DF_RC"\n",
+				DP_RC(rc));
 			goto failed;
 		}
 	}
@@ -674,7 +690,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
 			     "stats.heap.curr_allocated", &scm_used);
 	if (rc) {
-		D_ERROR("Failed to get SCM usage. rc:%d\n", rc);
+		D_ERROR("Failed to get SCM usage. "DF_RC"\n", DP_RC(rc));
 		return umem_tx_errno(rc);
 	}
 
@@ -701,7 +717,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	/* query NVMe free space */
 	rc = vea_query(pool->vp_vea_info, attr, stat);
 	if (rc) {
-		D_ERROR("Failed to get NVMe usage. rc:%d\n", rc);
+		D_ERROR("Failed to get NVMe usage. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	D_ASSERT(attr->va_blk_sz != 0);

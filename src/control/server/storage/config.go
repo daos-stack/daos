@@ -25,11 +25,13 @@ package storage
 import "github.com/pkg/errors"
 
 const (
+	maxScmDeviceLen = 1
+)
+
+const (
 	ScmClassNone ScmClass = ""
 	ScmClassDCPM ScmClass = "dcpm"
 	ScmClassRAM  ScmClass = "ram"
-
-	MaxScmDeviceLen = 1
 )
 
 // ScmClass specifies device type for Storage Class Memory
@@ -71,8 +73,8 @@ func (sc *ScmConfig) Validate() error {
 	if sc.Class == "" {
 		return errors.New("no scm_class set")
 	}
-	if len(sc.DeviceList) > MaxScmDeviceLen {
-		return errors.Errorf("scm_list may have at most %d devices", MaxScmDeviceLen)
+	if len(sc.DeviceList) > maxScmDeviceLen {
+		return errors.Errorf("scm_list may have at most %d devices", maxScmDeviceLen)
 	}
 	return nil
 }
@@ -120,6 +122,7 @@ type BdevConfig struct {
 	DeviceCount int       `yaml:"bdev_number,omitempty"`
 	FileSize    int       `yaml:"bdev_size,omitempty"`
 	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
+	MemSize     int       `yaml:"-" cmdLongFlag:"--mem_size,nonzero" cmdShortFlag:"-r,nonzero"`
 	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	Hostname    string    `yaml:"-"` // used when generating templates
 }

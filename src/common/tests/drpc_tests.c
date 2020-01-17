@@ -24,14 +24,6 @@
 /*
  * Unit tests for the drpc module
  */
-
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -44,6 +36,9 @@
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 /* None of these tests depend on a real socket existing */
 static char *TEST_SOCK_ADDR = "/good/socket.sock";
@@ -748,7 +743,17 @@ test_drpc_call_free_null(void **state)
 static void
 test_drpc_response_create_null_call(void **state)
 {
-	assert_null(drpc_response_create(NULL));
+	Drpc__Response	*resp;
+
+	resp = drpc_response_create(NULL);
+
+	assert_non_null(resp);
+	assert_memory_equal(resp->base.descriptor, &drpc__response__descriptor,
+			sizeof(ProtobufCMessageDescriptor));
+	assert_int_equal(resp->sequence, -1);
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+
+	drpc_response_free(resp);
 }
 
 static void

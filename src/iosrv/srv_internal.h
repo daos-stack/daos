@@ -25,27 +25,50 @@
 
 #include <daos_srv/daos_server.h>
 
+/**
+ * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
+ * must be the top two items.
+ *
+ * DSS_POOL_NET_POLL	Network poll ULT
+ * DSS_POOL_NVME_POLL	NVMe poll ULT
+ * DSS_POOL_IO		Update/Fetch, enumeration RPC handler ULTs
+ * DSS_POOL_REBUILD	Rebuild scan & pull ULTs
+ * DSS_POOL_AGGREGATE	VOS aggregation ULTs
+ * DSS_POOL_MISC	GC & Misc ULTs
+ */
+enum {
+	DSS_POOL_NET_POLL	= 0,
+	DSS_POOL_NVME_POLL,
+	DSS_POOL_IO,
+	DSS_POOL_REBUILD,
+	DSS_POOL_AGGREGATE,
+	DSS_POOL_GC,
+	DSS_POOL_CNT,
+};
+
 /** Per-xstream configuration data */
 struct dss_xstream {
-	char		dx_name[DSS_XS_NAME_LEN];
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	tse_sched_t	dx_sched_dsc;
+	char			dx_name[DSS_XS_NAME_LEN];
+	ABT_future		dx_shutdown;
+	hwloc_cpuset_t		dx_cpuset;
+	ABT_xstream		dx_xstream;
+	ABT_pool		dx_pools[DSS_POOL_CNT];
+	ABT_sched		dx_sched;
+	ABT_thread		dx_progress;
+	d_list_t		dx_sleep_ult_list;
+	tse_sched_t		dx_sched_dsc;
+	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
+	int			dx_xs_id;
 	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
 	 * For offload XS it is same value as its main XS.
 	 */
-	int		dx_tgt_id;
+	int			dx_tgt_id;
 	/* CART context id, invalid (-1) for the offload XS w/o CART context */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-	bool		dx_dsc_started;	/* DSC progress ULT started */
+	int			dx_ctx_id;
+	bool			dx_main_xs;	/* true for main XS */
+	bool			dx_comm;	/* true with cart context */
+	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 
 /** Server node topology */
@@ -82,6 +105,14 @@ int dss_module_cleanup_all(void);
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
 void dss_dump_ABT_state(void);
+void dss_xstreams_open_barrier(void);
+struct dss_xstream *dss_get_xstream(int stream_id);
+int dss_xstream_cnt(void);
+
+/* sched.c */
+void dss_sched_fini(struct dss_xstream *dx);
+int dss_sched_init(struct dss_xstream *dx);
+int sched_set_throttle(int pool_idx, unsigned int percent);
 
 /* tls.c */
 void dss_tls_fini(struct dss_thread_local_storage *dtls);
@@ -112,77 +143,6 @@ void ds_iv_fini(void);
  */
 #define DSS_XS_OFFSET_IN_TGT(xs_id)				\
 	(((xs_id) - dss_sys_xs_nr) % DSS_XS_NR_PER_TGT)
-
-/**
- * Get the service xstream xs_id to schedule the ULT for specific ULT type and
- * target index.
- *
- * \param[in]	ult_type	ULT type (enum daos_ult_type)
- * \param[in]	tgt_idx		target VOS index (main xstream index)
- *
- * \return			XS (xstream) xs_id to be used for the ULT
- */
-static inline int
-dss_ult_xs(int ult_type, int tgt_id)
-{
-	if (tgt_id == DSS_TGT_SELF || ult_type == DSS_ULT_DTX_RESYNC)
-		return DSS_XS_SELF;
-
-	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
-	switch (ult_type) {
-	case DSS_ULT_IOFW:
-	case DSS_ULT_MISC:
-		return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
-	case DSS_ULT_EC:
-	case DSS_ULT_CHECKSUM:
-	case DSS_ULT_COMPRESS:
-		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
-	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_RDB:
-	case DSS_ULT_DRPC_HANDLER:
-		return 0;
-	case DSS_ULT_DRPC_LISTENER:
-		return 1;
-	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
-		return DSS_MAIN_XS_ID(tgt_id);
-	default:
-		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
-		return -DER_INVAL;
-	}
-}
-
-/**
- * Get the pool index to schedule the ULT for specific ULT type.
- *
- * \param[in]	ult_type	ULT type (enum daos_ult_type)
- *
- * \return			pool index to be used for the ULT
- */
-static inline int
-dss_ult_pool(int ult_type)
-{
-	switch (ult_type) {
-	case DSS_ULT_DTX_RESYNC:
-		return DSS_POOL_URGENT;
-	case DSS_ULT_IOFW:
-	case DSS_ULT_EC:
-	case DSS_ULT_CHECKSUM:
-	case DSS_ULT_COMPRESS:
-	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC_LISTENER:
-	case DSS_ULT_RDB:
-	case DSS_ULT_MISC:
-	case DSS_ULT_DRPC_HANDLER:
-	case DSS_ULT_AGGREGATE:
-		return DSS_POOL_SHARE;
-	case DSS_ULT_REBUILD:
-		return DSS_POOL_REBUILD;
-	default:
-		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
-		return -DER_INVAL;
-	}
-}
 
 /**
  * get the VOS target ID of xstream.

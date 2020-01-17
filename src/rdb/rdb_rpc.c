@@ -310,20 +310,6 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
 }
 
-int
-rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
-{
-	struct dss_module_info *info = dss_get_module_info();
-	crt_opcode_t		opc_full;
-
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
-	return crt_corpc_req_create(info->dmi_ctx, group,
-				    NULL /* excluded_ranks */, opc_full,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */,
-				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
-}
-
 struct rdb_raft_rpc {
 	d_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
 	crt_rpc_t      *drc_rpc;
@@ -407,16 +393,21 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	struct rdb_raft_rpc    *rrpc = cb_info->cci_arg;
 	struct rdb	       *db = rrpc->drc_db;
 	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
-	int			rc = cb_info->cci_rc;
+	d_rank_t		dstrank;
+	int			rc;
 
+	rc = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+
+	rc = cb_info->cci_rc;
 	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
-		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent);
+		dstrank, ABT_get_wtime() - rrpc->drc_sent);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D_ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
+			D_ERROR(DF_DB": RPC %x to rank %u failed: "DF_RC"\n",
 				DP_DB(rrpc->drc_db), opc,
-				rrpc->drc_rpc->cr_ep.ep_rank, rc);
+				dstrank, DP_RC(rc));
 		/*
 		 * Drop this RPC, assuming that raft will make a new one. If we
 		 * are stopping, rdb_recvd() might have already stopped. Hence,
@@ -460,12 +451,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 		timeout = timeout_min;
 #if 0
 	rc = crt_req_set_timeout(rpc, timeout);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 #endif
 	rrpc->drc_sent = ABT_get_wtime();
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return 0;
 }
 
@@ -481,9 +472,14 @@ rdb_abort_raft_rpcs(struct rdb *db)
 		d_list_del_init(&rrpc->drc_entry);
 		rc = crt_req_abort(rrpc->drc_rpc);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
-				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
-				rrpc->drc_rpc->cr_ep.ep_rank, rc);
+			d_rank_t	dstrank;
+			int		rc2;
+
+			rc2 = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
+			D_ASSERTF(rc2 == 0, ""DF_RC"\n", DP_RC(rc2));
+			D_ERROR(DF_DB": failed to abort %x to rank %u: "
+				""DF_RC"\n", DP_DB(rrpc->drc_db),
+				rrpc->drc_rpc->cr_opc, dstrank, DP_RC(rc));
 			return rc;
 		}
 	}

@@ -30,71 +30,83 @@ import (
 	"path/filepath"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
+	log    logging.Logger
 	config *security.TransportConfig
 }
 
 // NewSecurityModule creates a new security module with a transport config
-func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
+func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
 	mod := &SecurityModule{
+		log:    log,
 		config: tc,
 	}
 	return mod
 }
 
 func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
-	var key crypto.PublicKey
-	credential := &auth.Credential{}
-	err := proto.Unmarshal(body, credential)
+	req := &auth.ValidateCredReq{}
+	err := proto.Unmarshal(body, req)
 	if err != nil {
-		return nil, err
+		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	if m.config.AllowInsecure == true {
+	cred := req.Cred
+	if cred == nil || cred.GetToken() == nil || cred.GetVerifier() == nil {
+		m.log.Errorf("Invalid credential: %+v", cred)
+		return m.validateRespWithStatus(drpc.DaosInvalidInput)
+	}
+
+	var key crypto.PublicKey
+	if m.config.AllowInsecure {
 		key = nil
 	} else {
-		certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
+		certName := fmt.Sprintf("%s.%s", cred.Origin, "crt")
 		certPath := filepath.Join(m.config.ClientCertDir, certName)
 		cert, err := security.LoadCertificate(certPath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "loading certificate %s failed:", certPath)
+			m.log.Errorf("loading certificate %s failed: %v", certPath, err)
+			return m.validateRespWithStatus(drpc.DaosBadPath)
 		}
 		key = cert.PublicKey
 	}
 
 	// Check our verifier
-	err = auth.VerifyToken(key, credential.GetToken(), credential.GetVerifier().GetData())
+	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData())
 	if err != nil {
-		return nil, errors.Wrapf(err, "credential verification failed for verifier %s", hex.Dump(credential.GetVerifier().GetData()))
+		m.log.Errorf("cred verification failed: %v for verifier %s", err, hex.Dump(cred.GetVerifier().GetData()))
+		return m.validateRespWithStatus(drpc.DaosNoPermission)
 	}
 
-	responseBytes, err := proto.Marshal(credential.Token)
+	resp := &auth.ValidateCredResp{Token: cred.Token}
+	responseBytes, err := proto.Marshal(resp)
 	if err != nil {
-		return nil, err
+		return nil, drpc.MarshalingFailure()
 	}
 	return responseBytes, nil
 }
 
-// HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != drpc.MethodValidateCredentials {
-		return nil, errors.Errorf("Attempt to call unregistered function")
-	}
-
-	responseBytes, err := m.processValidateCredentials(body)
-	return responseBytes, err
+func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
+	resp := &auth.ValidateCredResp{Status: int32(status)}
+	return drpc.Marshal(resp)
 }
 
-// InitModule is empty for this module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
+// HandleCall is the handler for calls to the SecurityModule
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+	if method == drpc.MethodValidateCredentials {
+		return m.processValidateCredentials(body)
+	}
+
+	return nil, drpc.UnknownMethodFailure()
+}
 
 // ID will return Security module ID
 func (m *SecurityModule) ID() int32 {

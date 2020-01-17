@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -53,8 +54,12 @@ func TestMain(m *testing.M) {
 	case "":
 		os.Exit(m.Run())
 	case "RunnerNormalExit":
+		// remove this once we're running so that it doesn't pollute test results
+		os.Unsetenv("LD_LIBRARY_PATH")
 		os.Unsetenv(testModeVar)
-		fmt.Printf("%s%s%s\n", testEnvStr, testSep, strings.Join(os.Environ(), " "))
+		env := os.Environ()
+		sort.Strings(env)
+		fmt.Printf("%s%s%s\n", testEnvStr, testSep, strings.Join(env, " "))
 		fmt.Printf("%s%s%s\n", testArgsStr, testSep, strings.Join(os.Args[1:], " "))
 		os.Exit(0)
 	case "RunnerContextExit":
@@ -88,6 +93,11 @@ func createFakeBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// capture this and set on exit to accommodate the addition of
+	// netdetect dependencies
+	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
+	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
 
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
@@ -135,6 +145,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
+		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
@@ -151,7 +162,12 @@ func TestRunnerNormalExit(t *testing.T) {
 	// Light integration testing of arg/env generation; unit tests elsewhere.
 	wantArgs := "-t 42 -x 1 -p 1 -I 0"
 	var gotArgs string
-	wantEnv := "OFI_INTERFACE=qib0"
+	env := []string{
+		"OFI_INTERFACE=qib0",
+		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+	}
+	sort.Strings(env)
+	wantEnv := strings.Join(env, " ")
 	var gotEnv string
 
 	splitLine := func(line, marker string, dest *string) {

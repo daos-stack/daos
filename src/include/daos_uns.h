@@ -57,9 +57,8 @@ struct duns_attr_t {
  * type, and create a new DAOS container in the pool that is passed in \a
  * attr.da_puuid. The uuid of the container is returned in \a attr.da_cuuid. Set
  * extended attributes on the dir/file created that points to pool uuid,
- * container uuid, and default object class to be used for object in that
- * container. This is to be used in a unified namespace solution to be able to
- * map a path in the unified namespace to a location in the DAOS tier.
+ * container uuid. This is to be used in a unified namespace solution to be able
+ * to map a path in the unified namespace to a location in the DAOS tier.
  *
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
@@ -75,7 +74,8 @@ duns_create_path(daos_handle_t poh, const char *path,
 
 /**
  * Retrieve the extended attributes on a path corresponding to DAOS location and
- * properties of that path.
+ * properties of that path. This includes the pool and container uuid and the
+ * container type. The rest of the fields are not populated in attr struct.
  *
  * \param[in]	path	Valid path in an existing namespace.
  * \param[out]	attr	Struct containing the xattrs on the path.
@@ -95,17 +95,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
  */
 int
 duns_destroy_path(daos_handle_t poh, const char *path);
-
-/**
- * If dynamicaly resolved, will point to the llapi_unlink_foreign() Lustre
- * API, which needs to be used to remove foreign DAOS file/dir.
- *
- * \param[in]	path	Valid path in an existing Lustre namespace.
- *
- * \return		0 on Success. Negative on Failure.
- */
-extern int
-(*unlink_foreign)(char *);
 
 #if defined(__cplusplus)
 }

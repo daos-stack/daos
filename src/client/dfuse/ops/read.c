@@ -24,31 +24,105 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#define READAHEAD_SIZE (1024 * 1024)
+
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	d_iov_t				iov = {};
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*fc = fuse_req_ctx(req);
+	d_iov_t				iov[2] = {};
 	d_sg_list_t			sgl = {};
+	struct fuse_bufvec		fb = {};
 	daos_size_t			size;
 	void				*buff;
 	int				rc;
+	size_t				buff_len = len;
+	bool				skip_read = false;
+	bool				readahead = false;
 
-	D_ALLOC(buff, len);
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested pid=%d",
+		       position, position + len - 1, fc->pid);
+
+	DFUSE_TRA_DEBUG(oh, "Will try readahead file size %zi",
+			oh->doh_ie->ie_stat.st_size);
+
+	if (oh->doh_ie->ie_truncated &&
+	    position + len < oh->doh_ie->ie_stat.st_size &&
+		((oh->doh_ie->ie_start_off == 0 &&
+			oh->doh_ie->ie_end_off == 0) ||
+			position >= oh->doh_ie->ie_end_off ||
+			position + len <= oh->doh_ie->ie_start_off)) {
+		off_t pos_ra = position + len + READAHEAD_SIZE;
+
+		DFUSE_TRA_DEBUG(oh, "Returning zeros");
+		skip_read = true;
+
+		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
+		    ((oh->doh_ie->ie_start_off == 0 &&
+				oh->doh_ie->ie_end_off == 0) ||
+				(position >= oh->doh_ie->ie_end_off ||
+					pos_ra <= oh->doh_ie->ie_start_off))) {
+
+			readahead = true;
+		}
+	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
+		len < (1024 * 1024) &&
+		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+		/* Only do readahead if the requested size is less than 1Mb and
+		 * the file size is > 1Mb
+		 */
+
+		readahead = true;
+	}
+
+	if (readahead)
+		buff_len += READAHEAD_SIZE;
+
+	D_ALLOC(buff, buff_len);
 	if (!buff) {
 		DFUSE_REPLY_ERR_RAW(NULL, req, ENOMEM);
 		return;
 	}
 
 	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
+	d_iov_set(&iov[0], (void *)buff, buff_len);
+	sgl.sg_iovs = iov;
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, sgl, position, &size);
-	if (rc == 0)
+	if (skip_read) {
+		size = buff_len;
+	} else {
+		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size,
+			      NULL);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_REPLY_ERR_RAW(oh, req, rc);
+			D_FREE(buff);
+			return;
+		}
+	}
+
+	if (size <= len) {
 		DFUSE_REPLY_BUF(oh, req, buff, size);
+		D_FREE(buff);
+		return;
+	}
+
+	fb.count = 1;
+	fb.buf[0].mem = buff + len;
+	fb.buf[0].size = size - len;
+
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
+		       position + len, position + size - 1);
+
+	rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
+					position + len, &fb, 0);
+	if (rc == 0)
+		DFUSE_TRA_DEBUG(oh, "notfiy_store returned %d", rc);
 	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+		DFUSE_TRA_INFO(oh, "notfiy_store returned %d", rc);
+
+	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);
 }

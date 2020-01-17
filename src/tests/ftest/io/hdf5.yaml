@@ -1,0 +1,22 @@
+hosts:
+    test_servers:
+        - server-A
+    test_clients:
+        - client-B
+timeout: 1800
+server_config:
+    name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        setname: daos_server
+    createsize:
+        size: 25000000000
+    createsvc:
+        svcn: 1
+client_processes:
+    np: 8
+test_repo:
+    hdf5: "/usr/lib64/hdf5/tests"

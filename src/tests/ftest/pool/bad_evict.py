@@ -23,11 +23,10 @@
 '''
 import os
 import traceback
-import json
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from pydaos.raw import DaosPool, DaosApiError, RankList
 
 
 class BadEvictTest(TestWithServers):
@@ -91,14 +90,9 @@ class BadEvictTest(TestWithServers):
         pool = None
 
         try:
-            # setup the DAOS python API
-            with open('../../../.build_vars.json') as build_file:
-                data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib/')
-
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
@@ -146,4 +140,5 @@ class BadEvictTest(TestWithServers):
                         pool.uuid[item] = saveduuid[item]
                 if savedsvc is not None:
                     pool.svc = savedsvc
+                pool.disconnect()
                 pool.destroy(1)
