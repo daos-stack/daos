@@ -28,7 +28,8 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
 
 RESULT_PASS = "PASS"

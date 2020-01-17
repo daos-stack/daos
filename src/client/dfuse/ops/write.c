@@ -37,6 +37,23 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
+	/* Check for potentially using readahead on this file, ie_truncated
+	 * will only be set if caching is enabled so only check for the one
+	 * flag rather than two here
+	 */
+	if (oh->doh_ie->ie_truncated) {
+		if (oh->doh_ie->ie_start_off == 0 &&
+		    oh->doh_ie->ie_end_off == 0) {
+			oh->doh_ie->ie_start_off = position;
+			oh->doh_ie->ie_end_off = position + len;
+		} else {
+			if (oh->doh_ie->ie_start_off > position)
+				oh->doh_ie->ie_start_off = position;
+			if (oh->doh_ie->ie_end_off < position + len)
+				oh->doh_ie->ie_end_off = position + len;
+		}
+	}
+
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sgl, position, NULL);
 	if (rc == 0)
 		DFUSE_REPLY_WRITE(oh, req, len);

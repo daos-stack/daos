@@ -28,7 +28,8 @@ import time
 from apricot import TestWithServers
 from ior_utils import IorCommand
 import slurm_utils
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from general_utils import pcmd
 import socket
