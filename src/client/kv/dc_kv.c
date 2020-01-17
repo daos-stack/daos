@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,7 +86,6 @@ dc_kv_put(tse_task_t *task)
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_eprs	= NULL;
-	params->iod.iod_csums	= NULL;
 	params->iod.iod_size	= args->buf_size;
 	params->iod.iod_type	= DAOS_IOD_SINGLE;
 
@@ -168,7 +167,6 @@ dc_kv_get(tse_task_t *task)
 	params->iod.iod_nr	= 1;
 	params->iod.iod_recxs	= NULL;
 	params->iod.iod_eprs	= NULL;
-	params->iod.iod_csums	= NULL;
 	params->iod.iod_size	= *buf_size;
 	params->iod.iod_type	= DAOS_IOD_SINGLE;
 

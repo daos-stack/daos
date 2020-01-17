@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -333,14 +333,12 @@ io_invalid_poh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
 		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -424,14 +422,12 @@ io_invalid_coh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
 		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
@@ -503,14 +499,12 @@ update_ro(void **state)
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
 	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -982,18 +982,11 @@ class IORequest(object):
         self.sgl = daos_cref.SGL()
 
         self.iod = daos_cref.DaosIODescriptor()
-        ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
 
         # epoch range still in IOD for some reason
         # Commenting epoch_range because it was creating issue DAOS-2028.
         # self.epoch_range = EpochRange()
         self.txn = 0
-
-        csum = daos_cref.CheckSum()
-        csum.cs_sum = ctypes.pointer(ctypes.create_string_buffer(32))
-        csum.cs_buf_len = 32
-        csum.cs_len = 0
-        self.iod.iod_csums = ctypes.pointer(csum)
 
     def __del__(self):
         """Cleanup this request."""
@@ -1274,7 +1267,6 @@ class IORequest(object):
             iods[i].iod_type = 1
             iods[i].iod_size = len(tup[1])+1
             iods[i].iod_nr = 1
-            ctypes.memset(ctypes.byref(iods[i].iod_kcsum), 0, 16)
             i += 1
         iod_ptr = ctypes.pointer(iods)
         sgl_ptr = ctypes.pointer(sgl_list)
@@ -1336,7 +1328,6 @@ class IORequest(object):
             iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
 
             iods[i].iod_nr = 1
-            ctypes.memset(ctypes.byref(iods[i].iod_kcsum), 0, 16)
             i += 1
         sgl_ptr = ctypes.pointer(sgl_list)
 

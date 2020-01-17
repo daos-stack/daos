@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,8 +105,6 @@ struct ioreq {
 	daos_key_t		akey;
 	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
 	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_csum_buf_t		csum;
-	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_iod_t		iod[IOREQ_SG_IOD_NR];
@@ -176,10 +174,6 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
 
-	/* init csum */
-	dcb_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE,
-		UPDATE_CSUM_SIZE, 1, 0);
-
 	/* init record extent */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
 		int j;
@@ -200,9 +194,6 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		/* epoch descriptor */
 		req->iod[i].iod_eprs = req->erange[i];
 
-		req->iod[i].iod_kcsum.cs_csum = NULL;
-		req->iod[i].iod_kcsum.cs_buf_len = 0;
-		req->iod[i].iod_kcsum.cs_len = 0;
 		req->iod[i].iod_type = iod_type;
 
 	}

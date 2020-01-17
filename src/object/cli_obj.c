@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -556,7 +556,7 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
 }
 
 /**
- * Create reasb_req and set iod'svalue, akey reuse buffer from input
+ * Create reasb_req and set iod's value, akey reuse buffer from input
  * iod, iod_type/iod_size assign as input iod, iod_kcsum/iod_nr/iod_recx/
  * iod_csums/iod_eprs array will set as 0/NULL.
  */
@@ -606,7 +606,6 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 		uiod = &iods[i];
 		riod = &reasb_req->orr_iods[i];
 		riod->iod_name = uiod->iod_name;
-		riod->iod_kcsum = uiod->iod_kcsum;
 		riod->iod_type = uiod->iod_type;
 		riod->iod_size = uiod->iod_size;
 		ec_recx = &reasb_req->orr_recxs[i];
@@ -2146,18 +2145,35 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	}
 }
 
+static int
+obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args) {
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
+		return 0;
+
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
+					args->nr,
+					&args->iod_csums);
+	if (rc != 0)
+		return rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+		((char *) args->iod_csums->ic_data->cs_csum)[0]++;
+
+	return 0;
+}
+
 static void
 obj_update_csum_destroy(const struct dc_object *obj,
-			     const daos_obj_update_t *args)
+			daos_obj_update_t *args)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	int			 i;
 
 	if (!daos_csummer_initialized(csummer))
 		return;
-
-	for (i = 0; i < args->nr; i++)
-		daos_csummer_free_dcbs(csummer, &(&args->iods[i])->iod_csums);
+	daos_csummer_free_ic(csummer, &args->iod_csums);
 }
 
 static int
@@ -2366,44 +2382,6 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
-/** Ensures that checksum structures are NULL. If not will log a warning and
- *  set to NULL. This is needed because the checksum structures are visible
- *  in the public APIs but should not be used.
- */
-static void
-obj_null_csum(const daos_obj_update_t *args) {
-	int i;
-
-	for (i = 0; i < args->nr; i++) {
-		if (args->iods[i].iod_csums != NULL) {
-			D_WARN("iod csums should be NULL\n");
-			args->iods[i].iod_csums = NULL;
-		}
-	}
-}
-
-static void
-obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
-	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	daos_iod_t		*iod;
-	int			 i;
-
-	obj_null_csum(args);
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
-		return;
-
-	for (i = 0; i < args->nr; i++) {
-		iod = &args->iods[i];
-
-		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
-			continue;
-		daos_csummer_calc(csummer, &args->sgls[i],
-				  iod, &iod->iod_csums);
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-			((char *) iod->iod_csums->cs_csum)[0]++;
-	}
-}
-
 /* Selects next replica in the object's layout.
  */
 static int
@@ -2528,7 +2506,6 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 		goto out_task;
 	}
-	obj_null_csum(args);
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);

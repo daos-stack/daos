@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,8 +215,6 @@ typedef enum {
 typedef struct {
 	/** akey for this iod */
 	daos_key_t		iod_name;
-	/** akey checksum */
-	daos_csum_buf_t		iod_kcsum;
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
@@ -246,7 +244,6 @@ typedef struct {
 	 * Checksum associated with each extent. If the type of the iod is
 	 * single, will only have a single checksum.
 	 */
-	daos_csum_buf_t		*iod_csums;
 	/** Epoch range associated with each extent */
 	daos_epoch_range_t	*iod_eprs;
 } daos_iod_t;

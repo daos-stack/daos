@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -619,7 +619,7 @@ punch_model_test(void **state)
 	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
 
 	/* Write the original value (under) */
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 1, &iod,
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 1, &iod, NULL,
 			    &sgl);
 	assert_int_equal(rc, 0);
 	/* Punch the akey */
@@ -630,7 +630,7 @@ punch_model_test(void **state)
 	/* Write the new value (expected) */
 	rex.rx_nr = strlen(expected);
 	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 3, 0, &dkey, 1, &iod,
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 3, 0, &dkey, 1, &iod, NULL,
 			    &sgl);
 	assert_int_equal(rc, 0);
 
@@ -645,7 +645,7 @@ punch_model_test(void **state)
 
 	/* Write the original value at latest epoch (under) */
 	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 5, 0, &dkey, 1, &iod,
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 5, 0, &dkey, 1, &iod, NULL,
 			    &sgl);
 	assert_int_equal(rc, 0);
 	/* Punch the dkey */
@@ -656,7 +656,7 @@ punch_model_test(void **state)
 	/* Write the new value (expected) at latest epoch*/
 	rex.rx_nr = strlen(expected);
 	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 7, 0, &dkey, 1, &iod,
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 7, 0, &dkey, 1, &iod, NULL,
 			    &sgl);
 	assert_int_equal(rc, 0);
 
@@ -673,7 +673,7 @@ punch_model_test(void **state)
 	/* Write one more at 9 */
 	rex.rx_nr = strlen(expected);
 	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 9, 0, &dkey, 1, &iod,
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 9, 0, &dkey, 1, &iod, NULL,
 			    &sgl);
 	assert_int_equal(rc, 0);
 
@@ -686,7 +686,7 @@ punch_model_test(void **state)
 	rex.rx_nr = strlen(latest);
 	d_iov_set(&sgl.sg_iovs[0], (void *)latest, strlen(latest));
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 11, 0, &dkey, 1, &iod,
-			    &sgl);
+			    NULL, &sgl);
 	assert_int_equal(rc, 0);
 
 	/** read old one for sanity */
@@ -774,7 +774,8 @@ simple_multi_update(void **state)
 		iod[i].iod_recxs = NULL;
 	}
 
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 2, iod, sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 2, iod, NULL,
+			    sgl);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -799,7 +800,8 @@ simple_multi_update(void **state)
 			   NULL);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 2, iod, sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 2, iod, NULL,
+			    sgl);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -867,7 +869,7 @@ object_punch_and_fetch(void **state)
 		iod.iod_recxs = NULL;
 
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey,
-				    1, &iod, &sgl);
+				    1, &iod, NULL, &sgl);
 		assert_int_equal(rc, 0);
 
 		*actual_keys[0] = punch_keys[i];
@@ -925,13 +927,12 @@ sgl_test(void **state)
 	recx[0].rx_nr = 1;
 	iod.iod_recxs = recx;
 	iod.iod_eprs = NULL;
-	iod.iod_csums = NULL;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
 	/* Write just index 2 */
 	recx[0].rx_idx = 2;
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey,
-			    1, &iod, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey, 1, &iod,
+			    NULL, &sgl);
 	assert_int_equal(rc, 0);
 
 	memset(rbuf, 'a', sizeof(rbuf));

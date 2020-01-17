@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,7 +120,6 @@ setup_simple_data(struct csum_test_ctx *ctx)
 	ctx->update_iod.iod_recxs = &ctx->recx[0];
 	ctx->update_iod.iod_eprs  = NULL;
 	ctx->update_iod.iod_type  = DAOS_IOD_ARRAY;
-	ctx->update_iod.iod_csums = NULL;
 
 	/** Setup Fetch IOD*/
 	ctx->fetch_iod.iod_name = ctx->update_iod.iod_name;
@@ -128,7 +127,6 @@ setup_simple_data(struct csum_test_ctx *ctx)
 	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
 	ctx->fetch_iod.iod_nr = ctx->update_iod.iod_nr;
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
-	ctx->fetch_iod.iod_csums = NULL;
 }
 
 /**
@@ -168,7 +166,6 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 	ctx->update_iod.iod_nr	= recx_nr;
 	ctx->update_iod.iod_recxs = ctx->recx;
 	ctx->update_iod.iod_eprs  = NULL;
-	ctx->update_iod.iod_csums = NULL;
 	ctx->update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	for (i = 0; i < recx_nr; i++) {
@@ -182,7 +179,6 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
 	ctx->fetch_iod.iod_nr = ctx->update_iod.iod_nr;
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
-	ctx->fetch_iod.iod_csums = NULL;
 	ctx->fetch_iod.iod_eprs = NULL;
 }
 
@@ -207,6 +203,42 @@ cleanup_data(struct csum_test_ctx *ctx)
 {
 	d_sgl_fini(&ctx->update_sgl, true);
 	d_sgl_fini(&ctx->fetch_sgl, true);
+}
+
+static void
+checksum_disabled(void **state)
+{
+	struct csum_test_ctx	 ctx = {0};
+	int			 rc;
+
+	/**
+	 * Setup
+	 */
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_OFF, false, 0);
+
+	/**
+	 * Act
+	 */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
+
+	/**
+	 * Clean up
+	 */
+
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+
 }
 
 static void
@@ -254,8 +286,10 @@ io_with_server_side_verify(void **state)
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
+	unset_csum_fi();
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
+	set_update_csum_fi();
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
@@ -482,7 +516,6 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 	ctx.update_iod.iod_nr	= 1;
 	ctx.update_iod.iod_recxs = ctx.recx;
 	ctx.update_iod.iod_eprs  = NULL;
-	ctx.update_iod.iod_csums = NULL;
 	ctx.update_iod.iod_type  = DAOS_IOD_ARRAY;
 
 	/** Setup Fetch IOD*/
@@ -491,7 +524,6 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 	ctx.fetch_iod.iod_recxs = &args->fetch_recx;
 	ctx.fetch_iod.iod_nr = ctx.update_iod.iod_nr;
 	ctx.fetch_iod.iod_type = ctx.update_iod.iod_type;
-	ctx.fetch_iod.iod_csums = NULL;
 	ctx.fetch_iod.iod_eprs = NULL;
 
 	setup_from_test_args(&ctx, test_arg);
@@ -619,6 +651,8 @@ setup(void **state)
 }
 
 static const struct CMUnitTest tests[] = {
+	{ "DAOS_CSUM00: csum disabled",
+		checksum_disabled, async_disable, test_case_teardown},
 	{ "DAOS_CSUM01: simple update with server side verify",
 		io_with_server_side_verify, async_disable, test_case_teardown},
 	{ "DAOS_CSUM02: Fetch Array Type",

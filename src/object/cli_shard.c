@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2019 Intel Corporation.
+ *  (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
 	daos_iod_t		*iods;
+	struct dcs_iod_csums	*iods_csums;
 	int			 i;
 	int			 rc = 0;
 
@@ -138,34 +139,24 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
 	iods = orw->orw_iod_array.oia_iods;
+	iods_csums = orwo->orw_iod_csum.ca_arrays;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
 		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_csum.ca_arrays->cs_csum[0]++;
-
-	/** Link the checksums returned from the server to the iods to make
-	 *  verifying the data the iod describes easier
-	 */
-	daos_iods_link_dcbs(
-		iods, orw->orw_nr,
-		orwo->orw_csum.ca_arrays,
-		orwo->orw_csum.ca_count);
+		orwo->orw_iod_csum.ca_arrays->ic_data->cs_csum[0]++;
 
 	for (i = 0; i < orw->orw_nr; i++) {
-		daos_iod_t *iod = &iods[i];
+		daos_iod_t		*iod = &iods[i];
+		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 
 		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
 			continue;
 
-		rc = daos_csummer_verify(csummer, iod, &sgls[i]);
+		rc = daos_csummer_verify(csummer, iod, &sgls[i], iod_csum);
 		if (rc != 0)
 			break;
 	}
 
-	/** Remove the extra link to the checksum memory to prevent duplicate
-	 * freeing
-	 */
-	daos_iods_unlink_dcbs(iods, orw->orw_nr);
 	return rc;
 }
 
@@ -424,6 +415,13 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dkey = *dkey;
 	orw->orw_iod_array.oia_iod_nr = nr;
 	orw->orw_iod_array.oia_iods = api_args->iods;
+	if (api_args->iod_csums != NULL) {
+		orw->orw_iod_csums.ca_arrays = api_args->iod_csums;
+		orw->orw_iod_csums.ca_count = api_args->nr;
+	} else {
+		orw->orw_iod_csums.ca_arrays = NULL;
+		orw->orw_iod_csums.ca_count = 0;
+	}
 	orw->orw_iod_array.oia_oiods = args->oiods;
 	orw->orw_iod_array.oia_oiod_nr = (args->oiods == NULL) ?
 					 0 : nr;
