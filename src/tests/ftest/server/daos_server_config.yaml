@@ -74,7 +74,7 @@ server_config_val: !mux
     config_val:
       - "control_log_file"
       - "ABC12cd*()_-"
-      - "FAIL"
+      - "PASS"
       - "gen"
   control_log_mask_wrong_mask:
     config_val:
