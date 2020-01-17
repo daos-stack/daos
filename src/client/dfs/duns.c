@@ -50,6 +50,11 @@
 #define DUNS_MAX_XATTR_LEN	170
 #define DUNS_MIN_XATTR_LEN	85
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+
+#ifndef FUSE_SUPER_MAGIC
+#define FUSE_SUPER_MAGIC	0x65735546
+#endif
+
 #ifdef LUSTRE_INCLUDE
 #define LIBLUSTRE		"liblustreapi.so"
 
@@ -455,6 +460,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	int			len;
 	int			try_multiple = 1;		/* boolean */
 	int			rc;
+	bool			backend_dfuse = false;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -498,6 +504,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 				dirp, strerror(errno));
 			/** TODO - convert errno to rc */
 			return -DER_INVAL;
+		}
+
+		if (fs.f_type == FUSE_SUPER_MAGIC) {
+			backend_dfuse = true;
 		}
 
 #ifdef LUSTRE_INCLUDE
@@ -582,6 +592,49 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
+
+		if (rc == -DER_SUCCESS && backend_dfuse) {
+			/* Setup the DFUSE entry points.  Do this after the
+			 * container has been created as the first access after
+			 * setting these will do a container attach and that
+			 * will fail if the container doesn't exist.
+			 *
+			 * Set both the extended attribures the DFUSE expects
+			 * as well as the Lustre version, which is used by
+			 * duns_resove_path() in container destroy.
+			 */
+
+			rc = lsetxattr(path, "user.uns.pool", pool,
+				       strlen(pool), XATTR_CREATE);
+			if (rc) {
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
+				D_GOTO(err_link, rc = -DER_IO);
+			}
+
+			rc = lsetxattr(path, "user.uns.container", cont,
+				       strlen(cont), XATTR_CREATE);
+			if (rc) {
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
+				D_GOTO(err_link, rc = -DER_IO);
+			}
+
+			/* This next setxattr will cause dfuse to lookup the
+			 * entry point and perform a container connect,
+			 * therefore this xattr will be set in the root of the
+			 * new container, not the directory
+			 */
+
+			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
+				       len + 1, XATTR_CREATE);
+			if (rc) {
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					rc);
+				D_GOTO(err_link, rc = -DER_IO);
+			}
+		}
+
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);

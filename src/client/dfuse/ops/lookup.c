@@ -38,6 +38,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
 		if (rc)
@@ -174,6 +177,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_err, ret = EINVAL);
 	}
 
+	dfs->dfs_attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
 	/* Search the currently connect dfp list, if one matches then use that
@@ -207,7 +211,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
 			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
-			D_GOTO(out_err, ret = rc);
+			D_GOTO(out_err, ret = daos_der2errno(rc));
 		}
 
 	} else {
@@ -234,7 +238,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		if (rc) {
 			DFUSE_LOG_ERROR("Failed container open (%d)",
 					rc);
-			D_GOTO(out_pool, ret = rc);
+			D_GOTO(out_pool, ret = daos_der2errno(rc));
 		}
 
 		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
