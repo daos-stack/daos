@@ -25,7 +25,8 @@ from __future__ import print_function
 
 import traceback
 import ctypes
-from pydaos.raw import DaosApiError, RankList
+from pydaos.raw import RankList
+from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
 
@@ -109,7 +110,7 @@ class BadConnectTest(TestWithServers):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
             if expected_result in ['PASS']:

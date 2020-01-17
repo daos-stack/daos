@@ -115,18 +115,19 @@ class BadCreateTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context,
+                                dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        # Manually set TestPool members before calling create
+        self.pool.mode.value = mode
+        self.pool.uid = uid
+        self.pool.gid = gid
+        self.pool.scm_size.value = size
+        self.pool.name.value = group
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
-            self.pool.get_params(self)
-            # Manually set TestPool members before calling create
-            self.pool.mode.value = mode
-            self.pool.uid = uid
-            self.pool.gid = gid
-            self.pool.scm_size.value = size
-            self.pool.name.value = group
             self.pool.create()
 
             if expected_result in ['FAIL']:
@@ -139,5 +140,3 @@ class BadCreateTest(TestWithServers):
             self.log.error(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            self.destroy_pools(pool)

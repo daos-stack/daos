@@ -58,7 +58,7 @@ class InfoTests(TestWithServers):
         self.pool.create()
 
         # Connect to the pool
-        self.pool.connect(permissions)
+        self.pool.connect(1 << permissions)
 
         # Verify the pool information
         checks = {

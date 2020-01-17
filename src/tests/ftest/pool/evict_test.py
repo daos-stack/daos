@@ -64,7 +64,7 @@ class EvictTests(TestWithServers):
         #if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
-        status = pool.connect(1)
+        status = pool.connect()
         if not status:
             self.fail("Pool connect failed or already connected")
         # Return connected pool

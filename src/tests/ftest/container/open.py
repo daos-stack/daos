@@ -36,6 +36,7 @@ RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
+
 class OpenContainerTest(TestWithServers):
     """
     Test Class Description:
@@ -131,7 +132,7 @@ class OpenContainerTest(TestWithServers):
             self.pool.append(TestPool(self.context, self.log))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
-            self.pool[-1].connect(1)
+            self.pool[-1].connect()
             self.container.append(TestContainer(self.pool[-1]))
             self.container[-1].get_params(self)
             self.container[-1].create()

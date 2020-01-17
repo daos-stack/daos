@@ -58,6 +58,11 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            dmg_command (DmgCommand): DmgCommand used to call dmg command. If
+                control_method is set to dmg, this value needs to be set. It
+                can be obtained by calling self.get_dmg_command() from a test.
+                It'll return the object with -l <Access Point host:port> and
+                --insecure.
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -211,11 +216,11 @@ class TestPool(TestDaosApiBase):
         self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
-    def connect(self, permission=1):
+    def connect(self, permission=2):
         """Connect to the pool.
 
         Args:
-            permission (int, optional): connect permission. Defaults to 1.
+            permission (int, optional): connect permission. Defaults to 2.
 
         Returns:
             bool: True if the pool has been connected; False if the pool was
@@ -223,7 +228,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and not self.connected:
-            kwargs = {"flags": 1 << permission}
+            kwargs = {"flags": permission}
             self.log.info(
                 "Connecting to pool %s with permission %s (flag: %s)",
                 self.uuid, permission, kwargs["flags"])

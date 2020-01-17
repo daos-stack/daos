@@ -23,7 +23,12 @@
 '''
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
+
+RESULT_PASS = "PASS"
+RESULT_FAIL = "FAIL"
+
 
 class Permission(TestWithServers):
     """Test pool permissions.
@@ -55,15 +60,15 @@ class Permission(TestWithServers):
             self.cancelForTicket("DAOS-3442")
 
         if createmode == 73:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
         if createmode == 511 and permissions == 0:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode in [146, 511] and permissions == 1:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode in [292, 511] and permissions == 2:
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         else:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
 
         # initialize a python pool object then create the underlying
         # daos storage
@@ -78,13 +83,17 @@ class Permission(TestWithServers):
             self.pool.connect(1 << permissions)
             self.multi_log("Pool Connect successful", "debug")
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at pool.connect, but it " +
+                    "passed.\n")
 
-        except DaosApiError as excep:
+        except TestFail as excep:
             self.log.error(str(excep))
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at " +
+                    "pool.connect.\n")
 
     def test_filemodification(self):
         """Test ID: DAOS-???.
@@ -99,13 +108,13 @@ class Permission(TestWithServers):
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
 
         if createmode == 73:
-            expected_result = 'FAIL'
+            expected_result = RESULT_FAIL
         elif createmode in [146, 511]:
             permissions = 1
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
         elif createmode == 292:
             permissions = 2
-            expected_result = 'PASS'
+            expected_result = RESULT_PASS
 
         # initialize a python pool object then create the underlying
         # daos storage
@@ -118,7 +127,19 @@ class Permission(TestWithServers):
         try:
             self.pool.connect(1 << permissions)
             self.multi_log("Pool Connect successful", "debug")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at pool.connect but it " +
+                    "passed.\n")
+        except TestFail as excep:
+            self.log.error(str(excep))
+            self.log.error(traceback.format_exc())
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at " +
+                    "pool.connect.\n")
 
+        try:
             self.container = DaosContainer(self.context)
             self.multi_log("Contianer initialisation successful", "debug")
 
@@ -136,10 +157,14 @@ class Permission(TestWithServers):
 
             self.container.write_an_obj(thedata, size, dkey, akey)
             self.multi_log("Container write successful", "debug")
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail at container operations " +
+                    "but it passed.\n")
 
         except DaosApiError as excep:
             self.log.error(str(excep))
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == RESULT_PASS:
+                self.fail(
+                    "Test was expected to pass but it failed at container " +
+                    "operations.\n")

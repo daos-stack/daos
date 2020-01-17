@@ -32,6 +32,7 @@ from avocado.core.exceptions import TestFail
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
 
+
 class PoolSvc(TestWithServers):
     """
     Tests svc argument while pool create.
@@ -56,6 +57,8 @@ class PoolSvc(TestWithServers):
         self.pool.svcn.update(createsvc[0])
         try:
             self.pool.create()
+            if expected_result == RESULT_FAIL:
+                self.fail("Test was expected to fail, but it passed.\n")
         except TestFail as excep:
             print("## TestFail exception is caught at pool create!")
             print(excep)
@@ -66,8 +69,7 @@ class PoolSvc(TestWithServers):
         # FAIL case should fail at above pool create, so do below only for
         # PASS case
         if expected_result == RESULT_PASS:
-            #self.log.debug("## self.pool.svc_ranks = %s" %
-            #               self.pool.svc_ranks)
+            self.log.debug("self.pool.svc_ranks = %s" % self.pool.svc_ranks)
             self.assertTrue(999999 not in self.pool.svc_ranks,
                             "999999 is in the pool's service ranks.")
             self.assertEqual(len(self.pool.svc_ranks), self.pool.svcn.value,
@@ -88,23 +90,18 @@ class PoolSvc(TestWithServers):
                     self.pool.exclude([leader], self.d_log)
                     # perform pool disconnect, try connect again and disconnect
                     self.pool.disconnect()
-                    self.pool.connect(1)
+                    self.pool.connect()
                     self.pool.disconnect()
                     # kill another server which is not a leader and exclude it
                     server = DaosServer(self.context, self.server_group, 3)
                     server.kill(1)
                     self.pool.exclude([3], self.d_log)
                     # perform pool connect
-                    self.pool.connect(1)
-
-                if expected_result == RESULT_FAIL:
-                    self.fail("Test was expected to fail but it passed.\n")
-
+                    self.pool.connect()
             # Use TestFail instead of DaosApiError because create method has
             # @fail_on
             except TestFail as excep:
                 print("## TestFail exception caught")
                 print(excep)
                 print(traceback.format_exc())
-                if expected_result == RESULT_PASS:
-                    self.fail("Test was expected to pass but it failed.\n")
+                self.fail("Test was expected to pass but it failed.\n")

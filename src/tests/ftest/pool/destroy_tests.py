@@ -342,7 +342,7 @@ class DestroyTests(TestWithServers):
 
         # Connect to the pool
         self.assertTrue(
-            self.pool.connect(1), "Pool connect failed before destroy")
+            self.pool.connect(), "Pool connect failed before destroy")
 
         # Destroy pool with direct API call (no disconnect)
         self.log.info("Attempting to destroy a connected pool")
@@ -393,7 +393,7 @@ class DestroyTests(TestWithServers):
 
         # Connect to the pool
         self.assertTrue(
-            self.pool.connect(1), "Pool connect failed before destroy")
+            self.pool.connect(), "Pool connect failed before destroy")
 
         # Create a container
         self.container = TestContainer(self.pool)

@@ -78,23 +78,23 @@ class GlobalHandle(TestWithServers):
         self.pool.get_params(self)
         self.pool.create()
 
-        self.pool.pool.connect(1 << 1)
+        self.pool.connect()
 
-        # create a container just to make sure handle is good
-        self.container = DaosContainer(self.context)
-        self.container.create(self.pool.pool.handle)
-
-        # create a global handle
-        iov_len, buf_len, buf = self.pool.pool.local2global()
-
-        # this should work in the future but need on-line server addition
-        #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
-        #p = Process(target=check_handle, args=arg_list)
-        #p.start()
-        #p.join()
-        # for now verifying global handle in the same process which is not
-        # the intended use case
         try:
+            # create a container just to make sure handle is good
+            self.container = DaosContainer(self.context)
+            self.container.create(self.pool.pool.handle)
+
+            # create a global handle
+            iov_len, buf_len, buf = self.pool.pool.local2global()
+
+            # this should work in the future but need on-line server addition
+            #arg_list = (buf_len, iov_len, buf, pool.get_uuid_str(), 0)
+            #p = Process(target=check_handle, args=arg_list)
+            #p.start()
+            #p.join()
+            # for now verifying global handle in the same process which is not
+            # the intended use case
             self.check_handle(buf_len, iov_len, buf,
                               self.pool.pool.get_uuid_str(), 0)
 

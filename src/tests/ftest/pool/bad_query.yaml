@@ -29,5 +29,3 @@ querytests:
           info:
              - NULL
              - PASS
-   connectmode:
-     mode: 2

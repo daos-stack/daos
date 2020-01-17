@@ -93,7 +93,7 @@ class PoolAttributeTest(TestWithServers):
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
-        self.pool.pool.connect(1 << 1)
+        self.pool.connect()
 
     def create_data_set(self):
         """
