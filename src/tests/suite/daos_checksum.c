@@ -40,6 +40,11 @@ set_fetch_csum_fi()
 	daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
 }
 static void
+set_data_corrupt_fi()
+{
+	daos_fail_loc_set(DAOS_CHECKSUM_CDATA_CORRUPT | DAOS_FAIL_ALWAYS);
+}
+static void
 unset_csum_fi()
 {
 	daos_fail_loc_set(0); /** turn off fault injection */
@@ -257,6 +262,14 @@ io_with_server_side_verify(void **state)
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, -DER_CSUM);
+	cleanup_cont_obj(&ctx);
+	unset_csum_fi();
+
+	/**5. Data corruption. Update should fail due CRC mismatch */
+	set_data_corrupt_fi();
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
