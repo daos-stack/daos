@@ -54,7 +54,7 @@ do {									\
 
 #define DCHECK(rc, format, ...)						\
 do {									\
-        int _rc = (rc);							\
+	int _rc = (rc);							\
 									\
 	if (_rc < 0) {							\
 		fprintf(stderr, "ERROR (%s:%d): %d: "			\
@@ -62,7 +62,7 @@ do {									\
 			##__VA_ARGS__);					\
 		fflush(stderr);						\
 		return -1;						\
-        }                                                               \
+	}								\
 } while (0)
 
 bool daos_initialized;
@@ -160,7 +160,7 @@ daos_fio_init(struct thread_data *td)
 	if (dd->io_us == NULL)
 		ERR("Failed to allocate IO queue\n");
 
-	rc = daos_init(); 
+	rc = daos_init();
 	if (rc != -DER_ALREADY && rc)
 		DCHECK(rc, "Failed to initialize daos");
 
@@ -330,8 +330,8 @@ daos_fio_queue(struct thread_data *td, struct io_u *io_u)
 	if (dd->queued == td->o.iodepth)
 		return FIO_Q_BUSY;
 
-	io->sgl.sg_nr = 1; 
-	io->sgl.sg_nr_out = 0; 
+	io->sgl.sg_nr = 1;
+	io->sgl.sg_nr_out = 0;
 	d_iov_set(&io->iov, io_u->xfer_buf, io_u->xfer_buflen);
 	io->sgl.sg_iovs = &io->iov;
 
@@ -345,7 +345,8 @@ daos_fio_queue(struct thread_data *td, struct io_u *io_u)
 		DCHECK(rc, "dfs_write() failed.");
 		break;
 	case DDIR_READ:
-		rc = dfs_read(dd->dfs, dd->obj, &io->sgl, offset, &ret, &io->ev);
+		rc = dfs_read(dd->dfs, dd->obj, &io->sgl, offset, &ret,
+			      &io->ev);
 		DCHECK(rc, "dfs_read() failed.");
 		break;
 	default:

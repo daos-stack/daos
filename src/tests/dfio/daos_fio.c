@@ -54,7 +54,7 @@ do {									\
 
 #define DCHECK(rc, format, ...)						\
 do {									\
-        int _rc = (rc);							\
+	int _rc = (rc);							\
 									\
 	if (_rc < 0) {							\
 		fprintf(stderr, "ERROR (%s:%d): %d: "			\
@@ -62,7 +62,7 @@ do {									\
 			##__VA_ARGS__);					\
 		fflush(stderr);						\
 		return -1;						\
-        }                                                               \
+	}								\
 } while (0)
 
 bool daos_initialized;
@@ -306,7 +306,8 @@ daos_fio_prep(struct thread_data fio_unused *td, struct io_u *io_u)
 struct ioengine_ops ioengine = {
 	.name			= "fio_daos_dfs",
 	.version		= FIO_IOOPS_VERSION,
-	.flags			= FIO_DISKLESSIO | FIO_NODISKUTIL | FIO_RAWIO | FIO_SYNCIO,
+	.flags			= FIO_DISKLESSIO | FIO_NODISKUTIL | FIO_RAWIO |
+	FIO_SYNCIO,
 	.init			= daos_fio_init,
 	.prep			= daos_fio_prep,
 	.cleanup		= daos_fio_cleanup,
