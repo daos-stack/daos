@@ -283,13 +283,15 @@ static int daos_fio_getevents(struct thread_data *td, unsigned int min,
 			if (!ev_flag)
 				continue;
 
+			if (io->ev.ev_error)
+				io_u->error = io->ev.ev_error;
+			else
+				io_u->resid = 0;
 			dd->io_us[events] = io_u;
 			dd->queued--;
 			daos_event_fini(&io->ev);
 			io->complete = true;
 			events++;
-			io_u->resid = 0;
-			io_u->error = 0;
 		}
 		if (events < min)
 			continue;
