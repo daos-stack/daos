@@ -69,7 +69,7 @@ class PoolSvc(TestWithServers):
         # FAIL case should fail at above pool create, so do below only for
         # PASS case
         if expected_result == RESULT_PASS:
-            self.log.debug("self.pool.svc_ranks = %s" % self.pool.svc_ranks)
+            self.log.debug("self.pool.svc_ranks = %s", self.pool.svc_ranks)
             self.assertTrue(999999 not in self.pool.svc_ranks,
                             "999999 is in the pool's service ranks.")
             self.assertEqual(len(self.pool.svc_ranks), self.pool.svcn.value,

@@ -133,7 +133,6 @@ class Permission(TestWithServers):
                     "passed.\n")
         except TestFail as excep:
             self.log.error(str(excep))
-            self.log.error(traceback.format_exc())
             if expected_result == RESULT_PASS:
                 self.fail(
                     "Test was expected to pass but it failed at " +

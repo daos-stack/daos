@@ -188,7 +188,7 @@ class EvictTests(TestWithServers):
         pool_tgt_ut = [num for num in range(int(len(self.hostlist_servers)/2))]
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        #non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))

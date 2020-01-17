@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import time
 import traceback
 import uuid
 
@@ -170,6 +169,3 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][3])
-
-if __name__ == "__main__":
-    main()
