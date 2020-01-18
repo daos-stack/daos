@@ -24,6 +24,8 @@
 package common
 
 import (
+	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -39,29 +41,19 @@ func HasPort(addr string) bool {
 // SplitPort separates port from host in address and can apply default port if
 // address doesn't contain one.
 func SplitPort(addrPattern string, defaultPort int) (string, string, error) {
-	var port string
-	hp := strings.Split(addrPattern, ":")
+	host, port, err := net.SplitHostPort(addrPattern)
+	if err != nil {
+		if !strings.Contains(err.Error(), "missing port in address") {
+			return "", "", err
+		}
 
-	switch len(hp) {
-	case 1:
-		// no port specified, use default
-		port = strconv.Itoa(defaultPort)
-	case 2:
-		port = hp[1]
-		if port == "" {
-			return "", "", errors.Errorf("invalid port %q", port)
-		}
-		if _, err := strconv.Atoi(port); err != nil {
-			return "", "", errors.WithMessagef(err, "cannot parse %q",
-				addrPattern)
-		}
-	default:
-		return "", "", errors.Errorf("cannot parse %q", addrPattern)
+		return net.SplitHostPort(
+			fmt.Sprintf("%s:%d", addrPattern, defaultPort))
 	}
 
-	if hp[0] == "" {
-		return "", "", errors.Errorf("invalid host %q", hp[0])
+	if _, err := strconv.Atoi(port); err != nil {
+		return "", "", errors.Errorf("invalid port %q", port)
 	}
 
-	return hp[0], port, nil
+	return host, port, err
 }

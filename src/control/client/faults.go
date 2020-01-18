@@ -34,12 +34,12 @@ var (
 		"",
 	)
 	FaultConfigBadControlPort = clientFault(
-		code.ClientConfigBadParam,
+		code.ClientConfigBadControlPort,
 		"invalid control port in configuration",
 		"specify a nonzero control port in configuration ('port' parameter) and retry the client application",
 	)
 	FaultConfigBadAccessPoints = clientFault(
-		code.ClientConfigBadParam,
+		code.ClientConfigBadAccessPoints,
 		"invalid list of access points in configuration",
 		"only a single access point is currently supported, specify only one and retry the client application",
 	)

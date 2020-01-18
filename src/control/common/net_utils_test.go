@@ -56,10 +56,9 @@ func TestUtils_SplitPort(t *testing.T) {
 		"ip has port":   {"192.168.1.1:10001", 10000, "192.168.1.1", "10001", ""},
 		"ip no port":    {"192.168.1.1", 10000, "192.168.1.1", "10000", ""},
 		"empty port":    {"192.168.1.1:", 10000, "", "", "invalid port \"\""},
-		"bad port": {"192.168.1.1:abc", 10000, "", "",
-			"cannot parse \"192.168.1.1:abc\": strconv.Atoi: parsing \"abc\": invalid syntax"},
-		"bad host":    {":10001", 10000, "", "", "invalid host \"\""},
-		"bad address": {"192.168.1.1:10001:", 10000, "", "", "cannot parse \"192.168.1.1:10001:\""},
+		"bad port":      {"192.168.1.1:abc", 10000, "", "", "invalid port \"abc\""},
+		"bad address": {"192.168.1.1:10001:", 10000, "", "",
+			"address 192.168.1.1:10001:: too many colons in address"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h, p, err := SplitPort(tc.addr, tc.dPort)

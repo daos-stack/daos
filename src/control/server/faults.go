@@ -32,34 +32,34 @@ var (
 		code.ServerUnknown,
 		"unknown control server error", "")
 	FaultBadConfig = serverFault(
-		code.ServerConfigBadParam,
+		code.ServerBadConfig,
 		"insufficient information in configuration",
 		"supply path to valid configuration file, use examples for reference",
 	)
-	FaultConfigBadControlPort = serverFault(
-		code.ServerConfigBadParam,
-		"invalid control port in configuration",
-		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
-	)
-	FaultConfigNoProvider = serverFault(
-		code.ServerConfigBadParam,
-		"provider not specified in configuration",
-		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
-	)
 	FaultConfigNoPath = serverFault(
-		code.ServerConfigBadParam,
+		code.ServerNoConfigPath,
 		"configuration file path not set",
 		"supply the path to a server configuration file when restarting the control server with commandline option '-o'",
 	)
-	FaultConfigNoServers = serverFault(
-		code.ServerConfigBadParam,
-		"no DAOS IO Servers specified in configuration",
-		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
+	FaultConfigBadControlPort = serverFault(
+		code.ServerConfigBadControlPort,
+		"invalid control port in configuration",
+		"specify a nonzero control port in configuration ('port' parameter) and restart the control server",
 	)
 	FaultConfigBadAccessPoints = serverFault(
-		code.ServerConfigBadParam,
+		code.ServerConfigBadAccessPoints,
 		"invalid list of access points in configuration",
 		"only a single access point is currently supported, specify only one and restart the control server",
+	)
+	FaultConfigNoProvider = serverFault(
+		code.ServerConfigBadProvider,
+		"provider not specified in configuration",
+		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
+	)
+	FaultConfigNoServers = serverFault(
+		code.ServerConfigNoServers,
+		"no DAOS IO Servers specified in configuration",
+		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
 )
 

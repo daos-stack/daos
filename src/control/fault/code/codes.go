@@ -58,11 +58,17 @@ const (
 
 	// Client fault codes
 	ClientUnknown Code = iota + 500
-	ClientConfigBadParam
+	ClientConfigBadControlPort
+	ClientConfigBadAccessPoints
 
 	// Server fault codes
 	ServerUnknown Code = iota + 600
-	ServerConfigBadParam
+	ServerBadConfig
+	ServerNoConfigPath
+	ServerConfigBadControlPort
+	ServerConfigBadAccessPoints
+	ServerConfigBadProvider
+	ServerConfigNoServers
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900
