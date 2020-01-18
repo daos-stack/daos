@@ -192,7 +192,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 
 	// kind of a hack, but don't want to modify the hostlist library to
 	// accept invalid hostnames.
-	out = strings.ReplaceAll(out, rankPrefix, "")
+	out = strings.Replace(out, rankPrefix, "", -1)
 	log.Info(out)
 
 	return nil
