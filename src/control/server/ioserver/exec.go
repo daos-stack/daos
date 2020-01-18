@@ -124,7 +124,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.setStarted()
 	defer r.setStopped()
 
-	return errors.Wrapf(exitStatus(r.cmd.Wait()), "%s (instance %d) exited", r.cmd.Path, r.Config.Index)
+	return errors.Wrapf(exitStatus(cmd.Wait()), "%s (instance %d) exited", binPath, r.Config.Index)
 }
 
 // Start asynchronously starts the IOServer instance and waits for exit after
