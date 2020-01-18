@@ -122,13 +122,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 }
 
 static void
-rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-			   int failed_tgt)
-{
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, true, false);
-}
-
-static void
 reintegrate_test(void **state)
 {
 	test_arg_t		*arg = *state;

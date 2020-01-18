@@ -351,7 +351,8 @@ is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt)
 	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
 					      idx, &tgt);
 	D_ASSERT(rc == 1);
-	if (tgt->ta_comp.co_status != PO_COMP_ST_UPIN) {
+	if (tgt->ta_comp.co_status != PO_COMP_ST_UPIN &&
+			tgt->ta_comp.co_status != PO_COMP_ST_UP) {
 		D_DEBUG(DB_REBUILD, "%d/%d target status %d\n",
 			rank, idx, tgt->ta_comp.co_status);
 		return false;

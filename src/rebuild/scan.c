@@ -569,12 +569,14 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
+	struct 			pool_target *my_tgts;
 	daos_unit_oid_t		oid = ent->ie_oid;
 	unsigned int		tgt_array[LOCAL_ARRAY_SIZE];
 	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int		*tgts = NULL;
 	unsigned int		*shards = NULL;
 	int			rebuild_nr = 0;
+	int 			num_targets;
 	d_rank_t		myrank;
 	int			i;
 	int			rc;
@@ -630,6 +632,15 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
+	num_targets = pool_map_find_target_by_rank_idx(map->pl_poolmap, myrank,
+			PO_COMP_ID_ALL, &my_tgts);
+	for(i = 0; i < num_targets; ++i) {
+		if (my_tgts[i].ta_comp.co_status == PO_COMP_ST_UP) {
+			vos_obj_delete(param->ip_hdl, oid);
+			break;
+		}
+	}
+
 	D_ASSERT(rebuild_nr <= arg->rebuild_tgt_nr);
 	for (i = 0; i < rebuild_nr; i++) {
 		struct pool_target *target;
@@ -641,7 +652,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
-
 		/* During rebuild test, it will manually exclude some target to
 		 * trigger the rebuild, then later add it back, so some objects
 		 * might exist on some illegal target, so they might use its
