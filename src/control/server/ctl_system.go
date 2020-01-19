@@ -51,7 +51,10 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 
 	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
 
-	// currently just update newly unresponsive or errored members
+	// update either:
+	// - members unresponsive to ping
+	// - members with stopped processes
+	// - members with ping errors
 	badRanks := make(map[uint32]system.MemberState)
 	for _, addr := range hostAddrs {
 		hResults, err := harnessAction(ctx, leader.msClient,
@@ -62,7 +65,8 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 
 		for _, result := range hResults {
 			if result.State == system.MemberStateUnresponsive ||
-				result.State == system.MemberStateErrored {
+				result.State == system.MemberStateErrored ||
+				result.State == system.MemberStateStopped {
 
 				badRanks[result.Rank] = result.State
 			}
@@ -91,8 +95,8 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	resp := &ctlpb.SystemQueryResp{}
 
-	// verify we are running on a host with the MS leader and therefore will
-	// have membership list.
+	// Verify we are running on a host with the MS leader and therefore will
+	// have membership list. Don't require MS to be started.
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
@@ -100,12 +104,10 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 
 	svc.log.Debug("Received SystemQuery RPC")
 
-	if mi.IsStarted() {
-		// update status of each system member
-		// TODO: should only given rank be updated if supplied in request?
-		if err := svc.updateMemberStatus(ctx, mi); err != nil {
-			return nil, err
-		}
+	// Update status of each system member.
+	// TODO: Should only given rank be updated if supplied in request?
+	if err := svc.updateMemberStatus(ctx, mi); err != nil {
+		return nil, err
 	}
 
 	var members []*system.Member
