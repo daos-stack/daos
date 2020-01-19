@@ -72,7 +72,7 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 
 func (tr *TestRunner) Stop() error { return nil }
 
-func (tr *TestRunner) IsStarted() bool { return true }
+func (tr *TestRunner) IsRunning() bool { return true }
 
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg

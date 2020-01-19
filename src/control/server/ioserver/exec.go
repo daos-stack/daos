@@ -53,7 +53,7 @@ type (
 	Runner struct {
 		Config  *Config
 		log     logging.Logger
-		started uint32
+		running uint32
 		cmd     *exec.Cmd
 	}
 )
@@ -121,7 +121,7 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	}
 	r.cmd = cmd
 
-	r.setStarted()
+	r.setRunning()
 	defer r.setStopped()
 
 	return errors.Wrapf(exitStatus(cmd.Wait()), "%s (instance %d) exited", binPath, r.Config.Index)
@@ -146,21 +146,21 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	return nil
 }
 
-func (r *Runner) setStarted() {
-	atomic.StoreUint32(&r.started, 1)
+func (r *Runner) setRunning() {
+	atomic.StoreUint32(&r.running, 1)
 }
 
 func (r *Runner) setStopped() {
-	atomic.StoreUint32(&r.started, 0)
+	atomic.StoreUint32(&r.running, 0)
 }
 
-func (r *Runner) IsStarted() bool {
-	return atomic.LoadUint32(&r.started) == 1
+func (r *Runner) IsRunning() bool {
+	return atomic.LoadUint32(&r.running) == 1
 }
 
 func (r *Runner) Stop() error {
-	if !r.IsStarted() {
-		return errors.Errorf("instance %d is not started", r.Config.Index)
+	if !r.IsRunning() {
+		return errors.Errorf("instance %d is not running", r.Config.Index)
 	}
 	return r.cmd.Process.Kill()
 }
