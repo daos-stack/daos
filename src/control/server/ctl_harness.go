@@ -60,6 +60,7 @@ type RemoteHarnessReq struct {
 	Action HarnessAction
 	Addr   string
 	Ranks  []uint32
+	Force  bool
 }
 
 func NewRemoteHarnessReq(action HarnessAction, addr string, ranks ...uint32) *RemoteHarnessReq {
@@ -95,7 +96,7 @@ func harnessAction(ctx context.Context, msClient *mgmtSvcClient, req *RemoteHarn
 	}
 
 	rpcResp, err := requestFn(ctx, req.Addr,
-		&mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: float32(timeout)})
+		&mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: float32(timeout), Force: req.Force})
 	if err != nil {
 		return nil, err
 	}

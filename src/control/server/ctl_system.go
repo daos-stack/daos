@@ -51,10 +51,10 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 
 	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
 
-	// update either:
+	// Update either:
 	// - members unresponsive to ping
 	// - members with stopped processes
-	// - members with ping errors
+	// TODO: update members with ping errors
 	badRanks := make(map[uint32]system.MemberState)
 	for _, addr := range hostAddrs {
 		hResults, err := harnessAction(ctx, leader.msClient,
@@ -65,7 +65,6 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 
 		for _, result := range hResults {
 			if result.State == system.MemberStateUnresponsive ||
-				result.State == system.MemberStateErrored ||
 				result.State == system.MemberStateStopped {
 
 				badRanks[result.Rank] = result.State
@@ -185,7 +184,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerIns
 // one or more data-plane instances (DAOS system members).
 //
 // TODO: specify the ranks managed by the harness that should be started.
-func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
+func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstance, force bool) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
 	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
@@ -202,7 +201,9 @@ func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstanc
 		}
 
 		hResults, err := harnessAction(ctx, leader.msClient,
-			NewRemoteHarnessReq(HarnessStop, addr))
+			&RemoteHarnessReq{
+				Action: HarnessStop, Addr: addr, Force: force,
+			})
 		if err != nil {
 			return nil, err
 		}
@@ -211,7 +212,9 @@ func (svc *ControlService) shutdown(ctx context.Context, leader *IOServerInstanc
 	}
 
 	hResults, err := harnessAction(ctx, leader.msClient,
-		NewRemoteHarnessReq(HarnessStop, leaderMember.Addr.String()))
+		&RemoteHarnessReq{
+			Action: HarnessStop, Addr: leaderMember.Addr.String(), Force: force,
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -242,10 +245,6 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 
 	svc.log.Debug("Received SystemStop RPC")
 
-	if !mi.IsStarted() {
-		return nil, errors.New("management service is not running")
-	}
-
 	// TODO: consider locking to prevent join attempts when shutting down
 
 	if req.Prep {
@@ -264,7 +263,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 
 	if req.Kill {
 		// shutdown by stopping system members
-		stopResults, err := svc.shutdown(ctx, mi)
+		stopResults, err := svc.shutdown(ctx, mi, req.Force)
 		if err != nil {
 			return nil, err
 		}

@@ -34,6 +34,7 @@ import "acl.proto"; // ACL-related requests
 message RanksReq {
 	repeated uint32 ranks = 1;
 	float timeout = 2;
+	bool force = 3;
 }
 
 // Generic response containing DER result from multiple ranks.

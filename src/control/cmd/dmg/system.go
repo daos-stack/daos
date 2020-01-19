@@ -195,13 +195,14 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
+	Force bool `long:"force" description:"Force stop DAOS system members"`
 }
 
 // Execute is run when systemStopCmd activates
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	req := client.SystemStopReq{Prep: true, Kill: true}
+	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
 	resp, err := cmd.conns.SystemStop(req)
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")

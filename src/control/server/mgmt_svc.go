@@ -808,6 +808,14 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
+		if req.Force {
+			if err := i.Stop(); err != nil {
+				svc.log.Error(errors.Wrapf(err,
+					"rank %d force stop", *rank).Error())
+			}
+			continue
+		}
+
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank,
 			&mgmtpb.KillRankReq{Rank: *rank, Force: false})
 
