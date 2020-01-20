@@ -67,22 +67,6 @@ public class DaosFsClientIT {
   }
 
   @Test
-  public void testCreateNewPool()throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolScmSize(1*1024*1024*1024);
-    DaosFsClient client = null;
-    try{
-      client = builder.build();
-      Assert.assertTrue(client != null);
-    }finally {
-      if(client != null){
-        client.disconnect();
-        DaosFsClient.destroyPool(Constants.POOL_DEFAULT_SERVER_GROUP, client.getPoolId(), true);
-      }
-    }
-  }
-
-  @Test
   public void testFsClientCachePerPoolAndContainer()throws Exception{
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
     builder.poolId(poolId).containerId(contId);

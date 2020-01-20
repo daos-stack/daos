@@ -35,13 +35,13 @@ public final class Constants {
   public static final String POOL_DEFAULT_RANKS = "0";
   public static final int POOL_DEFAULT_SVC_REPLICS = 1;
 
-  public static final int FILE_DEFAULT_CHUNK_SIZE = 8192;
+  public static final int FILE_DEFAULT_CHUNK_SIZE = 0; // DAOS will decide what default is. 1MB for now.
   public static final int FILE_DEFAULT_FILE_MODE = 0755;
 
+  // flags for setting file external attribute, see dfs_setxattr().
   public static final int SET_XATTRIBUTE_NO_CHECK = 0;
   public static final int SET_XATTRIBUTE_CREATE = 1;
   public static final int SET_XATTRIBUTE_REPLACE = 2;
-
 
   public static final int ERROR_CODE_NOT_EXIST = 2;
   public static final int ERROR_CODE_FILE_EXIST = 17;

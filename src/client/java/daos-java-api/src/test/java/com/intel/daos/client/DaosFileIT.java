@@ -259,7 +259,7 @@ public class DaosFileIT {
     Assert.assertTrue(attributes.getLength() == 0);
     Assert.assertTrue(attributes.getObjId() != 0);
     Assert.assertTrue(attributes.getBlockCnt() == 0);
-    Assert.assertTrue(attributes.getBlockSize() == Constants.FILE_DEFAULT_CHUNK_SIZE);
+    Assert.assertTrue(attributes.getBlockSize() == 1024*1024);
     Assert.assertTrue(attributes.getMode() != 0);
     Assert.assertTrue(attributes.getAccessTime() != null);
     Assert.assertTrue(attributes.getModifyTime() != null);

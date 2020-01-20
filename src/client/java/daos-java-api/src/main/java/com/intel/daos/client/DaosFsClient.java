@@ -195,9 +195,6 @@ public final class DaosFsClient {
     if (inited) {
       return;
     }
-    if (poolId == null) {
-      poolId = createPool(builder);
-    }
 
     poolPtr = daosOpenPool(poolId, builder.serverGroup,
             builder.ranks,
@@ -241,31 +238,6 @@ public final class DaosFsClient {
 
   public String getContId() {
     return contId;
-  }
-
-  /**
-   * create pool based on information from {@link DaosFsClientBuilder}.
-   *
-   * @param builder
-   * cloned builder instance
-   * @return pool id
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  public static String createPool(DaosFsClientBuilder builder) throws IOException {
-    String poolInfo = daosCreatePool(builder.serverGroup,
-            builder.poolSvcReplics,
-            builder.poolMode,
-            builder.poolScmSize,
-            builder.poolNvmeSize);
-    log.info("opened pool: {}", poolInfo);
-    String[] fields = poolInfo.split(" ");
-    String pooId = fields[0];
-    if (fields.length > 1) {
-      builder.ranks = fields[1];
-      builder.poolId = pooId;
-    }
-    return pooId;
   }
 
   /**
@@ -313,7 +285,7 @@ public final class DaosFsClient {
     disconnect(false);
   }
 
-  private void disconnect(boolean force) throws IOException {
+  private synchronized void disconnect(boolean force) throws IOException {
     decrementRef();
     if (force || refCnt <= 0) {
       if (inited && dfsPtr != 0) {
@@ -617,43 +589,6 @@ public final class DaosFsClient {
    */
   native boolean delete(long dfsPtr, String parentPath, String name, boolean force) throws IOException;
 
-
-  //DAOS corresponding methods
-
-  /**
-   * create DAOS pool.
-   *
-   * @param serverGroup
-   * DAOS server group
-   * @param poolSvcReplics
-   * pool service replications
-   * @param mode
-   * pool mode, see {@link DaosFsClientBuilder#poolMode(int)}
-   * @param scmSize
-   * scm size
-   * @param nvmeSize
-   * nvme size
-   * @return poold id
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native String daosCreatePool(String serverGroup, int poolSvcReplics, int mode, long scmSize,
-                                      long nvmeSize) throws IOException;
-
-  /**
-   * destroy pool.
-   *
-   * @param serverGroup
-   * DAOS server group
-   * @param poolId
-   * pool id
-   * @param force
-   * force to destroy pool
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void destroyPool(String serverGroup, String poolId, boolean force) throws IOException;
-
   /**
    * open pool.
    *
@@ -894,7 +829,10 @@ public final class DaosFsClient {
    * @param value
    * attribute value
    * @param flags
-   * attribute flags
+   * attribute flags, possible values are,
+   * {@link Constants#SET_XATTRIBUTE_REPLACE}
+   * {@link Constants#SET_XATTRIBUTE_CREATE}
+   * {@link Constants#SET_XATTRIBUTE_NO_CHECK}
    * @throws IOException
    * {@link DaosIOException}
    */
@@ -1075,14 +1013,11 @@ public final class DaosFsClient {
     private String contId;
     private String ranks = Constants.POOL_DEFAULT_RANKS;
     private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
-    private int poolSvcReplics = Constants.POOL_DEFAULT_SVC_REPLICS;
     private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
     private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
     private int poolMode = Constants.MODE_POOL_GROUP_READWRITE | Constants.MODE_POOL_OTHER_READWRITE |
             Constants.MODE_POOL_USER_READWRITE;
-    private long poolScmSize;
-    private long poolNvmeSize;
-    private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE; //8k
+    private int defaultFileChunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private int defaultFileAccessFlags = Constants.ACCESS_FLAG_FILE_READWRITE;
     private int defaultFileMode = Constants.FILE_DEFAULT_FILE_MODE;
     private DaosObjectType defaultFileObjType = DaosObjectType.OC_SX;
@@ -1120,18 +1055,6 @@ public final class DaosFsClient {
      */
     public DaosFsClientBuilder serverGroup(String serverGroup) {
       this.serverGroup = serverGroup;
-      return this;
-    }
-
-    /**
-     * number of service replics when create pool.
-     *
-     * @param poolSvcReplics
-     * default is 1
-     * @return DaosFsClientBuilder
-     */
-    public DaosFsClientBuilder poolSvcReplics(int poolSvcReplics) {
-      this.poolSvcReplics = poolSvcReplics;
       return this;
     }
 
@@ -1195,16 +1118,6 @@ public final class DaosFsClient {
       return this;
     }
 
-    public DaosFsClientBuilder poolScmSize(long poolScmSize) {
-      this.poolScmSize = poolScmSize;
-      return this;
-    }
-
-    public DaosFsClientBuilder poolNvmeSize(long poolNvmeSize) {
-      this.poolNvmeSize = poolNvmeSize;
-      return this;
-    }
-
     /**
      * set default file access flag.
      *
@@ -1254,7 +1167,7 @@ public final class DaosFsClient {
      * calling {@link DaosFile#createNewFile(int, DaosObjectType, int, boolean)}
      *
      * @param defaultFileChunkSize
-     * default is 8k
+     * default is 0. DAOS will decide what default is. 1MB for now.
      * @return DaosFsClientBuilder
      */
     public DaosFsClientBuilder defaultFileChunkSize(int defaultFileChunkSize) {
@@ -1305,7 +1218,7 @@ public final class DaosFsClient {
       if (poolId != null) {
         client = getClientForCont(copied);
       } else {
-        client = new DaosFsClient(copied);
+        throw new IllegalArgumentException("need pool UUID.");
       }
       client.init();
       client.incrementRef();
