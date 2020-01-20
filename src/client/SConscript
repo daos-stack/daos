@@ -8,7 +8,7 @@ def scons():
     SConscript('api/SConscript')
     SConscript('dfs/SConscript')
     SConscript('dfuse/SConscript')
-    SConscript('pydaos/SConscript')
+    SConscript('python/pydaos/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
