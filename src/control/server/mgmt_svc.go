@@ -879,6 +879,7 @@ func ping(i *IOServerInstance, rank uint32, timeout time.Duration) *mgmtpb.Ranks
 		default:
 			dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
 		case <-ctx.Done():
+			return
 		}
 
 		resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted)
