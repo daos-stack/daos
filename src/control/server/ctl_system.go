@@ -29,7 +29,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -57,11 +56,11 @@ func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQue
 	// !mi.IsStarted()
 
 	var members []*system.Member
-	nilRank := ioserver.NilRank
-	if nilRank.Equals(ioserver.NewRankPtr(req.Rank)) {
+	// negative Rank in request indicates none specified
+	if req.Rank < 0 {
 		members = svc.membership.Members()
 	} else {
-		member, err := svc.membership.Get(req.Rank)
+		member, err := svc.membership.Get(uint32(req.Rank))
 		if err != nil {
 			return nil, err
 		}

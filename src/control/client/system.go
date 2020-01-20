@@ -110,7 +110,7 @@ func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 
 // SystemQueryReq contains the inputs for the system query request.
 type SystemQueryReq struct {
-	Rank uint32
+	Rank int32 // negative integer represents a NilRank
 }
 
 // SystemQueryResp contains the request response.

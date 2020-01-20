@@ -33,7 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -132,19 +131,13 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 type systemQueryCmd struct {
 	logCmd
 	connectedCmd
-	Verbose bool    `long:"verbose" short:"v" description:"Display more member details"`
-	Rank    *uint32 `long:"rank" short:"r" description:"System member rank to query"`
+	Verbose bool  `long:"verbose" short:"v" description:"Display more member details"`
+	Rank    int32 `long:"rank" short:"r" default:"-1" description:"System member rank to query"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	nilRank := ioserver.NilRank
-	req := client.SystemQueryReq{
-		Rank: nilRank.Uint32(),
-	}
-	if cmd.Rank != nil {
-		req.Rank = *cmd.Rank
-	}
+	req := client.SystemQueryReq{Rank: cmd.Rank}
 
 	resp, err := cmd.conns.SystemQuery(req)
 	if err != nil {
@@ -157,7 +150,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if cmd.Rank != nil {
+	if cmd.Rank >= 0 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
