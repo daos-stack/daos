@@ -257,7 +257,6 @@ pipeline {
           steps {
             sconsBuild target: 'cart',
                        scons_local_replace: true,
-                       USE_INSTALLED: 'none',
                        scm: [url: 'https://github.com/daos-stack/cart.git',
                              cleanAfterCheckout: true,
                              withSubmodules: true]

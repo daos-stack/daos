@@ -1058,11 +1058,15 @@ class PreReqComponent():
         out_of_src_build -- Build from a different directory if set to True
         """
         update = False
+        use_installed = False
+        if 'all' in self.installed or name in self.installed:
+            use_installed = True
         if 'all' in self.__update or name in self.__update:
             update = True
         comp = _Component(self,
                           name,
                           update,
+                          use_installed,
                           **kw)
         self.__defined[name] = comp
 
@@ -1146,6 +1150,8 @@ class PreReqComponent():
                     changes = True
                 continue
             self.__required[comp] = False
+            if comp_def.is_installed(needed_libs):
+                continue
             try:
                 comp_def.configure()
                 if comp_def.build(env, needed_libs):
@@ -1170,6 +1176,12 @@ class PreReqComponent():
                 raise error
             return False
         return True
+
+    def is_installed(self, name):
+        """Returns True if a component is available"""
+        if self.check_component(name):
+            return self.__defined[name].use_installed
+        return False
 
     def get_env(self, var):
         """Get a variable from the construction environment"""
@@ -1307,6 +1319,8 @@ class _Component():
     Args:
         prereqs -- A PreReqComponent object
         name -- The name of the component definition
+        update -- update the component
+        use_installed -- check if the component is installed
 
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
@@ -1326,11 +1340,13 @@ class _Component():
                  prereqs,
                  name,
                  update,
+                 use_installed,
                  **kw):
 
         self.__check_only = GetOption('check_only')
         self.__dry_run = GetOption('no_exec')
         self.targets_found = False
+        self.use_installed = use_installed
         self.update = update
         self.build_path = None
         self.prebuilt_path = None
@@ -1581,6 +1597,17 @@ class _Component():
     # pylint: enable=too-many-branches
     # pylint: enable=too-many-return-statements
 
+    def is_installed(self, needed_libs):
+        """Check if the component is already installed"""
+        if not self.use_installed:
+            return False
+        new_env = self.prereqs.system_env.Clone()
+        self.set_environment(new_env, needed_libs)
+        if self.has_missing_targets(new_env):
+            self.use_installed = False
+            return False
+        return True
+
     def configure(self):
         """Setup paths for a required component"""
         self.prereqs.setup_path_var(self.src_opt)
@@ -1615,24 +1642,26 @@ class _Component():
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
-        env.AppendENVPath('PATH', os.path.join(self.component_prefix, 'bin'))
+        if not self.use_installed and not self.component_prefix == "/usr":
+            env.AppendENVPath('PATH', os.path.join(self.component_prefix,
+                                                   'bin'))
 
-        for path in self.include_path:
-            env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
-                                                   path)])
-        # The same rules that apply to headers apply to RPATH.   If a build
-        # uses a component, that build needs the RPATH of the dependencies.
-        for path in self.lib_path:
-            if self.component_prefix == '/usr':
-                continue
-            full_path = os.path.join(self.component_prefix, path)
-            if not os.path.exists(full_path):
-                continue
-            lib_paths.append(full_path)
-            env.AppendUnique(RPATH=[full_path])
-        # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
-        # and this allows LD_LIBRARY_PATH to override RPATH
-        env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
+            for path in self.include_path:
+                env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
+                                                       path)])
+
+            # The same rules that apply to headers apply to RPATH.   If a build
+            # uses a component, that build needs the RPATH of the dependencies.
+            for path in self.lib_path:
+                full_path = os.path.join(self.component_prefix, path)
+                if not os.path.exists(full_path):
+                    continue
+                lib_paths.append(full_path)
+                env.AppendUnique(RPATH=[full_path])
+
+            # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
+            # and this allows LD_LIBRARY_PATH to override RPATH
+            env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
 
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])

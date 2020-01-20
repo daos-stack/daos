@@ -36,6 +36,34 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
 
 NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
 
+class installed_comps():
+    """Checks for installed components and keeps track of prior checks"""
+    installed = []
+    not_installed = []
+
+    def __init__(self, reqs):
+        """Class for checking installed components"""
+        self.reqs = reqs
+
+    def inst(self, name):
+        """Return True if name is in list of possible installed packages"""
+        return set([name, 'all']).intersection(set(self.reqs.installed))
+
+    def check(self, name):
+        """Returns True if installed"""
+        if name in self.installed:
+            return True
+        if name in self.not_installed:
+            return False
+        if self.inst(name) and self.reqs.is_installed(name):
+            print("Using installed version of %s" % name)
+            self.installed.append(name)
+            return True
+
+        print("Using build version of %s" % name)
+        self.not_installed.append(name)
+        return False
+
 def exclude(reqs, name, use_value, exclude_value):
     """Return True if in exclude list"""
     if set([name, 'all']).intersection(set(reqs.exclude)):
@@ -45,12 +73,14 @@ def exclude(reqs, name, use_value, exclude_value):
 
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
-    return set([name, 'all']).intersection(set(reqs.installed))
+    installed = installed_comps(reqs)
+    return installed.check(name)
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
        installed or not"""
-    if inst(reqs, name):
+    installed = installed_comps(reqs)
+    if installed.check(name):
         return installed_str
     return built_str
 
@@ -62,9 +92,6 @@ def define_mercury(reqs):
         libs = []
     else:
         reqs.define('rt', libs=['rt'])
-    retriever = \
-        GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                         True)
     reqs.define('stdatomic', headers=['stdatomic.h'])
 
     if reqs.check_component('stdatomic'):
@@ -72,32 +99,19 @@ def define_mercury(reqs):
     else:
         atomic = 'openpa'
 
-    reqs.define('mercury',
-                retriever=retriever,
-                commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
-                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
-                          check(reqs, 'openpa', '', '64') + '/libopa.a '
-                          '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                          '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
-                          '-DBUILD_EXAMPLES=OFF '
-                          '-DMERCURY_USE_BOOST_PP=ON '
-                          '-DMERCURY_USE_SELF_FORWARD=ON '
-                          '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
-                          '-DBUILD_TESTING=ON '
-                          '-DNA_USE_OFI=ON '
-                          '-DBUILD_DOCUMENTATION=OFF '
-                          '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
-                          '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
-                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
-                          check(reqs, 'ofi',
-                                '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
-                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
-                          'make $JOBS_OPT', 'make install'],
-                libs=['mercury', 'na', 'mercury_util'],
-                requires=[atomic, 'boost', 'ofi'] + libs,
-                extra_include_path=[os.path.join('include', 'na')],
-                out_of_src_build=True,
-                package='mercury-devel' if inst(reqs, 'mercury') else None)
+    reqs.define('psm2',
+                retriever=GitRepoRetriever(
+                    'https://github.com/intel/opa-psm2.git'),
+                # psm2 hard-codes installing into /usr/...
+                commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=' +
+                          '\\/usr\\/lib\\)64/\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
+                          'Makefile compat/Makefile',
+                          'make $JOBS_OPT',
+                          'make DESTDIR=$PSM2_PREFIX install'],
+                headers=['psm2.h'],
+                libs=['psm2'])
 
     retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
     reqs.define('ofi',
@@ -126,6 +140,37 @@ def define_mercury(reqs):
                           'make $JOBS_OPT',
                           'make install'], libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
+
+    retriever = \
+        GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
+                         True)
+    reqs.define('mercury',
+                retriever=retriever,
+                commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
+                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
+                          check(reqs, 'openpa', '', '64') + '/libopa.a '
+                          '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
+                          '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
+                          '-DBUILD_EXAMPLES=OFF '
+                          '-DMERCURY_USE_BOOST_PP=ON '
+                          '-DMERCURY_USE_SELF_FORWARD=ON '
+                          '-DMERCURY_ENABLE_VERBOSE_ERROR=ON '
+                          '-DBUILD_TESTING=ON '
+                          '-DNA_USE_OFI=ON '
+                          '-DBUILD_DOCUMENTATION=OFF '
+                          '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
+                          '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
+                          '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ' +
+                          check(reqs, 'ofi',
+                                '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
+                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
+                          'make $JOBS_OPT', 'make install'],
+                libs=['mercury', 'na', 'mercury_util'],
+                requires=[atomic, 'boost', 'ofi'] + libs,
+                extra_include_path=[os.path.join('include', 'na')],
+                out_of_src_build=True,
+                package='mercury-devel' if inst(reqs, 'mercury') else None)
+
 
 
 def define_common(reqs):
@@ -282,19 +327,5 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
-
-    reqs.define('psm2',
-                retriever=GitRepoRetriever(
-                    'https://github.com/intel/opa-psm2.git'),
-                # psm2 hard-codes installing into /usr/...
-                commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
-                          '       -e "s/\\(INSTALL_LIB_TARG=' +
-                          '\\/usr\\/lib\\)64/\\1/" ' +
-                          '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
-                          'Makefile compat/Makefile',
-                          'make $JOBS_OPT',
-                          'make DESTDIR=$PSM2_PREFIX install'],
-                headers=['psm2.h'],
-                libs=['psm2'])
 
 __all__ = ['define_components']
