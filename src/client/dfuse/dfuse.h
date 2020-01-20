@@ -36,9 +36,6 @@
 
 #include "dfuse_common.h"
 
-#define DFUSE_UNS_POOL_ATTR "user.uns.pool"
-#define DFUSE_UNS_CONTAINER_ATTR "user.uns.container"
-
 struct dfuse_info {
 	struct fuse_session		*di_session;
 	struct dfuse_projection_info	*di_handle;
