@@ -1223,6 +1223,17 @@ dfs_umount(dfs_t *dfs)
 	return 0;
 }
 
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	return 0;
+}
+
 /* Structure of global buffer for dfs */
 struct dfs_glob {
 	uint32_t		magic;
@@ -1564,8 +1575,11 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			struct dfs_entry child_entry = {0};
 			char entry_name[DFS_MAX_PATH + 1];
 			bool exists;
+			int len;
 
-			snprintf(entry_name, kds[i].kd_key_len + 1, "%s", ptr);
+			len = snprintf(entry_name, kds[i].kd_key_len + 1,
+				       "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 
 			rc = fetch_entry(oh, th, entry_name, false,
@@ -1925,8 +1939,11 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			snprintf(dirs[key_nr].d_name, kds[i].kd_key_len + 1,
-				 "%s", ptr);
+			int len;
+
+			len = snprintf(dirs[key_nr].d_name,
+				       kds[i].kd_key_len + 1, "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 			key_nr++;
 		}
@@ -1999,9 +2016,12 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 
 		/** for every entry, issue the filler cb */
 		for (i = 0; i < num; i++) {
-			char name[DFS_MAX_PATH];
+			char name[DFS_MAX_PATH + 1];
+			int len;
 
-			snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			len = snprintf(name, kds[i].kd_key_len + 1, "%s", ptr);
+			D_ASSERT(len >= kds[i].kd_key_len);
+
 			if (op) {
 				rc = op(dfs, obj, name, udata);
 				if (rc)
@@ -2489,10 +2509,11 @@ struct dfs_read_params {
 	dfs_obj_t		*obj;
 	d_sg_list_t		*sgl;
 	daos_size_t		*read_size;
+	dfs_iod_t		*iod;
 	daos_off_t		off;
 	daos_size_t		array_size;
 	daos_size_t		buf_size;
-	daos_array_iod_t	iod;
+	daos_array_iod_t	arr_iod;
 	daos_range_t		rg;
 	tse_task_t		*ptask;
 };
@@ -2539,7 +2560,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	/** if no short fetch detected, return all the read size */
-	if (params->iod.arr_nr_short_read == 0) {
+	if (params->arr_iod.arr_nr_short_read == 0) {
 		*params->read_size = params->buf_size;
 		return 0;
 	}
@@ -2592,15 +2613,20 @@ dfs_read_int(tse_task_t *task)
 	params->ptask = task;
 
 	/** set array location */
-	params->iod.arr_nr	= 1;
-	params->rg.rg_len	= params->buf_size;
-	params->rg.rg_idx	= params->off;
-	params->iod.arr_rgs	= &params->rg;
+	if (params->iod == NULL) {
+		params->arr_iod.arr_nr	= 1;
+		params->rg.rg_len	= params->buf_size;
+		params->rg.rg_idx	= params->off;
+		params->arr_iod.arr_rgs	= &params->rg;
+	} else {
+		params->arr_iod.arr_nr	= params->iod->iod_nr;
+		params->arr_iod.arr_rgs	= params->iod->iod_rgs;
+	}
 
 	read_args		= daos_task_get_args(read_task);
 	read_args->oh		= params->obj->oh;
 	read_args->th		= DAOS_TX_NONE;
-	read_args->iod		= &params->iod;
+	read_args->iod		= &params->arr_iod;
 	read_args->sgl		= params->sgl;
 	read_args->csums	= NULL;
 
@@ -2667,6 +2693,50 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	args->obj	= obj;
 	args->sgl	= sgl;
 	args->off	= off;
+	args->iod	= NULL;
+	args->read_size	= read_size;
+	args->buf_size	= buf_size;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev)
+{
+	struct dfs_read_params	*args;
+	tse_task_t		*task;
+	daos_size_t		buf_size;
+	int			i, rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_WRONLY)
+		return EPERM;
+
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*read_size = 0;
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args		= dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->sgl	= sgl;
+	args->iod	= iod;
 	args->read_size	= read_size;
 	args->buf_size	= buf_size;
 
@@ -2712,6 +2782,41 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL, ev);
+	if (rc)
+		D_ERROR("daos_array_write() failed (%d)\n", rc);
+
+	return daos_der2errno(rc);
+}
+
+int
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev)
+{
+	daos_array_iod_t	arr_iod;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
+
+	if (iod->iod_nr == 0) {
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	/** set array location */
+	arr_iod.arr_nr = iod->iod_nr;
+	arr_iod.arr_rgs = iod->iod_rgs;
+
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, NULL, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 
@@ -3068,7 +3173,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= &sg_iovs[i];
+	sgl.sg_iovs	= &sg_iovs[0];
 
 	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
@@ -3721,7 +3826,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 	while (!daos_anchor_is_eof(&anchor)) {
 		uint32_t	number = ENUM_DESC_NR;
 		uint32_t	i;
-		d_iov_t	iov;
+		d_iov_t		iov;
 		char		enum_buf[ENUM_DESC_BUF] = {0};
 		d_sg_list_t	sgl;
 		char		*ptr;
@@ -3740,6 +3845,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
+			int len;
+
 			if (strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
@@ -3752,8 +3859,9 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			if (list_size < kds[i].kd_key_len - 2)
 				continue;
 
-			snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
-				 ptr + 2);
+			len = snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
+				       ptr + 2);
+			D_ASSERT(len >= kds[i].kd_key_len - 2);
 
 			list_size -= kds[i].kd_key_len - 1;
 			ptr_list += kds[i].kd_key_len - 1;
