@@ -1388,10 +1388,9 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Aggregation */
-	D_DEBUG(DB_EPC, "oid:"DF_UOID", dkey:%s, akye:%s, lgc_ext:"DF_EXT", "
+	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
 		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
-		DP_UOID(agg_param->ap_oid), (char *)agg_param->ap_dkey.iov_buf,
-		(char *)agg_param->ap_akey.iov_buf, DP_EXT(&lgc_ext),
+		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
 		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_vis_flags);
 
 	rc = set_window_size(mw, entry->ie_rsize);
