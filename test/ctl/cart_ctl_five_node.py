@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ class CartCtlFiveNodeTest(Test):
         :avocado: tags=all,ctl,five_node
         """
 
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv")
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
@@ -73,9 +73,9 @@ class CartCtlFiveNodeTest(Test):
 
         time.sleep(5)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
+        clicmd = self.utils.build_cmd(self, self.env, "cli1")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -67,13 +67,8 @@ class CartGroupTiersThreeNodeTest(Test):
 
         #:avocado: tags=all,multi_tier,group_tiers,three_node
         """
-        urifile1 = self.utils.create_uri_file()
-
-        srvcmd = self.utils.build_cmd(self, self.env, "srv1", True, urifile1)
-
-        urifile2 = self.utils.create_uri_file()
-
-        srv2cmd = self.utils.build_cmd(self, self.env, "srv2", True, urifile2)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv1")
+        srv2cmd = self.utils.build_cmd(self, self.env, "srv2")
 
         try:
             srv2_rtn = self.utils.launch_cmd_bg(self, srv2cmd)
@@ -91,11 +86,11 @@ class CartGroupTiersThreeNodeTest(Test):
 
         time.sleep(4)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1", False, urifile2)
+        clicmd = self.utils.build_cmd(self, self.env, "cli1")
 
         self.utils.launch_test(self, clicmd, srv_rtn, srv2_rtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli2", False, urifile1)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2")
 
         self.utils.launch_test(self, clicmd, srv_rtn, srv2_rtn)
 

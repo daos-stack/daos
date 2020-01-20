@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -55,11 +55,8 @@ class CartRpcTwoNodeTest(Test):
 
         :avocado: tags=all,rpc,two_node
         """
-
-        urifile = self.utils.create_uri_file()
-
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True, urifile)
-        clicmd = self.utils.build_cmd(self, self.env, "cli", False, urifile)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv")
+        clicmd = self.utils.build_cmd(self, self.env, "cli")
 
         self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
         self.utils.log_check(self)

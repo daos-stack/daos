@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ class CartSelfThreeNodeTest(Test):
         :avocado: tags=all,selftest,three_node
         """
 
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv")
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
@@ -70,11 +70,11 @@ class CartSelfThreeNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
+        clicmd = self.utils.build_cmd(self, self.env, "cli1")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2")
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli3", False)
+        clicmd = self.utils.build_cmd(self, self.env, "cli3")
         self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
