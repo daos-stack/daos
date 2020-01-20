@@ -1,4 +1,4 @@
-# DAOS Software Installation
+# Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
 on CentOS 7, OpenSUSE 42.2, and Ubuntu 18.04 distributions.
