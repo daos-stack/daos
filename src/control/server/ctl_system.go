@@ -62,6 +62,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context, leader *IOSer
 		if err != nil {
 			return err
 		}
+	if err := convert.Types(rpcResp.GetResults(), &memberResults); err != nil {
 
 		for _, result := range hResults {
 			if result.State == system.MemberStateUnresponsive ||
