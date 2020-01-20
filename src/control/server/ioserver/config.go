@@ -165,10 +165,6 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
-	if c.HelperStreamCount > maxHelperStreamCount {
-		c.HelperStreamCount = maxHelperStreamCount
-	}
-
 	return nil
 }
 

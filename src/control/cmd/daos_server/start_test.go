@@ -181,13 +181,6 @@ func TestStartOptions(t *testing.T) {
 				return cfg
 			},
 		},
-		"XS Helpers (bad)": {
-			argList: []string{"-x", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].WithHelperStreamCount(2)
-				return cfg
-			},
-		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
