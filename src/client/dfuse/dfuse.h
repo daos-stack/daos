@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,6 @@
 
 #include "dfuse_common.h"
 
-#define DFUSE_UNS_POOL_ATTR "user.uns.pool"
-#define DFUSE_UNS_CONTAINER_ATTR "user.uns.container"
-
 struct dfuse_info {
 	struct fuse_session		*di_session;
 	struct dfuse_projection_info	*di_handle;
@@ -49,6 +46,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	bool				di_caching;
 	/* List head of dfuse_pool entries */
 	d_list_t			di_dfp_list;
 	pthread_mutex_t			di_lock;
@@ -147,7 +145,7 @@ struct dfuse_inode_ops {
 			  size_t size);
 	void (*removexattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			    const char *name);
-
+	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -172,6 +170,7 @@ struct dfuse_dfs {
 	daos_handle_t		dfs_coh;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
 };
@@ -299,15 +298,16 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(desc, req, attr)				\
+#define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning attr mode %#x dir:%d",	\
+		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
-		__rc = fuse_reply_attr(req, attr, 0);			\
+		__rc = fuse_reply_attr(req, attr,			\
+				(ie)->ie_dfs->dfs_attr_timeout);	\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -384,6 +384,17 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
+#define DFUSE_REPLY_STATFS(desc, req, stat)				\
+	do {								\
+		int __rc;						\
+		DFUSE_TRA_DEBUG(desc, "Returning statfs");		\
+		__rc = fuse_reply_statfs(req, stat);			\
+		if (__rc != 0)						\
+			DFUSE_TRA_ERROR(desc,				\
+					"fuse_reply_statfs returned %d:%s", \
+					__rc, strerror(-__rc));		\
+	} while (0)
+
 #define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)			\
 	do {								\
 		int __rc;						\
@@ -442,6 +453,13 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
+
+	/** written region for truncated files (i.e. ie_truncated set) */
+	size_t			ie_start_off;
+	size_t			ie_end_off;
+
+	/** file was truncated from 0 to a certain size */
+	bool			ie_truncated;
 
 	/** Set to true if this is the root of the container */
 	bool			ie_root;
@@ -564,6 +582,9 @@ dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
 dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
+
+void
+dfuse_cb_statfs(fuse_req_t, struct dfuse_inode_entry *);
 
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,

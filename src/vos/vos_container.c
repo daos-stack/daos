@@ -436,22 +436,21 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		}
 	}
 
+	rc = vos_dtx_act_reindex(cont);
+	if (rc != 0) {
+		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
+		goto exit;
+	}
+
 	rc = cont_insert(cont, &ukey, &pkey, coh);
 	if (rc != 0) {
 		D_ERROR("Error inserting vos container handle to uuid hash\n");
 		goto exit;
 	}
 
-	rc = vos_dtx_act_reindex(cont);
-	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
-	} else {
-		cont->vc_open_count = 1;
-
-		D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
-			DP_UUID(cont->vc_id));
-
-	}
+	cont->vc_open_count = 1;
+	D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
+		DP_UUID(cont->vc_id));
 
 exit:
 	if (rc != 0 && cont)
