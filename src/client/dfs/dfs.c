@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2721,8 +2721,12 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 		return EPERM;
 
 	buf_size = 0;
-	for (i = 0; i < sgl->sg_nr; i++)
+	for (i = 0; i < sgl->sg_nr; i++) {
 		buf_size += sgl->sg_iovs[i].iov_len;
+		if (sgl->sg_iovs[i].iov_buf_len)
+			memset(sgl->sg_iovs[i].iov_buf, 0,
+			       sgl->sg_iovs[i].iov_buf_len);
+	}
 	if (buf_size == 0) {
 		*read_size = 0;
 		if (ev) {
