@@ -488,8 +488,11 @@ kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 		Py_INCREF(Py_None);
 		val = Py_None;
 	} else {
-		val = PyString_FromStringAndSize(op->buf, op->size);
+		val = PyBytes_FromStringAndSize(op->buf, op->size);
 	}
+
+	if (val == NULL)
+		return -DER_IO;
 
 	rc = PyDict_SetItem(daos_dict, op->key_obj, val);
 	if (rc < 0)
@@ -562,7 +565,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			if (evp->ev_error == DER_SUCCESS) {
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
-					break;
+					D_GOTO(err, 0);
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				/**
 				 * op->size = VAL_SZ;
@@ -606,6 +609,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 				op = container_of(evp, struct kv_op, ev);
 				rc2 = kv_get_comp(op, daos_dict);
 				if (rc == DER_SUCCESS && rc2 != DER_SUCCESS)
+					D_GOTO(err, 0);
 					rc = rc2;
 				continue;
 			} else if (evp->ev_error == -DER_REC2BIG) {
@@ -646,6 +650,8 @@ out:
 	return PyInt_FromLong(rc);
 
 err:
+	D_FREE(kv_array);
+
 	return NULL;
 }
 
@@ -715,12 +721,13 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			size = pysize;
 #endif
 		} else {
-			buf = PyString_AsString(value);
-			if (buf == NULL)
+			Py_ssize_t pysize = 0;
+
+			rc = PyBytes_AsStringAndSize(value, &buf, &pysize);
+			if (buf == NULL || rc != 0)
 				D_GOTO(err, 0);
 
-			/** don't store final '\0' */
-			size = strlen(buf);
+			size = pysize;
 		}
 
 #ifdef __USE_PYTHON3__
