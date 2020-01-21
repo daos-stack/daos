@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -374,18 +374,6 @@ struct crt_bulk_cb_info {
 typedef void (*crt_cb_t)(const struct crt_cb_info *cb_info);
 
 typedef void (*crt_generic_cb_t)(void *cb_info);
-
-struct crt_barrier_cb_info {
-	void	*bci_arg;  /**< optional argument passed by user */
-	int	 bci_rc;    /**< return code for barrier */
-};
-
-/**
- * completion callback for crt_barrier
- *
- * \param[in] info	Callback info structure
- */
-typedef void (*crt_barrier_cb_t)(struct crt_barrier_cb_info *info);
 
 /** completion callback for bulk transferring, i.e. crt_bulk_transfer()
  *

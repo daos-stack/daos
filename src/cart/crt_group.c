@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1052,15 +1052,9 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	if (rc)
 		D_GOTO(out_swim_lock, rc);
 
-	rc = crt_barrier_info_init(grp_priv);
-	if (rc)
-		D_GOTO(out_grp_lock, rc);
-
 	*grp_priv_created = grp_priv;
-	D_GOTO(out, rc);
+	return rc;
 
-out_grp_lock:
-	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
 out_swim_lock:
 	csm->csm_target = NULL;
 	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
@@ -1153,9 +1147,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		D_FREE(grp_priv->gp_psr_phy_addr);
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 
-	crt_barrier_info_destroy(grp_priv);
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
-
 	D_FREE(grp_priv);
 }
 
@@ -1476,9 +1468,6 @@ crt_primary_grp_init(crt_group_id_t grpid)
 			rc);
 		D_GOTO(out, rc);
 	}
-
-	if (is_service)
-		crt_barrier_update_master(grp_priv);
 
 out:
 	if (rc == 0) {

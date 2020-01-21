@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       4.4.0
+Version:       4.5.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -136,6 +136,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Sun Jan 19 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.0-1
+- Libcart version 4.5.0-1
+- crt_barrier() API and associated types removed
+
 * Tue Jan 14 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.4.0-1
 - Libcart version 4.4.0-1
 - New IV APIs added: crt_iv_namespace_priv_set/get

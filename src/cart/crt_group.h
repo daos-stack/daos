@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,6 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
-#include "crt_barrier.h"
 #include "crt_swim.h"
 
 
@@ -139,9 +138,6 @@ struct crt_grp_priv {
 
 	/* group reference count */
 	uint32_t		 gp_refcount;
-
-	/* Barrier information.  Only used in local service groups */
-	struct crt_barrier_info	 gp_barrier_info;
 
 	pthread_rwlock_t	 gp_rwlock; /* protect all fields above */
 };

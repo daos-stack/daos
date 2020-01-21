@@ -1,3 +1,10 @@
+cart (4.5.0-1) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * 4.5.0-1 version of CaRT
+  * crt_barrier() API and associated types removed
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sun, 19 Jan 2020 16:53:01 +0000
+
 cart (4.4.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]

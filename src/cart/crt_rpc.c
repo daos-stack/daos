@@ -135,14 +135,6 @@ static struct crt_corpc_ops crt_iv_sync_co_ops = {
 	.co_pre_forward = crt_iv_sync_corpc_pre_forward,
 };
 
-/* barrier */
-CRT_RPC_DEFINE(crt_barrier, CRT_ISEQ_BARRIER, CRT_OSEQ_BARRIER)
-
-static struct crt_corpc_ops crt_barrier_corpc_ops = {
-	.co_aggregate = crt_hdlr_barrier_aggregate,
-	.co_pre_forward = NULL,
-};
-
 CRT_GEN_PROC_FUNC(crt_grp_cache, CRT_SEQ_GRP_CACHE);
 
 /* !! All of the following 4 RPC definition should have the same input fields !!

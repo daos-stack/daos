@@ -261,12 +261,6 @@ struct crt_rpc_priv {
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops),			\
-	X(CRT_OPC_BARRIER_ENTER,					\
-		0, &CQF_crt_barrier,					\
-		crt_hdlr_barrier_enter, &crt_barrier_corpc_ops),	\
-	X(CRT_OPC_BARRIER_EXIT,						\
-		0, &CQF_crt_barrier,					\
-		crt_hdlr_barrier_exit, &crt_barrier_corpc_ops),		\
 	X(CRT_OPC_CTL_GET_URI_CACHE,					\
 		0, &CQF_crt_ctl_get_uri_cache,				\
 		crt_hdlr_ctl_get_uri_cache, NULL),			\
@@ -456,21 +450,6 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((int32_t)		(rc)			CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
-
-#define CRT_ISEQ_BARRIER	/* input fields */		 \
-	((int32_t)		(b_num)			CRT_VAR)
-#define CRT_OSEQ_BARRIER	/* output fields */		 \
-	((int32_t)		(b_rc)			CRT_VAR)
-
-CRT_RPC_DECLARE(crt_barrier, CRT_ISEQ_BARRIER, CRT_OSEQ_BARRIER)
-
-#define CRT_ISEQ_LM_EVICT	/* input fields */		 \
-	((d_rank_t)		(clei_rank)		CRT_VAR) \
-	((uint32_t)		(clei_ver)		CRT_VAR)
-
-#define CRT_OSEQ_LM_EVICT	/* output fields */		 \
-	((int32_t)		(cleo_succeeded)	CRT_VAR) \
-	((int32_t)		(cleo_rc)		CRT_VAR)
 
 #define CRT_ISEQ_CTL		/* input fields */		 \
 	((crt_group_id_t)	(cel_grp_id)		CRT_VAR) \

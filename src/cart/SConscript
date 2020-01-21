@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016-2019 Intel Corporation
+# Copyright (C) 2016-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import SCons.Action
 # pylint: enable=import-error
 # pylint: enable=no-name-in-module
 
-SRC = ['crt_barrier.c', 'crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
+SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
        'crt_init.c', 'crt_iv.c', 'crt_register.c',
        'crt_rpc.c', 'crt_self_test_client.c', 'crt_self_test_service.c',

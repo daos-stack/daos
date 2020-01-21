@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 Intel Corporation
+# Copyright (C) 2016-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -49,8 +49,6 @@ def scons():
     env.Install("$CRT_TSTDIR/util", Glob("util/*.yaml"))
     env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.py"))
     env.Install("$CRT_TSTDIR/rpc", Glob("rpc/*.yaml"))
-    env.Install("$CRT_TSTDIR/barrier", Glob("barrier/*.py"))
-    env.Install("$CRT_TSTDIR/barrier", Glob("barrier/*.yaml"))
     env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.py"))
     env.Install("$CRT_TSTDIR/ctl", Glob("ctl/*.yaml"))
     env.Install("$CRT_TSTDIR/corpc", Glob("corpc/*.py"))
