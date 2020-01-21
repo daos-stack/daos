@@ -106,7 +106,7 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		req->rank, req->force);
 
 	/* terminate local service */
-	ds_mgmt_kill_rank(req->force)
+	ds_mgmt_kill_rank(req->force);
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__kill_rank_req__free_unpacked(req, NULL);
