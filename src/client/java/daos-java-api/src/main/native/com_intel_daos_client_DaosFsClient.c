@@ -60,7 +60,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved)
 {
 	JNIEnv *env;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION) != JNI_OK) {
 		return JNI_ERR;
 	}
 
@@ -378,7 +378,7 @@ JNIEXPORT void JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsUnmountFs(JNIEnv *env,
 		jclass clientClass, jlong dfsPtr)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	int rc = dfs_umount(dfs);
 
 	if (rc) {
@@ -427,7 +427,7 @@ JNIEXPORT void JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsUnmountFsOnRoot(JNIEnv *env,
 		jclass clientClass, jlong dfsPtr)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 
 	int rc = dfs_umount_root_cont(dfs);
 
@@ -487,7 +487,7 @@ Java_com_intel_daos_client_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_Str
 	dfs_obj_t *src_dir_handle = NULL;
 	dfs_obj_t *dest_dir_handle = NULL;
 	mode_t tmp_mode;
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	int rc = dfs_lookup(dfs, src_dir, O_RDWR, &src_dir_handle, &tmp_mode,
 			NULL);
 
@@ -558,10 +558,10 @@ Java_com_intel_daos_client_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_S
 {
 	char *src_base = (*env)->GetStringUTFChars(env, srcName, NULL);
 	char *dest_base = (*env)->GetStringUTFChars(env, destName, NULL);
-	dfs_obj_t *src_dir_handle = *(dfs_obj_t**)&srcPrtObjId;
-	dfs_obj_t *dest_dir_handle = *(dfs_obj_t**)&destPrtObjId;
+	dfs_obj_t *src_dir_handle = *(dfs_obj_t **)&srcPrtObjId;
+	dfs_obj_t *dest_dir_handle = *(dfs_obj_t **)&destPrtObjId;
 	mode_t tmp_mode;
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	int rc = dfs_move(dfs, src_dir_handle, src_base, dest_dir_handle,
 			dest_base, NULL);
 
@@ -670,7 +670,7 @@ Java_com_intel_daos_client_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		jlong dfsPtr, jstring path, jint mode, jboolean recursive)
 {
 	const char* path_str = (*env)->GetStringUTFChars(env, path, NULL);
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	char *dirs;
 	char *bases;
 	char *parent_dir;
@@ -754,7 +754,7 @@ Java_com_intel_daos_client_DaosFsClient_createNewFile(JNIEnv *env,
 		jint mode, jint accessFlags, jstring objectType, jint chunkSize,
 		jboolean createParent)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	const char *parent_path = (*env)->GetStringUTFChars(env, parentPath,
 			NULL);
 	const char *file_name = (*env)->GetStringUTFChars(env, name, NULL);
@@ -838,7 +838,7 @@ Java_com_intel_daos_client_DaosFsClient_delete(JNIEnv *env, jobject client,
 		jlong dfsPtr, jstring parentPath, jstring name,
 		jboolean force)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	const char *parent_path = (*env)->GetStringUTFChars(env, parentPath,
 					NULL);
 	const char *file_name = (*env)->GetStringUTFChars(env, name, NULL);
@@ -894,8 +894,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsLookup__JJLjava_lang_String_2IJ(
 		JNIEnv *env, jobject client, jlong dfsPtr, jlong parentObjId,
 		jstring name, jint flags, jlong bufferAddress)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *parent = *(dfs_obj_t**)&parentObjId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *parent = *(dfs_obj_t **)&parentObjId;
 	dfs_obj_t *file;
 	mode_t tmp_mode;
 	const char *file_name = (*env)->GetStringUTFChars(env, name, NULL);
@@ -934,7 +934,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsLookup__JLjava_lang_String_2IJ(
 		JNIEnv *env, jobject client, jlong dfsPtr, jstring path,
 		jint flags, jlong bufferAddress)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
 	dfs_obj_t *file;
 	mode_t tmp_mode;
 	const char *file_path = (*env)->GetStringUTFChars(env, path, NULL);
@@ -966,8 +966,8 @@ JNIEXPORT jlong JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsGetSize(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	daos_size_t size;
 	int rc = dfs_get_size(dfs, file, &size);
 
@@ -995,8 +995,8 @@ JNIEXPORT jlong JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsDup(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jint flags)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	dfs_obj_t *new_file;
 	int rc = dfs_dup(dfs, file, flags, &new_file);
 
@@ -1020,7 +1020,7 @@ JNIEXPORT void JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsRelease(JNIEnv *env,
 		jclass clientClass, jlong objId)
 {
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	int rc = dfs_release(file);
 
 	if (rc) {
@@ -1050,8 +1050,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jlong bufferAddress,
 		jlong fileOffset, jlong len, jint eventNo)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	char *buf = (char*)bufferAddress;
 	d_iov_t sg_iov = {0};
 	d_sg_list_t sgl = {
@@ -1096,8 +1096,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jlong bufferAddress,
 		jlong fileOffset, jlong len, jint eventNo)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	char *buf = (char*)bufferAddress;
 	d_iov_t sg_iov = {0};
 	d_sg_list_t sgl = {
@@ -1135,8 +1135,8 @@ JNIEXPORT jstring JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		jlong dfsPtr, jlong objId, jint maxEntries)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *dir = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *dir = *(dfs_obj_t **)&objId;
 	daos_anchor_t anchor = {0};
 	uint32_t nr = READ_DIR_BATCH_SIZE;
 	struct dirent entries[nr];
@@ -1236,8 +1236,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 		jobject client, jlong dfsPtr, jlong objId,
 		jlong bufferAddress)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	struct stat stat = {};
 	int rc = dfs_ostat(dfs, file, &stat);
 
@@ -1291,8 +1291,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
 		jobject client, jlong dfsPtr, jlong objId, jstring name,
 		jstring value, jint flags)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	const char *attr_value = (*env)->GetStringUTFChars(env, value, NULL);
 	int rc = dfs_setxattr(dfs, file, attr_name, attr_value,
@@ -1329,8 +1329,8 @@ Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr(JNIEnv *env,
 		jobject client, jlong dfsPtr, jlong objId, jstring name,
 		jint expectedValueLen)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	long value_len = expectedValueLen;
 	char *value = (char *)malloc(value_len+1); // 1 for \0
@@ -1378,8 +1378,8 @@ JNIEXPORT void JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsRemoveExtAttr(JNIEnv *env,
 		jobject client, jlong dfsPtr, jlong objId, jstring name)
 {
-	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_t *dfs = *(dfs_t **)&dfsPtr;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	int rc = dfs_removexattr(dfs, file, attr_name);
 
@@ -1406,7 +1406,7 @@ JNIEXPORT jlong JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsGetChunkSize(JNIEnv *env,
 		jclass clientClass, jlong objId)
 {
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	daos_size_t size;
 	int rc = dfs_get_chunk_size(file, &size);
 
@@ -1432,7 +1432,7 @@ JNIEXPORT jint JNICALL
 Java_com_intel_daos_client_DaosFsClient_dfsGetMode(JNIEnv *env,
 		jclass clientClass, jlong objId)
 {
-	dfs_obj_t *file = *(dfs_obj_t**)&objId;
+	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	mode_t mode;
 	int rc = dfs_get_mode(file, &mode);
 
@@ -1471,7 +1471,7 @@ JNI_OnUnload(JavaVM* vm, void *reserved)
 {
 	JNIEnv *env;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION) != JNI_OK) {
 		return;
 	}
 	(*env)->DeleteGlobalRef(env, daos_io_exception_class);
