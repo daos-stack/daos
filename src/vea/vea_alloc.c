@@ -366,13 +366,14 @@ reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int
 persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
-	struct vea_free_extent found, frag;
+	struct vea_free_extent *found, frag;
 	daos_handle_t btr_hdl;
 	d_iov_t key_in, key_out, val;
-	uint64_t blk_off, found_end, vfe_end;
+	uint64_t *blk_off, found_end, vfe_end;
 	int rc, opc = BTR_PROBE_LE;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	D_ASSERT(vfe->vfe_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(vfe->vfe_blk_cnt > 0);
 
@@ -382,10 +383,10 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
 		vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 
-	/* Fetch & operate on the copied record */
+	/* Fetch & operate on the in-tree record */
 	d_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
-	d_iov_set(&key_out, &blk_off, sizeof(blk_off));
-	d_iov_set(&val, &found, sizeof(found));
+	d_iov_set(&key_out, NULL, sizeof(*blk_off));
+	d_iov_set(&val, NULL, sizeof(*found));
 
 	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
 			  &val);
@@ -395,50 +396,63 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		return rc;
 	}
 
-	rc = verify_free_entry(&blk_off, &found);
+	found = (struct vea_free_extent *)val.iov_buf;
+	blk_off = (uint64_t *)key_out.iov_buf;
+
+	rc = verify_free_entry(blk_off, found);
 	if (rc)
 		return rc;
 
-	found_end = found.vfe_blk_off + found.vfe_blk_cnt;
+	found_end = found->vfe_blk_off + found->vfe_blk_cnt;
 	vfe_end = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 
-	if (found.vfe_blk_off > vfe->vfe_blk_off || found_end < vfe_end) {
+	if (found->vfe_blk_off > vfe->vfe_blk_off || found_end < vfe_end) {
 		D_ERROR("mismatched extent ["DF_U64", %u] ["DF_U64", %u]\n",
-			found.vfe_blk_off, found.vfe_blk_cnt,
+			found->vfe_blk_off, found->vfe_blk_cnt,
 			vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 		return -DER_INVAL;
 	}
 
-	/* Remove the original free extent from persistent tree */
-	rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
-	if (rc)
-		return rc;
-
-	/* Add back fore part of free extent */
-	if (found.vfe_blk_off < vfe->vfe_blk_off) {
-		frag = found;
-		frag.vfe_blk_cnt = vfe->vfe_blk_off - found.vfe_blk_off;
-
-		d_iov_set(&key_in, &frag.vfe_blk_off,
-			     sizeof(frag.vfe_blk_off));
-		d_iov_set(&val, &frag, sizeof(frag));
-		rc = dbtree_update(btr_hdl, &key_in, &val);
-		if (rc)
-			return rc;
-	}
-
-	/* Add back the rear part of free extent */
-	if (found_end > vfe_end) {
-		frag.vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
-		frag.vfe_blk_cnt = found_end - vfe_end;
-		rc = daos_gettime_coarse(&frag.vfe_age);
+	if (found->vfe_blk_off < vfe->vfe_blk_off) {
+		/* Adjust the in-tree free extent length */
+		rc = umem_tx_add_ptr(vsi->vsi_umem, &found->vfe_blk_cnt,
+				     sizeof(found->vfe_blk_cnt));
 		if (rc)
 			return rc;
 
-		d_iov_set(&key_in, &frag.vfe_blk_off,
-			     sizeof(frag.vfe_blk_off));
-		d_iov_set(&val, &frag, sizeof(frag));
-		rc = dbtree_update(btr_hdl, &key_in, &val);
+		found->vfe_blk_cnt = vfe->vfe_blk_off - found->vfe_blk_off;
+
+		/* Add back the rear part of free extent */
+		if (found_end > vfe_end) {
+			frag.vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
+			frag.vfe_blk_cnt = found_end - vfe_end;
+			rc = daos_gettime_coarse(&frag.vfe_age);
+			if (rc)
+				return rc;
+
+			d_iov_set(&key_in, &frag.vfe_blk_off,
+				  sizeof(frag.vfe_blk_off));
+			d_iov_set(&val, &frag, sizeof(frag));
+			rc = dbtree_update(btr_hdl, &key_in, &val);
+			if (rc)
+				return rc;
+		}
+	} else if (found_end > vfe_end) {
+		/* Adjust the in-tree integer key */
+		rc = umem_tx_add_ptr(vsi->vsi_umem, blk_off, sizeof(*blk_off));
+		if (rc)
+			return rc;
+
+		*blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
+
+		/* Adjust the in-tree extent offset */
+		rc = umem_tx_add_ptr(vsi->vsi_umem, found, sizeof(*found));
+		if (rc)
+			return rc;
+
+		found->vfe_blk_off = *blk_off;
+		found->vfe_blk_cnt = found_end - vfe_end;
+		rc = daos_gettime_coarse(&found->vfe_age);
 		if (rc)
 			return rc;
 	}
