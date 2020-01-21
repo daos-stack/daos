@@ -1505,6 +1505,165 @@ test_drpc_pool_create_invalid_acl(void **state)
 
 }
 
+/*
+ * dRPC ping rank tests
+ */
+static void
+expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
+{
+	Mgmt__PingRankResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__ping_rank_resp__unpack(NULL, resp->body.len,
+					       resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_rc);
+
+	mgmt__ping_rank_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+pack_ping_rank_req(Mgmt__PingRankReq *req, Drpc__Call *call)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__ping_rank_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__ping_rank_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+test_drpc_ping_rank_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PingRankReq	pr_req = MGMT__PING_RANK_REQ__INIT;
+
+	pack_ping_rank_req(&pc_req, &call);
+
+	ds_mgmt_drpc_ping_rank(&call, &resp);
+
+	expect_create_resp_with_success(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+
+}
+
+/*
+ * dRPC kill rank tests
+ */
+static void
+expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
+{
+	Mgmt__KillRankResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__kill_rank_resp__unpack(NULL, resp->body.len,
+					       resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_rc);
+
+	mgmt__kill_rank_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+pack_kill_rank_req(Mgmt__KillRankReq *req, Drpc__Call *call)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__kill_rank_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__kill_rank_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+test_drpc_kill_rank_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__KillRankReq	pr_req = MGMT__KILL_RANK_REQ__INIT;
+
+	pack_kill_rank_req(&pc_req, &call);
+
+	ds_mgmt_drpc_kill_rank(&call, &resp);
+
+	expect_create_resp_with_success(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+
+}
+
+/*
+ * dRPC prep shutdown tests
+ */
+static void
+expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
+{
+	Mgmt__PrepShutdownResp	*pc_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pc_resp = mgmt__prep_shutdown_resp__unpack(NULL, resp->body.len,
+					       resp->body.data);
+	assert_non_null(pc_resp);
+	assert_int_equal(pc_resp->status, exp_rc);
+
+	mgmt__prep_shutdown_resp__free_unpacked(pc_resp, NULL);
+}
+
+static void
+pack_prep_shutdown_req(Mgmt__PrepShutdownReq *req, Drpc__Call *call)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__prep_shutdown_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__prep_shutdown_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+test_drpc_prep_shutdown_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PrepShutdownReq	pr_req = MGMT__PREP_SHUTDOWN_REQ__INIT;
+
+	pack_prep_shutdown_req(&pc_req, &call);
+
+	ds_mgmt_drpc_prep_shutdown(&call, &resp);
+
+	expect_create_resp_with_success(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -1526,6 +1685,12 @@ test_drpc_pool_create_invalid_acl(void **state)
 						drpc_pool_query_setup)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
+
+#define PING_RANK_TEST(x)	cmocka_unit_test(x)
+
+#define KILL_RANK_TEST(x)	cmocka_unit_test(x)
+
+#define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
 
 int
 main(void)
@@ -1568,6 +1733,9 @@ main(void)
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
+		PING_RANK_TEST(test_drpc_ping_rank_success),
+		KILL_RANK_TEST(test_drpc_kill_rank_success),
+		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

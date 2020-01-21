@@ -136,6 +136,8 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to ping rank %u\n", req->rank);
 
+	/* TODO: verify iosrv components are functioning as expected */
+
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__ping_rank_req__free_unpacked(req, NULL);
 }
