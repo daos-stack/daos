@@ -144,5 +144,6 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 			 int nservers, uint32_t version);
+int ds_mgmt_kill_rank(force bool);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

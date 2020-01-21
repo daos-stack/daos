@@ -80,3 +80,18 @@ out:
 		d_rank_list_free(ranks);
 	return rc;
 }
+
+void
+ds_mgmt_kill_rank(force bool)
+{
+	int	sig;
+
+	if (force)
+		sig = SIGKILL;
+	else
+		sig = SIGTERM;
+
+	D_INFO("Service rank %d is being killed by signal %d\n",
+		req->rank, sig);
+	kill(getpid(), sig);
+}

@@ -92,7 +92,6 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__KillRankReq	*req = NULL;
 	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
-	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__kill_rank_req__unpack(
@@ -107,13 +106,7 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		req->rank, req->force);
 
 	/* terminate local service */
-	if (req->force)
-		sig = SIGKILL;
-	else
-		sig = SIGTERM;
-	D_INFO("Service rank %d is being killed by signal %d\n",
-		req->rank, sig);
-	kill(getpid(), sig);
+	ds_mgmt_kill_rank(req->force)
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__kill_rank_req__free_unpacked(req, NULL);

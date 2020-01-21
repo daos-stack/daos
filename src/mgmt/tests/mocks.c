@@ -469,3 +469,9 @@ ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
 {
 	return 0;
 }
+
+void
+ds_mgmt_kill_rank(bool force)
+{
+	return;
+}
