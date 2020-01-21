@@ -112,8 +112,8 @@ rdb_destroy(const char *path, const uuid_t uuid)
 
 	rc = vos_pool_destroy(path, (unsigned char *)uuid);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy %s: %d\n", DP_UUID(uuid),
-			path, rc);
+		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
+			DP_UUID(uuid), path, DP_RC(rc));
 	return rc;
 }
 
@@ -264,14 +264,15 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 
 	rc = vos_pool_open(path, (unsigned char *)uuid, &db->d_pool);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to open %s: %d\n", DP_DB(db), path, rc);
+		D_ERROR(DF_DB": failed to open %s: "DF_RC"\n", DP_DB(db), path,
+			DP_RC(rc));
 		goto err_kvss;
 	}
 
 	rc = vos_cont_open(db->d_pool, (unsigned char *)uuid, &db->d_mc);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to open metadata container: %d\n",
-			DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to open metadata container: "DF_RC"\n",
+			DP_DB(db), DP_RC(rc));
 		goto err_pool;
 	}
 
@@ -282,7 +283,8 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
 		goto err_mc;
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up UUID: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to look up UUID: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err_mc;
 	}
 

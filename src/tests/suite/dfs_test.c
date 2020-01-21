@@ -347,16 +347,9 @@ dfs_test_short_read(void **state)
 		wbuf[i] = i+1;
 
 	for (i = 0; i < NUM_SEGS; i++) {
-		D_ALLOC_ARRAY(rbuf[i], buf_size);
+		D_ALLOC_ARRAY(rbuf[i], buf_size + 100);
 		assert_non_null(rbuf[i]);
 	}
-
-	/** set memory location */
-	rsgl.sg_nr = NUM_SEGS;
-	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
-	assert_non_null(rsgl.sg_iovs);
-	for (i = 0; i < NUM_SEGS; i++)
-		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
 
 	d_iov_set(&iov, wbuf, buf_size);
 	wsgl.sg_nr = 1;
@@ -382,6 +375,25 @@ dfs_test_short_read(void **state)
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** set contig mem location */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size + 100);
+	rsgl.sg_iovs = &iov;
+	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+
+	/* reset write iov */
+	d_iov_set(&iov, wbuf, buf_size);
+
+	/** set strided memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);

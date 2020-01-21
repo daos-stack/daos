@@ -161,16 +161,17 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
+	d_list_add(&child->spc_list, &tls->dt_pool_list);
+
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc) {
+		d_list_del_init(&child->spc_list);
 		ds_cont_child_stop_all(child);
 		vos_pool_close(child->spc_hdl);
 		D_FREE(child);
 		return rc;
 	}
-
-	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	return 0;
 }
@@ -254,8 +255,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_map_version = arg->pca_map_version;
 	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to add ES pool caches: %d\n",
-			DP_UUID(key), rc);
+		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
+			DP_UUID(key), DP_RC(rc));
 		goto err_iv_lock;
 	}
 
@@ -283,7 +284,7 @@ err_group:
 	crt_group_secondary_destroy(pool->sp_group);
 err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
-	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
+	D_ASSERTF(rc_tmp == 0, ""DF_RC"\n", DP_RC(rc_tmp));
 err_iv_lock:
 	ABT_mutex_free(&pool->sp_iv_refresh_lock);
 err_lock:
@@ -313,8 +314,8 @@ pool_free_ref(struct daos_llink *llink)
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
-		D_ERROR(DF_UUID": failed to delete ES pool caches: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+		D_ERROR(DF_UUID": failed to delete ES pool caches: "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
 
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
@@ -648,8 +649,9 @@ pool_query_one(void *vin)
 
 	rc = vos_pool_query(pool_child->spc_hdl, &vos_pool_info);
 	if (rc != 0) {
-		D_ERROR("Failed to query pool "DF_UUID", tgt_id: %d, rc: %d\n",
-			DP_UUID(pool->sp_uuid), tid, rc);
+		D_ERROR("Failed to query pool "DF_UUID", tgt_id: %d, "
+			"rc: "DF_RC"\n", DP_UUID(pool->sp_uuid), tid,
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -696,8 +698,8 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 					&coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -705,8 +707,8 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
-		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
-			DP_UUID(pool->sp_uuid), rc);
+		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -779,8 +781,8 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		rc = pool_tgt_query(pool, &out->tco_space);
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d "DF_RC"\n",
+		DP_UUID(in->tci_uuid), rpc, out->tco_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -835,8 +837,8 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 	rc = 0;
 out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d "DF_RC"\n",
+		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -915,8 +917,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	if (buf != NULL) {
 		rc = pool_map_create(buf, map_version, &map);
 		if (rc != 0) {
-			D_ERROR(DF_UUID" failed to create pool map: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
+			D_ERROR(DF_UUID" failed to create pool map: "DF_RC"\n",
+				DP_UUID(pool->sp_uuid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -941,8 +943,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
-				D_ERROR(DF_UUID": failed update pl_map: %d\n",
-					DP_UUID(pool->sp_uuid), rc);
+				D_ERROR(DF_UUID": failed update pl_map: "
+					""DF_RC"\n", DP_UUID(pool->sp_uuid),
+					DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 
@@ -989,34 +992,18 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*hdl = NULL;
 	struct ds_pool			*pool;
 	int				 rc;
 
-	/* If no handle provided, try looking up by pool UUID */
-	if (uuid_is_null(in->tqi_op.pi_hdl)) {
-		pool = ds_pool_lookup(in->tqi_op.pi_uuid);
-		if (pool == NULL) {
-			D_ERROR("Failed to find pool "DF_UUID"\n",
-				DP_UUID(in->tqi_op.pi_uuid));
-			D_GOTO(out, rc = -DER_NONEXIST);
-		}
-	} else {
-		hdl = ds_pool_hdl_lookup(in->tqi_op.pi_hdl);
-		if (hdl == NULL) {
-			D_ERROR("Failed to find pool hdl "DF_UUID"\n",
-				DP_UUID(in->tqi_op.pi_hdl));
-			D_GOTO(out, rc = -DER_NO_HDL);
-		}
-
-		D_ASSERT(hdl->sph_pool != NULL);
-		pool = hdl->sph_pool;
+	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
+	if (pool == NULL) {
+		D_ERROR("Failed to find pool "DF_UUID"\n",
+			DP_UUID(in->tqi_op.pi_uuid));
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	rc = pool_tgt_query(pool, &out->tqo_space);
-
-	if (hdl != NULL)
-		ds_pool_hdl_put(hdl);
+	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);

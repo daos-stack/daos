@@ -394,7 +394,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_active_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX active btree: rc = %d\n", rc);
+		D_ERROR("Failed to create DTX active btree: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -404,7 +405,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX committed btree: rc = %d\n", rc);
+		D_ERROR("Failed to create DTX committed btree: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -414,7 +416,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_cos_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
+		D_ERROR("Failed to create DTX CoS btree: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -433,22 +436,21 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		}
 	}
 
+	rc = vos_dtx_act_reindex(cont);
+	if (rc != 0) {
+		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
+		goto exit;
+	}
+
 	rc = cont_insert(cont, &ukey, &pkey, coh);
 	if (rc != 0) {
 		D_ERROR("Error inserting vos container handle to uuid hash\n");
 		goto exit;
 	}
 
-	rc = vos_dtx_act_reindex(cont);
-	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
-	} else {
-		cont->vc_open_count = 1;
-
-		D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
-			DP_UUID(cont->vc_id));
-
-	}
+	cont->vc_open_count = 1;
+	D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
+		DP_UUID(cont->vc_id));
 
 exit:
 	if (rc != 0 && cont)
@@ -683,7 +685,7 @@ cont_iter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
-			D_ERROR("co_iter_fini failed: %d\n", rc);
+			D_ERROR("co_iter_fini failed: "DF_RC"\n", DP_RC(rc));
 	}
 
 	if (co_iter->cot_pool != NULL)
@@ -748,7 +750,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching co info: %d\n", rc);
+		D_ERROR("Error while fetching co info: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));
