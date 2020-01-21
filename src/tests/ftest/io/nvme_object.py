@@ -27,7 +27,8 @@ import threading
 import avocado
 
 from pydaos.raw import DaosApiError
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from apricot import TestWithServers
 
 

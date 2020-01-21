@@ -187,7 +187,7 @@ class _Obj(object):
 # pylint: disable=too-few-public-methods
 class KVIter():
 
-    """Iterator class for KBOjb"""
+    """Iterator class for KVOjb"""
 
     def __init__(self, kv):
         self._entries = []
@@ -283,6 +283,8 @@ class KVObj(_Obj):
 
         d = {key : None}
         self.bget(d)
+        if d[key] is None:
+            raise KeyError(key)
         return d[key]
 
     def __getitem__(self, key):
@@ -295,6 +297,9 @@ class KVObj(_Obj):
 
     def __setitem__(self, key, val):
         self.put(key, val)
+
+    def __delitem__(self, key):
+        self.put(key, None)
 
     def bget(self, ddict):
         """Bulk get value for all the keys of the input python dictionary."""
@@ -331,9 +336,11 @@ class KVObj(_Obj):
         return False
 
     def __contains__(self, key):
-        if self.get(key) is None:
+        try:
+            self.get(key)
+            return True
+        except KeyError:
             return False
-        return True
 
     def __iter__(self):
         return KVIter(self)
