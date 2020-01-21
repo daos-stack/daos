@@ -194,9 +194,11 @@ def set_test_environment():
     print("Daos Server : ")
     out = get_output("command -v daos_server")
     print(out)
+
     print("fi_info : ")
     out = get_output("command -v fi_info")
     print(out)
+
     os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
@@ -692,6 +694,7 @@ def display_libfabric(test_yaml, args):
     print("Daos Server : ")
     out = get_output("command -v daos_server")
     print(out)
+    output = os.path.dirname(out)
     cmd = "ldd {}".format(out)
     spawn_commands(host_list, cmd)
 
@@ -700,11 +703,19 @@ def display_libfabric(test_yaml, args):
     cmd = "ldd {}".format(out)
     spawn_commands(host_list, cmd)
 
-
     out = get_output("command -v fi_info")
     print(out)
     cmd = "ldd {}".format(out)
-    spawn_commands(host_list, cmd)    
+    spawn_commands(host_list, cmd)   
+
+    cmd = "/usr/lib64/openmpi3/bin/orterun --map-by node --mca btl tcp,self" \
+          " --mca oob tcp --mca pml ob1 -np 2 -x CRT_PHY_ADDR_STR=\"ofi+verbs;ofi_rxm\"" \
+          " -x OFI_INTERFACE=ib0 -x OFI_DOMAIN=hfi1_0 {0}/../../opt/cart/bin/crt_launch"  \
+          " -e {0}/../../opt/cart/TESTING/tests/iv_server -v 3".format(output)
+    spawn_commands(host_list, cmd)
+
+
+ 
 
 def archive_logs(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
