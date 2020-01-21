@@ -91,6 +91,6 @@ ds_mgmt_kill_rank(bool force)
 	else
 		sig = SIGTERM;
 
-	D_INFO("Kill with signal %d\n", sig)
+	D_INFO("Kill with signal %d\n", sig);
 	kill(getpid(), sig);
 }
