@@ -80,12 +80,14 @@ struct obj_auxi_args {
 					 args_initialized:1,
 					 to_leader:1,
 					 spec_shard:1,
-					 req_reasbed:1;
+					 req_reasbed:1,
+					 csum_retry:1;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
+	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	/* one shard_args embedded to save one memory allocation if the obj
@@ -1645,7 +1647,6 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 				DP_RC(rc));
 			goto out;
 		}
-		/* obj_req_tgts_dump(req_tgts); */
 		break;
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_PUNCH:
@@ -2172,6 +2173,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->to_leader = 0;
 	obj_auxi->io_retry = 0;
+	obj_auxi->csum_retry = 0;
 	switch (obj_auxi->opc) {
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		arg = data;
@@ -2249,10 +2251,18 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 * are some other cases we need to retry the RPC with current
 		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
+
 		if (!obj_auxi->spec_shard ||
 		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
 
+		if (task->dt_result == -DER_CSUM) {
+			if (!obj_auxi->spec_shard &&
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
+				obj_auxi->csum_retry = 1;
+			else
+				obj_auxi->io_retry = 0;
+		}
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
 	}
@@ -2261,6 +2271,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_retry_cb(task, obj, obj_auxi);
 
 	if (!obj_auxi->io_retry) {
+
 		if (obj_auxi->opc == DAOS_OBJ_RPC_SYNC &&
 		    task->dt_result != 0) {
 			struct daos_obj_sync_args	*sync_args;
@@ -2393,16 +2404,66 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	}
 }
 
+/* Selects next replica in the object's layout.
+ */
+static int
+obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
+{
+	struct daos_oclass_attr	*oca;
+	unsigned int next_shard, retry_size, shard_cnt, shard_idx;
+	int rc = 0;
+
+	/* CSUM retry for EC object is not supported yet */
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+		obj_auxi->spec_shard = 1;
+		rc = -DER_CSUM;
+		goto out;
+	}
+	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
+			      &shard_idx, &shard_cnt);
+	if (rc != 0)
+		goto out;
+
+	/* bitmap has only 8 bits, so retry to the first eight replicas */
+	retry_size = shard_cnt <= 8 ? shard_cnt : 8;
+	next_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) %
+		retry_size + shard_idx;
+
+	/* all replicas have csum error for this fetch request */
+	if (next_shard == obj_auxi->initial_shard) {
+		obj_auxi->spec_shard = 1;
+		rc = -DER_CSUM;
+		goto out;
+	}
+	setbit(bitmap, next_shard - shard_idx);
+out:
+	return rc;
+}
+
+/* Sets initial shard so retry will know when all replicas have been tried.
+ */
+static inline void
+obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		      uint64_t dkey_hash, unsigned int map_ver)
+{
+	obj_auxi->initial_shard = obj_dkey2shard(obj, dkey_hash, map_ver,
+						 DAOS_OBJ_RPC_FETCH,
+						 obj_auxi->to_leader);
+}
+
 static int
 do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		uint32_t flags, uint32_t shard)
 {
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
+	uint8_t                 *tgt_bitmap = NULL;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
+	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &epoch);
 	if (rc != 0)
@@ -2438,10 +2499,25 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		D_ASSERT(!obj_auxi->to_leader);
 	else
 		obj_auxi->to_leader = (flags & DIOF_TO_LEADER) != 0;
+
+	/* for CSUM error, build a bitmap with only the next target set,
+	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
+	 * (increment shard mod rdg-size, set appropriate bit).
+	 */
+	if (obj_auxi->csum_retry) {
+		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
+				   &csum_bitmap);
+		if (rc)
+			goto out_task;
+		tgt_bitmap = &csum_bitmap;
+	} else {
+		obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
+		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
+	}
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
-			      dkey_hash, obj_auxi->reasb_req.tgt_bitmap,
-			      map_ver, obj_auxi->to_leader,
-			      obj_auxi->spec_shard, &obj_auxi->req_tgts);
+			      dkey_hash, tgt_bitmap, map_ver,
+			      obj_auxi->to_leader, obj_auxi->spec_shard,
+			      &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
