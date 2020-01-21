@@ -34,7 +34,8 @@ public final class Constants {
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
 
-  public static final int FILE_DEFAULT_CHUNK_SIZE = 0; // DAOS will decide what default is. 1MB for now.
+  // DAOS will decide what default is. 1MB for now.
+  public static final int FILE_DEFAULT_CHUNK_SIZE = 0;
   public static final int FILE_DEFAULT_FILE_MODE = 0755;
 
   // flags for setting file external attribute, see dfs_setxattr().
