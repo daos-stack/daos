@@ -194,7 +194,8 @@ db_delete(struct sys_db *db, char *table, d_iov_t *key)
 	D_ASSERT(!daos_handle_is_inval(vdb->db_coh));
 
 	db_io_init(&io, table, key, NULL);
-	rc = vos_obj_del_key(vdb->db_coh, vdb->db_obj, &io.io_key, NULL);
+	rc = vos_obj_del_key(vdb->db_coh, vdb->db_obj, &io.io_key,
+			     &io.io_iod.iod_name);
 	if (rc == 0) {
 		int creds = 100;
 		/* vos_obj_del_key() wouldn't free space */

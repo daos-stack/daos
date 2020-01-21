@@ -272,9 +272,10 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		key = akey;
 		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 				      dkey, 0, DAOS_INTENT_PUNCH, NULL, &toh);
-		if (rc)
+		if (rc) {
 			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
 			goto out_tx;
+		}
 	} else { /* delete dkey */
 		key = dkey;
 		toh = obj->obj_toh;
