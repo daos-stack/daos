@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -147,6 +148,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
+		}
+
+		// Provide special handling for the ofi+verbs provider.
+		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
+		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+		// specify the correct device for each.
+		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
+			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			if err != nil {
+				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+			}
+			envVar := "OFI_DOMAIN=" + deviceAlias
+			srvCfg.WithEnvVars(envVar)
 		}
 
 		// If the configuration specifies that we should explicitly set hugepage values
