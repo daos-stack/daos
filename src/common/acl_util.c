@@ -395,7 +395,7 @@ perms_unified(struct daos_ace *ace)
 		if (bits & DAOS_ACL_ ## bit_name)			\
 			rc = write_char(&pen, bit_name ## _CH,		\
 					&remaining_len);		\
-	} while(0)
+	} while (0)
 
 int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
