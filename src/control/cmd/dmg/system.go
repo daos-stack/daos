@@ -64,11 +64,22 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
+// addRankPrefix is a hack, but don't want to modify the hostlist library to
+// accept invalid hostnames.
+func addRankPrefix(rank uint32) string {
+	return fmt.Sprintf("r-%d", rank)
+}
+
+// removeRankPrefixes is a hack, but don't want to modify the hostlist library to
+// accept invalid hostnames.
+func removeRankPrefixes(in string) string {
+	return strings.Replace(in, "r-", "", -1)
+}
+
 func displaySystemQuery(log logging.Logger, members system.Members) error {
-	rankPrefix := "r-"
 	groups := make(hostlist.HostGroups)
 	for _, m := range members {
-		if err := groups.AddHost(m.State().String(), fmt.Sprintf("%s%d", rankPrefix, m.Rank)); err != nil {
+		if err := groups.AddHost(m.State().String(), addRankPrefix(m.Rank)); err != nil {
 			return err
 		}
 	}
@@ -80,8 +91,7 @@ func displaySystemQuery(log logging.Logger, members system.Members) error {
 
 	// kind of a hack, but don't want to modify the hostlist library to
 	// accept invalid hostnames.
-	out = strings.Replace(out, rankPrefix, "", -1)
-	log.Info(out)
+	log.Info(removeRankPrefixes(out))
 
 	return nil
 }
@@ -163,7 +173,6 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 }
 
 func displaySystemAction(log logging.Logger, results system.MemberResults) error {
-	rankPrefix := "r-"
 	groups := make(hostlist.HostGroups)
 
 	for _, r := range results {
@@ -173,7 +182,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 		}
 
 		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
-		if err := groups.AddHost(resStr, fmt.Sprintf("%s%d", rankPrefix, r.Rank)); err != nil {
+		if err := groups.AddHost(resStr, addRankPrefix(r.Rank)); err != nil {
 			return errors.Wrap(err, "adding rank result to group")
 		}
 	}
@@ -183,10 +192,7 @@ func displaySystemAction(log logging.Logger, results system.MemberResults) error
 		return errors.Wrap(err, "printing result table")
 	}
 
-	// kind of a hack, but don't want to modify the hostlist library to
-	// accept invalid hostnames.
-	out = strings.Replace(out, rankPrefix, "", -1)
-	log.Info(out)
+	log.Info(removeRankPrefixes(out))
 
 	return nil
 }
