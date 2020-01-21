@@ -28,7 +28,7 @@ import general_utils
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from command_utils import CommandFailure
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 
 
@@ -190,12 +190,12 @@ class BashCmd(TestWithServers):
                                 fi".format(abs_file_path1, self.dd_count,
                                            self.dd_blocksize),
                                 u"cp -r {} {}".format(abs_file_path1,
-                                                      abs_file_path2),
+                                                     abs_file_path2),
                                 u"cmp --silent {} {}".format(abs_file_path1,
-                                                             abs_file_path2),
+                                                            abs_file_path2),
                                 u"rm {}".format(abs_file_path2),
                                 u"mv {} {}".format(abs_file_path1,
-                                                   abs_file_path2),
+                                                  abs_file_path2),
                                 u"ls -al {}".format(abs_file_path2),
                                 u"rm {}".format(abs_file_path2),
                                 u"rmdir {}".format(abs_dir_path)]
