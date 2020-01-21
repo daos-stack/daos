@@ -569,14 +569,14 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
-	struct 			pool_target *my_tgts;
+	struct			pool_target *my_tgts;
 	daos_unit_oid_t		oid = ent->ie_oid;
 	unsigned int		tgt_array[LOCAL_ARRAY_SIZE];
 	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int		*tgts = NULL;
 	unsigned int		*shards = NULL;
 	int			rebuild_nr = 0;
-	int 			num_targets;
+	int			num_targets;
 	d_rank_t		myrank;
 	int			i;
 	int			rc;
@@ -634,7 +634,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 	num_targets = pool_map_find_target_by_rank_idx(map->pl_poolmap, myrank,
 			PO_COMP_ID_ALL, &my_tgts);
-	for(i = 0; i < num_targets; ++i) {
+	for (i = 0; i < num_targets; ++i) {
 		if (my_tgts[i].ta_comp.co_status == PO_COMP_ST_UP) {
 			vos_obj_delete(param->ip_hdl, oid);
 			break;

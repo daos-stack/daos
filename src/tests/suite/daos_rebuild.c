@@ -143,14 +143,16 @@ static void
 rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, true, false);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, true,
+			false);
 }
 
 static void
 reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false, false);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
+			false);
 }
 void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,

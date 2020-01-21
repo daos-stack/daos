@@ -75,7 +75,6 @@ print_usage(int rank)
 	print_message("daos_test -R|--MD_replication_tests\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
-	print_message("daos_test -t|--reintegration\n");
 	print_message("daos_test -v|--rebuild_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
@@ -219,14 +218,6 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests,
 							   sub_tests_size);
 			break;
-		case 't':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS reintegration tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_reintegration_test(rank, size,
-						sub_tests,
-						sub_tests_size);
-			break;
 		case 'F':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS FileSystem (DFS) test..");
@@ -304,7 +295,6 @@ main(int argc, char **argv)
 		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
-		{"reintegration",	no_argument,	NULL,	't'},
 		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
