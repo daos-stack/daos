@@ -36,6 +36,7 @@
 #include <uuid/uuid.h>
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
+#include "../srv.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
 
@@ -1506,24 +1507,27 @@ test_drpc_pool_create_invalid_acl(void **state)
 }
 
 /*
- * dRPC ping rank tests
+ * dRPC Rank test utils
  */
 static void
-expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
+expect_daos_resp_with_der(Drpc__Response *resp, int exp_der)
 {
-	Mgmt__PingRankResp	*pc_resp = NULL;
+	Mgmt__DaosResp	*d_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
 
-	pc_resp = mgmt__ping_rank_resp__unpack(NULL, resp->body.len,
-					       resp->body.data);
-	assert_non_null(pc_resp);
-	assert_int_equal(pc_resp->status, exp_rc);
+	d_resp = mgmt__daos_resp__unpack(NULL, resp->body.len,
+					 resp->body.data);
+	assert_non_null(d_resp);
+	assert_int_equal(d_resp->status, exp_der);
 
-	mgmt__ping_rank_resp__free_unpacked(pc_resp, NULL);
+	mgmt__daos_resp__free_unpacked(d_resp, NULL);
 }
 
+/*
+ * dRPC ping rank tests
+ */
 static void
 pack_ping_rank_req(Mgmt__PingRankReq *req, Drpc__Call *call)
 {
@@ -1547,11 +1551,11 @@ test_drpc_ping_rank_success(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PingRankReq	pr_req = MGMT__PING_RANK_REQ__INIT;
 
-	pack_ping_rank_req(&pc_req, &call);
+	pack_ping_rank_req(&pr_req, &call);
 
 	ds_mgmt_drpc_ping_rank(&call, &resp);
 
-	expect_create_resp_with_success(&resp, 0);
+	expect_daos_resp_with_der(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1561,22 +1565,6 @@ test_drpc_ping_rank_success(void **state)
 /*
  * dRPC kill rank tests
  */
-static void
-expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
-{
-	Mgmt__KillRankResp	*pc_resp = NULL;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	pc_resp = mgmt__kill_rank_resp__unpack(NULL, resp->body.len,
-					       resp->body.data);
-	assert_non_null(pc_resp);
-	assert_int_equal(pc_resp->status, exp_rc);
-
-	mgmt__kill_rank_resp__free_unpacked(pc_resp, NULL);
-}
-
 static void
 pack_kill_rank_req(Mgmt__KillRankReq *req, Drpc__Call *call)
 {
@@ -1598,38 +1586,21 @@ test_drpc_kill_rank_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__KillRankReq	pr_req = MGMT__KILL_RANK_REQ__INIT;
+	Mgmt__KillRankReq	kr_req = MGMT__KILL_RANK_REQ__INIT;
 
-	pack_kill_rank_req(&pc_req, &call);
+	pack_kill_rank_req(&kr_req, &call);
 
 	ds_mgmt_drpc_kill_rank(&call, &resp);
 
-	expect_create_resp_with_success(&resp, 0);
+	expect_daos_resp_with_der(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 /*
  * dRPC prep shutdown tests
  */
-static void
-expect_create_resp_with_rc(Drpc__Response *resp, int exp_rc)
-{
-	Mgmt__PrepShutdownResp	*pc_resp = NULL;
-
-	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp->body.data);
-
-	pc_resp = mgmt__prep_shutdown_resp__unpack(NULL, resp->body.len,
-					       resp->body.data);
-	assert_non_null(pc_resp);
-	assert_int_equal(pc_resp->status, exp_rc);
-
-	mgmt__prep_shutdown_resp__free_unpacked(pc_resp, NULL);
-}
-
 static void
 pack_prep_shutdown_req(Mgmt__PrepShutdownReq *req, Drpc__Call *call)
 {
@@ -1651,17 +1622,16 @@ test_drpc_prep_shutdown_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__PrepShutdownReq	pr_req = MGMT__PREP_SHUTDOWN_REQ__INIT;
+	Mgmt__PrepShutdownReq	ps_req = MGMT__PREP_SHUTDOWN_REQ__INIT;
 
-	pack_prep_shutdown_req(&pc_req, &call);
+	pack_prep_shutdown_req(&ps_req, &call);
 
 	ds_mgmt_drpc_prep_shutdown(&call, &resp);
 
-	expect_create_resp_with_success(&resp, 0);
+	expect_daos_resp_with_der(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
