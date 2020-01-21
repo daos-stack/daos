@@ -434,6 +434,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_size_t		 rsize;
 	daos_off_t		 index;
 	daos_off_t		 end;
+	bool			 csum_enabled = false;
 	int			 rc;
 
 	index = recx->rx_idx;
@@ -491,8 +492,12 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			if (rc != 0)
 				return rc;
 			biov_align_lens(&biov, ent, rsize);
+			csum_enabled = true;
 		} else {
 			bio_iov_set_extra(&biov, 0, 0);
+			if (csum_enabled)
+				D_ERROR("Checksum found in some entries, "
+					"but not all");
 		}
 
 		rc = iod_fetch(ioc, &biov);

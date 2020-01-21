@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1173,6 +1173,8 @@ struct dc_cont_glob {
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	uint16_t	dcg_csum_type;
+	uint32_t	dcg_csum_chunksize;
 };
 
 static inline daos_size_t
@@ -1234,6 +1236,9 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
+	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
+	cont_glob->dcg_csum_chunksize =
+		daos_csummer_get_chunksize(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:
@@ -1311,6 +1316,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	daos_csummer_init(&cont->dc_csummer,
+		daos_csum_type2algo(cont_glob->dcg_csum_type),
+		cont_glob->dcg_csum_chunksize);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
