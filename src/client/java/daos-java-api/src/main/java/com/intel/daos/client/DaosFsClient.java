@@ -113,14 +113,14 @@ public final class DaosFsClient {
 
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
 
-  //make it non-daemon so that all DAOS file object can be released
+  // make it non-daemon so that all DAOS file object can be released
   private final ExecutorService cleanerExe = Executors.newSingleThreadExecutor((r) -> {
     Thread thread = new Thread(r, "DAOS file object cleaner thread");
     thread.setDaemon(true);
     return thread;
   });
 
-  //keyed by poolId+contId
+  // keyed by poolId+contId
   private static final Map<String, DaosFsClient> pcFsMap = new ConcurrentHashMap<>();
 
   static {
@@ -412,6 +412,34 @@ public final class DaosFsClient {
   }
 
   /**
+   * move file from <code>srcName</code> under directory denoted by <code>srcParentObjId</code>
+   * to <code>destName</code> under directory denoted by <code>destParentObjId</code>.
+   * This method is more efficient than {@link #move(String, String)} since we don't need to open
+   * both source directory and destination directory.
+   *
+   * @param srcParentObjId
+   * object id of source directory
+   * @param srcName
+   * source file name without any path
+   * @param destParentObjId
+   * object id of destination directory
+   * @param destName
+   * destination file name without any path
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  public void move(long srcParentObjId, String srcName, long destParentObjId, String destName) throws IOException {
+    srcName = DaosUtils.normalize(srcName);
+    if (srcName.indexOf('/') >= 0) {
+      throw new IllegalArgumentException("srcName should not contain any path");
+    }
+    if (destName.indexOf('/') >= 0) {
+      throw new IllegalArgumentException("destName should not contain any path");
+    }
+    move(dfsPtr, srcParentObjId, srcName, destParentObjId, destName);
+  }
+
+  /**
    * delete file or directory denoted by <code>path</code>. Non-empty directory will be deleted
    * if <code>force</code> is true.
    *
@@ -514,7 +542,7 @@ public final class DaosFsClient {
     }
   }
 
-  //------------------native methods------------------
+  // ------------------native methods------------------
 
   /**
    * move file object denoted by <code>srcPath</code> to new path denoted by <code>destPath</code>.
@@ -529,6 +557,28 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   native void move(long dfsPtr, String srcPath, String destPath) throws IOException;
+
+  /**
+   * move file from <code>srcName</code> under directory denoted by <code>srcParentObjId</code>
+   * to <code>destName</code> under directory denoted by <code>destParentObjId</code>.
+   * This method is more efficient than {@link #move(String, String)} since we don't need to open
+   * both source directory and destination directory.
+   *
+   * @param dfsPtr
+   * pointer of dfs object
+   * @param srcParentObjId
+   * object id of source directory
+   * @param srcName
+   * source name
+   * @param destParentObjId
+   * object id of destination directory
+   * @param destName
+   * destination name
+   * @throws IOException
+   * {@link DaosIOException}
+   */
+  native void move(long dfsPtr, long srcParentObjId, String srcName, long destParentObjId, String destName)
+          throws IOException;
 
   /**
    * make directory denoted by <code>path</code>.
@@ -559,8 +609,8 @@ public final class DaosFsClient {
    * file mode, see {@link DaosFsClientBuilder#defaultFileMode(int)} for possible values
    * @param accessFlags
    * file access flags, see {@link DaosFsClientBuilder#defaultFileAccessFlags(int)} for its possible values
-   * @param objectType
-   * object type, see {@link DaosFsClientBuilder#defaultFileObjType} for its possible values
+   * @param objType
+   * object type in string, see {@link DaosFsClientBuilder#defaultFileObjType} for its possible values
    * @param chunkSize
    * file chunk size
    * @param createParent
@@ -570,7 +620,7 @@ public final class DaosFsClient {
    * {@link DaosIOException}
    */
   native long createNewFile(long dfsPtr, String parentPath, String name, int mode, int accessFlags,
-                            int objectType, int chunkSize, boolean createParent) throws IOException;
+                            String objType, int chunkSize, boolean createParent) throws IOException;
 
   /**
    * delete file with <code>name</code> from <code>parentPath</code>.
@@ -642,7 +692,7 @@ public final class DaosFsClient {
   static native void daosClosePool(long poolPtr) throws IOException;
 
 
-  //DAOS FS corresponding methods
+  // DAOS FS corresponding methods
 
   /**
    * set prefix.
@@ -1005,7 +1055,7 @@ public final class DaosFsClient {
    * A builder for constructing Java DAOS FS Client. All parameters should be specified here. This builder
    * makes sure single instance of {@link DaosFsClient} per pool and container.
    *
- * <p>
+   * <p>
    * Please note that new pool and new container will be created if their ids (poolId and containerId) are {@code null}.
    */
   public static class DaosFsClientBuilder implements Cloneable {

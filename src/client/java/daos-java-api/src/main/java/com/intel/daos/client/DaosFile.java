@@ -167,7 +167,7 @@ public class DaosFile {
     }
     //parse path to get parent and name.
     //dfs lookup parent and then dfs open
-    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.getValue(), chunkSize,
+    objId = client.createNewFile(dfsPtr, parentPath, name, mode, accessFlags, objectType.name(), chunkSize,
             createParent);
     createCleaner();
   }

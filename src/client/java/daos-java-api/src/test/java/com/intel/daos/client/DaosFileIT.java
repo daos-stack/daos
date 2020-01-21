@@ -51,6 +51,7 @@ public class DaosFileIT {
     dir2.mkdirs();
     String destPath = dir2.getPath() + "/data2";
     DaosFile destFile = srcFile.rename(destPath);
+    Assert.assertTrue(destFile.exists());
     Assert.assertEquals(0, destFile.length());
   }
 

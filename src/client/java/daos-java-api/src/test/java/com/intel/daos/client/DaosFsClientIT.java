@@ -48,25 +48,6 @@ public class DaosFsClientIT {
   }
 
   @Test
-  public void testCreateNewPoolWithoutScmSize()throws Exception{
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    Exception ee = null;
-    DaosFsClient client = null;
-    try {
-      client = builder.build();
-    }catch (Exception e){
-      ee = e;
-    }finally {
-      if(client != null){
-        client.disconnect();
-      }
-    }
-    Assert.assertTrue(ee instanceof DaosIOException);
-    DaosIOException de = (DaosIOException)ee;
-    Assert.assertEquals(Constants.CUSTOM_ERR_NO_POOL_SIZE.getCode(), de.getErrorCode());
-  }
-
-  @Test
   public void testFsClientCachePerPoolAndContainer()throws Exception{
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
     builder.poolId(poolId).containerId(contId);
@@ -137,6 +118,64 @@ public class DaosFsClientIT {
       Assert.assertTrue(client != null);
       client.mkdir("/mkdir/1", false);
       client.mkdir("/mkdir/1", false);
+    }finally {
+      if(client != null){
+        client.disconnect();
+      }
+    }
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testMoveWithOpenDirsIllegalSrcName() throws Exception {
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+    builder.poolId(poolId).containerId(contId);
+    DaosFsClient client = null;
+    try{
+      String fileName = "srcFile/zb";
+      client = builder.build();
+      client.move(0, fileName, 0, "destFile");
+    }finally {
+      if(client != null){
+        client.disconnect();
+      }
+    }
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testMoveWithOpenDirsIllegalDestName() throws Exception {
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+    builder.poolId(poolId).containerId(contId);
+    DaosFsClient client = null;
+    try{
+      String fileName = "srcFile";
+      client = builder.build();
+      client.move(0, fileName, 0, "/destFile");
+    }finally {
+      if(client != null){
+        client.disconnect();
+      }
+    }
+  }
+
+  @Test
+  public void testMoveWithOpenDirs() throws Exception {
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
+    builder.poolId(poolId).containerId(contId);
+    DaosFsClient client = null;
+    try{
+      String fileName = "srcFile";
+      client = builder.build();
+      DaosFile srcDir = client.getFile("/mdir1");
+      srcDir.mkdirs();
+      DaosFile srcFile = client.getFile(srcDir, fileName);
+      srcFile.createNewFile();
+
+      DaosFile destDir = client.getFile("/mdir2");
+      destDir.mkdirs();
+      String destFileName = "destFile";
+      client.move(srcDir.getObjId(), fileName, destDir.getObjId(), destFileName);
+      Assert.assertFalse(srcFile.exists());
+      Assert.assertTrue(client.getFile(destDir, destFileName).exists());
     }finally {
       if(client != null){
         client.disconnect();

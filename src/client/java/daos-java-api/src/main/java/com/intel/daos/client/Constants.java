@@ -33,7 +33,6 @@ public final class Constants {
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
   public static final String POOL_DEFAULT_RANKS = "0";
-  public static final int POOL_DEFAULT_SVC_REPLICS = 1;
 
   public static final int FILE_DEFAULT_CHUNK_SIZE = 0; // DAOS will decide what default is. 1MB for now.
   public static final int FILE_DEFAULT_FILE_MODE = 0755;
@@ -83,6 +82,4 @@ public final class Constants {
   public static final int ACCESS_FLAG_CONTAINER_READONLY = 1;
   public static final int ACCESS_FLAG_CONTAINER_READWRITE = 2;
   public static final int ACCESS_FLAG_CONTAINER_NOSLIP = 4;
-
-
 }

@@ -184,124 +184,6 @@ throw_exception_const_msg(JNIEnv *env, char *msg, int error_code)
 }
 
 /**
- * JNI method to create new pool for mounting DFS.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	serverGroup	server group name
- * \param[in]	svcReplics	service replications
- * \param[in]	mode		pool mode
- * \param[in]	scmSize		scm size
- * \param[in]	nvmeSize	nvme size
- *
- * \return	pool UUID + " " + rank1 + ":" + rank2 + ":" + ...
- */
-JNIEXPORT jstring JNICALL
-Java_com_intel_daos_client_DaosFsClient_daosCreatePool(JNIEnv *env,
-		jclass clientClass, jstring serverGroup, jint svcReplics,
-		jint mode, jlong scmSize, jlong nvmeSize)
-{
-
-	d_rank_t svc[svcReplics];
-	d_rank_list_t svcl = {};
-
-	printf("creating pool ... \n");
-	memset(svc, 0, sizeof(svc));
-	svcl.rl_ranks = svc;
-	svcl.rl_nr = svcReplics;
-	if (!(scmSize > 0 || nvmeSize > 0)) {
-		char *tmp = "Either scm size (%ld) or nvme size (%ld) should " \
-	"be greater than 0";
-		char *msg = (char *)malloc(strlen(tmp) + 16);
-
-		sprintf(msg, tmp, scmSize, nvmeSize);
-		throw_exception(env, msg, CUSTOM_ERR1);
-		return NULL;
-	}
-	uuid_t pool_uuid;
-	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
-								0);
-	int rc = daos_pool_create(mode /* mode */,
-		geteuid() /* user owner */,
-		getegid() /* group owner */,
-		server_group /* daos server process set ID */,
-		NULL /* list of targets, NULL = all */,
-		"pmem" /* storage type to use, use default */,
-		scmSize ,
-		nvmeSize ,
-		NULL ,
-		&svcl /* pool service nodes, used for connect */,
-		pool_uuid, /* the uuid of the pool created */
-		NULL /* event, use blocking call for now */);
-	jstring ret;
-
-	if (rc) {
-		char *tmp = "Failed to create pool with server group (%s), " \
-			"service replics (%d), mode (%d), scm size (%ld), " \
-			"nvme size (%ld)";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(server_group) +
-				24);
-
-		sprintf(msg, tmp, serverGroup, svcReplics, mode, scmSize,
-				nvmeSize);
-		throw_exception_base(env, msg, rc, 1, 0);
-		ret = NULL;
-	} else {
-		char *tmp = (char *)malloc(50 + svcl.rl_nr*11);
-
-		uuid_unparse(pool_uuid, tmp);
-		strcat(tmp, " ");
-		int i;
-
-		/* Print the pool service replica ranks. */
-		for (i = 0; i < svcl.rl_nr; i++) {
-			if(i) strcat(tmp, ":");
-			char rs[10] = {'\0'};
-			sprintf(rs, "%d", svcl.rl_ranks[i]);
-			strcat(tmp, rs);
-		}
-		printf("pool created successfully, %s\n", tmp);
-		ret = (*env)->NewStringUTF(env, tmp);
-		free(tmp);
-	}
-	(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
-	return ret;
-}
-
-/**
- * JNI method to destroy pool with given \a poolId.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	serverGroup	server group name
- * \param[in]	poolId		pool UUID
- * \param[in]	force		force to destroy pool
- */
-JNIEXPORT void JNICALL
-Java_com_intel_daos_client_DaosFsClient_destroyPool(JNIEnv *env,
-		jclass clientClass, jstring serverGroup, jstring poolId,
-		jboolean force)
-{
-	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
-	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
-								0);
-	uuid_t pool_uuid;
-	uuid_parse(pool_str, pool_uuid);
-	int rc = daos_pool_destroy(pool_uuid, server_group, force, 0);
-
-	if (rc) {
-		char *tmp = "Failed to destroy pool, %s with server group, %s";
-		char *msg = (char *)malloc(strlen(tmp) + strlen(pool_str) +
-				strlen(server_group));
-
-		sprintf(msg, tmp, pool_str, server_group);
-		throw_exception(env, msg, rc);
-	}
-	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
-	(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
-}
-
-/**
  * JNI method to open pool with given \a poolId.
  *
  * \param[in]	env		JNI environment
@@ -357,8 +239,12 @@ Java_com_intel_daos_client_DaosFsClient_daosOpenPool(JNIEnv *env,
 		}
 	}
 	(*env)->ReleaseStringUTFChars(env, poolId, pool_str);
-	(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
-	(*env)->ReleaseStringUTFChars(env, ranks, svc_ranks);
+	if (serverGroup != NULL) {
+		(*env)->ReleaseStringUTFChars(env, serverGroup, server_group);
+	}
+	if (ranks != NULL) {
+		(*env)->ReleaseStringUTFChars(env, ranks, svc_ranks);
+	}
 	return ret;
 }
 
@@ -579,11 +465,12 @@ Java_com_intel_daos_client_DaosFsClient_daosFinalize(JNIEnv *env,
  * \param[in]	destPath	destination path
  */
 JNIEXPORT void JNICALL
-Java_com_intel_daos_client_DaosFsClient_move(JNIEnv *env, jobject obj,
-		jlong dfsPtr, jstring srcPath, jstring destPath)
+Java_com_intel_daos_client_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
+		JNIEnv *env, jobject obj, jlong dfsPtr, jstring srcPath,
+		jstring destPath)
 {
-	const char* src_path = (*env)->GetStringUTFChars(env, srcPath, NULL);
-	const char* dest_path = (*env)->GetStringUTFChars(env, destPath, NULL);
+	const char *src_path = (*env)->GetStringUTFChars(env, srcPath, NULL);
+	const char *dest_path = (*env)->GetStringUTFChars(env, destPath, NULL);
 	char *src_dir_path = NULL;
 	char *src_base_path = NULL;
 	char *dest_dir_path = NULL;
@@ -593,10 +480,10 @@ Java_com_intel_daos_client_DaosFsClient_move(JNIEnv *env, jobject obj,
 	src_base_path = strdup(src_path);
 	dest_dir_path = strdup(dest_path);
 	dest_base_path = strdup(dest_path);
-	char * src_dir = dirname(src_dir_path);
-	char * src_base = basename(src_base_path);
-	char * dest_dir = dirname(dest_dir_path);
-	char * dest_base = basename(dest_base_path);
+	char *src_dir = dirname(src_dir_path);
+	char *src_base = basename(src_base_path);
+	char *dest_dir = dirname(dest_dir_path);
+	char *dest_base = basename(dest_base_path);
 	dfs_obj_t *src_dir_handle = NULL;
 	dfs_obj_t *dest_dir_handle = NULL;
 	mode_t tmp_mode;
@@ -647,6 +534,50 @@ out:
 	if (src_dir_handle != dest_dir_handle) dfs_release(dest_dir_handle);
 	(*env)->ReleaseStringUTFChars(env, srcPath, src_path);
 	(*env)->ReleaseStringUTFChars(env, destPath, dest_path);
+}
+
+/**
+ * move file from \a srcName under directory denoted by \a srcPrtObjId
+ * to \a destName under directory denoted by \a destPrtObjId.
+ * This method is more efficient than last move(srcPath, destPath) since we
+ * don't need to open both source directory and destination directory.
+ *
+ * \param[in]	env		JNI environment
+ * \param[in]	obj		object of DaosFsClient
+ * \param[in]	dfsPtr		pointer to dfs object
+ * \param[in]	srcPrtObjId	source parent object id
+ * \param[in]	srcName		source name, just file name without any path
+ * \param[in]	destPrtObjId	dest parent object id
+ * \param[in]	destName	destination name, just file name without any
+ * 				path
+ */
+JNIEXPORT void JNICALL
+Java_com_intel_daos_client_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_String_2(
+		JNIEnv *env, jobject obj, jlong dfsPtr, jlong srcPrtObjId,
+		jstring srcName, jlong destPrtObjId, jstring destName)
+{
+	char *src_base = (*env)->GetStringUTFChars(env, srcName, NULL);
+	char *dest_base = (*env)->GetStringUTFChars(env, destName, NULL);
+	dfs_obj_t *src_dir_handle = *(dfs_obj_t**)&srcPrtObjId;
+	dfs_obj_t *dest_dir_handle = *(dfs_obj_t**)&destPrtObjId;
+	mode_t tmp_mode;
+	dfs_t *dfs = *(dfs_t**)&dfsPtr;
+	int rc = dfs_move(dfs, src_dir_handle, src_base, dest_dir_handle,
+			dest_base, NULL);
+
+	if (rc) {
+		char *tmp = "Failed to move source file (%s) under dir (%ld)" \
+			" to destination file (%s) under dir (%ld)";
+		char *msg = (char *)malloc(strlen(tmp) + strlen(src_base) +
+			20 + strlen(dest_base) + 20);
+
+		sprintf(msg, tmp, src_base, srcPrtObjId, dest_base,
+				destPrtObjId);
+		throw_exception(env, msg, rc);
+	}
+out:
+	(*env)->ReleaseStringUTFChars(env, srcName, src_base);
+	(*env)->ReleaseStringUTFChars(env, destName, dest_base);
 }
 
 /**
@@ -810,7 +741,7 @@ Java_com_intel_daos_client_DaosFsClient_mkdir(JNIEnv *env, jobject client,
  * \param[in]	name		new file name
  * \param[in]	mode		file mode
  * \param[in]	accessFlags	file access flags
- * \param[in]	objectId	id of object type of this new file
+ * \param[in]	objectType	object type of this new file
  * \param[in]	chunkSize	file chunk size
  * \param[in]	createParent	create parent directory recursively if it
  * 				doesn't exist
@@ -820,17 +751,21 @@ Java_com_intel_daos_client_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 JNIEXPORT jlong JNICALL
 Java_com_intel_daos_client_DaosFsClient_createNewFile(JNIEnv *env,
 		jobject client, jlong dfsPtr, jstring parentPath, jstring name,
-		jint mode, jint accessFlags, jint objectId, jint chunkSize,
+		jint mode, jint accessFlags, jstring objectType, jint chunkSize,
 		jboolean createParent)
 {
 	dfs_t *dfs = *(dfs_t**)&dfsPtr;
-	const char* parent_path = (*env)->GetStringUTFChars(env, parentPath,
+	const char *parent_path = (*env)->GetStringUTFChars(env, parentPath,
 			NULL);
-	const char* file_name = (*env)->GetStringUTFChars(env, name, NULL);
+	const char *file_name = (*env)->GetStringUTFChars(env, name, NULL);
+	const char *object_type = (*env)->GetStringUTFChars(env, objectType,
+								NULL);
+	int type_id = daos_oclass_name2id(object_type);
 	char *parentError = NULL;
 	dfs_obj_t *file = NULL;
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
+
 	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode, NULL);
 
 	if (rc) {
@@ -866,7 +801,7 @@ Java_com_intel_daos_client_DaosFsClient_createNewFile(JNIEnv *env,
 	}
 
 	rc = dfs_open(dfs, parent, file_name, S_IFREG | mode,
-			O_CREAT | accessFlags, objectId, chunkSize, NULL,
+			O_CREAT | accessFlags, type_id, chunkSize, NULL,
 			&file);
 	if (rc) {
 		char *tmp = "Failed to create new file (%s) under " \
@@ -880,6 +815,7 @@ Java_com_intel_daos_client_DaosFsClient_createNewFile(JNIEnv *env,
 out:
 	(*env)->ReleaseStringUTFChars(env, parentPath, parent_path);
 	(*env)->ReleaseStringUTFChars(env, name, file_name);
+	(*env)->ReleaseStringUTFChars(env, objectType, object_type);
 	if (parentError) free(parentError);
 	if (parent) dfs_release(parent);
 	return *(jlong*)&file;
@@ -1131,7 +1067,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 	if (rc) {
 		char *tmp = "Failed to read %ld bytes from file starting " \
 				"at %ld";
-		char *msg = (char *)malloc(strlen(tmp) + 8 + 8);
+		char *msg = (char *)malloc(strlen(tmp) + 20 + 20);
 
 		sprintf(msg, tmp, len, fileOffset);
 		throw_exception(env, msg, rc);
@@ -1175,7 +1111,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsWrite(JNIEnv *env, jobject client,
 
 	if (rc) {
 		char *tmp = "Failed to write %ld bytes to file starting at %ld";
-		char *msg = (char *)malloc(strlen(tmp) + 8 + 8);
+		char *msg = (char *)malloc(strlen(tmp) + 20 + 20);
 
 		sprintf(msg, tmp, len, fileOffset);
 		throw_exception(env, msg, rc);
