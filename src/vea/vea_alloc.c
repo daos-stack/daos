@@ -455,6 +455,11 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		rc = daos_gettime_coarse(&found->vfe_age);
 		if (rc)
 			return rc;
+	} else {
+		/* Remove the original free extent from persistent tree */
+		rc = dbtree_delete(btr_hdl, BTR_PROBE_BYPASS, &key_out, NULL);
+		if (rc)
+			return rc;
 	}
 
 	return 0;
