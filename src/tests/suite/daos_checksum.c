@@ -239,6 +239,44 @@ checksum_disabled(void **state)
 }
 
 static void
+sv_still_works(void **state)
+{
+	struct csum_test_ctx	 ctx = {0};
+	int			 rc;
+
+	/**
+	 * Setup
+	 */
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_OFF, false, 0);
+
+	/** force to be SV */
+	ctx.update_iod.iod_type = DAOS_IOD_SINGLE;
+	ctx.update_iod.iod_recxs = NULL;
+	ctx.update_iod.iod_size = daos_sgl_buf_size(&ctx.update_sgl);
+
+	/**
+	 * Act
+	 */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Clean up
+	 */
+
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+
+}
+
+static void
 io_with_server_side_verify(void **state)
 {
 	struct csum_test_ctx	 ctx = {0};
@@ -648,6 +686,8 @@ setup(void **state)
 static const struct CMUnitTest tests[] = {
 	{ "DAOS_CSUM00: csum disabled",
 		checksum_disabled, async_disable, test_case_teardown},
+	{ "DAOS_CSUM00: SV still works",
+		sv_still_works, async_disable, test_case_teardown},
 	{ "DAOS_CSUM01: simple update with server side verify",
 		io_with_server_side_verify, async_disable, test_case_teardown},
 	{ "DAOS_CSUM02: Fetch Array Type",

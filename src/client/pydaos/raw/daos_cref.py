@@ -178,8 +178,7 @@ class DaosIODescriptor(ctypes.Structure):
                 ("iod_type", ctypes.c_int),
                 ("iod_size", ctypes.c_uint64),
                 ("iod_nr", ctypes.c_uint32),
-                ("iod_recxs", ctypes.POINTER(Extent)),
-                ("iod_eprs", ctypes.c_void_p)]
+                ("iod_recxs", ctypes.POINTER(Extent))]
 
 class Anchor(ctypes.Structure):
     """ Class to represent a C daos_anchor_t struct. """

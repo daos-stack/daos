@@ -2143,7 +2143,8 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 }
 
 static int
-obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args) {
+obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args)
+{
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 	int			 rc;
 
@@ -2537,7 +2538,6 @@ dc_obj_update(tse_task_t *task)
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
-
 	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch);
 	if (rc != 0)
 		D_GOTO(out_task, rc);

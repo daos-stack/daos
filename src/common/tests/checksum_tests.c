@@ -523,12 +523,10 @@ test_get_iod_csum_allocation_size(void **state)
 	fake_get_size_result = csum_size;
 	daos_csummer_init(&csummer, &fake_algo, chunksize);
 
-	assert_int_equal(sizeof(struct dcs_iod_csums),
-			 daos_csummer_allocation_size(csummer, &iods[0], 1));
-
 	iods[0].iod_nr = 1;
 	iods[0].iod_recxs = recxs;
 	iods[0].iod_size = 1;
+	iods[0].iod_type = DAOS_IOD_ARRAY;
 
 	recxs[0].rx_idx = 0;
 	recxs[0].rx_nr = chunksize;
@@ -556,6 +554,7 @@ test_get_iod_csum_allocation_size(void **state)
 	iods[1].iod_nr = 1;
 	iods[1].iod_recxs = recxs + 1;
 	iods[1].iod_size = 1;
+	iods[1].iod_type = DAOS_IOD_ARRAY;
 	assert_int_equal(sizeof(struct dcs_iod_csums) * 2 +
 			 sizeof(struct dcs_csum_info) * 2 +
 			 csum_size * 3,
@@ -1043,6 +1042,40 @@ test_is_csum_enabled(void **state)
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }
 
+static void
+test_sv_still_works(void **state)
+{
+	struct daos_csummer	*csummer = NULL;
+	struct dcs_iod_csums	*csums = NULL;
+	d_sg_list_t		 sgl;
+	enum DAOS_CSUM_TYPE	 type;
+	daos_iod_t		 iod = {0};
+	int			 rc;
+
+	dts_sgl_init_with_strings(&sgl, 1, "ABCDEFG");
+
+	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
+		rc = daos_csummer_init(&csummer,
+				       daos_csum_type2algo(type), 128);
+		assert_int_equal(0, rc);
+
+		iod.iod_nr = 1;
+		iod.iod_recxs = NULL;
+		iod.iod_size = daos_sgl_buf_size(&sgl);
+		iod.iod_type = DAOS_IOD_SINGLE;
+
+		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &csums);
+
+		assert_int_equal(0, rc);
+
+		daos_csummer_free_ic(csummer, &csums);
+		daos_csummer_destroy(&csummer);
+	}
+
+	daos_sgl_fini(&sgl, true);
+}
+
+
 static int test_setup(void **state)
 {
 	return 0;
@@ -1104,6 +1137,8 @@ static const struct CMUnitTest tests[] = {
 		test_align_boundaries, test_setup, test_teardown},
 	{"CSUM22: Align range to a single chunk",
 		test_align_to_chunk, test_setup, test_teardown},
+	{"CSUM23: SV still works",
+		test_sv_still_works, test_setup, test_teardown},
 };
 
 int

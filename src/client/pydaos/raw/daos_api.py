@@ -1012,9 +1012,6 @@ class IORequest(object):
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
-        # self.epoch_range.epr_lo = 0
-        # self.epoch_range.epr_hi = ~0
-
         self.txn = txn
         c_tx = ctypes.c_uint64(txn)
 
@@ -1030,8 +1027,6 @@ class IORequest(object):
         self.iod.iod_size = c_data[0][1]
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
-        # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-        #                                 ctypes.c_void_p)
 
         # now do it
         func = self.context.get_function('update-obj')
@@ -1131,9 +1126,6 @@ class IORequest(object):
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
 
-        # self.epoch_range.epr_lo = 0
-        # self.epoch_range.epr_hi = ~0
-
         # setup the descriptor
         if akey is not None:
             self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
@@ -1142,8 +1134,7 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
-            # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-            #                                 ctypes.c_void_p)
+
 
         # now do it
         if dkey is not None:
