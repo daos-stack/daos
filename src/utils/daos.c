@@ -80,8 +80,6 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
-	else if (strcmp(str, "uns-insert") == 0)
-		return CONT_UNS_INSERT;
 	return -1;
 }
 
@@ -585,8 +583,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT) &&
-	    (ap->path != NULL)) {
+	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
@@ -601,8 +598,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ap->type = dattr.da_type;
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-		ap->oclass = dattr.da_oclass_id;
-		ap->chunk_size = dattr.da_chunk_size;
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -691,9 +686,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
-		break;
-	case CONT_UNS_INSERT:
-		rc = cont_uns_insert_hdlr(ap);
 		break;
 	default:
 		break;
@@ -786,6 +778,35 @@ out:
 	return rc;
 }
 
+#define OCLASS_NAMES_LIST_SIZE 512
+
+static void
+print_oclass_names_list(FILE *stream)
+{
+	char *str;
+	size_t size = OCLASS_NAMES_LIST_SIZE, len;
+
+again:
+	str = malloc(size);
+	if (str == NULL) {
+		fprintf(stderr, "failed to malloc %zu bytes to gather oclass names list\n",
+			size);
+		return;
+	}
+	len = daos_oclass_names_list(size, str);
+	if (len <= 0)
+		goto out;
+	if (len < size)
+		fprintf(stream, "%s", str);
+	else {
+		size = len + 1;
+		free(str);
+		goto again;
+	}
+out:
+	free(str);
+}
+
 static int
 help_hdlr(struct cmd_args_s *ap)
 {
@@ -840,8 +861,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-snaps       list container snapshots taken\n"
 "	  destroy-snap     destroy container snapshots\n"
 "			   by name, epoch or range\n"
-"	  rollback         roll back container to specified snapshot\n"
-"	  uns-insert       insert container into UNS\n");
+"	  rollback         roll back container to specified snapshot\n");
 
 #if 0
 	fprintf(stream,
@@ -871,7 +891,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	--path=PATHSTR     container namespace path\n"
 "	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 "	--oclass=OCLSSTR   container object class\n"
-"			   (tiny, small, large, R2, R2S, repl_max)\n"
+"			   (");
+	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
+	print_oclass_names_list(stream);
+	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "container options (destroy):\n"

@@ -319,7 +319,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	rc = smd_dev_get_by_id(dev_uuid, &dev_info);
 	if (rc != 0) {
 		D_ERROR("Device UUID:"DF_UUID" not found\n", DP_UUID(dev_uuid));
-		goto out;
+		return rc;
 	}
 
 	D_ALLOC(resp->dev_state, buflen);

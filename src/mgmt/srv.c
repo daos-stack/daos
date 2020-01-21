@@ -273,7 +273,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -321,7 +321,7 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "mark hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }

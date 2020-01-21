@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -123,9 +123,8 @@ enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
         done;                                                                    \
         pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
-              libpmemobj-devel fuse-devel protobuf-c-devel                       \
-              spdk spdk-devel                                                    \
-              fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-19.el7            \
+              libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
+              fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-21.el7            \
               openpa-devel libfabric-devel                                       \
               dpdk-devel";                     \
         echo "Installing: $pkgs";                                                \

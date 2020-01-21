@@ -140,7 +140,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 
 	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
 	if (rc) {
-		print_error("vos container creation error: %d\n", rc);
+		print_error("vos container creation error: "DF_RC"\n",
+			    DP_RC(rc));
 		goto failed;
 	}
 	tcx->tc_step = TCX_CO_CREATE;
@@ -148,7 +149,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
 			   &tcx->tc_co_hdl);
 	if (rc) {
-		print_error("vos container open error: %d\n", rc);
+		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 	tcx->tc_step = TCX_CO_OPEN;
@@ -286,7 +287,7 @@ pool_fini(struct dts_context *tsc)
 
 	vos_pool_close(tsc->tsc_poh);
 	rc = vos_pool_destroy(tsc->tsc_pmem_file, tsc->tsc_pool_uuid);
-	D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc=%d\n", rc);
+	D_ASSERTF(rc == 0 || rc == -DER_NONEXIST, "rc="DF_RC"\n", DP_RC(rc));
 }
 
 static int

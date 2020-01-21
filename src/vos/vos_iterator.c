@@ -139,10 +139,11 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 				dict->id_name);
 		else if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch nested tree from "
-				"because of conflict modification: %d\n", rc);
+				"because of conflict modification: "DF_RC"\n",
+					DP_RC(rc));
 		else
 			D_ERROR("Problem fetching nested tree from iterator:"
-				" %d\n", rc);
+				" "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -211,11 +212,11 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	rc = dict->id_ops->iop_prepare(type, param, &iter);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "No %s to iterate: %d\n",
-				dict->id_name, rc);
+			D_DEBUG(DB_TRACE, "No %s to iterate: "DF_RC"\n",
+				dict->id_name, DP_RC(rc));
 		else
-			D_ERROR("Failed to prepare %s iterator: %d\n",
-				dict->id_name, rc);
+			D_ERROR("Failed to prepare %s iterator: "DF_RC"\n",
+				dict->id_name, DP_RC(rc));
 		return rc;
 	}
 
@@ -284,7 +285,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 		iter->it_state = VOS_ITS_END;
 	else
 		iter->it_state = VOS_ITS_NONE;
-	D_DEBUG(DB_IO, "done probing iterator rc = %d\n", rc);
+	D_DEBUG(DB_IO, "done probing iterator rc = "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -538,7 +539,8 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg)
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg)
 {
 	daos_anchor_t		*anchor, *probe_anchor = NULL;
 	vos_iter_entry_t	iter_ent;
@@ -549,6 +551,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
+	D_ASSERT(pre_cb || post_cb);
 
 	anchor = type2anchor(type, anchors);
 
@@ -558,8 +561,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to prepare iterator (type=%d): %d\n",
-				type, rc);
+			D_ERROR("failed to prepare iterator (type=%d): "
+				""DF_RC"\n", type, DP_RC(rc));
 		}
 		return rc;
 	}
@@ -576,11 +579,12 @@ probe:
 		} else {
 			if (rc == -DER_INPROGRESS)
 				D_DEBUG(DB_TRACE, "Cannot probe because of "
-					"some conflict modification: %d\n", rc);
+					"some conflict modification: "DF_RC"\n",
+					DP_RC(rc));
 			else
 				D_ERROR("failed to probe iterator (type=%d "
-					"anchor=%p): %d\n",
-					type, probe_anchor, rc);
+					"anchor=%p): "DF_RC"\n",
+					type, probe_anchor, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -591,25 +595,29 @@ probe:
 			if (rc == -DER_INPROGRESS)
 				D_DEBUG(DB_TRACE, "Cannot fetch iterator "
 					"(type=%d) because of conflict "
-					"modification: %d\n", type, rc);
+					"modification: "DF_RC"\n", type,
+					DP_RC(rc));
 			else
 				D_ERROR("failed to fetch iterator (type=%d): "
-					"%d\n", type, rc);
+					""DF_RC"\n", type, DP_RC(rc));
 			break;
 		}
 
-		rc = cb(ih, &iter_ent, type, param, arg, &acts);
-		if (rc != 0)
-			break;
+		skipped = false;
+		if (pre_cb) {
+			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
 
-		set_reprobe(type, acts, anchors, param->ip_flags);
-		skipped = (acts & VOS_ITER_CB_SKIP);
-		acts = 0;
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			skipped = (acts & VOS_ITER_CB_SKIP);
+			acts = 0;
 
-		if (need_reprobe(type, anchors)) {
-			D_ASSERT(!daos_anchor_is_zero(anchor) &&
-				 !daos_anchor_is_eof(anchor));
-			goto probe;
+			if (need_reprobe(type, anchors)) {
+				D_ASSERT(!daos_anchor_is_zero(anchor) &&
+					 !daos_anchor_is_eof(anchor));
+				goto probe;
+			}
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&
@@ -636,24 +644,35 @@ probe:
 			}
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
-					 recursive, anchors, cb, arg);
+					 recursive, anchors, pre_cb, post_cb,
+					 arg);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
+		}
 
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
+		if (post_cb) {
+			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
+			if (rc != 0)
+				break;
+
+			set_reprobe(type, acts, anchors, param->ip_flags);
+			acts = 0;
+
+		}
+
+		if (need_reprobe(type, anchors)) {
+			D_ASSERT(!daos_anchor_is_zero(anchor) &&
+				 !daos_anchor_is_eof(anchor));
+			goto probe;
 		}
 
 		rc = vos_iter_next(ih);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
 				D_ERROR("failed to iterate next (type=%d): "
-					"%d\n", type, rc);
+					""DF_RC"\n", type, DP_RC(rc));
 			break;
 		}
 	}
@@ -664,7 +683,7 @@ probe:
 	}
 out:
 	if (rc < 0)
-		D_ERROR("abort iteration type:%d, rc:%d\n", type, rc);
+		D_ERROR("abort iteration type:%d, "DF_RC"\n", type, DP_RC(rc));
 
 	vos_iter_finish(ih);
 	return rc;

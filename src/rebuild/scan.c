@@ -263,7 +263,8 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map, &targets,
 					     &failed_tgts_cnt);
 		if (rc != 0) {
-			D_ERROR("failed create failed tgt list rc %d\n", rc);
+			D_ERROR("failed create failed tgt list rc "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 
@@ -372,7 +373,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	rc = dbtree_create_inplace(tree_class, 0, 32, &uma,
 				   broot, &root.root_hdl);
 	if (rc) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_FREE(broot);
 		D_GOTO(out, rc);
 	}
@@ -700,7 +701,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	uuid_copy(xarg->co_uuid, entry->ie_couuid);
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, xarg);
+			 rebuild_obj_scan_cb, NULL, xarg);
 	vos_cont_close(coh);
 
 	/* Since dtx_resync might yield, let's reprobe anyway */
@@ -740,7 +741,7 @@ rebuild_scanner(void *data)
 	xarg.arg = arg;
 	xarg.yield_freq = DEFAULT_YIELD_FREQ;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 rebuild_container_scan_cb, &xarg);
+			 rebuild_container_scan_cb, NULL, &xarg);
 
 	ds_pool_child_put(child);
 
@@ -933,7 +934,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
 			   &scan_arg->rebuild_tree_hdl);
 	if (rc != 0) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_lock, rc);
 	}
 

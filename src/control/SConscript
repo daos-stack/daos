@@ -84,7 +84,7 @@ def scons():
     # runtime
     prefix = denv.subst("$PREFIX")
     sprefix = denv.subst("$SPDK_PREFIX")
-    if sprefix not in ["/usr", prefix]:
+    if sprefix not in ["", prefix]:
         for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
             target = join(prefix, _dir)
             if not check_dir_exists(target):

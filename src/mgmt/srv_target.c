@@ -447,7 +447,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	/** initialize DAOS-M target and fetch uuid */
 	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
+		D_ERROR("ds_pool_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_tree, rc);
 	}
 
@@ -777,7 +777,7 @@ tgt_profile_task(void *arg)
 			break;
 	}
 
-	D_DEBUG(DB_MGMT, "profile task: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
