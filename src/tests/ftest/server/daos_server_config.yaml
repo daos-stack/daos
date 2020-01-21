@@ -46,6 +46,12 @@ server_config_val: !mux
       - "amjustin, 12345, abcdef"
       - "FAIL"
       - "gen"
+  access_point_noport:
+    config_val:
+      - "access_points"
+      - "[localhost]"
+      - "PASS"
+      - "gen"
   # access_point_repeated:
   #   config_val:
   #     - "access_points"
@@ -100,18 +106,18 @@ server_config_val: !mux
       - "ABCdef"
       - "FAIL"
       - "gen"
-  # nr_hugepages_overflow_int:
-  #   config_val:
-  #     - "nr_hugepages"
-  #     - "1000000000000000000"
-  #     - "FAIL"
-  #     - "gen"
-  # nr_hugepages_negative_int:
-  #   config_val:
-  #     - "nr_hugepages"
-  #     - "-100"
-  #     - "FAIL"
-  #     - "gen"
+  nr_hugepages_overflow_int:
+    config_val:
+      - "nr_hugepages"
+      - "1000000000000000000"
+      - "PASS"
+      - "gen"
+  nr_hugepages_negative_int:
+    config_val:
+      - "nr_hugepages"
+      - "-100"
+      - "PASS"
+      - "gen"
   port_str:
     config_val:
       - "port"
@@ -172,18 +178,18 @@ server_config_val: !mux
       - "ABCDE"
       - "FAIL"
       - "server"
-  # nr_xs_helpers_negative:
-  #   config_val:
-  #     - "nr_xs_helpers"
-  #     - "-10000"
-  #     - "FAIL"
-  #     - "server"
-  # targets_negative:
-  #   config_val:
-  #     - "targets"
-  #     - "-1"
-  #     - "FAIL"
-  #     - "server"
+  nr_xs_helpers_negative:
+    config_val:
+      - "nr_xs_helpers"
+      - "-10000"
+      - "PASS"
+      - "server"
+  targets_negative:
+    config_val:
+      - "targets"
+      - "-1"
+      - "PASS"
+      - "server"
   targets_str:
     config_val:
       - "targets"
