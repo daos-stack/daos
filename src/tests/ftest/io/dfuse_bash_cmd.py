@@ -177,28 +177,28 @@ class BashCmd(TestWithServers):
                 # if doesn't exist perform some bash cmds.
                 if not dir_exists:
                     # list of commands to be executed.
-                    commands = [r"mkdir -p {}".format(abs_dir_path),
-                                r"touch {}".format(abs_file_path1),
-                                r"ls -a {}".format(abs_file_path1),
-                                r"rm {}".format(abs_file_path1),
-                                r"dd if=/dev/zero of={} count={} bs={}".format(
+                    commands = [u"mkdir -p {}".format(abs_dir_path),
+                                u"touch {}".format(abs_file_path1),
+                                u"ls -a {}".format(abs_file_path1),
+                                u"rm {}".format(abs_file_path1),
+                                u"dd if=/dev/zero of={} count={} bs={}".format(
                                     abs_file_path1, self.dd_count,
                                     self.dd_blocksize),
-                                r"ls -al {}".format(abs_file_path1),
-                                r"filesize=$(stat -c%s '{}');\
+                                u"ls -al {}".format(abs_file_path1),
+                                u"filesize=$(stat -c%s '{}');\
                                 if (( filesize != {}*{} )); then exit 1;\
                                 fi".format(abs_file_path1, self.dd_count,
                                            self.dd_blocksize),
-                                r"cp -r {} {}".format(abs_file_path1,
+                                u"cp -r {} {}".format(abs_file_path1,
                                                      abs_file_path2),
-                                r"cmp --silent {} {}".format(abs_file_path1,
+                                u"cmp --silent {} {}".format(abs_file_path1,
                                                             abs_file_path2),
-                                r"rm {}".format(abs_file_path2),
-                                r"mv {} {}".format(abs_file_path1,
+                                u"rm {}".format(abs_file_path2),
+                                u"mv {} {}".format(abs_file_path1,
                                                   abs_file_path2),
-                                r"ls -al {}".format(abs_file_path2),
-                                r"rm {}".format(abs_file_path2),
-                                r"rmdir {}".format(abs_dir_path)]
+                                u"ls -al {}".format(abs_file_path2),
+                                u"rm {}".format(abs_file_path2),
+                                u"rmdir {}".format(abs_dir_path)]
                     for cmd in commands:
                         try:
                             # execute bash cmds
