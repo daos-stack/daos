@@ -1,4 +1,4 @@
-# DAOS Pool Operations
+# Pool Operations
 
 A DAOS pool is a storage reservation that can span any storage nodes and
 is managed by the administrator. The amount of space allocated to a pool
@@ -12,7 +12,7 @@ A DAOS pool can be created and destroyed through the DAOS management API
 storage pools from the command line.
 
 **To create a pool:**
-```
+```bash
 $ dmg pool create --scm-size=xxG --nvme-size=yyT
 ```
 
@@ -22,7 +22,7 @@ The UUID allocated to the newly created pool is printed to stdout
 (referred as ${puuid}) as well as the rank where the pool service is
 located (referred as ${svcl}).
 
-```
+```bash
 $ dmg pool create --help
 ...
 [create command options]
@@ -38,7 +38,7 @@ $ dmg pool create --help
 
 The typical output of this command is as follows:
 
-```
+```bash
 $ dmg -i pool create -s 1G -n 10G -g root -u root -S daos
 Active connections: [localhost:10001]
 Creating DAOS pool with 1GB SCM and 10GB NvMe storage (0.100 ratio)
@@ -51,20 +51,20 @@ two pool service replica on rank 0 and 1.
 
 **To destroy a pool:**
 
-```
+```bash
 $ dmg pool destroy --pool=${puuid}
 ```
 
 **To see a list of the pools in your DAOS system:**
 
-```
+```bash
 $ dmg system list-pools
 ```
 
 This will return a table of pool UUIDs and the ranks of their pool service
 replicas. For example:
 
-```
+```bash
 $ dmg system list-pools
 localhost:10001: connected
 Pool UUID				Svc Replicas
@@ -166,14 +166,14 @@ By default, if a user matches no ACEs in the list, access will be denied.
 
 To create a pool with a custom ACL:
 
-```
+```bash
 $ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
 The ACL file is expected to be a text file with one ACE listed on each line. For
 example:
 
-```
+```bash
 # Entries:
 A::OWNER@:rw
 A:G:GROUP@:rw
@@ -187,7 +187,7 @@ You may add comments to the ACL file by starting the line with `#`.
 
 To view a pool's ACL:
 
-```
+```bash
 $ dmg pool get-acl --pool <UUID>
 ```
 
@@ -203,7 +203,7 @@ noted above for pool creation.
 
 To replace a pool's ACL with a new ACL:
 
-```
+```bash
 $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 ```
 
@@ -211,13 +211,13 @@ $ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
 
 To add or update multiple entries in an existing pool ACL:
 
-```
+```bash
 $ dmg pool update-acl --pool <UUID> --acl-file <path>
 ```
 
 To add or update a single entry in an existing pool ACL:
 
-```
+```bash
 $ dmg pool update-acl --pool <UUID> --entry <ACE>
 ```
 
@@ -229,7 +229,7 @@ is replaced with the new one.
 
 To delete an entry for a given principal, or identity, in an existing pool ACL:
 
-```
+```bash
 $ dmg pool delete-acl --pool <UUID> --principal <principal>
 ```
 
@@ -255,8 +255,8 @@ is integrated into the dmg_old utility.
 
 **To query a pool:**
 
-```
-$ dmg_old query --svc=${svcl} --pool=${puuid}
+```bash
+$ dmg pool query --pool <UUID>
 ```
 
 Below is the output for a pool created with SCM space only.

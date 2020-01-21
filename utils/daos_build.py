@@ -1,5 +1,6 @@
 """Common DAOS build functions"""
 from SCons.Script import Literal
+from SCons.Script import GetOption
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 import os
@@ -32,10 +33,12 @@ def load_mpi_path(env):
     """Load location of mpicc into path if MPI_PKG is set"""
     mpicc = find_executable("mpicc")
     if mpicc:
-        env.AppendENVPath("PATH", os.path.dirname(mpicc))
+        env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
 def _configure_mpi_pkg(env, libs):
     """Configure MPI using pkg-config"""
+    if GetOption('help'):
+        return
     mpicc = find_executable("mpicc")
     if mpicc:
         env.Replace(CC="mpicc")
