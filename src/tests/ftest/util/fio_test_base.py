@@ -27,7 +27,7 @@ import subprocess
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from fio_utils import Fio
 from command_utils import CommandFailure
 from dfuse_utils import Dfuse

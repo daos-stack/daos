@@ -179,7 +179,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 			D_FREE(current->iod.iod_recxs);
 			current->iod.iod_recxs = NULL;
 		}
-		if (current->sgl.sg_iovs) {
+		if (!current->user_sgl_used && current->sgl.sg_iovs) {
 			D_FREE(current->sgl.sg_iovs);
 			current->sgl.sg_iovs = NULL;
 		}
@@ -199,7 +199,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to create array obj (%d)\n", rc);
+		D_ERROR("Failed to create array obj "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_obj, rc);
 	}
 
@@ -338,7 +338,7 @@ out_array:
 	array_decref(array);
 out:
 	if (rc)
-		D_ERROR("daos_array_l2g failed, rc: %d\n", rc);
+		D_ERROR("daos_array_l2g failed, rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -399,7 +399,7 @@ dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	rc = daos_obj_open(coh, array_glob->oid, array_mode, &array->daos_oh,
 			   NULL);
 	if (rc) {
-		D_ERROR("Failed local object open (%d).\n", rc);
+		D_ERROR("Failed local object open "DF_RC".\n", DP_RC(rc));
 		D_GOTO(out_array, rc);
 	}
 
@@ -458,7 +458,7 @@ dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 
 	rc = dc_array_g2l(coh, array_glob, mode, oh);
 	if (rc != 0)
-		D_ERROR("dc_array_g2l failed (%d).\n", rc);
+		D_ERROR("dc_array_g2l failed "DF_RC".\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -498,7 +498,7 @@ write_md_cb(tse_task_t *task, void *data)
 	int rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to open object (%d)\n", rc);
+		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -683,7 +683,7 @@ fetch_md_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to open object (%d)\n", rc);
+		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1091,6 +1091,16 @@ set_short_read_cb(tse_task_t *task, void *data)
 	while (current) {
 		daos_size_t len = 0, recs;
 		int i;
+		d_iov_t sg_iov;
+
+		if (current->user_sgl_used) {
+			D_ASSERT(args->sgl->sg_nr == 1);
+			current->sgl.sg_nr = args->sgl->sg_nr;
+			current->sgl.sg_nr_out = args->sgl->sg_nr_out;
+			sg_iov.iov_buf_len = args->sgl->sg_iovs[0].iov_buf_len;
+			sg_iov.iov_len = args->sgl->sg_iovs[0].iov_len;
+			current->sgl.sg_iovs = &sg_iov;
+		}
 
 		/*
 		 * if we moved to a lower dkey and the higher one is not empty
@@ -1544,7 +1554,7 @@ get_array_size_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Array size query Failed (%d)\n", rc);
+		D_ERROR("Array size query Failed "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1700,7 +1710,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
-		D_ERROR("daos_task_create() failed (%d)\n", rc);
+		D_ERROR("daos_task_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc);
 	}
 
@@ -1847,7 +1857,7 @@ check_record_cb(tse_task_t *task, void *data)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0,
 			      NULL, &io_task);
 	if (rc) {
-		D_ERROR("Task create failed (%d)\n", rc);
+		D_ERROR("Task create failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1936,7 +1946,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task), 0, NULL,
 			      &io_task);
 	if (rc) {
-		D_ERROR("Task create failed (%d)\n", rc);
+		D_ERROR("Task create failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc);
 	}
 
@@ -2065,7 +2075,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Array DKEY enumermation Failed (%d)\n", rc);
+		D_ERROR("Array DKEY enumermation Failed "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

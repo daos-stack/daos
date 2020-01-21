@@ -36,10 +36,11 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
-	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd     `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS System Membership"`
+	Stop        systemStopCmd      `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd     `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
+	ListPools   systemListPoolsCmd `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
 type leaderQueryCmd struct {
@@ -61,7 +62,49 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemStopCmd is the struct representing the command to shutdown system.
+// systemQueryCmd is the struct representing the command to list
+// system member details.
+type systemQueryCmd struct {
+	logCmd
+	connectedCmd
+}
+
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(args []string) error {
+	members, err := cmd.conns.SystemQuery()
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
+	}
+
+	cmd.log.Debug("System-Query command succeeded\n")
+	if len(members) == 0 {
+		cmd.log.Info("No members in system\n")
+		return nil
+	}
+
+	rankTitle := "Rank"
+	uuidTitle := "UUID"
+	addrTitle := "Control Address"
+	stateTitle := "State"
+
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
+	var table []txtfmt.TableRow
+
+	for _, m := range members {
+		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
+		row[uuidTitle] = m.UUID
+		row[addrTitle] = m.Addr.String()
+		row[stateTitle] = m.State().String()
+
+		table = append(table, row)
+	}
+
+	cmd.log.Info(formatter.Format(table))
+
+	return nil
+}
+
+// systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
 	logCmd
 	connectedCmd
@@ -111,47 +154,27 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to shutdown system.
-type systemMemberQueryCmd struct {
+// systemStartCmd is the struct representing the command to start system.
+type systemStartCmd struct {
 	logCmd
 	connectedCmd
 }
 
-// Execute is run when systemMemberQueryCmd activates
-func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	members, err := cmd.conns.SystemMemberQuery()
+// Execute is run when systemStartCmd activates
+func (cmd *systemStartCmd) Execute(args []string) error {
+	msg := "SUCCEEDED: "
+
+	err := cmd.conns.SystemStart()
 	if err != nil {
-		return errors.Wrap(err, "System-Member-Query command failed")
+		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 
-	cmd.log.Debug("System-Member-Query command succeeded\n")
-	if len(members) == 0 {
-		cmd.log.Info("No members in system\n")
-		return nil
-	}
-
-	rankTitle := "Rank"
-	uuidTitle := "UUID"
-	addrTitle := "Control Address"
-	stateTitle := "State"
-
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, stateTitle)
-	var table []txtfmt.TableRow
-
-	for _, m := range members {
-		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
-		row[uuidTitle] = m.UUID
-		row[addrTitle] = m.Addr.String()
-		row[stateTitle] = m.State().String()
-
-		table = append(table, row)
-	}
-
-	cmd.log.Info(formatter.Format(table))
+	cmd.log.Infof("System-start command %s\n", msg)
 
 	return nil
 }
 
+// Execute is run when systemListPoolsCmd activates
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
 type systemListPoolsCmd struct {
 	logCmd

@@ -34,7 +34,7 @@ dfuse_cb_removexattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	rc = dfs_removexattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name);
 	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
+		DFUSE_REPLY_ZERO(inode, req);
 	else
 		DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

@@ -608,7 +608,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			      tgts_used, dom_used);
 out:
 	if (rc) {
-		D_ERROR("jump_map_obj_layout_fill failed, rc %d.\n", rc);
+		D_ERROR("jump_map_obj_layout_fill failed, rc "DF_RC"\n",
+			DP_RC(rc));
 		remap_list_free_all(remap_list);
 	}
 
@@ -733,7 +734,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("jm_obj_placement_get failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -741,7 +742,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
 	if (rc != 0) {
-		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
+		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -749,7 +750,8 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list, false, md);
 	if (rc < 0) {
-		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
+		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
+			DP_RC(rc));
 		pl_obj_layout_free(layout);
 		remap_list_free_all(&remap_list);
 		return rc;
@@ -815,7 +817,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("jm_obj_placement_get failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -829,7 +831,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	rc = pl_obj_layout_alloc(jmop.jmop_grp_size, jmop.jmop_grp_nr,
 				 &layout);
 	if (rc) {
-		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
+		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -837,7 +839,8 @@ jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	rc = get_object_layout(jmap, layout, &jmop, &remap_list, false, md);
 
 	if (rc < 0) {
-		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
+		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
