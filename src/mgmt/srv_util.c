@@ -82,7 +82,7 @@ out:
 }
 
 void
-ds_mgmt_kill_rank(force bool)
+ds_mgmt_kill_rank(bool force)
 {
 	int	sig;
 
