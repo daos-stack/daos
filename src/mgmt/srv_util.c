@@ -91,7 +91,6 @@ ds_mgmt_kill_rank(bool force)
 	else
 		sig = SIGTERM;
 
-	D_INFO("Service rank %d is being killed by signal %d\n",
-		req->rank, sig);
+	D_INFO("Kill with signal %d\n", sig)
 	kill(getpid(), sig);
 }
