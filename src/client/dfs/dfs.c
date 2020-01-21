@@ -299,9 +299,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	iod.iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
-		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+			    sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 	iod.iod_recxs	= &recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 	i = 0;
 

@@ -548,7 +548,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 	rdone->ro_rec_num += rec_cnt;
 	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
-	out:
+out:
 	return 0;
 }
 

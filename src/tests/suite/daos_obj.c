@@ -2975,7 +2975,7 @@ update_overlapped_recxs(void **state)
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing with overlapped recxs should get -DER_INVAL\n");
@@ -3274,7 +3274,7 @@ punch_then_lookup(void **state)
 	iod.iod_nr	= 10;
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
@@ -3330,7 +3330,7 @@ split_sgl_internal(void **state, int size)
 	recx.rx_idx	= 0;
 	recx.rx_nr	= 1;
 	iod.iod_recxs	= &recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update by split sgls */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
