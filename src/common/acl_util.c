@@ -506,6 +506,13 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	rc = daos_acl_validate(tmp_acl);
+	if (rc != 0) {
+		D_ERROR("Resulting ACL was invalid\n");
+		daos_acl_free(tmp_acl);
+		D_GOTO(out, rc);
+	}
+
 	*acl = tmp_acl;
 	rc = 0;
 
