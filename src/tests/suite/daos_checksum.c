@@ -231,11 +231,14 @@ io_with_server_side_verify(void **state)
 	 * 1. Regular, server verify disabled and no corruption ... obviously
 	 *    should be success.
 	 * 2. Server verify enabled, and still no corruption. Should be success.
+	 *    Corruption under checksum field.
 	 * 3. Server verify disabled and there's corruption. Update should
 	 *    still be success because the corruption won't be caught until
-	 *    it's fetched.
+	 *    it's fetched. Corruption under checksum field.
 	 * 4. Server verify enabled and corruption occurs. The update should
 	 *    fail because the server will catch the corruption.
+	 * 5. Server verify enabled and corruption on data field.(Repeat
+	 *    test 3 and 4 with data field corrution)
 	 *
 	 */
 	/** 1. Server verify disabled, no corruption */
@@ -270,6 +273,13 @@ io_with_server_side_verify(void **state)
 
 	/**5. Data corruption. Update should fail due CRC mismatch */
 	set_data_corrupt_fi();
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+	cleanup_cont_obj(&ctx);
+
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
