@@ -544,6 +544,7 @@ class Orterun(JobManager):
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
         self.mca = FormattedParameter("--mca {}", None)
+        self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
@@ -592,6 +593,7 @@ class Mpirun(JobManager):
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
+        self.ppn = FormattedParameter("-ppn {}", None)
         self.mpitype = mpitype
 
     def setup_command(self, env, hostfile, processes):
@@ -642,6 +644,11 @@ class Srun(JobManager):
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
+        self.nodelist = FormattedParameter("--nodelist={}", None)
+        self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.reservation = FormattedParameter("--reservation={}", None)
+        self.partition = FormattedParameter("--partition={}", None)
+        self.output = FormattedParameter("--output={}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the srun command with common inputs.
@@ -651,6 +658,7 @@ class Srun(JobManager):
                 the launch command
             hostfile (str): file defining host names and slots
             processes (int): number of host processes
+            processpernode (int): number of process per node
         """
         # Setup the env for the job to export with the srun command
         self.export.value = ",".join(["ALL"] + env.get_list())

@@ -28,15 +28,17 @@ import java.nio.ByteOrder;
 
 /**
  * Java attributes representing DAOS <code>struct stat</code> which has below information
- * * mode_t    st_mode;
- * * uid_t     st_uid;
- * * gid_t     st_gid;
- * * off_t     st_size;
- * * blkcnt_t  st_blocks
- * * blksize_t st_blocksize
- * * struct timespec st_atim;
- * * struct timespec st_mtim;
- * * struct timespec st_ctim;
+ * * objId     long             (8 bytes)
+ * * mode_t    st_mode;         (4 bytes)
+ * * uid_t     st_uid;          (4 bytes)
+ * * gid_t     st_gid;          (4 bytes)
+ * * off_t     st_size;         (8 bytes)
+ * * blkcnt_t  st_blocks        (8 bytes)
+ * * blksize_t st_blocksize     (8 bytes)
+ * * struct timespec st_atim;   (16 bytes)
+ * * struct timespec st_mtim;   (16 bytes)
+ * * struct timespec st_ctim;   (16 bytes)
+ * * file      boolean          (1 byte)
  *
  * <p>
  * This Java representative adds two more fields, object id and file (is file).
@@ -126,6 +128,12 @@ public class StatAttributes {
     return file;
   }
 
+  /**
+   * buffer size in bytes to hold all fields in binary.
+   * see the class description for size of each field.
+   *
+   * @return total buffer size
+   */
   public static int objectSize() {
     return 4 * 8 + 3 * 4 + 3 * 16 + 1; //93
   }
