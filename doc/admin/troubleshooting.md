@@ -1,4 +1,4 @@
-# DAOS Troubleshooting
+# Troubleshooting
 
 ## DAOS Errors
 

@@ -32,7 +32,8 @@ OPS_SRC = ['create',
            'setattr',
            'symlink',
            'unlink',
-           'write']
+           'write',
+           'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
@@ -135,7 +136,7 @@ def scons():
     cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
     cenv.AppendUnique(LIBPATH=["../dfs"])
 
-    cenv.AppendUnique(LIBS=['dfs'])
+    cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     prereqs.require(cenv, 'fuse')
 

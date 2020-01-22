@@ -1182,6 +1182,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 */
 		hdl->sch_cont->sc_open++;
 
+		if (hdl->sch_cont->sc_open > 1)
+			goto csummer;
+
 		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
 		if (rc != 0) {
 			hdl->sch_cont->sc_open--;
@@ -1212,6 +1215,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_register, rc);
 		}
 
+csummer:
 		rc = cont_hdl_csummer_init(hdl);
 		if (rc != 0) {
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
