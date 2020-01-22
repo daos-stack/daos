@@ -11,7 +11,9 @@ server_config:
   servers:
     0:
       pinned_numa_node: 0
+      nr_xs_helpers: 1
       fabric_iface: ib0
+      fabric_iface_port: 31416
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:5e:00.0"]
@@ -20,7 +22,9 @@ server_config:
       scm_mount: /mnt/daos0
     1:
       pinned_numa_node: 1
+      nr_xs_helpers: 1
       fabric_iface: ib1
+      fabric_iface_port: 31417
       log_file: daos_server1.log
       bdev_class: nvme
       bdev_list: ["0000:5f:00.0"]

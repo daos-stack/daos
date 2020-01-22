@@ -165,6 +165,8 @@ def set_test_environment(args):
     # already defined.
     if "DAOS_TEST_LOG_DIR" not in os.environ:
         os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+    os.environ["D_LOG_FILE"] = os.path.join(
+        os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
     # Ensure the daos log files directory exists on each possible test node
     test_hosts = NodeSet(socket.gethostname().split(".")[0])
@@ -310,8 +312,8 @@ def find_values(obj, keys, key=None, val_type=list):
         matches[key] = obj
     elif isinstance(obj, dict):
         # Recursively look for matches in each dictionary entry
-        for key, val in obj.items():
-            matches.update(find_values(val, keys, key, val_type))
+        for obj_key, obj_val in obj.items():
+            matches.update(find_values(obj_val, keys, obj_key, val_type))
     elif isinstance(obj, list):
         # Recursively look for matches in each list entry
         for item in obj:

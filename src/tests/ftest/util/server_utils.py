@@ -612,7 +612,8 @@ class ServerManager(ExecutableCommand):
 
             # Remove any files left over on each mount point
             if is_nvme:
-                commands.append("sudo rm -fr {}".format(scm_mount))
+                commands.append(
+                    "sudo rm -fr {}".format(os.path.join(scm_mount, "*")))
             else:
                 # Also ensure the tmpfs/dcpm mount point exists
                 commands.extend([
