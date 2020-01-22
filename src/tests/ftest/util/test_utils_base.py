@@ -77,14 +77,13 @@ class TestDaosApiBase(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
     """A base class for functional testing of DaosPools objects."""
 
-    def __init__(self, namespace, cb_handler=None, debug=False):
+    def __init__(self, namespace, cb_handler=None):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            debug (bool, optional): log additional info. Defaults to False.
         """
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
