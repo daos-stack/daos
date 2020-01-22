@@ -71,10 +71,10 @@ class BuildInfo():
                     continue
                 if "PREFIX" not in var:
                     continue
-                script.write("SL_%s=%s\n" % (var, self.info[var]))
-                components.append(var)
                 if self.info[var] == "/usr":
                     continue
+                script.write("SL_%s=%s\n" % (var, self.info[var]))
+                components.append(var)
                 path = os.path.join(self.info[var], "bin")
                 lib = os.path.join(self.info[var], "lib")
                 lib64 = os.path.join(self.info[var], "lib64")
