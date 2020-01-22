@@ -1,7 +1,7 @@
 # Note that stuff that is commented out represents tests that presently
 # fail and will be uncommented as the daos code is fixed
 server_config:
-   name: scott_server
+   name: daos_server
 hosts:
   test_servers:
     - server-A
@@ -29,7 +29,7 @@ querytests:
    createmode:
      mode: 511
    createset:
-     setname: scott_server
+     setname: daos_server
    createsize:
      size: 1073741824
 
