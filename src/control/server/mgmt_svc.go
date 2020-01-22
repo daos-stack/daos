@@ -844,7 +844,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	case <-time.After(timeout):
 	}
 
-	// either all instances started or timeout occurred
+	// either all instances stopped or timeout occurred
 	for _, i := range svc.harness.instances {
 		state := system.MemberStateStarted
 		rrErr := errors.Errorf("want %s, got %s", system.MemberStateStopped, state)
@@ -978,7 +978,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(timeout):
 	}
 
-	// either all instances started or Timeout
+	// either all instances st timeout occurred
 	for _, i := range svc.harness.instances {
 		state := system.MemberStateStopped
 		rrErr := errors.Errorf("want %s, got %s", system.MemberStateStarted, state)

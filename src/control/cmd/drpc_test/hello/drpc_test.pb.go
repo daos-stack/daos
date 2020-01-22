@@ -3,9 +3,11 @@
 
 package hello
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Module int32
 
@@ -27,6 +29,7 @@ const (
 var Module_name = map[int32]string{
 	0: "HELLO",
 }
+
 var Module_value = map[string]int32{
 	"HELLO": 0,
 }
@@ -34,8 +37,9 @@ var Module_value = map[string]int32{
 func (x Module) String() string {
 	return proto.EnumName(Module_name, int32(x))
 }
+
 func (Module) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{0}
+	return fileDescriptor_858b488d37349cc7, []int{0}
 }
 
 type Function int32
@@ -47,6 +51,7 @@ const (
 var Function_name = map[int32]string{
 	0: "GREETING",
 }
+
 var Function_value = map[string]int32{
 	"GREETING": 0,
 }
@@ -54,11 +59,12 @@ var Function_value = map[string]int32{
 func (x Function) String() string {
 	return proto.EnumName(Function_name, int32(x))
 }
+
 func (Function) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{1}
+	return fileDescriptor_858b488d37349cc7, []int{1}
 }
 
-// *
+//*
 // Hello is the message to request a greeting from the server
 //
 // name is the name of the user being greeted
@@ -73,16 +79,17 @@ func (m *Hello) Reset()         { *m = Hello{} }
 func (m *Hello) String() string { return proto.CompactTextString(m) }
 func (*Hello) ProtoMessage()    {}
 func (*Hello) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{0}
+	return fileDescriptor_858b488d37349cc7, []int{0}
 }
+
 func (m *Hello) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Hello.Unmarshal(m, b)
 }
 func (m *Hello) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Hello.Marshal(b, m, deterministic)
 }
-func (dst *Hello) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Hello.Merge(dst, src)
+func (m *Hello) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Hello.Merge(m, src)
 }
 func (m *Hello) XXX_Size() int {
 	return xxx_messageInfo_Hello.Size(m)
@@ -100,7 +107,7 @@ func (m *Hello) GetName() string {
 	return ""
 }
 
-// *
+//*
 // HeloResponse is the greeting returned from the server.
 //
 // greeting is greeting message for the user.
@@ -115,16 +122,17 @@ func (m *HelloResponse) Reset()         { *m = HelloResponse{} }
 func (m *HelloResponse) String() string { return proto.CompactTextString(m) }
 func (*HelloResponse) ProtoMessage()    {}
 func (*HelloResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_drpc_test_3e62a822cdd81bd6, []int{1}
+	return fileDescriptor_858b488d37349cc7, []int{1}
 }
+
 func (m *HelloResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HelloResponse.Unmarshal(m, b)
 }
 func (m *HelloResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_HelloResponse.Marshal(b, m, deterministic)
 }
-func (dst *HelloResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HelloResponse.Merge(dst, src)
+func (m *HelloResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HelloResponse.Merge(m, src)
 }
 func (m *HelloResponse) XXX_Size() int {
 	return xxx_messageInfo_HelloResponse.Size(m)
@@ -143,15 +151,15 @@ func (m *HelloResponse) GetGreeting() string {
 }
 
 func init() {
-	proto.RegisterType((*Hello)(nil), "hello.Hello")
-	proto.RegisterType((*HelloResponse)(nil), "hello.HelloResponse")
 	proto.RegisterEnum("hello.Module", Module_name, Module_value)
 	proto.RegisterEnum("hello.Function", Function_name, Function_value)
+	proto.RegisterType((*Hello)(nil), "hello.Hello")
+	proto.RegisterType((*HelloResponse)(nil), "hello.HelloResponse")
 }
 
-func init() { proto.RegisterFile("drpc_test.proto", fileDescriptor_drpc_test_3e62a822cdd81bd6) }
+func init() { proto.RegisterFile("drpc_test.proto", fileDescriptor_858b488d37349cc7) }
 
-var fileDescriptor_drpc_test_3e62a822cdd81bd6 = []byte{
+var fileDescriptor_858b488d37349cc7 = []byte{
 	// 153 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4f, 0x29, 0x2a, 0x48,
 	0x8e, 0x2f, 0x49, 0x2d, 0x2e, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xcd, 0x48, 0xcd,

@@ -24,7 +24,7 @@
 syntax = "proto3";
 package ctl;
 
-import "common.proto";
+import "ctl/common.proto";
 
 // NVMe Storage Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.

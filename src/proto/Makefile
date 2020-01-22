@@ -1,5 +1,5 @@
 #
-# (C) Copyright 2019 Intel Corporation.
+# (C) Copyright 2020 Intel Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -43,14 +43,16 @@ GO_CONTROL_FILES = common/proto/mgmt/acl.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/srv.pb.go\
 		   common/proto/mgmt/storage_query.pb.go\
+		   common/proto/mgmt/rank.pb.go\
 		   common/proto/ctl/storage.pb.go\
 		   common/proto/ctl/common.pb.go\
 		   common/proto/ctl/storage_nvme.pb.go\
 		   common/proto/ctl/storage_scm.pb.go\
 		   common/proto/ctl/system.pb.go\
 		   common/proto/ctl/control.pb.go\
- 		   common/proto/ctl/network_scan.pb.go\
+		   common/proto/ctl/network_scan.pb.go\
 		   common/proto/srv/srv.pb.go\
+		   common/proto/ctl/rank.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
 		   cmd/drpc_test/hello/drpc_test.pb.go
@@ -69,7 +71,7 @@ $(PROTOC):
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
-PROTOC_GEN_GO_TAG ?= v1.2.0
+PROTOC_GEN_GO_TAG ?= v1.3.2
 PROTOC_GEN_GO_IMP := github.com/golang/protobuf/protoc-gen-go
 PROTOC_GEN_GO := $(GOPATH)/bin/protoc-gen-go
 
@@ -88,21 +90,21 @@ GO_TARGETS = $(addprefix $(DAOS_ROOT)/src/control/,$(GO_CONTROL_FILES))
 proto-go: $(PROTOC_GEN_GO) $(GO_TARGETS)
 
 $(DAOS_ROOT)/src/control/common/proto/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+	protoc --proto_path $(PROTO_SOURCE_DIR) --go_out=plugins=grpc:$(dir $@)../ $<
 
 # Some of these don't follow a regular pattern, so define
 # one-off recipes for them.
 $(DAOS_ROOT)/src/control/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --go_out=plugins=grpc:$(dir $@) $<
 
 $(DAOS_ROOT)/src/control/security/acl/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --go_out=plugins=grpc:$(dir $@) $<
 
 $(DAOS_ROOT)/src/control/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --go_out=plugins=grpc:$(dir $@) $<
 
 $(DAOS_ROOT)/src/control/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --go_out=plugins=grpc:$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --go_out=plugins=grpc:$(dir $@) $<
 
 PROTOC_GEN_C := $(shell which protoc-gen-c 2>/dev/null)
 ifeq ($(PROTOC_GEN_C),)
@@ -119,27 +121,27 @@ C_TARGETS = $(addprefix $(DAOS_ROOT)/src/,$(C_HEADER_FILES)) \
 proto-c: $(PROTOC_GEN_C) $(C_TARGETS)
 
 $(DAOS_ROOT)/src/%.pb-c.h: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/%.pb-c.c: $(PROTO_SOURCE_DIR)/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/iosrv/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/iosrv/%.pb-c.c: $(PROTO_SOURCE_DIR)/srv/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.h: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.c: $(PROTO_SOURCE_DIR)/test/%.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 
 $(DAOS_ROOT)/src/include/daos/drpc.pb-c.h: $(PROTO_SOURCE_DIR)/drpc.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 	rm $(basename $@).c
 
 $(DAOS_ROOT)/src/common/drpc.pb-c.c: $(PROTO_SOURCE_DIR)/drpc.proto
-	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+	protoc --proto_path $(dir $<) --c_out=$(dir $@) $<
 	rm $(basename $@).h

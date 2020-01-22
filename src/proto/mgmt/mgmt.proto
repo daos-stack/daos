@@ -24,32 +24,11 @@
 syntax = "proto3";
 package mgmt;
 
-import "pool.proto";
-import "srv.proto";
-import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
-import "acl.proto"; // ACL-related requests
-
-// Generic request indicating which ranks to operate on.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-message RanksReq {
-	repeated uint32 ranks = 1;
-	float timeout = 2;
-	bool force = 3;
-}
-
-// Generic response containing DER result from multiple ranks.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-message RanksResp {
-	// Identical to ctl.system.RankResult proto message.
-	message RankResult {
-		uint32 rank = 1;
-		string action = 2;
-		bool errored = 3;
-		string msg = 4;
-		uint32 state = 5;
-	}
-	repeated RankResult results = 1;
-}
+import "mgmt/pool.proto";
+import "mgmt/srv.proto";
+import "mgmt/storage_query.proto"; // storage query req/resp BIO data and SMD device list
+import "mgmt/acl.proto"; // ACL-related requests
+import "mgmt/rank.proto"; // req/resp to/from multiple ranks
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -64,7 +43,7 @@ service MgmtSvc {
 	rpc LeaderQuery(LeaderQueryReq) returns (LeaderQueryResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
-	// Destroy a DAOS pool allocated across a number of ranks.
+	// Destroy a DAOS pool allocated across a number of rank.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
@@ -95,11 +74,11 @@ service MgmtSvc {
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
-	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
+	rpc PrepShutdownRanks(rank.RanksReq) returns (rank.RanksResp) {}
 	// Kill DAOS IO servers on a host. (gRPC fanout)
-	rpc KillRanks(RanksReq) returns (RanksResp) {}
+	rpc KillRanks(rank.RanksReq) returns (rank.RanksResp) {}
 	// Ping DAOS IO servers on a host. (gRPC fanout)
-	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	rpc PingRanks(rank.RanksReq) returns (rank.RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
-	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	rpc StartRanks(rank.RanksReq) returns (rank.RanksResp) {}
 }
