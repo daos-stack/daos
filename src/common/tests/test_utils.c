@@ -126,6 +126,7 @@ fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces)
 
 		snprintf(name, sizeof(name), "user%d@", i + 1);
 		ace[i] = daos_ace_create(DAOS_ACL_USER, name);
+		ace[i]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	}
 }
 
