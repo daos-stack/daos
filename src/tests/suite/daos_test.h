@@ -319,7 +319,7 @@ int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
-			 bool discard);
+			 bool discard, bool after_reint);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt);
 
