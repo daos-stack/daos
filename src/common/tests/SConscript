@@ -1,4 +1,4 @@
-"""Build doas common tests"""
+"""Build daos common tests"""
 import daos_build
 from prereq_tools import GitRepoRetriever
 
@@ -78,7 +78,12 @@ def scons():
                      common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', '../acl_api.c'],
+                    source=['acl_api_tests.c', '../acl_api.c',
+                            common_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'acl_valid_tests',
+                    source=['acl_valid_tests.c', '../acl_api.c',
+                            common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_util_tests',
                     source=['acl_util_tests.c', '../acl_util.c'],
