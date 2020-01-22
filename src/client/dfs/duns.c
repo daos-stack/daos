@@ -197,7 +197,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		lfm = (struct lmv_foreign_md *)buf;
 		/* sanity check */
 		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
-		    lfm->lfm_type != LU_FOREIGN_TYPE_DAOS ||
+		    lfm->lfm_type != LU_FOREIGN_TYPE_SYMLINK ||
 		    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
 		    snprintf(str, DUNS_MAX_XATTR_LEN, "%s",
 			     lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
@@ -450,7 +450,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	}
 
 	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_DAOS, 0xda05, str);
+				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
 	if (rc) {
 		D_ERROR("Failed to create Lustre dir '%s' with foreign "
 			"LMV '%s' (rc = %d).\n", path, str, rc);

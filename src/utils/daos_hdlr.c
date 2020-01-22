@@ -162,6 +162,11 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_SET_ATTR);
 
+	if (ap->attrname_str == NULL || ap->value_str == NULL) {
+		fprintf(stderr, "both attribute name and value must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
 			       ap->mdsrv, DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
@@ -203,6 +208,11 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_ATTR);
+
+	if (ap->attrname_str == NULL) {
+		fprintf(stderr, "attribute name must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
 			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
@@ -246,6 +256,9 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out_disconnect:
+	if (buf != NULL)
+		D_FREE(buf);
+
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
@@ -263,7 +276,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 {
 	size_t				 total_size, expected_size, cur = 0,
 					 len;
-	char				*buf;
+	char				*buf = NULL;
 	int				rc = 0;
 	int				rc2;
 
@@ -317,6 +330,9 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out_disconnect:
+	if (buf != NULL)
+		D_FREE(buf);
+
 	/* Pool disconnect  in normal and error flows: preserve rc */
 	rc2 = daos_pool_disconnect(ap->pool, NULL);
 	if (rc2 != 0)
@@ -482,7 +498,7 @@ out:
 int
 cont_list_snaps_hdlr(struct cmd_args_s *ap)
 {
-	daos_epoch_t *buf;
+	daos_epoch_t *buf = NULL;
 	daos_anchor_t anchor;
 	int rc, i, snaps_count, expected_count;
 
@@ -526,6 +542,9 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	D_PRINT("\n");
 
 out:
+	if (buf != NULL)
+		D_FREE(buf);
+
 	return rc;
 }
 
@@ -534,7 +553,7 @@ cont_create_snap_hdlr(struct cmd_args_s *ap)
 {
 	int rc;
 
-	rc = daos_cont_create_snap(ap->cont, &ap->epc, NULL, NULL);
+	rc = daos_cont_create_snap(ap->cont, &ap->epc, ap->snapname_str, NULL);
 	if (rc != 0) {
 		fprintf(stderr, "cont create snap failed: %d\n", rc);
 		D_GOTO(out, rc);
@@ -586,6 +605,11 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 	size_t				value_size;
 	int				rc = 0;
 
+	if (ap->attrname_str == NULL || ap->value_str == NULL) {
+		fprintf(stderr, "both attribute name and value must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	value_size = strlen(ap->value_str);
 	rc = daos_cont_set_attr(ap->cont, 1,
 				(const char * const*)&ap->attrname_str,
@@ -607,6 +631,11 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 	size_t				 attr_size, expected_size;
 	char				*buf;
 	int				rc = 0;
+
+	if (ap->attrname_str == NULL) {
+		fprintf(stderr, "attribute name must be provided\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	/* evaluate required size to get attr */
 	attr_size = 0;
@@ -642,6 +671,9 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 	D_PRINT("%s\n", buf);
 
 out:
+	if (buf != NULL)
+		D_FREE(buf);
+
 	return rc;
 
 }
@@ -651,7 +683,7 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 {
 	size_t				 size, total_size, expected_size,
 					 cur = 0, len;
-	char				*buf;
+	char				*buf = NULL;
 	int				rc = 0;
 
 	/* evaluate required size to get all attrs */
@@ -694,6 +726,9 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
+	if (buf != NULL)
+		D_FREE(buf);
+
 	return rc;
 
 }
@@ -704,6 +739,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 {
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
+	char			type[10] = {};
 	int			rc = 0;
 
 	prop_query = daos_prop_alloc(0);
@@ -716,7 +752,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
-	D_PRINT("Pool properties :\n");
+	D_PRINT("Container properties :\n");
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || entry->dpe_str == NULL) {
@@ -730,7 +766,8 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		fprintf(stderr, "layout type property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
-	D_PRINT("layout type -> "DF_U64"\n", entry->dpe_val);
+	daos_unparse_ctype(entry->dpe_val, type);
+	D_PRINT("layout type -> "DF_U64"/%s\n", entry->dpe_val, type);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LAYOUT_VER);
 	if (entry == NULL) {
@@ -748,10 +785,10 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
 	if (entry == NULL) {
-		fprintf(stderr, "checksum chunck-size property not found\n");
+		fprintf(stderr, "checksum chunk-size property not found\n");
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
-	D_PRINT("checksum chunck-size -> "DF_U64"\n", entry->dpe_val);
+	D_PRINT("checksum chunk-size -> "DF_U64"\n", entry->dpe_val);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
 	if (entry == NULL) {
@@ -825,7 +862,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_chunk_size = ap->chunk_size;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 	} else {
-		rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
+		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {

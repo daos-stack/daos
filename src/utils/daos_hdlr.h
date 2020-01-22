@@ -88,6 +88,7 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_begin;
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
+	daos_prop_t		*props;		/* --properties cont create */
 
 	FILE			*ostream;	/* help_hdlr() stream */
 };
