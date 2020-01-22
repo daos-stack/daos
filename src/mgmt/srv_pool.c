@@ -169,7 +169,7 @@ pool_rec_lookup(struct rdb_tx *tx, struct mgmt_svc *svc, uuid_t uuid,
 
 /* Caller is responsible for freeing ranks */
 static int
-pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+pool_get_svc_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 {
 	struct rdb_tx	tx;
 	struct pool_rec	*rec;
@@ -186,7 +186,8 @@ pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc != 0) {
 		D_GOTO(out_lock, rc);
-	} else if (rec->pr_state != POOL_READY) {
+	} else if ((rec->pr_state != POOL_READY) &&
+		   (rec->pr_state != POOL_DESTROYING)) {
 		D_ERROR("Pool not ready\n");
 		D_GOTO(out_lock, rc = -DER_AGAIN);
 	}
@@ -574,22 +575,35 @@ int
 ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 {
 	struct mgmt_svc	*svc;
-	int		rc;
+	d_rank_list_t	*psvcranks;
+	int		 rc;
 
-	/* TODO check metadata about the pool's existence?
-	 *      and check active pool connection for "force"
-	 */
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
 		goto out;
 
+	rc = pool_get_svc_ranks(svc, pool_uuid, &psvcranks);
+	if (rc != 0) {
+		D_ERROR("Failed to get pool service ranks "DF_UUID" rc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		goto out_svc;
+	}
+
+	/* Check active pool connections, evict only if force */
+	rc = ds_pool_svc_check_evict(pool_uuid, psvcranks, force);
+	if (rc != 0) {
+		D_ERROR("Failed to check/evict pool handles "DF_UUID" rc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		goto out_ranks;
+	}
+
 	rc = pool_destroy_prepare(svc, pool_uuid);
 	if (rc != 0) {
 		if (rc == -DER_ALREADY)
 			rc = 0;
-		goto out_svc;
+		goto out_ranks;
 	}
 
 	rc = ds_pool_svc_destroy(pool_uuid);
@@ -615,6 +629,8 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 		DP_UUID(pool_uuid));
+out_ranks:
+	d_rank_list_free(psvcranks);
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
@@ -819,7 +835,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, struct daos_pool_cont_info **containers,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -861,7 +877,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, daos_pool_info_t *pool_info)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -911,7 +927,7 @@ ds_mgmt_pool_get_acl(uuid_t pool_uuid, daos_prop_t **access_prop)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -943,7 +959,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -987,7 +1003,7 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -1024,7 +1040,7 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 
@@ -1073,7 +1089,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, daos_prop_t *prop,
 	if (rc != 0)
 		goto out;
 
-	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	rc = pool_get_svc_ranks(svc, pool_uuid, &ranks);
 	if (rc != 0)
 		goto out_svc;
 

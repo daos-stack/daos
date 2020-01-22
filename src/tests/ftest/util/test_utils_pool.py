@@ -42,6 +42,7 @@ from dmg_utils import (get_pool_uuid_service_replicas_from_stdout, DmgCommand)
 
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
+
     # Constants to define whether to use API or dmg to create and destroy
     # pool.
     USE_API = "API"
@@ -271,6 +272,7 @@ class TestPool(TestDaosApiBase):
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
                 defined.
+
         """
         if self.pool:
             self.disconnect()
