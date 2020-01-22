@@ -44,7 +44,7 @@ I2048        2Kb iovec Input and Output
 i2048 0      2Kb iovec Input only
 0 i2048      2Kb iovec Output only
 
-For full description of self_test usage, run
+For full description of self_test usage, run:
 ../bin/self_test --help
 
 **To start test_group server:**
