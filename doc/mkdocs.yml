@@ -11,8 +11,12 @@ repo_url: https://github.com/daos-stack/daos
 
 # Theme
 theme:
-    name: readthedocs
+    name: windmill
     language: en
+    collapse_by_default: false
+
+extra:
+    version: v0.8
 
 docs_dir: ./
 
@@ -33,10 +37,8 @@ nav:
         - 'System Deployment': 'admin/deployment.md'
         - 'System Administration': 'admin/administration.md'
         - 'Pool Operations': 'admin/pool_operations.md'
-        - 'Applications Interface and Tiering': 'admin/app_interface_tiering.md'
+        - 'Application Interface and Tiering': 'admin/app_interface_tiering.md'
         - 'Performance Tuning': 'admin/performance_tuning.md'
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
-    - User Guide:
-    - Developer Guide:

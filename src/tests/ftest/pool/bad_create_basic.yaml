@@ -19,7 +19,10 @@ pool:
   name_list:
     - [daos_server, PASS]
     - [NULLPTR, PASS]
-  svcn: 1
+  svcn_list:
+    - [1, PASS]
+    - [0, FAIL]
+    - [NULLPTR, FAIL]
   target_list_list:
     - [[0], PASS]
     - [0, FAIL]

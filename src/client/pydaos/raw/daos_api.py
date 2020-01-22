@@ -115,7 +115,11 @@ class DaosPool(object):
         if group:
             self.set_group(group)
         self.uuid = (ctypes.c_ubyte * 16)()
-        rank_t = ctypes.c_uint * svcn
+        try:
+            rank_t = ctypes.c_uint * svcn
+        except TypeError as error:
+            raise DaosApiError("Invalid 'svcn' argument: {}".format(error))
+
         # initializing with default values
         rank = rank_t(*list([999999 for dummy_i in range(svcn)]))
         rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
