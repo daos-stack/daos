@@ -1,7 +1,7 @@
 /* Automatically generated with structures
  * expanded from CRT_RPC_DECLARE() macros
  *
- * Copyright (C) 2016-2019 Intel Corporation
+ * Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,14 +38,6 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
-struct crt_barrier_in {
-	int32_t b_num;
-};
-
-struct crt_barrier_out {
-	int32_t b_rc;
-};
 
 struct crt_ctl_ep_ls_in {
 	crt_group_id_t cel_grp_id;

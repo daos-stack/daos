@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@ struct test_global_t {
 	sem_t			 tg_token_to_proceed;
 	bool			 tg_save_cfg;
 	char			*tg_cfg_path;
+	uint32_t		 tg_num_proto;
 };
 
 struct test_global_t test = {0};
@@ -78,7 +79,7 @@ ping_hdlr_0(crt_rpc_t *rpc_req)
 {
 	int	rc;
 
-	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	DBG_PRINT("entered %s().\n", __func__);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
@@ -91,7 +92,7 @@ ping_hdlr_1(crt_rpc_t *rpc_req)
 	struct ping_out	*rpc_req_output;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	DBG_PRINT("entered %s().\n", __func__);
 
 	rpc_req_input = crt_req_get(rpc_req);
 	rpc_req_output = crt_reply_get(rpc_req);
@@ -106,7 +107,29 @@ ping_hdlr_2(crt_rpc_t *rpc_req)
 {
 	int	rc;
 
-	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	DBG_PRINT("entered %s().\n", __func__);
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+}
+
+static void
+ping_hdlr_3(crt_rpc_t *rpc_req)
+{
+	int	rc;
+
+	DBG_PRINT("entered %s().\n", __func__);
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+}
+
+static void
+ping_hdlr_4(crt_rpc_t *rpc_req)
+{
+	int	rc;
+
+	DBG_PRINT("entered %s().\n", __func__);
 
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
@@ -165,7 +188,69 @@ struct crt_proto_rpc_format my_proto_rpc_fmt_1[] = {
 		.prf_hdlr	= shutdown_handler,
 		.prf_co_ops	= NULL,
 	}
+};
 
+struct crt_proto_rpc_format my_proto_rpc_fmt_2[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_0,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_1,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_2,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_3,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= shutdown_handler,
+		.prf_co_ops	= NULL,
+	}
+};
+
+struct crt_proto_rpc_format my_proto_rpc_fmt_3[] = {
+	{
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_0,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_1,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_2,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_3,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_ping,
+		.prf_hdlr	= ping_hdlr_4,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= shutdown_handler,
+		.prf_co_ops	= NULL,
+	}
 };
 
 struct crt_proto_format my_proto_fmt_0 = {
@@ -198,6 +283,22 @@ struct crt_proto_format my_proto_fmt_1 = {
 	.cpf_base = OPC_MY_PROTO,
 };
 
+struct crt_proto_format my_proto_fmt_2 = {
+	.cpf_name = "my-proto",
+	.cpf_ver = 2,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_2),
+	.cpf_prf = &my_proto_rpc_fmt_2[0],
+	.cpf_base = OPC_MY_PROTO,
+};
+
+struct crt_proto_format my_proto_fmt_3 = {
+	.cpf_name = "my-proto",
+	.cpf_ver = 3,
+	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_3),
+	.cpf_prf = &my_proto_rpc_fmt_3[0],
+	.cpf_base = OPC_MY_PROTO,
+};
+
 int
 test_parse_args(int argc, char **argv)
 {
@@ -208,11 +309,12 @@ test_parse_args(int argc, char **argv)
 		{"attach_to",	required_argument,	0, 'a'},
 		{"hold",	no_argument,		0, 'h'},
 		{"cfg_path",	required_argument,	0, 's'},
+		{"num_proto",	required_argument,	0, 'p'},
 		{0, 0, 0, 0}
 	};
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:hs", long_options,
+		rc = getopt_long(argc, argv, "n:a:s:p:h", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -234,6 +336,9 @@ test_parse_args(int argc, char **argv)
 			test.tg_save_cfg = true;
 			test.tg_cfg_path = optarg;
 			break;
+		case 'p':
+			test.tg_num_proto = atoi(optarg);
+			break;
 		case '?':
 			return 1;
 		default:
@@ -242,6 +347,12 @@ test_parse_args(int argc, char **argv)
 	}
 	if (optind < argc) {
 		fprintf(stderr, "non-option argv elements encountered");
+		return 1;
+	}
+
+	if (test.tg_num_proto < 1 || test.tg_num_proto > 4) {
+		fprintf(stderr, "num_proto should be 1-4, num_proto=%d",
+			test.tg_num_proto);
 		return 1;
 	}
 

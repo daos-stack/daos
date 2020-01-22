@@ -24,14 +24,34 @@ hosts: !mux
     cli:
        - boro-A
 tests: !mux
-  proto_np:
-    name: proto_np
+  proto_np_1:
+    name: proto_np_1
     srv_bin: ../bin/crt_launch
-    srv_arg: "-e tests/test_proto_server --name proto_srv_grp --cfg_path=."
+    srv_arg: "-e tests/test_proto_server -p 4 --name proto_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
     cli_bin: tests/test_proto_client
-    cli_arg: "--name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
+    cli_arg: "-p 4 --name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  proto_np_2:
+    name: proto_np_2
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_proto_server -p 4 --name proto_srv_grp --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_proto_client
+    cli_arg: "-p 2 --name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  proto_np_3:
+    name: proto_np_3
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_proto_server -p 3 --name proto_srv_grp --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_proto_client
+    cli_arg: "-p 4 --name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
     cli_env: ""
     cli_ppn: "1"
   test_group:

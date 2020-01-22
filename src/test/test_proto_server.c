@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,10 +65,22 @@ test_run(d_rank_t my_rank)
 			  "crt_group_config_save() failed. rc: %d\n", rc);
 	}
 
-	rc = crt_proto_register(&my_proto_fmt_0);
-	D_ASSERT(rc == 0);
-	rc = crt_proto_register(&my_proto_fmt_1);
-	D_ASSERT(rc == 0);
+	switch (test.tg_num_proto) {
+	case 4:
+		rc = crt_proto_register(&my_proto_fmt_3);
+		D_ASSERT(rc == 0);
+	case 3:
+		rc = crt_proto_register(&my_proto_fmt_2);
+		D_ASSERT(rc == 0);
+	case 2:
+		rc = crt_proto_register(&my_proto_fmt_1);
+		D_ASSERT(rc == 0);
+	case 1:
+		rc = crt_proto_register(&my_proto_fmt_0);
+		D_ASSERT(rc == 0);
+	default:
+		break;
+	}
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);

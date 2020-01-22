@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -677,7 +677,7 @@ crt_hdlr_proto_query(crt_rpc_t *rpc_req)
 		if (rc_tmp != DER_SUCCESS)
 			continue;
 
-		if (ver > high_ver) {
+		if (ver >= high_ver) {
 			high_ver = ver;
 			rc = DER_SUCCESS;
 		}
