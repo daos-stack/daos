@@ -281,35 +281,40 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 
 /* supported properties names are "label", "cksum" ("off" or <type> in
  * crc[16,32,64], sha1), "cksum_size", "srv_cksum" (cksum on server,
- * "on"/"off"), "red_factor (rf[0-4])".
+ * "on"/"off"), "red_factor" (redundancy factor, rf[0-4]).
  */
-static int daos_parse_property(int nb, char *name, char *value,
-			       daos-prop_t *props)
+static int
+daos_parse_property(char *name, char *value, daos_prop_t *props)
 {
-	struct daos_prop_entry *entry = props->dpp_entries[dpp_nr];
+	/* dpp_nr is used to iterate in props here */
+	struct daos_prop_entry *entry = &props->dpp_entries[props->dpp_nr];
 
 	if (!strcmp(name, "label")) {
-		if (!daos_prop_str_valid(value))
+		size_t len = strnlen(value, DAOS_PROP_LABEL_MAX_LEN);
+		if (len == DAOS_PROP_LABEL_MAX_LEN) {
+			fprintf(stderr, "label string exceed %u bytes\n",
+				DAOS_PROP_LABEL_MAX_LEN);
 			return -DER_INVAL;
+		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
 		entry->dpe_str = strdup(value);
-	} else if (!strcmp(name, "cksum)) {
+	} else if (!strcmp(name, "cksum")) {
 		if (!strcmp(value, "off"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_OFF;
 		else if (!strcmp(value, "crc16"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC16;
 		else if (!strcmp(value, "crc32"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC32;
-		else if (!strcmp(value, "crc64")
+		else if (!strcmp(value, "crc64"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC64;
-		else if (!strcmp(value, "sha1")
+		else if (!strcmp(value, "sha1"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1;
 		else {
 			fprintf(stderr, "curently supported 'cksum' prop values are 'off, crc[16,32,64], sha1'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
-	} else if (!strcmp(name, "cksum_size") {
+	} else if (!strcmp(name, "cksum_size")) {
 		char *endp;
 		long val;
 
@@ -328,27 +333,29 @@ static int daos_parse_property(int nb, char *name, char *value,
 
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = val;
-	} else if (!strcmp(name, "srv_cksum") {
+	} else if (!strcmp(name, "srv_cksum")) {
 		if (!strcmp(value, "on"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
 		else if (!strcmp(value, "off"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
 		else {
-			fprintf(stderr, "srv_cksum prop value can only be 'on/off'\n);
+			fprintf(stderr, "srv_cksum prop value can only be 'on/off'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	} else if (!strcmp(name, "red_factor")) {
 		if (!strcmp(value, "rf0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
-		else if (!strcmp(value, "rf1))
+		else if (!strcmp(value, "rf1"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF1;
-		else if (!strcmp(value, "rf2))
+		else if (!strcmp(value, "rf2"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF2;
-		else if (!strcmp(value, "rf4))
+		else if (!strcmp(value, "rf3"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF3;
+		else if (!strcmp(value, "rf4"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF4;
 		else {
-			fprintf(stderr, "presently supported values of prop 'red_prop' are 'rf[0-4]'\n);
+			fprintf(stderr, "presently supported values of prop 'red_prop' are 'rf[0-4]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -358,34 +365,90 @@ static int daos_parse_property(int nb, char *name, char *value,
 	}
 
 	props->dpp_nr++;
-
+	return 0;
 }
 
-/* format for list of properties is "<name>:<value>[,<name>:<value>,...] */
-static int daos_parse_properties(char *props_string, daos-prop_t *props)
+/* format for list of properties is "<name>:<value>[,<name>:<value>,...]" */
+static int
+daos_parse_properties(char *props_string, daos_prop_t *props)
 {
-	char name[20], value[20], *cur = props_string;
-	size_t len = strlen(props_string), prop_size;
-	int rc;
+	char name[20], value[DAOS_PROP_LABEL_MAX_LEN] /* for label */;
+	char *cur = props_string, *comma, *colon;
+	size_t len = strlen(props_string);
+	int rc = 0;
 
+#if 0
+	size_t prop_size;
 	while (len > 0) {
 		if (sscanf(cur, "%s:%s,", name, value) == 2) {
-			rc = daos_parse_property(nb_prop, name, value, props);
+			rc = daos_parse_property(name, value, props);
 				if (rc)
 					break;
 			prop_size = strlen(name) + strlen(value) + 2;
 		} else if (sscanf(cur, "%s:%s", name, value) == 2) {
-			rc = daos_parse_property(nb_prop, name, value, props);
+			rc = daos_parse_property(name, value, props);
 			/* last property in list */
 			break;
 		} else {
-			fprintf( stderr, "wrong format for properties\n");
+			fprintf(stderr, "wrong format for properties\n");
 			rc = -DER_INVAL;
 			break;
 		}
 		len -= prop_size;
 		cur += prop_size;
 	}
+#else /* !0 */
+	while (len > 0) {
+		colon = strchr(cur, ':');
+		if (colon == NULL) {
+			fprintf( stderr, "wrong format for properties\n");
+			rc = -DER_INVAL;
+			break;
+		}
+		*colon = '\0';
+		if (strlen(cur) >= sizeof(name)) {
+			fprintf(stderr, "too long prop name '%s'\n",
+				cur);
+			*colon = ':';
+			rc = -DER_INVAL;
+			break;
+		}
+		strcpy(name, cur);
+		*colon = ':';
+		comma = strchr(colon + 1, ',');
+		if (comma == NULL) {
+			if (strlen(colon + 1) < sizeof(value)) {
+				strcpy(value, colon + 1);
+				/* last property in list */
+				/* break; */
+				len -= strlen(cur);
+			} else {
+				fprintf(stderr, "too long prop value '%s'\n",
+					colon + 1);
+				rc = -DER_INVAL;
+				break;
+			}
+		} else {
+			*comma = '\0';
+			if (sizeof(value) > strlen(colon + 1)) {
+				strcpy(value, colon + 1);
+				len = len - (comma - cur + 1);
+				cur = comma + 1;
+				*comma = ',';
+				/* continue; */
+			} else {
+				fprintf(stderr, "too long prop value '%s'\n",
+					colon + 1);
+				*comma = ',';
+				rc = -DER_INVAL;
+				break;
+			}
+		}
+		rc = daos_parse_property(name, value, props);
+		if (rc)
+			break;
+	}
+#endif
 
 	return rc;
 }
@@ -393,7 +456,7 @@ static int daos_parse_properties(char *props_string, daos-prop_t *props)
 /* values to identify options with no small value in getopt_long() */
 enum {
 	DAOS_PROPERTIES_OPTION = 1,
-}
+};
 
 static int
 common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
@@ -589,17 +652,15 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			/* parse properties to be set at cont create time */
 			/* alloc max */
 			ap->props = daos_prop_alloc(DAOS_PROP_ENTRIES_MAX_NR);
-			if (ap->pros == NULL) {
+			if (ap->props == NULL) {
 				fprintf(stderr, "unable to allocate props struct and array\n");
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			}
-			/* fake number of enries in array for current entry to
-			 * be filled
+			/* fake number of entries in array to be used for
+			 * current entry to be filled
 			 */
 			ap->props->dpp_nr = 0;
 			rc = daos_parse_properties(optarg, ap->props);
-			/* restore number of enries in array for freeing */
-			ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 			if (rc != 0)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
@@ -659,8 +720,11 @@ out_free:
 		D_FREE(ap->snapname_str);
 	if (ap->epcrange_str != NULL)
 		D_FREE(ap->epcrange_str);
-	if (ap->props)
+	if (ap->props) {
+		/* restore number of entries in array for freeing */
+		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 		daos_prop_free(ap->props);
+	}
 	D_FREE(cmdname);
 	return rc;
 }
@@ -1048,6 +1112,14 @@ help_hdlr(struct cmd_args_s *ap)
 	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
+"	--properties=<name>:<value>[,<name>:<value>,...]"
+"			   supported prop names are label, cksum,"
+"				cksum_size, srv_cksum, red_factor"
+"			   label value can be any string"
+"			   cksum supported values are off, crc[16,32,64], sha1"
+"			   cksum_size can be any size"
+"			   srv_cksum values can be on, off"
+"			   red_factor supported values are rf[0-4]"
 "container options (destroy):\n"
 "	--force            destroy container regardless of state\n"
 "container options (query, and all commands except create):\n"
