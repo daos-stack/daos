@@ -46,7 +46,7 @@ public class DaosInputStreamIT {
     int numFiles = 100;
     long size = 1024;
 
-    Path p = new Path("/test/data");
+    Path p = new Path("/test34546/data");
     fs.mkdirs(p);
     List<Path> files = new ArrayList<>();
 
@@ -55,10 +55,9 @@ public class DaosInputStreamIT {
       files.add(file);
     }
     for (Path file : files) {
-      ContractTestUtils.generateTestFile(fs, file, size, 256, 255);
+      ContractTestUtils.generateTestFile(fs, file, size, 256, 128);
       Assert.assertTrue(fs.exists(file));
     }
-
   }
 
   private Path setPath(String path) throws IOException {

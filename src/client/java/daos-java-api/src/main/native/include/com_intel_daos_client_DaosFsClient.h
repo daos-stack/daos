@@ -12,8 +12,16 @@ extern "C" {
  * Method:    move
  * Signature: (JLjava/lang/String;Ljava/lang/String;)V
  */
-JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_move
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2
   (JNIEnv *, jobject, jlong, jstring, jstring);
+
+/*
+ * Class:     com_intel_daos_client_DaosFsClient
+ * Method:    move
+ * Signature: (JJLjava/lang/String;JLjava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_move__JJLjava_lang_String_2JLjava_lang_String_2
+  (JNIEnv *, jobject, jlong, jlong, jstring, jlong, jstring);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -26,10 +34,10 @@ JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_mkdir
 /*
  * Class:     com_intel_daos_client_DaosFsClient
  * Method:    createNewFile
- * Signature: (JLjava/lang/String;Ljava/lang/String;IIIIZ)J
+ * Signature: (JLjava/lang/String;Ljava/lang/String;IILjava/lang/String;IZ)J
  */
 JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
-  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jint, jint, jboolean);
+  (JNIEnv *, jobject, jlong, jstring, jstring, jint, jint, jstring, jint, jboolean);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
@@ -38,22 +46,6 @@ JNIEXPORT jlong JNICALL Java_com_intel_daos_client_DaosFsClient_createNewFile
  */
 JNIEXPORT jboolean JNICALL Java_com_intel_daos_client_DaosFsClient_delete
   (JNIEnv *, jobject, jlong, jstring, jstring, jboolean);
-
-/*
- * Class:     com_intel_daos_client_DaosFsClient
- * Method:    daosCreatePool
- * Signature: (Ljava/lang/String;IIJJ)Ljava/lang/String;
- */
-JNIEXPORT jstring JNICALL Java_com_intel_daos_client_DaosFsClient_daosCreatePool
-  (JNIEnv *, jclass, jstring, jint, jint, jlong, jlong);
-
-/*
- * Class:     com_intel_daos_client_DaosFsClient
- * Method:    destroyPool
- * Signature: (Ljava/lang/String;Ljava/lang/String;Z)V
- */
-JNIEXPORT void JNICALL Java_com_intel_daos_client_DaosFsClient_destroyPool
-  (JNIEnv *, jclass, jstring, jstring, jboolean);
 
 /*
  * Class:     com_intel_daos_client_DaosFsClient
