@@ -533,7 +533,9 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2)
 {
 	struct daos_acl *acl1;
+	size_t		acl1_size;
 	struct daos_acl *acl2;
+	size_t		acl2_size;
 
 	/* Never call this with entries not known to be ACL types */
 	D_ASSERT(entry1->dpe_type == DAOS_PROP_PO_ACL ||
@@ -552,13 +554,16 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	acl1 = entry1->dpe_val_ptr;
 	acl2 = entry2->dpe_val_ptr;
 
-	if (acl1->dal_len != acl2->dal_len) {
-		D_ERROR("ACL len mistmatch, %u != %u\n",
-			acl1->dal_len, acl2->dal_len);
+	acl1_size = daos_acl_get_size(acl1);
+	acl2_size = daos_acl_get_size(acl2);
+
+	if (acl1_size != acl2_size) {
+		D_ERROR("ACL len mistmatch, %lu != %lu\n",
+			acl1_size, acl2_size);
 		return -DER_MISMATCH;
 	}
 
-	if (memcmp(acl1, acl2, daos_acl_get_size(acl1)) != 0) {
+	if (memcmp(acl1, acl2, acl1_size) != 0) {
 		D_ERROR("ACL content mismatch\n");
 		return -DER_MISMATCH;
 	}
