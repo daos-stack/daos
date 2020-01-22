@@ -377,27 +377,6 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 	size_t len = strlen(props_string);
 	int rc = 0;
 
-#if 0
-	size_t prop_size;
-	while (len > 0) {
-		if (sscanf(cur, "%s:%s,", name, value) == 2) {
-			rc = daos_parse_property(name, value, props);
-				if (rc)
-					break;
-			prop_size = strlen(name) + strlen(value) + 2;
-		} else if (sscanf(cur, "%s:%s", name, value) == 2) {
-			rc = daos_parse_property(name, value, props);
-			/* last property in list */
-			break;
-		} else {
-			fprintf(stderr, "wrong format for properties\n");
-			rc = -DER_INVAL;
-			break;
-		}
-		len -= prop_size;
-		cur += prop_size;
-	}
-#else /* !0 */
 	while (len > 0) {
 		colon = strchr(cur, ':');
 		if (colon == NULL) {
@@ -448,7 +427,6 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 		if (rc)
 			break;
 	}
-#endif
 
 	return rc;
 }
