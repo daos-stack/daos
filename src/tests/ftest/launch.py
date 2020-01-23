@@ -710,8 +710,8 @@ def display_libfabric(test_yaml, args):
 
     cmd = "/usr/lib64/openmpi3/bin/orterun --map-by node --mca btl tcp,self" \
           " --mca oob tcp --mca pml ob1 -np 2 -x CRT_PHY_ADDR_STR=\"ofi+verbs;ofi_rxm\"" \
-          " -x OFI_INTERFACE=ib0 -x OFI_DOMAIN=hfi1_0 {0}/../../opt/cart/bin/crt_launch"  \
-          " -e {0}/../../opt/cart/TESTING/tests/iv_server -v 3".format(output)
+          " -x OFI_INTERFACE=ib0 -x OFI_DOMAIN=hfi1_0 /usr/bin/crt_launch"  \
+          " -e /usr/lib/cart/TESTING/iv_server -v 3"
     spawn_commands(host_list, cmd)
 
 
