@@ -289,19 +289,24 @@ daos_csummer_initialized(struct daos_csummer *obj)
 uint16_t
 daos_csummer_get_type(struct daos_csummer *obj)
 {
-	return obj->dcs_algo->cf_type;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_algo->cf_type;
+	return 0;
 }
 
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj)
 {
-	return obj->dcs_chunk_size;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_chunk_size;
+	return 0;
 }
 
 char *
 daos_csummer_get_name(struct daos_csummer *obj)
 {
-	if (obj->dcs_algo->cf_name)
+
+	if (daos_csummer_initialized(obj) && obj->dcs_algo->cf_name)
 		return obj->dcs_algo->cf_name;
 	return csum_unknown_name;
 }

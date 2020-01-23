@@ -1272,6 +1272,19 @@ out:
 	return rc;
 }
 
+static void
+csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
+{
+	struct csum_ft *csum_algo;
+
+	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
+	if (csum_algo != NULL)
+		daos_csummer_init(&cont->dc_csummer, csum_algo,
+				  cont_glob->dcg_csum_chunksize);
+	else
+		cont->dc_csummer = NULL;
+}
+
 static int
 dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	    daos_handle_t *coh)
@@ -1317,9 +1330,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
-	daos_csummer_init(&cont->dc_csummer,
-		daos_csum_type2algo(cont_glob->dcg_csum_type),
-		cont_glob->dcg_csum_chunksize);
+	csum_cont_g2l(cont_glob, cont);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);
