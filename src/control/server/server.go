@@ -29,8 +29,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"os/user"
-	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -97,47 +95,47 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	bdevProvider := bdev.DefaultProvider(log)
-	runningUser, err := user.Current()
-	if err != nil {
-		return errors.Wrap(err, "unable to lookup current user")
-	}
-
-	if !cfgHasBdev(cfg) {
-		// If there are no bdevs in the config, don't waste memory on configuring
-		// hugepages (1 is minimum to avoid default).
-		cfg.NrHugepages = 1
-	}
+	//	runningUser, err := user.Current()
+	//	if err != nil {
+	//		return errors.Wrap(err, "unable to lookup current user")
+	//	}
+	//
+	//	if !cfgHasBdev(cfg) {
+	//		// If there are no bdevs in the config, don't waste memory on configuring
+	//		// hugepages (1 is minimum to avoid default).
+	//		cfg.NrHugepages = 1
+	//	}
 
 	// Perform an automatic prepare based on the values in the config file.
-	prepReq := bdev.PrepareRequest{
-		HugePageCount: cfg.NrHugepages,
-		TargetUser:    runningUser.Username,
-		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
-	}
-	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := bdevProvider.Prepare(prepReq); err != nil {
-		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
-	}
-
-	hugePages, err := getHugePageInfo()
-	if err != nil {
-		return errors.Wrap(err, "unable to read system hugepage info")
-	}
-
-	// Don't bother with these checks if there aren't any block devices configured.
-	if cfgHasBdev(cfg) {
-		if hugePages.Free != hugePages.Total {
-			// Not sure if this should be an error, per se, but I think we want to display it
-			// on the console to let the admin know that there might be something that needs
-			// to be cleaned up?
-			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
-		}
-
-		if hugePages.FreeMB() == 0 {
-			// Is this appropriate? Or should we bomb out?
-			log.Error("no free hugepages -- NVMe performance may suffer")
-		}
-	}
+	//	prepReq := bdev.PrepareRequest{
+	//		HugePageCount: cfg.NrHugepages,
+	//		TargetUser:    runningUser.Username,
+	//		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
+	//	}
+	//	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+	//	if _, err := bdevProvider.Prepare(prepReq); err != nil {
+	//		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	//	}
+	//
+	//	hugePages, err := getHugePageInfo()
+	//	if err != nil {
+	//		return errors.Wrap(err, "unable to read system hugepage info")
+	//	}
+	//
+	//	// Don't bother with these checks if there aren't any block devices configured.
+	//	if cfgHasBdev(cfg) {
+	//		if hugePages.Free != hugePages.Total {
+	//			// Not sure if this should be an error, per se, but I think we want to display it
+	//			// on the console to let the admin know that there might be something that needs
+	//			// to be cleaned up?
+	//			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
+	//		}
+	//
+	//		if hugePages.FreeMB() == 0 {
+	//			// Is this appropriate? Or should we bomb out?
+	//			log.Error("no free hugepages -- NVMe performance may suffer")
+	//		}
+	//	}
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
@@ -151,18 +149,18 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 		// If the configuration specifies that we should explicitly set hugepage values
 		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
-		if cfg.SetHugepages {
-			// If we have multiple I/O instances with block devices, then we need to apportion
-			// the hugepage memory among the instances.
-			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
-			// reserve a little for daos_admin
-			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
-		}
-
-		// Each instance must have a unique shmid in order to run as SPDK primary.
-		// Use a stable identifier that's easy to construct elsewhere if we don't
-		// have access to the instance configuration.
-		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
+		//		if cfg.SetHugepages {
+		//			// If we have multiple I/O instances with block devices, then we need to apportion
+		//			// the hugepage memory among the instances.
+		//			srvCfg.Storage.Bdev.MemSize = hugePages.FreeMB() / len(cfg.Servers)
+		//			// reserve a little for daos_admin
+		//			srvCfg.Storage.Bdev.MemSize -= srvCfg.Storage.Bdev.MemSize / 16
+		//		}
+		//
+		//		// Each instance must have a unique shmid in order to run as SPDK primary.
+		//		// Use a stable identifier that's easy to construct elsewhere if we don't
+		//		// have access to the instance configuration.
+		//		srvCfg.Storage.Bdev.ShmID = instanceShmID(i)
 
 		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
@@ -186,9 +184,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
-	if err := controlService.Setup(); err != nil {
-		return errors.Wrap(err, "setup control service")
-	}
+	//	if err := controlService.Setup(); err != nil {
+	//		return errors.Wrap(err, "setup control service")
+	//	}
 
 	// Create and start listener on management network.
 	lis, err := net.Listen("tcp4", controlAddr.String())
