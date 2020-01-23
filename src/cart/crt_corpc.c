@@ -553,7 +553,6 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
 		crt_rpc_complete(rpc_priv, co_info->co_rc);
-		RPC_DECREF(rpc_priv); /* destroy */
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
