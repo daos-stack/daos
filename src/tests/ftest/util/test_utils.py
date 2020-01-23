@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=pylint-too-many-lines
 from logging import getLogger
 import os
 from time import sleep, time
@@ -687,7 +688,6 @@ class TestContainerData(object):
                 Defaults to False.
         """
         self.obj = None
-        self.txn = None
         self.records = []
         self.log = getLogger(__name__)
         self.debug = debug
@@ -744,13 +744,13 @@ class TestContainerData(object):
             if isinstance(data, list):
                 kwargs["datalist"] = data
                 self._log_method("write_an_array_value", kwargs)
-                (self.obj, self.txn) = \
+                (self.obj) = \
                     container.container.write_an_array_value(**kwargs)
             else:
                 kwargs["thedata"] = data
                 kwargs["size"] = len(data)
                 self._log_method("write_an_obj", kwargs)
-                (self.obj, self.txn) = \
+                (self.obj) = \
                     container.container.write_an_obj(**kwargs)
         except DaosApiError as error:
             raise DaosTestError(
@@ -809,7 +809,7 @@ class TestContainerData(object):
         Returns:
             str: the data read for the container
         """
-        kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "txn": self.txn}
+        kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj}
         try:
             if data_array_size > 0:
                 kwargs["rec_count"] = data_array_size
@@ -999,10 +999,7 @@ class TestContainer(TestDaosApiBase):
             self._call_method(self.container.query, {"coh": coh})
             self.info = self.container.info
 
-    def check_container_info(self, ci_uuid=None, es_hce=None, es_lre=None,
-                             es_lhe=None, es_ghce=None, es_glre=None,
-                             es_ghpce=None, ci_nsnapshots=None,
-                             ci_min_slipped_epoch=None):
+    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None):
         # pylint: disable=unused-argument
         """Check the container info attributes.
 
@@ -1013,20 +1010,8 @@ class TestContainer(TestDaosApiBase):
 
         Args:
             ci_uuid (str, optional): container uuid. Defaults to None.
-            es_hce (int, optional): hc epoch?. Defaults to None.
-            es_lre (int, optional): lr epoch?. Defaults to None.
-            es_lhe (int, optional): lh epoch?. Defaults to None.
-            es_ghce (int, optional): ghc epoch?. Defaults to None.
-            es_glre (int, optional): glr epoch?. Defaults to None.
-            es_ghpce (int, optional): ghpc epoch?. Defaults to None.
             ci_nsnapshots (int, optional): number of snapshots.
                 Defaults to None.
-            ci_min_slipped_epoch (int, optional): . Defaults to None.
-
-        Note:
-            Arguments may also be provided as a string with a number preceeded
-            by '<', '<=', '>', or '>=' for other comparisions besides the
-            default '=='.
 
         Returns:
             bool: True if at least one expected value is specified and all the

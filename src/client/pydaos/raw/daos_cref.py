@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-few-public-methods
+# pylint: pylint-missing-docstring
 import ctypes
 
 # DAOS api C structures
@@ -220,7 +222,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
         implementation if this is used as something other than a test
         tool.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -255,14 +257,14 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     # clean up
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
-
+    '''
 def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     """
         See AsyncWorker1 for details.  This does the same thing but
         uses different API functions (test instead of poll) for test
         coverage purposes.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -294,7 +296,7 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     # cleanup
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
-
+    '''
 class Logfac:
     DEBUG = 0
     INFO = 1

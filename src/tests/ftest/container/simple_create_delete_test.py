@@ -26,6 +26,7 @@ from test_utils import TestPool, TestContainer
 
 
 class SimpleCreateDeleteTest(TestWithServers):
+    # pylint: disable=too-few-public-methods
     """Tests container basics including create, destroy, open, query and close.
 
     :avocado: recursive
@@ -61,23 +62,14 @@ class SimpleCreateDeleteTest(TestWithServers):
         self.container.get_params(self)
         self.container.create()
 
-	# TODO: the cont info is out of date (see C version daos_cont_info_t)
-        # Open and query the container.  Verify the UUID from the query.
-        #checks = {
-        #    "ci_uuid": self.container.uuid,
-        #    "es_hce": 0,
-        #    "es_lre": 0,
-        #    "es_lhe": 0,
-        #    "es_ghce": 0,
-        #    "es_glre": 0,
-        #    "es_ghpce": 0,
-        #    "ci_nsnapshots": 0,
-        #    "ci_min_slipped_epoch": 0,
-        #}
+        # TO Be Done:the cont info needs update (see C version daos_cont_info_t)
+        # Open and query the container.Verify the UUID & No of Snapshot.
+        checks = {
+            "ci_uuid": self.container.uuid,
+            "ci_nsnapshots": 0}
 
-        #self.assertTrue(
-        #    self.container.check_container_info(**checks),
-        #    "Error confirming container info from query")
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info from query")
 
         # Close and destroy the container
         self.container.close()

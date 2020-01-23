@@ -244,7 +244,6 @@ class ObjectDataValidation(TestWithoutServers):
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
