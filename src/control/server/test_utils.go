@@ -106,7 +106,7 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 
 // newTestIOServer returns an IOServerInstance configured for testing.
 func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
-	r := ioserver.NewRunner(log, ioserver.NewConfig())
+	r := ioserver.NewTestRunner(nil, ioserver.NewConfig())
 
 	var msCfg mgmtSvcClientCfg
 	if isAP {
