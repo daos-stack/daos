@@ -88,31 +88,6 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 }
 
 void
-ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
-{
-	Mgmt__KillRankReq	*req = NULL;
-	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
-
-	/* Unpack the inner request from the drpc call body */
-	req = mgmt__kill_rank_req__unpack(
-		NULL, drpc_req->body.len, drpc_req->body.data);
-	if (req == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (kill rank)\n");
-		return;
-	}
-
-	D_INFO("Received request to kill rank %u (force: %d)\n",
-		req->rank, req->force);
-
-	/* terminate local service */
-	ds_mgmt_kill_rank(req->force);
-
-	pack_daos_response(&resp, drpc_resp);
-	mgmt__kill_rank_req__free_unpacked(req, NULL);
-}
-
-void
 ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PingRankReq	*req = NULL;

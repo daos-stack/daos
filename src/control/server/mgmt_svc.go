@@ -808,21 +808,13 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
-		if req.Force {
-			if err := i.Stop(); err != nil {
-				svc.log.Error(errors.Wrapf(err,
-					"rank %d force stop", *rank).Error())
+		if err := i.Stop(req.Force); err != nil {
+			var msg string
+			if req.Force {
+				msg = " (forced)"
 			}
-			continue
-		}
-
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank,
-			&mgmtpb.KillRankReq{Rank: *rank, Force: false})
-
-		// don't use RankResult but log errors
-		result := drespToRankResult(*rank, "stop", dresp, err, system.MemberStateUnknown)
-		if result.Errored {
-			svc.log.Debug(result.Msg)
+			svc.log.Error(errors.Wrapf(err,
+				"rank %d stop%s", *rank, msg).Error())
 		}
 	}
 
