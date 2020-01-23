@@ -666,7 +666,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_cmd.extend(["--mca", "btl", "tcp,self"])
         server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])
-        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+        server_cmd.extend(["--hostfile", hostfile])
+        server_cmd.extend(["--enable-recovery", "--tag-output"])
 
         # Add any user supplied environment
         if env_dict is not None:

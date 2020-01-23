@@ -51,6 +51,7 @@ public class DaosFileIT {
     dir2.mkdirs();
     String destPath = dir2.getPath() + "/data2";
     DaosFile destFile = srcFile.rename(destPath);
+    Assert.assertTrue(destFile.exists());
     Assert.assertEquals(0, destFile.length());
   }
 
@@ -259,7 +260,7 @@ public class DaosFileIT {
     Assert.assertTrue(attributes.getLength() == 0);
     Assert.assertTrue(attributes.getObjId() != 0);
     Assert.assertTrue(attributes.getBlockCnt() == 0);
-    Assert.assertTrue(attributes.getBlockSize() == Constants.FILE_DEFAULT_CHUNK_SIZE);
+    Assert.assertTrue(attributes.getBlockSize() == 1024*1024);
     Assert.assertTrue(attributes.getMode() != 0);
     Assert.assertTrue(attributes.getAccessTime() != null);
     Assert.assertTrue(attributes.getModifyTime() != null);

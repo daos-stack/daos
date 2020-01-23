@@ -43,15 +43,9 @@ func TestSystemCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"system stop with kill",
-			"system stop --kill",
-			"ConnectClients SystemStop",
-			nil,
-		},
-		{
-			"system stop with prep",
-			"system stop --prep",
-			"ConnectClients SystemStop",
+			"system start with no arguments",
+			"system start",
+			"ConnectClients SystemStart",
 			nil,
 		},
 		{

@@ -1,17 +1,19 @@
-java_home=$JAVA_HOME
-if [ -n  "$java_home" ] 
-then 
-	echo $java_home
+#!/usr/bin/env bash
+
+java_home_path=$JAVA_HOME
+if [ -n  "$java_home_path" ]
+then
+	echo "$java_home_path"
 else
-	java_path=$(dirname $(readlink -f $(which java)))
-	java_home=$(echo $java_path | sed 's^/jre/bin^^')
-	if  [ ! -f "${java_home}/include/jni.h" ] 
+	java_path="$(dirname $(readlink -f $(which java)))"
+	java_home_path="${java_path/\/jre\/bin/}"
+	if  [ ! -f "${java_home_path}/include/jni.h" ]
 	then
-		java_home=$(echo $java_path | sed 's^/bin^^')
-		if [ ! -f "$java_home/include/jni.h" ]
+		java_home_path="${java_path/\/bin/}"
+		if [ ! -f "$java_home_path/include/jni.h" ]
 		then
 			exit 1
 		fi
 	fi
-	echo $java_home
+	echo "$java_home_path"
 fi

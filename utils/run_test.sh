@@ -108,6 +108,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
+    run_test build/src/common/tests/acl_valid_tests
     run_test build/src/common/tests/acl_util_tests
     run_test build/src/common/tests/acl_principal_tests
     run_test build/src/common/tests/acl_real_tests
