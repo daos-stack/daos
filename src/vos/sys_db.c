@@ -295,8 +295,7 @@ vos_db_init(const char *db_path, const char *db_name, bool recreate)
 	int	rc;
 
 	memset(&vos_db, 0, sizeof(vos_db));
-
-	rc = asprintf(&vos_db.db_path, "%s", db_path ? db_path : SYS_DB_DIR);
+	rc = asprintf(&vos_db.db_path, "%s/%s", db_path, SYS_DB_DIR);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb path failed. %d\n", rc);
 		return -DER_NOMEM;
