@@ -325,7 +325,7 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
 			 false /* retry */);
 	if (rc)
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -352,7 +352,7 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
 			  false /* retry */);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -401,7 +401,7 @@ pool_iv_map_invalidate(void *ns, unsigned int shortcut, unsigned int sync_mode)
 	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0,
 			      false /* retry */);
 	if (rc)
-		D_ERROR("iv invalidate failed %d\n", rc);
+		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -623,7 +623,7 @@ pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, iv_entry, size,
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
 	if (rc)
-		D_ERROR("pool_iv_update failed %d.\n", rc);
+		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 	D_FREE(iv_entry);
 
 out:
@@ -662,19 +662,19 @@ pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	key.class_id = IV_POOL_PROP;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed %d\n", rc);
+		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = pool_iv_prop_g2l(&iv_entry->piv_prop, prop_fetch);
 	if (rc) {
-		D_ERROR("pool_iv_prop_g2l failed %d.\n", rc);
+		D_ERROR("pool_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed %d.\n", rc);
+		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

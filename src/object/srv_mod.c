@@ -125,7 +125,7 @@ ds_obj_profile_start(char *path)
 
 	rc = srv_profile_start(&tls->ot_sp, path, profile_op_names);
 
-	D_DEBUG(DB_MGMT, "object profile start: %d\n", rc);
+	D_DEBUG(DB_MGMT, "object profile start: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -140,7 +140,7 @@ ds_obj_profile_stop(void)
 
 	rc = srv_profile_stop(tls->ot_sp);
 
-	D_DEBUG(DB_MGMT, "object profile stop: %d\n", rc);
+	D_DEBUG(DB_MGMT, "object profile stop: "DF_RC"\n", DP_RC(rc));
 	tls->ot_sp = NULL;
 	return rc;
 }
@@ -153,7 +153,7 @@ struct dss_module_key obj_module_key = {
 };
 
 static struct dss_module_ops ds_obj_mod_ops = {
-	.dms_abt_pool_choose_cb = ds_obj_abt_pool_choose_cb,
+	.dms_abt_pool_choose_cb = NULL,
 	.dms_profile_start = ds_obj_profile_start,
 	.dms_profile_stop = ds_obj_profile_stop,
 };

@@ -32,9 +32,7 @@
 #include <sys/xattr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/vfs.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -47,10 +45,6 @@
 #include "daos_uns.h"
 
 #include "daos_hdlr.h"
-
-#define DUNS_XATTR_NAME		"user.daos"
-#define DUNS_MAX_XATTR_LEN	170
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
 
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
@@ -916,112 +910,6 @@ err_rc:
 }
 
 int
-cont_uns_insert_hdlr(struct cmd_args_s *ap)
-{
-	struct statfs	stsf;
-	int		rc;
-	char		*dir;
-	char		*base;
-	char		*pool;
-	char		*cont;
-	int		fd;
-	int		nfd;
-	int		err;
-
-	if (!ap->path) {
-		fprintf(stderr,
-			"Path not set\n");
-		D_GOTO(err_rc, rc = -DER_INVAL);
-	}
-
-	base = basename(ap->path);
-
-	/* This function modifies ap->path by inserting a \0 in place of the
-	 * last '/' character, so it's important to call basename() before
-	 * dirname() or basename will return the name of the parent directory
-	 * not the bottom level entry.
-	 */
-	dir = dirname(ap->path);
-
-	fd = open(dir, O_PATH | O_DIRECTORY);
-	if (fd < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to open parent directory %s\n", strerror(err));
-		D_GOTO(err_rc, rc = -DER_INVAL);
-	}
-
-	rc = fstatfs(fd, &stsf);
-	if (rc < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to statfs parent directory %s\n",
-			strerror(err));
-		D_GOTO(close, rc = -DER_IO);
-	}
-
-	/* This should read FUSE_SUPER_MAGIC however this is not exported from
-	 * the kernel headers so hard-code the value
-	 */
-	if (stsf.f_type != 0x65735546) {
-		fprintf(stderr,
-			"Wrong filesystem type for path\n");
-		D_GOTO(close, rc = -DER_INVAL);
-	}
-
-	rc = mkdirat(fd, base, 0700);
-	if (rc < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to make new directory %s\n", strerror(err));
-		D_GOTO(close, rc = daos_errno2der(rc));
-	}
-
-	nfd = openat(fd, base, O_RDONLY, O_DIRECTORY);
-	if (nfd < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to open new directory %s\n", strerror(err));
-		D_GOTO(unlink, rc = -DER_IO);
-	}
-
-	pool = DP_UUID(ap->p_uuid);
-
-	rc = fsetxattr(nfd, "user.uns.pool", pool, strlen(pool), XATTR_CREATE);
-	if (rc < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to set pool attribute %s\n", strerror(err));
-		D_GOTO(close_two, rc = -DER_IO);
-
-	}
-
-	cont = DP_UUID(ap->c_uuid);
-
-	rc = fsetxattr(nfd, "user.uns.container", cont, strlen(cont),
-		       XATTR_CREATE);
-	if (rc < 0) {
-		err = errno;
-		fprintf(stderr,
-			"Failed to set cont attribute %s\n", strerror(err));
-		D_GOTO(close_two, rc = -DER_IO);
-
-	}
-
-	printf("Setup UNS entry point\n");
-	return 0;
-
-close_two:
-	close(nfd);
-unlink:
-	unlinkat(fd, base, AT_REMOVEDIR);
-close:
-	close(fd);
-err_rc:
-	return rc;
-}
-
-int
 cont_query_hdlr(struct cmd_args_s *ap)
 {
 	daos_cont_info_t	cont_info;
@@ -1051,13 +939,29 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		if (ap->oclass == OC_UNKNOWN)
-			strcpy(oclass, "UNKNOWN");
-		else
-			daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
-		printf("Object Class:\t%s\n", oclass);
-		printf("Chunk Size:\t%zu\n", ap->chunk_size);
+
+		if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+			dfs_t		*dfs;
+			dfs_attr_t	attr;
+
+			rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
+			if (rc) {
+				fprintf(stderr, "dfs_mount failed (%d)\n", rc);
+				D_GOTO(err_out, rc);
+			}
+
+			dfs_query(dfs, &attr);
+			daos_oclass_id2name(attr.da_oclass_id, oclass);
+			printf("Object Class:\t%s\n", oclass);
+			printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
+
+			rc = dfs_umount(dfs);
+			if (rc) {
+				fprintf(stderr, "dfs_umount failed (%d)\n", rc);
+				D_GOTO(err_out, rc);
+			}
+		}
 	}
 
 	return 0;

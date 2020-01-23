@@ -102,7 +102,7 @@ dss_self_rank(void)
 	int		rc;
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return rank;
 }
 
@@ -118,7 +118,8 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -126,21 +127,24 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -148,7 +152,8 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -206,7 +211,7 @@ modules_load(uint64_t *facs)
  * passed in preferred number of threads.
  */
 static int
-dss_tgt_nr_get(int ncores, int nr)
+dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 {
 	int nr_default;
 
@@ -225,10 +230,13 @@ dss_tgt_nr_get(int ncores, int nr)
 		nr_default = 1;
 
 	/* If user requires less target threads then set it as dss_tgt_nr,
-	 * if user requires more then uses the number calculated above
-	 * as creating more threads than #cores may hurt performance.
+	 * if user oversubscribes, then:
+	 *      . if oversubscribe is enabled, use the required number
+	 *      . if oversubscribe is disabled(default),
+	 *        use the number calculated above
+	 * Note: oversubscribing  may hurt performance.
 	 */
-	if (nr >= 1 && nr < nr_default)
+	if (nr >= 1 && ((nr < nr_default) || oversubscribe))
 		nr_default = nr;
 
 	if (nr_default != nr)
@@ -247,6 +255,7 @@ dss_topo_init()
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
+	bool            tgt_oversub = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -255,12 +264,14 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
+	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
+					    tgt_oversub);
 
 		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %d "
@@ -314,7 +325,8 @@ dss_topo_init()
 	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
 	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
+	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
+				    tgt_oversub);
 	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
@@ -501,14 +513,16 @@ server_init(int argc, char *argv[])
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
+			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(exit_srv_init, rc);
 		}
 		rc = pl_init();
@@ -523,13 +537,14 @@ server_init(int argc, char *argv[])
 
 	rc = server_init_state_init();
 	if (rc != 0) {
-		D_ERROR("failed to init server init state: %d\n", rc);
+		D_ERROR("failed to init server init state: "DF_RC"\n",
+			DP_RC(rc));
 		goto exit_daos_fini;
 	}
 
 	rc = drpc_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: %d\n", rc);
+		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
 	}
 

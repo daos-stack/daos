@@ -42,7 +42,7 @@ type TableFormatter struct {
 
 // Init instantiates internal variables.
 func (t *TableFormatter) Init() {
-	t.writer = tabwriter.NewWriter(&t.out, 8, 8, 0, '\t', 0)
+	t.writer = tabwriter.NewWriter(&t.out, 0, 0, 1, ' ', 0)
 }
 
 // SetColumnTitles sets the ordered column titles for the table.

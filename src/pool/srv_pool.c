@@ -466,6 +466,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
+	uint32_t		connectable;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
 	d_iov_t		value;
@@ -555,6 +556,13 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop);
+	if (rc != 0)
+		D_GOTO(out_uuids, rc);
+
+	/* Write connectable property */
+	connectable = 1;
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
 
@@ -696,8 +704,8 @@ rechoose:
 	rsvc_client_choose(&client, &ep);
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 	in = crt_req_get(rpc);
@@ -726,13 +734,13 @@ rechoose:
 	}
 	rc = out->pro_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to create pool: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
 	rc = daos_rank_list_copy(svc_addrs, ranks);
-	D_ASSERTF(rc == 0, "daos_rank_list_copy: %d\n", rc);
+	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
@@ -764,8 +772,8 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 			       &excluded, true /* destroy */);
 	map_ranks_fini(&excluded);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -1085,15 +1093,15 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 				DP_UUID(svc->ps_uuid));
 			rc = +DER_UNINIT;
 		} else {
-			D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
-				DP_UUID(svc->ps_uuid), rc);
+			D_ERROR(DF_UUID": failed to read pool map buffer: "
+				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		}
 		goto out_lock;
 	}
 	rc = rdb_get_ranks(rsvc->s_db, &replicas);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to get pool service replica: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to get pool service replica: "
+			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -1124,7 +1132,7 @@ out_lock:
 		goto out;
 
 	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	D_PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 out:
@@ -1156,7 +1164,7 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	fini_svc_pool(svc);
 
 	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	D_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 }
@@ -1336,7 +1344,8 @@ pool_start_all(void *arg)
 	/* Scan the storage and start all pool services. */
 	rc = ds_mgmt_tgt_pool_iterate(start_one, NULL /* arg */);
 	if (rc != 0)
-		D_ERROR("failed to scan all pool services: %d\n", rc);
+		D_ERROR("failed to scan all pool services: "DF_RC"\n",
+			DP_RC(rc));
 }
 
 /* Note that this function is currently called from the main xstream. */
@@ -1350,7 +1359,8 @@ ds_pool_start_all(void)
 	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_ULT_POOL_SRV,
 			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
 	if (rc != 0) {
-		D_ERROR("failed to create pool start ULT: %d\n", rc);
+		D_ERROR("failed to create pool start ULT: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 	ABT_thread_join(thread);
@@ -1618,8 +1628,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 			D_DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
 				DP_UUID(svc->ps_uuid));
 		else
-			D_ERROR(DF_UUID": failed to look up pool map: %d\n",
-				DP_UUID(svc->ps_uuid), rc);
+			D_ERROR(DF_UUID": failed to look up pool map: "
+				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_tx, rc);
 	}
 
@@ -1692,8 +1702,8 @@ out_svc:
 	pool_svc_put(svc);
 out:
 	out->pro_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pri_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pri_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1737,8 +1747,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tco_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to %d targets\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to connect to "DF_RC" targets\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	} else {
 		if (ps != NULL)
@@ -1748,7 +1758,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -1860,6 +1871,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
+	uint32_t			connectable;
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -1894,6 +1906,20 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
+	/* Check if pool is being destroyed and not accepting connections */
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root,
+			   &ds_pool_prop_connectable, &value);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": connectable=%u\n",
+		DP_UUID(in->pci_op.pi_uuid), connectable);
+	if (!connectable) {
+		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
+			DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_lock, rc = -DER_BUSY);
+	}
+
 	/* Check existing pool handles. */
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &hdl, sizeof(hdl));
@@ -1921,8 +1947,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	prop_bits = DAOS_PO_QUERY_PROP_ALL;
 	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get access data for pool, rc=%d\n",
-			DP_UUID(in->pci_op.pi_uuid), rc);
+		D_ERROR(DF_UUID": cannot get access data for pool, "
+			"rc="DF_RC"\n", DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 	D_ASSERT(prop != NULL);
@@ -1946,8 +1972,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			&in->pci_cred, in->pci_capas);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
-			DF_X64" error: %d\n", DP_UUID(in->pci_op.pi_uuid),
-			in->pci_capas, rc);
+			DF_X64" error: "DF_RC"\n", DP_UUID(in->pci_op.pi_uuid),
+			in->pci_capas, DP_RC(rc));
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
@@ -1961,8 +1987,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 */
 	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
@@ -2005,8 +2031,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
 				&out->pco_space : NULL, CRT_BULK_NULL);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
-			DP_UUID(in->pci_op.pi_uuid), rc);
+		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
+			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 
@@ -2031,7 +2057,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	/* Update pool map by IV */
 	rc = pool_map_update(rpc->cr_ctx, svc, map_version, map_buf);
 	if (rc) {
-		D_ERROR("pool_map_update failed %d.\n", rc);
+		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 
@@ -2055,8 +2081,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pco_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pci_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2088,15 +2114,16 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to disconnect from %d targets\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to disconnect from "DF_RC" targets\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	}
 
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2150,7 +2177,8 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		D_GOTO(out, rc);
 
 out:
-	D_DEBUG(DF_DSMS, DF_UUID": leaving: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DF_DSMS, DF_UUID": leaving: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2204,8 +2232,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	pdo->pdo_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -2236,8 +2264,8 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	out = crt_reply_get(rpc);
 	rc = out->tqo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query from %d targets\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	} else {
 		D_ASSERT(ps != NULL);
@@ -2247,7 +2275,8 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MD, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
+	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2605,7 +2634,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 		rc = pool_iv_prop_fetch(svc->ps_pool, iv_prop);
 		if (rc) {
-			D_ERROR("pool_iv_prop_fetch failed %d.\n", rc);
+			D_ERROR("pool_iv_prop_fetch failed "DF_RC"\n",
+				DP_RC(rc));
 			daos_prop_free(iv_prop);
 			D_GOTO(out_map_version, rc);
 		}
@@ -2650,15 +2680,15 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 		daos_prop_free(iv_prop);
 		if (rc) {
-			D_ERROR("iv_prop verify failed %d.\n", rc);
+			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_map_version, rc);
 		}
 	}
 
 	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 
@@ -2682,8 +2712,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
 }
@@ -2865,8 +2895,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pgo_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pgi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pgi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
 }
@@ -2906,8 +2936,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_GET, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool get prop rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to create pool get prop rpc: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_client, rc);
 	}
 
@@ -2931,8 +2961,8 @@ rechoose:
 
 	rc = out->pgo_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get prop for pool: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to get prop for pool: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
@@ -3429,8 +3459,8 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
 					   &replace_ranks);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
+			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	if (replace_ranks.rl_nr > 0)
@@ -3509,8 +3539,8 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": failed to commit: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_replicas, rc);
 	}
 
@@ -3734,8 +3764,8 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 
 out:
 	out->pto_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pti_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 	pool_target_addr_list_free(&out_list);
 }
@@ -3871,9 +3901,33 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	if (n_hdl_uuids > 0)
-		rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
-					  rpc->cr_ctx);
+	if (n_hdl_uuids > 0) {
+		/* If pool destroy but not forcibly, error: the pool is busy */
+
+		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
+			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
+				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
+			D_GOTO(out_lock, rc = -DER_BUSY);
+		} else {
+			/* Pool evict, or pool destroy with force=true */
+			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
+						  n_hdl_uuids, rpc->cr_ctx);
+		}
+	}
+
+	/* If pool destroy and not error case, disable new connections */
+	if (in->pvi_pool_destroy) {
+		uint32_t	connectable = 0;
+		d_iov_t		value;
+
+		d_iov_set(&value, &connectable, sizeof(connectable));
+		rc = rdb_tx_update(&tx, &svc->ps_root,
+				   &ds_pool_prop_connectable, &value);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
+			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
+	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
@@ -3886,9 +3940,85 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->pvo_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pvi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc during pool destroy to test and
+ * (if applicable based on force option) evict all open handles on a pool.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	force		If true request all handles be forcibly evicted
+ *
+ * \return	0		Success
+ *		-DER_BUSY	Open pool handles exist and no force requested
+ *
+ */
+int
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+{
+	int			 rc;
+	struct rsvc_client	 client;
+	crt_endpoint_t		 ep;
+	struct dss_module_info	*info = dss_get_module_info();
+	crt_rpc_t		*rpc;
+	struct pool_evict_in	*in;
+	struct pool_evict_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
+		DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pvi_op.pi_hdl);
+
+	/* Pool destroy (force=false): assert no open handles / do not evict.
+	 * Pool destroy (force=true): evict any/all open handles on the pool.
+	 */
+	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy_force = force;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pvo_op.po_rc,
+				      &out->pvo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pvo_op.po_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
+			"rc: %d\n", DP_UUID(pool_uuid), rc);
+
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
 }
 
 /* This RPC could be implemented by ds_rsvc. */
@@ -3907,8 +4037,8 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_stop_leader(DS_RSVC_CLASS_POOL, &id, &out->pso_op.po_hint);
 
 	out->pso_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -3935,8 +4065,8 @@ ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_version)
 	ABT_rwlock_rdlock(svc->ps_lock);
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_lock, rc);
 	}
 	D_ASSERT(map_buf != NULL);
@@ -4010,8 +4140,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pasi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pasi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -4045,8 +4175,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pagi_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pagi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 
 }
@@ -4082,8 +4212,8 @@ out_svc:
 	pool_svc_put_leader(svc);
 out:
 	out->palo_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pali_op.pi_uuid), rpc, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->pali_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 

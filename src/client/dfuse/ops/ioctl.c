@@ -42,7 +42,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	il_reply.fir_version = DFUSE_IOCTL_VERSION;
 
-	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_pool);
+	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_pool);
 	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfs_cont);
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
@@ -62,7 +62,7 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hs_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_poh, &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -92,7 +92,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_poh, &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 

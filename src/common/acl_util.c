@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
  * Utility functions that may be used when interacting with Access Control
  * Lists
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
@@ -50,6 +50,13 @@
  */
 #define PERM_READ_CH		'r'
 #define PERM_WRITE_CH		'w'
+#define PERM_CREATE_CONT_CH	'c'
+#define PERM_DEL_CONT_CH	'd'
+#define PERM_GET_PROP_CH	't'
+#define PERM_SET_PROP_CH	'T'
+#define PERM_GET_ACL_CH		'a'
+#define PERM_SET_ACL_CH		'A'
+#define PERM_SET_OWNER_CH	'o'
 
 /*
  * States used to parse a formatted ACE string
@@ -134,6 +141,27 @@ process_perms(const char *str, uint64_t *perms)
 			break;
 		case PERM_WRITE_CH:
 			*perms |= DAOS_ACL_PERM_WRITE;
+			break;
+		case PERM_CREATE_CONT_CH:
+			*perms |= DAOS_ACL_PERM_CREATE_CONT;
+			break;
+		case PERM_DEL_CONT_CH:
+			*perms |= DAOS_ACL_PERM_DEL_CONT;
+			break;
+		case PERM_GET_PROP_CH:
+			*perms |= DAOS_ACL_PERM_GET_PROP;
+			break;
+		case PERM_SET_PROP_CH:
+			*perms |= DAOS_ACL_PERM_SET_PROP;
+			break;
+		case PERM_GET_ACL_CH:
+			*perms |= DAOS_ACL_PERM_GET_ACL;
+			break;
+		case PERM_SET_ACL_CH:
+			*perms |= DAOS_ACL_PERM_SET_ACL;
+			break;
+		case PERM_SET_OWNER_CH:
+			*perms |= DAOS_ACL_PERM_SET_OWNER;
 			break;
 		default:
 			D_INFO("Invalid permission '%c'\n", str[i]);
@@ -293,8 +321,8 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	return 0;
 }
 
-static const char *
-get_principal_name_str(struct daos_ace *ace)
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace)
 {
 	switch (ace->dae_principal_type) {
 	case DAOS_ACL_OWNER:
@@ -410,7 +438,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 		rc = write_char(&pen, FLAG_POOL_INHERIT_CH, &remaining_len);
 
 	written = snprintf(pen, remaining_len, ":%s:",
-			   get_principal_name_str(ace));
+			   daos_ace_get_principal_str(ace));
 	if (written > remaining_len) {
 		remaining_len = 0;
 	} else {
@@ -423,6 +451,20 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 		rc = write_char(&pen, PERM_READ_CH, &remaining_len);
 	if (perms & DAOS_ACL_PERM_WRITE)
 		rc = write_char(&pen, PERM_WRITE_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_CREATE_CONT)
+		rc = write_char(&pen, PERM_CREATE_CONT_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_DEL_CONT)
+		rc = write_char(&pen, PERM_DEL_CONT_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_GET_PROP)
+		rc = write_char(&pen, PERM_GET_PROP_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_SET_PROP)
+		rc = write_char(&pen, PERM_SET_PROP_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_GET_ACL)
+		rc = write_char(&pen, PERM_GET_ACL_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_SET_ACL)
+		rc = write_char(&pen, PERM_SET_ACL_CH, &remaining_len);
+	if (perms & DAOS_ACL_PERM_SET_OWNER)
+		rc = write_char(&pen, PERM_SET_OWNER_CH, &remaining_len);
 
 	return rc;
 }
@@ -482,7 +524,7 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 
 	rc = daos_ace_to_str(current, buf, sizeof(buf));
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACE to string: %d\n", rc);
+		D_ERROR("Couldn't convert ACE to string: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
