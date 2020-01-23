@@ -26,7 +26,7 @@ import ctypes
 from pydaos.raw import (DaosContainer, IORequest,
                         DaosObj)
 from apricot import TestWithServers
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 
 class ChecksumContainerValidation(TestWithServers):

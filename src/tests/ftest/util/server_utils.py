@@ -577,7 +577,7 @@ def storage_prepare(hosts, user, device_type):
            .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
-        raise ServerFailed("Error preparing NVMe storage")
+        raise ServerFailed("Error preparing {} storage".format(device_type))
 
 
 def storage_reset(hosts):
@@ -666,7 +666,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_cmd.extend(["--mca", "btl", "tcp,self"])
         server_cmd.extend(["--mca", "oob", "tcp"])
         server_cmd.extend(["--mca", "pml", "ob1"])
-        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+        server_cmd.extend(["--hostfile", hostfile])
+        server_cmd.extend(["--enable-recovery", "--tag-output"])
 
         # Add any user supplied environment
         if env_dict is not None:

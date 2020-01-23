@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -267,9 +268,8 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 			return ctx.Err()
 		case err := <-h.errChan: // received when instance exits
 			// TODO: Restart failed instances on unexpected exit.
-			allInstancesStopped := !h.HasStartedInstances()
 			msg := fmt.Sprintf("instance exited: %v", err)
-			if allInstancesStopped {
+			if len(h.StartedRanks()) == 0 {
 				msg += ", all instances stopped!"
 				h.setRestartable()
 			}
@@ -319,20 +319,6 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	return nil
 }
 
-// HasStartedInstances returns true if any harness instances are running.
-func (h *IOServerHarness) HasStartedInstances() bool {
-	h.RLock()
-	defer h.RUnlock()
-
-	for _, instance := range h.instances {
-		if instance.IsStarted() {
-			return true
-		}
-	}
-
-	return false
-}
-
 // RestartInstances will signal the harness to restart configured instances.
 func (h *IOServerHarness) RestartInstances() error {
 	h.RLock()
@@ -344,7 +330,7 @@ func (h *IOServerHarness) RestartInstances() error {
 	if !h.IsRestartable() {
 		return errors.New("can't start instances: already running")
 	}
-	if h.HasStartedInstances() {
+	if len(h.StartedRanks()) > 0 {
 		return errors.New("can't start instances: already started")
 	}
 
@@ -397,6 +383,22 @@ func (h *IOServerHarness) setStopped() {
 
 func (h *IOServerHarness) IsStarted() bool {
 	return atomic.LoadUint32(&h.started) == 1
+}
+
+// StartedRanks returns rank assignment of configured harness instances that are
+// in a running state. Rank assignments can be nil.
+func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
+	h.RLock()
+	defer h.RUnlock()
+
+	ranks := make([]*ioserver.Rank, 0, maxIoServers)
+	for _, i := range h.instances {
+		if i.hasSuperblock() && i.IsStarted() {
+			ranks = append(ranks, i.getSuperblock().Rank)
+		}
+	}
+
+	return ranks
 }
 
 func (h *IOServerHarness) setRestartable() {

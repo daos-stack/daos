@@ -37,7 +37,7 @@ set_update_csum_fi()
 static void
 set_fetch_csum_fi()
 {
-	daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
+	daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ONCE);
 }
 static void
 unset_csum_fi()
@@ -76,7 +76,7 @@ setup_from_test_args(struct csum_test_ctx *ctx, test_arg_t *state)
  */
 static void
 setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
-	       int chunksize)
+	       int chunksize, daos_oclass_id_t oclass)
 {
 	daos_prop_t	*props = daos_prop_alloc(3);
 	int		 rc;
@@ -100,7 +100,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_int_equal(0, rc);
 
-	ctx->oid = dts_oid_gen(OC_SX, 0, 1);
+	ctx->oid = dts_oid_gen(oclass, 0, 1);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
 	assert_int_equal(0, rc);
 }
@@ -234,14 +234,14 @@ io_with_server_side_verify(void **state)
 	 *
 	 */
 	/** 1. Server verify disabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 2. Server verify enabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
@@ -249,14 +249,14 @@ io_with_server_side_verify(void **state)
 
 	/** 3. Server verify disabled, corruption occurs, update should work */
 	set_update_csum_fi();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
@@ -279,7 +279,7 @@ test_fetch_array(void **state)
 
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
 	setup_simple_data(&ctx);
 
 	/**
@@ -294,6 +294,7 @@ test_fetch_array(void **state)
 	 * 3. Repeat case 1, but with a more complicated I/O: Larger data,
 	 *    multiple extents.
 	 * 4. Repeate case 2 but with the more complicated I/O from 3.
+	 * 5. Repeate cases 2 and 4, but with replica (2) object class.
 	 */
 
 	/** 1. Simple success case */
@@ -337,8 +338,41 @@ test_fetch_array(void **state)
 			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	unset_csum_fi();
+	cleanup_cont_obj(&ctx);
+
+	/** 5. Replicated object with corruption */
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_RP_2GX);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+	set_fetch_csum_fi();
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** Update/Fetch data matches */
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
+	unset_csum_fi();
+	cleanup_data(&ctx);
+
+	/** 6. Replicated (complicated data) object with corruption */
+	set_fetch_csum_fi();
+	setup_multiple_extent_data(&ctx);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** Update/Fetch data matches */
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
 
 	/** Clean up */
+	unset_csum_fi();
 	cleanup_data(&ctx);
 	cleanup_cont_obj(&ctx);
 }
@@ -462,7 +496,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 
 	setup_from_test_args(&ctx, test_arg);
 	setup_cont_obj(&ctx, args->csum_prop_type, args->server_verify,
-		       args->chunksize);
+		       args->chunksize, OC_SX);
 
 	for (i = 0; i < recx_count; i++) {
 		ctx.recx[0].rx_nr = args->recx_cfgs[i].nr;

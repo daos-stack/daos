@@ -223,4 +223,7 @@ ds_pool_disable_evict(void);
 void
 ds_pool_enable_evict(void);
 
+int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			    uint32_t force);
+
 #endif /* __DAOS_SRV_POOL_H__ */

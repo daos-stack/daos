@@ -52,6 +52,9 @@ struct duns_attr_t {
 	bool			da_on_lustre;
 };
 
+#define DUNS_XATTR_NAME		"user.daos"
+#define DUNS_MAX_XATTR_LEN	170
+
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container
  * type, and create a new DAOS container in the pool that is passed in \a
@@ -95,6 +98,18 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
  */
 int
 duns_destroy_path(daos_handle_t poh, const char *path);
+
+/**
+ * Convert a string into duns_attr_t.
+ *
+ * \param[in]	str	Input string
+ * \param[in]	len	Length of input string
+ * \param[out]	attr	Struct containing the xattrs on the path.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
 
 #if defined(__cplusplus)
 }

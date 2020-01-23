@@ -50,6 +50,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc = ENOMEM);
 	}
 
+	dfs->dfs_attr_timeout = parent->ie_dfs->dfs_attr_timeout;
 	dfs->dfs_dfp = dfp;
 
 	/* Dentry names where are not valid uuids cannot possibly be added so in

@@ -266,7 +266,8 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
+			DAOS_OF_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
 	daos_obj_generate_id(oid, feat, oclass, 0);
@@ -2509,10 +2510,11 @@ struct dfs_read_params {
 	dfs_obj_t		*obj;
 	d_sg_list_t		*sgl;
 	daos_size_t		*read_size;
+	dfs_iod_t		*iod;
 	daos_off_t		off;
 	daos_size_t		array_size;
 	daos_size_t		buf_size;
-	daos_array_iod_t	iod;
+	daos_array_iod_t	arr_iod;
 	daos_range_t		rg;
 	tse_task_t		*ptask;
 };
@@ -2559,7 +2561,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	/** if no short fetch detected, return all the read size */
-	if (params->iod.arr_nr_short_read == 0) {
+	if (params->arr_iod.arr_nr_short_read == 0) {
 		*params->read_size = params->buf_size;
 		return 0;
 	}
@@ -2612,15 +2614,20 @@ dfs_read_int(tse_task_t *task)
 	params->ptask = task;
 
 	/** set array location */
-	params->iod.arr_nr	= 1;
-	params->rg.rg_len	= params->buf_size;
-	params->rg.rg_idx	= params->off;
-	params->iod.arr_rgs	= &params->rg;
+	if (params->iod == NULL) {
+		params->arr_iod.arr_nr	= 1;
+		params->rg.rg_len	= params->buf_size;
+		params->rg.rg_idx	= params->off;
+		params->arr_iod.arr_rgs	= &params->rg;
+	} else {
+		params->arr_iod.arr_nr	= params->iod->iod_nr;
+		params->arr_iod.arr_rgs	= params->iod->iod_rgs;
+	}
 
 	read_args		= daos_task_get_args(read_task);
 	read_args->oh		= params->obj->oh;
 	read_args->th		= DAOS_TX_NONE;
-	read_args->iod		= &params->iod;
+	read_args->iod		= &params->arr_iod;
 	read_args->sgl		= params->sgl;
 	read_args->csums	= NULL;
 
@@ -2687,6 +2694,50 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	args->obj	= obj;
 	args->sgl	= sgl;
 	args->off	= off;
+	args->iod	= NULL;
+	args->read_size	= read_size;
+	args->buf_size	= buf_size;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev)
+{
+	struct dfs_read_params	*args;
+	tse_task_t		*task;
+	daos_size_t		buf_size;
+	int			i, rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_WRONLY)
+		return EPERM;
+
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*read_size = 0;
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args		= dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->sgl	= sgl;
+	args->iod	= iod;
 	args->read_size	= read_size;
 	args->buf_size	= buf_size;
 
@@ -2732,6 +2783,41 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
 
 	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL, ev);
+	if (rc)
+		D_ERROR("daos_array_write() failed (%d)\n", rc);
+
+	return daos_der2errno(rc);
+}
+
+int
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev)
+{
+	daos_array_iod_t	arr_iod;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
+
+	if (iod->iod_nr == 0) {
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	/** set array location */
+	arr_iod.arr_nr = iod->iod_nr;
+	arr_iod.arr_rgs = iod->iod_rgs;
+
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, NULL, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 
@@ -3088,7 +3174,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= &sg_iovs[i];
+	sgl.sg_iovs	= &sg_iovs[0];
 
 	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
