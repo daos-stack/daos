@@ -307,10 +307,13 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 		else if (!strcmp(value, "crc64"))
 			entry->dpe_val = DAOS_PROP_CO_CSUM_CRC64;
-		else if (!strcmp(value, "sha1"))
-			entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1;
-		else {
-			fprintf(stderr, "curently supported 'cksum' prop values are 'off, crc[16,32,64], sha1'\n");
+		else if (!strcmp(value, "sha1")) {
+			/* entry->dpe_val = DAOS_PROP_CO_CSUM_SHA1; */
+			fprintf(stderr, "'sha1' isn't supported yet, please use one of the CRC option\n");
+			return -DER_INVAL;
+		} else {
+			/* fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64], sha1'\n"); */
+			fprintf(stderr, "curently supported checksum types are 'off, crc[16,32,64]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
@@ -343,24 +346,24 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	} else if (!strcmp(name, "red_factor")) {
-		if (!strcmp(value, "rf0"))
+	} else if (!strcmp(name, "rf")) {
+		if (!strcmp(value, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
-		else if (!strcmp(value, "rf1"))
+		else if (!strcmp(value, "1"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF1;
-		else if (!strcmp(value, "rf2"))
+		else if (!strcmp(value, "2"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF2;
-		else if (!strcmp(value, "rf3"))
+		else if (!strcmp(value, "3"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF3;
-		else if (!strcmp(value, "rf4"))
+		else if (!strcmp(value, "4"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF4;
 		else {
-			fprintf(stderr, "presently supported values of prop 'red_prop' are 'rf[0-4]'\n");
+			fprintf(stderr, "presently supported redundancy factors (rf) are [0-4]'\n");
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	} else {
-		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/red_factor\n");
+		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/rf\n");
 		return -DER_INVAL;
 	}
 
@@ -1092,12 +1095,12 @@ help_hdlr(struct cmd_args_s *ap)
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "	--properties=<name>:<value>[,<name>:<value>,...]"
 "			   supported prop names are label, cksum,"
-"				cksum_size, srv_cksum, red_factor"
+"				cksum_size, srv_cksum, rf"
 "			   label value can be any string"
 "			   cksum supported values are off, crc[16,32,64], sha1"
 "			   cksum_size can be any size"
 "			   srv_cksum values can be on, off"
-"			   red_factor supported values are rf[0-4]"
+"			   rf supported values are [0-4]"
 "container options (destroy):\n"
 "	--force            destroy container regardless of state\n"
 "container options (query, and all commands except create):\n"

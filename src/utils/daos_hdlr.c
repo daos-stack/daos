@@ -201,10 +201,10 @@ out:
 int
 pool_get_attr_hdlr(struct cmd_args_s *ap)
 {
-	size_t				 attr_size, expected_size;
-	char				*buf;
-	int				rc = 0;
-	int				rc2;
+	size_t	attr_size, expected_size;
+	char	*buf = NULL;
+	int	rc = 0;
+	int	rc2;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_ATTR);
@@ -628,9 +628,9 @@ out:
 int
 cont_get_attr_hdlr(struct cmd_args_s *ap)
 {
-	size_t				 attr_size, expected_size;
-	char				*buf;
-	int				rc = 0;
+	size_t	attr_size, expected_size;
+	char	*buf= NULL;
+	int	rc = 0;
 
 	if (ap->attrname_str == NULL) {
 		fprintf(stderr, "attribute name must be provided\n");
