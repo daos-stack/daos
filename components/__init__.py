@@ -243,8 +243,8 @@ def define_components(reqs):
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
-    pmdk_build = ["make \"BUILD_RPMEM=n\" \"NDCTL_ENABLE=n\" "
-                  "\"NDCTL_DISABLE=y\" " "$JOBS_OPT install "
+    pmdk_build = ["make all \"BUILD_RPMEM=n\" \"NDCTL_ENABLE=n\" "
+                  "\"NDCTL_DISABLE=y\" $JOBS_OPT install "
                   "prefix=$PMDK_PREFIX"]
 
     reqs.define('pmdk',
