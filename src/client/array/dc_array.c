@@ -483,7 +483,7 @@ set_md_params(struct md_params *params)
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
 	params->iod.iod_recxs	= NULL;
-params->iod.iod_type	= DAOS_IOD_SINGLE;
+	params->iod.iod_type	= DAOS_IOD_SINGLE;
 }
 
 static int

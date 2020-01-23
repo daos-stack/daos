@@ -405,7 +405,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
 		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 	iod.iod_recxs	= &recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 	i = 0;
 
@@ -3054,7 +3054,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	recx.rx_idx	= MODE_IDX;
 	recx.rx_nr	= sizeof(mode_t);
 	iod.iod_recxs	= &recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 
 	/** set sgl for update */
@@ -3114,7 +3114,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
 	iod.iod_recxs	= recx;
-iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 
 	if (flags & DFS_SET_ATTR_MODE) {
@@ -3619,7 +3619,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
-iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** if not default flag, check for xattr existence */
 	if (flags != 0) {
@@ -3701,7 +3701,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
-iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_type	= DAOS_IOD_SINGLE;
 
 	if (*size) {
 		iod.iod_size	= *size;

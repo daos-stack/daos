@@ -926,7 +926,7 @@ sgl_test(void **state)
 	iod.iod_size = 1;
 	recx[0].rx_nr = 1;
 	iod.iod_recxs = recx;
-iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_type = DAOS_IOD_ARRAY;
 
 	/* Write just index 2 */
 	recx[0].rx_idx = 2;

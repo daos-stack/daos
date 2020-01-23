@@ -2538,6 +2538,7 @@ dc_obj_update(tse_task_t *task)
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
+
 	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch);
 	if (rc != 0)
 		D_GOTO(out_task, rc);

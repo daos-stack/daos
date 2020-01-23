@@ -137,12 +137,8 @@ def set_test_environment():
         net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
         for device in sorted(net_list):
             # Get the interface state - only include active (up) interfaces
-            # todo-ryon: fix
-            # try:
             with open(os.path.join(net_path, device, "operstate"), "r") as fh:
                 state = fh.read().strip()
-            #except:
-            #speed = 0
             # Only include interfaces that are up
             if state.lower() == "up":
                 # Get the interface speed - used to select the fastest available

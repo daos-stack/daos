@@ -1135,7 +1135,6 @@ class IORequest(object):
             self.iod.iod_size = size
             self.iod.iod_nr = 1
 
-
         # now do it
         if dkey is not None:
             dkey_iov = daos_cref.IOV()

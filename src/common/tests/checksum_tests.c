@@ -244,7 +244,6 @@ test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-
 static void
 test_daos_checksummer_with_unaligned_recx(void **state)
 {
