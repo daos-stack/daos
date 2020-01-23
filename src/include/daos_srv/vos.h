@@ -961,7 +961,7 @@ int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
 struct sys_db *vos_db_get(void);
-int  vos_db_init(const char *path);
+int  vos_db_init(const char *db_path, const char *db_name, bool recreate);
 void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

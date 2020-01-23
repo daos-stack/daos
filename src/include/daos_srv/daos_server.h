@@ -639,9 +639,11 @@ struct sys_db;
 typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
 				void *args);
 
+#define SYS_DB_NAME_SZ		32
+
 /** system database is a simple local KV store */
 struct sys_db {
-	char	 *sd_name;
+	char	 sd_name[SYS_DB_NAME_SZ];
 	/** look up the provided key in \a table and return its value */
 	int	(*sd_fetch)(struct sys_db *db, char *table,
 			    d_iov_t *key, d_iov_t *val);

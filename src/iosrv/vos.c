@@ -1010,7 +1010,7 @@ sys_db_init(const char *storage_path, struct sys_db **db_p)
 {
 	int	rc;
 
-	rc = vos_db_init(storage_path);
+	rc = vos_db_init(storage_path, NULL, false);
 	if (rc == 0)
 		*db_p = vos_db_get();
 

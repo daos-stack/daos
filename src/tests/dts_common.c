@@ -346,7 +346,7 @@ dts_ctx_init(struct dts_context *tsc)
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
 	if (tsc->tsc_pmem_file) /* VOS mode */
-		rc = vos_self_init("/tmp");
+		rc = vos_self_init("/mnt/daos");
 	else
 		rc = daos_init();
 	if (rc)

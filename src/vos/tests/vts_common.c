@@ -354,7 +354,7 @@ dts_ctx_init(struct dts_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init("/tmp");
+	rc = vos_self_init("/mnt/daos");
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

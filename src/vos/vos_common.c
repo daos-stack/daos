@@ -323,7 +323,7 @@ vos_self_init(const char *db_path)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_db_init(db_path);
+	rc = vos_db_init(db_path, "self_db", true);
 	if (rc)
 		D_GOTO(failed, rc);
 

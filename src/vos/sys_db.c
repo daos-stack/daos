@@ -37,7 +37,7 @@
 #define SYS_DB_CONT		"00000000-DA05-C001-CAFE-000020191231"
 
 #define SYS_DB_DIR		"daos_sys"
-#define	SYS_DB_FILE		"sys_db"
+#define	SYS_DB_NAME		"sys_db"
 
 #define SYS_DB_SIZE		(128UL << 20)	/* 128MB */
 #define SYS_DB_EPC		1
@@ -86,6 +86,14 @@ db_close(struct sys_db *db)
 		vos_pool_close(vdb->db_poh);
 		vdb->db_poh = DAOS_HDL_INVAL;
 	}
+}
+
+static void
+db_unlink(struct sys_db *db)
+{
+	struct vos_sys_db *vdb = db2vos(db);
+
+	unlink(vdb->db_file); /* ignore error code */
 }
 
 /* open or create system DB stored in pmemfile */
@@ -281,19 +289,21 @@ db_unlock(struct sys_db *db)
 
 /** Initialize system DB of VOS */
 int
-vos_db_init(const char *path)
+vos_db_init(const char *db_path, const char *db_name, bool recreate)
 {
 	int	create;
 	int	rc;
 
 	memset(&vos_db, 0, sizeof(vos_db));
-	rc = asprintf(&vos_db.db_path, "%s/%s", path, SYS_DB_DIR);
+
+	rc = asprintf(&vos_db.db_path, "%s", db_path ? db_path : SYS_DB_DIR);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb path failed. %d\n", rc);
 		return -DER_NOMEM;
 	}
 
-	rc = asprintf(&vos_db.db_file, "%s/%s", vos_db.db_path, SYS_DB_FILE);
+	rc = asprintf(&vos_db.db_file, "%s/%s",
+		      vos_db.db_path, db_name ? db_name : SYS_DB_NAME);
 	if (rc < 0) {
 		D_ERROR("Generate sysdb filename failed. %d\n", rc);
 		rc = -DER_NOMEM;
@@ -309,7 +319,7 @@ vos_db_init(const char *path)
 	vos_db.db_poh = DAOS_HDL_INVAL;
 	vos_db.db_coh = DAOS_HDL_INVAL;
 
-	vos_db.db_pub.sd_name	  = "vos_sys_db";
+	strncpy(vos_db.db_pub.sd_name, db_name, SYS_DB_NAME_SZ - 1);
 	vos_db.db_pub.sd_fetch	  = db_fetch;
 	vos_db.db_pub.sd_upsert	  = db_upsert;
 	vos_db.db_pub.sd_delete	  = db_delete;
@@ -324,6 +334,9 @@ vos_db_init(const char *path)
 
 	rc = uuid_parse(SYS_DB_CONT, vos_db.db_cont);
 	D_ASSERTF(rc == 0, "Failed to parse sys cont uuid: %s\n", SYS_DB_CONT);
+
+	if (recreate)
+		db_unlink(&vos_db.db_pub);
 
 	for (create = 0; create <= 1; create++) {
 		rc = db_open_create(&vos_db.db_pub, !!create);

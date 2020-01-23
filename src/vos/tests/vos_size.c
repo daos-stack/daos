@@ -186,7 +186,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_self_init("/tmp");
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		printf("Error initializing VOS instance\n");
 		goto exit_0;
