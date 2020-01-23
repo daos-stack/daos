@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -185,14 +184,19 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemQuery() (system.Members, error) {
+func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
 	tc.appendInvocation("SystemQuery")
-	return make(system.Members, 0), nil
+	return &client.SystemQueryResp{}, nil
 }
 
-func (tc *testConn) SystemStop(req client.SystemStopReq) (system.MemberResults, error) {
+func (tc *testConn) SystemStop(req client.SystemStopReq) (*client.SystemStopResp, error) {
 	tc.appendInvocation("SystemStop")
-	return make(system.MemberResults, 0), nil
+	return &client.SystemStopResp{}, nil
+}
+
+func (tc *testConn) SystemStart(req client.SystemStartReq) (*client.SystemStartResp, error) {
+	tc.appendInvocation("SystemStart")
+	return &client.SystemStartResp{}, nil
 }
 
 func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
@@ -203,11 +207,6 @@ func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryR
 func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
 	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
 	return &client.ListPoolsResp{}, nil
-}
-
-func (tc *testConn) SystemStart() error {
-	tc.appendInvocation("SystemStart")
-	return nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

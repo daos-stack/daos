@@ -485,12 +485,16 @@ test_teardown(void **state)
 		if (arg->multi_rank)
 			MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
-			pool_destroy_safe(arg, NULL);
+			rc = pool_destroy_safe(arg, NULL);
 
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (rc)
+		if (rc) {
+			print_message("failed to destroy pool "DF_UUIDF
+				      " rc: %d\n",
+				      DP_UUID(arg->pool.pool_uuid), rc);
 			return rc;
+		}
 	}
 
 	if (!daos_handle_is_inval(arg->eq)) {
