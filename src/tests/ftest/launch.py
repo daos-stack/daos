@@ -165,6 +165,8 @@ def set_test_environment(args):
     # already defined.
     if "DAOS_TEST_LOG_DIR" not in os.environ:
         os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+    os.environ["D_LOG_FILE"] = os.path.join(
+        os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
     # Ensure the daos log files directory exists on each possible test node
     test_hosts = NodeSet(socket.gethostname().split(".")[0])

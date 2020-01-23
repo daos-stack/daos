@@ -35,11 +35,11 @@ from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from configuration_utils import Configuration
 from command_utils import CommandFailure, EnvironmentVariables
 from command_daos_utils import CommonConfig
-from agent_utils import DaosAgentYamlParameters, DaosAgentCommand
-from agent_utils import DaosAgentManager, DaosAgentTransportCredentials
-from agent_utils import include_local_host
-from server_utils import DaosServerYamlParameters, DaosServerCommand
-from server_utils import DaosServerManager, DaosServerTransportCredentials
+from agent_utils import (DaosAgentYamlParameters, DaosAgentCommand,
+                         DaosAgentManager, DaosAgentTransportCredentials,
+                         include_local_host)
+from server_utils import (DaosServerYamlParameters, DaosServerCommand,
+                          DaosServerManager, DaosServerTransportCredentials)
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
 
