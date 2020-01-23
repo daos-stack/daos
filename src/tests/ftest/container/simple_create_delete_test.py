@@ -45,7 +45,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.create()
 

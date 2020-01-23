@@ -128,7 +128,7 @@ class OpenContainerTest(TestWithServers):
         #for i in range(2):
         i = 0
         while i < 2:
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(TestPool(self.context))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
             self.pool[-1].connect(1)

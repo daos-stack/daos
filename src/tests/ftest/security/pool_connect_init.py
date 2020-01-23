@@ -54,7 +54,7 @@ class PoolSecurityTest(TestWithServers):
         user_uid = os.geteuid()
         user_gid = os.getegid()
 
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
 
         uid, gid, expected = self.params.get("ids", "/run/pool/tests/*")

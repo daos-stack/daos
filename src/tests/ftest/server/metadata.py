@@ -94,7 +94,7 @@ class ObjectMetadata(TestWithServers):
             self.hostlist_clients, self.workdir, None)
 
         # Create a pool
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.create()
 

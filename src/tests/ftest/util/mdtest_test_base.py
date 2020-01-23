@@ -82,7 +82,7 @@ class MdtestBase(TestWithServers):
     def _create_pool(self):
         """Create a pool and execute Mdtest."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
 
         # Create a pool

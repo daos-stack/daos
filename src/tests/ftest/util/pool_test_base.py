@@ -89,7 +89,7 @@ class PoolTestBase(TestWithServers):
             namespace (str, optional): [description]. Defaults to None.
         """
         # Create a TestPool object
-        self.pool = TestPool(self.context, debug=True)
+        self.pool = TestPool(self.context)
         if namespace is not None:
             self.pool.namespace = namespace
         self.pool.get_params(self)

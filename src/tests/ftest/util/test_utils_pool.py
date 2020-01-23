@@ -48,20 +48,17 @@ class TestPool(TestDaosApiBase):
     USE_API = "API"
     USE_DMG = "dmg"
 
-    def __init__(self, context, log=None, cb_handler=None, debug=False,
-                 dmg_bin_path=None):
-        # pylint: disable=unused-argument
+    def __init__(self, context, cb_handler=None, dmg_bin_path=None):
         """Initialize a TestPool object.
 
         Note: 'log' is now a defunct argument and will be removed in the future
 
         Args:
             context (DaosContext): [description]
-            log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestPool, self).__init__("/run/pool/*", cb_handler, debug)
+        super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()

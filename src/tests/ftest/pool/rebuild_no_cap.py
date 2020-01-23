@@ -48,7 +48,7 @@ class RebuildNoCap(TestWithServers):
         :avocado: tags=all,medium,pr,pool,rebuild,nocap
         """
         # Get the test params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")

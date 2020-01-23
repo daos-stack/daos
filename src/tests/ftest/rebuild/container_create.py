@@ -150,7 +150,7 @@ class ContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(TestPool(self.context))
             self.pool[-1].get_params(self)
 
         if use_ior:

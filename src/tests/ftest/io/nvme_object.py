@@ -77,7 +77,7 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     """
 
     # pool initialization
-    self.pool.append(TestPool(self.context, self.log))
+    self.pool.append(TestPool(self.context))
     self.pool[index].get_params(self)
 
     # set pool size

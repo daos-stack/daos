@@ -32,3 +32,4 @@ pool:
   nvme_size_list:
     - [0, PASS]
     - [NULLPTR, FAIL]
+  debug: True

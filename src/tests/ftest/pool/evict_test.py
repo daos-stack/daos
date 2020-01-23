@@ -49,7 +49,7 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context)
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets

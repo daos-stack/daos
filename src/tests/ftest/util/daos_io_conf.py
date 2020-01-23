@@ -93,7 +93,7 @@ class IoConfTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
 
     def execute_io_conf_run_test(self):

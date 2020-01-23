@@ -76,7 +76,7 @@ class FioBase(TestWithServers):
         """Create a pool and execute Fio."""
         # Get the pool params
         # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
 
         # Create a pool

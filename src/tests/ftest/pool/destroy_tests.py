@@ -72,7 +72,7 @@ class DestroyTests(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.name.value = group_name
         self.pool.create()
@@ -290,7 +290,7 @@ class DestroyTests(TestWithServers):
         self.start_servers(group_hosts)
 
         self.log.info("Create a pool in server group %s", group_names[0])
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.name.value = group_names[0]
         self.pool.create()
@@ -453,7 +453,7 @@ class DestroyTests(TestWithServers):
         }
         self.start_servers(group_hosts)
 
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.name.value = group_names[0]
         self.pool.create()
@@ -489,7 +489,7 @@ class DestroyTests(TestWithServers):
 
         # Destroy pool with callback while stopping other server
         # Create new pool on server_group_a
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context)
         self.pool.get_params(self)
         self.pool.name.value = group_names[0]
         self.pool.create()

@@ -71,7 +71,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            self.pool = TestPool(self.context, self.log)
+            self.pool = TestPool(self.context)
             self.pool.get_params(self)
 
             # update pool sizes
