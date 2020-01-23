@@ -1,8 +1,10 @@
-%define carthome %{_exec_prefix}/lib/%{name}
+%global carthome %{_exec_prefix}/lib/%{name}
+
+%global mercury_version 1.0.1-21%{?dist}
 
 Name:          cart
 Version:       4.5.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -13,7 +15,7 @@ Source1:       scons_local-%{version}.tar.gz
 BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
 BuildRequires: openpa-devel
-BuildRequires: mercury-devel = 1.0.1-21%{?dist}
+BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openmpi3-devel
 BuildRequires: libpsm2-devel
 BuildRequires: libevent-devel
@@ -36,6 +38,11 @@ BuildRequires: gcc-c++
 Provides: %{name}-%{sha1}
 %endif
 
+# This should only be temporary until we can get a stable upstream release
+# of mercury, at which time the autoprov shared library version should
+# suffice
+Requires: mercury = %{mercury_version}
+
 %description
 Collective and RPC Transport (CaRT)
 
@@ -53,7 +60,7 @@ Requires: %{name} = %{version}-%{release}
 Requires: libuuid-devel
 Requires: libyaml-devel
 Requires: boost-devel
-Requires: mercury-devel = 1.0.1-21%{?dist}
+Requires: mercury-devel = %{mercury_version}
 Requires: openpa-devel
 Requires: libfabric-devel
 Requires: openmpi3-devel
@@ -136,6 +143,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Thu Jan 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 4.5.0-2
+- Add Requires: mercury-$version until we can get an upstream stable release
+
 * Sun Jan 19 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.0-1
 - Libcart version 4.5.0-1
 - crt_barrier() API and associated types removed
