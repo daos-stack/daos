@@ -342,3 +342,19 @@ def get_partition_hosts(partition):
                     "Unable to obtain hosts from the %s slurm partition "
                     "output: %s", partition, output)
     return hosts
+
+
+def get_test_file(file_name):
+    """Get the full path of the specified file name for testing.
+
+    Append the DAOS_TEST_LOG_DIR path to the specified file name.
+
+    Args:
+        file_name (str): file name and extension
+
+    Returns:
+        str: full path of the specified file
+
+    """
+    return os.path.join(
+        os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), file_name)

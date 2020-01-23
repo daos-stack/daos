@@ -32,6 +32,7 @@ from command_utils import CommandFailure
 from job_manager_utils import OpenMPI, Mpich
 from dfuse_utils import Dfuse
 from daos_utils import create_container
+from general_utils import get_test_file
 
 
 class MdtestBase(TestWithServers):
@@ -182,7 +183,7 @@ class MdtestBase(TestWithServers):
         manager.assign_processes(processes)
         manager.assign_environment(
             self.mdtest_cmd.get_default_env(
-                manager.command, self.tmp, self.client_log))
+                manager.command, self.tmp, get_test_file(self.client_log)))
 
         try:
             manager.run()

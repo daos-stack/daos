@@ -1003,7 +1003,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_tgt_query(pool, &out->tqo_space);
-
+	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);

@@ -44,7 +44,7 @@ class IorCommand(ExecutableCommand):
         >>> mpirun.assign_processes(len(self.hostlist_clients))
         >>> mpirun.assign_environment(
                 self.ior_cmd.get_default_env(
-                    mpirun.command, self.tmp, self.client_log))
+                    mpirun.command, self.tmp, get_test_file(self.client_log)))
         >>> mpirun.run()
     """
 
@@ -244,13 +244,15 @@ class IorCommand(ExecutableCommand):
 
     @staticmethod
     def get_ior_metrics(cmdresult):
-        """Parse the CmdResult (output of the test) and look for
-           the ior stdout and get the read and write metrics.
+        """Get the IOR read and write metrics from the command output.
+
+        Parse the CmdResult (output of the test) and look for the ior stdout and
+        get the read and write metrics.
 
         Args:
             cmdresult (CmdResult): output of job manager
 
-       Returns:
+        Returns:
             metrics (tuple) : list of write and read metrics from ior run
 
         """

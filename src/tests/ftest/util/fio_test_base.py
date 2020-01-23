@@ -28,9 +28,11 @@ import subprocess
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from test_utils_pool import TestPool
-from fio_utils import Fio
-from command_utils import CommandFailure
+from fio_utils import FioCommand
+from command_utils import CommandFailure, EnvironmentVariables
 from dfuse_utils import Dfuse
+from daos_utils import create_container
+
 
 class FioBase(TestWithServers):
     """Base fio class.
@@ -43,25 +45,23 @@ class FioBase(TestWithServers):
         super(FioBase, self).__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
+        self.manager = None
         self.dfuse = None
-        self.container = None
 
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
         self.update_log_file_names()
+
         # Start the servers and agents
         super(FioBase, self).setUp()
-        self.params_all = [item for item in self.params.iteritems()]
-        self.namespace = list(
-            set([item[0] for item in self.params_all
-                 if item[0].startswith('/run/fio')]))
-        self.namespace.insert(
-            0, self.namespace.pop(self.namespace.index('/run/fio/global')))
+
         # removing runner node from hostlist_client, only need one client node.
         self.hostlist_clients = self.hostlist_clients[:-1]
+
         # Get the parameters for Fio
-        self.fio_cmd = Fio(self.namespace, self)
+        self.fio_cmd = FioCommand()
+        self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
 
@@ -88,26 +88,22 @@ class FioBase(TestWithServers):
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
         # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        # self.container = TestContainer(self.pool)
+        # self.container.get_params(self)
 
         # create container
         # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
+
         # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.pool.uuid, ":".join(
-                [str(item) for item in self.pool.svc_ranks]))
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
+        svc = ":".join([str(item) for item in self.pool.svc_ranks])
+        env = EnvironmentVariables({"CRT_ATTACH_INFO_PATH": self.tmp})
+        result = create_container(self.bin, self.pool.uuid, svc, "POSIX", env)
+        if not result:
+            self.fail("Container create failed")
 
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
-
-        return output.split()[3]
+        cont_uuid = result.stdout.split()[3]
+        self.log.info("Container created with UUID %s", cont_uuid)
+        return cont_uuid
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -131,7 +127,6 @@ class FioBase(TestWithServers):
 
     def execute_fio(self):
         """Runner method for Fio."""
-
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
@@ -143,6 +138,10 @@ class FioBase(TestWithServers):
             # self.pool.connect()
             # self.create_cont()
             self._start_dfuse()
-            self.fio_cmd.directory.update(self.dfuse.mount_dir.value)
+            self.fio_cmd.update(
+                "global", "directory", self.dfuse.mount_dir.value,
+                "fio --name=global --directory")
+
         # Run Fio
-        self.fio_cmd.run(self.hostlist_clients)
+        self.fio_cmd.hosts = self.hostlist_clients
+        self.fio_cmd.run()

@@ -145,6 +145,7 @@ class OpenMPI(JobManager):
         self.allow_run_as_root = FormattedParameter(
             "--allow-run-as-root", False)
         self.mca = FormattedParameter("--mca {}", None)
+        self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
 
@@ -236,6 +237,7 @@ class Mpich(JobManager):
         #   -envlist {env1,env2,...}         environment variable list to pass
         self.hostfile = FormattedParameter("-f {}", None)
         self.processes = FormattedParameter("-np {}", 1)
+        self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -325,7 +327,11 @@ class Srun(JobManager):
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
+        self.nodelist = FormattedParameter("--nodelist={}", None)
         self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.reservation = FormattedParameter("--reservation={}", None)
+        self.partition = FormattedParameter("--partition={}", None)
+        self.output = FormattedParameter("--output={}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).

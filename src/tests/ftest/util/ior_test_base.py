@@ -35,6 +35,7 @@ from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 from daos_utils import create_container
+from general_utils import get_test_file
 
 
 class IorTestBase(TestWithServers):
@@ -208,7 +209,7 @@ class IorTestBase(TestWithServers):
                 Defaults to None
         """
         env = self.ior_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), self.tmp, get_test_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
 
@@ -297,7 +298,7 @@ class IorTestBase(TestWithServers):
         manager = self.get_job_manager_command()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
         env = self.ior_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), self.tmp, get_test_file(self.client_log))
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.assign_hosts(hosts, path, slots)

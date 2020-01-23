@@ -60,19 +60,25 @@ class DaosAdminPrivTest(TestWithServers):
             self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
 
         # Setup server as non-root
-        server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
-        server.get_params(self)
-        server.hosts = (
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
+        self.add_server_manager()
+        self.configure_manager(
+            "server", self.server_managers[0], self.hostlist_servers,
+            self.hostfile_servers_slots)
+        self.server_managers[0].clean_files()
 
-        if self.prefix != "/usr":
-            if server.runner.export.value is None:
-                server.runner.export.value = []
-            server.runner.export.value.extend(["PATH"])
+        # server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
+        # server.get_params(self)
+        # server.hosts = (
+        #     self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
 
-        yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
-        server.runner.job.set_config(yamlfile)
-        server.server_clean()
+        # if self.prefix != "/usr":
+        #     if server.runner.export.value is None:
+        #         server.runner.export.value = []
+        #     server.runner.export.value.extend(["PATH"])
+
+        # yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+        # server.runner.job.set_config(yamlfile)
+        # server.server_clean()
 
         # Get user
         user = getpass.getuser()
@@ -94,10 +100,12 @@ class DaosAdminPrivTest(TestWithServers):
         # Start server
         try:
             self.log.info("Starting server as non-root")
-            server.run()
+            # server.run()
+            self.server_managers[0].manager.run()
         except CommandFailure as err:
             # Kill the subprocess, anything that might have started
-            server.kill()
+            # server.kill()
+            self.server_managers[0].kill()
             self.fail("Failed starting server as non-root user: {}".format(err))
 
         # Update hostlist value for dmg command
@@ -111,8 +119,8 @@ class DaosAdminPrivTest(TestWithServers):
         if format_res is None:
             self.fail("Failed to format storage")
 
-        # Stop server
-        try:
-            server.stop()
-        except ServerFailed as err:
-            self.fail("Failed to stop server: {}".format(err))
+        # # Stop server
+        # try:
+        #     server.stop()
+        # except ServerFailed as err:
+        #     self.fail("Failed to stop server: {}".format(err))

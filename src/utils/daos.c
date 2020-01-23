@@ -80,8 +80,6 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
-	else if (strcmp(str, "uns-insert") == 0)
-		return CONT_UNS_INSERT;
 	return -1;
 }
 
@@ -585,8 +583,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT) &&
-	    (ap->path != NULL)) {
+	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
@@ -689,9 +686,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
-		break;
-	case CONT_UNS_INSERT:
-		rc = cont_uns_insert_hdlr(ap);
 		break;
 	default:
 		break;
@@ -867,8 +861,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-snaps       list container snapshots taken\n"
 "	  destroy-snap     destroy container snapshots\n"
 "			   by name, epoch or range\n"
-"	  rollback         roll back container to specified snapshot\n"
-"	  uns-insert       insert container into UNS\n");
+"	  rollback         roll back container to specified snapshot\n");
 
 #if 0
 	fprintf(stream,
