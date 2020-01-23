@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 # pylint: disable=too-few-public-methods
-# pylint: pylint-missing-docstring
+# pylint: disable=pylint-missing-docstring
 import ctypes
 
 # DAOS api C structures
