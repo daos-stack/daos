@@ -2,8 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - boro-53
 timeout: 100
 faults: !mux
 # commenting out the fault injection bit

@@ -96,13 +96,13 @@ class ArrayObjTest(TestWithServers):
             akey = "this is the akey"
 
             self.plog.info("writing array to dkey >%s< akey >%s<.", dkey, akey)
-            oid, epoch = container.write_an_array_value(thedata, dkey, akey,
+            oid = container.write_an_array_value(thedata, dkey, akey,
                                                         obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])
             thedata2 = container.read_an_array(len(thedata), length+1,
-                                               dkey, akey, oid, epoch)
+                                               dkey, akey, oid)
             if thedata[0][0:length-1] != thedata2[0][0:length-1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[0])

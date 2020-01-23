@@ -2,8 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - boro-53
 timeout: 600
 faults:
     no_faults:
@@ -23,11 +22,3 @@ snapshot:
 object_class: !mux
     OC_S1:
         obj_class: 200
-    OC_S4:
-        obj_class: 202
-    OC_SX:
-        obj_class: 214
-    OC_RP_2G1:
-        obj_class: 220
-    OC_RP_2G2:
-        obj_class: 221

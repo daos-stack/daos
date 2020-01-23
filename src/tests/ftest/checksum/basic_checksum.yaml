@@ -2,9 +2,9 @@
 # required quantity is indicated by the placeholders
 hosts:
  test_servers:
-  - server-A
+  - boro-53
  test_clients:
-  - client-B
+  - boro-54
 timeout: 240
 server_config:
  name: daos_server
@@ -24,22 +24,12 @@ container: !mux
 dkeys: !mux
   single:
     no_of_dkeys:
-    - 50
+    - 5
 akeys: !mux
   single:
     no_of_akeys:
     - 10
 record: !mux
-  1Byte:
-    length:
-      - 1
   1KB:
     length:
-      - 1024
-  Mixed:
-    length:
-      - 1
-      - 8
-      - 32
-      - 512
       - 1024

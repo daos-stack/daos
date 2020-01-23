@@ -101,13 +101,13 @@ class SameKeyDifferentValue(TestWithServers):
         for i in range(3):
             try:
                 # create an object and write single value data into it
-                obj, txn = self.container.write_an_obj(single_value_data,
-                                                       len(single_value_data)+1,
-                                                       dkey, akey, obj_cls=1)
+                obj = self.container.write_an_obj(single_value_data,
+                                                  len(single_value_data)+1,
+                                                  dkey, akey, obj_cls=1)
 
                 # read the data back and make sure its correct
                 read_back_data = self.container.read_an_obj(
-                    len(single_value_data)+1, dkey, akey, obj, txn)
+                    len(single_value_data)+1, dkey, akey, obj)
                 if single_value_data != read_back_data.value:
                     print("data I wrote:" + single_value_data)
                     print("data I read back" + read_back_data.value)
@@ -205,13 +205,13 @@ class SameKeyDifferentValue(TestWithServers):
         for i in range(3):
             try:
                 # create an object and write array value data into it
-                obj, txn = self.container.write_an_array_value(array_value_data,
-                                                               dkey, akey,
-                                                               obj_cls=1)
+                obj = self.container.write_an_array_value(array_value_data,
+                                                          dkey, akey,
+                                                          obj_cls=1)
                 # read the data back and make sure its correct
                 length = len(array_value_data[0])
                 read_back_data = self.container.read_an_array(
-                    len(array_value_data), length + 1, dkey, akey, obj, txn)
+                    len(array_value_data), length + 1, dkey, akey, obj)
 
                 for j in range(3):
                     if (array_value_data[j][0:length-1] !=

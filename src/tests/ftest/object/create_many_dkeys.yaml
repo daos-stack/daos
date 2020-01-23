@@ -2,8 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - boro-53
 timeout: 8000
 server_config:
   name: daos_server
@@ -15,4 +14,4 @@ pool:
   createsize:
     size: 2000000000
 dkeys:
-  number_of_dkeys: 1000000
+  number_of_dkeys: 1000

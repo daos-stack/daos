@@ -2,8 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - boro-53
 server_config:
    name: daos_server
 pool:

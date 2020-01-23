@@ -3,8 +3,7 @@
 timeout: 120
 hosts:
   test_servers:
-    - server-A
-    - server-B
+    - boro-54
 server_config:
     name: daos_server
 pool:
@@ -15,16 +14,6 @@ pool:
     createsize: !mux
         size1gb:
             size: 1073741824
-        size8gb:
-            size: 8489934592
 object_class: !mux
     OC_S1:
         obj_class: OC_S1
-    OC_S4:
-        obj_class: OC_S4
-    OC_SX:
-        obj_class: OC_SX
-    OC_RP_2G1:
-        obj_class: OC_RP_2G1
-    OC_RP_2G2:
-        obj_class: OC_RP_2G2

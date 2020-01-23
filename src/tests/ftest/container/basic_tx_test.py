@@ -90,12 +90,12 @@ class BasicTxTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            oid, txn = container.write_an_obj(thedata, thedatasize,
-                                              dkey, akey, None, None, 2)
+            oid = container.write_an_obj(thedata, thedatasize,
+                                         dkey, akey, None, None, 2)
 
             # read the data back and make sure its correct
             thedata2 = container.read_an_obj(thedatasize, dkey, akey,
-                                             oid, txn)
+                                             oid)
             if thedata != thedata2.value:
                 print("thedata>" + thedata)
                 print("thedata2>" + thedata2.value)
@@ -108,14 +108,14 @@ class BasicTxTest(TestWithServers):
             thedatasize2 = 19
             # note using the same keys so writing to the same spot
             dkey = "this is the dkey"
-            akey = "this is the akey"
+            akey = "this is the akey qw"
 
-            oid, tx2 = container.write_an_obj(thedata3, thedatasize2,
-                                              dkey, akey, oid, None, 2)
+            oid = container.write_an_obj(thedata3, thedatasize2,
+                                         dkey, akey, oid, None, 2)
 
             # read the data back and make sure its correct
             thedata4 = container.read_an_obj(thedatasize2, dkey, akey,
-                                             oid, tx2)
+                                             oid)
             if thedata3 != thedata4.value:
                 self.fail("Write data 2, read it back, didn't match\n")
 
