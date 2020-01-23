@@ -994,7 +994,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		return EINVAL;
 	}
 
-	if (attr->da_props != NULL)
+	if (attr != NULL && attr->da_props != NULL)
 		prop = daos_prop_alloc(attr->da_props->dpp_nr + 1);
 	else
 		prop = daos_prop_alloc(1);
@@ -1003,9 +1003,10 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		return ENOMEM;
 	}
 
-	if (attr->da_props != NULL) {
+	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
 		if (rc) {
+			daos_prop_free(prop);
 			D_ERROR("failed to copy properties (%d)\n", rc);
 			return daos_der2errno(rc);
 		}

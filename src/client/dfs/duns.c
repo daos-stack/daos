@@ -425,7 +425,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
@@ -602,7 +602,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
