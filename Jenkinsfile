@@ -859,7 +859,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'openmpi3 hwloc-devel argobots ' +
-                                                  "cart-${env.CART_COMMIT}-devel fuse3-libs " +
+                                                  "cart-devel-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel'
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
