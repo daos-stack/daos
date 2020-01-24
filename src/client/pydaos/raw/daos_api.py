@@ -1463,7 +1463,7 @@ class DaosContainer(object):
         # 3. Server Verfiy
         # 4. Chunk Size Allocation.
         if ((self.cont_input_values.type != "Unknown")
-              and (self.cont_input_values.enable_chksum is False)):
+            and (self.cont_input_values.enable_chksum is False)):
             # Only type like posix, hdf5 defined.
             num_prop = 1
         elif ((self.cont_input_values.type == "Unknown")
@@ -1835,7 +1835,7 @@ class DaosContainer(object):
         ioreq = IORequest(self.context, self, obj, rank, objtype=obj_cls)
 
         ioreq.multi_akey_insert(c_dkey, c_data, txn)
-        #self.commit_tx(txn)
+
         return ioreq.obj
 
     def read_an_array(self, rec_count, rec_size, dkey, akey, obj,

@@ -257,12 +257,12 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     # clean up
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
-    '''
+
 def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
-    """
-        See AsyncWorker1 for details.  This does the same thing but
-        uses different API functions (test instead of poll) for test
-        coverage purposes.
+    """    
+    See AsyncWorker1 for details.  This does the same thing but
+    uses different API functions (test instead of poll) for test
+    coverage purposes.
     """
     # TO be Done insufficient error handling in this function
 
@@ -296,7 +296,7 @@ def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     # cleanup
     qfunc = context.get_function('destroy-eq')
     qfunc(ctypes.byref(qhandle))
-    '''
+
 class Logfac:
     DEBUG = 0
     INFO = 1
