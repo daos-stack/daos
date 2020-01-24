@@ -923,12 +923,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
 			opts.mem_size = nvme_glb.bd_mem_size;
-			D_PRINT("Requesting %d MB memory allocation and"
-				" expecting SPDK primary process mode\n",
+			D_PRINT("Requesting %d MB memory allocation\n",
 				opts.mem_size);
-		} else {
-			D_PRINT("Expecting SPDK auto-detection of secondary"
-				" process mode\n");
 		}
 
 		rc = spdk_env_init(&opts);
