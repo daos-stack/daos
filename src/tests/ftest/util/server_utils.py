@@ -32,7 +32,7 @@ from command_utils import (BasicParameter, FormattedParameter,
 from command_daos_utils import (YamlParameters, YamlCommand, SubprocessManager,
                                 TransportCredentials, LogParameter)
 from general_utils import pcmd
-from dmg_utils import storage_format
+from dmg_utils import DmgCommand
 
 
 class ServerFailed(Exception):
@@ -707,6 +707,10 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.sub_command_override = "start"
         self._exe_names.append("daos_io_server")
 
+        # Dmg command to access this group of servers which will be configured
+        # to access the doas_servers when they are started
+        self.dmg = DmgCommand(self.manager.job.command_path)
+
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
 
@@ -769,6 +773,12 @@ class DaosServerManager(SubprocessManager):
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
 
+        # Update dmg command params to reflect access to the server
+        self.dmg.hostlist.update(
+            self.get_config_value("access_points"), "dmg.hostlist")
+        self.dmg.insecure.update(
+            self.get_config_value("allow_insecure"), "dmg.insecure")
+
         # Prepare the servers
         self.prepare()
 
@@ -793,8 +803,9 @@ class DaosServerManager(SubprocessManager):
 
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(
-                self.manager.job.command_path, ",".join(ported_hosts))
+            self.dmg.storage_format()
+            # storage_format(
+            #     self.manager.job.command_path, ",".join(ported_hosts))
             self.manager.job.update_pattern("normal")
             try:
                 self.manager.job.check_subprocess_status(self.manager.process)

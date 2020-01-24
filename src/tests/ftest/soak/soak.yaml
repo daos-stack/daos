@@ -36,6 +36,8 @@ server_config:
         scm_list: [/dev/pmem0]
         bdev_class: nvme
         bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+    transport_config:
+        allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
@@ -43,17 +45,20 @@ pool_ior:
     scm_size: 40000000000
     nvme_size: 100000000000
     svcn: 1
+    control_method: dmg
 pool_fio:
     mode: 146
     name: daos_server
     scm_size: 40000000000
     nvme_size: 100000000000
     svcn: 1
+    control_method: dmg
 pool_reserved:
     mode: 511
     name: daos_server
     scm_size: 3000000000
     nvme_size: 50000000000
+    control_method: dmg
 container_reserved:
     akey_size: 5
     dkey_size: 5

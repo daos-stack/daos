@@ -32,7 +32,6 @@ from avocado import skip, TestFail, fail_on
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from configuration_utils import Configuration
 from command_utils import CommandFailure, EnvironmentVariables
 from command_daos_utils import CommonConfig
 from agent_utils import (DaosAgentYamlParameters, DaosAgentCommand,
@@ -176,8 +175,8 @@ class TestWithServers(TestWithoutServers):
         self.server_group = None
         self.hostlist_servers = None
         self.hostlist_clients = None
-        self.partition_servers = None
-        self.partition_clients = None
+        self.server_partition = None
+        self.client_partition = None
         self.config = None
         self.debug = False
         self.setup_start_servers = True
@@ -211,65 +210,35 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "OpenMPI")
 
         # Determine which hosts to use as servers and optionally clients.
-        test_servers = self.params.get("test_servers", "/run/hosts/*")
-        test_clients = self.params.get("test_clients", "/run/hosts/*")
-
-        # Support the use of a host type count to test with subsets of the
-        # specified hosts lists
-        server_count = self.params.get("server_count", "/run/hosts/*")
-        client_count = self.params.get("client_count", "/run/hosts/*")
+        self.hostlist_servers = self.params.get("test_servers", "/run/hosts/*")
+        self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
 
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         for name in ("servers", "clients"):
-            host_list_name = "_".join(["test", name])
-            partition_name = "_".join(["partition", name])
+            host_list_name = "_".join(["hostlist", name])
+            partition_name = "_".join([name[:-1], "partition"])
             partition = self.params.get(partition_name, "/run/hosts/*")
-            host_list = locals()[host_list_name]
+            host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
                 # partition information to populate the list of hosts.
                 setattr(self, partition_name, partition)
-                locals()[host_list_name] = get_partition_hosts(partition_name)
+                setattr(self, host_list_name, get_partition_hosts(partition))
             elif partition is not None and host_list is not None:
                 self.fail(
                     "Specifying both a {} partition name and a list of hosts "
                     "is not supported!".format(name))
 
         # For API calls include running the agent on the local host
-        test_clients = include_local_host(test_clients)
+        self.hostlist_clients = include_local_host(self.hostlist_clients)
 
-        # Supported combinations of yaml hosts arguments:
-        #   - test_servers [+ server_count]
-        #   - test_servers [+ server_count] + test_clients [+ client_count]
-        if test_servers and test_clients:
-            self.hostlist_servers = test_servers[:server_count]
-            self.hostlist_clients = test_clients[:client_count]
-        elif test_servers:
-            self.hostlist_servers = test_servers[:server_count]
+        # Display host information
+        self.log.info("--- HOST INFORMATION ---")
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
-
-        # Find a configuration that meets the test requirements
-        self.config = Configuration(
-            self.params, self.hostlist_servers, debug=self.debug)
-        if not self.config.set_config(self):
-            self.cancel("Test requirements not met!")
-
-        # If a specific count is specified, verify enough servers/clients are
-        # specified to satisy the count
-        host_count_checks = (
-            ("server", server_count,
-             len(self.hostlist_servers) if self.hostlist_servers else 0),
-            ("client", client_count,
-             len(self.hostlist_clients) if self.hostlist_clients else 0)
-        )
-        for host_type, expected_count, actual_count in host_count_checks:
-            if expected_count:
-                self.assertEqual(
-                    expected_count, actual_count,
-                    "Test requires {} {}; {} specified".format(
-                        expected_count, host_type, actual_count))
+        self.log.info("server_partition:  %s", self.server_partition)
+        self.log.info("client_partition:  %s", self.client_partition)
 
         # Start the clients (agents)
         if self.setup_start_agents:
@@ -402,7 +371,7 @@ class TestWithServers(TestWithoutServers):
 
         # Setup defaults
         if config_file is None:
-            config_file = self.get_config_file("daos", "server")
+            config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
             common_cfg = self.get_common_config(
                 DaosAgentTransportCredentials(), self.server_group,

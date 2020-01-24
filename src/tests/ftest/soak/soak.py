@@ -90,7 +90,9 @@ class Soak(TestWithServers):
         for pool_name in pool_names:
             path = "".join(["/run/", pool_name, "/*"])
             # Create a pool and add it to the overall list of pools
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(
+                TestPool(
+                    self.context, self.log, dmg=self.server_managers[0].dmg))
             self.pool[-1].namespace = path
             self.pool[-1].get_params(self)
             self.pool[-1].create()
@@ -309,7 +311,9 @@ class Soak(TestWithServers):
         script_list = []
 
         # Start the daos_agent in the batch script for now
-        agent_launch_cmd = self.get_agent_launch_command()
+        agent_launch_cmds = [
+            "mkdir -p {}".format(os.environ.get("DAOS_TEST_LOG_DIR"))]
+        agent_launch_cmds.append(self.get_agent_launch_command())
 
         # Create the sbatch script for each cmdline
         for cmd in commands:
@@ -324,7 +328,7 @@ class Soak(TestWithServers):
             sbatch.update(self.srun_params)
             script = slurm_utils.write_slurm_script(
                 self.test_log_dir, job, output, nodesperjob,
-                [agent_launch_cmd] + [cmd], sbatch)
+                agent_launch_cmds + [cmd], sbatch)
             script_list.append(script)
         return script_list
 
@@ -557,8 +561,8 @@ class Soak(TestWithServers):
             "reservation", "/run/srun_params/*")
 
         # Srun params
-        if self.partition_clients is not None:
-            self.srun_params = {"partition": self.partition_clients}
+        if self.client_partition is not None:
+            self.srun_params = {"partition": self.client_partition}
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
         # Initialize time
@@ -568,11 +572,18 @@ class Soak(TestWithServers):
         # self.pool is a list of all the pools used in soak
         # self.pool[0] will always be the reserved pool
         self.add_pools(["pool_reserved"])
+
+        # TO-DO: Remove when no longer using API calls
+        # Start and agent on this host to enable API calls
+        agent_groups = {
+            self.server_group: [socket.gethostname().split('.', 1)[0]]}
+        self.start_agents(agent_groups, self.hostlist_servers)
         self.pool[0].connect()
+
         # Create the container and populate with a known data
         # TO-DO: use IOR to write and later read verify the data
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved"
+        self.container.namespace = "/run/container_reserved/*"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
@@ -653,7 +664,7 @@ class Soak(TestWithServers):
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
 
         # Fail if slurm partition daos_client is not defined
-        if not self.partition_clients:
+        if not self.client_partition:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
@@ -688,7 +699,7 @@ class Soak(TestWithServers):
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
             status = process.system("scancel --partition {}".format(
-                self.partition_clients))
+                self.client_partition))
             if status > 0:
                 errors_detected = True
         # One last attempt to copy any logfiles from client nodes

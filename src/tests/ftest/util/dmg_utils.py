@@ -23,7 +23,9 @@
 """
 from __future__ import print_function
 
-import getpass
+from getpass import getuser
+from grp import getgrgid
+from pwd import getpwuid
 import re
 
 from command_utils import CommandWithSubCommand, CommandWithParameters
@@ -53,9 +55,8 @@ class DmgCommand(CommandWithSubCommand):
         Args:
             manager (SubprocessManager): daos server/agent process manager
         """
-        port = manager.get_config_value("port")
-        hostlist = [":".join([host, str(port)]) for host in manager.hosts]
-        self.hostlist.update(",".join(hostlist), "dmg.hostlist")
+        self.hostlist.update(
+            manager.get_config_value("access_points"), "dmg.hostlist")
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -133,14 +134,14 @@ class DmgCommand(CommandWithSubCommand):
                     DmgCommand.PoolSubCommand.CreateSubCommand,
                     self).__init__(
                         "/run/dmg/pool/create/*", "create")
-                self.group = FormattedParameter("-g {}", None)
-                self.user = FormattedParameter("-u {}", None)
-                self.acl_file = FormattedParameter("-a {}", None)
-                self.scm_size = FormattedParameter("-s {}", None)
-                self.nvme_size = FormattedParameter("-n {}", None)
-                self.ranks = FormattedParameter("-r {}", None)
-                self.nsvc = FormattedParameter("-v {}", None)
-                self.sys = FormattedParameter("-S {}", None)
+                self.group = FormattedParameter("--group={}", None)
+                self.user = FormattedParameter("--user={}", None)
+                self.acl_file = FormattedParameter("--acl-file={}", None)
+                self.scm_size = FormattedParameter("--scm-size={}", None)
+                self.nvme_size = FormattedParameter("--nvme-size={}", None)
+                self.ranks = FormattedParameter("--ranks={}", None)
+                self.nsvc = FormattedParameter("--nsvc={}", None)
+                self.sys = FormattedParameter("--sys={}", None)
 
         class DeleteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool delete-acl command."""
@@ -164,7 +165,8 @@ class DmgCommand(CommandWithSubCommand):
                     self).__init__(
                         "/run/dmg/pool/destroy/*", "destroy")
                 self.pool = FormattedParameter("--pool={}", None)
-                self.force = FormattedParameter("-f", False)
+                self.sys_name = FormattedParameter("--sys-name={}", None)
+                self.force = FormattedParameter("--force", False)
 
         class GetAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool get-acl command."""
@@ -319,232 +321,120 @@ class DmgCommand(CommandWithSubCommand):
             super(DmgCommand.SystemSubCommand, self).__init__(
                 "/run/dmg/system/*", "system")
 
+    def _get_result(self):
+        """Get the result from running the configured dmg command.
 
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
-def storage_scan(path, hosts, insecure=True):
-    """Execute scan command through dmg tool to servers provided.
+        """
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as details:
+            self.log.info("<dmg> command failed: %s", str(details))
 
-    Args:
-        path (str): path to tool's binary
-        hosts (list): list of servers to run scan on.
-        insecure (bool): toggle insecure mode
+        return result
 
-    Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
+    def storage_scan(self):
+        """Get the result of the dmg storage scan command.
 
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = hosts
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("scan")
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("<dmg> command failed: {}".format(details))
-        return None
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("scan")
+        return self._get_result()
 
-    return result
+    def storage_format(self):
+        """Get the result of the dmg storage format command.
 
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
-def storage_format(path, hosts, insecure=True):
-    """Execute format command through dmg tool to servers provided.
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("format")
+        return self._get_result()
 
-    Args:
-        path (str): path to tool's binary
-        hosts (list): list of servers to run format on.
-        insecure (bool): toggle insecure mode
+    def storage_prepare(self, user=None, hugepages="4096", nvme=False,
+                        scm=False, reset=False, force=True):
+        """Get the result of the dmg storage format command.
 
-    Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = hosts
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("format")
+        """
+        self.set_sub_command("storage")
+        self.sub_command_class.set_sub_command("prepare")
+        self.sub_command_class.sub_command_class.nvme_only.value = nvme
+        self.sub_command_class.sub_command_class.scm_only.value = scm
+        self.sub_command_class.sub_command_class.target_user.value = \
+            getuser() if user is None else user
+        self.sub_command_class.sub_command_class.hugepages.value = hugepages
+        self.sub_command_class.sub_command_class.reset.value = reset
+        self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
 
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("<dmg> command failed: {}".format(details))
-        return None
+    def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
+                    target_list=None, svcn=None, group=None):
+        """Create a pool with the dmg command.
 
-    return result
+        Args:
+            scm_size (int): SCM pool size to create.
+            uid (int, optional): User ID with privileges. Defaults to None.
+            gid (int, otional): Group ID with privileges. Defaults to None.
+            nvme_size (str, optional): NVMe size. Defaults to None.
+            target_list (list, optional): a list of storage server unique
+                identifiers (ranks) for the DAOS pool
+            svcn (str, optional): Number of pool service replicas. Defaults to
+                None, in which case 1 is used by the dmg binary in default.
+            group (str, optional): DAOS system group name in which to create the
+                pool. Defaults to None, in which case "daos_server" is used by
+                default.
 
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
 
-def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
-                 scm=False, insecure=True):
-    """Execute prepare command through dmg tool to servers provided.
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("create")
+        self.sub_command_class.sub_command_class.user.value = \
+            getpwuid(uid).pw_name if uid is not None else uid
+        self.sub_command_class.sub_command_class.group.value = \
+            getgrgid(gid).gr_name if gid is not None else gid
+        self.sub_command_class.sub_command_class.scm_size.value = scm_size
+        self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
+        if target_list is not None:
+            self.sub_command_class.sub_command_class.ranks.value = ":".join(
+                target_list)
+        self.sub_command_class.sub_command_class.nsvc.value = svcn
+        self.sub_command_class.sub_command_class.sys.value = group
+        return self._get_result()
 
-    Args:
-        path (str): path to tool's binary
-        hosts (list): list of servers to run prepare on.
-        user (str, optional): User with privileges. Defaults to False.
-        hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
-        nvme (bool, optional): Perform prep on nvme. Defaults to False.
-        scm (bool, optional): Perform prep on scm. Defaults to False.
-        insecure (bool): toggle insecure mode
+    def pool_destroy(self, pool, force=True):
+        """Destroy a  pool with the dmg command.
 
-    Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
+        Args:
+            pool (str): Pool UUID to destroy.
+            foce (bool, optional): Force removal of DAOS pool. Defaults to True.
 
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = hosts
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("prepare")
-    dmg.sub_command_class.sub_command_class.nvme_only.value = nvme
-    dmg.sub_command_class.sub_command_class.scm_only.value = scm
-    dmg.sub_command_class.sub_command_class.target_user.value = \
-        getpass.getuser() if user is None else user
-    dmg.sub_command_class.sub_command_class.hugepages.value = hugepages
-    dmg.sub_command_class.sub_command_class.force.value = True
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
 
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("<dmg> command failed: {}".format(details))
-        return None
-
-    return result
-
-
-def storage_reset(path, hosts, nvme=False, scm=False, user=None,
-                  hugepages="4096", insecure=True):
-    """Execute prepare reset command through dmg tool to servers provided.
-
-    Args:
-        path (str): path to tool's binary.
-        hosts (list): list of servers to run prepare on.
-        nvme (bool): if true, nvme flag will be appended to command.
-        scm (bool): if true, scm flag will be appended to command.
-        user (str, optional): User with privileges. Defaults to False.
-        hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
-        insecure (bool): toggle insecure mode
-
-    Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
-
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = hosts
-    dmg.set_sub_command("storage")
-    dmg.sub_command_class.set_sub_command("prepare")
-    dmg.sub_command_class.sub_command_class.nvme_only.value = nvme
-    dmg.sub_command_class.sub_command_class.scm_only.value = scm
-    dmg.sub_command_class.sub_command_class.target_user.value = user
-    dmg.sub_command_class.sub_command_class.hugepages.value = hugepages
-    dmg.sub_command_class.sub_command_class.reset.value = True
-    dmg.sub_command_class.sub_command_class.force.value = True
-
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("<dmg> command failed: {}".format(details))
-        return None
-
-    return result
-
-
-def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
-                user=None, acl_file=None, nvme_size=None, ranks=None,
-                nsvc=None, sys=None):
-    # pylint: disable=too-many-arguments
-    """Execute pool create command through dmg tool to servers provided.
-
-    Args:
-        path (str): Path to the directory of dmg binary.
-        host_port (str, optional): Comma separated list of Host:Port where
-            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
-            the default port number. This number is defined in
-            daos_avocado_test.yaml
-        scm_size (str): SCM size value passed into the command.
-        insecure (bool, optional): Insecure mode. Defaults to True.
-        group (str, otional): Group with privileges. Defaults to None.
-        user (str, optional): User with privileges. Defaults to None.
-        acl_file (str, optional): Access Control List file path for DAOS pool.
-            Defaults to None.
-        nvme_size (str, optional): NVMe size. Defaults to None.
-        ranks (str, optional): Storage server unique identifiers (ranks) for
-            DAOS pool
-        nsvc (str, optional): Number of pool service replicas. Defaults to
-            None, in which case 1 is used by the dmg binary in default.
-        sys (str, optional): DAOS system that pool is to be a part of. Defaults
-            to None, in which case daos_server is used by the dmg binary in
-            default.
-
-    Returns:
-        CmdResult: Object that contains exit status, stdout, and other
-            information.
-
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = host_port
-    dmg.set_sub_command("pool")
-    dmg.sub_command_class.set_sub_command("create")
-    dmg.sub_command_class.sub_command_class.group.value = group
-    dmg.sub_command_class.sub_command_class.user.value = user
-    dmg.sub_command_class.sub_command_class.acl_file.value = acl_file
-    dmg.sub_command_class.sub_command_class.scm_size.value = scm_size
-    dmg.sub_command_class.sub_command_class.nvme_size.value = nvme_size
-    dmg.sub_command_class.sub_command_class.ranks.value = ranks
-    dmg.sub_command_class.sub_command_class.nsvc.value = nsvc
-    dmg.sub_command_class.sub_command_class.sys.value = sys
-
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("Pool create command failed: {}".format(details))
-        return None
-
-    return result
-
-
-def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
-    """Execute pool destroy command through dmg tool to servers provided.
-
-    Args:
-        path (str): Path to the directory of dmg binary.
-        pool_uuid (str): Pool UUID to destroy.
-        host_port (str, optional): Comma separated list of Host:Port where
-            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
-            the default port number. This number is defined in
-            daos_avocado_test.yaml
-        insecure (bool, optional): Insecure mode. Defaults to True.
-        foce (bool, optional): Force removal of DAOS pool. Defaults to True.
-
-    Returns:
-        CmdResult: Object that contains exit status, stdout, and other
-            information.
-
-    """
-    # Create and setup the command
-    dmg = DmgCommand(path)
-    dmg.insecure.value = insecure
-    dmg.hostlist.value = host_port
-    dmg.set_sub_command("pool")
-    dmg.sub_command_class.set_sub_command("destroy")
-    dmg.sub_command_class.sub_command_class.pool.value = pool_uuid
-    dmg.sub_command_class.sub_command_class.force.value = force
-
-    try:
-        result = dmg.run()
-    except CommandFailure as details:
-        print("Pool destroy command failed: {}".format(details))
-        return None
-
-    return result
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("destroy")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
 
 
 def get_pool_uuid_service_replicas_from_stdout(stdout_str):

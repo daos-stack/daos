@@ -501,6 +501,15 @@ class SubprocessManager(object):
         # Define the list of executable names to terminate in the kill() method
         self._exe_names = [self.manager.job.command]
 
+    def __str__(self):
+        """Get the complete manager command string.
+
+        Returns:
+            str: the complete manager command string
+
+        """
+        return str(self.manager)
+
     @property
     def hosts(self):
         """Get the hosts used to execute the daos command."""
