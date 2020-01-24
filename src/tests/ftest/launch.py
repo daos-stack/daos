@@ -127,35 +127,42 @@ def set_test_environment():
     path = os.environ.get("PATH")
 
     # Get the default interface to use if OFI_INTERFACE is not set
-    print("Detecting network devices")
-    available_interfaces = {}
-    # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-    net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    for device in sorted([dev for dev in os.listdir(net_path) if dev != "lo"]):
-        # Get the interface state - only include active (up) interfaces
-        with open(os.path.join(net_path, device, "operstate"), "r") as buffer:
-            state = buffer.read().strip()
-        # Get the interface speed - used to select the fastest available
-        with open(os.path.join(net_path, device, "speed"), "r") as buffer:
-            speed = int(buffer.read().strip())
+    interface = os.environ.get("OFI_INTERFACE")
+    if interface is None:
+        # Find all the /sys/class/net interfaces on the launch node
+        # (excluding lo)
+        print("Detecting network devices - OFI_INTERFACE not set")
+        available_interfaces = {}
+        net_path = os.path.join(os.path.sep, "sys", "class", "net")
+        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
+        for device in sorted(net_list):
+            # Get the interface state - only include active (up) interfaces
+            with open(os.path.join(net_path, device, "operstate"), "r") as fh:
+                state = fh.read().strip()
+            # Only include interfaces that are up
+            if state.lower() == "up":
+                # Get the interface speed - used to select the fastest available
+                with open(os.path.join(net_path, device, "speed"), "r") as fh:
+                    speed = int(fh.read().strip())
+                print(
+                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                        device, speed, state))
+                # Only include the first active interface for each speed - first
+                # is determined by an alphabetic sort: ib0 will be checked
+                # before ib1
+                if speed not in available_interfaces:
+                    available_interfaces[speed] = device
+        try:
+            # Select the fastest active interface available by sorting the speed
+            interface = available_interfaces[sorted(available_interfaces)[-1]]
+        except IndexError:
+            print(
+                "Error obtaining a default interface from: {}".format(
+                    os.listdir(net_path)))
+            exit(1)
         print(
-            "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                device, speed, state))
-        # Only include the first active interface for each speed - first is
-        # determined by an alphabetic sort: ib0 will be checked before ib1
-        if state.lower() == "up" and speed not in available_interfaces:
-            available_interfaces[speed] = device
-    try:
-        # Select the fastest active interface available by sorting the speeds
-        interface = available_interfaces[sorted(available_interfaces)[-1]]
-    except IndexError:
-        print(
-            "Error obtaining a default interface from: {}".format(
-                os.listdir(net_path)))
-        exit(1)
-    print(
-        "Using {} as the default interface from {}".format(
-            interface, available_interfaces))
+            "Using {} as the default interface from {}".format(
+                interface, available_interfaces))
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
