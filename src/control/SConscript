@@ -85,25 +85,19 @@ def scons():
     prefix = denv.subst("$PREFIX")
     sprefix = denv.subst("$SPDK_PREFIX")
     if sprefix not in ["", prefix]:
-        # install include/spdk
-        _dir = join("include", "spdk")
-        env.Install(join(prefix, _dir), Glob(join(sprefix, _dir, '*.*')))
+        def install_dir(env, srcdir, destdir):
+            """walk a directory and install targets"""
+            for root, _dirs, files in os.walk(srcdir):
+                dest_root = os.path.relpath(root, sprefix)
+                for fname in files:
+                    full_name = os.path.join(root, fname)
+                    dest = os.path.join(prefix, dest_root)
+                    env.Install(dest, full_name)
 
-        # install share/spdk/scripts
-        _dir = join("share", "spdk", "scripts")
-        source = join(sprefix, _dir)
-        target = join(prefix, _dir)
-        env.Install(target, Glob(join(source, '*.*')))
-        # install subdir
-        dirs = ['ceph', 'perf', 'rpc', 'spdkcli', 'vagrant']
-        for sub_dir in dirs:
-            env.Install(join(target, sub_dir), Glob(join(source, sub_dir, '*.*')))
-        # install dirs in perf
-        perf_source = join(source, 'perf')
-        perf_target = join(target, 'perf')
-        dirs = ['nvme', 'nvmf', 'vhost']
-        for sub_dir in dirs:
-            env.Install(join(perf_target, sub_dir), Glob(join(perf_source, sub_dir, '*.*')))
+        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
+            target = join(prefix, _dir)
+            source = join(sprefix, _dir)
+            install_dir(denv, source, target)
 
     def check_go_version(context):
         """Check GO Version"""
