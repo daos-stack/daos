@@ -108,7 +108,7 @@ class BasicTxTest(TestWithServers):
             thedatasize2 = 19
             # note using the same keys so writing to the same spot
             dkey = "this is the dkey"
-            akey = "this is the akey qw"
+            akey = "this is the akey"
 
             oid = container.write_an_obj(thedata3, thedatasize2,
                                          dkey, akey, oid, None, 2)
