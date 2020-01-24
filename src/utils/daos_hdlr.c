@@ -854,6 +854,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
 		attr.da_chunk_size = ap->chunk_size;
+		attr.da_props = ap->props;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
@@ -891,6 +892,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
+	dattr.da_props = ap->props;
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {

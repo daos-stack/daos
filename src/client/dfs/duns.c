@@ -431,19 +431,31 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props)
+				prop = daos_prop_alloc(attrp->da_props->dpp_nr + 1);
+			else
+				prop = daos_prop_alloc(1);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
@@ -608,19 +620,31 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				prop = daos_prop_alloc(attrp->da_props->dpp_nr + 1);
+			else
+				prop = daos_prop_alloc(1);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err_link, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
