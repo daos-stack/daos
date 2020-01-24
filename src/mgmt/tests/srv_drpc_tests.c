@@ -102,7 +102,6 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	 * to test for proper handling of garbage in the payload
 	 */
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_prep_shutdown);
-	expect_failure_for_bad_call_payload(ds_mgmt_drpc_kill_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_ping_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_create_mgmt_svc);
@@ -1622,8 +1621,6 @@ test_drpc_prep_shutdown_success(void **state)
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
-#define KILL_RANK_TEST(x)	cmocka_unit_test(x)
-
 #define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
 
 int
@@ -1668,7 +1665,6 @@ main(void)
 		QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
 		POOL_CREATE_TEST(test_drpc_pool_create_invalid_acl),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
-		KILL_RANK_TEST(test_drpc_kill_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
 	};
 
