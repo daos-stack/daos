@@ -258,7 +258,8 @@ pipeline {
                                           createrepo artifacts/centos7/
                                           cat $mockroot/result/{root,build}.log'''
                                script {
-                                   daos_packages_version = sh(script: 'rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm',
+                                   daos_packages_version = sh(label: "Determine RPM version",
+                                                              script: 'rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm',
                                       returnStdout: true)
                                }
                             publishToRepository product: 'daos',
