@@ -302,7 +302,7 @@ test_server_data_corruption(void **state)
 	setup_multiple_extent_data(&ctx);
 	/** Set the Server data corruption flag */
 	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				DAOS_CHECKSUM_SDATA_CORRUPT | DAOS_FAIL_ONCE,
+				DAOS_CHECKSUM_SDATA_CORRUPT | DAOS_FAIL_ALWAYS,
 				0, NULL);
 	assert_int_equal(rc, 0);
 	/** Perform the update */
