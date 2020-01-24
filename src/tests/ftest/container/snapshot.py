@@ -155,7 +155,7 @@ class Snapshot(TestWithServers):
         return status
 
     def test_snapshot_negativecases(self):
-        # pylint: disable=pylint-no-member
+        # pylint: disable=no-member
         """
         Test ID: DAOS-1390 Verify snap_create bad parameter behavior.
                  DAOS-1322 Create a new container, verify snapshot state.
@@ -321,7 +321,7 @@ class Snapshot(TestWithServers):
             self.log.info("  =Snapshot number : %s", ss_index)
             self.log.info("  ==container_coh     =%s", test_data[ind]["coh"])
             self.log.info("  ==container_epoch   =%s",
-                test_data[ind]["container_epoch"])
+                          test_data[ind]["container_epoch"])
             self.log.info(
                 "  ==snapshot          =%s", test_data[ind]["snapshot"])
             self.log.info("  ==snapshot.epoch    =%s",
@@ -336,7 +336,7 @@ class Snapshot(TestWithServers):
 
 
     def test_snapshots(self):
-        # pylint: disable=pylint-no-member
+        # pylint: disable=no-member
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots

@@ -40,7 +40,7 @@ class FullPoolContainerCreate(TestWithServers):
 
     @skipForTicket("DAOS-3142")
     def test_no_space_cont_create(self):
-        # pylint: disable=pylint-no-member
+        # pylint: disable=no-member
         """
         :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
         """
