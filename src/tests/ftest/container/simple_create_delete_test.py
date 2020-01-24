@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(
+            self.context, self.log, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
 

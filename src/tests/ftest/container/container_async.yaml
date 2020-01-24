@@ -6,11 +6,8 @@ hosts:
 timeout: 80
 server_config:
     name: daos_server
-createtests:
-    createmode:
-        mode_RO:
-            mode: 146
-    createset:
-        setname: daos_server
-    createsize:
-        size: 1073741
+pool:
+    control_method: dmg
+    name: daos_server
+    scm_size: 1073741
+    mode: 146

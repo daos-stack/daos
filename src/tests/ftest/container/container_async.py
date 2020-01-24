@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import uuid
 import threading
 
 from apricot import TestWithServers
-
-from pydaos.raw import  DaosPool, DaosContainer, DaosApiError
+from test_utils_pool import TestPool
+from pydaos.raw import  DaosContainer, DaosApiError
 
 # pylint: disable=global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
@@ -60,7 +60,6 @@ class ContainerAsync(TestWithServers):
         super(ContainerAsync, self).__init__(*args, **kwargs)
         self.container1 = None
         self.container2 = None
-        self.pool = None
 
     def test_createasync(self):
         """
@@ -72,29 +71,20 @@ class ContainerAsync(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.create()
+
+        poh = self.pool.pool.handle
+
+        self.pool.connect()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            poh = self.pool.handle
-
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container1 = DaosContainer(self.context)
             self.container2 = DaosContainer(self.context)
-
 
             GLOB_SIGNAL = threading.Event()
             self.container1.create(poh, None, cb_func)
@@ -106,7 +96,6 @@ class ContainerAsync(TestWithServers):
 
             # Try to recreate container after destroying pool,
             # this should fail. Checking rc after failure.
-            self.pool.disconnect()
             self.pool.destroy(1)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
@@ -116,9 +105,6 @@ class ContainerAsync(TestWithServers):
             if GLOB_RC == 0:
                 self.fail("RC not as expected in async test")
             print("RC after unsuccessful container create: ", GLOB_RC)
-
-            # cleanup the pool and container
-            self.pool = None
 
         except DaosApiError as excep:
             print(excep)
@@ -134,25 +120,18 @@ class ContainerAsync(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        poh = self.pool.pool.handle
+
+        self.pool.connect()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            poh = self.pool.handle
-
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container1 = DaosContainer(self.context)
             self.container2 = DaosContainer(self.context)
@@ -191,25 +170,18 @@ class ContainerAsync(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        poh = self.pool.pool.handle
+
+        self.pool.connect()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            poh = self.pool.handle
-
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container1 = DaosContainer(self.context)
             self.container2 = DaosContainer(self.context)
@@ -255,26 +227,18 @@ class ContainerAsync(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        poh = self.pool.pool.handle
+
+        self.pool.connect()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-
-            poh = self.pool.handle
-
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container1 = DaosContainer(self.context)
             self.container2 = DaosContainer(self.context)
@@ -323,25 +287,18 @@ class ContainerAsync(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-        createsetid = self.params.get("setname", '/run/createtests/createset/')
-        createsize = self.params.get("size", '/run/createtests/createsize/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        poh = self.pool.pool.handle
+
+        self.pool.connect()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            poh = self.pool.handle
-
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container1 = DaosContainer(self.context)
             self.container2 = DaosContainer(self.context)
