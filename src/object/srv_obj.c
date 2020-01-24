@@ -357,6 +357,19 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		rc = ret ? dss_abterr2der(ret) : *status;
 
 	ABT_eventual_free(&arg.eventual);
+	/* After RDMA is done, corrupt the server data */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_SDATA_CORRUPT)) {
+		struct bio_sglist	*fbsgl;
+		d_sg_list_t		 fsgl;
+		int			*fbuffer;
+
+		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		fbsgl = vos_iod_sgl_at(ioh, 0);
+		bio_sgl_convert(fbsgl, &fsgl);
+		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+		*fbuffer += 0x2;
+		daos_sgl_fini(&fsgl, false);
+	}
 	return rc;
 }
 
@@ -1216,6 +1229,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
+
 	rc = obj_ioc_begin(orw->orw_oid, orw->orw_map_ver,
 			   orw->orw_pool_uuid, orw->orw_co_hdl,
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);
