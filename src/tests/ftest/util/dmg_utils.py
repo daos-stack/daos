@@ -328,12 +328,15 @@ class DmgCommand(CommandWithSubCommand):
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
+        Raises:
+            CommandFailure: if the dmg command fails.
+
         """
         result = None
         try:
             result = self.run()
         except CommandFailure as details:
-            self.log.info("<dmg> command failed: %s", str(details))
+            raise CommandFailure("<dmg> command failed: %s", str(details))
 
         return result
 
@@ -343,6 +346,9 @@ class DmgCommand(CommandWithSubCommand):
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage scan command fails.
 
         """
         self.set_sub_command("storage")
@@ -356,6 +362,9 @@ class DmgCommand(CommandWithSubCommand):
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
+        Raises:
+            CommandFailure: if the dmg storage format command fails.
+
         """
         self.set_sub_command("storage")
         self.sub_command_class.set_sub_command("format")
@@ -368,6 +377,9 @@ class DmgCommand(CommandWithSubCommand):
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage prepare command fails.
 
         """
         self.set_sub_command("storage")
@@ -402,6 +414,9 @@ class DmgCommand(CommandWithSubCommand):
             CmdResult: an avocado CmdResult object containing the dmg command
                 information, e.g. exit status, stdout, stderr, etc.
 
+        Raises:
+            CommandFailure: if the dmg pool create command fails.
+
         """
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("create")
@@ -413,7 +428,7 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
         if target_list is not None:
             self.sub_command_class.sub_command_class.ranks.value = ":".join(
-                target_list)
+                [str(target) for target in target_list])
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
         return self._get_result()
@@ -428,6 +443,9 @@ class DmgCommand(CommandWithSubCommand):
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
                 information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
 
         """
         self.set_sub_command("pool")
