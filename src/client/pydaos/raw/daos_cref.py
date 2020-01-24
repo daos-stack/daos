@@ -259,7 +259,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     qfunc(ctypes.byref(qhandle))
 
 def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
-    """    
+    """
     See AsyncWorker1 for details.  This does the same thing but
     uses different API functions (test instead of poll) for test
     coverage purposes.
