@@ -23,11 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import threading
 import string
 import random
+
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from general_utils import DaosTestError

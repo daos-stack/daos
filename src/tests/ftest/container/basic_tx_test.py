@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-import os
+
 import time
 import traceback
 from apricot import TestWithServers

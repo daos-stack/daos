@@ -24,7 +24,6 @@
 from __future__ import print_function
 
 import ctypes
-import os
 import traceback
 from multiprocessing import sharedctypes
 
@@ -32,7 +31,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError, IOV
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
 
 
 class GlobalHandle(TestWithServers):
@@ -111,8 +110,8 @@ class GlobalHandle(TestWithServers):
         c_buf = buftype.from_buffer(buf)
         sct_pool_handle = (
             sharedctypes.RawValue(IOV,
-                                    ctypes.cast(c_buf, ctypes.c_void_p),
-                                    buf_len, iov_len))
+                                  ctypes.cast(c_buf, ctypes.c_void_p),
+                                  buf_len, iov_len))
 
         try:
             # create a container
@@ -138,8 +137,8 @@ class GlobalHandle(TestWithServers):
             #p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            self.check_handle(sct_pool_handle, sct_pool_uuid,
-	                      sct_cont_handle, 0)
+            self.check_handle(
+                sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
 
         except DaosApiError as excep:
             print(excep)

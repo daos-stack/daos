@@ -20,7 +20,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
 import random
 import string
 
@@ -41,6 +40,7 @@ class FullPoolContainerCreate(TestWithServers):
 
     @skipForTicket("DAOS-3142")
     def test_no_space_cont_create(self):
+        # pylint: disable=pylint-no-member
         """
         :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
         """

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,11 +21,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
 import random
 
 from apricot import TestWithServers, skipForTicket
-from pydaos import DaosContainer, DaosSnapshot, DaosApiError
+from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 from test_utils_pool import TestPool
 
@@ -84,7 +83,7 @@ class BasicSnapshot(TestWithServers):
 
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
