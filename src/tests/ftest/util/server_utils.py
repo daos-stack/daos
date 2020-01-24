@@ -797,15 +797,10 @@ class DaosServerManager(SubprocessManager):
                     self.manager.job.mode))
 
         if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-            # Setup the hostlist to pass to dmg command
-            port = self.manager.job.get_config_value("port")
-            ported_hosts = ["{}:{}".format(host, port) for host in self._hosts]
-
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             self.dmg.storage_format()
-            # storage_format(
-            #     self.manager.job.command_path, ",".join(ported_hosts))
+
             self.manager.job.update_pattern("normal")
             try:
                 self.manager.job.check_subprocess_status(self.manager.process)

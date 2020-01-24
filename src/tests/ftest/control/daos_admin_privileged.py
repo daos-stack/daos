@@ -26,9 +26,8 @@ from __future__ import print_function
 import os
 import getpass
 
-from dmg_utils import storage_format
-from command_utils import CommandFailure
 from apricot import TestWithServers
+from command_utils import CommandFailure
 from server_utils import ServerFailed
 
 
@@ -91,13 +90,8 @@ class DaosAdminPrivTest(TestWithServers):
             self.server_managers[0].kill()
             self.fail("Failed starting server as non-root user: {}".format(err))
 
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        h_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-
         # Run format command under non-root user
         self.log.info("Performing SCM format")
-        format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
-        if format_res is None:
+        result = self.server_managers[0].dmg.storage_format()
+        if result is None:
             self.fail("Failed to format storage")
