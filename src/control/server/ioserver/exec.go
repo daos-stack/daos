@@ -168,6 +168,7 @@ func (r *Runner) Stop(force bool) error {
 	if force {
 		signal = syscall.SIGKILL
 	}
+	r.log.Debugf("Stopping I/O server instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
 }
