@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import random
 from avocado.utils import process
 
 from apricot import TestWithServers
@@ -85,6 +86,41 @@ class IoConfGen(ExecutableCommand):
             self.log.error(msg)
             raise CommandFailure(msg)
 
+def gen_unaligned_io_conf(record_size, filename="testfile"):
+    """
+    Generate the data-set file based on record size.
+
+    Args:
+        record_size(Number): Record Size to fill the data.
+        filename (string): Filename (with/without path) for
+                           creating the data set.
+    """
+    rand_ofs_end = random.randint(1, record_size)
+    rand_ofs_start = rand_ofs_end - 1
+    file_data = (
+        "test_lvl daos",
+        "dkey dkey_0",
+        "akey akey_0",
+        "iod_size 1",
+        "pool --query",
+        "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
+        "update --tx 1 --recx \"[{}, {}]123\""
+        .format(rand_ofs_start, rand_ofs_end),
+        "fetch  --tx 1 -v --recx \"[0, {}]045 [{}, {}]123 [{}, {}]045\""
+        .format(rand_ofs_start,
+                rand_ofs_start,
+                rand_ofs_end,
+                rand_ofs_end,
+                record_size),
+        "pool --query")
+
+    try:
+        file_hd = open(filename, "w+")
+        file_hd.write("\n".join(file_data))
+        file_hd.close()
+    except Exception as error:
+        raise error
+
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
@@ -107,3 +143,20 @@ class IoConfTestBase(TestWithServers):
         io_conf.run()
         #Run test file using daos_run_io_conf
         io_conf.run_conf()
+
+    def unaligned_io(self):
+        """
+        Execute the unaligned IO test steps.
+        """
+        total_sizes = self.params.get("sizes", "/run/datasize/*")
+        #Setup the pool
+        self.setup_test_pool()
+        pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
+        io_conf.get_params(self)
+        for record_size in total_sizes:
+            print("Start test for record size = {}".format(record_size))
+            #create unaligned test data set
+            gen_unaligned_io_conf(record_size)
+            #Run test file using daos_run_io_conf
+            io_conf.run_conf()

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,11 +21,12 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from apricot import TestWithServers, skipForTicket
-from test_utils_pool import TestPool
+from apricot import skipForTicket
+from pool_test_base import PoolTestBase
 
 
-class RebuildNoCap(TestWithServers):
+class RebuildNoCap(PoolTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for failed pool rebuild.
 
     Test Class Description:
@@ -48,8 +49,7 @@ class RebuildNoCap(TestWithServers):
         :avocado: tags=all,medium,pr,pool,rebuild,nocap
         """
         # Get the test params
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
+        self.create_test_pool()
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
 

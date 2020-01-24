@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from apricot import TestWithServers
-from test_utils_pool import TestPool
+from pool_test_base import PoolTestBase
 
 
-class InfoTests(TestWithServers):
+class InfoTests(PoolTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for pool query.
 
     Test Class Description:
@@ -47,17 +47,15 @@ class InfoTests(TestWithServers):
         :avocado: tags=all,tiny,pr,pool,smoke,infotest
         """
         # Get the test params
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
+        self.create_test_pool()
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
-        pool_targets = len(self.hostlist_servers) * targets
 
         # Create a pool
         self.pool.create()
 
         # Connect to the pool
-        self.pool.connect(permissions)
+        self.pool.connect(1 << permissions)
 
         # Verify the pool information
         checks = {
@@ -73,7 +71,7 @@ class InfoTests(TestWithServers):
         self.assertTrue(status, "Invlaid pool information detected prior")
         checks = {
             "s_total": (self.pool.scm_size.value, 0),
-            #"s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
+            "s_free": ("<{}".format(self.pool.scm_size.value), 0),
         }
         status = self.pool.check_pool_daos_space(**checks)
         self.assertTrue(status, "Invlaid pool space information detected")

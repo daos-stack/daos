@@ -29,3 +29,4 @@ pool:
     - [1073741824, PASS]
     - [9999999999999999999999, FAIL]
   debug: True
+  control_method: dmg

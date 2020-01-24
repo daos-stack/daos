@@ -42,6 +42,19 @@ class PoolTestBase(TestWithServers):
         self.update_log_file_names()
         super(PoolTestBase, self).setUp()
 
+    def create_test_pool(self, namespace=None):
+        """Create a TestPool object.
+
+        Args:
+            namespace (str, optional): yaml namespace to use instead of the
+                default TestPool namespace to find parameter values. Defaults
+                to None.
+        """
+        self.pool = TestPool(self.context, dmg=self.get_dmg_command())
+        if namespace is not None:
+            self.pool.namespace = namespace
+        self.pool.get_params(self)
+
     def get_param_list(self, name):
         """Get the list of param values and expected result for the param name.
 
@@ -88,11 +101,7 @@ class PoolTestBase(TestWithServers):
         Args:
             namespace (str, optional): [description]. Defaults to None.
         """
-        # Create a TestPool object
-        self.pool = TestPool(self.context)
-        if namespace is not None:
-            self.pool.namespace = namespace
-        self.pool.get_params(self)
+        self.create_test_pool(namespace)
 
         # Obtain the lists of arguments to use
         param_names = (

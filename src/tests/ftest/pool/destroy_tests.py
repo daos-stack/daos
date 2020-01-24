@@ -64,6 +64,7 @@ class DestroyTests(TestWithServers):
         self.validate_pool_destroy(hosts, case, exception_expected)
 
     def validate_pool_creation(self, hosts, group_name):
+        # pylint: disable=unused-argument
         """Validate the creation of a pool on the specified list of hosts.
 
         Args:
@@ -78,13 +79,14 @@ class DestroyTests(TestWithServers):
         self.pool.create()
         self.log.info("Pool UUID is %s", self.pool.uuid)
 
-        # Commented out due to DAOS-3836.
+        # Commented out due to DAOS-3836. Remove pylint disable when fixed.
         ## Check that the pool was created
         #self.assertTrue(
         #    self.pool.check_files(hosts),
         #    "Pool data not detected on servers before destroy")
 
     def validate_pool_destroy(self, hosts, case, exception_expected=False):
+        # pylint: disable=unused-argument
         """Validate a pool destroy.
 
         Args:
@@ -116,7 +118,7 @@ class DestroyTests(TestWithServers):
 
         # Restore the valid server group and check if valid pool still exists
         self.pool.uuid = saved_uuid
-        # Commented out due to DAOS-3836.
+        # Commented out due to DAOS-3836. Remove pylint disable when fixed.
         #if exception_detected:
         #    self.log.info(
         #        "Check pool data still exists after a failed pool destroy")
@@ -342,7 +344,7 @@ class DestroyTests(TestWithServers):
 
         # Connect to the pool
         self.assertTrue(
-            self.pool.connect(1), "Pool connect failed before destroy")
+            self.pool.connect(), "Pool connect failed before destroy")
 
         # Destroy pool with direct API call (no disconnect)
         self.log.info("Attempting to destroy a connected pool")
@@ -393,7 +395,7 @@ class DestroyTests(TestWithServers):
 
         # Connect to the pool
         self.assertTrue(
-            self.pool.connect(1), "Pool connect failed before destroy")
+            self.pool.connect(), "Pool connect failed before destroy")
 
         # Create a container
         self.container = TestContainer(self.pool)

@@ -35,6 +35,7 @@ from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 import write_host_file
 
+
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -83,7 +84,7 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(self.context)
+        self.pool = TestPool(self.context, dmg=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
@@ -93,9 +94,9 @@ class IorTestBase(TestWithServers):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
-        # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        # # Get Container params
+        # self.container = TestContainer(self.pool)
+        # self.container.get_params(self)
 
         # create container
         # self.container.create()
@@ -167,8 +168,7 @@ class IorTestBase(TestWithServers):
         return out
 
     def update_ior_cmd_with_pool(self):
-        """Update ior_cmd with pool
-        """
+        """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
@@ -250,7 +250,7 @@ class IorTestBase(TestWithServers):
         job2.join()
 
     def get_new_job(self, clients, job_num, results, intercept=None):
-        """Create a new thread for ior run
+        """Create a new thread for ior run.
 
         Args:
             clients (lst): Number of clients the ior would run against.
@@ -266,7 +266,7 @@ class IorTestBase(TestWithServers):
 
     def run_multiple_ior(self, hostfile, num_clients,
                          results, job_num, intercept=None):
-        #pylint: disable=too-many-arguments
+        # pylint: disable=too-many-arguments
         """Run the IOR command.
 
         Args:

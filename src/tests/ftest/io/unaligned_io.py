@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2018-2020 Intel Corporation.
+"""
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,28 +20,30 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from pool_test_base import PoolTestBase
+"""
+from daos_io_conf import IoConfTestBase
 
 
-class BadCreateTest(PoolTestBase):
-    # pylint: disable=too-many-ancestors
-    """Test pool create calls.
-
-    Test Class Description:
-        Tests pool create API by passing NULL and otherwise inappropriate
-        parameters.  This can't be done with daosctl, need to use the python
-        API.
+class DaosRunIoConf(IoConfTestBase):
+    """Test daos_run_io_conf.
 
     :avocado: recursive
     """
-
-    def test_create(self):
-        """Test ID: DAOS-???.
+    # pylint: disable=too-many-ancestors
+    def test_unaligned_io(self):
+        """Jira ID: DAOS-3151.
 
         Test Description:
-            Pass bad parameters to pool create.
+            Create the records with requested sizes in yaml.daos_run_io_conf
+            will write the full data set. Modify single byte in random offset
+            with different value. later verify the full data set where single
+            byte will have only updated value, rest all data is intact with
+            original value.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        Use Cases:
+            Write data set, modified 1bytes in different offsets. Verify
+            read through
+
+        :avocado: tags=all,small,hw,unaligned_io,full_regression
         """
-        self.run_pool_create_test()
+        self.unaligned_io()
