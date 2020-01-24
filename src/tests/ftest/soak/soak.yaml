@@ -20,12 +20,10 @@ srun_params:
 timeout: 8000
 logdir: /tmp/soak
 server_config:
-#    access_points: ['wolf-118:10001']
     name: daos_server
     provider: ofi+sockets
     control_log_mask: INFO
     control_log_file: /tmp/daos_control0.log
-#    socket_dir: /var/run/daos_server0
     servers:
         log_mask: ERR
         fabric_iface: ib0
@@ -60,11 +58,10 @@ container_reserved:
     akey_size: 5
     dkey_size: 5
     data_size: 4096
-    object_qty: 10
-    record_qty: 5
+    object_qty: 20
+    record_qty: 1
     record_size: 100
-    array_size: 10
-    object_class: "OC_SX"
+    array_size: 1
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -94,7 +91,7 @@ smoke:
       - ior_smoke
       - fio_smoke
 # SOAK stress test params
-# Test will run for 60 minutes
+# Test will run for 120 minutes
 soak_stress:
     name: soak_stress
     test_timeout: 7200
@@ -153,8 +150,10 @@ ior_smoke:
     daos_oclass:
         - 'SX'
 fio_smoke:
+  names:
+    - global
+    - test
   global:
-    name: 'global'
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
     thread: 1
@@ -162,18 +161,16 @@ fio_smoke:
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blksz:
-        - '256B'
-        - '1M'
-    sz:
-        - '1M'
-        - '1G'
-    readwrite:
-        - 'rw'
-        - 'randrw'
   test:
-    name: 'test'
     numjobs: 1
+  soak:
+    blocksize:
+      - '1M'
+    size:
+      - '1G'
+    rw:
+      - 'rw'
+      - 'randrw'
 ior_stress:
     api:
         - DAOS
@@ -197,27 +194,29 @@ ior_stress:
         # - "RP_3GX"
         # - "RP_4GX"
 fio_stress:
+  names:
+    - global
+    - test
   global:
-    name: 'global'
     directory: "/tmp/daos_dfuse"
     ioengine: 'libaio'
-    thread: 16
+    thread: 1
     group_reporting: 1
     direct: 1
     verify: 'crc64'
     iodepth: 16
-    blksz:
-        - '256B'
-        - '1M'
-    sz:
-        - '1M'
-        - '1G'
-    readwrite:
-        - 'rw'
-        - 'randrw'
   test:
-    name: 'test'
     numjobs: 5
+  soak:
+    blocksize:
+      - '256B'
+      - '1M'
+    size:
+      - '500M'
+      - '1G'
+    rw:
+      - 'rw'
+      - 'randrw'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 rebuild:

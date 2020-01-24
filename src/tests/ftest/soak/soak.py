@@ -26,7 +26,7 @@ import os
 import time
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from fio_utils import Fio
+from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from command_utils import Srun
 from general_utils import get_random_string
@@ -418,7 +418,7 @@ class Soak(TestWithServers):
         params["export"] = "all"
         params["ntasks-per-node"] = 1
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), cmd, params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Dfuse mountpoint {} not created>>".format(
@@ -426,7 +426,7 @@ class Soak(TestWithServers):
 
         cmd = self.dfuse.__str__()
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), cmd, self.srun_params)
+            NodeSet.fromlist(self.hostlist_clients), cmd, params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Dfuse failed to start>>")
@@ -446,42 +446,41 @@ class Soak(TestWithServers):
         """
         commands = []
 
-        fio_namespace = "/run/" + job_spec
+        fio_namespace = "/run/{}".format(job_spec)
         # test params
-        bs_list = self.params.get("blksz", fio_namespace + "/global/*")
-        size_list = self.params.get("sz", fio_namespace + "/global/*")
-        rw_list = self.params.get("readwrite", fio_namespace + "/global/*")
-
-        params_all = [item for item in self.params.iteritems()]
-        namespace = list(
-            set([item[0] for item in params_all if item[0].startswith(
-                fio_namespace)]))
-        namespace.insert(0, namespace.pop(namespace.index(
-            fio_namespace + '/global')))
+        bs_list = self.params.get("blocksize", fio_namespace + "/soak/*")
+        size_list = self.params.get("size", fio_namespace + "/soak/*")
+        rw_list = self.params.get("rw", fio_namespace + "/soak/*")
+        # Get the parameters for Fio
+        fio_cmd = FioCommand()
+        fio_cmd.namespace = "{}/*".format(fio_namespace)
+        fio_cmd.get_params(self)
         for blocksize in bs_list:
             for size in size_list:
                 for rw in rw_list:
-                    # Get the parameters for Fio
-                    fio_cmd = Fio(namespace, self)
-                    fio_cmd.get_params(self)
                     # update fio params
-                    fio_cmd.blocksize.update(blocksize)
-                    fio_cmd.size.update(size)
-                    fio_cmd.rw.update(rw)
+                    fio_cmd.update(
+                        "global", "blocksize", blocksize,
+                        "fio --name=global --blocksize")
+                    fio_cmd.update(
+                        "global", "size", size,
+                        "fio --name=global --size")
+                    fio_cmd.update(
+                        "global", "rw", rw,
+                        "fio --name=global --rw")
                     # start dfuse if api is POSIX
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
                         self.start_dfuse(pool)
-                        fio_cmd.directory.update(
-                            self.dfuse.mount_dir.value)
+                        fio_cmd.update(
+                            "global", "directory",
+                            self.dfuse.mount_dir.value,
+                            "fio --name=global --directory")
                     # fio command
-                    cmd = "fio" + fio_cmd.run_cmd.replace(
-                        "fio", ' ').replace(" POSIX", '')
-                    commands.append(cmd)
+                    commands.append(fio_cmd.__str__())
                     self.log.info(
                         "<<FIO cmdline>>: %s \n", commands[-1])
-                    fio_cmd = None
         return commands
 
     def build_job_script(self, commands, job, ppn, nodesperjob):
@@ -618,7 +617,7 @@ class Soak(TestWithServers):
             "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
 
         # If there is nothing to do; exit
-        if len(job_id_list) > 0:
+        if job_id_list:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
                 # self.log.info(
@@ -633,7 +632,7 @@ class Soak(TestWithServers):
                 else:
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
-            if len(job_id_list) > 0:
+            if job_id_list:
                 self.log.info(
                     "<<Cancel jobs in queue with id's %s >>", job_id_list)
                 for job in job_id_list:
@@ -705,7 +704,7 @@ class Soak(TestWithServers):
         self.failed_job_id_list = self.job_completion(job_id_list)
 
         # Test fails on first error but could use continue on error here
-        if len(self.failed_job_id_list) > 0:
+        if self.failed_job_id_list:
             raise SoakTestError(
                 "<<FAILED: The following jobs failed {} >>".format(
                     " ,".join(
@@ -749,7 +748,6 @@ class Soak(TestWithServers):
             self.srun_params = {"partition": self.partition_clients}
         if slurm_reservation is not None:
             self.srun_params["reservation"] = slurm_reservation
-
         # Initialize time
         start_time = time.time()
         end_time = start_time + self.test_timeout
@@ -788,7 +786,6 @@ class Soak(TestWithServers):
             start_loop_time = time.time()
             self.log.info("<<Soak1 PASS %s: time until done %s>>", self.loop, (
                 end_time - time.time()))
-
             # Create all specified pools
             self.add_pools(pool_list)
             self.log.info(
@@ -862,7 +859,7 @@ class Soak(TestWithServers):
             self.exclude_slurm_nodes.append(test_node[0])
             self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        if len(self.hostlist_clients) < 1:
+        if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
         self.node_list = self.hostlist_clients + test_node
@@ -875,7 +872,7 @@ class Soak(TestWithServers):
         self.log.info("<<tearDown Started>> at %s", time.ctime())
         # clear out any jobs in squeue;
         errors_detected = False
-        if len(self.failed_job_id_list) > 0:
+        if self.failed_job_id_list:
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)

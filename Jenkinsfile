@@ -396,6 +396,7 @@ pipeline {
                                                  build/src/common/tests/sched,
                                                  build/src/common/tests/drpc_tests,
                                                  build/src/common/tests/acl_api_tests,
+                                                 build/src/common/tests/acl_valid_tests,
                                                  build/src/common/tests/acl_util_tests,
                                                  build/src/common/tests/acl_principal_tests,
                                                  build/src/common/tests/acl_real_tests,

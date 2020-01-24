@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,3 +115,27 @@ mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
 
 	drpc__response__free_unpacked(resp, NULL);
 }
+
+void
+fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces)
+{
+	int i;
+
+	for (i = 0; i < num_aces; i++) {
+		char name[256];
+
+		snprintf(name, sizeof(name), "user%d@", i + 1);
+		ace[i] = daos_ace_create(DAOS_ACL_USER, name);
+	}
+}
+
+void
+free_all_aces(struct daos_ace *ace[], size_t num_aces)
+{
+	int i;
+
+	for (i = 0; i < num_aces; i++) {
+		daos_ace_free(ace[i]);
+	}
+}
+
