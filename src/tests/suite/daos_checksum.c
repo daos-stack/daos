@@ -297,7 +297,7 @@ test_server_data_corruption(void **state)
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
-	
+
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
 	/** Set the Server data corruption flag */
@@ -309,7 +309,7 @@ test_server_data_corruption(void **state)
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			&ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
-	
+
 	/** Clear the fail injection flag */
 	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_int_equal(rc, 0);
