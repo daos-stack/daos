@@ -1793,7 +1793,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_KillRanks(t *testing.T) {
+func TestMgmtSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
 		missingSB        bool
@@ -1909,7 +1909,7 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			gotResp, gotErr := svc.KillRanks(context.TODO(), tc.req)
+			gotResp, gotErr := svc.StopRanks(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

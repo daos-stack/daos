@@ -96,8 +96,8 @@ service MgmtSvc {
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
-	// Kill DAOS IO servers on a host. (gRPC fanout)
-	rpc KillRanks(RanksReq) returns (RanksResp) {}
+	// Stop DAOS IO servers on a host. (gRPC fanout)
+	rpc StopRanks(RanksReq) returns (RanksResp) {}
 	// Ping DAOS IO servers on a host. (gRPC fanout)
 	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
