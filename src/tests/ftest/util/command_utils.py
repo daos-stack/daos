@@ -356,32 +356,23 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Use a list to send signals to the process with one second delays:
-            #   Interupt + wait 3 seconds
-            #   Terminate + wait 2 seconds
-            #   Quit + wait 1 second
-            #   Kill
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
-
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
 
-            # Keep sending signals and or waiting while the process is alive
-            while self._process.poll() is None and signal_list:
-                signal_type = signal_list.pop(0)
-                if signal_type is not None:
-                    self._process.send_signal(signal_type)
-                if signal_list:
-                    time.sleep(1)
-            if not signal_list:
+            # Start with SIGTERM and then send SIGKILL if the process isn't
+            # cooperating. Will be easier once we move to python 3 since wait()
+            # takes a timeout
+            self._process.terminate()
+
+            nr = 0
+            while self._process.poll() is None and nr < 20:
+                time.sleep(0.2)
+                nr += 1
+
+            if nr == 20:
+                self._process.kill()
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
-            self._process = None
-
 
 class DaosCommand(ExecutableCommand):
     """A class for similar daos command line tools."""
