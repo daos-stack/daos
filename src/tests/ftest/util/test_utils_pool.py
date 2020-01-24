@@ -166,17 +166,17 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value)
 
         # Set the TestPool attributes for the created pool
-        self.uuid = self.pool.get_uuid_str()
         self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
+        self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
-    def connect(self, permission=1):
+    def connect(self, permission=2):
         """Connect to the pool.
 
         Args:
-            permission (int, optional): connect permission. Defaults to 1.
+            permission (int, optional): connect permission. Defaults to 2.
 
         Returns:
             bool: True if the pool has been connected; False if the pool was
@@ -184,7 +184,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and not self.connected:
-            kwargs = {"flags": 1 << permission}
+            kwargs = {"flags": permission}
             self.log.info(
                 "Connecting to pool %s with permission %s (flag: %s)",
                 self.uuid, permission, kwargs["flags"])

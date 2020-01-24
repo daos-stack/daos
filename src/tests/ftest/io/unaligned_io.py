@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,32 +21,29 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from avocado.utils import process
-
-from apricot import TestWithServers
-from dmg_utils import DmgCommand
+from daos_io_conf import IoConfTestBase
 
 
-class ControlTestBase(TestWithServers):
-    # pylint: disable=too-few-public-methods
-    """Defines common methods for control tests.
+class DaosRunIoConf(IoConfTestBase):
+    """Test daos_run_io_conf.
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
+    def test_unaligned_io(self):
+        """Jira ID: DAOS-3151.
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a ControlTestBase object."""
-        super(ControlTestBase, self).__init__(*args, **kwargs)
-        self.setup_start_agents = False
+        Test Description:
+            Create the records with requested sizes in yaml.daos_run_io_conf
+            will write the full data set. Modify single byte in random offset
+            with different value. later verify the full data set where single
+            byte will have only updated value, rest all data is intact with
+            original value.
 
-    def run_dmg_command(self):
-        """Run the dmg command."""
-        # Create dmg command
-        dmg = DmgCommand(self.bin)
-        dmg.get_params(self)
-        dmg.set_hostlist(self.server_managers[0])
+        Use Cases:
+            Write data set, modified 1bytes in different offsets. Verify
+            read through
 
-        try:
-            dmg.run()
-        except process.CmdError as details:
-            self.fail("dmg command failed: {}".format(details))
+        :avocado: tags=all,small,hw,unaligned_io,full_regression
+        """
+        self.unaligned_io()

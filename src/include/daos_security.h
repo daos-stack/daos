@@ -60,7 +60,7 @@ extern "C" {
 /**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
-#define DAOS_ACL_MAX_ACE_LEN		(8192)
+#define DAOS_ACL_MAX_ACE_LEN		(65536)
 
 /**
  * Maximum length of an ACE provided in string format:

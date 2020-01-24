@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ class EvictTests(TestWithServers):
     """
 
     def connected_pool(self, hostlist, targets=None):
+        # pylint: disable=unused-argument
         """Connect to pool.
 
         Args:
@@ -49,19 +50,20 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
         pool.get_params(self)
         if targets is not None:
             pool.target_list.value = targets
         # create pool
         pool.create()
-        # Commented out due to DAOS-3836.
-        ## Check that the pool was created
-        #status = pool.check_files(hostlist)
-        #if not status:
+        # Commented out due to DAOS-3836. Remove the pylint disable at the top
+        # of this method when the following lines are uncommented.
+        # # Check that the pool was created
+        # status = pool.check_files(hostlist)
+        # if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
         # Connect to the pool
-        status = pool.connect(1)
+        status = pool.connect()
         if not status:
             self.fail("Pool connect failed or already connected")
         # Return connected pool
@@ -155,7 +157,7 @@ class EvictTests(TestWithServers):
             self.log.error(
                 "Pool handle was removed when doing an evict with bad param")
         # Commented out due to DAOS-3836.
-        #if self.pool.check_files(self.hostlist_servers):
+        # if self.pool.check_files(self.hostlist_servers):
         #    self.log.error("Valid pool files were not detected on server after"
         #                   " a pool evict with %s failed to raise an "
         #                   "exception", test_param)
@@ -190,7 +192,10 @@ class EvictTests(TestWithServers):
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))
             # Commented out due to DAOS-3836.
-            #if len(non_pool_servers[count]) > 0:
+            if non_pool_servers[count]:
+                self.log.info(
+                    "Skipping calling self.pool.check_files(%s) due to "
+                    "DAOS-3836", non_pool_servers)
             #    self.assertFalse(
             #        pool[count].check_files(non_pool_servers[count]),
             #        "Pool # {} data detected on non pool servers {} ".format(
@@ -217,12 +222,12 @@ class EvictTests(TestWithServers):
 
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.
-            ## Check that all pool files still exist
-            #if pool[count].check_files(pool_servers[count]):
+            # # Check that all pool files still exist
+            # if pool[count].check_files(pool_servers[count]):
             #    self.log.info(
             #        "Pool # %s with UUID %s still exists",
             #        count+1, pool[count].uuid)
-            #else:
+            # else:
             #    self.fail(
             #        "Pool # {} with UUID {} does not exists".format(
             #            count+1, pool[count].uuid))

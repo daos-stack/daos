@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,22 +32,22 @@ var (
 		code.ScmUnknown, "unknown scm error", "",
 	)
 	FaultDiscoveryFailed = scmFault(
-		code.ScmUnknown, "module discovery failed", "",
+		code.ScmDiscoveryFailed, "module discovery failed", "",
 	)
 	FaultFormatInvalidSize = scmFault(
-		code.ScmFormatBadParam, "format request must specify a size greater than 0", "",
+		code.ScmFormatInvalidSize, "format request must specify a size greater than 0", "",
 	)
 	FaultFormatInvalidDeviceCount = scmFault(
-		code.ScmFormatBadParam, "format request must have exactly 1 dcpm device", "",
+		code.ScmFormatInvalidDeviceCount, "format request must have exactly 1 dcpm device", "",
 	)
 	FaultFormatMissingMountpoint = scmFault(
-		code.ScmFormatBadParam, "format request must specify mountpoint", "",
+		code.ScmFormatMissingMountpoint, "format request must specify mountpoint", "",
 	)
 	FaultFormatMissingParam = scmFault(
-		code.ScmFormatBadParam, "format request must have ramdisk or dcpm parameter", "",
+		code.ScmFormatMissingParam, "format request must have ramdisk or dcpm parameter", "",
 	)
 	FaultFormatConflictingParam = scmFault(
-		code.ScmFormatBadParam,
+		code.ScmFormatConflictingParam,
 		"format request must not have both ramdisk and dcpm parameters", "",
 	)
 	FaultFormatNoReformat = scmFault(
@@ -61,12 +61,12 @@ var (
 		"unmount the device and retry the operation",
 	)
 	FaultTargetAlreadyMounted = scmFault(
-		code.StorageDeviceAlreadyMounted,
+		code.StorageTargetAlreadyMounted,
 		"request included already-mounted mount target (cannot double-mount)",
 		"unmount the target and retry the operation",
 	)
 	FaultFormatMissingDevice = scmFault(
-		code.ScmFormatBadParam,
+		code.ScmFormatMissingDevice,
 		"configured SCM device does not exist",
 		"check the configured value and/or perform the SCM preparation procedure",
 	)

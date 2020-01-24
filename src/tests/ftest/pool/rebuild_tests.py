@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -45,7 +45,8 @@ class RebuildTests(TestWithServers):
         pools = []
         containers = []
         for index in range(pool_quantity):
-            pools.append(TestPool(self.context, self.log))
+            pools.append(
+                TestPool(self.context, dmg=self.server_managers[0].dmg))
             pools[index].get_params(self)
             containers.append(TestContainer(pools[index]))
             containers[index].get_params(self)

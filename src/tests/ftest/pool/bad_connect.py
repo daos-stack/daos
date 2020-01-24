@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,8 +25,10 @@ from __future__ import print_function
 
 import traceback
 import ctypes
-from pydaos.raw import DaosPool, DaosApiError, RankList
+from pydaos.raw import RankList
+from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
+from test_utils_pool import TestPool
 
 
 class BadConnectTest(TestWithServers):
@@ -38,32 +40,12 @@ class BadConnectTest(TestWithServers):
     :avocado: recursive
     """
 
-    # start servers, establish file locations, etc.
-    def setUp(self):
-        """Set up each test case."""
-        super(BadConnectTest, self).setUp()
-
-        # NULL is causing connect to blow up so skip that test for now
-        uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
-        connectuuid = uuidlist[0]
-        if connectuuid == 'NULLPTR':
-            self.cancel("skipping null pointer test until DAOS-1781 is fixed")
-
     @skipForTicket("DAOS-3819")
     def test_connect(self):
         """Pass bad parameters to pool connect.
 
         :avocado: tags=all,pool,full_regression,tiny,badconnect
         """
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/connecttests/createmode/')
-        createuid = self.params.get("uid", '/run/connecttests/uids/createuid/')
-        creategid = self.params.get("gid", '/run/connecttests/gids/creategid/')
-        createsetid = self.params.get("setname",
-                                      '/run/connecttests/setnames/createset/')
-        createsize = self.params.get("size",
-                                     '/run/connecttests/psize/createsize/')
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -84,6 +66,8 @@ class BadConnectTest(TestWithServers):
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
         connectuuid = uuidlist[0]
+        if connectuuid == 'NULLPTR':
+            self.cancel("skipping null pointer test until DAOS-1781 is fixed")
         expected_for_param.append(uuidlist[1])
 
         # if any parameter is FAIL then the test should FAIL, in this test
@@ -97,40 +81,40 @@ class BadConnectTest(TestWithServers):
         puuid = (ctypes.c_ubyte * 16)()
         psvc = RankList()
         pgroup = ctypes.create_string_buffer(0)
-        pool = None
+        # initialize a python pool object then create the underlying
+        # daos storage
+        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
+        self.pool.get_params(self)
+        self.pool.create()
+
+        # save this uuid since we might trash it as part of the test
+        ctypes.memmove(puuid, self.pool.pool.uuid, 16)
+
+        # trash the the pool service rank list
+        psvc.rl_ranks = self.pool.pool.svc.rl_ranks
+        psvc.rl_nr = self.pool.pool.svc.rl_nr
+        if not svc == 'VALID':
+            rl_ranks = ctypes.POINTER(ctypes.c_uint)()
+            self.pool.pool.svc = RankList(rl_ranks, 1)
+
+        # trash the pool group value
+        pgroup = self.pool.pool.group
+        if connectset == 'NULLPTR':
+            self.pool.pool.group = None
+
+        # trash the UUID value in various ways
+        if connectuuid == 'NULLPTR':
+            self.pool.pool.uuid = None
+        if connectuuid == 'JUNK':
+            self.pool.pool.uuid[4] = 244
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            # save this uuid since we might trash it as part of the test
-            ctypes.memmove(puuid, pool.uuid, 16)
-
-            # trash the the pool service rank list
-            psvc.rl_ranks = pool.svc.rl_ranks
-            psvc.rl_nr = pool.svc.rl_nr
-            if not svc == 'VALID':
-                rl_ranks = ctypes.POINTER(ctypes.c_uint)()
-                pool.svc = RankList(rl_ranks, 1)
-
-            # trash the pool group value
-            pgroup = pool.group
-            if connectset == 'NULLPTR':
-                pool.group = None
-
-            # trash the UUID value in various ways
-            if connectuuid == 'NULLPTR':
-                pool.uuid = None
-            if connectuuid == 'JUNK':
-                pool.uuid[4] = 244
-
-            pool.connect(connectmode)
+            self.pool.connect(connectmode)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except DaosApiError as excep:
+        except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
             if expected_result in ['PASS']:
@@ -138,13 +122,11 @@ class BadConnectTest(TestWithServers):
 
         # cleanup the pool
         finally:
-            if pool is not None and pool.attached == 1:
+            if self.pool is not None and self.pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                pool.svc.rl_ranks = psvc.rl_ranks
-                pool.svc.rl_nr = psvc.rl_nr
-                pool.group = pgroup
-                ctypes.memmove(pool.uuid, puuid, 16)
+                self.pool.pool.svc.rl_ranks = psvc.rl_ranks
+                self.pool.pool.svc.rl_nr = psvc.rl_nr
+                self.pool.pool.group = pgroup
+                ctypes.memmove(self.pool.pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
-                    pool.get_uuid_str()))
-                pool.disconnect()
-                pool.destroy(1)
+                    self.pool.pool.get_uuid_str()))
