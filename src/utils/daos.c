@@ -289,6 +289,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 
 	if (!strcmp(name, "label")) {
 		size_t len = strnlen(value, DAOS_PROP_LABEL_MAX_LEN);
+
 		if (len == DAOS_PROP_LABEL_MAX_LEN) {
 			fprintf(stderr, "label string exceed %u bytes\n",
 				DAOS_PROP_LABEL_MAX_LEN);
@@ -381,7 +382,7 @@ daos_parse_properties(char *props_string, daos_prop_t *props)
 	while (len > 0) {
 		colon = strchr(cur, ':');
 		if (colon == NULL) {
-			fprintf( stderr, "wrong format for properties\n");
+			fprintf(stderr, "wrong format for properties\n");
 			rc = -DER_INVAL;
 			break;
 		}

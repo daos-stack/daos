@@ -436,11 +436,12 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
-			if (attrp->da_props)
-				prop = daos_prop_alloc(attrp->da_props->dpp_nr + 1);
-			else
-				prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err, rc = -DER_NOMEM);
@@ -455,7 +456,8 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 			}
 			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
@@ -625,11 +627,12 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
 			if (attrp->da_props != NULL)
-				prop = daos_prop_alloc(attrp->da_props->dpp_nr + 1);
-			else
-				prop = daos_prop_alloc(1);
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err_link, rc = -DER_NOMEM);
@@ -644,7 +647,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			}
 			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
