@@ -468,7 +468,7 @@ class Snapshot(TestWithServers):
                           "still available", num_transactions)
 
         #(5)Verify the snapshots data
-        for ind, item in enumerate(test_data):
+        for ind, _ in enumerate(test_data):
             ss_number = ind + 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
                           , ss_number, ss_number)
