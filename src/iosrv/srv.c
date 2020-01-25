@@ -691,7 +691,6 @@ dss_xstreams_fini(bool force)
 {
 	struct dss_xstream	*dx;
 	int			 i;
-	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
 
