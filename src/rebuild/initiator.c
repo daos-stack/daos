@@ -875,7 +875,8 @@ rebuild_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 static int
 rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 {
-	return dss_task_collective(rebuild_obj_punch_one, arg, 0);
+	return dss_task_collective(rebuild_obj_punch_one, arg, 0,
+				   DSS_ULT_REBUILD);
 }
 
 /**
