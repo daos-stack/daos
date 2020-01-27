@@ -94,7 +94,7 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self, co_prop=None):
+    def create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # Enable container using TestContainer object,
         # Get Container params
