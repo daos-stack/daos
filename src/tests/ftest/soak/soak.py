@@ -697,7 +697,7 @@ class Soak(TestWithServers):
             if not self.harasser_completion(self.harasser_timeout):
                 raise SoakTestError("<<FAILED: Harassers failed ")
             # rebuild can only run once for now
-            if "rebuild" in self.h_list:
+            if self.is_harasser("rebuild"):
                 self.h_list.remove("rebuild")
 
         # Wait for jobs to finish and cancel/kill jobs if necessary
@@ -733,7 +733,7 @@ class Soak(TestWithServers):
         pool_list = self.params.get("poollist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
 
-        if self.h_list is not None and "rebuild" in self.h_list:
+        if self.is_harasser("rebuild"):
             obj_class = "_".join(["OC", str(
                 self.params.get("daos_oclass", "/run/rebuild/*")[0])])
         else:
