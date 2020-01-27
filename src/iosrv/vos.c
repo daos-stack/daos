@@ -414,9 +414,9 @@ enum {
 
 /* Parse recxs in <*data, len> and append them to iod and sgl. */
 static int
-unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
-	     daos_key_t *akey, daos_key_desc_t *kds, void **data,
-	     daos_size_t len, uint32_t *version)
+unpack_recxs(daos_iod_t *iod, int *recxs_cap, daos_epoch_t *eph,
+	     d_sg_list_t *sgl, daos_key_t *akey, daos_key_desc_t *kds,
+	     void **data, daos_size_t len, uint32_t *version)
 {
 	int rc = 0;
 	int type;
@@ -473,11 +473,6 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 					cap);
 			if (rc != 0)
 				break;
-			rc = grow_array((void **)&iod->iod_eprs,
-					sizeof(*iod->iod_eprs), *recxs_cap,
-					cap);
-			if (rc != 0)
-				break;
 			if (sgl != NULL) {
 				rc = grow_array((void **)&sgl->sg_iovs,
 						sizeof(*sgl->sg_iovs),
@@ -494,12 +489,12 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 			*recxs_cap = cap;
 		}
 
-		/* Append one more recx. */
-		iod->iod_eprs[iod->iod_nr] = rec->rec_epr;
-		/* Iteration does not fill the high epoch, so let's reset
-		 * the high epoch with EPOCH_MAX to make vos fetch/update happy.
+		/* Get the max epoch for the current iod, might be used by
+		 * punch rebuild, see rebuild_punch_one()
 		 */
-		iod->iod_eprs[iod->iod_nr].epr_hi = DAOS_EPOCH_MAX;
+		if (*eph < rec->rec_epr.epr_lo)
+			*eph = rec->rec_epr.epr_lo;
+
 		iod->iod_recxs[iod->iod_nr] = rec->rec_recx;
 		iod->iod_nr++;
 		iod->iod_size = rec->rec_size;
@@ -526,11 +521,10 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 
 		D_DEBUG(DB_IO,
 			"unpacked data %p len "DF_U64" idx/nr "DF_U64"/"DF_U64
-			" ver %u epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
+			" ver %u eph "DF_U64" size %zd\n",
 			rec, len_bak, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 			iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
-			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
-			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size);
+			*eph, iod->iod_size);
 	}
 
 	D_DEBUG(DB_IO, "unpacked nr %d version/type /%u/%d rc "DF_RC"\n",
@@ -546,14 +540,16 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
  * \param[in]		iods		daos_iod_t array
  * \param[in]		recxs_caps	recxs capacity array
  * \param[in]		sgls		optional sgl array for inline recxs
- * \param[in]		ephs		akey punched ephs
+ * \param[in]		akey_ephs	akey punched ephs
+ * \param[in]		rec_ephs	record punched ephs
  * \param[in]		iods_cap	maximal number of elements in \a iods,
  *					\a recxs_caps, \a sgls, and \a ephs
  */
 static void
 dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 			int *recxs_caps, d_sg_list_t *sgls,
-			daos_epoch_t *ephs, int iods_cap)
+			daos_epoch_t *akey_ephs, daos_epoch_t *rec_ephs,
+			int iods_cap)
 {
 	memset(io, 0, sizeof(*io));
 
@@ -574,9 +570,14 @@ dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
 		io->ui_sgls = sgls;
 	}
 
-	if (ephs != NULL) {
-		memset(ephs, 0, sizeof(*ephs) * iods_cap);
-		io->ui_akey_punch_ephs = ephs;
+	if (akey_ephs != NULL) {
+		memset(akey_ephs, 0, sizeof(*akey_ephs) * iods_cap);
+		io->ui_akey_punch_ephs = akey_ephs;
+	}
+
+	if (rec_ephs != NULL) {
+		memset(rec_ephs, 0, sizeof(*rec_ephs) * iods_cap);
+		io->ui_rec_punch_ephs = rec_ephs;
 	}
 }
 
@@ -586,8 +587,6 @@ clear_iod(daos_iod_t *iod, d_sg_list_t *sgl, int *recxs_cap)
 	daos_iov_free(&iod->iod_name);
 	if (iod->iod_recxs != NULL)
 		D_FREE(iod->iod_recxs);
-	if (iod->iod_eprs != NULL)
-		D_FREE(iod->iod_eprs);
 	memset(iod, 0, sizeof(*iod));
 
 	if (sgl != NULL) {
@@ -619,6 +618,9 @@ dss_enum_unpack_io_clear(struct dss_enum_unpack_io *io)
 
 	if (io->ui_akey_punch_ephs)
 		memset(io->ui_akey_punch_ephs, 0,
+		       sizeof(daos_epoch_t) * io->ui_iods_cap);
+	if (io->ui_rec_punch_ephs)
+		memset(io->ui_rec_punch_ephs, 0,
 		       sizeof(daos_epoch_t) * io->ui_iods_cap);
 	io->ui_dkey_punch_eph = 0;
 	io->ui_iods_top = -1;
@@ -831,6 +833,7 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 		len = data + kds->kd_key_len - ptr;
 		rc = unpack_recxs(&io->ui_iods[j],
 				  &io->ui_recxs_caps[j],
+				  &io->ui_rec_punch_ephs[j],
 				  io->ui_sgls == NULL ?
 				  NULL : &io->ui_sgls[j], &iod_akey,
 				  kds, &ptr, len,
@@ -916,6 +919,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 	int				recxs_caps[DSS_ENUM_UNPACK_MAX_IODS];
 	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_epoch_t			ephs[DSS_ENUM_UNPACK_MAX_IODS];
+	daos_epoch_t			rec_ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	void				*ptr;
 	unsigned int			i;
 	int				rc = 0;
@@ -936,7 +940,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 	}
 
 	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls, ephs,
-				DSS_ENUM_UNPACK_MAX_IODS);
+				rec_ephs, DSS_ENUM_UNPACK_MAX_IODS);
 	if (type != OBJ_ITER_OBJ)
 		io.ui_oid = arg->oid;
 
