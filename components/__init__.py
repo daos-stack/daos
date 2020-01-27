@@ -21,12 +21,14 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import sys
 import os
 import platform
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
 
+SCONS_EXE = sys.argv[0]
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
@@ -285,7 +287,7 @@ def define_components(reqs):
                                  True)
     reqs.define('cart',
                 retriever=retriever,
-                commands=["scons --config=force $JOBS_OPT "
+                commands=[SCONS_EXE + " --config=force $JOBS_OPT "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
                           "PREFIX=$CART_PREFIX "
                           "MPI_PKG=$MPI_PKG "
