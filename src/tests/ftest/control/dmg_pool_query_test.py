@@ -33,7 +33,7 @@ class DmgPoolQueryTest(IorTestBase):
     Simple test to verify the pool query command of dmg tool.
     :avocado: recursive
     """
-
+    # pylint: disable=too-many-ancestors
     def setUp(self):
         "Set up for dmg pool query."
         super(DmgPoolQueryTest, self).setUp()
@@ -48,24 +48,6 @@ class DmgPoolQueryTest(IorTestBase):
         self.host_p = ["{}:{}".format(host, self.port)
                        for host in self.hostlist_servers]
 
-    def parse_space_value(self, space_str):
-        """ Parse a string and return the value and unit individually.
-
-        Args:
-            space_str (str): string representing space information. i.e. 3GB
-
-        Returns:
-            value, unit (int, str): returns to the user the values parsed.
-
-        """
-        value, unit = ""
-        for i in space_str:
-            if i.isdigit():
-                value += i
-            elif i.isalpha():
-                unit += i
-        return int(value), unit
-
     def test_pool_query_basic(self):
         """
         JIRA ID: DAOS-2976
@@ -79,10 +61,10 @@ class DmgPoolQueryTest(IorTestBase):
 
         # Parse output
         d_info = get_pool_query_info(dmg_out.stdout)
-        self.log.info("dmg values found: {}".format(d_info))
+        self.log.info("dmg values found: %s", d_info)
 
         e_info = self.params.get("exp_vals", "/run/*")
-        self.log.info("Expected values are: {}".format(e_info))
+        self.log.info("Expected values are: %s", e_info)
 
         # Verify
         if d_info != e_info:
@@ -143,19 +125,38 @@ class DmgPoolQueryTest(IorTestBase):
 
         # Parse output of dmg command before running ior
         orig_pool_info = get_pool_query_info(out_before_ior.stdout)
-        self.log.info("dmg values found: {}".format(orig_pool_info))
+        self.log.info("dmg values found: %s", orig_pool_info)
 
         # Parse output of dmg command after running ior
         curr_pool_info = get_pool_query_info(out_after_ior.stdout)
-        self.log.info("dmg values found: {}".format(curr_pool_info))
+        self.log.info("dmg values found: %s", curr_pool_info)
 
         # Compare info
         for mem in ["s_free", "n_free"]:
-            orig_value, orig_unit = self.parse_space_value(orig_pool_info[mem])
-            curr_value, curr_unit = self.parse_space_value(curr_pool_info[mem])
+            orig_value, orig_unit = parse_space_value(orig_pool_info[mem])
+            curr_value, curr_unit = parse_space_value(curr_pool_info[mem])
             if orig_value <= curr_value:
                 self.fail("Free space should be less than: {}".format(
                     orig_value))
             elif orig_unit != curr_unit:
                 self.fail("Free space unit don't seem right: {}".format(
                     orig_unit))
+
+
+def parse_space_value(space_str):
+    """ Parse a string and return the value and unit individually.
+
+    Args:
+        space_str (str): string representing space information. i.e. 3GB
+
+    Returns:
+        value, unit (int, str): returns to the user the values parsed.
+
+    """
+    value, unit = ""
+    for i in space_str:
+        if i.isdigit():
+            value += i
+        elif i.isalpha():
+            unit += i
+    return int(value), unit
