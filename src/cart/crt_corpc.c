@@ -842,6 +842,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		crt_endpoint_t	 tgt_ep = {0};
 
 		tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
+		tgt_ep.ep_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 		tgt_ep.ep_grp = &co_info->co_grp_priv->gp_pub;
 
 		rc = crt_req_create_internal(rpc_priv->crp_pub.cr_ctx, &tgt_ep,
