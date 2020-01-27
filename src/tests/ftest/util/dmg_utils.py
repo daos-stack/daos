@@ -412,3 +412,42 @@ def get_pool_uuid_service_replicas_from_stdout(stdout_str):
         uuid = match.group(1)
         svc = match.group(2)
     return uuid, svc
+
+
+def get_pool_query_info(stdout_str):
+        """Method to get the pool information from pool query command.
+
+        Args:
+            stdout_str (str): Stdout string.
+
+        Returns:
+            d_info (dict): dictionary with pool query information obtained.
+
+        """
+        pool_info = {}
+        pool_info["ntarget"] = re.findall(
+            r"Target\(VOS\) count:(.+)", stdout_str)
+        s_mem, n_mem = re.findall(r"Total size: (.+)", stdout_str)
+        pool_info["s_mem"] = s_mem
+        pool_info["n_mem"] = n_mem
+
+        # Parse mem info
+        s_space, n_space = re.findall(
+            r"Free: (.+), min:(.+), max:(.+), mean:(.+)", stdout_str)
+        pool_info["s_free"] = s_space[0][0]
+        pool_info["s_free_min"] = s_space[0][1]
+        pool_info["s_free_max"] = s_space[0][2]
+        pool_info["s_free_mean"] = s_space[0][3]
+
+        pool_info["n_free"] = n_space[0][0]
+        pool_info["n_free_min"] = n_space[0][1]
+        pool_info["n_free_max"] = n_space[0][2]
+        pool_info["n_free_mean"] = n_space[0][3]
+
+        # Parse rebuild info
+        r_info = re.findall(r"Rebuild (.+), (.+) objs, (.+) recs", stdout_str)
+        pool_info["r_status"] = r_info[0][0]
+        pool_info["r_objs"] = r_info[0][1]
+        pool_info["r_recs"] = r_info[0][2]
+
+        return pool_info

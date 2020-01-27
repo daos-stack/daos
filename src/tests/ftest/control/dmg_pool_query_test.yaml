@@ -5,57 +5,74 @@ hosts:
     - server-A
   test_clients:
     - client-B
-
+timeout: 120
 server_config:
   name: daos_server
   servers:
+    targets: 8
     bdev_class: nvme
     bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 
+ior:
+  client_processes:
+    np: 1
+  ior_flags: "-w -W -k -G 1"
+  transfer_size: "500M"
+exp_vals:
+  ntarget: "8"
+  s_mem: "3GB"
+  n_mem: "2GB"
+  s_free: "3GB"
+  s_free_min: "358MB"
+  s_free_max: "358MB"
+  s_free_mean: "358MB"
+  n_free: "2GB"
+  n_free_min: "238MB"
+  n_free_max: "238MB"
+  n_free_mean: "238MB"
+  r_status: "idle"
+  r_objs: "0"
+  r_recs: "0"
+
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    group: daos_server
-  createsize:
-    scm_size: 1000000000
-    nvme_size: 2000000000
-  createsvc:
-    svcn: 1
+  control_method: dmg
+  mode: 146
+  scm_size: 3000000000
+  nvme_size: 2000000000
+  name: daos_server
 
 pool_uuids: !mux
   alpha_upper:
     uuid:
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
-      - 1 # FAIL
+      - "FAIL"
   alpha_lower:
     uuid:
       - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
-      - 1 # FAIL
+      - "FAIL"
   alphanumeric:
     uuid:
       - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
-      - 1 # FAIL
+      - "FAIL"
   numeric_01:
     uuid:
       - "111-222-333-444-555"
-      - 1 # FAIL
+      - "FAIL"
   numeric_02:
     uuid:
       - "0-0-0-0-0"
-      - 1 # FAIL
+      - "FAIL"
   random:
     uuid:
       - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
-      - 1 # FAIL
+      - "FAIL"
   special_chars:
     uuid:
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-      - 1 # FAIL
+      - "FAIL"
   special_aplanumeric_chars:
     uuid:
       - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
-      - 1 # FAIL
+      - "FAIL"

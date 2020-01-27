@@ -23,24 +23,48 @@
 """
 from __future__ import print_function
 
-import re
-
-from dmg_utils import pool_query
-from ior_utils import IorCommand
-from apricot import TestWithServers
-from test_utils import TestPool, check_pool_space
+from dmg_utils import pool_query, get_pool_query_info
+from ior_test_base import IorTestBase
+from test_utils_pool import TestPool
 
 
-class DmgPoolQueryTest(TestWithServers):
+class DmgPoolQueryTest(IorTestBase):
     """Test Class Description:
     Simple test to verify the pool query command of dmg tool.
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a DmgPoolQueryTest object."""
-        super(DmgPoolQueryTest, self).__init__(*args, **kwargs)
-        self.pool = None
+    def setUp(self):
+        "Set up for dmg pool query."
+        super(DmgPoolQueryTest, self).setUp()
+
+        # Init the pool
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+
+        # Get the host list with port to provide the dmg command
+        self.port = self.params.get("port", "/run/server_config/*")
+        self.host_p = ["{}:{}".format(host, self.port)
+                       for host in self.hostlist_servers]
+
+    def parse_space_value(self, space_str):
+        """ Parse a string and return the value and unit individually.
+
+        Args:
+            space_str (str): string representing space information. i.e. 3GB
+
+        Returns:
+            value, unit (int, str): returns to the user the values parsed.
+
+        """
+        value, unit = ""
+        for i in space_str:
+            if i.isdigit():
+                value += i
+            elif i.isalpha():
+                unit += i
+        return int(value), unit
 
     def test_pool_query_basic(self):
         """
@@ -50,40 +74,19 @@ class DmgPoolQueryTest(TestWithServers):
         pool query command.
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
         """
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect(1 << 1)
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        host_p = ["{}:{}".format(host, port) for host in self.hostlist_servers]
-
         self.log.info("Running dmg pool query")
-        dmg_out = pool_query(self.bin, host_p, self.pool.uuid)
+        dmg_out = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
 
         # Parse output
-        d_info = {}
-        d_info["dmg_t_cnt"] = re.findall(
-            r"Target\(VOS\) count:(.+)", dmg_out.stdout)
-        d_info["dmg_t_size"] = re.findall(r"Total size: (.+)", dmg_out.stdout)
-        d_info["dmg_mem_info"] = re.findall(
-            r"Free: (.+), min:(.+), max:(.+), mean:(.+)", dmg_out.stdout)
-        d_info["dmg_r_info"] = re.findall(
-            r"Rebuild (.+), (.+) objs, (.+) recs", dmg_out.stdout)
+        d_info = get_pool_query_info(dmg_out.stdout)
+        self.log.info("dmg values found: {}".format(d_info))
 
-        print("d_info: {}".format(d_info))
-        # Get data from API to verify dmg output.
-        e_info = {}
-        e_info["exp_t_cnt"] = None # Get value from yaml
-        e_info["exp_t_size"] = None # Get values from yaml file
-        e_info["exp_mem_info"] = None # Get min, max, mean calculating yaml values
-        e_info["exp_r_info"] = None # from pool information?
+        e_info = self.params.get("exp_vals", "/run/*")
+        self.log.info("Expected values are: {}".format(e_info))
 
         # Verify
-        for k, e, d in zip(e_info, e_info.values(), d_info.values()):
-            if e != d:
-                self.fail("dmg pool query expected output: {}:{}".format(k, e))
+        if d_info != e_info:
+            self.fail("dmg pool query expected output: {}".format(e_info))
 
     def test_pool_query_inputs(self):
         """
@@ -94,53 +97,65 @@ class DmgPoolQueryTest(TestWithServers):
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
         """
         # Get test UUID
-        exp_out = []
         uuid = self.params.get("uuid", '/run/pool_uuids/*/')
-        exp_out.append(uuid[1])
-        self.log.info("Using test UUID: %s", uuid)
-
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        host_p = ["{}:{}".format(host, port) for host in self.hostlist_servers]
+        self.log.info("Using test UUID: %s", uuid[0])
 
         self.log.info("Running dmg pool query")
-        dmg_out = pool_query(self.bin, host_p, uuid)
+        dmg_out = pool_query(self.bin, self.host_p, uuid[0])
 
         # Verify
-        self.log.info("Test expected to finish with: %s", exp_out[-1])
-        if dmg_out.exit_status != exp_out[-1]:
-            self.fail("Test failed, dmg pool query finished with: {}".format(
-                dmg_out.exit_status))
-        elif dmg_out is None:
-            self.fail("Test failed, dmg command failed while executing.")
+        self.log.info("Test is expected to finish with: %s", uuid[1])
+        if dmg_out is None:
+            exception = 2
+        else:
+            if dmg_out.exit_status == 0:
+                exception = None
+            else:
+                exception = 1
 
-    def test_pool_query_pool_size(self):
+        if uuid[1] == "FAIL" and exception is None:
+            self.log.error("Command was expected to fail")
+            self.fail("Test failed, dmg pool query command output: {}".format(
+                dmg_out.stdout))
+        elif uuid[1] == "PASS" and exception is not None:
+            self.log.error("Command was expected to pass")
+            if exception == 2:
+                self.fail("Test failed, dmg command failed while executing.")
+            if exception == 1:
+                self.fail("Test failed, dmg command failed with {}".format(
+                    dmg_out.stdout))
+
+    def test_pool_query_ior(self):
         """
         JIRA ID: DAOS-2976
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
         """
-        transfer_block_size = self.params.get("transfer_block_size",
-                                              '/run/ior/iorflags/*')
-        # Create pool
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect(1 << 1)
+        # Store orignal pool info and run ior
+        self.log.info("Getting pool info before writting data")
+        out_before_ior = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
+        self.run_ior_with_pool()
 
-        #  Run ior
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        mpirun = Mpirun()
-        env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
-        processes = len(self.hostlist_clients)
-        mpirun.setup_command(env, self.hostfile_clients, processes)
-        mpirun.run()
+        # Check pool written data
+        self.log.info("Getting pool info after ior run")
+        out_after_ior = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
 
-        # Get the aggregate amount of written data in bytes
+        # Parse output of dmg command before running ior
+        orig_pool_info = get_pool_query_info(out_before_ior.stdout)
+        self.log.info("dmg values found: {}".format(orig_pool_info))
 
-        # Compare the amount of written bytes against what is expected
+        # Parse output of dmg command after running ior
+        curr_pool_info = get_pool_query_info(out_after_ior.stdout)
+        self.log.info("dmg values found: {}".format(curr_pool_info))
 
-        # Compare if written data also matches the dmg pool query output.
+        # Compare info
+        for mem in ["s_free", "n_free"]:
+            orig_value, orig_unit = self.parse_space_value(orig_pool_info[mem])
+            curr_value, curr_unit = self.parse_space_value(curr_pool_info[mem])
+            if orig_value <= curr_value:
+                self.fail("Free space should be less than: {}".format(
+                    orig_value))
+            elif orig_unit != curr_unit:
+                self.fail("Free space unit don't seem right: {}".format(
+                    orig_unit))
