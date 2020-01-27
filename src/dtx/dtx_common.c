@@ -586,6 +586,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	if (result < 0 || rc < 0)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
+	if (!dth->dth_actived)
+		D_GOTO(out, result = 0);
+
 	if (dth->dth_intent == DAOS_INTENT_PUNCH)
 		flags |= DCF_FOR_PUNCH;
 	if (dth->dth_has_ilog)
@@ -638,12 +641,13 @@ out:
 
 	D_DEBUG(DB_TRACE,
 		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
-		"%s, %s participator(s): rc = %d\n",
+		"%s, %s participator(s), modified %s: rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		dth->dth_sync ? "sync" : "async",
-		dth->dth_solo ? "single" : "multiple", result);
+		dth->dth_solo ? "single" : "multiple",
+		dth->dth_actived ? "something" : "nothing", result);
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 

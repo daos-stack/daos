@@ -981,6 +981,16 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			  val_iov);
 	if (rc != 0) {
 		D_ASSERT(rc == -DER_NONEXIST);
+
+		/* For non-rebuild case, if the key does not exist,
+		 * don't create it.
+		 */
+		if (!(flags & VOS_OF_REPLAY_PC))
+			return 0;
+
+		/* For rebuild case, bypass DTX. */
+		D_ASSERT(vos_dth_get() == NULL);
+
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
 				   key_iov, val_iov);

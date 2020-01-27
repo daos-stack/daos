@@ -1704,9 +1704,11 @@ vos_dtx_cleanup_dth(struct dtx_handle *dth)
 	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
 			   BTR_PROBE_EQ, &kiov, NULL);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
 			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
-	else
+	} else {
+		dth->dth_ent = NULL;
 		dth->dth_actived = 0;
+	}
 }
