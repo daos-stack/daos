@@ -47,7 +47,7 @@ class TestPool(TestDaosApiBase):
     USE_API = "API"
     USE_DMG = "dmg"
 
-    def __init__(self, context, cb_handler=None, dmg=None):
+    def __init__(self, context, cb_handler=None, dmg_command=None):
         """Initialize a TestPool object.
 
         Note: 'log' is now a defunct argument and will be removed in the future
@@ -81,7 +81,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-        self.dmg = dmg
+        self.dmg = dmg_command
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -99,7 +99,8 @@ class TestPool(TestDaosApiBase):
         DaosCommand object for the dmg argument of the class constructor in
         order to use the dmg control method. For example:
 
-            self.pool = TestPool(self.context, dmg=self.get_dmg_command())
+            self.pool = TestPool(
+                self.context, dmg_command=self.get_dmg_command())
 
         The current uid, gid, name, svcn, target_list, scm_size, and nvme_size
         values are mapped to the appropriate dmg pool create command line

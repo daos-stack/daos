@@ -33,3 +33,4 @@ pool:
     - [0, PASS]
     - [NULLPTR, FAIL]
   debug: True
+  control_method: api

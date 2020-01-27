@@ -29,4 +29,8 @@ pool:
     - [1073741824, PASS]
     - [9999999999999999999999, FAIL]
   debug: True
-  control_method: dmg
+  control_method_mux: !mux
+    api:
+      control_method: api
+    dmg:
+      control_method: dmg

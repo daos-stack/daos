@@ -50,7 +50,7 @@ class PoolTestBase(TestWithServers):
                 default TestPool namespace to find parameter values. Defaults
                 to None.
         """
-        self.pool = TestPool(self.context, dmg=self.get_dmg_command())
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         if namespace is not None:
             self.pool.namespace = namespace
         self.pool.get_params(self)
