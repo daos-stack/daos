@@ -1715,9 +1715,9 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),
+	rc = run_daos_sub_tests_only(rebuild_tests, ARRAY_SIZE(rebuild_tests),
 				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+				NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
