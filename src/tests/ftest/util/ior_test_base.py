@@ -31,7 +31,8 @@ from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 from dfuse_utils import Dfuse
 import write_host_file
