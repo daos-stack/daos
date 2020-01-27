@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,27 +301,6 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
-static void
-pool_prop_copy_ptr(struct daos_prop_entry *entry_def,
-		struct daos_prop_entry *entry, size_t len)
-{
-	D_ALLOC(entry_def->dpe_val_ptr, len);
-	if (entry_def->dpe_val_ptr != NULL) {
-		memcpy(entry_def->dpe_val_ptr, entry->dpe_val_ptr, len);
-	}
-}
-
-static uint32_t
-pool_prop_acl_get_length(struct daos_prop_entry *entry)
-{
-	if (entry->dpe_val_ptr == NULL) {
-		D_WARN("ACL pool property was NULL\n");
-		return 0;
-	}
-
-	return daos_acl_get_size((struct daos_acl *)entry->dpe_val_ptr);
-}
-
 /* copy \a prop to \a prop_def (duplicated default prop) */
 static int
 pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
@@ -361,8 +340,10 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
-				pool_prop_copy_ptr(entry_def, entry,
-					pool_prop_acl_get_length(entry));
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				daos_prop_entry_dup_ptr(entry_def, entry,
+							daos_acl_get_size(acl));
 				if (entry_def->dpe_val_ptr == NULL)
 					return -DER_NOMEM;
 			}
@@ -416,8 +397,10 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
-				d_iov_set(&value, entry->dpe_val_ptr,
-					     pool_prop_acl_get_length(entry));
+				struct daos_acl *acl;
+
+				acl = entry->dpe_val_ptr;
+				d_iov_set(&value, acl, daos_acl_get_size(acl));
 				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
 						   &value);
 				if (rc)
@@ -2647,12 +2630,23 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			D_ASSERT(iv_entry != NULL);
 			switch (entry->dpe_type) {
 			case DAOS_PROP_PO_LABEL:
-			case DAOS_PROP_PO_OWNER:
-			case DAOS_PROP_PO_OWNER_GROUP:
 				D_ASSERT(strlen(entry->dpe_str) <=
 					 DAOS_PROP_LABEL_MAX_LEN);
 				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
 					    DAOS_PROP_LABEL_MAX_LEN) != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
+				break;
+			case DAOS_PROP_PO_OWNER:
+			case DAOS_PROP_PO_OWNER_GROUP:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_ACL_MAX_PRINCIPAL_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN)
+				    != 0) {
 					D_ERROR("mismatch %s - %s.\n",
 						entry->dpe_str,
 						iv_entry->dpe_str);
@@ -2671,6 +2665,9 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 				}
 				break;
 			case DAOS_PROP_PO_ACL:
+				if (daos_prop_entry_cmp_acl(entry, iv_entry)
+				    != 0)
+					rc = -DER_IO;
 				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",

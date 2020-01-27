@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -843,6 +843,16 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 				memcpy(&iv_prop->cip_acl, acl,
 				       daos_acl_get_size(acl));
 			break;
+		case DAOS_PROP_CO_OWNER:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->cip_owner, prop_entry->dpe_str);
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			D_ASSERT(strlen(prop_entry->dpe_str) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -857,6 +867,8 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 	struct daos_acl		*acl;
 	void			*label_alloc = NULL;
 	void			*acl_alloc = NULL;
+	void			*owner_alloc = NULL;
+	void			*owner_grp_alloc = NULL;
 	int			 i;
 	int			 rc = 0;
 
@@ -918,6 +930,26 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				prop_entry->dpe_val_ptr = NULL;
 			}
 			break;
+		case DAOS_PROP_CO_OWNER:
+			D_ASSERT(strlen(iv_prop->cip_owner) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (prop_entry->dpe_str)
+				owner_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			D_ASSERT(strlen(iv_prop->cip_owner_grp) <=
+				 DAOS_ACL_MAX_PRINCIPAL_LEN);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner_grp,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (prop_entry->dpe_str)
+				owner_grp_alloc = prop_entry->dpe_str;
+			else
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -930,6 +962,10 @@ out:
 			daos_acl_free(acl_alloc);
 		if (label_alloc)
 			D_FREE(label_alloc);
+		if (owner_alloc)
+			D_FREE(owner_alloc);
+		if (owner_grp_alloc)
+			D_FREE(owner_grp_alloc);
 	}
 	return rc;
 }
