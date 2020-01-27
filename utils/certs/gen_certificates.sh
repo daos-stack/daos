@@ -58,7 +58,7 @@ function generate_ca_cert () {
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
 	chmod 0400 $PRIVATE/daosCA.key
 	# Generate CA Certificate
-	openssl req -new -x509 -config ca.cnf -days 3650 -sha512 \
+	openssl req -new -x509 -config ca.cnf -days 1095  -sha512 \
 		-key $PRIVATE/daosCA.key \
 		-out $CERTS/daosCA.crt -batch
 	# Reset the the CA index
@@ -127,11 +127,33 @@ function generate_server_cert () {
 	$CERTS/server.crt"
 }
 
+function generate_test_cert () {
+	echo "Generating Test Certificate"
+	# Generate Private key and set its permissions
+	openssl genrsa -out $CERTS/test.key 4096
+	chmod 0400 $CERTS/test.key
+	# Generate a Certificate Signing Request (CRS)
+	openssl req -new -config test.cnf -key $CERTS/test.key \
+		-out test.csr -batch
+	# Create Certificate from request
+	openssl ca -config ca.cnf -keyfile $PRIVATE/daosCA.key \
+		-cert $CERTS/daosCA.crt -policy signing_policy \
+		-extensions signing_test -out $CERTS/test.crt \
+		-outdir $CERTS -in test.csr -batch
+
+	echo "Required Test Certificate Files:
+	$CERTS/daosCA.crt
+	$CERTS/test.key
+	$CERTS/test.crt"
+}
+
+
 function cleanup () {
 	rm -f $CERTS/*pem
 	rm -f agent.csr
 	rm -f admin.csr
 	rm -f server.csr
+	rm -f test.csr
 }
 
 function fixup_permissions() {
@@ -145,6 +167,7 @@ function main () {
 	generate_agent_cert
 	generate_admin_cert
 	generate_server_cert
+	generate_test_cert
 	fixup_permissions
 	cleanup
 }

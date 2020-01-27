@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ extern "C" {
 /**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
-#define DAOS_ACL_MAX_ACE_LEN		(8192)
+#define DAOS_ACL_MAX_ACE_LEN		(65536)
 
 /**
  * Maximum length of an ACE provided in string format:
@@ -127,8 +127,15 @@ enum daos_acl_flags {
  * Bits representing the specific permissions that may be set
  */
 enum daos_acl_perm {
-	DAOS_ACL_PERM_READ	= (1U << 0),
-	DAOS_ACL_PERM_WRITE	= (1U << 1)
+	DAOS_ACL_PERM_READ		= (1U << 0),
+	DAOS_ACL_PERM_WRITE		= (1U << 1),
+	DAOS_ACL_PERM_CREATE_CONT	= (1U << 2),
+	DAOS_ACL_PERM_DEL_CONT		= (1U << 3),
+	DAOS_ACL_PERM_GET_PROP		= (1U << 4),
+	DAOS_ACL_PERM_SET_PROP		= (1U << 5),
+	DAOS_ACL_PERM_GET_ACL		= (1U << 6),
+	DAOS_ACL_PERM_SET_ACL		= (1U << 7),
+	DAOS_ACL_PERM_SET_OWNER		= (1U << 8),
 };
 
 /**
@@ -301,6 +308,34 @@ int
 daos_acl_validate(struct daos_acl *acl);
 
 /**
+ * Check that the Access Control List is valid for use with a DAOS pool.
+ *
+ * This includes the checks in daos_acl_validate().
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_pool_validate(struct daos_acl *acl);
+
+/**
+ * Check that the Access Control List is valid for use with a DAOS container.
+ *
+ * This includes the checks in daos_acl_validate().
+ *
+ * \param	acl	Access Control List to sanity check
+ *
+ * \return	0		ACL is valid
+ *		-DER_INVAL	ACL is not valid
+ *		-DER_NOMEM	Ran out of memory while checking
+ */
+int
+daos_acl_cont_validate(struct daos_acl *acl);
+
+/**
  * Allocate a new Access Control Entry with an appropriately aligned principal
  * name, if applicable.
  *
@@ -434,6 +469,17 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid);
  */
 int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
+
+/**
+ * Get the principal name string from an Access Control Entry.
+ *
+ * \param[in]	ace	Access Control Entry
+ *
+ * \return	Either the string from the principal name field, or one of the
+ *		special principal names: OWNER@, GROUP@, EVERYONE@
+ */
+const char *
+daos_ace_get_principal_str(struct daos_ace *ace);
 
 /**
  * Convert an Access Control Entry formatted as a string to a daos_ace

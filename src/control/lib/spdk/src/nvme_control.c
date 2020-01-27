@@ -113,7 +113,7 @@ nvme_format(char *ctrlr_pci_addr)
 	format.ms	= 0; /* metadata xfer as part of separate buffer */
 	format.pi	= 0; /* protection information is not enabled */
 	format.pil	= 0; /* protection information location N/A */
-	format.ses	= 1; /* secure erase operation set user data erase */
+	format.ses	= 0; /* secure erase operation set user data erase */
 
 	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
 	if (ret->rc != 0) {

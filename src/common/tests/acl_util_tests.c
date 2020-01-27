@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,33 @@
 /*
  * String conversion tests
  */
+
+static void
+expect_string_for_principal(enum daos_acl_principal_type type, const char *name,
+			    const char *exp_str)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(type, name);
+	assert_string_equal(daos_ace_get_principal_str(ace),
+			    exp_str);
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_get_principal_str(void **state)
+{
+	expect_string_for_principal(DAOS_ACL_OWNER, NULL,
+				    DAOS_ACL_PRINCIPAL_OWNER);
+	expect_string_for_principal(DAOS_ACL_OWNER_GROUP, NULL,
+				    DAOS_ACL_PRINCIPAL_OWNER_GRP);
+	expect_string_for_principal(DAOS_ACL_EVERYONE, NULL,
+				    DAOS_ACL_PRINCIPAL_EVERYONE);
+	expect_string_for_principal(DAOS_ACL_USER, "acl_user@",
+				    "acl_user@");
+	expect_string_for_principal(DAOS_ACL_GROUP, "acl_grp@",
+				    "acl_grp@");
+}
 
 static void
 test_ace_from_str_null_str(void **state)
@@ -255,23 +282,43 @@ test_ace_from_str_invalid_flags(void **state)
 }
 
 static void
-test_ace_from_str_perm_read_only(void **state)
+expect_perms_for_str(char *perms_str, uint64_t exp_perms)
 {
-	check_ace_from_valid_str("A::someuser@:r",
+	const char	*identity = "someuser@";
+	char		ace_str[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	snprintf(ace_str, sizeof(ace_str), "A::%s:%s", identity, perms_str);
+
+	check_ace_from_valid_str(ace_str,
 				 DAOS_ACL_ACCESS_ALLOW,
 				 DAOS_ACL_USER,
 				 0,
-				 DAOS_ACL_PERM_READ,
-				 0, 0, "someuser@");
+				 exp_perms,
+				 0, 0, identity);
 }
 
 static void
-test_ace_from_str_perm_none(void **state)
+test_ace_from_str_perms(void **state)
 {
-	check_ace_from_valid_str("A::someuser@:",
-				 DAOS_ACL_ACCESS_ALLOW,
-				 DAOS_ACL_USER,
-				 0, 0, 0, 0, "someuser@");
+	expect_perms_for_str("", 0);
+	expect_perms_for_str("r", DAOS_ACL_PERM_READ);
+	expect_perms_for_str("w", DAOS_ACL_PERM_WRITE);
+	expect_perms_for_str("c", DAOS_ACL_PERM_CREATE_CONT);
+	expect_perms_for_str("d", DAOS_ACL_PERM_DEL_CONT);
+	expect_perms_for_str("t", DAOS_ACL_PERM_GET_PROP);
+	expect_perms_for_str("T", DAOS_ACL_PERM_SET_PROP);
+	expect_perms_for_str("a", DAOS_ACL_PERM_GET_ACL);
+	expect_perms_for_str("A", DAOS_ACL_PERM_SET_ACL);
+	expect_perms_for_str("o", DAOS_ACL_PERM_SET_OWNER);
+	expect_perms_for_str("rwcdtTaAo", DAOS_ACL_PERM_READ |
+					  DAOS_ACL_PERM_WRITE |
+					  DAOS_ACL_PERM_CREATE_CONT |
+					  DAOS_ACL_PERM_DEL_CONT |
+					  DAOS_ACL_PERM_GET_PROP |
+					  DAOS_ACL_PERM_SET_PROP |
+					  DAOS_ACL_PERM_GET_ACL |
+					  DAOS_ACL_PERM_SET_ACL |
+					  DAOS_ACL_PERM_SET_OWNER);
 }
 
 static void
@@ -523,8 +570,16 @@ test_ace_to_str_all_perms(void **state)
 			       DAOS_ACL_FLAG_ACCESS_FAIL,
 			       0,
 			       0,
-			       DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
-			       "L:F:EVERYONE@:rw");
+			       DAOS_ACL_PERM_READ |
+			       DAOS_ACL_PERM_WRITE |
+			       DAOS_ACL_PERM_CREATE_CONT |
+			       DAOS_ACL_PERM_DEL_CONT |
+			       DAOS_ACL_PERM_GET_PROP |
+			       DAOS_ACL_PERM_SET_PROP |
+			       DAOS_ACL_PERM_GET_ACL |
+			       DAOS_ACL_PERM_SET_ACL |
+			       DAOS_ACL_PERM_SET_OWNER,
+			       "L:F:EVERYONE@:rwcdtTaAo");
 }
 
 static void
@@ -631,7 +686,7 @@ check_ace_turns_back_to_same_str(const char *ace_str)
 static void
 test_ace_from_str_and_back_again(void **state)
 {
-	check_ace_turns_back_to_same_str("U:S:OWNER@:w");
+	check_ace_turns_back_to_same_str("U:S:OWNER@:rwcdtTaAo");
 	check_ace_turns_back_to_same_str("A:G:GROUP@:rw");
 	check_ace_turns_back_to_same_str("AUL:GS:somegroup@somedomain:rw");
 	check_ace_turns_back_to_same_str("AL:F:user1@:r");
@@ -645,6 +700,9 @@ test_acl_from_strs_bad_input(void **state)
 	struct daos_acl		*acl = NULL;
 	static const char	*valid_aces[] = {"A::OWNER@:rw"};
 	static const char	*garbage[] = {"ABCD:E:FGH:IJ"};
+	/* duplicate entries aren't valid */
+	static const char	*invalid_aces[2] = {"A::OWNER@:rw",
+						    "A::OWNER@:rw"};
 
 	assert_int_equal(daos_acl_from_strs(NULL, 1, &acl), -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(valid_aces, 0, &acl),
@@ -652,6 +710,7 @@ test_acl_from_strs_bad_input(void **state)
 	assert_int_equal(daos_acl_from_strs(valid_aces, 1, NULL),
 			 -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(garbage, 1, &acl), -DER_INVAL);
+	assert_int_equal(daos_acl_from_strs(invalid_aces, 2, &acl), -DER_INVAL);
 }
 
 static void
@@ -768,6 +827,7 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_ace_get_principal_str),
 		cmocka_unit_test(test_ace_from_str_null_str),
 		cmocka_unit_test(test_ace_from_str_null_ptr),
 		cmocka_unit_test(test_ace_from_str_owner),
@@ -784,8 +844,7 @@ main(void)
 		cmocka_unit_test(test_ace_from_str_invalid_access),
 		cmocka_unit_test(test_ace_from_str_multiple_flags),
 		cmocka_unit_test(test_ace_from_str_invalid_flags),
-		cmocka_unit_test(test_ace_from_str_perm_read_only),
-		cmocka_unit_test(test_ace_from_str_perm_none),
+		cmocka_unit_test(test_ace_from_str_perms),
 		cmocka_unit_test(test_ace_from_str_invalid_perms),
 		cmocka_unit_test(test_ace_from_str_empty_str),
 		cmocka_unit_test(test_ace_from_str_not_all_fields),

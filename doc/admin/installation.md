@@ -1,4 +1,4 @@
-# DAOS Software Installation
+# Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
 on CentOS 7, OpenSUSE 42.2, and Ubuntu 18.04 distributions.
@@ -27,6 +27,10 @@ Moreover, the DAOS stack leverages the following open source projects:
     computation.
 
 -   [*Argobots*](https://github.com/pmodels/argobots) for thread management.
+
+-   [*hwloc*](https://github.com/open-mpi/hwloc) for discovering system devices,         detecting their NUMA node affinity and for CPU binding
+
+-   [*libfabric*](https://github.com/ofiwg/libfabric) for detecting fabric               interfaces, providers and connection management.
 
 The DAOS build system can be configured to download and build any missing
 dependencies automatically.
