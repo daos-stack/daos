@@ -301,13 +301,13 @@ test_server_data_corruption(void **state)
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
 	/** Set the Server data corruption flag */
-	rc = daos_mgmt_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				DAOS_CHECKSUM_SDATA_CORRUPT | DAOS_FAIL_ALWAYS,
 				0, NULL);
 	assert_int_equal(rc, 0);
 	/** Adding delay for functional testing under VM */
 	/** On actual hardware, delay is not needed      */
-	sleep(60);
+	sleep(120);
 	/** Perform the update */
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			&ctx.update_iod, &ctx.update_sgl, NULL);
