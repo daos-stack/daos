@@ -217,8 +217,6 @@ func TestConstructedConfig(t *testing.T) {
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
-		WithUserName("daosuser").
-		WithGroupName("daosgroup").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").

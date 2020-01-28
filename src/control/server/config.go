@@ -71,8 +71,6 @@ type Configuration struct {
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
-	UserName            string                    `yaml:"user_name"`
-	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 
 	// duplicated in ioserver.Config
@@ -266,18 +264,6 @@ func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 // WithHelperLogFile sets the path to the daos_admin logfile.
 func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	c.HelperLogFile = filePath
-	return c
-}
-
-// WithUserName sets the user to run as.
-func (c *Configuration) WithUserName(name string) *Configuration {
-	c.UserName = name
-	return c
-}
-
-// WithGroupName sets the group to run as.
-func (c *Configuration) WithGroupName(name string) *Configuration {
-	c.GroupName = name
 	return c
 }
 
