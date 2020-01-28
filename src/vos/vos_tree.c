@@ -977,12 +977,12 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	int			 rc;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov, NULL,
 			  val_iov);
 	if (rc != 0) {
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
 				   key_iov, val_iov);
 		if (rc) {
 			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
