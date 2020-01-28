@@ -446,7 +446,6 @@ typedef struct {
 	unsigned int		nr;
 	daos_iod_t		*iods;
 	d_sg_list_t		*sgls;
-	struct dcs_iod_csums	*iod_csums;
 	daos_iom_t		*maps; /* only valid for fetch */
 } daos_obj_rw_t;
 

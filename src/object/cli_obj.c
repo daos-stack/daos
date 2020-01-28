@@ -86,6 +86,7 @@ struct obj_auxi_args {
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
+	struct dcs_iod_csums		*iod_csums;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
@@ -2143,7 +2144,8 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 }
 
 static int
-obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args)
+obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args,
+		 struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 	int			 rc;
@@ -2152,26 +2154,25 @@ obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args)
 		return 0;
 
 	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
-					args->nr,
-					&args->iod_csums);
+					args->nr, &obj_auxi->iod_csums);
 	if (rc != 0)
 		return rc;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-		((char *) args->iod_csums->ic_data->cs_csum)[0]++;
+		((char *) obj_auxi->iod_csums->ic_data->cs_csum)[0]++;
 
 	return 0;
 }
 
 static void
 obj_update_csum_destroy(const struct dc_object *obj,
-			daos_obj_update_t *args)
+			struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
 	if (!daos_csummer_initialized(csummer))
 		return;
-	daos_csummer_free_ic(csummer, &args->iod_csums);
+	daos_csummer_free_ic(csummer, &obj_auxi->iod_csums);
 }
 
 static int
@@ -2299,7 +2300,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
-			obj_update_csum_destroy(obj, dc_task_get_args(task));
+			obj_update_csum_destroy(obj, obj_auxi);
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
@@ -2353,6 +2354,7 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	shard_arg->iod_csums		= obj_auxi->iod_csums;
 	if (obj_auxi->req_reasbed) {
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
@@ -2576,7 +2578,7 @@ dc_obj_update(tse_task_t *task)
 			      false, &obj_auxi->req_tgts);
 
 	if (!obj_auxi->io_retry)
-		obj_update_csums(obj, args);
+		obj_update_csums(obj, args, obj_auxi);
 
 	if (rc)
 		goto out_task;

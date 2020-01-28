@@ -415,8 +415,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dkey = *dkey;
 	orw->orw_iod_array.oia_iod_nr = nr;
 	orw->orw_iod_array.oia_iods = api_args->iods;
-	if (api_args->iod_csums != NULL) {
-		orw->orw_iod_csums.ca_arrays = api_args->iod_csums;
+	if (args->iod_csums != NULL) {
+		orw->orw_iod_csums.ca_arrays = args->iod_csums;
 		orw->orw_iod_csums.ca_count = api_args->nr;
 	} else {
 		orw->orw_iod_csums.ca_arrays = NULL;
