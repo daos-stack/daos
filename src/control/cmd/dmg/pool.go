@@ -42,7 +42,7 @@ const (
 	msgSizeNoNumber = "size string doesn't specify a number"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
-	mibsInMB        = 0.90949470177293 // convert base2->base10
+	mibsInMB        = (10 ^ 6) / (2 ^ 20) // convert base2->base10
 )
 
 // toBase10 converts base 2 ByteSize type to the base 10 equivalent.
