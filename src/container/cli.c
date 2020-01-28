@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -889,6 +889,12 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_ACL:
 			bits |= DAOS_CO_QUERY_PROP_ACL;
+			break;
+		case DAOS_PROP_CO_OWNER:
+			bits |= DAOS_CO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

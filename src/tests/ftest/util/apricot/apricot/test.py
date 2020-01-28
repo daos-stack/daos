@@ -45,6 +45,7 @@ from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from general_utils import pcmd
+from dmg_utils import DmgCommand
 
 
 # pylint: disable=invalid-name
@@ -511,3 +512,29 @@ class TestWithServers(TestWithoutServers):
         self.control_log = "{}_daos_control.log".format(self.test_id)
         self.helper_log = "{}_daos_admin.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
+
+    def get_dmg_command(self, index=0):
+        """Get a DmgCommand setup to interact with server manager index.
+
+        Return a DmgCommand object configured with:
+            - the "-l" parameter assigned to the server's access point list
+            - the "-i" parameter assigned to the server's interactive mode
+
+        This method is intended to be used by tests that wants to use dmg to
+        create and destroy pool. Pass in the object to TestPool constructor.
+
+        Access point should be passed in to -l regardless of the number of
+        servers.
+
+        Args:
+            index (int, optional): Server index. Defaults to 0.
+
+        Returns:
+            DmgCommand: New DmgCommand object.
+        """
+        dmg = DmgCommand(self.bin)
+        dmg.hostlist.value = self.server_managers[index].runner.job.\
+            yaml_params.access_points.value
+        dmg.insecure.value = \
+            self.server_managers[index].insecure.value
+        return dmg
