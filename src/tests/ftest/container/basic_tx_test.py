@@ -25,10 +25,10 @@ from __future__ import print_function
 
 import time
 import traceback
-from apricot import TestWithServers
-from test_utils_pool import TestPool
 
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+
 
 class BasicTxTest(TestWithServers):
     """
@@ -50,14 +50,8 @@ class BasicTxTest(TestWithServers):
         :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
         # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
-        # need a connection to create container
-        self.pool.connect()
+        # daos storage and connect to the pool
+        self.prepare_pool()
 
         try:
             # create a container

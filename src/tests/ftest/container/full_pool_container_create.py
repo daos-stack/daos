@@ -26,6 +26,7 @@ import string
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
 from test_utils_pool import TestPool
+from general_utils import get_random_string
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -40,7 +41,6 @@ class FullPoolContainerCreate(TestWithServers):
 
     @skipForTicket("DAOS-3142")
     def test_no_space_cont_create(self):
-        # pylint: disable=no-member
         """
         :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
         """
@@ -49,19 +49,8 @@ class FullPoolContainerCreate(TestWithServers):
         # probably should be -1007, revisit later
         err2 = "-1009"
 
-        # create pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        self.d_log.debug("creating pool")
-        self.pool.name.value = self.server_group
-        self.pool.create()
-        self.d_log.debug("created pool")
-
-        # connect to the pool
-        self.d_log.debug("connecting to pool")
-        self.pool.connect()
-        self.d_log.debug("connected to pool")
+        # create pool and connect
+        self.prepare_pool()
 
         # query the pool
         self.d_log.debug("querying pool info")
@@ -92,10 +81,8 @@ class FullPoolContainerCreate(TestWithServers):
                                  "container".format(write_count, obj_sz))
                 my_str = "a" * obj_sz
                 my_str_sz = obj_sz
-                dkey = (
-                    ''.join(random.choice(string.lowercase) for i in range(5)))
-                akey = (
-                    ''.join(random.choice(string.lowercase) for i in range(5)))
+                dkey = (get_random_string(5))
+                akey = (get_random_string(5))
                 try:
                     dummy_oid, dummy_tx = self.cont.write_an_obj(
                         my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")

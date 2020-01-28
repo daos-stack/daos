@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import random
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
-from test_utils_pool import TestPool
+
 
 class BasicSnapshot(TestWithServers):
     """DAOS-1370 Basic snapshot test.
@@ -67,19 +67,9 @@ class BasicSnapshot(TestWithServers):
         """
         # Set up the pool and container.
         try:
-            # parameters used in pool create
-            createsize = self.params.get("size", '/run/pool/createsize/*')
-
             # initialize a pool object then create the underlying
-            # daos storage
-            self.pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
-            self.pool.get_params(self)
-            self.pool.scm_size.value = createsize
-            self.pool.create()
-
-            # need a connection to create container
-            self.pool.connect()
+            # daos storage, and connect
+            self.prepare_pool()
 
             # create a container
             self.container = DaosContainer(self.context)

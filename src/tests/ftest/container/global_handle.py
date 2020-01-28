@@ -29,7 +29,6 @@ from multiprocessing import sharedctypes
 
 from avocado import fail_on
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 import check_for_pool
 from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
 
@@ -97,12 +96,8 @@ class GlobalHandle(TestWithServers):
         :avocado: tags=all,container,tiny,pr,conthandle
         """
         # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        # daos storage and connect to it
+        self.prepare_pool()
 
         # create a pool global handle
         iov_len, buf_len, buf = self.pool.pool.local2global()

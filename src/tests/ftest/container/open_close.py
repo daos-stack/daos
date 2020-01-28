@@ -26,7 +26,6 @@ from __future__ import print_function
 import traceback
 import uuid
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from pydaos.raw import DaosContainer, DaosApiError
 
 
@@ -51,14 +50,9 @@ class OpenClose(TestWithServers):
         expected_result = coh_params[1]
 
         # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
+        # daos storage and connect to it
+        self.prepare_pool()
         poh = self.pool.pool.handle
-        self.pool.connect()
 
         try:
             # Container initialization and creation

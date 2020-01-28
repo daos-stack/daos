@@ -27,7 +27,6 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from pydaos.raw import DaosContainer, DaosApiError
 
 
@@ -50,11 +49,7 @@ class CreateContainerTest(TestWithServers):
         expected_results = []
 
         # setup the pool
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.prepare_pool()
 
         # maybe use the good handle, maybe not
         handleparam = self.params.get("handle", '/run/poolhandle/*')

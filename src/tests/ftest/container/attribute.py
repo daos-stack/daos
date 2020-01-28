@@ -29,7 +29,6 @@ import string
 import random
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from general_utils import DaosTestError
 from pydaos.raw import DaosContainer, DaosApiError
 
@@ -87,11 +86,7 @@ class ContainerAttributeTest(TestWithServers):
 
         self.large_data_set = {}
 
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.prepare_pool()
         poh = self.pool.pool.handle
         self.container = DaosContainer(self.context)
         self.container.create(poh)

@@ -28,7 +28,6 @@ import string
 from apricot import TestWithServers
 from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
-from test_utils_pool import TestPool
 
 
 # pylint: disable=broad-except
@@ -58,16 +57,12 @@ class Snapshot(TestWithServers):
         self.log.info("==In setUp, self.context= %s", self.context)
 
         # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        # daos storage and connect to it
+        self.prepare_pool()
         # need a connection to the pool with rw permission
         #    DAOS_PC_RO = int(1 << 0)
         #    DAOS_PC_RW = int(1 << 1)
         #    DAOS_PC_EX = int(1 << 2)
-        self.pool.connect()
 
         try:
             # create a container

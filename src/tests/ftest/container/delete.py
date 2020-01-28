@@ -26,7 +26,6 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from pydaos.raw import DaosApiError, DaosContainer
 
 
@@ -76,13 +75,8 @@ class DeleteContainerTest(TestWithServers):
                 break
 
         # initialize a python pool object then create the underlying
-        # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        # need a connection to create container
-        self.pool.connect()
+        # daos storage and connect to it
+        self.prepare_pool()
 
         try:
             self.container = DaosContainer(self.context)

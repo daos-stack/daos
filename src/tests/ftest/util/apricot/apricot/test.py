@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from dmg_utils import DmgCommand
+from test_utils_pool import TestPool
 
 
 # pylint: disable=invalid-name
@@ -523,3 +524,14 @@ class TestWithServers(TestWithoutServers):
         dmg.insecure.value = \
             self.server_managers[index].insecure.value
         return dmg
+
+    def prepare_pool(self):
+        """Create a pool, read the pool parameters from the yaml, create, and
+        connect.
+
+        This sequence is common for a lot of the container tests.
+        """
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
+        self.pool.connect()

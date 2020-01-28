@@ -27,8 +27,8 @@ import uuid
 import threading
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from pydaos.raw import  DaosContainer, DaosApiError
+
 
 # pylint: disable=global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
@@ -72,13 +72,8 @@ class ContainerAsync(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.create()
-
+        self.prepare_pool()
         poh = self.pool.pool.handle
-
-        self.pool.connect()
 
         try:
             # Container initialization and creation
@@ -121,14 +116,8 @@ class ContainerAsync(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
+        self.prepare_pool()
         poh = self.pool.pool.handle
-
-        self.pool.connect()
 
         try:
             # Container initialization and creation
@@ -171,14 +160,8 @@ class ContainerAsync(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
+        self.prepare_pool()
         poh = self.pool.pool.handle
-
-        self.pool.connect()
 
         try:
             # Container initialization and creation
@@ -228,14 +211,8 @@ class ContainerAsync(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
+        self.prepare_pool()
         poh = self.pool.pool.handle
-
-        self.pool.connect()
 
         try:
             # Container initialization and creation
@@ -288,14 +265,8 @@ class ContainerAsync(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-
+        self.prepare_pool()
         poh = self.pool.pool.handle
-
-        self.pool.connect()
 
         try:
             # Container initialization and creation
