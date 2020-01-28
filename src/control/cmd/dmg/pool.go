@@ -42,6 +42,7 @@ const (
 	msgSizeNoNumber = "size string doesn't specify a number"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
+	mibsInMB        = 0.90949470177293 // convert base2->base10
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
@@ -173,6 +174,9 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 			err, "illegal nvme size: %s", nvmeSize)
 		return
 	}
+
+	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
+	nvmeBytes = bytesize.New(float64(mibsInMB) * float64(nvmeBytes))
 
 	ratio := 1.00
 	if nvmeBytes > 0 {

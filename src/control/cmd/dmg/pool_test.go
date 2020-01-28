@@ -85,40 +85,49 @@ func TestGetSize(t *testing.T) {
 	}
 }
 
+// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
+// i.e. if "10G" was specified then the output bytes would be the base 10
+// equivalent of this specified size as opposed to base 2.
+// SSD/NVMe size is conventionally specified as base 10.
+func toBase10(in ByteSize) ByteSize {
+	return New(float64(in) * float64(mibsInMB))
+}
+
 // TestCalcStorage verifies the correct scm/nvme bytes are returned from input
 func TestCalcStorage(t *testing.T) {
-	var tests = []struct {
-		scm     string
-		nvme    string
-		outScm  ByteSize
-		outNvme ByteSize
-		errMsg  string
-		desc    string
+	for name, tc := range map[string]struct {
+		scm          string
+		nvme         string
+		expScmBytes  ByteSize
+		expNvmeBytes ByteSize
+		errMsg       string
 	}{
-		{"256M", "8G", 256 * MB, 8 * GB, "", "defaults"},
-		{"256M", "", 256 * MB, 0, "", "no nvme specified"},
-		{"99M", "1G", 99 * MB, 1 * GB, "", "bad ratio"}, // should issue ratio warning
-		{"", "8G", 0, 0, msgSizeZeroScm, "no scm specified"},
-		{"0", "8G", 0, 0, msgSizeZeroScm, "zero scm"},
-		{"Z0", "Z8G", 0, 0, "illegal scm size: Z0: Unrecognized size suffix Z0B", "zero scm"},
-	}
-
-	for idx, tt := range tests {
-		t.Run(fmt.Sprintf("%s-%d", t.Name(), idx), func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+		"defaults":     {"256M", "8G", 256 * MB, toBase10(8 * GB), ""},
+		"no nvme":      {"256M", "", 256 * MB, 0, ""},
+		"bad ratio":    {"99M", "1G", 99 * MB, toBase10(GB), ""}, // should issue ratio warning
+		"no scm":       {"", "8G", 0, 0, msgSizeZeroScm},
+		"zero scm":     {"0", "8G", 0, 0, msgSizeZeroScm},
+		"bad scm size": {"Z0", "Z8G", 0, 0, "illegal scm size: Z0: Unrecognized size suffix Z0B"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
 			defer ShowBufferOnFailure(t, buf)
 
-			scmBytes, nvmeBytes, err := calcStorage(log, tt.scm, tt.nvme)
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, tt.desc)
+			gotScmBytes, gotNvmeBytes, err := calcStorage(log, tc.scm, tc.nvme)
+			if tc.errMsg != "" {
+				ExpectError(t, err, tc.errMsg, name)
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			AssertEqual(t, scmBytes, tt.outScm, "bad scm bytes, "+tt.desc)
-			AssertEqual(t, nvmeBytes, tt.outNvme, "bad nvme bytes, "+tt.desc)
+			if diff := cmp.Diff(tc.expScmBytes, gotScmBytes, DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected number of SCM bytes (-want, +got)\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expNvmeBytes, gotNvmeBytes, DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected number of NVMe bytes (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -216,7 +225,7 @@ func TestPoolCommands(t *testing.T) {
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
 					ScmBytes:   uint64(testSize),
-					NvmeBytes:  uint64(testSize),
+					NvmeBytes:  uint64(toBase10(testSize)),
 					NumSvcReps: 3,
 					Sys:        "fnord",
 					Usr:        "foo@",
