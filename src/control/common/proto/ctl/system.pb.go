@@ -85,10 +85,84 @@ func (m *SystemMember) GetState() uint32 {
 	return 0
 }
 
+// RankResult is a generic result for a system operation on a rank.
+// Identical to mgmt.proto RanksResp_RankResult.
+type RankResult struct {
+	Rank                 uint32   `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
+	Action               string   `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Errored              bool     `protobuf:"varint,3,opt,name=errored,proto3" json:"errored,omitempty"`
+	Msg                  string   `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
+	State                uint32   `protobuf:"varint,5,opt,name=state,proto3" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RankResult) Reset()         { *m = RankResult{} }
+func (m *RankResult) String() string { return proto.CompactTextString(m) }
+func (*RankResult) ProtoMessage()    {}
+func (*RankResult) Descriptor() ([]byte, []int) {
+	return fileDescriptor_86a7260ebdc12f47, []int{1}
+}
+
+func (m *RankResult) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RankResult.Unmarshal(m, b)
+}
+func (m *RankResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RankResult.Marshal(b, m, deterministic)
+}
+func (m *RankResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RankResult.Merge(m, src)
+}
+func (m *RankResult) XXX_Size() int {
+	return xxx_messageInfo_RankResult.Size(m)
+}
+func (m *RankResult) XXX_DiscardUnknown() {
+	xxx_messageInfo_RankResult.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RankResult proto.InternalMessageInfo
+
+func (m *RankResult) GetRank() uint32 {
+	if m != nil {
+		return m.Rank
+	}
+	return 0
+}
+
+func (m *RankResult) GetAction() string {
+	if m != nil {
+		return m.Action
+	}
+	return ""
+}
+
+func (m *RankResult) GetErrored() bool {
+	if m != nil {
+		return m.Errored
+	}
+	return false
+}
+
+func (m *RankResult) GetMsg() string {
+	if m != nil {
+		return m.Msg
+	}
+	return ""
+}
+
+func (m *RankResult) GetState() uint32 {
+	if m != nil {
+		return m.State
+	}
+	return 0
+}
+
 // SystemStopReq supplies system shutdown parameters.
 type SystemStopReq struct {
 	Prep                 bool     `protobuf:"varint,1,opt,name=prep,proto3" json:"prep,omitempty"`
 	Kill                 bool     `protobuf:"varint,2,opt,name=kill,proto3" json:"kill,omitempty"`
+	Ranks                []uint32 `protobuf:"varint,3,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -98,7 +172,7 @@ func (m *SystemStopReq) Reset()         { *m = SystemStopReq{} }
 func (m *SystemStopReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStopReq) ProtoMessage()    {}
 func (*SystemStopReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{1}
+	return fileDescriptor_86a7260ebdc12f47, []int{2}
 }
 
 func (m *SystemStopReq) XXX_Unmarshal(b []byte) error {
@@ -133,20 +207,27 @@ func (m *SystemStopReq) GetKill() bool {
 	return false
 }
 
+func (m *SystemStopReq) GetRanks() []uint32 {
+	if m != nil {
+		return m.Ranks
+	}
+	return nil
+}
+
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 type SystemStopResp struct {
-	Results              []*SystemStopResp_Result `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
+	Results              []*RankResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *SystemStopResp) Reset()         { *m = SystemStopResp{} }
 func (m *SystemStopResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStopResp) ProtoMessage()    {}
 func (*SystemStopResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{2}
+	return fileDescriptor_86a7260ebdc12f47, []int{3}
 }
 
 func (m *SystemStopResp) XXX_Unmarshal(b []byte) error {
@@ -167,78 +248,16 @@ func (m *SystemStopResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SystemStopResp proto.InternalMessageInfo
 
-func (m *SystemStopResp) GetResults() []*SystemStopResp_Result {
+func (m *SystemStopResp) GetResults() []*RankResult {
 	if m != nil {
 		return m.Results
 	}
 	return nil
 }
 
-type SystemStopResp_Result struct {
-	Rank                 uint32   `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
-	Action               string   `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Errored              bool     `protobuf:"varint,3,opt,name=errored,proto3" json:"errored,omitempty"`
-	Msg                  string   `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *SystemStopResp_Result) Reset()         { *m = SystemStopResp_Result{} }
-func (m *SystemStopResp_Result) String() string { return proto.CompactTextString(m) }
-func (*SystemStopResp_Result) ProtoMessage()    {}
-func (*SystemStopResp_Result) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{2, 0}
-}
-
-func (m *SystemStopResp_Result) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SystemStopResp_Result.Unmarshal(m, b)
-}
-func (m *SystemStopResp_Result) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SystemStopResp_Result.Marshal(b, m, deterministic)
-}
-func (m *SystemStopResp_Result) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SystemStopResp_Result.Merge(m, src)
-}
-func (m *SystemStopResp_Result) XXX_Size() int {
-	return xxx_messageInfo_SystemStopResp_Result.Size(m)
-}
-func (m *SystemStopResp_Result) XXX_DiscardUnknown() {
-	xxx_messageInfo_SystemStopResp_Result.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SystemStopResp_Result proto.InternalMessageInfo
-
-func (m *SystemStopResp_Result) GetRank() uint32 {
-	if m != nil {
-		return m.Rank
-	}
-	return 0
-}
-
-func (m *SystemStopResp_Result) GetAction() string {
-	if m != nil {
-		return m.Action
-	}
-	return ""
-}
-
-func (m *SystemStopResp_Result) GetErrored() bool {
-	if m != nil {
-		return m.Errored
-	}
-	return false
-}
-
-func (m *SystemStopResp_Result) GetMsg() string {
-	if m != nil {
-		return m.Msg
-	}
-	return ""
-}
-
 // SystemStartReq supplies system restart parameters.
 type SystemStartReq struct {
+	Ranks                []uint32 `protobuf:"varint,1,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -248,7 +267,7 @@ func (m *SystemStartReq) Reset()         { *m = SystemStartReq{} }
 func (m *SystemStartReq) String() string { return proto.CompactTextString(m) }
 func (*SystemStartReq) ProtoMessage()    {}
 func (*SystemStartReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{3}
+	return fileDescriptor_86a7260ebdc12f47, []int{4}
 }
 
 func (m *SystemStartReq) XXX_Unmarshal(b []byte) error {
@@ -269,19 +288,27 @@ func (m *SystemStartReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SystemStartReq proto.InternalMessageInfo
 
+func (m *SystemStartReq) GetRanks() []uint32 {
+	if m != nil {
+		return m.Ranks
+	}
+	return nil
+}
+
 // SystemStartResp returns status of restart attempt and results
 // of attempts to start system members.
 type SystemStartResp struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Results              []*RankResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
 }
 
 func (m *SystemStartResp) Reset()         { *m = SystemStartResp{} }
 func (m *SystemStartResp) String() string { return proto.CompactTextString(m) }
 func (*SystemStartResp) ProtoMessage()    {}
 func (*SystemStartResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{4}
+	return fileDescriptor_86a7260ebdc12f47, []int{5}
 }
 
 func (m *SystemStartResp) XXX_Unmarshal(b []byte) error {
@@ -302,8 +329,16 @@ func (m *SystemStartResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SystemStartResp proto.InternalMessageInfo
 
+func (m *SystemStartResp) GetResults() []*RankResult {
+	if m != nil {
+		return m.Results
+	}
+	return nil
+}
+
 // SystemQueryReq supplies system query parameters.
 type SystemQueryReq struct {
+	Rank                 int32    `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -313,7 +348,7 @@ func (m *SystemQueryReq) Reset()         { *m = SystemQueryReq{} }
 func (m *SystemQueryReq) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryReq) ProtoMessage()    {}
 func (*SystemQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{5}
+	return fileDescriptor_86a7260ebdc12f47, []int{6}
 }
 
 func (m *SystemQueryReq) XXX_Unmarshal(b []byte) error {
@@ -334,6 +369,13 @@ func (m *SystemQueryReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SystemQueryReq proto.InternalMessageInfo
 
+func (m *SystemQueryReq) GetRank() int32 {
+	if m != nil {
+		return m.Rank
+	}
+	return 0
+}
+
 // SystemQueryResp returns active system members.
 type SystemQueryResp struct {
 	Members              []*SystemMember `protobuf:"bytes,1,rep,name=members,proto3" json:"members,omitempty"`
@@ -346,7 +388,7 @@ func (m *SystemQueryResp) Reset()         { *m = SystemQueryResp{} }
 func (m *SystemQueryResp) String() string { return proto.CompactTextString(m) }
 func (*SystemQueryResp) ProtoMessage()    {}
 func (*SystemQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_86a7260ebdc12f47, []int{6}
+	return fileDescriptor_86a7260ebdc12f47, []int{7}
 }
 
 func (m *SystemQueryResp) XXX_Unmarshal(b []byte) error {
@@ -376,9 +418,9 @@ func (m *SystemQueryResp) GetMembers() []*SystemMember {
 
 func init() {
 	proto.RegisterType((*SystemMember)(nil), "ctl.SystemMember")
+	proto.RegisterType((*RankResult)(nil), "ctl.RankResult")
 	proto.RegisterType((*SystemStopReq)(nil), "ctl.SystemStopReq")
 	proto.RegisterType((*SystemStopResp)(nil), "ctl.SystemStopResp")
-	proto.RegisterType((*SystemStopResp_Result)(nil), "ctl.SystemStopResp.Result")
 	proto.RegisterType((*SystemStartReq)(nil), "ctl.SystemStartReq")
 	proto.RegisterType((*SystemStartResp)(nil), "ctl.SystemStartResp")
 	proto.RegisterType((*SystemQueryReq)(nil), "ctl.SystemQueryReq")
@@ -388,23 +430,25 @@ func init() {
 func init() { proto.RegisterFile("system.proto", fileDescriptor_86a7260ebdc12f47) }
 
 var fileDescriptor_86a7260ebdc12f47 = []byte{
-	// 285 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x91, 0xc1, 0x6a, 0xbb, 0x40,
-	0x10, 0xc6, 0xd9, 0xbf, 0xf9, 0x47, 0x33, 0x4d, 0xda, 0x64, 0x29, 0x65, 0xc9, 0x49, 0x3c, 0x09,
-	0x05, 0x0f, 0x6d, 0xa1, 0xb7, 0xbe, 0x41, 0x0f, 0xdd, 0xbc, 0x40, 0x8c, 0x0e, 0x45, 0xa2, 0x71,
-	0x33, 0xbb, 0x1e, 0xf2, 0x46, 0x7d, 0xcc, 0xb2, 0xa3, 0x36, 0xe6, 0xf6, 0xcd, 0x8f, 0x6f, 0x98,
-	0xf9, 0xf8, 0x60, 0x69, 0x2f, 0xd6, 0x61, 0x93, 0x19, 0x6a, 0x5d, 0x2b, 0x83, 0xc2, 0xd5, 0xc9,
-	0x1e, 0x96, 0x3b, 0x86, 0x9f, 0xd8, 0x1c, 0x90, 0xa4, 0x84, 0x59, 0x5e, 0x96, 0xa4, 0x44, 0x2c,
-	0xd2, 0x85, 0x66, 0xed, 0x59, 0xd7, 0x55, 0xa5, 0xfa, 0xd7, 0x33, 0xaf, 0x3d, 0xa3, 0xfc, 0x74,
-	0x54, 0x41, 0x2c, 0xd2, 0x95, 0x66, 0x2d, 0x1f, 0xe1, 0xbf, 0x75, 0xb9, 0x43, 0x35, 0x63, 0xd8,
-	0x0f, 0xc9, 0x3b, 0xac, 0xfa, 0x0b, 0x3b, 0xd7, 0x1a, 0x8d, 0x67, 0xbf, 0x6a, 0x08, 0x0d, 0x9f,
-	0x88, 0x34, 0x6b, 0xcf, 0x8e, 0x55, 0x5d, 0xf3, 0x89, 0x48, 0xb3, 0x4e, 0x7e, 0x04, 0xdc, 0x4f,
-	0x37, 0xad, 0x91, 0x6f, 0x10, 0x12, 0xda, 0xae, 0x76, 0x56, 0x89, 0x38, 0x48, 0xef, 0x5e, 0xb6,
-	0x59, 0xe1, 0xea, 0xec, 0xd6, 0x95, 0x69, 0xb6, 0xe8, 0xd1, 0xba, 0xdd, 0xc3, 0xbc, 0x47, 0x7f,
-	0x5f, 0x8b, 0xc9, 0xd7, 0x4f, 0x30, 0xcf, 0x0b, 0x57, 0xb5, 0xa7, 0x21, 0xdf, 0x30, 0x49, 0x05,
-	0x21, 0x12, 0xb5, 0x84, 0x25, 0x87, 0x8c, 0xf4, 0x38, 0xca, 0x35, 0x04, 0x8d, 0xfd, 0xe6, 0x94,
-	0x0b, 0xed, 0x65, 0xb2, 0xbe, 0x7e, 0x9a, 0x93, 0xd3, 0x78, 0x4e, 0x36, 0xf0, 0x70, 0x43, 0xac,
-	0xb9, 0x9a, 0xbe, 0x3a, 0xa4, 0x8b, 0x37, 0x7d, 0x8c, 0xa6, 0x81, 0x58, 0x23, 0x9f, 0x21, 0x6c,
-	0xb8, 0x89, 0x31, 0xe1, 0x66, 0x92, 0xb0, 0xef, 0x48, 0x8f, 0x8e, 0xc3, 0x9c, 0x8b, 0x7c, 0xfd,
-	0x0d, 0x00, 0x00, 0xff, 0xff, 0x0c, 0xa5, 0x0a, 0x1f, 0xd8, 0x01, 0x00, 0x00,
+	// 308 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x92, 0xcd, 0x4e, 0xc3, 0x30,
+	0x0c, 0xc7, 0x15, 0xb2, 0x4f, 0xb3, 0x31, 0x88, 0x10, 0xca, 0xb1, 0xaa, 0x10, 0x1a, 0x42, 0xea,
+	0x01, 0x8e, 0x20, 0xde, 0x60, 0x07, 0xb2, 0x17, 0x20, 0x6b, 0x23, 0x54, 0xf5, 0x2b, 0x24, 0xe9,
+	0x61, 0x3c, 0x3d, 0x8a, 0xdb, 0xb4, 0xe5, 0xc8, 0xed, 0xef, 0x7f, 0x6c, 0xff, 0x62, 0xcb, 0xb0,
+	0xb1, 0x67, 0xeb, 0x54, 0x95, 0x68, 0xd3, 0xb8, 0x86, 0xd1, 0xd4, 0x95, 0xf1, 0x27, 0x6c, 0x8e,
+	0x68, 0x1e, 0x54, 0x75, 0x52, 0x86, 0x31, 0x98, 0xc9, 0x2c, 0x33, 0x9c, 0x44, 0x64, 0xbf, 0x16,
+	0xa8, 0xbd, 0xd7, 0xb6, 0x79, 0xc6, 0x2f, 0x3a, 0xcf, 0x6b, 0xef, 0x19, 0x59, 0x17, 0x9c, 0x46,
+	0x64, 0xbf, 0x15, 0xa8, 0xd9, 0x2d, 0xcc, 0xad, 0x93, 0x4e, 0xf1, 0x19, 0x9a, 0x5d, 0x10, 0xff,
+	0x00, 0x08, 0x59, 0x17, 0x42, 0xd9, 0xb6, 0x74, 0x43, 0x1d, 0x99, 0xd4, 0xdd, 0xc1, 0x42, 0xa6,
+	0x2e, 0x6f, 0xea, 0x9e, 0xd0, 0x47, 0x8c, 0xc3, 0x52, 0x19, 0xd3, 0x18, 0x95, 0x21, 0x66, 0x25,
+	0x42, 0xc8, 0xae, 0x81, 0x56, 0xf6, 0x0b, 0x39, 0x6b, 0xe1, 0xe5, 0xc8, 0x9e, 0x4f, 0xd9, 0x07,
+	0xd8, 0x76, 0xd3, 0x1d, 0x5d, 0xa3, 0x85, 0xfa, 0xf6, 0x78, 0x6d, 0x94, 0x46, 0xfc, 0x4a, 0xa0,
+	0xf6, 0x5e, 0x91, 0x97, 0x25, 0xc2, 0x57, 0x02, 0xb5, 0x6f, 0xe7, 0xbf, 0x66, 0x39, 0x8d, 0xa8,
+	0x6f, 0x87, 0x41, 0xfc, 0x0a, 0x57, 0xd3, 0x76, 0x56, 0xb3, 0x47, 0x58, 0x1a, 0x1c, 0xcc, 0x72,
+	0x12, 0xd1, 0xfd, 0xe5, 0xf3, 0x2e, 0x49, 0x5d, 0x99, 0x8c, 0x03, 0x8b, 0xf0, 0x1e, 0x3f, 0x8c,
+	0xc5, 0xd2, 0x38, 0xff, 0x99, 0x01, 0x42, 0xa6, 0x90, 0x37, 0xd8, 0xfd, 0xc9, 0xfb, 0x1f, 0xe5,
+	0x3e, 0x50, 0x3e, 0x5a, 0x65, 0xce, 0xfd, 0xc8, 0xc3, 0xc6, 0xe7, 0xdd, 0xc6, 0xe3, 0xf7, 0xc0,
+	0xe8, 0xb3, 0xac, 0x66, 0x4f, 0xb0, 0xac, 0xf0, 0x04, 0x02, 0xe3, 0x06, 0x19, 0xd3, 0xe3, 0x10,
+	0x21, 0xe3, 0xb4, 0xc0, 0x0b, 0x7a, 0xf9, 0x0d, 0x00, 0x00, 0xff, 0xff, 0x28, 0x04, 0xf3, 0x8e,
+	0x51, 0x02, 0x00, 0x00,
 }

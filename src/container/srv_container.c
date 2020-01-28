@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -368,7 +368,22 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				daos_prop_entry_dup_ptr(entry_def, entry,
+							daos_acl_get_size(acl));
+				if (entry_def->dpe_val_ptr == NULL)
+					return -DER_NOMEM;
+			}
+			break;
+		case DAOS_PROP_CO_OWNER:
+		case DAOS_PROP_CO_OWNER_GROUP:
+			D_FREE(entry_def->dpe_str);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
@@ -479,8 +494,32 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
+		case DAOS_PROP_CO_OWNER:
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner_group,
+					   &value);
+			if (rc)
+				return rc;
+			break;
 		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				d_iov_set(&value, acl, daos_acl_get_size(acl));
+				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_acl,
+						   &value);
+				if (rc)
+					return rc;
+			}
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
@@ -1261,9 +1300,58 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_acl,
+				   &value);
+		if (rc != 0)
+			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
-		prop->dpp_entries[idx].dpe_val_ptr = NULL;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+		       value.iov_buf_len);
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER_GROUP) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner_group,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner group length %zu (> %d).\n",
+				value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
 	}
 
 out:
@@ -1351,7 +1439,22 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				}
 				break;
 			case DAOS_PROP_CO_ACL:
-				/* no container ACL now */
+				if (daos_prop_entry_cmp_acl(entry, iv_entry)
+				    != 0)
+					rc = -DER_IO;
+				break;
+			case DAOS_PROP_CO_OWNER:
+			case DAOS_PROP_CO_OWNER_GROUP:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_ACL_MAX_PRINCIPAL_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN)
+				    != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
 				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
