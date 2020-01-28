@@ -774,7 +774,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	return resp, nil
 }
 
-// KillRanks implements the method defined for the Management Service.
+// StopRanks implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
 //
@@ -784,12 +784,12 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 //
 // TODO: Enable "force" if number of retries fail, issuing a different signal/mechanism for
 //       terminating the process.
-func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
+func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 	timeout := time.Duration(req.Timeout)
-	svc.log.Debugf("MgmtSvc.KillRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
+	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -808,21 +808,13 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
-		if req.Force {
-			if err := i.Stop(); err != nil {
-				svc.log.Error(errors.Wrapf(err,
-					"rank %d force stop", *rank).Error())
+		if err := i.Stop(req.Force); err != nil {
+			var msg string
+			if req.Force {
+				msg = " (forced)"
 			}
-			continue
-		}
-
-		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank,
-			&mgmtpb.KillRankReq{Rank: *rank, Force: false})
-
-		// don't use RankResult but log errors
-		result := drespToRankResult(*rank, "stop", dresp, err, system.MemberStateUnknown)
-		if result.Errored {
-			svc.log.Debug(result.Msg)
+			svc.log.Error(errors.Wrapf(err,
+				"rank %d stop%s", *rank, msg).Error())
 		}
 	}
 
@@ -861,7 +853,7 @@ func (svc *mgmtSvc) KillRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			NewRankResult(i.getSuperblock().Rank.Uint32(), "stop", state, rrErr))
 	}
 
-	svc.log.Debugf("MgmtSvc.KillRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("MgmtSvc.StopRanks dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

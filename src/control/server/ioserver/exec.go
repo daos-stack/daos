@@ -158,12 +158,19 @@ func (r *Runner) IsRunning() bool {
 	return atomic.LoadUint32(&r.running) != 0
 }
 
-// Stop kills the Runner process (idempotent).
-func (r *Runner) Stop() error {
+// Stop sends relevant shutdown signal to the Runner process (idempotent).
+func (r *Runner) Stop(force bool) error {
 	if !r.IsRunning() {
 		return nil
 	}
-	return r.cmd.Process.Kill()
+
+	signal := syscall.SIGTERM
+	if force {
+		signal = syscall.SIGKILL
+	}
+	r.log.Debugf("Stopping I/O server instance %d (%s)", r.Config.Index, signal)
+
+	return r.cmd.Process.Signal(signal)
 }
 
 // GetConfig returns the runner's configuration
