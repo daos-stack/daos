@@ -101,8 +101,13 @@ class IorTestBase(TestWithServers):
         # self.container.create()
         env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
         # command to create container of posix type
+#        svcl = ":".join(
+#            [str(item) for item in [
+#                int(self.pool.pool.svc.rl_ranks[index])
+#                for index in range(self.pool.pool.svc.rl_nr)]])
         cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.ior_cmd.daos_pool.value, self.ior_cmd.daos_svcl.value)
+            self.pool.uuid, self.pool.svc)
+#            self.ior_cmd.daos_pool.value, self.ior_cmd.daos_svcl.value)
         try:
             container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                          shell=True)
@@ -161,7 +166,7 @@ class IorTestBase(TestWithServers):
 
             self.ior_cmd.test_file.update(testfile)
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes,
+        out = self.run_ior(self.get_job_manager_command_ior(), self.processes,
                            intercept)
 
         return out
@@ -175,7 +180,7 @@ class IorTestBase(TestWithServers):
         # Update IOR params with the pool
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
-    def get_job_manager_command(self):
+    def get_job_manager_command_ior(self):
         """Get the MPI job manager command for IOR.
 
         Returns:
@@ -183,7 +188,7 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "DFS", "POSIX"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
@@ -281,7 +286,7 @@ class IorTestBase(TestWithServers):
         if intercept:
             testfile += "intercept"
         self.ior_cmd.test_file.update(testfile)
-        manager = self.get_job_manager_command()
+        manager = self.get_job_manager_command_ior()
         procs = (self.processes // len(self.hostlist_clients)) * num_clients
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)

@@ -1,0 +1,84 @@
+hosts:
+  test_servers:
+    - boro-64
+#    - server-A
+#    - server-B
+#    - server-C
+#    - server-D
+#    - server-E
+#    - server-F
+#    - server-G
+#    - server-H
+  test_clients:
+    - boro-14
+#    - client-I
+timeout: 3600
+server_config:
+  name: daos_server
+  servers:
+#    bdev_class: nvme
+#    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+#    scm_class: dcpm
+#    scm_list: ["/dev/pmem0"]
+    scm_size: 60
+pool:
+  createmode:
+    mode_RW:
+      mode: 146
+  createset:
+    setname: daos_server
+  createsize:
+    scm_size: 55000000000   # large scm_size for 1K transfersize
+#    nvme_size: 40000000000
+  createsvc:
+    svcn: 1
+largefilecount:
+  api:
+      - DFS
+#      - POSIX
+ior:
+  np: 1
+  dfs_destroy: False
+  iorflags:
+    sequential:
+#      flags: "-v -k -D 300 -W -w -r -R"
+      flags: "-v -k -W -w -r -R"
+#  ior_api: !mux
+#    dfs:
+#      api: DFS
+#    posix:
+#      api: POSIX
+  test_file: /testFile
+  repetitions: 1
+  transfersize_blocksize: !mux
+    4K:
+      transfer_size: '4K'
+      block_size: '1G'
+  objectclass: !mux
+    SX:
+      daos_oclass: "SX"
+dfuse:
+    mount_dir: "/tmp/daos_dfuse"
+
+mdtest:
+  client_processes:
+    np: 8
+#  num_of_files_dirs: 125000
+  num_of_files_dirs: 1000
+#  mdtest_api: !mux
+#    dfs:
+#      api: 'DFS'
+#    posix:
+#      api: 'POSIX'
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: True
+  manager: "MPICH"
+#  diff_flags: !mux
+#    flags_ssf:
+#      flags: " "
+#      data:
+#        zero:
+  write_bytes: 0
+  read_bytes: 0
+  depth: 0

@@ -82,6 +82,7 @@ class TestPool(TestDaosApiBase):
         self.uuid = None
         self.info = None
         self.svc_ranks = None
+        self.svc = None
         self.connected = False
         self.dmg = None
         # Required to use dmg. It defined the directory where dmg is installed.
@@ -218,7 +219,11 @@ class TestPool(TestDaosApiBase):
             self.pool.attached = 1
 
         self.uuid = self.pool.get_uuid_str()
-
+        self.svc = ":".join(
+            [str(item) for item in [
+                int(self.pool.svc.rl_ranks[index])
+                for index in range(self.pool.svc.rl_nr)]])
+    
     @fail_on(DaosApiError)
     def connect(self, permission=1):
         """Connect to the pool.
