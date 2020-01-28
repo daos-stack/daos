@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,14 @@ const (
 	maxNumSvcReps   = 13
 	mibsInMB        = 0.90949470177293 // convert base2->base10
 )
+
+// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
+// i.e. if "10G" was specified then the output bytes would be the base 10
+// equivalent of this specified size as opposed to base 2.
+// SSD/NVMe size is conventionally specified as base 10.
+func toBase10(in bytesize.ByteSize) bytesize.ByteSize {
+	return bytesize.New(float64(in) * float64(mibsInMB))
+}
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
@@ -176,7 +184,7 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 	}
 
 	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
-	nvmeBytes = bytesize.New(float64(mibsInMB) * float64(nvmeBytes))
+	nvmeBytes = toBase10(nvmeBytes)
 
 	ratio := 1.00
 	if nvmeBytes > 0 {

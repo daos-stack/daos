@@ -85,14 +85,6 @@ func TestGetSize(t *testing.T) {
 	}
 }
 
-// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
-// i.e. if "10G" was specified then the output bytes would be the base 10
-// equivalent of this specified size as opposed to base 2.
-// SSD/NVMe size is conventionally specified as base 10.
-func toBase10(in ByteSize) ByteSize {
-	return New(float64(in) * float64(mibsInMB))
-}
-
 // TestCalcStorage verifies the correct scm/nvme bytes are returned from input
 func TestCalcStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
