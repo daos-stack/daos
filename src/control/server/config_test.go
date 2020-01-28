@@ -80,12 +80,6 @@ func emptyMockConfig(t *testing.T) *Configuration {
 	return newDefaultConfiguration(defaultMockExt())
 }
 
-// defaultMockConfig returns configuration populated from blank config file
-// with mocked external interface.
-func defaultMockConfig(t *testing.T) *Configuration {
-	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
-}
-
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()

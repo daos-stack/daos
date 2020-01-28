@@ -405,10 +405,6 @@ func (h *IOServerHarness) setRestartable() {
 	atomic.StoreUint32(&h.restartable, 1)
 }
 
-func (h *IOServerHarness) setNotRestartable() {
-	atomic.StoreUint32(&h.restartable, 0)
-}
-
 func (h *IOServerHarness) IsRestartable() bool {
 	return atomic.LoadUint32(&h.restartable) == 1
 }

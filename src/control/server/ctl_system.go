@@ -32,11 +32,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	memberStopTimeout   = 10 * retryDelay
-	prepShutdownTimeout = 10 * retryDelay
-)
-
 // SystemQuery implements the method defined for the Management Service.
 //
 // Return system status.
