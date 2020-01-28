@@ -427,7 +427,7 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.sub_command_class.scm_size.value = scm_size
         self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
         if target_list is not None:
-            self.sub_command_class.sub_command_class.ranks.value = ":".join(
+            self.sub_command_class.sub_command_class.ranks.value = ",".join(
                 [str(target) for target in target_list])
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
