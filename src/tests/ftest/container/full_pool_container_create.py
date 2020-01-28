@@ -20,12 +20,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import random
-import string
-
 from apricot import TestWithServers, skipForTicket
 from pydaos.raw import DaosContainer, DaosApiError
-from test_utils_pool import TestPool
 from general_utils import get_random_string
 
 
