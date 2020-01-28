@@ -158,9 +158,9 @@ def set_test_environment(args):
                 "Error obtaining a default interface from: {}".format(
                     os.listdir(net_path)))
             exit(1)
-        print(
-            "Using {} as the default interface from {}".format(
-                interface, available_interfaces))
+    print(
+        "Using {} as the default interface from {}".format(
+            interface, available_interfaces))
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
@@ -515,6 +515,7 @@ def run_tests(test_files, tag_filter, args):
             # along with the test results
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
+                archive_config_files(avocado_logs_dir)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -628,9 +629,9 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     host_list = get_hosts_from_yaml(test_yaml, args)
 
     # Create a subdirectory in the avocado logs directory for this test
-    doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-    print("Archiving host logs from {} in {}".format(host_list, doas_logs_dir))
-    get_output("mkdir {}".format(doas_logs_dir))
+    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
+    print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
+    get_output("mkdir {}".format(daos_logs_dir))
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -642,12 +643,51 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in $(ls {}/*.log)".format(logs_dir),
         "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, doas_logs_dir),
+            this_host, daos_logs_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
         "ls -al $file",
         "fi",
+        "fi",
+        "done",
+        "echo Copied ${copied[@]:-no files}",
+        "exit $rc",
+    ]
+    spawn_commands(host_list, "; ".join(commands))
+
+
+def archive_config_files(avocado_logs_dir):
+    """Copy all of the configuration files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+    """
+    # Run the command locally as the config files are written to a shared dir
+    this_host = socket.gethostname().split(".")[0]
+    host_list = [this_host]
+
+    # Get the source directory for the config files
+    base_dir = get_build_environment()["PREFIX"]
+    config_file_dir = get_temporary_directory(base_dir)
+
+    # Get the destination directory for the config file
+    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_configs")
+    print(
+        "Archiving config files from {} in {}".format(host_list, daos_logs_dir))
+    get_output("mkdir {}".format(daos_logs_dir))
+
+    # Archive any yaml configuration files.  Currently these are always written
+    # to a shared directory for all of hosts.
+    commands = [
+        "set -eu",
+        "rc=0",
+        "copied=()",
+        "for file in $(ls {}/daos_*.yaml)".format(config_file_dir),
+        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, daos_logs_dir),
+        "then copied+=($file)",
+        "else ((rc++))",
         "fi",
         "done",
         "echo Copied ${copied[@]:-no files}",

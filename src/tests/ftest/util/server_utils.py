@@ -165,7 +165,7 @@ class DaosServer(DaosCommand):
             self.group = FormattedParameter("-g {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
-            self.recreate = FormattedParameter("--recreate-superblocks", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", False)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -499,6 +499,12 @@ class ServerManager(ExecutableCommand):
     def run(self):
         """Execute the runner subprocess."""
         self.log.info("Start CMD>>> %s", str(self.runner))
+
+        # Temporary display debug mount information
+        self.log.info("%s", "=" * 80)
+        pcmd(self._hosts, "df -h -t tmpfs", True, None, None)
+        self.log.info("%s", "=" * 80)
+
         return self.runner.run()
 
     def start(self, yamlfile):

@@ -245,11 +245,6 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
 
-        # Display debug memory usage
-        self.log.info("%s", "=" * 80)
-        pcmd(self.hostlist_servers, "free -tm; vmstat -s;df", True, None, None)
-        self.log.info("%s", "=" * 80)
-
         # Find a configuration that meets the test requirements
         self.config = Configuration(
             self.params, self.hostlist_servers, debug=self.debug)

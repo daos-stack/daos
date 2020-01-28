@@ -5,7 +5,7 @@ hosts:
   test_clients:
     - client-E
     - client-F
-timeout: 1500
+timeout: 4800
 server_config:
   servers_per_host: 2
   name: daos_server
@@ -16,6 +16,10 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31416
       log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:5e:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
     1:
       pinned_numa_node: 1
@@ -23,6 +27,10 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:5f:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 pool:
   mode: 146
