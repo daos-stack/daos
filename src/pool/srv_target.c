@@ -253,7 +253,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
-	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0,
+				   DSS_ULT_IO);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
@@ -283,7 +284,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_group:
 	crt_group_secondary_destroy(pool->sp_group);
 err_collective:
-	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
+	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0,
+				       DSS_ULT_IO);
 	D_ASSERTF(rc_tmp == 0, ""DF_RC"\n", DP_RC(rc_tmp));
 err_iv_lock:
 	ABT_mutex_free(&pool->sp_iv_refresh_lock);
@@ -310,7 +312,8 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
+	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0,
+				   DSS_ULT_IO);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
 	else if (rc != 0)
@@ -703,7 +706,8 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 		return rc;
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0,
+					  DSS_ULT_IO);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
@@ -972,7 +976,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 				pool_map_get_version(pool->sp_map));
 
 			pool->sp_map_version = map_version;
-			rc = dss_task_collective(update_child_map, pool, 0);
+			rc = dss_task_collective(update_child_map, pool, 0,
+						 DSS_ULT_IO);
 			D_ASSERT(rc == 0);
 		}
 	} else {
@@ -1003,7 +1008,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_tgt_query(pool, &out->tqo_space);
-
+	ds_pool_put(pool);
 out:
 	out->tqo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);

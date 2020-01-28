@@ -136,7 +136,7 @@ def scons():
     cenv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
     cenv.AppendUnique(LIBPATH=["../dfs"])
 
-    cenv.AppendUnique(LIBS=['dfs'])
+    cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     prereqs.require(cenv, 'fuse')
 

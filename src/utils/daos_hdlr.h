@@ -37,7 +37,6 @@ enum cont_op {
 	CONT_LIST_SNAPS,
 	CONT_DESTROY_SNAP,
 	CONT_ROLLBACK,
-	CONT_UNS_INSERT,
 };
 
 enum pool_op {
@@ -45,6 +44,7 @@ enum pool_op {
 	POOL_QUERY,
 	POOL_STAT,
 	POOL_GET_PROP,
+	POOL_SET_ATTR,
 	POOL_GET_ATTR,
 	POOL_LIST_ATTRS
 };
@@ -87,6 +87,7 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_begin;
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
+	daos_prop_t		*props;		/* --properties cont create */
 
 	FILE			*ostream;	/* help_hdlr() stream */
 };
@@ -168,21 +169,27 @@ typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 /* Pool operations */
 int pool_query_hdlr(struct cmd_args_s *ap);
 int pool_list_containers_hdlr(struct cmd_args_s *ap);
-
+int pool_get_prop_hdlr(struct cmd_args_s *ap);
+int pool_set_attr_hdlr(struct cmd_args_s *ap);
+int pool_get_attr_hdlr(struct cmd_args_s *ap);
+int pool_list_attrs_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
- * int pool_get_prop_hdlr(struct cmd_args_s *ap);
- * int pool_get_attr_hdlr(struct cmd_args_s *ap);
- * int pool_list_attrs_hdlr(struct cmd_args_s *ap);
  */
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
-int cont_uns_insert_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
+int cont_get_prop_hdlr(struct cmd_args_s *ap);
+int cont_list_attrs_hdlr(struct cmd_args_s *ap);
+int cont_set_attr_hdlr(struct cmd_args_s *ap);
+int cont_get_attr_hdlr(struct cmd_args_s *ap);
+int cont_create_snap_hdlr(struct cmd_args_s *ap);
+int cont_list_snaps_hdlr(struct cmd_args_s *ap);
+int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -190,15 +197,8 @@ int cont_destroy_hdlr(struct cmd_args_s *ap);
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_get_prop_hdlr()
  * int cont_set_prop_hdlr()
- * int cont_list_attrs_hdlr()
  * int cont_del_attr_hdlr()
- * int cont_get_attr_hdlr()
- * int cont_set_attr_hdlr()
- * int cont_create_snap_hdlr()
- * int cont_list_snaps_hdlr()
- * int cont_destroy_snap_hdlr()
  * int cont_rollback_hdlr()
  */
 

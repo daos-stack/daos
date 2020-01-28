@@ -55,6 +55,7 @@ typedef struct {
 	daos_size_t		da_chunk_size;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
+	daos_prop_t		*da_props;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */

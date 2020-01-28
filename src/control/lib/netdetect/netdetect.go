@@ -805,6 +805,13 @@ func ValidateProviderConfig(device string, provider string) error {
 		return errors.New("provider required")
 	}
 
+	// Allow provider 'sm' (shared memory) to pass validation without passing any of the checks
+	// The provider is valid to use, but does not use devices.  Therefore, it is handled specially to avoid
+	// flagging it as an error.
+	if provider == "sm" {
+		return nil
+	}
+
 	if device == "" {
 		return errors.New("device required")
 	}
