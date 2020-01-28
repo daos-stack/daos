@@ -306,7 +306,7 @@ test_server_data_corruption(void **state)
 				0, NULL);
 	assert_int_equal(rc, 0);
 	/** Adding delay for functional testing under VM */
-	/** On actual hardware, delay is not needed */
+	/** On actual hardware, delay is not needed      */
 	sleep(60);
 	/** Perform the update */
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
