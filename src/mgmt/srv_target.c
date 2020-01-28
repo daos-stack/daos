@@ -420,6 +420,8 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 	return rc;
 }
 
+static int tgt_destroy(uuid_t pool_uuid, char *path);
+
 static int
 tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	   daos_size_t nvme_size, char *path)
@@ -466,8 +468,8 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 
 out_tree:
 	/** cleanup will be re-executed on several occasions */
-	(void)subtree_destroy(newborn);
-	(void)rmdir(newborn);
+	/* Ensure partially created resources (e.g., SPDK blobs) not leaked */
+	(void)tgt_destroy(pool_uuid, newborn);
 out:
 	D_FREE(newborn);
 	return rc;
