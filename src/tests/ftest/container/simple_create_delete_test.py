@@ -45,18 +45,12 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(
-            self.context, self.log, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.prepare_pool()
 
         # Check that the pool was created
         self.assertTrue(
             self.pool.check_files(self.hostlist_servers),
             "Pool data not was created")
-
-        # Connect to the pool
-        self.pool.connect()
 
         # Create a container
         self.container = TestContainer(self.pool)

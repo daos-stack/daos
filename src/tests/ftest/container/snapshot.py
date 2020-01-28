@@ -59,10 +59,6 @@ class Snapshot(TestWithServers):
         # initialize a python pool object then create the underlying
         # daos storage and connect to it
         self.prepare_pool()
-        # need a connection to the pool with rw permission
-        #    DAOS_PC_RO = int(1 << 0)
-        #    DAOS_PC_RW = int(1 << 1)
-        #    DAOS_PC_EX = int(1 << 2)
 
         try:
             # create a container
