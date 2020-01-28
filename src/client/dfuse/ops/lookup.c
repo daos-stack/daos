@@ -325,8 +325,18 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
+		DFUSE_TRA_INFO(parent, "dfs_lookup() failed: (%s)",
 			       strerror(rc));
+
+		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
+			struct fuse_entry_param entry = {};
+
+			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+			DFUSE_REPLY_ENTRY(parent, req, entry);
+			D_GOTO(free, 0);
+		}
+
 		D_GOTO(err, rc);
 	}
 
@@ -347,6 +357,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+free:
 	D_FREE(ie);
 	return;
 }

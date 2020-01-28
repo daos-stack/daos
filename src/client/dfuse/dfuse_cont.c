@@ -118,8 +118,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 					DFUSE_TRA_ERROR(ie,
 							"dfs_ostat() failed: (%s)",
 							strerror(rc));
-					d_hash_rec_decref(&fs_handle->dpi_iet,
-							  &ie->ie_htl);
 					D_GOTO(err_unlock, rc);
 				}
 

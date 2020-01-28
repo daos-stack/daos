@@ -173,6 +173,7 @@ struct dfuse_dfs {
 	double			dfs_attr_timeout;
 	/* List of dfuse_dfs entries in the dfuse_pool */
 	d_list_t		dfs_list;
+	pthread_mutex_t		dfs_read_mutex;
 };
 
 /*
@@ -347,13 +348,17 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(desc, req, fi)					\
+#define DFUSE_REPLY_OPEN(oh, req, fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning open");		\
+		DFUSE_TRA_DEBUG(oh, "Returning open");		\
+		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
+			(fi)->keep_cache = 1;				\
+			(fi)->cache_readdir = 1;			\
+		}							\
 		__rc = fuse_reply_open(req, fi);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
+			DFUSE_TRA_ERROR(oh,				\
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)

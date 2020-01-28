@@ -321,6 +321,8 @@ main(int argc, char **argv)
 		dfs->dfs_ops = &dfuse_pool_ops;
 	}
 
+	D_MUTEX_INIT(&dfs->dfs_read_mutex, NULL);
+
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_cont, ret = rc);
