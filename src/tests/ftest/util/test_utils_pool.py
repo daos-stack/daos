@@ -151,12 +151,12 @@ class TestPool(TestDaosApiBase):
             else:
                 self.dmg.action_command.group.value = None
             self.dmg.action_command.scm_size.value = self.scm_size.value
-            if self.target_list.value is not None:
+            if isinstance(self.target_list.value, list):
                 # Convert the list of target ranks into a comma-separated list
                 self.dmg.action_command.ranks.value = ",".join(
                     [str(target) for target in self.target_list.value])
             else:
-                self.dmg.action_command.ranks.value = None
+                self.dmg.action_command.ranks.value = self.target_list.value
             self.dmg.action_command.nsvc.value = self.svcn.value
 
             # Execute the dmg command to get the pool uuid and svc list

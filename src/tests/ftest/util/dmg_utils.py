@@ -58,6 +58,25 @@ class DmgCommand(DaosCommand):
         else:
             self.action_command = None
 
+    def run(self):
+        """Run the dmg command.
+
+        Handle additional dmg exceptions:
+            - OverflowError: group id is greater than maximum
+
+        Raises:
+            CommandFailure: if there is an error running the dmg command
+
+        """
+        try:
+            return super(DmgCommand, self).run()
+
+        except OverflowError as error:
+            msg = "Error occurred running '{}': {}".format(
+                self.__str__(), error)
+            self.log.error(msg)
+            raise CommandFailure(msg)
+
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines an object representing a format sub dmg command."""
 
