@@ -995,14 +995,25 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		return EINVAL;
 	}
 
-	prop = daos_prop_alloc(1);
+	if (attr != NULL && attr->da_props != NULL)
+		prop = daos_prop_alloc(attr->da_props->dpp_nr + 1);
+	else
+		prop = daos_prop_alloc(1);
 	if (prop == NULL) {
 		D_ERROR("Failed to allocate container prop.");
 		return ENOMEM;
 	}
 
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
+	if (attr != NULL && attr->da_props != NULL) {
+		rc = daos_prop_copy(prop, attr->da_props);
+		if (rc) {
+			daos_prop_free(prop);
+			D_ERROR("failed to copy properties (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+	}
+	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
 	rc = daos_cont_create(poh, co_uuid, prop, NULL);
 	daos_prop_free(prop);
