@@ -302,3 +302,22 @@ func TestDeviceAlias(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateProviderSm verifies that using the shared memory provider 'sm'
+// is validated with a positive result.
+func TestValidateProviderSm(t *testing.T) {
+	provider := "" // an empty provider string is a search for 'all'
+	results, err := ScanFabric(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal(err)
+	}
+
+	for _, sf := range results {
+		err := ValidateProviderConfig(sf.DeviceName, "sm")
+		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
+	}
+}

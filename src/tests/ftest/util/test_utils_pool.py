@@ -37,17 +37,18 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosPool, c_uuid_to_str,
 from general_utils import check_pool_files, DaosTestError
 from env_modules import load_mpi
 
-from dmg_utils import (get_pool_uuid_service_replicas_from_stdout, DmgCommand)
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
 
 
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
+
     # Constants to define whether to use API or dmg to create and destroy
     # pool.
     USE_API = "API"
     USE_DMG = "dmg"
 
-    def __init__(self, context, log=None, cb_handler=None, dmg_bin_path=None):
+    def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -58,6 +59,11 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
+            dmg_command (DmgCommand): DmgCommand used to call dmg command. If
+                control_method is set to dmg, this value needs to be set. It
+                can be obtained by calling self.get_dmg_command() from a test.
+                It'll return the object with -l <Access Point host:port> and
+                --insecure.
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -83,16 +89,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-        self.dmg = None
-        # Required to use dmg. It defined the directory where dmg is installed.
-        # Use self.basepath + '/install/bin' in the test
-        self.dmg_bin_path = dmg_bin_path
-        if dmg_bin_path is not None:
-            # We make dmg as the member of this class because the test would
-            # have more flexibility over the usage of the command.
-            self.dmg = DmgCommand(self.dmg_bin_path)
-            self.dmg.insecure.value = True
-            self.dmg.request.value = "pool"
+        self.dmg = dmg_command
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -140,15 +137,12 @@ class TestPool(TestDaosApiBase):
                 if value is not None:
                     kwargs[key] = value
             self._call_method(self.pool.create, kwargs)
-
-            self.svc_ranks = [
-                int(self.pool.svc.rl_ranks[index])
-                for index in range(self.pool.svc.rl_nr)]
         else:
             if self.dmg is None:
                 raise DaosTestError(
-                    "self.dmg is None. dmg_bin_path needs to be set through "
+                    "self.dmg is None. dmg_command needs to be set through "
                     "the constructor of TestPool to create pool with dmg.")
+            self.dmg.request.value = "pool"
             # Currently, there is one test that creates the pool over the
             # subset of the server hosts; pool/evict_test. To do so, the test
             # needs to set the rank(s) to target_list.value starting from 0.
@@ -217,14 +211,17 @@ class TestPool(TestDaosApiBase):
             self.pool.set_uuid_str(new_uuid)
             self.pool.attached = 1
 
+        self.svc_ranks = [
+            int(self.pool.svc.rl_ranks[index])
+            for index in range(self.pool.svc.rl_nr)]
         self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
-    def connect(self, permission=1):
+    def connect(self, permission=2):
         """Connect to the pool.
 
         Args:
-            permission (int, optional): connect permission. Defaults to 1.
+            permission (int, optional): connect permission. Defaults to 2.
 
         Returns:
             bool: True if the pool has been connected; False if the pool was
@@ -232,7 +229,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and not self.connected:
-            kwargs = {"flags": 1 << permission}
+            kwargs = {"flags": permission}
             self.log.info(
                 "Connecting to pool %s with permission %s (flag: %s)",
                 self.uuid, permission, kwargs["flags"])
@@ -271,6 +268,7 @@ class TestPool(TestDaosApiBase):
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
                 defined.
+
         """
         if self.pool:
             self.disconnect()

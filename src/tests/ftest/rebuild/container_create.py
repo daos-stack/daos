@@ -228,7 +228,7 @@ class ContainerCreate(TestWithServers):
                 self.container[-1].object_qty.value = 8
                 self.container[-1].record_qty.value = 64
                 self.container[-1].data_size.value = 1024 * 1024
-                self.container[-1].write_objects(rank, cont_obj_cls, False)
+                self.container[-1].write_objects(rank, cont_obj_cls)
                 rank_list = self.container[-1].get_target_rank_lists(
                     " after writing data")
                 self.container[-1].get_target_rank_count(rank, rank_list)
