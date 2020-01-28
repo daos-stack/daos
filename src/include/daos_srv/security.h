@@ -41,6 +41,22 @@ struct pool_owner {
 };
 
 /**
+ * Allocate the default ACL for DAOS pools.
+ *
+ * \return	Newly allocated struct daos_acl
+ */
+struct daos_acl *
+ds_sec_alloc_default_daos_pool_acl(void);
+
+/**
+ * Allocate the default ACL for DAOS containers.
+ *
+ * \return	Newly allocated struct daos_acl
+ */
+struct daos_acl *
+ds_sec_alloc_default_daos_cont_acl(void);
+
+/**
  * Determine whether the provided credentials can access a pool.
  *
  * \param[in]	acl		Access Control List for pool
