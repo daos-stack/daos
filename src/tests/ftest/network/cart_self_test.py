@@ -76,10 +76,7 @@ class CartSelfTest(TestWithServers):
         """Set up each test case."""
         super(CartSelfTest, self).setUp()
 
-        # Define the uri file
-        self.uri_file = os.path.join(self.tmp, "uri.txt")
-
-        # Configure the daos server to use a uri file
+        # Configure the daos server
         transport = DaosServerTransportCredentials()
         self.add_server_manager(
             self.get_config_file(self.server_group, "server"),
@@ -90,17 +87,22 @@ class CartSelfTest(TestWithServers):
             self.server_managers[-1],
             self.hostlist_servers,
             self.hostfile_servers_slots)
-        self.server_managers[0].report_uri.value = self.uri_file
+
+        # Configure the daos server to use a uri file - if supported by the
+        # daos_server job manager
+        if hasattr(self.server_managers[0].manager, "report_uri"):
+            self.uri_file = os.path.join(self.tmp, "uri.txt")
+            self.server_managers[0].manager.report_uri.value = self.uri_file
 
         # Setup additional environment variables for the server orterun command
         share_addr = self.params.get("share_addr", "/run/test/*")
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
         self.cart_env["CRT_PHY_ADDR_STR"] = \
-            self.server_managers[0].job.get_server_config_value("provider")
+            self.server_managers[0].get_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
-            self.server_managers[0].job.get_server_config_value("fabric_iface")
-        self.server_managers[0].assign_environment(self.cart_env, True)
+            self.server_managers[0].get_config_value("fabric_iface")
+        self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
         # Start the daos server
         self.start_server_managers()
