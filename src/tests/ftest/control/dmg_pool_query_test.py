@@ -54,7 +54,7 @@ class DmgPoolQueryTest(IorTestBase):
         Test Description: Test basic dmg functionality to query pool info on
         the system. Provided a valid pool UUID, verify the output received from
         pool query command.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolquerybasic
         """
         self.log.info("Running dmg pool query")
         dmg_out = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
@@ -76,7 +76,7 @@ class DmgPoolQueryTest(IorTestBase):
         Test Description: Test basic dmg functionality to query pool info on
         the system. Verify the inputs that can be provided to 'query --pool'
         argument of the dmg pool subcommand.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryinputs
         """
         # Get test UUID
         uuid = self.params.get("uuid", '/run/pool_uuids/*/')
@@ -112,7 +112,7 @@ class DmgPoolQueryTest(IorTestBase):
         JIRA ID: DAOS-2976
         Test Description: Test that pool query command will properly and
         accurately show the size changes once there is content in the pool.
-        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic
+        :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryior
         """
         # Store orignal pool info and run ior
         self.log.info("Getting pool info before writting data")
