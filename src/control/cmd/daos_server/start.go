@@ -92,7 +92,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		}
 	}
 
-	return cmd.config.Validate()
+	return cmd.config.Validate(cmd.log)
 }
 
 func (cmd *startCmd) configureLogging() error {

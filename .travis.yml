@@ -14,7 +14,7 @@ berfore_install:
  - echo $DOCKER_IMAGE
  - git submodule init
  - git submodule update
- - docker pull $DOCKER_IMAGE
+ - docker pull ${DOCKER_IMAGE/./:}
 
 script:
  - docker build -f utils/docker/Dockerfile.$DOCKER_IMAGE -t daos/$DOCKER_IMAGE --build-arg NOBUILD=1 --build-arg UID=$UID .
