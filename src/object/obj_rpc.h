@@ -122,6 +122,8 @@ enum obj_rpc_flags {
 	ORF_RESEND		= (1 << 1),
 	/** Commit DTX synchronously. */
 	ORF_DTX_SYNC		= (1 << 2),
+	/** Reports prior fetch CSUM mismatch */
+	ORF_CSUM_REPORT		= (1 << 3),
 };
 
 struct obj_iod_array {

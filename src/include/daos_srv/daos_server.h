@@ -623,6 +623,13 @@ enum dss_init_state {
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
+enum dss_media_error_type {
+	MET_WRITE = 0,	/* write error */
+	MET_READ,	/* read error */
+	MET_UNMAP,	/* unmap error */
+	MET_CSUM	/* checksum error */
+};
+
 void dss_init_state_set(enum dss_init_state state);
 
 /* default credits */
@@ -633,6 +640,6 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-int notify_bio_error(bool unmap, bool update, int tgt_id);
+int notify_bio_error(int media_err_type, int tgt_id);
 
 #endif /* __DSS_API_H__ */
