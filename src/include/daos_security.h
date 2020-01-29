@@ -60,7 +60,7 @@ extern "C" {
 /**
  * Maximum length of daos_acl::dal_ace (dal_len's value).
  */
-#define DAOS_ACL_MAX_ACE_LEN		(8192)
+#define DAOS_ACL_MAX_ACE_LEN		(65536)
 
 /**
  * Maximum length of an ACE provided in string format:
@@ -110,6 +110,13 @@ enum daos_acl_access_type {
 };
 
 /**
+ * Mask of all valid access bits
+ */
+#define DAOS_ACL_ACCESS_ALL	(DAOS_ACL_ACCESS_ALLOW |		\
+				 DAOS_ACL_ACCESS_AUDIT |		\
+				 DAOS_ACL_ACCESS_ALARM)
+
+/**
  * Bits representing access flags
  */
 enum daos_acl_flags {
@@ -122,6 +129,14 @@ enum daos_acl_flags {
 	/** Audit/alarm should occur on successful access */
 	DAOS_ACL_FLAG_ACCESS_SUCCESS	= (1U << 3)
 };
+
+/**
+ * Mask of all valid flag bits
+ */
+#define DAOS_ACL_FLAG_ALL	(DAOS_ACL_FLAG_GROUP |			\
+				 DAOS_ACL_FLAG_POOL_INHERIT |		\
+				 DAOS_ACL_FLAG_ACCESS_FAIL |		\
+				 DAOS_ACL_FLAG_ACCESS_SUCCESS)
 
 /**
  * Bits representing the specific permissions that may be set
@@ -137,6 +152,32 @@ enum daos_acl_perm {
 	DAOS_ACL_PERM_SET_ACL		= (1U << 7),
 	DAOS_ACL_PERM_SET_OWNER		= (1U << 8),
 };
+
+/**
+ * Mask of all valid permissions for DAOS pools
+ */
+#define DAOS_ACL_PERM_POOL_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_WRITE |			\
+				 DAOS_ACL_PERM_CREATE_CONT |		\
+				 DAOS_ACL_PERM_DEL_CONT)
+
+/**
+ * Mask of all valid permissions for DAOS containers
+ */
+#define DAOS_ACL_PERM_CONT_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_WRITE |			\
+				 DAOS_ACL_PERM_DEL_CONT |		\
+				 DAOS_ACL_PERM_GET_PROP |		\
+				 DAOS_ACL_PERM_SET_PROP |		\
+				 DAOS_ACL_PERM_GET_ACL |		\
+				 DAOS_ACL_PERM_SET_ACL |		\
+				 DAOS_ACL_PERM_SET_OWNER)
+
+/**
+ * Mask of all valid permission bits in DAOS
+ */
+#define DAOS_ACL_PERM_ALL	(DAOS_ACL_PERM_POOL_ALL |		\
+				 DAOS_ACL_PERM_CONT_ALL)
 
 /**
  * Access Control Entry for a given principal.

@@ -890,6 +890,12 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ACL:
 			bits |= DAOS_CO_QUERY_PROP_ACL;
 			break;
+		case DAOS_PROP_CO_OWNER:
+			bits |= DAOS_CO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
