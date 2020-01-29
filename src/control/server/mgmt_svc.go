@@ -35,6 +35,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -149,7 +150,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
 	defaultPort := NewConfiguration().ControlPort
 	for _, ap := range accessPoints {
-		if !hasPort(ap) {
+		if !common.HasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
 		}
 		t, err := net.ResolveTCPAddr("tcp", ap)
@@ -159,12 +160,6 @@ func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error
 		addrs = append(addrs, t)
 	}
 	return addrs, nil
-}
-
-// hasPort checks if addr specifies a port. This only works with IPv4
-// addresses at the moment.
-func hasPort(addr string) bool {
-	return strings.Contains(addr, ":")
 }
 
 // getListenIPs takes the address this server listens on and returns a list of

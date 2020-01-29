@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -200,8 +200,10 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 9)
 #define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 10)
 #define DAOS_CO_QUERY_PROP_ACL		(1ULL << 11)
+#define DAOS_CO_QUERY_PROP_OWNER	(1ULL << 12)
+#define DAOS_CO_QUERY_PROP_OWNER_GROUP	(1ULL << 13)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR	(12)
+#define DAOS_CO_QUERY_PROP_BITS_NR	(14)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
