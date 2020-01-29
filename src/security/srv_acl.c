@@ -34,6 +34,88 @@
 #include "auth.pb-c.h"
 #include "srv_internal.h"
 
+/**
+ * The default ACLs for pool and container both include ACEs for owner and the
+ * assigned group. All others are denied by default.
+ */
+#define NUM_DEFAULT_ACES	(2)
+
+static struct daos_ace *
+alloc_ace_with_access(enum daos_acl_principal_type type, uint64_t permissions)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(type, NULL);
+	if (ace == NULL) {
+		D_ERROR("Failed to allocate default ACE type %d", type);
+		return NULL;
+	}
+
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = permissions;
+
+	return ace;
+}
+
+static struct daos_acl *
+alloc_default_daos_acl_with_perms(uint64_t owner_perms,
+				  uint64_t owner_grp_perms)
+{
+	int		i;
+	struct daos_ace	*default_aces[NUM_DEFAULT_ACES];
+	struct daos_acl	*default_acl;
+
+	default_aces[0] = alloc_ace_with_access(DAOS_ACL_OWNER, owner_perms);
+	default_aces[1] = alloc_ace_with_access(DAOS_ACL_OWNER_GROUP,
+						owner_grp_perms);
+
+	default_acl = daos_acl_create(default_aces, NUM_DEFAULT_ACES);
+
+	for (i = 0; i < NUM_DEFAULT_ACES; i++) {
+		daos_ace_free(default_aces[i]);
+	}
+
+	return default_acl;
+}
+
+struct daos_acl *
+ds_sec_alloc_default_daos_cont_acl(void)
+{
+	struct daos_acl	*acl;
+	uint64_t	owner_perms;
+	uint64_t	grp_perms;
+
+	/* container owner has full control */
+	owner_perms = DAOS_ACL_PERM_CONT_ALL;
+	/* owner-group has basic read/write access but not admin access */
+	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE |
+		    DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_SET_PROP;
+
+	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
+	if (acl == NULL)
+		D_ERROR("Failed to allocate default ACL for cont properties");
+
+	return acl;
+}
+
+struct daos_acl *
+ds_sec_alloc_default_daos_pool_acl(void)
+{
+	struct daos_acl	*acl;
+	uint64_t	owner_perms;
+	uint64_t	grp_perms;
+
+	/* pool owner and grp have full read/write access */
+	owner_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
+	if (acl == NULL)
+		D_ERROR("Failed to allocate default ACL for pool properties");
+
+	return acl;
+}
+
 static Auth__Token *
 auth_token_dup(Auth__Token *orig)
 {

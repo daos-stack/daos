@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,9 @@ daos_prop_free(daos_prop_t *prop)
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
 		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_CO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
+		case DAOS_PROP_CO_OWNER_GROUP:
 			if (entry->dpe_str)
 				D_FREE(entry->dpe_str);
 			break;
@@ -192,17 +194,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		switch (type) {
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
+		case DAOS_PROP_CO_LABEL:
 			if (!daos_prop_label_valid(
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
 		case DAOS_PROP_PO_ACL:
+		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
 			if (daos_acl_validate(acl_ptr) != 0)
 				return false;
-			break;
-		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
 			val = prop->dpp_entries[i].dpe_val;
@@ -225,21 +226,18 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_CO_OWNER:
 			if (!daos_prop_owner_valid(
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
+		case DAOS_PROP_CO_OWNER_GROUP:
 			if (!daos_prop_owner_group_valid(
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
-		/* container properties */
-		case DAOS_PROP_CO_LABEL:
-			if (!daos_prop_label_valid(
-				prop->dpp_entries[i].dpe_str))
-				return false;
-			break;
+		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
@@ -339,6 +337,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 			}
 			break;
 		case DAOS_PROP_PO_ACL:
+		case DAOS_PROP_CO_ACL:
 			acl_ptr = entry->dpe_val_ptr;
 			entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
 			if (entry_dup->dpe_val_ptr == NULL) {
@@ -347,11 +346,10 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 				return NULL;
 			}
 			break;
-		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
-			break;
 		case DAOS_PROP_PO_OWNER:
+		case DAOS_PROP_CO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
+		case DAOS_PROP_CO_OWNER_GROUP:
 			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_dup->dpe_str == NULL) {
@@ -385,6 +383,26 @@ daos_prop_entry_get(daos_prop_t *prop, uint32_t type)
 			return &prop->dpp_entries[i];
 	}
 	return NULL;
+}
+
+static void
+free_str_prop_entry(daos_prop_t *prop, uint32_t type)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry != NULL)
+		D_FREE(entry->dpe_str);
+}
+
+static void
+free_ptr_prop_entry(daos_prop_t *prop, uint32_t type)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry != NULL)
+		D_FREE(entry->dpe_val_ptr);
 }
 
 /**
@@ -441,22 +459,23 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			label_alloc = true;
-		} else if (type == DAOS_PROP_PO_ACL) {
+		} else if (type == DAOS_PROP_PO_ACL ||
+			   type == DAOS_PROP_CO_ACL) {
 			acl = entry_reply->dpe_val_ptr;
 			entry_req->dpe_val_ptr = daos_acl_dup(acl);
 			if (entry_req->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			acl_alloc = true;
-		} else if (type == DAOS_PROP_CO_ACL) {
-			/* TODO: Implement container ACL */
-		} else if (type == DAOS_PROP_PO_OWNER) {
+		} else if (type == DAOS_PROP_PO_OWNER ||
+			   type == DAOS_PROP_CO_OWNER) {
 			D_STRNDUP(entry_req->dpe_str,
 				  entry_reply->dpe_str,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			owner_alloc = true;
-		} else if (type == DAOS_PROP_PO_OWNER_GROUP) {
+		} else if (type == DAOS_PROP_PO_OWNER_GROUP ||
+			   type == DAOS_PROP_CO_OWNER_GROUP) {
 			D_STRNDUP(entry_req->dpe_str,
 				  entry_reply->dpe_str,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
@@ -471,28 +490,83 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 out:
 	if (rc) {
 		if (label_alloc) {
-			entry_req = daos_prop_entry_get(prop_req,
-							DAOS_PROP_PO_LABEL);
-			D_FREE(entry_req->dpe_str);
+			free_str_prop_entry(prop_req, DAOS_PROP_PO_LABEL);
+			free_str_prop_entry(prop_req, DAOS_PROP_CO_LABEL);
 		}
 		if (acl_alloc) {
-			entry_req = daos_prop_entry_get(prop_req,
-							DAOS_PROP_PO_ACL);
-			D_FREE(entry_req->dpe_val_ptr);
+			free_ptr_prop_entry(prop_req, DAOS_PROP_PO_ACL);
+			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ACL);
 		}
 		if (owner_alloc) {
-			entry_req = daos_prop_entry_get(prop_req,
-							DAOS_PROP_PO_OWNER);
-			D_FREE(entry_req->dpe_str);
+			free_str_prop_entry(prop_req, DAOS_PROP_PO_OWNER);
+			free_str_prop_entry(prop_req, DAOS_PROP_CO_OWNER);
 		}
 		if (group_alloc) {
-			entry_req = daos_prop_entry_get(prop_req,
-						DAOS_PROP_PO_OWNER_GROUP);
-			D_FREE(entry_req->dpe_str);
+			free_str_prop_entry(prop_req, DAOS_PROP_PO_OWNER_GROUP);
+			free_str_prop_entry(prop_req, DAOS_PROP_CO_OWNER_GROUP);
 		}
 		if (entries_alloc) {
 			D_FREE(prop_req->dpp_entries);
 		}
 	}
 	return rc;
+}
+
+
+int
+daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
+			struct daos_prop_entry *entry_src, size_t len)
+{
+	D_ASSERT(entry_src != NULL);
+	D_ASSERT(entry_dst != NULL);
+
+	D_ALLOC(entry_dst->dpe_val_ptr, len);
+	if (entry_dst->dpe_val_ptr == NULL)
+		return -DER_NOMEM;
+
+	memcpy(entry_dst->dpe_val_ptr, entry_src->dpe_val_ptr, len);
+	return 0;
+}
+
+int
+daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
+			struct daos_prop_entry *entry2)
+{
+	struct daos_acl *acl1;
+	size_t		acl1_size;
+	struct daos_acl *acl2;
+	size_t		acl2_size;
+
+	/* Never call this with entries not known to be ACL types */
+	D_ASSERT(entry1->dpe_type == DAOS_PROP_PO_ACL ||
+		 entry1->dpe_type == DAOS_PROP_CO_ACL);
+	D_ASSERT(entry2->dpe_type == DAOS_PROP_PO_ACL ||
+		 entry2->dpe_type == DAOS_PROP_CO_ACL);
+
+	if (entry1->dpe_val_ptr == NULL && entry2->dpe_val_ptr == NULL)
+		return 0;
+
+	if (entry1->dpe_val_ptr == NULL || entry2->dpe_val_ptr == NULL) {
+		D_ERROR("ACL mismatch, NULL ptr\n");
+		return -DER_MISMATCH;
+	}
+
+	acl1 = entry1->dpe_val_ptr;
+	acl2 = entry2->dpe_val_ptr;
+
+	acl1_size = daos_acl_get_size(acl1);
+	acl2_size = daos_acl_get_size(acl2);
+
+	if (acl1_size != acl2_size) {
+		D_ERROR("ACL len mistmatch, %lu != %lu\n",
+			acl1_size, acl2_size);
+		return -DER_MISMATCH;
+	}
+
+	if (memcmp(acl1, acl2, acl1_size) != 0) {
+		D_ERROR("ACL content mismatch\n");
+		return -DER_MISMATCH;
+	}
+
+	return 0;
 }
