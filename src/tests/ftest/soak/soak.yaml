@@ -35,7 +35,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 # pool_params - attributes of the pools to create; Currently only create one
 pool_ior:
     mode: 146
