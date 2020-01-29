@@ -40,6 +40,7 @@ from test_utils_base import TestDaosApiBase
 
 
 class TestPool(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosPools objects."""
 
     # Constants to define whether to use API or dmg to create and destroy
