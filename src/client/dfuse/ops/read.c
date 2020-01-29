@@ -119,8 +119,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
 			position + len, position + size - 1);
 
-		rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
-						position + len, &fb, 0);
+		rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
+						ino, position + len, &fb, 0);
 		if (rc == 0)
 			DFUSE_TRA_DEBUG(oh, "notify_store returned %d", rc);
 		else

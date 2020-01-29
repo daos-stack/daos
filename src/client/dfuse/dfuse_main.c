@@ -248,7 +248,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
-		D_GOTO(out_svcl, 0);
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
 	}
 
 	if (dfuse_info->di_caching)
@@ -256,7 +256,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfp);
 	if (!dfp) {
-		D_GOTO(out_svcl, 0);
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
 	}
 
 	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
@@ -291,7 +291,7 @@ main(int argc, char **argv)
 
 			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
 				DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
-				D_GOTO(out_pool, ret = -DER_INVAL);
+				D_GOTO(out_dfs, ret = -DER_INVAL);
 			}
 
 			/** Try to open the DAOS container (the mountpoint) */
@@ -302,7 +302,7 @@ main(int argc, char **argv)
 				DFUSE_TRA_ERROR(dfp,
 						"Failed container open (%d)",
 						rc);
-				D_GOTO(out_pool, 0);
+				D_GOTO(out_dfs, ret = rc);
 			}
 
 			rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
@@ -311,7 +311,7 @@ main(int argc, char **argv)
 				daos_cont_close(dfs->dfs_coh, NULL);
 				DFUSE_TRA_ERROR(dfp,
 						"dfs_mount failed (%d)", rc);
-				D_GOTO(out_pool, 0);
+				D_GOTO(out_dfs, ret = rc);
 			}
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		} else {
@@ -321,27 +321,20 @@ main(int argc, char **argv)
 		dfs->dfs_ops = &dfuse_pool_ops;
 	}
 
+	/* TODO: Do not merge this PR until this line is applied to all dfs
+	 * allocation points
+	 */
 	D_MUTEX_INIT(&dfs->dfs_read_mutex, NULL);
 
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, ret = rc);
+		D_GOTO(out_dfs, ret = rc);
 
 	/* Remove all inodes from the hash tables */
 	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
 
-	D_GOTO(out_dfs, 0);
-
-out_cont:
-	if (dfuse_info->di_cont) {
-		dfs_umount(dfs->dfs_ns);
-		daos_cont_close(dfs->dfs_coh, NULL);
-	}
-out_pool:
-	if (dfp && !daos_handle_is_inval(dfp->dfp_poh))
-		daos_pool_disconnect(dfp->dfp_poh, NULL);
 out_dfs:
 
 	d_list_for_each_entry_safe(dfp, dfpn, &dfuse_info->di_dfp_list,
