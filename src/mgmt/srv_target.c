@@ -412,12 +412,15 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 		vpa.vpa_scm_size = 0;
 		vpa.vpa_nvme_size = nvme_size;
 
-		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
+		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0,
+					   DSS_ULT_IO);
 	}
 
 	/** brute force cleanup to be done by the caller */
 	return rc;
 }
+
+static int tgt_destroy(uuid_t pool_uuid, char *path);
 
 static int
 tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
@@ -465,8 +468,8 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 
 out_tree:
 	/** cleanup will be re-executed on several occasions */
-	(void)subtree_destroy(newborn);
-	(void)rmdir(newborn);
+	/* Ensure partially created resources (e.g., SPDK blobs) not leaked */
+	(void)tgt_destroy(pool_uuid, newborn);
 out:
 	D_FREE(newborn);
 	return rc;
@@ -643,7 +646,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 
 	/* destroy blobIDs first */
 	uuid_copy(id.uuid, pool_uuid);
-	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0, DSS_ULT_IO);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -794,7 +797,7 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
-	rc = dss_task_collective(tgt_profile_task, in, 0);
+	rc = dss_task_collective(tgt_profile_task, in, 0, DSS_ULT_IO);
 
 	out = crt_reply_get(rpc);
 	out->p_rc = rc;

@@ -94,6 +94,8 @@ enum {
 	DAOS_OF_ARRAY		= (1 << 5),
 	/** reserved: Multi Dimensional Array */
 	DAOS_OF_ARRAY_MD	= (1 << 6),
+	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
+	DAOS_OF_ARRAY_BYTE	= (1 << 7),
 	/**
 	 * benchmark-only feature bit, I/O is a network echo, no data is going
 	 * to be stored/returned

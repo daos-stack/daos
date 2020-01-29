@@ -163,36 +163,15 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.PrepShutdownReq) (resp *mgmtpb.DaosResp, stopErr error) {
-	stopErr = msc.withConnection(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, psErr error) {
+	psErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
-			prefix := fmt.Sprintf("prep shutdown(%s, %+v)", destAddr, *req)
-			msc.log.Debugf(prefix + " begin")
-			defer msc.log.Debugf(prefix + " end")
+			msc.log.Debugf("prep shutdown(%s, %+v)", destAddr, *req)
 
-			for {
-				var err error
+			resp, err = pbClient.PrepShutdownRanks(ctx, req)
 
-				select {
-				case <-ctx.Done():
-					return errors.Wrap(ctx.Err(), prefix)
-				default:
-				}
-
-				resp, err = pbClient.PrepShutdown(ctx, req)
-				if msc.retryOnErr(err, ctx, prefix) {
-					continue
-				}
-				if resp == nil {
-					return errors.New("unexpected nil response status")
-				}
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
-					continue
-				}
-
-				return nil
-			}
+			return
 		})
 
 	return
@@ -202,7 +181,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 //
 // Shipped function issues KillRank requests using MgmtSvcClient over dRPC to
 // terminates given rank.
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
@@ -219,7 +198,10 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				default:
 				}
 
-				resp, err = pbClient.KillRank(ctx, req)
+				// returns on time out or when all instances are stopped
+				// error returned if any instance is still running so that
+				// we retry until all are terminated on host
+				resp, err = pbClient.KillRanks(ctx, req)
 				if msc.retryOnErr(err, ctx, prefix) {
 					continue
 				}
@@ -227,9 +209,6 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 					return errors.New("unexpected nil response status")
 				}
 				// TODO: Stop retrying upon certain errors.
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
-					continue
-				}
 
 				return nil
 			}
@@ -242,17 +221,25 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 //
 // Shipped function issues StartRanks requests using MgmtSvcClient to
 // restart the designated ranks as configured in persistent superblock.
-func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.StartRanksReq) (resp *mgmtpb.StartRanksResp, restartErr error) {
-	restartErr = msc.withConnection(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+//
+// StartRanks will return results for any instances started by the harness.
+// StartRanks will only return when instances have been detected as running
+// or timeout results in error.
+func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, startErr error) {
+	startErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
 			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, *req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
-			_, err := pbClient.StartRanks(ctx, req)
+			ctx, _ = context.WithTimeout(ctx, retryDelay)
 
-			return err
+			// returns on time out or when all instances are running
+			// don't retry
+			resp, err = pbClient.StartRanks(ctx, req)
+
+			return
 		})
 
 	return

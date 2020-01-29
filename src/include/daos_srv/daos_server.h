@@ -329,6 +329,8 @@ enum dss_ult_type {
 	DSS_ULT_GC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
+	/** I/O ULT */
+	DSS_ULT_IO,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -429,13 +431,16 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag);
+			   struct dss_coll_args *coll_args, int flag,
+			   int ult_type);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag);
+			     struct dss_coll_args *coll_args, int flag,
+			     int ult_type);
 
-int dss_task_collective(int (*func)(void *), void *arg, int flag);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag);
+int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag,
+			  int ult_type);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -599,6 +604,7 @@ struct dss_enum_unpack_io {
 	daos_iod_t		*ui_iods;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
+	daos_epoch_t		*ui_rec_punch_ephs;
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;

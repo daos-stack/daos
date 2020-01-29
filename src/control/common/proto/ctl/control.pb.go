@@ -67,7 +67,7 @@ type MgmtCtlClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
-	// Query DAOS system membership (joined data-plane instances)
+	// Query DAOS system status
 	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
@@ -213,7 +213,7 @@ type MgmtCtlServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
-	// Query DAOS system membership (joined data-plane instances)
+	// Query DAOS system status
 	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
