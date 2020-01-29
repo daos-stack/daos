@@ -698,6 +698,7 @@ class ServerManager(ExecutableCommand):
 
 def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                clean=True):
+    # pylint: disable=unused-argument
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:

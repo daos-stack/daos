@@ -26,6 +26,7 @@ from ior_test_base import IorTestBase
 
 
 class IorSmall(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with 1 server with basic parameters.
 
     :avocado: recursive

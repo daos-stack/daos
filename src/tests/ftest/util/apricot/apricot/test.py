@@ -44,7 +44,6 @@ from configuration_utils import Configuration
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
-from general_utils import pcmd
 from dmg_utils import DmgCommand
 
 
@@ -526,6 +525,7 @@ class TestWithServers(TestWithoutServers):
 
         Returns:
             DmgCommand: New DmgCommand object.
+
         """
         dmg = DmgCommand(self.bin)
         dmg.hostlist.value = self.server_managers[index].runner.job.\

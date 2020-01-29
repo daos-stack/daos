@@ -24,7 +24,9 @@
 
 from fio_test_base import FioBase
 
+
 class FioSmall(FioBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs Fio with in small config.
     :avocado: recursive
     """

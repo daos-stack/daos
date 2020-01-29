@@ -24,7 +24,9 @@
 
 from mdtest_test_base import MdtestBase
 
+
 class MdtestSmall(MdtestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs Mdtest with in small config.
     :avocado: recursive
     """
