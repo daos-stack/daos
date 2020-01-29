@@ -104,16 +104,21 @@ class PoolTestBase(TestWithServers):
         self.create_test_pool(namespace)
 
         # Obtain the lists of arguments to use
-        param_names = (
+        param_names = [
             "mode",
             "uid",
             "gid",
             "scm_size",
-            "name",
             "target_list",
             "svcn",
             "nvme_size"
-        )
+        ]
+        if not self.pool.using_dmg:
+            # The dmg pool create command does not make use of the server group
+            # name.  Therefore testing invalid server group name values is only
+            # valid when validating the API pool create.
+            param_names.append("name")
+
         param_lists = [self.get_param_list(key) for key in param_names]
 
         # Determine the number of test variants

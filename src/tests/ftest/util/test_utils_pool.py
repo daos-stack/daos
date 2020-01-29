@@ -83,6 +83,16 @@ class TestPool(TestDaosApiBase):
         self.connected = False
         self.dmg = dmg_command
 
+    @property
+    def using_dmg(self):
+        """Determine if dmg is being used as the control method.
+
+        Returns:
+            bool: True if dmg is being used as the control method
+
+        """
+        return self.control_method.value == self.USE_DMG
+
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
