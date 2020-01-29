@@ -161,6 +161,7 @@ daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 {
 	daos_prop_t	*prop;
 	const size_t	nr_entries = 3;
+	int		rc;
 
 	if (acl_prop == NULL) {
 		D_ERROR("invalid acl_prop parameter\n");
@@ -175,9 +176,13 @@ daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
 	prop->dpp_entries[2].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
 
-	*acl_prop = prop;
+	rc = daos_cont_query(coh, NULL, prop, ev);
+	if (rc == 0)
+		*acl_prop = prop;
+	else
+		daos_prop_free(prop);
 
-	return daos_cont_query(coh, NULL, prop, ev);
+	return rc;
 }
 
 int
