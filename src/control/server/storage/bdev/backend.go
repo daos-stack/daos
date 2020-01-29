@@ -217,7 +217,7 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		return nil, FaultFormatBadPciAddr(pciAddr)
 	}
 
-	if err := b.binding.Format(pciAddr); err != nil {
+	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 
