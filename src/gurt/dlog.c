@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -585,6 +585,13 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 {
 	int	tagblen;
 	char	*newtag, *cp;
+	int	truncate = 0;
+	char	*env;
+
+	env = getenv(D_LOG_TRUNCATE_ENV);
+
+	if (env != NULL && atoi(env) > 0)
+		truncate = 1;
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -624,13 +631,18 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.def_mask = default_mask;
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
+		int log_flags = O_RDWR | O_CREAT;
+
+		if (!truncate)
+			log_flags |= O_APPEND;
+
 		mst.logfile = strdup(logfile);
 		if (!mst.logfile) {
 			fprintf(stderr, "strdup failed.\n");
 			goto error;
 		}
 		mst.logfd =
-		    open(mst.logfile, O_RDWR | O_APPEND | O_CREAT, 0666);
+		    open(mst.logfile, log_flags, 0666);
 		if (mst.logfd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
 				mst.logfile, strerror(errno));

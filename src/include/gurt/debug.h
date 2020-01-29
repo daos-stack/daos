@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2017-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,6 +80,8 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 /**< Env to specify log file pid append to filename*/
 #define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
+
+#define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
 /* Enable shadow warning where users use same variable name in nested
  * scope.   This enables use of a variable in the macro below and is

@@ -3,8 +3,8 @@
 %global mercury_version 1.0.1-21%{?dist}
 
 Name:          cart
-Version:       4.5.0
-Release:       2%{?relval}%{?dist}
+Version:       4.5.1
+Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -143,6 +143,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Jan 27 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.1-1
+- Libcart version 4.5.1-1
+- New D_LOG_TRUNCATE environment variable added
+
 * Thu Jan 23 2020 Brian J. Murrell <brian.murrell@intel.com> - 4.5.0-2
 - Add Requires: mercury-$version until we can get an upstream stable release
 
