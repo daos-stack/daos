@@ -155,6 +155,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	daos_epoch_t		*ephs = NULL;
 	uuid_t			*uuids = NULL;
 	unsigned int		*shards = NULL;
+	unsigned int		index;
 	crt_rpc_t		*rpc = NULL;
 	crt_endpoint_t		tgt_ep = {0};
 	int			rc = 0;
@@ -205,9 +206,12 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
 		" cnt %d\n", DP_UUID(rpt->rt_pool_uuid), tgt_id, arg->count);
 
+	ABT_rwlock_rdlock(rpt->rt_pool->sp_lock);
 	rc = pool_map_find_target(rpt->rt_pool->sp_map, tgt_id, &target);
 	D_ASSERT(rc == 1);
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
+	index = target->ta_comp.co_index;
+	ABT_rwlock_unlock(rpt->rt_pool->sp_lock);
 	/* NB: let's send object list to 0 xstream to simplify the rebuild
 	 * object handling process for now, for example avoid lock to insert
 	 * objects in the object rebuild tree.
@@ -235,8 +239,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		rebuild_in->roi_shards.ca_count = arg->count;
 		rebuild_in->roi_shards.ca_arrays = shards;
 		uuid_copy(rebuild_in->roi_pool_uuid, rpt->rt_pool_uuid);
-		rebuild_in->roi_tgt_idx = target->ta_comp.co_index;
-
+		rebuild_in->roi_tgt_idx = index;
 		rc = dss_rpc_send(rpc);
 
 		rebuild_out = crt_reply_get(rpc);
@@ -260,8 +263,10 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		/* but we need check if the remote target is kicked out of the
 		 * pool map before retry.
 		 */
+		ABT_rwlock_rdlock(rpt->rt_pool->sp_lock);
 		rc = pool_map_find_down_tgts(rpt->rt_pool->sp_map, &targets,
 					     &failed_tgts_cnt);
+		ABT_rwlock_unlock(rpt->rt_pool->sp_lock);
 		if (rc != 0) {
 			D_ERROR("failed create failed tgt list rc "DF_RC"\n",
 				DP_RC(rc));
@@ -772,7 +777,6 @@ static void
 rebuild_scan_leader(void *data)
 {
 	struct rebuild_scan_arg	  *arg = data;
-	struct pool_map		  *map;
 	struct rebuild_tgt_pool_tracker *rpt;
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
@@ -781,20 +785,11 @@ rebuild_scan_leader(void *data)
 	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
 	rpt = arg->rpt;
-	/* refresh placement for the server stack */
-	ABT_mutex_lock(rpt->rt_lock);
-	map = rebuild_pool_map_get(rpt->rt_pool);
-	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, true, DEFAULT_PL_TYPE);
-	if (rc != 0) {
-		ABT_mutex_unlock(rpt->rt_lock);
-		D_GOTO(out_map, rc = -DER_NOMEM);
-	}
-	ABT_mutex_unlock(rpt->rt_lock);
-
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
 	rc = dss_thread_collective(rebuild_scanner, arg, 0, DSS_ULT_REBUILD);
 	if (rc)
-		D_GOTO(put_plmap, rc);
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
 		DP_UUID(rpt->rt_pool_uuid));
@@ -806,8 +801,15 @@ rebuild_scan_leader(void *data)
 		/* walk through the rebuild tree and send the rebuild objects */
 		rc = dbtree_iterate(arg->rebuild_tree_hdl, DAOS_INTENT_REBUILD,
 				    false, rebuild_tgt_fini_obj_send_cb, arg);
-		if (rc)
-			D_GOTO(put_plmap, rc);
+		if (rc) {
+			/* NB: it still need to rebuild_scan_done to stop the
+			 * the rebuild, so let's not exit here, only set the
+			 * status.
+			 */
+			D_ERROR(DF_UUID" Send object failed: rc %d\n",
+				DP_UUID(rpt->rt_pool_uuid), rc);
+			tls->rebuild_pool_status = rc;
+		}
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
@@ -816,19 +818,14 @@ rebuild_scan_leader(void *data)
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
-		D_GOTO(put_plmap, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(rpt->rt_pool_uuid), rc);
 
-put_plmap:
-	pl_map_disconnect(rpt->rt_pool_uuid);
-out_map:
-	rebuild_pool_map_put(map);
+out:
 	dbtree_destroy(arg->rebuild_tree_hdl, NULL);
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
-	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done %d\n",
