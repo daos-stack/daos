@@ -408,8 +408,19 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	/* Forward the request to its parent if it is not root, and
 	 * let's caller decide how to deal with leader.
 	 */
-	if (!valid && ns->iv_master_rank != dss_self_rank())
-		return -DER_IVCB_FORWARD;
+	if (!valid) {
+		/* If the rank inside the iv_fetch request(key) does not
+		 * match the current ns information, then it means the new
+		 * leader just steps up.  Let's return -DER_NOTLEADER in this
+		 * case, so IV fetch can keep retry, until the IV information
+		 * is updated on all nodes.
+		 */
+		if ((key.rank == dss_self_rank() &&
+		     key.rank != ns->iv_master_rank))
+			return -DER_NOTLEADER;
+		else if (ns->iv_master_rank != dss_self_rank())
+			return -DER_IVCB_FORWARD;
+	}
 
 	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
 	if (rc == 0)
@@ -908,8 +919,12 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
-	if (retry && daos_rpc_retryable_rc(rc)) {
-		D_DEBUG(DB_TRACE, "retry upon %d\n", rc);
+	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry upon %d\n", rc);
 		goto retry;
 	}
 	return rc;

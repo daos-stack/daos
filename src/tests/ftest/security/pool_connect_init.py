@@ -27,7 +27,7 @@ import traceback
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosApiError
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 class PoolSecurityTest(TestWithServers):
     """

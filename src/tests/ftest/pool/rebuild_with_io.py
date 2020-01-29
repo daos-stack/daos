@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers, skipForTicket
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class RebuildWithIO(TestWithServers):
@@ -49,7 +50,8 @@ class RebuildWithIO(TestWithServers):
         :avocado: tags=all,pool,rebuild,pr,medium,rebuildwithio
         """
         # Get the test params
-        pool = TestPool(self.context, self.log)
+        pool = TestPool(self.context, self.log,
+                        dmg_command=self.get_dmg_command())
         pool.get_params(self)
         container = TestContainer(pool)
         container.get_params(self)

@@ -132,7 +132,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(formatACL(acl))
+	_, err = file.WriteString(formatACLDefault(acl))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
@@ -174,6 +174,13 @@ func TestPoolCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Couldn't set file writable only")
 	}
+
+	testEmptyFile := filepath.Join(tmpDir, "empty.txt")
+	empty, err := os.Create(testEmptyFile)
+	if err != nil {
+		t.Fatalf("Failed to create empty file: %s", err)
+	}
+	empty.Close()
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
@@ -269,6 +276,12 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
+			"Create pool with empty ACL file",
+			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
@@ -315,6 +328,17 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Get pool ACL",
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool ACL with verbose flag",
+			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --verbose",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
@@ -385,6 +409,12 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
+			"Overwrite pool ACL with empty ACL file",
+			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
+		},
+		{
 			"Overwrite pool ACL",
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
@@ -401,6 +431,12 @@ func TestPoolCommands(t *testing.T) {
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
 			"ConnectClients",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
+		},
+		{
+			"Update pool ACL with empty ACL file",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testEmptyFile),
+			"ConnectClients",
+			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
 			"Update pool ACL without file or entry",

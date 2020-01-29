@@ -8,7 +8,7 @@
 
 Name:          daos
 Version:       0.8.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -221,6 +221,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
+%{_bindir}/pl_bench
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so
@@ -228,7 +229,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
-# TODO: this should move to %{_libdir}/daos/libplacement.so
+# TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %dir %{_libdir}/%{name}
@@ -335,7 +336,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Fri Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
+* Sat Jan 18 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-3
+- Fixing a few warnings in the RPM spec file
+
+* Fri Dec 27 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
 - Remove openmpi, pmix, and hwloc builds, use hwloc and openmpi packages
 
 * Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1

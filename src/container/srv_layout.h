@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,17 +71,20 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  */
 extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
 extern d_iov_t ds_cont_prop_max_oid;		/* uint64_t */
-extern d_iov_t ds_cont_prop_label;		/* uint64_t */
+extern d_iov_t ds_cont_prop_label;		/* string */
 extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
 extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_chunk_size;	/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_server_verify;	/* uint64_t */
-extern d_iov_t ds_cont_prop_redun_fac;	/* uint64_t */
-extern d_iov_t ds_cont_prop_redun_lvl;	/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_fac;		/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_lvl;		/* uint64_t */
 extern d_iov_t ds_cont_prop_snapshot_max;	/* uint64_t */
 extern d_iov_t ds_cont_prop_compress;		/* uint64_t */
 extern d_iov_t ds_cont_prop_encrypt;		/* uint64_t */
+extern d_iov_t ds_cont_prop_acl;		/* struct daos_acl */
+extern d_iov_t ds_cont_prop_owner;		/* string */
+extern d_iov_t ds_cont_prop_owner_group;	/* string */
 extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
 extern d_iov_t ds_cont_attr_user;		/* User attributes KVS */
 
@@ -100,5 +103,20 @@ struct container_hdl {
 extern daos_prop_t cont_prop_default;
 
 #define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+
+/**
+ * Initialize the default container properties.
+ *
+ * \return	0		Success
+ *		-DER_NOMEM	Out of memory
+ */
+int
+ds_cont_prop_default_init(void);
+
+/**
+ * Clean up the default container properties.
+ */
+void
+ds_cont_prop_default_fini(void);
 
 #endif /* __CONTAINER_SRV_LAYOUT_H__ */

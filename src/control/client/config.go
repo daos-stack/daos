@@ -28,7 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -39,11 +39,11 @@ import (
 )
 
 const (
-	defaultRuntimeDir = "/var/run/daos_agent"
-	defaultLogFile    = "/tmp/daos_agent.log"
-	defaultConfigPath = "etc/daos.yml"
-	defaultSystemName = "daos_server"
-	defaultPort       = 10001
+	defaultRuntimeDir  = "/var/run/daos_agent"
+	defaultLogFile     = "/tmp/daos_agent.log"
+	defaultConfigPath  = "../etc/daos.yml"
+	defaultSystemName  = "daos_server"
+	defaultControlPort = 10001
 )
 
 // External interface provides methods to support various os operations.
@@ -69,7 +69,7 @@ func (e *ext) Getenv(key string) string {
 type Configuration struct {
 	SystemName      string   `yaml:"name"`
 	AccessPoints    []string `yaml:"access_points"`
-	Port            int      `yaml:"port"`
+	ControlPort     int      `yaml:"port"`
 	HostList        []string `yaml:"hostlist"`
 	RuntimeDir      string   `yaml:"runtime_dir"`
 	HostFile        string   `yaml:"host_file"`
@@ -85,9 +85,9 @@ type Configuration struct {
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:      defaultSystemName,
-		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultPort)},
-		Port:            defaultPort,
-		HostList:        []string{fmt.Sprintf("localhost:%d", defaultPort)},
+		AccessPoints:    []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
+		ControlPort:     defaultControlPort,
+		HostList:        []string{fmt.Sprintf("localhost:%d", defaultControlPort)},
 		RuntimeDir:      defaultRuntimeDir,
 		LogFile:         defaultLogFile,
 		Path:            defaultConfigPath,
@@ -99,42 +99,46 @@ func newDefaultConfiguration(ext External) *Configuration {
 // GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(log logging.Logger, ConfigPath string) (*Configuration, error) {
-	config := NewConfiguration()
-	if ConfigPath != "" {
-		log.Debugf("Overriding default config path with: %s", ConfigPath)
-		config.Path = ConfigPath
+func GetConfig(log logging.Logger, inPath string) (*Configuration, error) {
+	c := NewConfiguration()
+	if err := c.SetPath(inPath); err != nil {
+		return nil, err
 	}
 
-	if !filepath.IsAbs(config.Path) {
-		newPath, err := common.GetAbsInstallPath(config.Path)
-		if err != nil {
-			return nil, errors.Wrap(err, "resolving install path")
-		}
-
-		config.Path = newPath
-	}
-
-	_, err := os.Stat(config.Path)
-	if err != nil {
-		if os.IsNotExist(err) && ConfigPath == "" {
+	if _, err := os.Stat(c.Path); err != nil {
+		if inPath == "" && os.IsNotExist(err) {
 			log.Debugf("No configuration file found; using default values")
-			return config, nil
+			c.Path = ""
+			return c, nil
 		}
-		return nil, errors.Wrapf(err, "failed to stat config file %s", config.Path)
+		return nil, err
 	}
 
-	if err := config.LoadConfig(); err != nil {
-		return nil, errors.Wrapf(err, "parsing config file %s", config.Path)
+	if err := c.Load(); err != nil {
+		return nil, errors.Wrapf(err, "parsing config file %s", c.Path)
 	}
-	log.Debugf("DAOS Client config read from %s", config.Path)
+	log.Debugf("DAOS Client config read from %s", c.Path)
 
-	return config, nil
+	if err := c.Validate(log); err != nil {
+		return nil, errors.Wrapf(err, "validating config file %s", c.Path)
+	}
+
+	return c, nil
 }
 
-// LoadConfig reads the configuration file specified by Configuration.Path
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
+	if err != nil {
+		return err
+	}
+	c.Path = newPath
+
+	return nil
+}
+
+// Load reads the configuration file specified by Configuration.Path
 // and parses it.  Parsed values override any default values.
-func (c *Configuration) LoadConfig() error {
+func (c *Configuration) Load() error {
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
 		return err
@@ -142,6 +146,36 @@ func (c *Configuration) LoadConfig() error {
 
 	if err = c.parse(bytes); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Validate asserts that config meets minimum requirements.
+func (c *Configuration) Validate(log logging.Logger) (err error) {
+	// only single access point valid for now
+	if len(c.AccessPoints) > 1 {
+		return FaultConfigBadAccessPoints
+	}
+	// apply configured control port if not supplied
+	for i := range c.AccessPoints {
+		// apply configured control port if not supplied
+		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)
+		if err != nil {
+			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
+		}
+
+		// warn if access point port differs from config control port
+		if strconv.Itoa(c.ControlPort) != port {
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
+				host, port, c.ControlPort)
+		}
+
+		if port == "0" {
+			return FaultConfigBadControlPort
+		}
+
+		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	return nil
