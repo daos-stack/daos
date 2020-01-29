@@ -700,6 +700,9 @@ test_acl_from_strs_bad_input(void **state)
 	struct daos_acl		*acl = NULL;
 	static const char	*valid_aces[] = {"A::OWNER@:rw"};
 	static const char	*garbage[] = {"ABCD:E:FGH:IJ"};
+	/* duplicate entries aren't valid */
+	static const char	*invalid_aces[2] = {"A::OWNER@:rw",
+						    "A::OWNER@:rw"};
 
 	assert_int_equal(daos_acl_from_strs(NULL, 1, &acl), -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(valid_aces, 0, &acl),
@@ -707,6 +710,7 @@ test_acl_from_strs_bad_input(void **state)
 	assert_int_equal(daos_acl_from_strs(valid_aces, 1, NULL),
 			 -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(garbage, 1, &acl), -DER_INVAL);
+	assert_int_equal(daos_acl_from_strs(invalid_aces, 2, &acl), -DER_INVAL);
 }
 
 static void
