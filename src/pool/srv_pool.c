@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,27 +301,6 @@ uuid_compare_cb(const void *a, const void *b)
 	return uuid_compare(*ua, *ub);
 }
 
-static void
-pool_prop_copy_ptr(struct daos_prop_entry *entry_def,
-		struct daos_prop_entry *entry, size_t len)
-{
-	D_ALLOC(entry_def->dpe_val_ptr, len);
-	if (entry_def->dpe_val_ptr != NULL) {
-		memcpy(entry_def->dpe_val_ptr, entry->dpe_val_ptr, len);
-	}
-}
-
-static uint32_t
-pool_prop_acl_get_length(struct daos_prop_entry *entry)
-{
-	if (entry->dpe_val_ptr == NULL) {
-		D_WARN("ACL pool property was NULL\n");
-		return 0;
-	}
-
-	return daos_acl_get_size((struct daos_acl *)entry->dpe_val_ptr);
-}
-
 /* copy \a prop to \a prop_def (duplicated default prop) */
 static int
 pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
@@ -361,8 +340,10 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
-				pool_prop_copy_ptr(entry_def, entry,
-					pool_prop_acl_get_length(entry));
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				daos_prop_entry_dup_ptr(entry_def, entry,
+							daos_acl_get_size(acl));
 				if (entry_def->dpe_val_ptr == NULL)
 					return -DER_NOMEM;
 			}
@@ -416,8 +397,10 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
-				d_iov_set(&value, entry->dpe_val_ptr,
-					     pool_prop_acl_get_length(entry));
+				struct daos_acl *acl;
+
+				acl = entry->dpe_val_ptr;
+				d_iov_set(&value, acl, daos_acl_get_size(acl));
 				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_acl,
 						   &value);
 				if (rc)
@@ -466,6 +449,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
+	uint32_t		connectable;
 	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
 	d_iov_t		value;
@@ -555,6 +539,13 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop);
+	if (rc != 0)
+		D_GOTO(out_uuids, rc);
+
+	/* Write connectable property */
+	connectable = 1;
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		D_GOTO(out_uuids, rc);
 
@@ -1863,6 +1854,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
+	uint32_t			connectable;
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -1896,6 +1888,20 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_svc, rc);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
+
+	/* Check if pool is being destroyed and not accepting connections */
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root,
+			   &ds_pool_prop_connectable, &value);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	D_DEBUG(DF_DSMS, DF_UUID": connectable=%u\n",
+		DP_UUID(in->pci_op.pi_uuid), connectable);
+	if (!connectable) {
+		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
+			DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_lock, rc = -DER_BUSY);
+	}
 
 	/* Check existing pool handles. */
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
@@ -2624,12 +2630,23 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			D_ASSERT(iv_entry != NULL);
 			switch (entry->dpe_type) {
 			case DAOS_PROP_PO_LABEL:
-			case DAOS_PROP_PO_OWNER:
-			case DAOS_PROP_PO_OWNER_GROUP:
 				D_ASSERT(strlen(entry->dpe_str) <=
 					 DAOS_PROP_LABEL_MAX_LEN);
 				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
 					    DAOS_PROP_LABEL_MAX_LEN) != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
+				break;
+			case DAOS_PROP_PO_OWNER:
+			case DAOS_PROP_PO_OWNER_GROUP:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_ACL_MAX_PRINCIPAL_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN)
+				    != 0) {
 					D_ERROR("mismatch %s - %s.\n",
 						entry->dpe_str,
 						iv_entry->dpe_str);
@@ -2648,6 +2665,9 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 				}
 				break;
 			case DAOS_PROP_PO_ACL:
+				if (daos_prop_entry_cmp_acl(entry, iv_entry)
+				    != 0)
+					rc = -DER_IO;
 				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
@@ -3878,9 +3898,33 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	if (n_hdl_uuids > 0)
-		rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
-					  rpc->cr_ctx);
+	if (n_hdl_uuids > 0) {
+		/* If pool destroy but not forcibly, error: the pool is busy */
+
+		if (in->pvi_pool_destroy && !in->pvi_pool_destroy_force) {
+			D_DEBUG(DF_DSMS, DF_UUID": busy, %u open handles\n",
+				DP_UUID(in->pvi_op.pi_uuid), n_hdl_uuids);
+			D_GOTO(out_lock, rc = -DER_BUSY);
+		} else {
+			/* Pool evict, or pool destroy with force=true */
+			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
+						  n_hdl_uuids, rpc->cr_ctx);
+		}
+	}
+
+	/* If pool destroy and not error case, disable new connections */
+	if (in->pvi_pool_destroy) {
+		uint32_t	connectable = 0;
+		d_iov_t		value;
+
+		d_iov_set(&value, &connectable, sizeof(connectable));
+		rc = rdb_tx_update(&tx, &svc->ps_root,
+				   &ds_pool_prop_connectable, &value);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+		D_DEBUG(DF_DSMS, DF_UUID": pool destroy/evict: mark pool for "
+			"no new connections\n", DP_UUID(in->pvi_op.pi_uuid));
+	}
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set out->pvo_op.po_map_version. */
@@ -3896,6 +3940,82 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc during pool destroy to test and
+ * (if applicable based on force option) evict all open handles on a pool.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	force		If true request all handles be forcibly evicted
+ *
+ * \return	0		Success
+ *		-DER_BUSY	Open pool handles exist and no force requested
+ *
+ */
+int
+ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint32_t force)
+{
+	int			 rc;
+	struct rsvc_client	 client;
+	crt_endpoint_t		 ep;
+	struct dss_module_info	*info = dss_get_module_info();
+	crt_rpc_t		*rpc;
+	struct pool_evict_in	*in;
+	struct pool_evict_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Destroy pool, inspect/evict handles\n",
+		DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pvi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pvi_op.pi_hdl);
+
+	/* Pool destroy (force=false): assert no open handles / do not evict.
+	 * Pool destroy (force=true): evict any/all open handles on the pool.
+	 */
+	in->pvi_pool_destroy = 1;
+	in->pvi_pool_destroy_force = force;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pvo_op.po_rc,
+				      &out->pvo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pvo_op.po_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
+			"rc: %d\n", DP_UUID(pool_uuid), rc);
+
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
 }
 
 /* This RPC could be implemented by ds_rsvc. */

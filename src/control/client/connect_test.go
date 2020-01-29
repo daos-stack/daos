@@ -218,29 +218,6 @@ func TestStorageFormat(t *testing.T) {
 	}
 }
 
-func TestKillRank(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	tests := []struct {
-		killRet error
-	}{
-		{
-			nil,
-		},
-	}
-
-	for _, tt := range tests {
-		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
-			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
-			nil, tt.killRet, nil, MockACL, nil)
-
-		resultMap := cc.KillRank(0)
-
-		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
-	}
-}
-
 func TestPoolQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mc      *mockConnectConfig

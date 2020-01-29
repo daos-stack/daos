@@ -162,6 +162,18 @@ matching groups.
 
 By default, if a user matches no ACEs in the list, access will be denied.
 
+### Limitations
+
+The maximum length of the ACE list in a DAOS ACL structure is 64KiB.
+
+To calculate the actual length of an ACL, use the following formula for each
+ACE:
+
+* The base size of an ACE is 256B.
+* If the ACE principal is *not* one of the special principals:
+  * Add the length of the identity string + 1.
+  * If that value is not 64B aligned, round up to the nearest 64B boundary.
+
 ### Creating a pool with a custom ACL
 
 To create a pool with a custom ACL:

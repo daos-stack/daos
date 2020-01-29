@@ -199,7 +199,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		lfm = (struct lmv_foreign_md *)buf;
 		/* sanity check */
 		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
-		    lfm->lfm_type != LU_FOREIGN_TYPE_DAOS ||
+		    lfm->lfm_type != LU_FOREIGN_TYPE_SYMLINK ||
 		    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
 		    snprintf(str, DUNS_MAX_XATTR_LEN, "%s",
 			     lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
@@ -425,25 +425,39 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
@@ -465,7 +479,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	}
 
 	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_DAOS, 0xda05, str);
+				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
 	if (rc) {
 		D_ERROR("Failed to create Lustre dir '%s' with foreign "
 			"LMV '%s' (rc = %d).\n", path, str, rc);
@@ -602,25 +616,39 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err_link, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
