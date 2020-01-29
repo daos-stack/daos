@@ -1468,6 +1468,59 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	return rc;
 }
 
+int
+ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		 struct cont *cont, struct container_hdl *hdl,
+		 crt_rpc_t *rpc)
+{
+	struct cont_prop_set_in		*in  = crt_req_get(rpc);
+	daos_prop_t			*prop_in = in->cpsi_prop;
+	daos_prop_t			*prop_out = NULL;
+	int				rc = 0;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cpsi_op.ci_uuid), rpc,
+		DP_UUID(in->cpsi_op.ci_hdl));
+
+	if (!daos_prop_valid(prop_in, false, true))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	/*
+	 * Can't modify the container props without RW perms to the container.
+	 * TODO DAOS-2063: Update check when set-prop and set-acl capas added.
+	 */
+	if (!(hdl->ch_capas & DAOS_COO_RW))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	rc = cont_prop_write(tx, &cont->c_prop, prop_in);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_commit(tx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Read all props & update prop IV */
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_out);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read prop for cont, rc=%d\n",
+			DP_UUID(cont->c_uuid), rc);
+		D_GOTO(out, rc);
+	}
+	D_ASSERT(prop_out != NULL);
+
+	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
+				 in->cpsi_op.ci_hdl, cont->c_uuid, prop_out);
+	if (rc)
+		D_ERROR(DF_UUID": failed to update prop IV for cont, "
+			"%d.\n", DP_UUID(cont->c_uuid), rc);
+
+	daos_prop_free(prop_out);
+
+out:
+	return rc;
+}
+
 static int
 cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	      struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
@@ -1788,6 +1841,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_PROP_SET:
+		return ds_cont_prop_set(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}

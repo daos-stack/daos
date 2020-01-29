@@ -562,6 +562,78 @@ co_acl(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+co_set_prop(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	daos_prop_t		*prop_in;
+	daos_prop_t		*prop_out = NULL;
+	struct daos_prop_entry	*entry;
+	int			 rc;
+	const char		*exp_label = "NEW_FANCY_LABEL";
+	const char		*exp_owner = "wonderfuluser@wonderfuldomain";
+
+	print_message("create container with default props and modify them.\n");
+	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/*
+	 * Set some props
+	 */
+	prop_in = daos_prop_alloc(2);
+	assert_non_null(prop_in);
+	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_label,
+		  DAOS_PROP_LABEL_MAX_LEN);
+	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
+	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner,
+		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+
+	print_message("Setting the container props\n");
+	rc = daos_cont_set_prop(arg->coh, prop_in, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Querying all container props\n");
+	prop_out = daos_prop_alloc(0);
+	assert_non_null(prop_out);
+	rc = daos_cont_query(arg->coh, NULL, prop_out, NULL);
+
+	assert_non_null(prop_out->dpp_entries);
+	assert_true(prop_out->dpp_nr >= prop_in->dpp_nr);
+
+	print_message("Checking label\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_LABEL);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_label,
+		    DAOS_PROP_LABEL_MAX_LEN)) {
+		print_message("Label prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	print_message("Checking owner\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	daos_prop_free(prop_in);
+	daos_prop_free(prop_out);
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -600,8 +672,10 @@ static const struct CMUnitTest co_tests[] = {
 	  co_properties, NULL, test_case_teardown},
 	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
 	  co_op_retry, NULL, test_case_teardown},
-	{ "CONT8: container ACL",
+	{ "CONT8: get container ACL",
 	  co_acl, NULL, test_case_teardown},
+	{ "CONT9: container set prop",
+	  co_set_prop, NULL, test_case_teardown},
 };
 
 int
