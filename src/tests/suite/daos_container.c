@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,80 @@ co_attribute(void **state)
 	}
 }
 
+static bool
+ace_has_permissions(struct daos_ace *ace, uint64_t exp_perms)
+{
+	if (ace->dae_access_types != DAOS_ACL_ACCESS_ALLOW) {
+		print_message("Expected access type allow for ACE\n");
+		daos_ace_dump(ace, 0);
+		return false;
+	}
+
+	if (ace->dae_allow_perms != exp_perms) {
+		print_message("ACE had perms: 0x%lx (expected: 0x%lx)\n",
+			      ace->dae_allow_perms, exp_perms);
+		daos_ace_dump(ace, 0);
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+is_acl_prop_default(struct daos_acl *prop)
+{
+	struct daos_ace *ace;
+	ssize_t		acl_expected_len = 0;
+
+	if (daos_acl_validate(prop) != 0) {
+		print_message("ACL property not valid\n");
+		daos_acl_dump(prop);
+		return false;
+	}
+
+	if (daos_acl_get_ace_for_principal(prop, DAOS_ACL_OWNER,
+					   NULL, &ace) != 0) {
+		print_message("Owner ACE not found\n");
+		return false;
+	}
+
+	acl_expected_len += daos_ace_get_size(ace);
+
+	/* Owner should have full control of the container by default */
+	if (!ace_has_permissions(ace, DAOS_ACL_PERM_CONT_ALL)) {
+		print_message("Owner ACE was wrong\n");
+		return false;
+	}
+
+	if (daos_acl_get_ace_for_principal(prop, DAOS_ACL_OWNER_GROUP,
+					   NULL, &ace) != 0) {
+		print_message("Owner Group ACE not found\n");
+		return false;
+	}
+
+	acl_expected_len += daos_ace_get_size(ace);
+
+	/* Owner-group should have basic access */
+	if (!ace_has_permissions(ace,
+				 DAOS_ACL_PERM_READ |
+				 DAOS_ACL_PERM_WRITE |
+				 DAOS_ACL_PERM_GET_PROP |
+				 DAOS_ACL_PERM_SET_PROP)) {
+		print_message("Owner Group ACE was wrong\n");
+		return false;
+	}
+
+	if (prop->dal_len != acl_expected_len) {
+		print_message("More ACEs in list than expected, expected len = "
+			      "%ld, actual len = %u\n", acl_expected_len,
+			      prop->dal_len);
+		return false;
+	}
+
+	print_message("ACL prop matches expected defaults\n");
+	return true;
+}
+
 static void
 co_properties(void **state)
 {
@@ -242,7 +316,7 @@ co_properties(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	const int prop_count = 6;
+	const int prop_count = 9;
 
 	prop_query = daos_prop_alloc(prop_count);
 	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
@@ -251,6 +325,9 @@ co_properties(void **state)
 	prop_query->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	prop_query->dpp_entries[4].dpe_type = DAOS_PROP_CO_ENCRYPT;
 	prop_query->dpp_entries[5].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	prop_query->dpp_entries[6].dpe_type = DAOS_PROP_CO_ACL;
+	prop_query->dpp_entries[7].dpe_type = DAOS_PROP_CO_OWNER;
+	prop_query->dpp_entries[8].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
 	assert_int_equal(rc, 0);
 
@@ -286,6 +363,33 @@ co_properties(void **state)
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
 		print_message("encrypt verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL ||
+	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
+		print_message("ACL prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	/* default owner */
+	print_message("Checking owner set to default\n");
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, "NOBODY@",
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	/* default owner-group */
+	print_message("Checking owner-group set to default\n");
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, "NOBODY@",
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 

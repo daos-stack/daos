@@ -55,24 +55,6 @@ func makeBadBytes(count int) (badBytes []byte) {
 	return
 }
 
-func TestHasPort(t *testing.T) {
-	tests := []struct {
-		addr        string
-		expectedHas bool
-	}{
-		{"localhost", false},
-		{"localhost:10000", true},
-		{"192.168.1.1", false},
-		{"192.168.1.1:10000", true},
-	}
-
-	for _, test := range tests {
-		if has := hasPort(test.addr); has != test.expectedHas {
-			t.Errorf("hasPort(%q) = %v", test.addr, has)
-		}
-	}
-}
-
 func TestCheckMgmtSvcReplica(t *testing.T) {
 	defaultPort := strconv.Itoa(NewConfiguration().ControlPort)
 

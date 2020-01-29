@@ -34,8 +34,8 @@
  * Characters representing access flags
  */
 #define FLAG_GROUP_CH		'G'
-#define FLAG_SUCCESS_CH		'S'
-#define FLAG_FAIL_CH		'F'
+#define FLAG_ACCESS_SUCCESS_CH	'S'
+#define FLAG_ACCESS_FAIL_CH	'F'
 #define FLAG_POOL_INHERIT_CH	'P'
 
 /*
@@ -109,10 +109,10 @@ process_flags(const char *str, uint16_t *flags)
 		case FLAG_GROUP_CH:
 			*flags |= DAOS_ACL_FLAG_GROUP;
 			break;
-		case FLAG_SUCCESS_CH:
+		case FLAG_ACCESS_SUCCESS_CH:
 			*flags |= DAOS_ACL_FLAG_ACCESS_SUCCESS;
 			break;
-		case FLAG_FAIL_CH:
+		case FLAG_ACCESS_FAIL_CH:
 			*flags |= DAOS_ACL_FLAG_ACCESS_FAIL;
 			break;
 		case FLAG_POOL_INHERIT_CH:
@@ -390,6 +390,13 @@ perms_unified(struct daos_ace *ace)
 	return true;
 }
 
+#define	WRITE_CH_FOR_BIT(bits, bit_name)				\
+	do {								\
+		if (bits & DAOS_ACL_ ## bit_name)			\
+			rc = write_char(&pen, bit_name ## _CH,		\
+					&remaining_len);		\
+	} while (0)
+
 int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 {
@@ -419,23 +426,16 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 
 	memset(buf, 0, buf_len);
 
-	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALLOW)
-		rc = write_char(&pen, ACCESS_ALLOW_CH, &remaining_len);
-	if (ace->dae_access_types & DAOS_ACL_ACCESS_AUDIT)
-		rc = write_char(&pen, ACCESS_AUDIT_CH, &remaining_len);
-	if (ace->dae_access_types & DAOS_ACL_ACCESS_ALARM)
-		rc = write_char(&pen, ACCESS_ALARM_CH, &remaining_len);
+	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_ALLOW);
+	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_AUDIT);
+	WRITE_CH_FOR_BIT(ace->dae_access_types, ACCESS_ALARM);
 
 	rc = write_char(&pen, ':', &remaining_len);
 
-	if (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP)
-		rc = write_char(&pen, FLAG_GROUP_CH, &remaining_len);
-	if (ace->dae_access_flags & DAOS_ACL_FLAG_ACCESS_SUCCESS)
-		rc = write_char(&pen, FLAG_SUCCESS_CH, &remaining_len);
-	if (ace->dae_access_flags & DAOS_ACL_FLAG_ACCESS_FAIL)
-		rc = write_char(&pen, FLAG_FAIL_CH, &remaining_len);
-	if (ace->dae_access_flags & DAOS_ACL_FLAG_POOL_INHERIT)
-		rc = write_char(&pen, FLAG_POOL_INHERIT_CH, &remaining_len);
+	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_GROUP);
+	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_ACCESS_SUCCESS);
+	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_ACCESS_FAIL);
+	WRITE_CH_FOR_BIT(ace->dae_access_flags, FLAG_POOL_INHERIT);
 
 	written = snprintf(pen, remaining_len, ":%s:",
 			   daos_ace_get_principal_str(ace));
@@ -447,24 +447,15 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 	}
 
 	perms = get_perms(ace);
-	if (perms & DAOS_ACL_PERM_READ)
-		rc = write_char(&pen, PERM_READ_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_WRITE)
-		rc = write_char(&pen, PERM_WRITE_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_CREATE_CONT)
-		rc = write_char(&pen, PERM_CREATE_CONT_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_DEL_CONT)
-		rc = write_char(&pen, PERM_DEL_CONT_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_GET_PROP)
-		rc = write_char(&pen, PERM_GET_PROP_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_SET_PROP)
-		rc = write_char(&pen, PERM_SET_PROP_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_GET_ACL)
-		rc = write_char(&pen, PERM_GET_ACL_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_SET_ACL)
-		rc = write_char(&pen, PERM_SET_ACL_CH, &remaining_len);
-	if (perms & DAOS_ACL_PERM_SET_OWNER)
-		rc = write_char(&pen, PERM_SET_OWNER_CH, &remaining_len);
+	WRITE_CH_FOR_BIT(perms, PERM_READ);
+	WRITE_CH_FOR_BIT(perms, PERM_WRITE);
+	WRITE_CH_FOR_BIT(perms, PERM_CREATE_CONT);
+	WRITE_CH_FOR_BIT(perms, PERM_DEL_CONT);
+	WRITE_CH_FOR_BIT(perms, PERM_GET_PROP);
+	WRITE_CH_FOR_BIT(perms, PERM_SET_PROP);
+	WRITE_CH_FOR_BIT(perms, PERM_GET_ACL);
+	WRITE_CH_FOR_BIT(perms, PERM_SET_ACL);
+	WRITE_CH_FOR_BIT(perms, PERM_SET_OWNER);
 
 	return rc;
 }
