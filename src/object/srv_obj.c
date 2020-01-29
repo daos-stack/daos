@@ -818,7 +818,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (obj_rpc_is_update(rpc)) {
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, dkey, orw->orw_nr,
+				      orw->orw_epoch, 0, dkey, orw->orw_nr,
 				      iods, &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
@@ -830,7 +830,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
+				     0, dkey, orw->orw_nr, iods, size_fetch,
+				     &ioh);
 
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",

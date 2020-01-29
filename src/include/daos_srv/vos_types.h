@@ -157,9 +157,27 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 enum {
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	/** Conditional Op: Update dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	/** Conditional Op: Punch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_PUNCH	= DAOS_COND_DKEY_PUNCH,
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	/** Conditional Op: Update akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
+	/** Conditional Op: Punch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_PUNCH	= DAOS_COND_AKEY_PUNCH,
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 0),
+	VOS_OF_REPLAY_PC	= (1 << 8),
 };
+
+D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */

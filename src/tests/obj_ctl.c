@@ -78,7 +78,7 @@ ctl_update(struct dts_io_credit *cred)
 		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
-		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
+		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
 				    0xcafe, &cred->tc_dkey, 1, &cred->tc_iod,
 				    &cred->tc_sgl);
 	}
@@ -94,7 +94,7 @@ ctl_fetch(struct dts_io_credit *cred)
 		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
-		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
+		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
 				   &cred->tc_dkey, 1, &cred->tc_iod,
 				   &cred->tc_sgl);
 	}

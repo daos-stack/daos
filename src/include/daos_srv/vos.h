@@ -464,6 +464,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
+ * \param flags	[IN]	Fetch flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN/OUT]
@@ -476,8 +477,8 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      d_sg_list_t *sgls);
+	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	      daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
  * Update records for the specfied object.
@@ -491,6 +492,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			range is provided by \a iods (kvl::kv_epr).
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
+ * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods [IN]	Array of I/O descriptors.
@@ -505,8 +507,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, d_sg_list_t *sgls);
+	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods, d_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -517,8 +519,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param epoch	[IN]	Epoch for the punch.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
- * \param flags [IN]	Object punch flags, VOS_OF_REPLAY_PC is the only
- *			currently supported flag.
+ * \param flags [IN]	Object punch flags, including VOS_OF_REPLAY_PC and
+ *			conditional flags
  * \param dkey	[IN]	Optional, the dkey will be punched if \a akeys is not
  *			provided.
  * \param akey_nr [IN]	Number of akeys in \a akeys.
@@ -561,6 +563,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a iods.
+ * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a ios.
  * \param iods	[IN/OUT]
@@ -574,7 +577,8 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		uint64_t flags, daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods,
 		bool size_fetch, daos_handle_t *ioh);
 
 /**
@@ -599,6 +603,7 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
+ * \param flags [IN]	conditional flags
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
@@ -609,8 +614,8 @@ vos_fetch_end(daos_handle_t ioh, int err);
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 uint64_t flags, daos_key_t *dkey, unsigned int nr,
+		 daos_iod_t *iods, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.

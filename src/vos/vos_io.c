@@ -50,6 +50,11 @@ struct vos_io_context {
 	daos_csum_buf_t		*ic_biov_dcbs;
 	uint32_t		 ic_biov_dcb_at;
 	uint32_t		 ic_biov_dcb_nr;
+	uint64_t		 ic_flags;
+	struct vos_ts_entry	*ic_cont_entry;
+	struct vos_ts_entry	*ic_obj_entry;
+	struct vos_ts_entry	*ic_dkey_entry;
+	struct vos_ts_entry	**ic_akey_entry;
 	/** current dkey info */
 	struct vos_ilog_info	 ic_dkey_info;
 	/** current akey info */
@@ -767,8 +772,8 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		bool size_fetch, daos_handle_t *ioh)
+		uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh)
 {
 	struct vos_io_context *ioc;
 	int i, rc;
@@ -1422,8 +1427,8 @@ out:
 
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 daos_handle_t *ioh, struct dtx_handle *dth)
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, daos_handle_t *ioh, struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	int			 rc;
@@ -1516,13 +1521,13 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, d_sg_list_t *sgls)
+	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods, d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	int rc;
 
-	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh, NULL);
+	rc = vos_update_begin(coh, oid, epoch, flags, dkey, iod_nr, iods, &ioh, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
@@ -1542,15 +1547,15 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      d_sg_list_t *sgls)
+	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	      daos_iod_t *iods, d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	bool size_fetch = (sgls == NULL);
 	int rc;
 
-	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
-			     &ioh);
+	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
+			     size_fetch, &ioh);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "

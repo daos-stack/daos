@@ -141,7 +141,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 				start, iod_cnt);
 			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 					    rdone->ro_epoch, rdone->ro_version,
-					    &rdone->ro_dkey, iod_cnt,
+					    0, &rdone->ro_dkey, iod_cnt,
 					    &rdone->ro_iods[start],
 					    &sgls[start]);
 			if (rc) {
@@ -157,7 +157,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 	if (iod_cnt > 0)
 		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 				    rdone->ro_epoch, rdone->ro_version,
-				    &rdone->ro_dkey, iod_cnt,
+				    0, &rdone->ro_dkey, iod_cnt,
 				    &rdone->ro_iods[start], &sgls[start]);
 
 	return rc;
@@ -173,7 +173,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
-			      &rdone->ro_dkey, rdone->ro_iod_num,
+			      0, &rdone->ro_dkey, rdone->ro_iod_num,
 			      rdone->ro_iods, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
@@ -285,7 +285,7 @@ rebuild_one_punch(struct rebuild_tgt_pool_tracker *rpt,
 	if (rdone->ro_punch_iod_num > 0) {
 		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid,
 				    rdone->ro_rec_punch_eph,
-				    rdone->ro_version, &rdone->ro_dkey,
+				    rdone->ro_version, 0, &rdone->ro_dkey,
 				    rdone->ro_punch_iod_num,
 				    rdone->ro_punch_iods, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d eph "DF_U64

@@ -98,11 +98,11 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
-				0, &cred->tc_dkey, 1, &cred->tc_iod,
+				0, 0, &cred->tc_dkey, 1, &cred->tc_iod,
 				&cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-					   &cred->tc_dkey, 1,
+					   0, &cred->tc_dkey, 1,
 					   &cred->tc_iod,
 					   &cred->tc_sgl);
 	} else { /* zero-copy */
@@ -111,12 +111,12 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
-					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh, NULL);
+					      0, &cred->tc_dkey, 1,
+					      &cred->tc_iod, &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
-					     &cred->tc_dkey, 1, &cred->tc_iod,
-					     false, &ioh);
+					     0, &cred->tc_dkey, 1,
+					     &cred->tc_iod, false, &ioh);
 		if (rc)
 			return rc;
 
