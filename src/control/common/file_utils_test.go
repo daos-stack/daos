@@ -34,7 +34,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestResolvePath(t *testing.T) {
+func TestUtils_ResolvePath(t *testing.T) {
 	workingDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestResolvePath(t *testing.T) {
 	}
 }
 
-func TestFindBinaryInPath(t *testing.T) {
+func TestUtils_FindBinaryInPath(t *testing.T) {
 	testDir, err := ioutil.TempDir("", t.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestFindBinaryInPath(t *testing.T) {
 	})
 }
 
-func TestFindBinaryAdjacent(t *testing.T) {
+func TestUtils_FindBinaryAdjacent(t *testing.T) {
 	testDir := filepath.Dir(os.Args[0])
 	testFile, err := os.OpenFile(path.Join(testDir, t.Name()), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {

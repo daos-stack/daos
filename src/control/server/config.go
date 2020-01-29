@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -40,17 +41,12 @@ import (
 )
 
 const (
-	defaultRuntimeDir        = "/var/run/daos_server"
-	defaultConfigPath        = "../etc/daos_server.yml"
-	defaultSystemName        = "daos_server"
-	defaultPort              = 10001
-	configOut                = ".daos_server.active.yml"
-	relConfExamplesPath      = "../utils/config/examples/"
-	msgBadConfig             = "insufficient config file, see examples in "
-	msgConfigNoProvider      = "provider not specified in config"
-	msgConfigNoPath          = "no config path set"
-	msgConfigNoServers       = "no servers specified in config"
-	msgConfigBadAccessPoints = "only a single access point is currently supported"
+	defaultRuntimeDir   = "/var/run/daos_server"
+	defaultConfigPath   = "../etc/daos_server.yml"
+	defaultSystemName   = "daos_server"
+	defaultPort         = 10001
+	configOut           = ".daos_server.active.yml"
+	relConfExamplesPath = "../utils/config/examples/"
 )
 
 type networkProviderValidation func(string, string) error
@@ -299,7 +295,7 @@ func NewConfiguration() *Configuration {
 // Load reads the serialized configuration from disk and validates it.
 func (c *Configuration) Load() error {
 	if c.Path == "" {
-		return errors.New(msgConfigNoPath)
+		return FaultConfigNoPath
 	}
 
 	bytes, err := ioutil.ReadFile(c.Path)
@@ -366,27 +362,47 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 }
 
 // Validate asserts that config meets minimum requirements.
-func (c *Configuration) Validate() (err error) {
+func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-			err = errors.WithMessage(err, msgBadConfig+examplesPath)
+			err = errors.WithMessage(FaultBadConfig,
+				err.Error()+", examples: "+examplesPath)
 		}
 	}()
 
 	if c.Fabric.Provider == "" {
-		return errors.New(msgConfigNoProvider)
+		return FaultConfigNoProvider
 	}
 
 	// only single access point valid for now
 	if len(c.AccessPoints) != 1 {
-		return errors.New(msgConfigBadAccessPoints)
+		return FaultConfigBadAccessPoints
+	}
+	for i := range c.AccessPoints {
+		// apply configured control port if not supplied
+		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)
+		if err != nil {
+			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
+		}
+
+		// warn if access point port differs from config control port
+		if strconv.Itoa(c.ControlPort) != port {
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
+				host, port, c.ControlPort)
+		}
+
+		if port == "0" {
+			return FaultConfigBadControlPort
+		}
+
+		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	if len(c.Servers) == 0 {
-		return errors.New(msgConfigNoServers)
+		return FaultConfigNoServers
 	}
 
 	for i, srv := range c.Servers {
