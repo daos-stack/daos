@@ -206,6 +206,11 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (dfuse_info->di_caching and !dfuse_info->threaded) {
+		printf("Caching not compatible with single-threaded mode\n");
+		exit(1);
+	}
+
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
