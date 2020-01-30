@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_write(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_write(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl,
 			      NULL);
 	if (rc) {
 		DFUSE_TRA_INFO(entry, "daos_array_write() failed %d", rc);
