@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #define __DAOS_EV_TREE_H__
 
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos_types.h>
 #include <daos/mem.h>
 #include <gurt/list.h>
@@ -264,15 +265,15 @@ enum evt_feats {
 /* Information about record to insert */
 struct evt_entry_in {
 	/** Extent to insert */
-	struct evt_rect	ei_rect;
+	struct evt_rect		ei_rect;
 	/** checksum of entry */
-	daos_csum_buf_t ei_csum;
+	struct dcs_csum_info	ei_csum;
 	/** pool map version */
-	uint32_t	ei_ver;
+	uint32_t		ei_ver;
 	/** number of bytes per record, zero for punch */
-	uint32_t	ei_inob;
+	uint32_t		ei_inob;
 	/** Address of record to insert */
-	bio_addr_t	ei_addr;
+	bio_addr_t		ei_addr;
 };
 
 enum evt_visibility {
@@ -297,7 +298,7 @@ struct evt_entry {
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
 	/** checksums of the actual extent*/
-	daos_csum_buf_t			en_csum;
+	struct dcs_csum_info		en_csum;
 	/** pool map version */
 	uint32_t			en_ver;
 	/** Visibility flags for extent */
