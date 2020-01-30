@@ -76,6 +76,7 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
+	ServerScmUnmanaged
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

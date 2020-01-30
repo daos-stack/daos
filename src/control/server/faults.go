@@ -23,6 +23,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -62,6 +64,14 @@ var (
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
 )
+
+func FaultScmUnmanaged(mntPoint string) *fault.Fault {
+	return serverFault(
+		code.ServerScmUnmanaged,
+		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
+		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
+	)
+}
 
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

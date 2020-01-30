@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -173,6 +173,11 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 				continue
 			}
 		}
+
+		if skipMissingSuperblock {
+			return FaultScmUnmanaged(instance.scmConfig().MountPoint)
+		}
+
 		h.log.Info("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
