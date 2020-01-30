@@ -96,6 +96,46 @@ func TestMergeEnvVars(t *testing.T) {
 	}
 }
 
+func TestConfigHasEnvVar(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startVars []string
+		addVar    string
+		addVal    string
+		expVars   []string
+	}{
+		"empty": {
+			addVar:  "FOO",
+			addVal:  "BAR",
+			expVars: []string{"FOO=BAR"},
+		},
+		"similar prefix": {
+			startVars: []string{"FOO_BAR=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO_BAR=BAZ", "FOO=BAR"},
+		},
+		"same prefix": {
+			startVars: []string{"FOO=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO=BAZ"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithEnvVars(tc.startVars...)
+
+			if !cfg.HasEnvVar(tc.addVar) {
+				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
+			}
+
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+				t.Fatalf("unexpected env vars:\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestConstructedConfig(t *testing.T) {
 	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"

@@ -55,7 +55,6 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/BioHealthQuery":      ComponentAdmin,
 	"/mgmt.MgmtSvc/SmdListDevs":         ComponentAdmin,
 	"/mgmt.MgmtSvc/SmdListPools":        ComponentAdmin,
-	"/mgmt.MgmtSvc/KillRank":            ComponentAdmin,
 	"/mgmt.MgmtSvc/ListPools":           ComponentAdmin,
 }
 
