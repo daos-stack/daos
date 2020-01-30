@@ -485,8 +485,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	rc = pc_out->lp_rc;
 	*arg->npools = pc_out->lp_npools;
 	if (rc) {
-		D_ERROR("MGMT_POOL_CREATE replied failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("MGMT_LIST_POOLS replied failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 

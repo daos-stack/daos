@@ -71,7 +71,7 @@ const maxIoServers = 2
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	err := cfg.Validate()
+	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}

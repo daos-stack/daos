@@ -48,6 +48,8 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass_id;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
+	/** container properties **/
+	daos_prop_t		*da_props;
 	/** Path is on Lustre */
 	bool			da_on_lustre;
 };

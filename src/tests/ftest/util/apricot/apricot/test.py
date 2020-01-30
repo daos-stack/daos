@@ -44,6 +44,7 @@ from configuration_utils import Configuration
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
+from dmg_utils import DmgCommand
 
 
 # pylint: disable=invalid-name
@@ -499,3 +500,26 @@ class TestWithServers(TestWithoutServers):
             self.log_dir, "{}_server_daos.log".format(self.test_id))
         self.client_log = os.path.join(
             self.log_dir, "{}_client_daos.log".format(self.test_id))
+
+    def get_dmg_command(self, index=0):
+        """Create a DmgCommand object, set the access point's host:port to -l
+        parameter, set False to -i (in default), and return the object.
+
+        This method is intended to be used by tests that wants to use dmg to
+        create and destroy pool. Pass in the object to TestPool constructor.
+
+        Access point should be passed in to -l regardless of the number of
+        servers.
+
+        Args:
+            index (int, optional): Server index. Defaults to 0.
+
+        Returns:
+            DmgCommand: New DmgCommand object.
+        """
+        dmg = DmgCommand(self.bin)
+        dmg.hostlist.value = self.server_managers[index].runner.job.\
+            yaml_params.access_points.value
+        dmg.insecure.value = \
+            self.server_managers[index].insecure.value
+        return dmg
