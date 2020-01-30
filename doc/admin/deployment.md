@@ -118,17 +118,47 @@ To tell systemd to create the necessary directories for DAOS:
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
-Due to limitations introduced by recent security fixes in the kernel,
-DAOS I/O processes are also required to run with elevated privileges
-in order to access NVMe SSDs through the SPDK framework.
+#### Privileged Helper Configuration
 
-This is a temporary requirement that will be mitigated by moving to
-use VFIO driver with SPDK (requires IOMMU enabled) rather than UIO.
+When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
+to the correct location with the correct permissions. The RPM creates a "daos_admins"
+system group and configures permissions such that `daos_admin` may only be invoked
+from `daos_server`.
+
+For non-RPM installations, there are two supported scenarios:
+
+1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
+and therefore no additional setup is necessary
+2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
+manually installed and configured
+
+The steps to enable the second scenario are as follows (steps are assumed to be
+running out of a DAOS source tree which may be on a NFS share):
+
+```bash
+$ chmod -x $SL_PREFIX/bin/daos_admin # prevent this copy from being executed
+$ sudo cp $SL_PREFIX/bin/daos_admin /usr/bin/daos_admin
+$ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
+$ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
+$ sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+           /usr/share/daos/control
+$ sudo mkdir -p /usr/share/spdk/scripts
+$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+           /usr/share/spdk/scripts
+$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+           /usr/share/spdk/scripts
+$ sudo ln -s $SL_PREFIX/include \
+           /usr/share/spdk/include
+```
+
+NOTES:
+ * The RPM installation is preferred for production scenarios. Manual installation
+ is most appropriate for development and predeployment proof-of-concept scenarios.
 
 ## DAOS Server Setup
 
 First of all, the DAOS server should be started to allow remote administration
-command to be executed via the dmg tool. This section describe the minimal
+command to be executed via the dmg tool. This section describes the minimal
 DAOS server configuration and how to start it on all the storage nodes.
 
 ### Server Configuration File

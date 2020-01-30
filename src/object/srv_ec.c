@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,17 +97,12 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 		iod = &iods[i];
 		split_iod = &split_iods[i];
 		split_iod->iod_name = iod->iod_name;
-		split_iod->iod_kcsum = iod->iod_kcsum;
 		split_iod->iod_type = iod->iod_type;
 		split_iod->iod_size = iod->iod_size;
 		siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
 		split_iod->iod_nr = siod->siod_nr;
 		if (iod->iod_recxs != NULL)
 			split_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
-		if (iod->iod_csums != NULL)
-			split_iod->iod_csums = &iod->iod_csums[siod->siod_idx];
-		if (iod->iod_eprs != NULL)
-			split_iod->iod_eprs = &iod->iod_eprs[siod->siod_idx];
 	}
 
 	*split_req = req;
