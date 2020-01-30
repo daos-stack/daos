@@ -627,19 +627,23 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 {
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_iod_t			*iod;
+	struct obj_io_desc		*oiod;
 	int				 i;
 
 	for (i = 0; i < obj_auxi->iod_nr; i++) {
 		iod = reasb_req->orr_iods + i;
+		oiod = reasb_req->orr_oiods + i;
 		if (iod == NULL)
 			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
 		/* iod_csums freed by obj_update_csum_destroy() */
-		if (iod->iod_eprs != NULL)
-			D_FREE(iod->iod_eprs);
+		if ((oiod->oiod_flags & OBJ_SIOD_EVEN_DIST) == 0) {
+			if (iod->iod_eprs != NULL)
+				D_FREE(iod->iod_eprs);
+		}
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
-		obj_io_desc_fini(reasb_req->orr_oiods + i);
+		obj_io_desc_fini(oiod);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
@@ -2348,9 +2352,6 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 				shard_auxi->shard - shard_auxi->start_shard);
 			D_ASSERT(toiod != NULL);
 			shard_arg->oiods = toiod->oto_oiods;
-			D_ASSERT(shard_arg->oiods[0].oiod_nr == 1 &&
-				 (shard_arg->oiods[0].oiod_flags &
-				  OBJ_SIOD_PROC_ONE) != 0);
 			shard_arg->offs = toiod->oto_offs;
 			D_ASSERT(shard_arg->offs != NULL);
 		} else {

@@ -108,13 +108,26 @@ obj_ec_pbufs_init(struct obj_ec_recx_array *recxs, uint64_t cell_bytes)
 }
 
 static int
-obj_ec_riod_init(daos_iod_t *riod, uint32_t recx_nr, bool with_eprs)
+obj_ec_riod_init(daos_iod_t *riod, daos_iod_t *uiod, uint32_t recx_nr)
 {
+	if (recx_nr == 0) {
+		/* for OBJ_SIOD_EVEN_DIST case, reuse eprs from original iod,
+		 * duplicate the recxs as need to remap the rx_idx.
+		 */
+		riod->iod_nr = uiod->iod_nr;
+		riod->iod_eprs = uiod->iod_eprs;
+		D_ALLOC_ARRAY(riod->iod_recxs, riod->iod_nr);
+		if (riod->iod_recxs == NULL)
+			return -DER_NOMEM;
+		memcpy(riod->iod_recxs, uiod->iod_recxs,
+		       riod->iod_nr * sizeof(*riod->iod_recxs));
+		return 0;
+	}
 	riod->iod_nr = recx_nr;
 	D_ALLOC_ARRAY(riod->iod_recxs, recx_nr);
 	if (riod->iod_recxs == NULL)
 		return -DER_NOMEM;
-	if (!with_eprs)
+	if (uiod->iod_eprs == NULL)
 		return 0;
 	D_ALLOC_ARRAY(riod->iod_eprs, recx_nr);
 	if (riod->iod_eprs == NULL)
@@ -326,6 +339,9 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 			ec_all_tgt_recx_nrs(oca, tgt_recx_nrs, j);
 		} else {
 			ec_data_tgt_recx_nrs(oca, tgt_recx_nrs, j);
+			if (recx->rx_idx < start ||
+			    recx->rx_idx + recx->rx_nr > end)
+				full_stripe_only = false;
 			continue;
 		}
 
@@ -374,24 +390,29 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 		D_ASSERT(ec_recx_array->oer_nr == 0);
 	}
 
-	for (i = 0, recx_nr = 0, tgt_nr = 0; i < obj_ec_tgt_nr(oca); i++) {
-		ec_recx_array->oer_tgt_recx_idxs[i] = recx_nr;
-		recx_nr += tgt_recx_nrs[i];
-		if (tgt_recx_nrs[i] != 0) {
-			setbit(tgt_bitmap, i);
-			tgt_nr++;
-		}
-	}
-	if (update && full_stripe_only) {
-		D_ASSERT(tgt_nr == obj_ec_tgt_nr(oca));
+	recx_nr = 0;
+	if (full_stripe_only) {
 		oiod_flags = OBJ_SIOD_EVEN_DIST;
+		tgt_nr = update ? obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);
+		for (i = 0; i < tgt_nr; i++)
+			setbit(tgt_bitmap, i);
+	} else {
+		tgt_nr = 0;
+		for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
+			ec_recx_array->oer_tgt_recx_idxs[i] = recx_nr;
+			recx_nr += tgt_recx_nrs[i];
+			if (tgt_recx_nrs[i] != 0) {
+				setbit(tgt_bitmap, i);
+				tgt_nr++;
+			}
+		}
+		D_ASSERT(recx_nr > 0);
 	}
 	rc = obj_io_desc_init(&reasb_req->orr_oiods[iod_idx], tgt_nr,
 			      oiod_flags);
 	if (rc)
 		goto out;
-	rc = obj_ec_riod_init(&reasb_req->orr_iods[iod_idx], recx_nr,
-			      (iod->iod_eprs != NULL));
+	rc = obj_ec_riod_init(&reasb_req->orr_iods[iod_idx], iod, recx_nr);
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */
@@ -592,7 +613,7 @@ recx_with_full_stripe(uint32_t recx_idx, struct obj_ec_recx_array *r_array,
  * \param[in]		oca		obj class attribute
  * \param[in]		add_parity	true to add to parity cells
  */
-static inline void
+static void
 ec_data_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
 		 uint32_t *start_idx, struct daos_oclass_attr *oca,
 		 bool add_parity)
@@ -679,7 +700,7 @@ ec_data_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
 }
 
 /** Add parity recx (full-stripe) to reassemble recx array */
-static inline void
+static void
 ec_parity_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
 		   uint32_t *start_idx, struct daos_oclass_attr *oca)
 {
@@ -698,6 +719,24 @@ ec_parity_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
 		ec_recx_add(r_recx, r_idx, start_idx,
 			    obj_ec_data_tgt_nr(oca) + i,
 			    tmp_idx, tmp_nr);
+}
+
+/** remap the recx index for OBJ_SIOD_EVEN_DIST case */
+static void
+ec_even_dist_recx_remap(daos_iod_t *iod, uint64_t stripe_rec_nr,
+			uint64_t cell_rec_nr, uint32_t data_tgt_nr)
+{
+	daos_recx_t	*recx;
+	int		 i;
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		recx = &iod->iod_recxs[i];
+		D_ASSERTF(recx->rx_idx % stripe_rec_nr == 0, "bad rx_idx\n");
+		D_ASSERTF(recx->rx_nr % stripe_rec_nr == 0, "bad rx_nr\n");
+		recx->rx_idx = obj_ec_vos_recx_idx(recx->rx_idx, stripe_rec_nr,
+						   cell_rec_nr);
+		recx->rx_nr = recx->rx_nr / data_tgt_nr;
+	}
 }
 
 /**
@@ -900,13 +939,18 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 
 	D_PRINT("\noiod, oiod_nr %d, oiod_flags 0x%x\n",
 		oiod->oiod_nr, oiod->oiod_flags);
-	D_PRINT("siods [siod_tgt_idx, (siod_idx, siod_nr), siod_off]:\n");
-	for (j = 0; j < oiod->oiod_nr; j++) {
-		siod = &oiod->oiod_siods[j];
-		D_PRINT("[%3d]:", j);
-		D_PRINT(" [%d, (%d, %d), "DF_U64"]\n",
-			siod->siod_tgt_idx, siod->siod_idx,
-			siod->siod_nr, siod->siod_off);
+	if (oiod->oiod_siods == NULL) {
+		D_ASSERTF((oiod->oiod_flags & OBJ_SIOD_EVEN_DIST) != 0,
+			  "invalid NULL oiod->oiod_siods\n");
+	} else {
+		D_PRINT("siods[siod_tgt_idx, (siod_idx, nr), siod_off]:\n");
+		for (j = 0; j < oiod->oiod_nr; j++) {
+			siod = &oiod->oiod_siods[j];
+			D_PRINT("[%3d]:", j);
+			D_PRINT(" [%d, (%d, %d), "DF_U64"]\n",
+				siod->siod_tgt_idx, siod->siod_idx,
+				siod->siod_nr, siod->siod_off);
+		}
 	}
 
 	D_PRINT("\nec_recx_array, oer_stripe_total %d, oer_nr %d\n",
@@ -975,10 +1019,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
-	bool				 with_full_stripe;
+	bool				 with_full_stripe, even_dist;
 	int				 rc = 0;
 
-	D_ASSERT(cell_rec_nr > 0);
 	if (iov_nr <= EC_INLINE_IOVS) {
 		iovs = iov_inline;
 	} else {
@@ -987,13 +1030,15 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			return -DER_NOMEM;
 	}
 
+	even_dist = (oiod->oiod_flags & OBJ_SIOD_EVEN_DIST);
 	for (i = 0; i < iod->iod_nr; i++) {
 		recx = &iod->iod_recxs[i];
 		with_full_stripe = recx_with_full_stripe(i, ec_recx_array,
 							 &full_ec_recx);
 		if (!with_full_stripe || !update) {
-			ec_data_recx_add(recx, riod->iod_recxs, ridx,
-					 tgt_recx_idxs, oca, update);
+			if (!even_dist)
+				ec_data_recx_add(recx, riod->iod_recxs, ridx,
+						 tgt_recx_idxs, oca, update);
 			ec_data_seg_add(recx, iod_size, sgl, &iov_idx, &iov_off,
 					oca, iovs, iov_nr, sorter, update);
 			continue;
@@ -1002,6 +1047,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		full_recx = &full_ec_recx->oer_recx;
 		D_ASSERT(recx->rx_idx <= full_recx->rx_idx);
 		if (recx->rx_idx < full_recx->rx_idx) {
+			D_ASSERT(!even_dist);
 			tmp_recx.rx_idx = recx->rx_idx;
 			tmp_recx.rx_nr = full_recx->rx_idx - recx->rx_idx;
 			D_ASSERTF(tmp_recx.rx_nr == (stripe_rec_nr -
@@ -1013,14 +1059,16 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 					&iov_off, oca, iovs, iov_nr, sorter,
 					true);
 		}
-		ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
-				 tgt_recx_idxs, oca, false);
+		if (!even_dist)
+			ec_data_recx_add(full_recx, riod->iod_recxs, ridx,
+					 tgt_recx_idxs, oca, false);
 		ec_data_seg_add(full_recx, iod_size, sgl, &iov_idx, &iov_off,
 				oca, iovs, iov_nr, sorter, false);
 		recx_end = recx->rx_idx + recx->rx_nr;
 		full_end = full_recx->rx_idx + full_recx->rx_nr;
 		D_ASSERT(recx_end >= full_end);
 		if (recx_end > full_end) {
+			D_ASSERT(!even_dist);
 			tmp_recx.rx_idx = full_end;
 			tmp_recx.rx_nr = recx_end - full_end;
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
@@ -1032,7 +1080,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	}
 
 	if (update) {
-		for (i = 0; i < ec_recx_array->oer_nr; i++) {
+		for (i = 0; !even_dist && i < ec_recx_array->oer_nr; i++) {
 			full_ec_recx = &ec_recx_array->oer_recxs[i];
 			full_recx = &full_ec_recx->oer_recx;
 			ec_parity_recx_add(full_recx, riod->iod_recxs, ridx,
@@ -1042,6 +1090,12 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	}
 
 	obj_ec_seg_pack(sorter, rsgl);
+
+	if (even_dist) {
+		ec_even_dist_recx_remap(riod, stripe_rec_nr, cell_rec_nr,
+					obj_ec_data_tgt_nr(oca));
+		goto bypass_siod;
+	}
 
 	/* generate the oiod/siod */
 	tgt_nr = update ? obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);
@@ -1092,6 +1146,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		last = tgt_recx_idxs[i] + tgt_recx_nrs[i];
 	}
 
+bypass_siod:
 #if EC_DEBUG
 	obj_reasb_req_dump(reasb_req, sgl, oca, stripe_rec_nr, iod_idx);
 #endif
@@ -1146,8 +1201,9 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 
 	if (!update) {
 		reasb_req->tgt_oiods = obj_ec_tgt_oiod_init(
-			reasb_req->orr_oiods, iod_nr, reasb_req->tgt_bitmap,
-			obj_ec_tgt_nr(oca) - 1, reasb_req->orr_tgt_nr);
+			reasb_req->orr_oiods, iods, iod_nr,
+			reasb_req->tgt_bitmap, obj_ec_data_tgt_nr(oca) - 1,
+			reasb_req->orr_tgt_nr, obj_ec_data_tgt_nr(oca));
 		if (reasb_req->tgt_oiods == NULL) {
 			D_ERROR(DF_OID" obj_ec_tgt_oiod_init failed.\n",
 				DP_OID(oid));
@@ -1186,14 +1242,16 @@ obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods, uint32_t tgt_nr,
 }
 
 struct obj_tgt_oiod *
-obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
-		     uint8_t *tgt_bitmap, uint32_t tgt_max_idx, uint32_t tgt_nr)
+obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, daos_iod_t *iods,
+		     uint32_t iod_nr, uint8_t *tgt_bitmap, uint32_t tgt_max_idx,
+		     uint32_t tgt_nr, uint32_t data_tgt_nr)
 {
 	struct obj_tgt_oiod	*tgt_oiod, *tgt_oiods;
 	struct obj_io_desc	*oiod, *r_oiod;
 	struct obj_shard_iod	*siod, *r_siod;
 	void			*buf;
 	uint8_t			*tmp_ptr;
+	uint64_t		 byte_stride;
 	daos_size_t		 off_size, oiod_size, siod_size, item_size;
 	uint32_t		 i, j, idx, tgt;
 
@@ -1240,6 +1298,25 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	/* traverse reassembled oiod and fill the tgt_oiod (per target oiod) */
 	for (i = 0; i < iod_nr; i++) {
 		r_oiod = &r_oiods[i];
+		if (r_oiod->oiod_siods == NULL) {
+			D_ASSERT(r_oiod->oiod_flags & OBJ_SIOD_EVEN_DIST);
+			D_ASSERT(tgt_max_idx == tgt_nr - 1);
+			D_ASSERT(r_oiod->oiod_nr == tgt_nr);
+			byte_stride = obj_ec_even_dist_byte_stride(
+					&iods[i], data_tgt_nr);
+			for (j = 0; j < tgt_nr; j++) {
+				tgt_oiod =  &tgt_oiods[j];
+				oiod = &tgt_oiod->oto_oiods[i];
+				D_ASSERT(oiod->oiod_siods[0].siod_tgt_idx == j);
+				oiod->oiod_flags = OBJ_SIOD_EVEN_DIST;
+				if (j >= data_tgt_nr)
+					oiod->oiod_flags |=
+						OBJ_SIOD_PROC_PARITY;
+				oiod->oiod_siods = NULL;
+				tgt_oiod->oto_offs[i] = byte_stride * j;
+			}
+			continue;
+		}
 		for (j = 0; j < r_oiod->oiod_nr; j++) {
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;

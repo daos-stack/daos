@@ -124,6 +124,31 @@ crt_proc_daos_recx_t(crt_proc_t proc, daos_recx_t *recx)
 }
 
 static int
+crt_proc_daos_recx_t_adv(crt_proc_t proc, daos_recx_t *recx, bool parity)
+{
+	int		rc;
+
+	if (parity) {
+		uint64_t	rx_idx;
+
+		rx_idx = recx->rx_idx | PARITY_INDICATOR;
+		rc = crt_proc_uint64_t(proc, &rx_idx);
+		if (rc != 0)
+			return -DER_HG;
+	} else {
+		rc = crt_proc_uint64_t(proc, &recx->rx_idx);
+		if (rc != 0)
+			return -DER_HG;
+	}
+
+	rc = crt_proc_uint64_t(proc, &recx->rx_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
 crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 {
 	int rc;
@@ -232,12 +257,15 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 			return rc;
 	}
 
-	for (i = 0; i < oiod->oiod_nr; i++) {
-		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				obj_io_desc_fini(oiod);
-			return -DER_HG;
+	if (oiod->oiod_siods != NULL) {
+		for (i = 0; i < oiod->oiod_nr; i++) {
+			rc = crt_proc_struct_obj_shard_iod(proc,
+					&oiod->oiod_siods[i]);
+			if (rc != 0) {
+				if (proc_op == CRT_PROC_DECODE)
+					obj_io_desc_fini(oiod);
+				return -DER_HG;
+			}
 		}
 	}
 
@@ -346,8 +374,13 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
+		bool parity;
+
+		parity = (oiod != NULL && proc_op == CRT_PROC_ENCODE &&
+			  (oiod->oiod_flags & OBJ_SIOD_PROC_PARITY) != 0);
 		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
+			rc = crt_proc_daos_recx_t_adv(proc, &dvi->iod_recxs[i],
+						      parity);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);

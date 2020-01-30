@@ -65,6 +65,8 @@ struct obj_shard_iod {
 #define OBJ_SIOD_EVEN_DIST	((uint32_t)1 << 0)
 /** Flag used only for proc func, to only proc to one specific target */
 #define OBJ_SIOD_PROC_ONE	((uint32_t)1 << 1)
+/** Flag used only for proc func, to add PARITY_INDICATOR */
+#define OBJ_SIOD_PROC_PARITY	((uint32_t)1 << 2)
 
 /**
  * Object IO descriptor.
@@ -240,22 +242,34 @@ obj_ec_recx_cell_nr(daos_recx_t *recx, struct daos_oclass_attr *oca)
 	       (recx_end % obj_ec_cell_rec_nr(oca));
 }
 
+/** Query the bytes stride for evenly distribution */
+static inline uint64_t
+obj_ec_even_dist_byte_stride(daos_iod_t *iod, uint32_t data_tgt_nr)
+{
+	uint64_t	rec_nr;
+	int		i;
+
+	for (i = 0, rec_nr = 0; i < iod->iod_nr; i++)
+		rec_nr += iod->iod_recxs[i].rx_nr;
+
+	D_ASSERTF(rec_nr % data_tgt_nr == 0, "bad iod.\n");
+	return (rec_nr / data_tgt_nr) * iod->iod_size;
+}
+
 static inline int
 obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 {
-#if 0
-	/* XXX refine it later */
-	if (tgt_nr < 2 || flags == OBJ_SIOD_EVEN_DIST) {
+	D_ASSERT(tgt_nr > 0);
+	oiod->oiod_nr = tgt_nr;
+	if (tgt_nr == 1 || (flags & OBJ_SIOD_EVEN_DIST) != 0) {
 		oiod->oiod_siods = NULL;
-		oiod->oiod_nr = tgt_nr;
 		oiod->oiod_flags = flags;
 		return 0;
 	}
-#endif
+
 	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
 	if (oiod->oiod_siods == NULL)
 		return -DER_NOMEM;
-	oiod->oiod_nr = tgt_nr;
 	return 0;
 }
 
@@ -280,8 +294,9 @@ void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
-			uint32_t iod_nr, uint8_t *tgt_bitmap,
-			uint32_t tgt_max_idx, uint32_t tgt_nr);
+			daos_iod_t *iods, uint32_t iod_nr, uint8_t *tgt_bitmap,
+			uint32_t tgt_max_idx, uint32_t tgt_nr,
+			uint32_t data_tgt_nr);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
 
