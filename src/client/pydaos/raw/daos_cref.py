@@ -21,6 +21,8 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+# pylint: disable=too-few-public-methods
+# pylint: disable=pylint-missing-docstring
 import ctypes
 
 # DAOS api C structures
@@ -209,7 +211,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
         implementation if this is used as something other than a test
         tool.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -247,11 +249,11 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
 
 def AsyncWorker2(func_ref, param_list, context, cb_func=None, obj=None):
     """
-        See AsyncWorker1 for details.  This does the same thing but
-        uses different API functions (test instead of poll) for test
-        coverage purposes.
+    See AsyncWorker1 for details.  This does the same thing but
+    uses different API functions (test instead of poll) for test
+    coverage purposes.
     """
-    # TODO insufficient error handling in this function
+    # TO be Done insufficient error handling in this function
 
     # setup the asynchronous infrastructure the API requires
     the_event = param_list[-1]
@@ -289,3 +291,6 @@ class Logfac:
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+#Transaction handle to update for an independent transaction
+DAOS_TX_NONE = Daos_handle_t(0)
