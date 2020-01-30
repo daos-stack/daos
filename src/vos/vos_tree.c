@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,10 +89,10 @@ static int
 ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key_iov, struct vos_rec_bundle *rbund)
 {
-	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
-	d_iov_t	   *iov	 = rbund->rb_iov;
-	daos_csum_buf_t	   *csum = rbund->rb_csum;
-	char		   *kbuf;
+	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
+	d_iov_t			*iov  = rbund->rb_iov;
+	struct dcs_csum_info	*csum = rbund->rb_csum;
+	char			*kbuf;
 
 	krec->kr_cs_size = csum->cs_len;
 	if (krec->kr_cs_size != 0) {
@@ -121,10 +121,10 @@ static int
 ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	     d_iov_t *key, struct vos_rec_bundle *rbund)
 {
-	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
-	d_iov_t	   *iov	 = rbund->rb_iov;
-	daos_csum_buf_t	   *csum = rbund->rb_csum;
-	char		   *kbuf;
+	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
+	d_iov_t			*iov  = rbund->rb_iov;
+	struct dcs_csum_info	*csum = rbund->rb_csum;
+	char			*kbuf;
 
 	kbuf = vos_krec2key(krec);
 	iov->iov_len = krec->kr_size;
@@ -435,7 +435,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct dtx_handle	*dth	= vos_dth_get();
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
-	daos_csum_buf_t		*csum	= rbund->rb_csum;
+	struct dcs_csum_info	*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
 
 	if (bio_iov2len(biov) != rbund->rb_rsize)
@@ -478,10 +478,10 @@ static int
 svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	     struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
-	struct svt_hkey    *skey = (struct svt_hkey *)&rec->rec_hkey[0];
-	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
-	daos_csum_buf_t    *csum = rbund->rb_csum;
-	struct bio_iov     *biov = rbund->rb_biov;
+	struct svt_hkey		*skey = (struct svt_hkey *)&rec->rec_hkey[0];
+	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
+	struct dcs_csum_info	*csum = rbund->rb_csum;
+	struct bio_iov		*biov = rbund->rb_biov;
 
 	if (kbund != NULL) /* called from iterator */
 		kbund->kb_epoch = skey->sv_epoch;
@@ -886,7 +886,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 daos_handle_t *sub_toh)
 {
 	struct vos_krec_df	*krec;
-	daos_csum_buf_t		 csum;
+	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
 	int			 rc;

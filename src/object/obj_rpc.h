@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,10 +34,11 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/event.h>
-#include <daos/rpc.h>
+#include <daos/checksum.h>
 #include <daos/dtx.h>
+#include <daos/event.h>
 #include <daos/object.h>
+#include <daos/rpc.h>
 
 #include "obj_ec.h"
 
@@ -154,11 +155,12 @@ struct obj_iod_array {
 	((uint32_t)		(orw_start_shard)	CRT_VAR) \
 	((uint32_t)		(orw_flags)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
-	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR)   \
+	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR) \
+	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
-	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
+	((struct daos_shard_tgt)(orw_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
@@ -169,7 +171,7 @@ struct obj_iod_array {
 	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
-	((daos_csum_buf_t)	(orw_csum)		CRT_ARRAY)
+	((struct dcs_iod_csums)	(orw_iod_csum)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)

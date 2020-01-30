@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,14 +64,11 @@ byte_array_simple_stack(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -140,15 +137,12 @@ array_simple(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	srand(time(NULL) + arg->size);
 	recx.rx_idx	= rand();
 	recx.rx_nr	= arg->nr;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -224,14 +218,11 @@ array_partial(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= NUM_RECORDS;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -379,15 +370,12 @@ replicator(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 27136;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
-	iod.iod_type	= DAOS_IOD_ARRAY;
+iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", 192);
@@ -458,14 +446,11 @@ read_empty(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= buf_len;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** fetch */
@@ -564,14 +549,11 @@ array_dkey_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
 	recx.rx_idx	= 0;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	print_message("Inserting %d dkeys...\n", KEYS);
@@ -650,14 +632,11 @@ array_akey_punch_enumerate(void **state)
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init I/O descriptor */
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
 	recx.rx_idx	= 0;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	print_message("Inserting %d akeys...\n", KEYS);
@@ -755,13 +734,10 @@ array_recx_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** insert 100 extents */
@@ -864,13 +840,10 @@ array_recx_read_incomplete(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx[0].rx_nr	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** insert 1 extent at location 2 */
@@ -882,7 +855,6 @@ array_recx_read_incomplete(void **state)
 	print_message("Fetching all records...\n");
 	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
 	d_iov_set(&sg_iov[0], rbuf, sizeof(rbuf));
-	dcb_set_null(&iod.iod_kcsum);
 	recx[0].rx_idx = 0;
 	recx[0].rx_nr	= 10;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -900,7 +872,6 @@ array_recx_read_incomplete(void **state)
 	print_message("Fetching every other record to contiguous buffer...\n");
 	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
 	d_iov_set(&sg_iov[0], rbuf, SM_BUF_LEN/2);
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr = SM_BUF_LEN/2;
 	for (i = 0; i < SM_BUF_LEN/2; i++) {
 		recx[i].rx_idx = i * 2;
@@ -921,7 +892,6 @@ array_recx_read_incomplete(void **state)
 	print_message("Fetching every other record to noncontiguous buffer\n");
 	memcpy(rbuf, rbuf_orig, sizeof(rbuf));
 	sgl.sg_nr = SM_BUF_LEN/2;
-	dcb_set_null(&iod.iod_kcsum);
 	for (i = 0; i < SM_BUF_LEN/2; i++) {
 		/* set so it matches the original index */
 		d_iov_set(&sg_iov[i], &rbuf[i * 2], 1);
