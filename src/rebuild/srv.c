@@ -331,12 +331,13 @@ struct rebuild_tgt_query_arg {
 };
 
 bool
-is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt)
+rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
+		     enum pool_comp_state states)
 {
-	struct pool_target	*tgt;
-	unsigned int		idx = dss_get_module_info()->dmi_tgt_id;
-	d_rank_t		rank;
-	int			rc;
+	struct pool_target      *tgt;
+	unsigned int            idx = dss_get_module_info()->dmi_tgt_id;
+	d_rank_t                rank;
+	int                     rc;
 
 	D_ASSERT(rpt != NULL);
 	D_ASSERT(rpt->rt_pool != NULL);
@@ -351,14 +352,22 @@ is_current_tgt_up(struct rebuild_tgt_pool_tracker *rpt)
 	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
 					      idx, &tgt);
 	D_ASSERT(rc == 1);
-	if (tgt->ta_comp.co_status != PO_COMP_ST_UPIN &&
-			tgt->ta_comp.co_status != PO_COMP_ST_UP) {
+	if ((tgt->ta_comp.co_status & states) != 0) {
 		D_DEBUG(DB_REBUILD, "%d/%d target status %d\n",
 			rank, idx, tgt->ta_comp.co_status);
-		return false;
+		return true;
 	}
 
-	return true;
+	return false;
+}
+
+bool
+is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt)
+{
+	enum pool_comp_state    state;
+
+	state = (PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN);
+	return rebuild_status_match(rpt, state);
 }
 
 static int
@@ -370,7 +379,7 @@ dss_rebuild_check_one(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	unsigned int			idx = dss_get_module_info()->dmi_tgt_id;
 
-	if (!is_current_tgt_up(rpt))
+	if (is_current_tgt_unavail(rpt))
 		return 0;
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
