@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,10 +133,16 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		if (cont_hdl)
-			daos_csummer_free_dcbs(cont_hdl->sch_csummer,
-					       &orwo->orw_csum.ca_arrays);
-		orwo->orw_csum.ca_count = 0;
+		if (orwo->orw_iod_csum.ca_arrays != NULL) {
+			D_FREE(orwo->orw_iod_csum.ca_arrays);
+			orwo->orw_iod_csum.ca_count = 0;
+		}
+
+		if (cont_hdl) {
+			daos_csummer_free_ic(cont_hdl->sch_csummer,
+				&orwo->orw_iod_csum.ca_arrays);
+			orwo->orw_iod_csum.ca_count = 0;
+		}
 	}
 }
 
@@ -686,83 +692,67 @@ next:
 	return rc;
 }
 
-/** Link the list dcbs from the output to the iod structures of the input so
- * they are easily associated by VOS to the recxs the checksums are
- * derived from. After VOS has populated the checksums \obj_fetch_csums_unlink
- * should be called to avoid double freeing of the csum resources.
- */
-static void
-obj_fetch_csums_link(const struct obj_rw_in *orw, const struct obj_rw_out *orwo)
-{
-	daos_iods_link_dcbs(orw->orw_iod_array.oia_iods,
-			    orw->orw_iod_array.oia_iod_nr,
-			    orwo->orw_csum.ca_arrays, orwo->orw_csum.ca_count);
-}
-static void
-obj_fetch_csums_unlink(struct obj_rw_in *orw)
-{
-	daos_iods_unlink_dcbs(orw->orw_iod_array.oia_iods,
-			      orw->orw_iod_array.oia_iod_nr);
-}
-
 /** if checksums are enabled, fetch needs to allocate the memory that will be
- * used for the dcb structures and actual checksums. The RPC output
- * structure will hold the reference to the list of dcbs allocated, so the RPC
- * input iod strctures will need to be linked to these before VOS can use them
+ * used for the csum structures.
  */
-static void
+static int
 obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 			 struct obj_rw_in *orw,
 			 struct obj_rw_out *orwo)
 {
-	daos_csum_buf_t	*csums;
-	uint32_t	 csum_nr;
-	int		 rc;
+	int rc;
 
 	/**
-	 * Allocate memory for the input iod's daos_csum_buf_t structures.
+	 * Allocate memory for the csum structures.
 	 * This memory and information will be used by VOS to put the checksums
 	 * in as it fetches the data's metadata from the btree/evtree.
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_dcbs(cont_hdl->sch_csummer,
-				     orw->orw_iod_array.oia_iods,
-				     orw->orw_iod_array.oia_iod_nr,
-				     &csums,
-				     &csum_nr);
+	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
+					   orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr,
+					   &orwo->orw_iod_csum.ca_arrays);
 
-	if (rc == 0) {
-		/** Set the output csums to the memory allocated. This way
-		 * when VOS populates the csums it's already available by the
-		 * output/return structures.
-		 */
-		orwo->orw_csum.ca_arrays = csums;
-		orwo->orw_csum.ca_count = csum_nr;
+	if (rc >= 0) {
+		orwo->orw_iod_csum.ca_count = (uint64_t)rc;
+		rc = 0;
 	}
+
+	return rc;
+}
+
+static struct dcs_iod_csums *
+get_iod_csum(struct dcs_iod_csums *iod_csums, int i)
+{
+	if (iod_csums == NULL)
+		return NULL;
+	return &iod_csums[i];
 }
 
 static int
 csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
-	      struct daos_csummer *csummer)
+	      struct daos_csummer *csummer,
+	      struct dcs_iod_csums *iod_csums)
 {
-	int			 rc = 0;
-	uint32_t		 biov_dcbs_idx = 0;
-	size_t			 biov_dcbs_used = 0;
-	int			 i;
+	int	 rc = 0;
+	uint32_t biov_csums_idx = 0;
+	size_t	 biov_csums_used = 0;
+	int	 i;
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
-	daos_csum_buf_t *dcbs = vos_ioh2dcbs(ioh);
+	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
 			bio_iod_sgl(biod, i),
-			&dcbs[biov_dcbs_idx],
-			&biov_dcbs_used);
+			&csum_infos[biov_csums_idx],
+			&biov_csums_used, get_iod_csum(iod_csums, i));
+
 		if (rc != 0)
 			return rc;
-		biov_dcbs_idx += biov_dcbs_used;
+		biov_csums_idx += biov_csums_used;
 	}
 
 	return rc;
@@ -818,8 +808,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (obj_rpc_is_update(rpc)) {
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, dkey, orw->orw_nr,
-				      iods, &ioh, dth);
+				      orw->orw_epoch, dkey, orw->orw_nr, iods,
+				      orw->orw_iod_csums.ca_arrays, &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -864,13 +854,17 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	}
 
 	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
-		obj_fetch_csum_init(cont_hdl, orw, orwo);
-		obj_fetch_csums_link(orw, orwo);
+		rc = obj_fetch_csum_init(cont_hdl, orw, orwo);
+		if (rc) {
+			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto post;
+		}
 		rc = csum_add2iods(ioh,
 				   orw->orw_iod_array.oia_iods,
 				   orw->orw_iod_array.oia_iod_nr,
-				   cont_hdl->sch_csummer);
-		obj_fetch_csums_unlink(orw);
+				   cont_hdl->sch_csummer,
+				   orwo->orw_iod_csum.ca_arrays);
 
 		if (rc) {
 			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
@@ -2078,6 +2072,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 	struct ds_pool		*pool;
 	daos_iod_t		*iods = orw->orw_iod_array.oia_iods;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
+	struct dcs_iod_csums	*iods_csums = orw->orw_iod_csums.ca_arrays;
 	unsigned int		 i;
 	int			 rc = 0;
 
@@ -2102,13 +2097,14 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		bool			 type_is_supported =
 						iod->iod_type == DAOS_IOD_ARRAY;
 
-		if (!type_is_supported || !dcb_is_valid(iod->iod_csums))
+		if (!type_is_supported)
 			continue;
 
 		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
-			rc = daos_csummer_verify(csummer, iod, &sgl);
+			rc = daos_csummer_verify(csummer, iod, &sgl,
+						 &iods_csums[i]);
 
 		daos_sgl_fini(&sgl, false);
 	}
