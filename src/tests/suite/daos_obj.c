@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,10 +67,6 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
 
-	/* init csum */
-	dcb_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE,
-		UPDATE_CSUM_SIZE, 1, 0);
-
 	/* init record extent */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
 		int j;
@@ -87,14 +83,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		/* I/O descriptor */
 		req->iod[i].iod_recxs = req->rex[i];
 		req->iod[i].iod_nr = IOREQ_IOD_NR;
-
-		/* epoch descriptor */
-		req->iod[i].iod_eprs = req->erange[i];
-
-		req->iod[i].iod_csums = NULL;
-		dcb_set_null(&req->iod[i].iod_kcsum);
 		req->iod[i].iod_type = iod_type;
-
 	}
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
@@ -198,8 +187,6 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 			iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
 			iod[i].iod_recxs[0].rx_nr = rx_nr[i];
 		}
-		/** Try I/O with invalid epoch, which then suould be ignored */
-		iod[i].iod_eprs = &req->erange[i][0]; /* [ 0 - MAX_EPOCH ] */
 		iod[i].iod_nr = 1;
 	}
 }
@@ -216,7 +203,6 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 	if (req->iod_type == DAOS_IOD_ARRAY) {
 		iod->iod_nr = nr;
 		iod->iod_recxs = recxs;
-		iod->iod_eprs = NULL;
 	} else {
 		iod->iod_nr = 1;
 	}
@@ -1912,7 +1898,6 @@ next_step:
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	tmp_len = buf_len / 3;
 	recx[0].rx_idx = 0;
 	recx[0].rx_nr  = tmp_len;
@@ -1924,8 +1909,6 @@ next_step:
 	iod.iod_size	= 1;
 	iod.iod_nr	= 3;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -2037,14 +2020,11 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= (size/2) * sizeof(int);
 	recx.rx_nr	= sizeof(int);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -2147,12 +2127,9 @@ fetch_size(void **state)
 
 		/** init I/O descriptor */
 		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
-		dcb_set_null(&iod[i].iod_kcsum);
 		iod[i].iod_nr		= 1;
 		iod[i].iod_size		= size * (i+1);
 		iod[i].iod_recxs	= NULL;
-		iod[i].iod_eprs		= NULL;
-		iod[i].iod_csums	= NULL;
 		iod[i].iod_type		= DAOS_IOD_SINGLE;
 	}
 
@@ -2996,11 +2973,8 @@ update_overlapped_recxs(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
@@ -3297,12 +3271,9 @@ punch_then_lookup(void **state)
 
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 10;
 	iod.iod_size	= 1;
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
@@ -3354,14 +3325,11 @@ split_sgl_internal(void **state, int size)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= size;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= 1;
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update by split sgls */

@@ -31,78 +31,145 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-type HarnessAction int
+// defaultTimeout used in harness requests.
+const defaultTimeout = 10 * time.Second
 
-const (
-	HarnessUnknown HarnessAction = iota
-	HarnessQuery
-	HarnessPrepShutdown
-	HarnessStop
-	HarnessStart
-
-	defaultTimeout = 10 * time.Second
-)
-
-func (hs HarnessAction) String() string {
-	return [...]string{
-		"Unknown",
-		"Query",
-		"PrepShutdown",
-		"Stop",
-		"Start",
-	}[hs]
-}
-
-type RemoteHarnessReq struct {
-	Action HarnessAction
-	Addr   string
-	Ranks  []uint32
-}
-
-func NewRemoteHarnessReq(action HarnessAction, addr string, ranks ...uint32) *RemoteHarnessReq {
-	return &RemoteHarnessReq{Action: action, Addr: addr, Ranks: ranks}
-}
-
-// harnessAction performs requested activity on a harness running on remote host.
+// HarnessClient provides methods for requesting actions on remote harnesses
+// (attached to listening gRPC servers) identified by host addresses.
 //
-// MgmtSvcClient request responses will contain results for each rank (system
-// member) managed by a harness. Single RPC per harness rather than one per rank.
-func harnessAction(ctx context.Context, msClient *mgmtSvcClient, req *RemoteHarnessReq) (system.MemberResults, error) {
-	var requestFn func(context.Context, string, *mgmtpb.RanksReq) (*mgmtpb.RanksResp, error)
-	memberResults := make(system.MemberResults, 0, maxIoServers)
-	timeout := defaultTimeout
+// Results will be provided for each rank (member) managed by harness.
+// Single gRPC sent over management network per harness (not per rank).
+type HarnessClient interface {
+	Query(context.Context, string, ...uint32) (system.MemberResults, error)
+	PrepShutdown(context.Context, string, ...uint32) (system.MemberResults, error)
+	Stop(context.Context, string, bool, ...uint32) (system.MemberResults, error)
+	Start(context.Context, string, ...uint32) (system.MemberResults, error)
+}
+
+// RemoteHarnessReq provides request parameters to HarnessClient methods
+type RemoteHarnessReq struct {
+	Addr    string
+	Ranks   []uint32
+	Force   bool
+	Timeout float32
+}
+
+// harnessClient implements the HarnessClient interface
+type harnessClient struct {
+	log          logging.Logger
+	localHarness *IOServerHarness
+	client       *mgmtSvcClient
+}
+
+// request is a wrapper that will operate over any provided requestFn.
+//
+// requestFn is a type alias for MgmtSvc fanout gRPCs that operate on a harness.
+func (hc *harnessClient) prepareRequest(req RemoteHarnessReq) (*mgmtpb.RanksReq, error) {
+	// Populate MS instance to use as MgmtSvcClient
+	if hc.client == nil {
+		mi, err := hc.localHarness.GetMSLeaderInstance()
+		if err != nil {
+			return nil, errors.Wrap(err, "HarnessClient request")
+		}
+		hc.client = mi.msClient
+	}
 
 	if len(req.Ranks) > maxIoServers {
 		return nil, errors.New("number of of ranks exceeds maximum")
 	}
 
-	switch req.Action {
-	case HarnessQuery:
-		// TODO: implement msClient.Status to check responsiveness
-		return nil, errors.New("HarnessQuery not implemented")
-	case HarnessPrepShutdown:
-		requestFn = msClient.PrepShutdown
-	case HarnessStop:
-		requestFn = msClient.Stop
-	case HarnessStart:
-		requestFn = msClient.Start
-		timeout = 3 * time.Second // don't need long timeout
-	default:
-		return nil, errors.New("unknown harness action requested")
-	}
+	return &mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: req.Timeout, Force: req.Force}, nil
+}
 
-	rpcResp, err := requestFn(ctx, req.Addr,
-		&mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: float32(timeout)})
-	if err != nil {
-		return nil, err
-	}
-
+func (hc *harnessClient) processResponse(rpcResp *mgmtpb.RanksResp) (system.MemberResults, error) {
+	memberResults := make(system.MemberResults, 0, maxIoServers)
 	if err := convert.Types(rpcResp.GetResults(), &memberResults); err != nil {
 		return nil, err
 	}
 
 	return memberResults, nil
+}
+
+func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+	hc.log.Debugf("issuing Query request to harness at %s", addr)
+
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
+		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp *mgmtpb.RanksResp
+	rpcResp, err = hc.client.Status(ctx, addr, *rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return hc.processResponse(rpcResp)
+}
+
+func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+	hc.log.Debugf("issuing PrepShutdown request to harness at %s", addr)
+
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
+		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp *mgmtpb.RanksResp
+	rpcResp, err = hc.client.PrepShutdown(ctx, addr, *rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return hc.processResponse(rpcResp)
+}
+
+func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
+	hc.log.Debugf("issuing Stop request to harness at %s", addr)
+
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
+		Addr: addr, Ranks: ranks, Force: force, Timeout: float32(defaultTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp *mgmtpb.RanksResp
+	rpcResp, err = hc.client.Stop(ctx, addr, *rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return hc.processResponse(rpcResp)
+}
+
+func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+	hc.log.Debugf("issuing Start request to harness at %s", addr)
+
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
+		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp *mgmtpb.RanksResp
+	rpcResp, err = hc.client.Start(ctx, addr, *rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return hc.processResponse(rpcResp)
+}
+
+func NewHarnessClient(l logging.Logger, h *IOServerHarness) HarnessClient {
+	return &harnessClient{log: l, localHarness: h}
 }
