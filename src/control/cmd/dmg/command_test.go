@@ -114,11 +114,6 @@ func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	return client.StorageFormatResults{}
 }
 
-func (tc *testConn) KillRank(rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
-	return nil
-}
-
 func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
 	return &client.PoolCreateResp{}, nil
@@ -185,17 +180,17 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 }
 
 func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
-	tc.appendInvocation("SystemQuery")
+	tc.appendInvocation(fmt.Sprintf("SystemQuery-%v", req))
 	return &client.SystemQueryResp{}, nil
 }
 
 func (tc *testConn) SystemStop(req client.SystemStopReq) (*client.SystemStopResp, error) {
-	tc.appendInvocation("SystemStop")
+	tc.appendInvocation(fmt.Sprintf("SystemStop-%v", req))
 	return &client.SystemStopResp{}, nil
 }
 
 func (tc *testConn) SystemStart(req client.SystemStartReq) (*client.SystemStartResp, error) {
-	tc.appendInvocation("SystemStart")
+	tc.appendInvocation(fmt.Sprintf("SystemStart-%v", req))
 	return &client.SystemStartResp{}, nil
 }
 

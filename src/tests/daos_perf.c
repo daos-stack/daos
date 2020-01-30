@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,9 +97,9 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
-				0, &cred->tc_dkey, 1, &cred->tc_iod,
-				&cred->tc_sgl);
+			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
+					    &cred->tc_dkey, 1, &cred->tc_iod,
+					    NULL, &cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
 					   &cred->tc_dkey, 1,
@@ -112,7 +112,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh, NULL);
+					      NULL, &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
