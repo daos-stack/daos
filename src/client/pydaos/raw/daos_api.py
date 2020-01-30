@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -982,18 +982,11 @@ class IORequest(object):
         self.sgl = daos_cref.SGL()
 
         self.iod = daos_cref.DaosIODescriptor()
-        ctypes.memset(ctypes.byref(self.iod.iod_kcsum), 0, 16)
 
         # epoch range still in IOD for some reason
         # Commenting epoch_range because it was creating issue DAOS-2028.
         # self.epoch_range = EpochRange()
         self.txn = 0
-
-        csum = daos_cref.CheckSum()
-        csum.cs_sum = ctypes.pointer(ctypes.create_string_buffer(32))
-        csum.cs_buf_len = 32
-        csum.cs_len = 0
-        self.iod.iod_csums = ctypes.pointer(csum)
 
     def __del__(self):
         """Cleanup this request."""
@@ -1019,9 +1012,6 @@ class IORequest(object):
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
-        # self.epoch_range.epr_lo = 0
-        # self.epoch_range.epr_hi = ~0
-
         self.txn = txn
         c_tx = ctypes.c_uint64(txn)
 
@@ -1037,8 +1027,6 @@ class IORequest(object):
         self.iod.iod_size = c_data[0][1]
         self.iod.iod_nr = 1
         self.iod.iod_recxs = ctypes.pointer(extent)
-        # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-        #                                 ctypes.c_void_p)
 
         # now do it
         func = self.context.get_function('update-obj')
@@ -1138,9 +1126,6 @@ class IORequest(object):
         self.sgl.sg_nr = 1
         self.sgl.sg_nr_out = 1
 
-        # self.epoch_range.epr_lo = 0
-        # self.epoch_range.epr_hi = ~0
-
         # setup the descriptor
         if akey is not None:
             self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
@@ -1149,8 +1134,6 @@ class IORequest(object):
             self.iod.iod_type = 1
             self.iod.iod_size = size
             self.iod.iod_nr = 1
-            # self.iod.iod_eprs = ctypes.cast(ctypes.pointer(self.epoch_range),
-            #                                 ctypes.c_void_p)
 
         # now do it
         if dkey is not None:
@@ -1274,7 +1257,6 @@ class IORequest(object):
             iods[i].iod_type = 1
             iods[i].iod_size = len(tup[1])+1
             iods[i].iod_nr = 1
-            ctypes.memset(ctypes.byref(iods[i].iod_kcsum), 0, 16)
             i += 1
         iod_ptr = ctypes.pointer(iods)
         sgl_ptr = ctypes.pointer(sgl_list)
@@ -1336,7 +1318,6 @@ class IORequest(object):
             iods[i].iod_size = ctypes.c_ulong(key[1].value+1)
 
             iods[i].iod_nr = 1
-            ctypes.memset(ctypes.byref(iods[i].iod_kcsum), 0, 16)
             i += 1
         sgl_ptr = ctypes.pointer(sgl_list)
 

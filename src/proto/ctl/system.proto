@@ -50,7 +50,8 @@ message RankResult {
 message SystemStopReq {
 	bool prep = 1; // indicates that the prep stage should be performed
 	bool kill = 2; // indicates that the kill stage should be performed
-	repeated uint32 ranks = 3; // system ranks to stop
+	bool force = 3;
+	repeated uint32 ranks = 4; // system ranks to stop
 }
 
 // SystemStopResp returns status of shutdown attempt and results

@@ -78,20 +78,11 @@ message PrepShutdownReq {
 
 // PrepShutdownResp is identical to DaosResp.
 
-message KillRankReq {
-	bool force = 1;		// Force service termination.
-	uint32 rank = 2;	// DAOS IO server unique identifier.
+message PingRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
 }
 
-// KillRankResp is identical to DaosResp.
-
-message StartRanksReq {
-	repeated uint32 ranks = 1; // Start each of the ranks supplied.
-}
-
-message StartRanksResp {
-	repeated int32 status = 1; // DER one for each IO server start attempt.
-}
+// PingRankResp is identical to DaosResp.
 
 message SetRankReq {
 	uint32 rank = 1;	// DAOS IO server unique identifier.

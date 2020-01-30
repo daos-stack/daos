@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,11 +60,11 @@ struct csum_context {
 	 */
 	daos_off_t		 cc_ext_start;
 	/** checksums for the bsgl. There should be 1
-	 * dcb for each iov in bsgl (that's not a hole)
+	 * csum info for each iov in bsgl (that's not a hole)
 	 */
-	daos_csum_buf_t		*cc_biov_dcbs;
-	uint64_t		 cc_biov_dcb_idx;
-	/** while processing, keep an index of csum within dcb  */
+	struct dcs_csum_info	*cc_biov_csums;
+	uint64_t		 cc_biov_csums_idx;
+	/** while processing, keep an index of csum within csum info  */
 	uint64_t		 cc_biov_csum_idx;
 	/** cached value of record size */
 	size_t			 cc_rec_len;
@@ -83,13 +83,13 @@ struct csum_context {
 	bool			 cc_csum_started;
 	/**
 	 * instead of copying a checksum for each chunk, copy
-	 * many checksums from a dcb at once if able. The following
+	 * many checksums from a csum info at once if able. The following
 	 * fields help to manage this
 	 */
-	 /** destination dcb */
-	daos_csum_buf_t		*cc_dcb_to_copy_to;
+	 /** destination csum info */
+	struct dcs_csum_info	*cc_csums_to_copy_to;
 	/** start of the dst csum buffer */
-	uint64_t		 cc_dcb_to_copy_to_csum_idx;
+	uint64_t		 cc_csums_to_copy_to_csum_idx;
 	/** start of the src csum bytes */
 	uint8_t			*cc_csum_buf_to_copy;
 	/** How many bytes to copy */
@@ -219,8 +219,8 @@ cc_need_new_csum(struct csum_context *ctx)
 static uint8_t *
 cc2biovcsum(const struct csum_context *ctx)
 {
-	return dcb_idx2csum(&ctx->cc_biov_dcbs[ctx->cc_biov_dcb_idx],
-			    ctx->cc_biov_csum_idx);
+	return ci_idx2csum(&ctx->cc_biov_csums[ctx->cc_biov_csums_idx],
+			   ctx->cc_biov_csum_idx);
 }
 
 static void
@@ -231,14 +231,14 @@ cc_biov_csum_move_next(struct csum_context *ctx)
 
 /** Calculate new checksum */
 static int
-cc_new_csum_update(struct csum_context *ctx, daos_csum_buf_t *dcb,
+cc_new_csum_update(struct csum_context *ctx, struct dcs_csum_info *info,
 		   uint32_t chunk_idx, size_t biov_bytes_for_chunk)
 {
 	struct bio_iov	*biov = cc2iov(ctx);
 	uint16_t	 csum_len = daos_csummer_get_csum_len(ctx->cc_csummer);
 
 	if (!ctx->cc_csum_started) {
-		uint8_t *csum = dcb_idx2csum(dcb, chunk_idx);
+		uint8_t *csum = ci_idx2csum(info, chunk_idx);
 
 		C_TRACE("Starting new checksum for chunk: %d\n", chunk_idx);
 		/** Setup csum to start updating */
@@ -261,7 +261,7 @@ cc_new_csum_update(struct csum_context *ctx, daos_csum_buf_t *dcb,
  * without the need to calculate new checksums
  */
 static void
-cc_remember_to_copy(struct csum_context *ctx, daos_csum_buf_t *dcb,
+cc_remember_to_copy(struct csum_context *ctx, struct dcs_csum_info *info,
 		    uint32_t idx, uint8_t *csum, uint16_t len)
 {
 	C_TRACE("Remember to copy csum (idx=%d, len=%d)\n", idx, len);
@@ -269,9 +269,9 @@ cc_remember_to_copy(struct csum_context *ctx, daos_csum_buf_t *dcb,
 		D_ERROR("Expected to have checksums to copy for fetch.");
 		return;
 	}
-	if (ctx->cc_dcb_to_copy_to == NULL) {
-		ctx->cc_dcb_to_copy_to = dcb;
-		ctx->cc_dcb_to_copy_to_csum_idx = idx;
+	if (ctx->cc_csums_to_copy_to == NULL) {
+		ctx->cc_csums_to_copy_to = info;
+		ctx->cc_csums_to_copy_to_csum_idx = idx;
 		ctx->cc_csum_buf_to_copy = csum;
 		ctx->cc_csum_buf_to_copy_len = len;
 	} else {
@@ -281,19 +281,19 @@ cc_remember_to_copy(struct csum_context *ctx, daos_csum_buf_t *dcb,
 
 /**
  * When can no longer just copy checksums from and extent (or done with the
- * extent) insert the entire csum buf into the destination dcb.
+ * extent) insert the entire csum buf into the destination csum info.
  */
 static void
 cc_insert_remembered_csums(struct csum_context *ctx)
 {
-	if (ctx->cc_dcb_to_copy_to != NULL) {
+	if (ctx->cc_csums_to_copy_to != NULL) {
 		C_TRACE("Inserting csum (len=%lu)\n",
 			ctx->cc_csum_buf_to_copy_len);
-		dcb_insert(ctx->cc_dcb_to_copy_to,
-			   ctx->cc_dcb_to_copy_to_csum_idx,
-			   ctx->cc_csum_buf_to_copy,
-			   ctx->cc_csum_buf_to_copy_len);
-		ctx->cc_dcb_to_copy_to = NULL;
+		ci_insert(ctx->cc_csums_to_copy_to,
+			  ctx->cc_csums_to_copy_to_csum_idx,
+			  ctx->cc_csum_buf_to_copy,
+			  ctx->cc_csum_buf_to_copy_len);
+		ctx->cc_csums_to_copy_to = NULL;
 	}
 }
 
@@ -351,7 +351,7 @@ cc_iov_move_next(struct csum_context *ctx) {
 
 /** Copy the extent/chunk checksum or calculate a new checksum if needed. */
 static int
-cc_add_csum(struct csum_context *ctx, daos_csum_buf_t *dcb,
+cc_add_csum(struct csum_context *ctx, struct dcs_csum_info *info,
 	    uint32_t chunk_idx)
 {
 	uint8_t		*biov_csum;
@@ -371,7 +371,7 @@ cc_add_csum(struct csum_context *ctx, daos_csum_buf_t *dcb,
 		if (cc_need_new_csum(ctx)) {
 			cc_insert_remembered_csums(ctx);
 			/** Calculate a new checksum */
-			rc = cc_new_csum_update(ctx, dcb, chunk_idx,
+			rc = cc_new_csum_update(ctx, info, chunk_idx,
 						biov_bytes_for_chunk);
 			if (rc != 0)
 				return rc;
@@ -379,7 +379,7 @@ cc_add_csum(struct csum_context *ctx, daos_csum_buf_t *dcb,
 			cc_remember_to_verify(ctx, biov_csum, biov);
 		} else {
 			/** just copy the biov_csum */
-			cc_remember_to_copy(ctx, dcb, chunk_idx, biov_csum,
+			cc_remember_to_copy(ctx, info, chunk_idx, biov_csum,
 					    csum_len);
 		}
 		cc_biov_csum_move_next(ctx);
@@ -392,9 +392,9 @@ cc_add_csum(struct csum_context *ctx, daos_csum_buf_t *dcb,
 		/** copy checksums saved from this biov */
 		cc_insert_remembered_csums(ctx);
 
-		/** only count dcbs if not a hole */
+		/** only count csum_infos if not a hole */
 		if (!bio_addr_is_hole(&biov->bi_addr))
-			ctx->cc_biov_dcb_idx++;
+			ctx->cc_biov_csums_idx++;
 
 		/** move to the next biov */
 		cc_iov_move_next(ctx);
@@ -412,12 +412,12 @@ cc_biov_bytes_left(const struct csum_context *ctx) {
 	return bio_iov2req_len(biov) - ctx->cc_bsgl_idx->iov_offset;
 }
 
-/** For a given recx, add checksums to the outupt dcb. Data will come from the
- * bsgls in \ctx
+/** For a given recx, add checksums to the outupt csum info. Data will come
+ * from the bsgls in \ctx
  */
 static int
 cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
-		      daos_csum_buf_t *dcb)
+		      struct dcs_csum_info *info)
 {
 	uint32_t		chunksize;
 	size_t			rec_size;
@@ -458,7 +458,7 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 			    ctx->cc_bsgl->bs_nr_out)
 				return 0;
 
-			rc = cc_add_csum(ctx, dcb, c);
+			rc = cc_add_csum(ctx, info, c);
 			if (rc != 0)
 				return rc;
 		}
@@ -476,15 +476,15 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 }
 
 static uint64_t
-cc2biov_dcbs_nr(struct csum_context *ctx)
+cc2biov_csums_nr(struct csum_context *ctx)
 {
 	return ctx->cc_biov_csum_idx;
 }
 
 int
 ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, daos_csum_buf_t *biov_dcbs,
-		size_t *biov_dcbs_used)
+		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
+		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums)
 {
 	struct csum_context	ctx = {0};
 	struct daos_sgl_idx	bsgl_idx = {0};
@@ -498,10 +498,10 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		return 0;
 
 	/** Verify have correct csums for extents returned.
-	 * Should be 1 biov_dcb for each biov in bsgl
+	 * Should be 1 biov_csums for each biov in bsgl
 	 */
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
-		if (!dcb_is_valid(&biov_dcbs[i])) {
+		if (!ci_is_valid(&biov_csums[i])) {
 			D_ERROR("Invalid csum for biov %d.", i);
 			return -DER_CSUM;
 		}
@@ -513,22 +513,24 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	ctx.cc_rec_len = iod->iod_size;
 	ctx.cc_chunksize = csummer->dcs_chunk_size;
 	ctx.cc_bsgl = bsgl;
-	ctx.cc_biov_dcbs = biov_dcbs;
+	ctx.cc_biov_csums = biov_csums;
 	ctx.cc_to_verify = ctx.cc_to_verify_embedded;
 	ctx.cc_to_verify_size = TO_VERIFY_EMBEDDED_NR;
+
+	iod_csums->ic_nr = iod->iod_nr;
 
 	/** for each extent/checksum buf */
 	for (i = 0; i < iod->iod_nr && rc == 0; i++) {
 		daos_recx_t		*recx = &iod->iod_recxs[i];
-		daos_csum_buf_t		*dcb = &iod->iod_csums[i];
+		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
-		if (ctx.cc_rec_len > 0 && dcb_is_valid(dcb))
-			rc = cc_add_csums_for_recx(&ctx, recx, dcb);
+		if (ctx.cc_rec_len > 0 && ci_is_valid(info))
+			rc = cc_add_csums_for_recx(&ctx, recx, info);
 	}
 
-	/** return the cound of biov csums used. */
-	if (biov_dcbs_used != NULL)
-		*biov_dcbs_used = cc2biov_dcbs_nr(&ctx);
+	/** return the count of biov csums used. */
+	if (biov_csums_used != NULL)
+		*biov_csums_used = cc2biov_csums_nr(&ctx);
 
 	return rc;
 }
