@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,33 +79,35 @@ struct test_case_args {
 
 #define	CSUM_FOR_ARRAYS_TEST_CASE(state, ...) \
 	csum_for_arrays_test_case(state, (struct test_case_args)__VA_ARGS__)
-
-struct dcb_idx {
-	uint32_t dcb_idx;
+/** index to a specific csum within a csum info array */
+struct cia_idx {
+	uint32_t ci_idx;
 	uint32_t csum_idx;
 };
 
 static bool
-dcbi_next(struct dcb_idx *dcbi, daos_csum_buf_t *dcbs, uint64_t dcbs_nr)
+cia_idx_next(struct cia_idx *idx, struct dcs_csum_info *infos,
+	     uint64_t infos_nr)
 {
-	dcbi->csum_idx++;
-	if (dcbs[dcbi->dcb_idx].cs_nr >= dcbi->csum_idx) {
-		dcbi->dcb_idx++;
-		dcbi->csum_idx = 0;
+	idx->csum_idx++;
+	if (infos[idx->ci_idx].cs_nr >= idx->csum_idx) {
+		idx->ci_idx++;
+		idx->csum_idx = 0;
 	}
-	return dcbi->dcb_idx < dcbs_nr;
+	return idx->ci_idx < infos_nr;
 }
 
 static uint8_t *
-dcbi_get_csum(struct dcb_idx *dcbi, daos_csum_buf_t *dcbs)
+cia_idx_get_csum(struct cia_idx *idx, struct dcs_csum_info *infos)
 {
-	return dcb_idx2csum(&dcbs[dcbi->dcb_idx], dcbi->csum_idx);
+	return ci_idx2csum(&infos[idx->ci_idx], idx->csum_idx);
 }
 
 void
 csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 {
-	daos_csum_buf_t		*dcbs;
+	struct dcs_csum_info	*csum_infos;
+	struct dcs_iod_csums	 iod_csums;
 	daos_iod_t		 iod = {0};
 	daos_recx_t		 recx[MAX_RECX];
 	d_sg_list_t		 sgl;
@@ -114,16 +116,16 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	int			 fetch_recx_nr = 0;
 	uint32_t		 csum_size;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-	uint32_t		 f_dcbs_nr;
-	daos_csum_buf_t		*f_dcbs;
+	uint32_t		 f_csums_nr;
+	struct dcs_csum_info	*f_csums;
 	struct bio_desc		*biod;
 	struct bio_sglist	*bsgl;
-	int			 expected_dcbs_nr;
+	int			 expected_csums_nr;
 	int			 i;
 	struct extent_key	 k;
 	int			 rc;
-	struct dcb_idx		 dcb_idx = {0};
-	struct dcb_idx		 f_dcb_idx = {0};
+	struct cia_idx		 csum_idx = {0};
+	struct cia_idx		 f_csums_idx = {0};
 
 	extent_key_from_test_args(&k, *state);
 	csum_size = 8;
@@ -142,27 +144,27 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 		recx[i].rx_idx = test.update_recxs[i].idx;
 	}
 
-	D_ALLOC_ARRAY(dcbs, update_recx_nr);
+	D_ALLOC_ARRAY(csum_infos, update_recx_nr);
+	iod_csums.ic_data = csum_infos;
 
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
 
 		csum_buf_len = csum_size * test.update_recxs[i].csum_count;
-		dcbs[i].cs_type = 1;
-		dcbs[i].cs_nr = test.update_recxs[i].csum_count;
-		dcbs[i].cs_chunksize = test.chunksize;
-		D_ALLOC(dcbs[i].cs_csum, csum_buf_len);
-		memset(dcbs[i].cs_csum, i + 1, csum_buf_len);
+		csum_infos[i].cs_type = 1;
+		csum_infos[i].cs_nr = test.update_recxs[i].csum_count;
+		csum_infos[i].cs_chunksize = test.chunksize;
+		D_ALLOC(csum_infos[i].cs_csum, csum_buf_len);
+		memset(csum_infos[i].cs_csum, i + 1, csum_buf_len);
 
-		dcbs[i].cs_buf_len = csum_buf_len;
-		dcbs[i].cs_len = csum_size;
+		csum_infos[i].cs_buf_len = csum_buf_len;
+		csum_infos[i].cs_len = csum_size;
 	}
 
 	iod.iod_name = k.akey;
 	iod.iod_size = test.rec_size;
 	iod.iod_nr = update_recx_nr;
 	iod.iod_recxs = recx;
-	iod.iod_csums = dcbs;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
 	dts_sgl_init_with_strings_repeat(&sgl, (data_size / 16) + 1, 1,
@@ -170,7 +172,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 
 	/** update with a checksum */
 	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, &sgl);
+			    &iod, &iod_csums, &sgl);
 	if (rc != 0)
 		fail_msg("vos_obj_update failed with error code %d", rc);
 
@@ -190,8 +192,8 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 
 	biod = vos_ioh2desc(ioh);
 	bsgl = bio_iod_sgl(biod, 0);
-	f_dcbs_nr = vos_ioh2dcbs_nr(ioh);
-	f_dcbs = vos_ioh2dcbs(ioh);
+	f_csums_nr = vos_ioh2ci_nr(ioh);
+	f_csums = vos_ioh2ci(ioh);
 
 	assert_int_equal(test.biovs_nr, bsgl->bs_nr_out);
 
@@ -203,26 +205,26 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 		assert_int_equal(expected_biov->suffix, biov->bi_suffix_len);
 	}
 
-	/** should be 1 dcb per biov (minus holes) */
-	expected_dcbs_nr = test.biovs_nr - test.holes_nr;
-	assert_int_equal(expected_dcbs_nr, f_dcbs_nr);
-	assert_non_null(f_dcbs);
+	/** should be 1 csum info per biov (minus holes) */
+	expected_csums_nr = test.biovs_nr - test.holes_nr;
+	assert_int_equal(expected_csums_nr, f_csums_nr);
+	assert_non_null(f_csums);
 
 	do {
-		assert_memory_equal(dcbi_get_csum(&dcb_idx, dcbs),
-				    dcbi_get_csum(&f_dcb_idx, f_dcbs),
+		assert_memory_equal(cia_idx_get_csum(&csum_idx, csum_infos),
+				    cia_idx_get_csum(&f_csums_idx, f_csums),
 				    csum_size);
-	} while (dcbi_next(&dcb_idx, dcbs, update_recx_nr) &&
-	       dcbi_next(&f_dcb_idx, f_dcbs, f_dcbs_nr));
+	} while (cia_idx_next(&csum_idx, csum_infos, update_recx_nr) &&
+		cia_idx_next(&f_csums_idx, f_csums, f_csums_nr));
 
 	/** Clean up */
 	vos_fetch_end(ioh, rc);
 	d_sgl_fini(&sgl, true);
 
 	for (i = 0; i < update_recx_nr; i++)
-		D_FREE(dcbs[i].cs_csum);
+		D_FREE(csum_infos[i].cs_csum);
 
-	D_FREE(dcbs);
+	D_FREE(csum_infos);
 }
 
 /** Single chunk extent updated and fetched */
@@ -437,12 +439,13 @@ csum_fault_injection(void **state)
 {
 	struct extent_key	 k;
 	daos_recx_t		 recx;
-	daos_csum_buf_t		 dcb;
+	struct dcs_iod_csums	 iod_csums = {0};
+	struct dcs_csum_info	 info = {0};
 	uint64_t		 csum;
 	daos_iod_t		 iod;
 	d_sg_list_t		 sgl;
 	int			 rc;
-	daos_csum_buf_t		*fetched_dcb;
+	struct dcs_csum_info	*fetched_csums;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 
 	extent_key_from_test_args(&k, *state);
@@ -452,18 +455,19 @@ csum_fault_injection(void **state)
 
 	recx.rx_idx = 0;
 	recx.rx_nr = daos_sgl_data_len(&sgl);
-	dcb_set(&dcb, &csum, 8, 8, 1, 8);
+	ci_set(&info, &csum, 8, 8, 1, 8, 0);
 	iod.iod_nr = 1;
 	iod.iod_recxs = &recx;
-	iod.iod_csums = &dcb;
 	iod.iod_name = k.akey;
 	iod.iod_size = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 
+	iod_csums.ic_data = &info;
+
 	set_csum_fi(DAOS_CHECKSUM_UPDATE_FAIL);
 
 	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, &sgl);
+			    &iod, &iod_csums, &sgl);
 	assert_int_equal(0, rc);
 	unset_csum_fi();
 
@@ -471,8 +475,8 @@ csum_fault_injection(void **state)
 			false, &ioh);
 	assert_int_equal(0, rc);
 
-	fetched_dcb = vos_ioh2dcbs(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_dcb->cs_csum, 0xABCD);
+	fetched_csums = vos_ioh2ci(ioh);
+	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
 
 	rc = vos_fetch_end(ioh, rc);
 	assert_int_equal(0, rc);
@@ -480,15 +484,15 @@ csum_fault_injection(void **state)
 	csum = 0xABCD;
 	set_csum_fi(DAOS_CHECKSUM_FETCH_FAIL);
 	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
-			    &iod, &sgl);
+			    &iod, NULL, &sgl);
 	assert_int_equal(0, rc);
 
 	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
 			     false, &ioh);
 	assert_int_equal(0, rc);
 
-	fetched_dcb = vos_ioh2dcbs(ioh);
-	assert_int_not_equal(*(uint64_t *)fetched_dcb->cs_csum, 0xABCD);
+	fetched_csums = vos_ioh2ci(ioh);
+	assert_int_not_equal(*(uint64_t *)fetched_csums->cs_csum, 0xABCD);
 
 	rc = vos_fetch_end(ioh, rc);
 	assert_int_equal(0, rc);
