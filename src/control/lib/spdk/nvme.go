@@ -41,7 +41,6 @@ import "C"
 
 import (
 	"os"
-	"path"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -49,7 +48,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const lockfilePrefix = "/tmp/spdk_pci_lock_"
+const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
 
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
@@ -113,12 +112,14 @@ func (n *Nvme) cleanLockFiles(log logging.Logger, pciAddrs ...string) {
 	log.Debugf("removing lockfiles: %v", pciAddrs)
 
 	for _, pciAddr := range pciAddrs {
-		fName := path.Join(lockfilePrefix, pciAddr)
+		fName := lockfilePathPrefix + pciAddr
 
 		err := os.Remove(fName)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			log.Errorf("remove %s: %s", fName, err)
-			continue
 		}
 
 		log.Debugf("%s removed", fName)
