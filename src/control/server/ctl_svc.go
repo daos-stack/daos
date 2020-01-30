@@ -35,8 +35,9 @@ import (
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
-	harness    *IOServerHarness
-	membership *system.Membership
+	harness       *IOServerHarness
+	membership    *system.Membership
+	harnessClient HarnessClient
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
@@ -44,6 +45,7 @@ type ControlService struct {
 func NewControlService(l logging.Logger, h *IOServerHarness,
 	bp *bdev.Provider, sp *scm.Provider,
 	cfg *Configuration, m *system.Membership) (*ControlService, error) {
+
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
@@ -55,5 +57,6 @@ func NewControlService(l logging.Logger, h *IOServerHarness,
 		StorageControlService: *scs,
 		harness:               h,
 		membership:            m,
+		harnessClient:         NewHarnessClient(l, h),
 	}, nil
 }
