@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
+#include <daos/checksum.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -580,7 +581,6 @@ typedef struct {
 	daos_handle_t		th;
 	daos_array_iod_t	*iod;
 	d_sg_list_t		*sgl;
-	daos_csum_buf_t		*csums;
 } daos_array_io_t;
 
 typedef struct {
