@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@ package spdk
 import "C"
 
 import (
+	"os"
+	"path"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -47,12 +49,14 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const lockfilePrefix = "/tmp/spdk_pci_lock_"
+
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover() ([]Controller, error)
+	Discover(logging.Logger) ([]Controller, error)
 	// Format NVMe controller namespaces
-	Format(ctrlrPciAddr string) error
+	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
 	Cleanup()
 }
@@ -105,23 +109,58 @@ type DeviceHealth struct {
 	VolatileWarn    bool
 }
 
+func (n *Nvme) cleanLockFiles(log logging.Logger, pciAddrs ...string) {
+	log.Debugf("removing lockfiles: %v", pciAddrs)
+
+	for _, pciAddr := range pciAddrs {
+		fName := path.Join(lockfilePrefix, pciAddr)
+
+		err := os.Remove(fName)
+		if err != nil && !os.IsNotExist(err) {
+			log.Errorf("remove %s: %s", fName, err)
+			continue
+		}
+
+		log.Debugf("%s removed", fName)
+	}
+}
+
 // Discover calls C.nvme_discover which returns
 // pointers to single linked list of ctrlr_t, ns_t and
 // dev_health_t structs.
 // These are converted to slices of Controller, Namespace
 // and DeviceHealth structs.
-func (n *Nvme) Discover() ([]Controller, error) {
+func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
 	failLocation := "NVMe Discover(): C.nvme_discover"
 
-	if retPtr := C.nvme_discover(); retPtr != nil {
-		return processReturn(retPtr, failLocation)
+	retPtr := C.nvme_discover()
+	if retPtr == nil {
+		return nil, errors.Errorf("%s unexpectedly returned NULL",
+			failLocation)
 	}
 
-	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
+	ctrlrs, err := processReturn(retPtr, failLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	ctrlrPciAddrs := make([]string, 0, len(ctrlrs))
+	for _, c := range ctrlrs {
+		ctrlrPciAddrs = append(ctrlrPciAddrs, c.PCIAddr)
+	}
+	log.Debugf("discovered nvme ssds: %v", ctrlrPciAddrs)
+
+	// remove lock file for each discovered device
+	n.cleanLockFiles(log, ctrlrPciAddrs...)
+
+	return ctrlrs, err
 }
 
 // Format device at given pci address, destructive operation!
 func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) error {
+	// remove lock file for each discovered device
+	defer n.cleanLockFiles(log, ctrlrPciAddr)
+
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
@@ -158,7 +197,10 @@ func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) error {
 
 // Update calls C.nvme_fwupdate to update controller firmware image.
 // Retrieves image from path and updates given firmware slot/register.
-func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
+func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
+	// remove lock file for each discovered device
+	defer n.cleanLockFiles(log, ctrlrPciAddr)
+
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
@@ -168,11 +210,12 @@ func (n *Nvme) Update(ctrlrPciAddr string, path string, slot int32) ([]Controlle
 	failLocation := "NVMe Update(): C.nvme_fwupdate"
 
 	retPtr := C.nvme_fwupdate(csPci, csPath, C.uint(slot))
-	if retPtr != nil {
-		return processReturn(retPtr, failLocation)
+	if retPtr == nil {
+		return nil, errors.Errorf("%s unexpectedly returned NULL",
+			failLocation)
 	}
 
-	return nil, errors.Errorf("%s unexpectedly returned NULL", failLocation)
+	return processReturn(retPtr, failLocation)
 }
 
 // Cleanup unlinks and detaches any controllers or namespaces,
