@@ -27,12 +27,11 @@ import os
 import sys
 import ctypes
 import avocado
-from apricot import Test, skipForTicket
-
+from apricot import TestWithServers
 
 from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
 
-class CreateManyDkeys(Test):
+class CreateManyDkeys(TestWithServers):
     """
     Test Class Description:
         Tests that create large numbers of keys in objects/containers and then
@@ -70,8 +69,6 @@ class CreateManyDkeys(Test):
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
-        epoch = self.container.get_new_tx()
-        c_epoch = ctypes.c_uint64(epoch)
 
         print("Started Writing the Dataset-----------\n")
         inc = 50000
@@ -85,15 +82,12 @@ class CreateManyDkeys(Test):
             ioreq.single_insert(c_dkey,
                                 c_akey,
                                 c_value,
-                                c_size,
-                                c_epoch)
+                                c_size)
 
             if key > last_key:
                 print("written: {}".format(key))
                 sys.stdout.flush()
                 last_key = key + inc
-
-        self.container.commit_tx(c_epoch)
 
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
@@ -103,8 +97,7 @@ class CreateManyDkeys(Test):
             the_data = "some data that gets stored with the key {0}".format(key)
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,
-                                     len(the_data)+1,
-                                     c_epoch)
+                                     len(the_data)+1)
 
             if the_data != (repr(val.value)[1:-1]):
                 self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
@@ -125,7 +118,6 @@ class CreateManyDkeys(Test):
         print("destroy complete")
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-1721")
     def test_many_dkeys(self):
         """
         Test ID: DAOS-1701
