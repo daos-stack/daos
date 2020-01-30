@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,6 +88,46 @@ func TestMergeEnvVars(t *testing.T) {
 			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
 			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConfigHasEnvVar(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startVars []string
+		addVar    string
+		addVal    string
+		expVars   []string
+	}{
+		"empty": {
+			addVar:  "FOO",
+			addVal:  "BAR",
+			expVars: []string{"FOO=BAR"},
+		},
+		"similar prefix": {
+			startVars: []string{"FOO_BAR=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO_BAR=BAZ", "FOO=BAR"},
+		},
+		"same prefix": {
+			startVars: []string{"FOO=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO=BAZ"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithEnvVars(tc.startVars...)
+
+			if !cfg.HasEnvVar(tc.addVar) {
+				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
+			}
+
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
 		})
 	}
