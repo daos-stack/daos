@@ -39,6 +39,7 @@
 #include <hwloc.h>
 #include <abt.h>
 #include <cart/iv.h>
+#include <daos/checksum.h>
 
 /** number of target (XS set) per server */
 extern unsigned int	dss_tgt_nr;
@@ -551,6 +552,7 @@ struct dss_enum_arg {
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
+	struct daos_csummer    *csummer;
 	int			eprs_cap;
 	int			eprs_len;
 	int			last_type;	/* hack for tweaking kds_len */
@@ -562,6 +564,7 @@ struct dss_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
+			d_iov_t			csum_iov;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */

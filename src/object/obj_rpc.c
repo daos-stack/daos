@@ -30,10 +30,7 @@
 #include <daos/rpc.h>
 #include <daos/object.h>
 #include "obj_rpc.h"
-
-/** proc functions defined in other files */
-int
-crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum);
+#include "rpc_csum.h"
 
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)

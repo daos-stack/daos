@@ -152,7 +152,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
 			continue;
 
-		rc = daos_csummer_verify(csummer, iod, &sgls[i], iod_csum);
+		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum);
 		if (rc != 0)
 			break;
 	}
@@ -413,6 +413,10 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
+	if (args->dkey_csum != NULL)
+		orw->orw_dkey_csum = args->dkey_csum;
+	else
+		memset(&orw->orw_dkey_csum, 0, sizeof(orw->orw_dkey_csum));
 	orw->orw_iod_array.oia_iod_nr = nr;
 	orw->orw_iod_array.oia_iods = api_args->iods;
 	if (args->iod_csums != NULL) {
@@ -616,6 +620,72 @@ struct obj_enum_args {
 	unsigned int		*eaa_map_ver;
 };
 
+int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
+			  const struct obj_key_enum_out *oeo)
+{
+	struct daos_csummer	*csummer;
+	uint8_t			*csum_ptr;
+	uint64_t		 i;
+	int			 rc = 0;
+	struct daos_sgl_idx	 sgl_idx = {0};
+	d_sg_list_t		 sgl = oeo->oeo_sgl;
+
+	csummer = dc_cont_hdl2csummer(enum_args->eaa_obj->do_co_hdl);
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	csum_ptr = oeo->oeo_csum_iov.iov_buf;
+	if (csum_ptr == NULL) {
+		D_ERROR("CSUM is enabled but key checksum not set.");
+		return -DER_CSUM;
+	}
+
+	for (i = 0; i < *enum_args->eaa_nr; i++) {
+		daos_key_desc_t		*kd = &enum_args->eaa_kds[i];
+		void			*key_buf;
+		d_iov_t			 key_iov;
+		struct dcs_csum_info	 csum_info;
+		d_iov_t			 iov = sgl.sg_iovs[sgl_idx.iov_idx];
+
+		if (kd->kd_csum_len != daos_csummer_get_csum_len(csummer)) {
+			D_ERROR("Key descriptor CSUM length doesn't match "
+				"configured CSUM type's length");
+			return -DER_CSUM;
+
+		}
+		if (kd->kd_csum_type != daos_csummer_get_type(csummer)) {
+			D_ERROR("Key descriptor CSUM type doesn't match "
+				"configured CSUM type");
+			return -DER_CSUM;
+		}
+
+		key_buf = iov.iov_buf + sgl_idx.iov_offset;
+
+		ci_set(&csum_info, csum_ptr, kd->kd_csum_len,
+		       kd->kd_csum_len, 1, CSUM_NO_CHUNK, kd->kd_csum_type);
+		d_iov_set(&key_iov, key_buf, kd->kd_key_len);
+
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL) ||
+		    DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+			((uint8_t *)key_buf)[0] += 2;
+		rc = daos_csummer_verify_key(csummer, &key_iov, &csum_info);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error: %d", rc);
+			return rc;
+		}
+
+		csum_ptr += kd->kd_csum_len;
+		sgl_idx.iov_offset += kd->kd_key_len;
+
+		/** move to next iov if necessary */
+		if (sgl_idx.iov_offset >= iov.iov_len) {
+			sgl_idx.iov_idx++;
+			sgl_idx.iov_offset = 0;
+		}
+	}
+	return rc;
+}
+
 static int
 dc_enumerate_cb(tse_task_t *task, void *arg)
 {
@@ -696,6 +766,10 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	if (enum_args->eaa_anchor)
 		enum_anchor_copy(enum_args->eaa_anchor,
 				 &oeo->oeo_anchor);
+	rc = csum_enum_verify_keys(enum_args, oeo);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 out:
 	if (enum_args->eaa_obj != NULL)
 		obj_shard_decref(enum_args->eaa_obj);

@@ -86,7 +86,6 @@ struct obj_auxi_args {
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
-	struct dcs_iod_csums		*iod_csums;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
@@ -2143,36 +2142,16 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	}
 }
 
-static int
-obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args,
-		 struct obj_auxi_args *obj_auxi)
-{
-	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	int			 rc;
-
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
-		return 0;
-
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
-					args->nr, &obj_auxi->iod_csums);
-	if (rc != 0)
-		return rc;
-
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-		((char *) obj_auxi->iod_csums->ic_data->cs_csum)[0]++;
-
-	return 0;
-}
-
 static void
-obj_update_csum_destroy(const struct dc_object *obj,
+obj_rw_csum_destroy(const struct dc_object *obj,
 			struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
 	if (!daos_csummer_initialized(csummer))
 		return;
-	daos_csummer_free_ic(csummer, &obj_auxi->iod_csums);
+	daos_csummer_free_ci(csummer, &obj_auxi->rw_args.dkey_csum);
+	daos_csummer_free_ic(csummer, &obj_auxi->rw_args.iod_csums);
 }
 
 static int
@@ -2286,7 +2265,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_retry_cb(task, obj, obj_auxi);
 
 	if (!obj_auxi->io_retry) {
-
 		if (obj_auxi->opc == DAOS_OBJ_RPC_SYNC &&
 		    task->dt_result != 0) {
 			struct daos_obj_sync_args	*sync_args;
@@ -2298,9 +2276,11 @@ obj_comp_cb(tse_task_t *task, void *data)
 			*sync_args->epochs_p = NULL;
 			*sync_args->nr = 0;
 		}
-
-		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
-			obj_update_csum_destroy(obj, obj_auxi);
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE ||
+		    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
+			/** checksums sent and not retrying,
+			 * can destroy now */
+			obj_rw_csum_destroy(obj, dc_task_get_args(task));
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
@@ -2354,7 +2334,6 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
-	shard_arg->iod_csums		= obj_auxi->iod_csums;
 	if (obj_auxi->req_reasbed) {
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
@@ -2381,6 +2360,87 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 	return 0;
 }
+
+static int
+csum_obj_update(struct dc_object *obj, daos_obj_update_t *args,
+		struct obj_auxi_args *obj_auxi)
+{
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct dcs_csum_info	*dkey_csum = NULL;
+	struct dcs_iod_csums	*iod_csums = NULL;
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
+		return 0;
+
+	/** Calc 'd' key checksum */
+	rc = daos_csummer_calc_key(csummer, args->dkey, &dkey_csum);
+	if (rc != 0)
+		return rc;
+
+	/** Calc 'a' key checksum and value checksum */
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
+				    args->nr, false, &iod_csums);
+	if (rc != 0) {
+		daos_csummer_free_ci(csummer, &dkey_csum);
+		D_ERROR("daos_csummer_calc_key error: %d", rc);
+		return rc;
+	}
+	/** fault injection */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_DKEY_FAIL))
+		((char *) args->dkey->iov_buf)[0]++;
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_AKEY_FAIL))
+		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+		((char *)iod_csums[0].ic_data->cs_csum)[0]++;
+
+	obj_auxi->rw_args.iod_csums = iod_csums;
+	obj_auxi->rw_args.dkey_csum = dkey_csum;
+
+	return 0;
+}
+
+static int
+csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
+	       struct obj_auxi_args *obj_auxi)
+{
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct dcs_csum_info	*dkey_csum = NULL;
+	struct dcs_iod_csums	*iod_csums = NULL;
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
+		return 0;
+
+	/** dkey */
+	rc = daos_csummer_calc_key(csummer, args->dkey,
+				   &dkey_csum);
+	if (rc != 0)
+		return rc;
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+		((char *) args->dkey->iov_buf)[0]++;
+
+	/** akeys (1 for each iod) */
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+				    true, &iod_csums);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_calc_iods error: %d", rc);
+		daos_csummer_free_ci(csummer, &dkey_csum);
+		return rc;
+	}
+
+	/** fault injection */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+		((char *) args->dkey->iov_buf)[0]++;
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL))
+		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
+
+	obj_auxi->rw_args.iod_csums = iod_csums;
+	obj_auxi->rw_args.dkey_csum = dkey_csum;
+
+	return 0;
+}
+
 
 /* Selects next replica in the object's layout.
  */
@@ -2499,6 +2559,14 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
+	if (!obj_auxi->io_retry) {
+		rc = csum_obj_fetch(obj, args, obj_auxi);
+		if (rc != 0) {
+			D_ERROR("csum_obj_fetch error: %d", rc);
+			D_GOTO(out_task, rc);
+		}
+	}
+
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
 			      false, false, task, obj_auxi);
 	if (rc != 0) {
@@ -2576,12 +2644,16 @@ dc_obj_update(tse_task_t *task)
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, dkey_hash,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, &obj_auxi->req_tgts);
-
-	if (!obj_auxi->io_retry)
-		obj_update_csums(obj, args, obj_auxi);
-
 	if (rc)
 		goto out_task;
+
+	if (!obj_auxi->io_retry) {
+		rc = csum_obj_update(obj, args, obj_auxi);
+		if (rc) {
+			D_ERROR("csum_obj_update error: %d", rc);
+			goto out_task;
+		}
+	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
