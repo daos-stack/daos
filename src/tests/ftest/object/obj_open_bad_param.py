@@ -67,15 +67,14 @@ class ObjOpenBadParam(TestWithServers):
             self.datasize = len(thedata) + 1
             self.dkey = "this is the dkey"
             self.akey = "this is the akey"
-            self.obj, self.epoch = self.container.write_an_obj(thedata,
-                                                               self.datasize,
-                                                               self.dkey,
-                                                               self.akey,
-                                                               obj_cls=1)
+            self.obj = self.container.write_an_obj(thedata,
+                                                   self.datasize,
+                                                   self.dkey,
+                                                   self.akey,
+                                                   obj_cls=1)
 
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
-                                                  self.akey, self.obj,
-                                                  self.epoch)
+                                                  self.akey, self.obj)
             if thedata not in thedata2.value:
                 print(thedata)
                 print(thedata2.value)

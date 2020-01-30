@@ -80,7 +80,7 @@ class FullPoolContainerCreate(TestWithServers):
                 dkey = (get_random_string(5))
                 akey = (get_random_string(5))
                 try:
-                    dummy_oid, dummy_tx = self.cont.write_an_obj(
+                    dummy_oid = self.cont.write_an_obj(
                         my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     obj_sz))

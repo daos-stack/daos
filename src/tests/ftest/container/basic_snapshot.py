@@ -23,7 +23,7 @@
 """
 import random
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 
@@ -50,7 +50,6 @@ class BasicSnapshot(TestWithServers):
         super(BasicSnapshot, self).__init__(*args, **kwargs)
         self.snapshot = None
 
-    @skipForTicket("DAOS-2484")
     def test_basic_snapshot(self):
         """Test ID: DAOS-1370.
 
@@ -89,15 +88,18 @@ class BasicSnapshot(TestWithServers):
             datasize = len(thedata) + 1
             dkey = "dkey"
             akey = "akey"
-            obj, epoch = self.container.write_an_obj(thedata,
-                                                     datasize,
-                                                     dkey,
-                                                     akey,
-                                                     obj_cls=obj_cls)
+            tx_handle = self.container.get_new_tx()
+            obj = self.container.write_an_obj(thedata,
+                                              datasize,
+                                              dkey,
+                                              akey,
+                                              obj_cls=obj_cls,
+                                              txn=tx_handle)
+            self.container.commit_tx(tx_handle)
             obj.close()
             # Take a snapshot of the container
             self.snapshot = DaosSnapshot(self.context)
-            self.snapshot.create(self.container.coh, epoch)
+            self.snapshot.create(self.container.coh, tx_handle)
             self.log.info("Wrote an object and created a snapshot")
 
         except DaosApiError as error:
@@ -113,7 +115,7 @@ class BasicSnapshot(TestWithServers):
             while more_transactions:
                 size = random.randint(1, 250) + 1
                 new_data = get_random_string(size)
-                new_obj, _ = self.container.write_an_obj(
+                new_obj = self.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)
                 new_obj.close()
                 more_transactions -= 1
@@ -144,7 +146,7 @@ class BasicSnapshot(TestWithServers):
             obj.open()
             snap_handle = self.snapshot.open(self.container.coh)
             thedata2 = self.container.read_an_obj(
-                datasize, dkey, akey, obj, snap_handle.value)
+                datasize, dkey, akey, obj, txn=snap_handle.value)
         except DaosApiError as error:
             self.fail(
                 "Error when retrieving the snapshot data.\n{0}".format(error))
