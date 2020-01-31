@@ -74,7 +74,9 @@ class DaosServer(DaosCommand):
         self.yaml_params = DaosServerConfig()
         self.timeout = 120
         self.server_list = []
-        self.mode = "normal"
+        self.format_required = False
+        self.patterns = []
+        self.reset_patterns()
 
         self.debug = FormattedParameter("-b", True)
         self.json = FormattedParameter("-j", False)
@@ -98,22 +100,31 @@ class DaosServer(DaosCommand):
                                   str(self.yaml_params.port)))
         self.yaml_params.access_points.value = access_points.split()
         self.config.value = self.yaml_params.create_yaml(yamlfile)
-        self.mode = "normal"
-        if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
-            self.mode = "format"
 
-    def get_server_count(self):
-        """Update the expected number of subprocess output messages.
+        # After updating the command parameters reset the subprocess start
+        # patterns for the next start
+        self.reset_patterns()
 
-        Update the expected number of daos_server command output messages used
-        to detect if the daos_server subprocess has started.  There should be
-        one message for each server started on each host.
+    def reset_patterns(self):
+        """Reset the subprocess completion detection search patterns."""
+        self.patterns = [
+            "DAOS I/O server.*started",
+            "(SCM format required)(?!;)",
+        ]
+
+    def get_expected_pattern_count(self):
+        """Get the expected number of matches for each search pattern.
 
         Returns:
-            int: number of expected subprocess output messages
+            list: a list of the number of expected daos_io_server started
+                messages and the number of expected format messages from each
+                daos_server process (when formatting is required)
 
         """
-        return len(self.server_list) * len(self.yaml_params.server_params)
+        server_count = len(self.server_list)
+        io_server_per_server = len(self.yaml_params.server_params)
+        io_server_count = server_count * io_server_per_server
+        return [io_server_count, server_count]
 
     def check_subprocess_status(self, sub_process):
         """Wait for message from command output.
@@ -121,33 +132,80 @@ class DaosServer(DaosCommand):
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
         """
-        # Update the expected number of daos_server command output messages used
-        # to detect if the daos_server subprocess has started.  There should be
-        # one message for each server started on each host.
-        server_count = self.get_server_count()
+        # Reset the format required flag
+        self.format_required = False
 
-        patterns = {
-            "format": "SCM format required",
-            "normal": "DAOS I/O server.*started",
-        }
-        start_time = time.time()
-        start_msgs = 0
+        # Update the expected number of daos_server command output messages used
+        # to detect if the daos_server subprocess has started.
+        expected = self.get_expected_pattern_count()
+        detected = [0 for _ in expected]
+
+        complete = False
         timed_out = False
-        while start_msgs != server_count and not timed_out:
+        start_time = time.time()
+
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the subprocess is no longer running (failure)
+        while not complete and not timed_out and sub_process.poll() is None:
+            # Determine what number of daos_server processes are waiting for a
+            # format and what number of daos_io_server processes have been
+            # started
             output = sub_process.get_stdout()
-            start_msgs = len(re.findall(patterns[self.mode], output))
+            for index, pattern in enumerate(self.patterns):
+                # Determine if all the expected number of patterns were found
+                detected[index] = len(re.findall(pattern, output))
+                complete = detected[index] == expected[index]
+
+                # If all the format patterns were detected set the format flag
+                if detected[index] == expected[index] and index > 0:
+                    self.format_required = True
+
+            # Handle the mixed started and format message case:
+            #   - The sub process is complete if every daos_server process is
+            #     awaiting format or all of its daos_io_server processes are
+            #     started
+            if not complete and len(self.patterns) > 1:
+                non_format_count = expected[1] - detected[1]
+                io_server_per_server = expected[0] / expected[1]
+                if detected[0] == non_format_count * io_server_per_server:
+                    complete = True
+                    self.format_required = True
+
+            # Deterime if the timeout has been reached
             timed_out = time.time() - start_time > self.timeout
 
-        if start_msgs != server_count:
-            err_msg = "{} detected. Only {}/{} messages received".format(
-                "Time out" if timed_out else "Error",
-                start_msgs, server_count)
-            self.log.info("%s:\n%s", err_msg, sub_process.get_stdout())
-            return False
+        # Summarize results
+        detected_msg = " and ".join([
+            "{}/{} '{}' messages".format(
+                detected[index], expected[index], pattern)
+            for index, pattern in enumerate(self.patterns)])
 
-        self.log.info("Started server in <%s> mode in %d seconds", self.mode,
-                      time.time() - start_time)
-        return True
+        if not complete:
+            err_msg = "{} detected. Only {} detected after {} seconds".format(
+                "Time out" if timed_out else "Error",
+                detected_msg, time.time() - start_time)
+            self.log.info(
+                "%s:\n%s",
+                err_msg,
+                sub_process.get_stdout() if not self.verbose else "<See above>")
+
+        elif self.format_required:
+            self.log.info(
+                "Format required after detecting %s after %d seconds",
+                detected_msg, time.time() - start_time)
+        else:
+            self.log.info(
+                "Successful start after detecting %s in %d seconds",
+                detected_msg, time.time() - start_time)
+
+        # Reduce the subprocess completion detection search pattern set to only
+        # include messages indicating the start of daos_io_server process if
+        # this method is called a second time for the same subprocess.
+        self.patterns = ["DAOS I/O server.*started"]
+
+        return complete
 
     class ServerStartSubCommand(CommandWithParameters):
         """Defines an object representing a daos_server start sub command."""
@@ -266,7 +324,7 @@ class DaosServerConfig(ObjectWithParameters):
             #       AIO /tmp/aiofile AIO1 4096
             self.scm_mount = BasicParameter(None, "/mnt/daos")
             self.scm_class = BasicParameter(None, "ram")
-            self.scm_size = BasicParameter(None, 6)
+            self.scm_size = BasicParameter(None, 16)
             self.scm_list = BasicParameter(None)
             self.bdev_class = BasicParameter(None)
             self.bdev_list = BasicParameter(None)
@@ -434,7 +492,7 @@ class ServerManager(ExecutableCommand):
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.recreate = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, False)   # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -512,6 +570,7 @@ class ServerManager(ExecutableCommand):
         storage_prep_flag = ""
         self.runner.job.set_config(yamlfile)
         self.server_clean()
+
         # Prepare SCM storage in servers
         if self.runner.job.yaml_params.is_scm():
             storage_prep_flag = "dcpm"
@@ -548,8 +607,7 @@ class ServerManager(ExecutableCommand):
                 "Failed to start server in {} mode.".format(
                     self.runner.job.mode))
 
-        if self.runner.job.yaml_params.is_nvme() or \
-           self.runner.job.yaml_params.is_scm():
+        if self.runner.job.format_required:
             # Setup the hostlist to pass to dmg command
             servers_with_ports = [
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
@@ -606,47 +664,28 @@ class ServerManager(ExecutableCommand):
 
     def clean_files(self):
         """Clean the tmpfs on the servers."""
-        is_dcpm = self.runner.job.yaml_params.is_scm()
-        is_nvme = self.runner.job.yaml_params.is_nvme()
-        commands = []
+        clean_cmds = set()
         for server_params in self.runner.job.yaml_params.server_params:
-            scm_list = server_params.scm_list.value
             scm_mount = server_params.scm_mount.value
-            scm_size = server_params.scm_size.value
+            if scm_mount:
+                self.log.info("Cleaning up the %s directory.", str(scm_mount))
+                clean_cmds.add(
+                    "find {} -mindepth 1 -maxdepth 1 -print0 | "
+                    "xargs -0r rm -rf".format(scm_mount))
+                if self.runner.job.yaml_params.is_nvme():
+                    #     clean_cmds.add("sudo rm -fr {}".format(scm_mount))
+                    clean_cmds.add(
+                        "while sudo umount {}; do continue; done".format(
+                            scm_mount))
 
-            self.log.info("Cleaning up the %s directory.", str(scm_mount))
+            if self.runner.job.yaml_params.is_scm():
+                scm_list = server_params.scm_list.value
+                if isinstance(server_params.scm_list.value, list):
+                    for device in scm_list:
+                        self.log.info("Cleaning up the %s device.", str(device))
+                        clean_cmds.add("sudo wipefs -a {}".format(device))
 
-            # Remove any files left over on each mount point
-            if is_nvme:
-                commands.append(
-                    "sudo rm -fr {}".format(os.path.join(scm_mount, "*")))
-            else:
-                # Also ensure the tmpfs/dcpm mount point exists
-                commands.extend([
-                    "if [ ! -e {} ]".format(scm_mount),
-                    "then sudo mkdir {}".format(scm_mount),
-                    "else find {} -mindepth 1 -maxdepth 1 -print0 | "
-                    "xargs -0r rm -rf".format(scm_mount),
-                    "fi"])
-
-            # Unmount the nvme drive
-            if is_nvme:
-                commands.append("sudo umount {}".format(scm_mount))
-
-            # Clean the dcpm device
-            if is_dcpm:
-                for dcpm_mount in scm_list:
-                    commands.extend([
-                        "sudo umount {}".format(dcpm_mount),
-                        "sudo wipefs -a {}".format(dcpm_mount)])
-
-            # Ensure the tmpfs mount point is mounted
-            if not is_dcpm and not is_nvme:
-                commands.append(
-                    "sudo mount -t tmpfs -o size={}G tmpfs {}".format(
-                        scm_size, scm_mount))
-
-        pcmd(self._hosts, "; ".join(commands), True)
+        pcmd(self._hosts, "; ".join(clean_cmds), True)
 
     def storage_prepare(self, user, device_type):
         """Prepare server's storage using the DAOS server's yaml settings file.
@@ -668,7 +707,7 @@ class ServerManager(ExecutableCommand):
             dev_param = "-s"
         elif device_type == "dcpm_nvme":
             device_args = " --hugepages=4096"
-        elif device_type == "ram_nvme" or device_type == "nvme":
+        elif device_type in ("ram_nvme", "nvme"):
             dev_param = "-n"
             device_args = " --hugepages=4096"
         else:
