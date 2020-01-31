@@ -29,7 +29,8 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
-#include "obj_rpc.h"
+
+#include "obj_internal.h"
 
 /** proc functions defined in other files */
 int
@@ -259,7 +260,9 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 #endif
 
 	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
-		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
+		/* PARITY_INDICATOR flag indicates singv EC */
+		if (dvi->iod_recxs != NULL && (dvi->iod_type == DAOS_IOD_ARRAY
+		    || (dvi->iod_recxs[0].rx_idx & PARITY_INDICATOR) != 0))
 			existing_flags |= IOD_REC_EXIST;
 	}
 

@@ -193,13 +193,13 @@ struct obj_reasb_req;
 #define obj_ec_stripe_rec_nr(oca)					\
 	((oca)->u.ec.e_k * (oca)->u.ec.e_len)
 /** Query the number of records in one EC cell/target */
-#define obj_ec_cell_rec_nr(oca)					\
+#define obj_ec_cell_rec_nr(oca)						\
 	((oca)->u.ec.e_len)
 /** Query the number of targets of EC obj class */
-#define obj_ec_tgt_nr(oca)					\
+#define obj_ec_tgt_nr(oca)						\
 	((oca)->u.ec.e_k + (oca)->u.ec.e_p)
 /** Query the number of data targets of EC obj class */
-#define obj_ec_data_tgt_nr(oca)					\
+#define obj_ec_data_tgt_nr(oca)						\
 	((oca)->u.ec.e_k)
 /** Query the number of parity targets of EC obj class */
 #define obj_ec_parity_tgt_nr(oca)					\
@@ -223,6 +223,79 @@ struct obj_reasb_req;
 #define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
+
+/**
+ * Threshold size of EC single-value layout (even distribution).
+ * When record_size <= OBJ_EC_SINGV_EVENDIST_SZ then stored in one data
+ * target, or will evenly distributed to all data targets.
+ */
+#define OBJ_EC_SINGV_EVENDIST_SZ(data_tgt_nr)	(((data_tgt_nr) / 8 + 1) * 4096)
+/** Alignment size of sing value local size */
+#define OBJ_EC_SINGV_CELL_ALIGN			(8)
+
+/** Local rec size, padding bytes and offset in the global record */
+struct obj_ec_singv_local {
+	uint64_t	esl_off;
+	uint64_t	esl_size;
+	uint32_t	esl_bytes_pad;
+};
+
+/** Query the target index for small sing-value record */
+#define obj_ec_singv_small_idx(oca, iod)	(0)
+
+/** Query if the single value record is stored in one data target */
+static inline bool
+obj_ec_singv_one_tgt(daos_iod_t *iod, d_sg_list_t *sgl,
+		     struct daos_oclass_attr *oca)
+{
+	uint64_t size = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca));
+
+	if ((iod->iod_size != DAOS_REC_ANY && iod->iod_size <= size) ||
+	    (sgl != NULL && daos_sgl_buf_size(sgl) <= size))
+		return true;
+
+	return false;
+}
+
+/* Query the cell size (#bytes) of evenly distributed singv */
+static inline uint64_t
+obj_ec_singv_cell_bytes(uint64_t rec_gsize, struct daos_oclass_attr *oca)
+{
+	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
+	uint64_t	cell_size;
+
+	cell_size = rec_gsize / data_tgt_nr;
+	if ((rec_gsize % data_tgt_nr) != 0)
+		cell_size++;
+	cell_size = roundup(cell_size, OBJ_EC_SINGV_CELL_ALIGN);
+
+	return cell_size;
+}
+
+/** Query local record size and needed padding for evenly distributed singv */
+static inline void
+obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
+		      uint32_t tgt_idx, struct obj_ec_singv_local *loc)
+{
+	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
+	uint64_t	cell_size;
+
+	D_ASSERT(tgt_idx < obj_ec_tgt_nr(oca));
+
+	cell_size = obj_ec_singv_cell_bytes(rec_gsize, oca);
+	if (tgt_idx >= data_tgt_nr)
+		loc->esl_off = rec_gsize + (tgt_idx - data_tgt_nr) * cell_size;
+	else
+		loc->esl_off = tgt_idx * cell_size;
+	if (tgt_idx == data_tgt_nr - 1) {
+		/* the last data target possibly with less size and padding */
+		loc->esl_size = rec_gsize - (data_tgt_nr - 1) * cell_size;
+		loc->esl_bytes_pad = cell_size - loc->esl_size;
+	} else {
+		loc->esl_size = cell_size;
+		loc->esl_bytes_pad = 0;
+	}
+}
 
 /** Query the number of data cells the recx covers */
 static inline uint32_t
