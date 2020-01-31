@@ -586,5 +586,7 @@ int bio_get_dev_state(struct bio_dev_state *dev_state,
  */
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
+/* Function to increment CSUM media error. */
+void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
 
 #endif /* __BIO_API_H__ */

@@ -2278,9 +2278,11 @@ obj_comp_cb(tse_task_t *task, void *data)
 				if (!obj_auxi->csum_retry &&
 				    !obj_auxi->csum_report) {
 					obj_auxi->csum_report = 1;
+					D_PRINT("reporting csum error \n");
 				} else if (obj_auxi->csum_report) {
 					obj_auxi->csum_report = 0;
 					obj_auxi->csum_retry = 1;
+					D_PRINT("retrying csum error \n");
 				}
 			} else
 				obj_auxi->io_retry = 0;
