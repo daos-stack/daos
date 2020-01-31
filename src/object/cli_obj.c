@@ -2418,8 +2418,6 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 				   &dkey_csum);
 	if (rc != 0)
 		return rc;
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
-		((char *) args->dkey->iov_buf)[0]++;
 
 	/** akeys (1 for each iod) */
 	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,

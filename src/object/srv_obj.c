@@ -808,6 +808,9 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	uint32_t	i;
 	int		rc;
 
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
 	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
 				     orw->orw_dkey_csum);
 	if (rc != 0) {

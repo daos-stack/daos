@@ -182,9 +182,8 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 	daos_size_t	rec_per_recx;
 	int		i;
 
-	d_iov_set(&ctx->dkey, "dkey", strlen("dkey"));
-	d_iov_set(&ctx->update_iod.iod_name, "akey_complex",
-		strlen("akey_complex"));
+	iov_alloc_str(&ctx->dkey, "dkey");
+	iov_alloc_str(&ctx->update_iod.iod_name, "akey_complex");
 
 	dts_sgl_init_with_strings_repeat(&ctx->update_sgl, 2000, 1,
 		"9876543210");
@@ -435,7 +434,6 @@ test_fetch_array(void **state)
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
-	setup_simple_data(&ctx);
 
 	/**
 	 * Act
@@ -453,6 +451,7 @@ test_fetch_array(void **state)
 	 */
 
 	/** 1. Simple success case */
+	setup_simple_data(&ctx);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);

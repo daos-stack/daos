@@ -39,13 +39,6 @@
 				return -DER_HG; \
 		} while (0)
 
-#define PROC_CI(value) \
-		do {\
-			rc = proc_struct_dcs_csum_info(proc, value); \
-			if (rc != 0)\
-				return -DER_HG; \
-		} while (0)
-
 static int
 proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
 {
@@ -112,8 +105,11 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 	if (ENCODING(proc_op)) {
 		csum_enabled = *p_csum != NULL;
 		PROC(bool, &csum_enabled);
-		if (csum_enabled)
-			PROC_CI(*p_csum);
+		if (csum_enabled) {
+			rc = proc_struct_dcs_csum_info(proc, *p_csum);
+			if (rc != 0)
+				return -DER_HG;
+		}
 
 		return 0;
 	}
@@ -133,7 +129,7 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 	}
 
 	if (FREEING(proc_op)) {
-		PROC_CI(*p_csum);
+		rc = proc_struct_dcs_csum_info(proc, *p_csum);
 		D_FREE(*p_csum);
 	}
 
@@ -150,26 +146,42 @@ crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	PROC_CI(&iod_csum->ic_akey);
+	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
+	if (rc != 0)
+		return rc;
 
 	if (ENCODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC_CI(&iod_csum->ic_data[i]);
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0)
+				return rc;
+		}
 	}
 
 	if (DECODING(proc)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
 		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC_CI(&iod_csum->ic_data[i]);
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0) {
+				D_FREE(iod_csum->ic_data);
+				return rc;
+			}
+		}
 	}
 
 	if (FREEING(proc)) {
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC_CI(&iod_csum->ic_data[i]);
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0)
+				break;
+		}
 		D_FREE(iod_csum->ic_data);
 	}
 
-	return 0;
+	return rc;
 }

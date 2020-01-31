@@ -343,11 +343,7 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 
 	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0) {
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
-		/* Corrupt data after calculating checksum */
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_CDATA_CORRUPT))
-			buf[0] += 0x2;
 	}
-
 
 	if (C_TRACE_ENABLED()) {
 		C_TRACE("CSUM: ...");
@@ -654,6 +650,9 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 			       iod->iod_recxs, iod->iod_nr,
 			       csums->ic_data);
 		csums->ic_nr = iod->iod_nr;
+		/* Corrupt data after calculating checksum */
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_CDATA_CORRUPT))
+			((char *)sgls[i].sg_iovs[0].iov_buf)[0] += 0x2;
 
 		if (rc != 0) {
 			D_ERROR("calc_csum error: %d", rc);
