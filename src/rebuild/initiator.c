@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 					    rdone->ro_epoch, rdone->ro_version,
 					    &rdone->ro_dkey, iod_cnt,
-					    &rdone->ro_iods[start],
+					    &rdone->ro_iods[start], NULL,
 					    &sgls[start]);
 			if (rc) {
 				D_ERROR("rebuild failed: rc "DF_RC"\n",
@@ -158,7 +158,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 				    rdone->ro_epoch, rdone->ro_version,
 				    &rdone->ro_dkey, iod_cnt,
-				    &rdone->ro_iods[start], &sgls[start]);
+				    &rdone->ro_iods[start], NULL, &sgls[start]);
 
 	return rc;
 }
@@ -174,7 +174,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, &ioh, NULL);
+			      rdone->ro_iods, NULL, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -283,27 +283,14 @@ rebuild_one_punch(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* punch records */
 	if (rdone->ro_punch_iod_num > 0) {
-		daos_epoch_t punch_eph = 0;
-		int j;
-
-		for (i = 0; i < rdone->ro_punch_iod_num; i++) {
-			daos_iod_t *iod;
-
-			iod = &rdone->ro_punch_iods[i];
-			for (j = 0; j < iod->iod_nr; j++) {
-				if (punch_eph == 0 ||
-				    punch_eph < iod->iod_eprs[i].epr_lo)
-					punch_eph = iod->iod_eprs[i].epr_lo;
-			}
-		}
-
-		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid, punch_eph,
+		rc = vos_obj_update(cont->sc_hdl, rdone->ro_oid,
+				    rdone->ro_rec_punch_eph,
 				    rdone->ro_version, &rdone->ro_dkey,
 				    rdone->ro_punch_iod_num,
-				    rdone->ro_punch_iods, NULL);
+				    rdone->ro_punch_iods, NULL, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d eph "DF_U64
 			" records: %d\n", DP_UOID(rdone->ro_oid), rdone,
-			rdone->ro_punch_iod_num, punch_eph, rc);
+			rdone->ro_punch_iod_num, rdone->ro_rec_punch_eph, rc);
 	}
 
 	return rc;
@@ -539,10 +526,9 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 	}
 
 	D_DEBUG(DB_REBUILD,
-		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d eph "
-		DF_U64"/"DF_U64"\n", idx, DP_KEY(&iod->iod_name),
-		iod->iod_nr, iod->iod_size, iod->iod_type,
-		iod->iod_eprs->epr_lo, iod->iod_eprs->epr_hi);
+		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d\n",
+		idx, DP_KEY(&iod->iod_name), iod->iod_nr, iod->iod_size,
+		iod->iod_type);
 
 	/* Check if data has been retrieved by iteration */
 	if (sgls) {
@@ -562,15 +548,12 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 	rdone->ro_rec_num += rec_cnt;
 	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
-	iod->iod_csums = NULL;
-	iod->iod_eprs = NULL;
-
 out:
 	return 0;
 }
 
 static int
-punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
+punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, daos_epoch_t eph)
 {
 	int idx = rdone->ro_punch_iod_num;
 	int rc;
@@ -588,15 +571,14 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
 		return rc;
 
 	D_DEBUG(DB_REBUILD,
-		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d eph "
-		DF_U64"/"DF_U64"\n", idx, DP_KEY(&iod->iod_name),
-		iod->iod_nr, iod->iod_size, iod->iod_type,
-		iod->iod_eprs->epr_lo, iod->iod_eprs->epr_hi);
+		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d \n", idx,
+		DP_KEY(&iod->iod_name), iod->iod_nr, iod->iod_size,
+		iod->iod_type);
 
+	if (rdone->ro_rec_punch_eph < eph)
+		rdone->ro_rec_punch_eph = eph;
 	rdone->ro_punch_iod_num++;
 	iod->iod_recxs = NULL;
-	iod->iod_csums = NULL;
-	iod->iod_eprs = NULL;
 	return 0;
 }
 
@@ -607,7 +589,7 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
 static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_epoch_t epoch,
 		  daos_unit_oid_t *oid, daos_key_t *dkey, daos_epoch_t dkey_eph,
-		  daos_iod_t *iods, daos_epoch_t *akey_ephs,
+		  daos_iod_t *iods, daos_epoch_t *akey_ephs, daos_epoch_t *rec_ephs,
 		  int iod_eph_total, d_sg_list_t *sgls, uint32_t version)
 {
 	struct rebuild_puller		*puller;
@@ -674,7 +656,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_epoch_t epoch,
 			continue;
 
 		if (iods[i].iod_size == 0)
-			rc = punch_iod_pack(rdone, &iods[i]);
+			rc = punch_iod_pack(rdone, &iods[i], rec_ephs[i]);
 		else
 			rc = rw_iod_pack(rdone, &iods[i],
 					 inline_copy ? &sgls[i] : NULL);
@@ -736,6 +718,7 @@ rebuild_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	return rebuild_one_queue(arg->arg, arg->epr.epr_hi, &io->ui_oid,
 				 &io->ui_dkey, io->ui_dkey_punch_eph,
 				 io->ui_iods, io->ui_akey_punch_ephs,
+				 io->ui_rec_punch_ephs,
 				 io->ui_iods_top + 1, io->ui_sgls,
 				 io->ui_version);
 }
@@ -875,7 +858,8 @@ rebuild_one_epoch_object(daos_handle_t oh, daos_epoch_range_t *epr,
 static int
 rebuild_obj_punch(struct rebuild_iter_obj_arg *arg)
 {
-	return dss_task_collective(rebuild_obj_punch_one, arg, 0);
+	return dss_task_collective(rebuild_obj_punch_one, arg, 0,
+				   DSS_ULT_REBUILD);
 }
 
 /**

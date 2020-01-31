@@ -40,10 +40,11 @@ package spdk
 import "C"
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // NVME is the interface that provides SPDK NVMe functionality.
@@ -120,19 +121,35 @@ func (n *Nvme) Discover() ([]Controller, error) {
 }
 
 // Format device at given pci address, destructive operation!
-func (n *Nvme) Format(ctrlrPciAddr string) error {
+func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) error {
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	failLocation := "NVMe Format(): C.nvme_format"
+	failLocation := "NVMe Format(): C.nvme_"
 
-	retPtr := C.nvme_format(csPci)
+	// attempt wipe of namespace #1 LBA-0
+	log.Debugf("attempting quick format on %s\n", ctrlrPciAddr)
+	retPtr := C.nvme_wipe_first_ns(csPci)
 	if retPtr == nil {
-		return fmt.Errorf("%s unexpectedly returned NULL",
+		return errors.Errorf("%swipe_first_ns() unexpectedly returned NULL",
+			failLocation)
+	}
+	if retPtr.rc == 0 {
+		return nil // quick format succeeded
+	}
+
+	log.Errorf("%swipe_first_ns() failed, rc: %d, %s",
+		failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
+
+	// fall back to full controller format if quick format failed
+	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
+	retPtr = C.nvme_format(csPci)
+	if retPtr == nil {
+		return errors.Errorf("%sformat() unexpectedly returned NULL",
 			failLocation)
 	}
 	if retPtr.rc != 0 {
-		return fmt.Errorf("%s failed, rc: %d, %s",
+		return errors.Errorf("%sformat() failed, rc: %d, %s",
 			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 

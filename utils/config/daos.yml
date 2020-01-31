@@ -15,8 +15,8 @@
 # default: daos_server
 #name: daos
 
-# Force different port number to connect to access points.
-# default: 10000
+# Default destination port to use if port not specified in host list addresses.
+# default: 10001
 #port: 10001
 
 # Hostlist

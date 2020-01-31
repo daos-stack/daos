@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,12 +80,15 @@ struct obj_auxi_args {
 					 args_initialized:1,
 					 to_leader:1,
 					 spec_shard:1,
-					 req_reasbed:1;
+					 req_reasbed:1,
+					 csum_retry:1;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
+	struct dcs_iod_csums		*iod_csums;
 	uint32_t			 iod_nr;
+	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	/* one shard_args embedded to save one memory allocation if the obj
@@ -554,7 +557,7 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard)
 }
 
 /**
- * Create reasb_req and set iod'svalue, akey reuse buffer from input
+ * Create reasb_req and set iod's value, akey reuse buffer from input
  * iod, iod_type/iod_size assign as input iod, iod_kcsum/iod_nr/iod_recx/
  * iod_csums/iod_eprs array will set as 0/NULL.
  */
@@ -604,7 +607,6 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 		uiod = &iods[i];
 		riod = &reasb_req->orr_iods[i];
 		riod->iod_name = uiod->iod_name;
-		riod->iod_kcsum = uiod->iod_kcsum;
 		riod->iod_type = uiod->iod_type;
 		riod->iod_size = uiod->iod_size;
 		ec_recx = &reasb_req->orr_recxs[i];
@@ -633,9 +635,6 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 			return;
 		if (iod->iod_recxs != NULL)
 			D_FREE(iod->iod_recxs);
-		/* iod_csums freed by obj_update_csum_destroy() */
-		if (iod->iod_eprs != NULL)
-			D_FREE(iod->iod_eprs);
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
@@ -1645,7 +1644,6 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 				DP_RC(rc));
 			goto out;
 		}
-		/* obj_req_tgts_dump(req_tgts); */
 		break;
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_PUNCH:
@@ -2145,18 +2143,36 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	}
 }
 
-static void
-obj_update_csum_destroy(const struct dc_object *obj,
-			     const daos_obj_update_t *args)
+static int
+obj_update_csums(const struct dc_object *obj, daos_obj_update_t *args,
+		 struct obj_auxi_args *obj_auxi)
 {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	int			 i;
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
+		return 0;
+
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
+					args->nr, &obj_auxi->iod_csums);
+	if (rc != 0)
+		return rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+		((char *) obj_auxi->iod_csums->ic_data->cs_csum)[0]++;
+
+	return 0;
+}
+
+static void
+obj_update_csum_destroy(const struct dc_object *obj,
+			struct obj_auxi_args *obj_auxi)
+{
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
 	if (!daos_csummer_initialized(csummer))
 		return;
-
-	for (i = 0; i < args->nr; i++)
-		daos_csummer_free_dcbs(csummer, &(&args->iods[i])->iod_csums);
+	daos_csummer_free_ic(csummer, &obj_auxi->iod_csums);
 }
 
 static int
@@ -2172,6 +2188,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->to_leader = 0;
 	obj_auxi->io_retry = 0;
+	obj_auxi->csum_retry = 0;
 	switch (obj_auxi->opc) {
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		arg = data;
@@ -2249,10 +2266,18 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 * are some other cases we need to retry the RPC with current
 		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
+
 		if (!obj_auxi->spec_shard ||
 		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
 
+		if (task->dt_result == -DER_CSUM) {
+			if (!obj_auxi->spec_shard &&
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
+				obj_auxi->csum_retry = 1;
+			else
+				obj_auxi->io_retry = 0;
+		}
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
 	}
@@ -2261,6 +2286,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_retry_cb(task, obj, obj_auxi);
 
 	if (!obj_auxi->io_retry) {
+
 		if (obj_auxi->opc == DAOS_OBJ_RPC_SYNC &&
 		    task->dt_result != 0) {
 			struct daos_obj_sync_args	*sync_args;
@@ -2274,7 +2300,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
-			obj_update_csum_destroy(obj, dc_task_get_args(task));
+			obj_update_csum_destroy(obj, obj_auxi);
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
@@ -2328,6 +2354,7 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	shard_arg->iod_csums		= obj_auxi->iod_csums;
 	if (obj_auxi->req_reasbed) {
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
@@ -2355,42 +2382,52 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
-/** Ensures that checksum structures are NULL. If not will log a warning and
- *  set to NULL. This is needed because the checksum structures are visible
- *  in the public APIs but should not be used.
+/* Selects next replica in the object's layout.
  */
-static void
-obj_null_csum(const daos_obj_update_t *args) {
-	int i;
+static int
+obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
+{
+	struct daos_oclass_attr	*oca;
+	unsigned int next_shard, retry_size, shard_cnt, shard_idx;
+	int rc = 0;
 
-	for (i = 0; i < args->nr; i++) {
-		if (args->iods[i].iod_csums != NULL) {
-			D_WARN("iod csums should be NULL\n");
-			args->iods[i].iod_csums = NULL;
-		}
+	/* CSUM retry for EC object is not supported yet */
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+		obj_auxi->spec_shard = 1;
+		rc = -DER_CSUM;
+		goto out;
 	}
+	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
+			      &shard_idx, &shard_cnt);
+	if (rc != 0)
+		goto out;
+
+	/* bitmap has only 8 bits, so retry to the first eight replicas */
+	retry_size = shard_cnt <= 8 ? shard_cnt : 8;
+	next_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) %
+		retry_size + shard_idx;
+
+	/* all replicas have csum error for this fetch request */
+	if (next_shard == obj_auxi->initial_shard) {
+		obj_auxi->spec_shard = 1;
+		rc = -DER_CSUM;
+		goto out;
+	}
+	setbit(bitmap, next_shard - shard_idx);
+out:
+	return rc;
 }
 
-static void
-obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
-	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	daos_iod_t		*iod;
-	int			 i;
-
-	obj_null_csum(args);
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
-		return;
-
-	for (i = 0; i < args->nr; i++) {
-		iod = &args->iods[i];
-
-		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
-			continue;
-		daos_csummer_calc(csummer, &args->sgls[i],
-				  iod, &iod->iod_csums);
-		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
-			((char *) iod->iod_csums->cs_csum)[0]++;
-	}
+/* Sets initial shard so retry will know when all replicas have been tried.
+ */
+static inline void
+obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		      uint64_t dkey_hash, unsigned int map_ver)
+{
+	obj_auxi->initial_shard = obj_dkey2shard(obj, dkey_hash, map_ver,
+						 DAOS_OBJ_RPC_FETCH,
+						 obj_auxi->to_leader);
 }
 
 static int
@@ -2399,10 +2436,12 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 {
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
+	uint8_t                 *tgt_bitmap = NULL;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
 	int			 rc;
+	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(args, DAOS_OBJ_RPC_FETCH, &epoch);
 	if (rc != 0)
@@ -2438,10 +2477,25 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		D_ASSERT(!obj_auxi->to_leader);
 	else
 		obj_auxi->to_leader = (flags & DIOF_TO_LEADER) != 0;
+
+	/* for CSUM error, build a bitmap with only the next target set,
+	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
+	 * (increment shard mod rdg-size, set appropriate bit).
+	 */
+	if (obj_auxi->csum_retry) {
+		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
+				   &csum_bitmap);
+		if (rc)
+			goto out_task;
+		tgt_bitmap = &csum_bitmap;
+	} else {
+		obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
+		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
+	}
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
-			      dkey_hash, obj_auxi->reasb_req.tgt_bitmap,
-			      map_ver, obj_auxi->to_leader,
-			      obj_auxi->spec_shard, &obj_auxi->req_tgts);
+			      dkey_hash, tgt_bitmap, map_ver,
+			      obj_auxi->to_leader, obj_auxi->spec_shard,
+			      &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -2452,7 +2506,6 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 		goto out_task;
 	}
-	obj_null_csum(args);
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
@@ -2525,7 +2578,7 @@ dc_obj_update(tse_task_t *task)
 			      false, &obj_auxi->req_tgts);
 
 	if (!obj_auxi->io_retry)
-		obj_update_csums(obj, args);
+		obj_update_csums(obj, args, obj_auxi);
 
 	if (rc)
 		goto out_task;

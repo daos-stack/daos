@@ -127,22 +127,10 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
         script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
         script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
+
         for cmd in list(cmds):
             script_file.write(cmd + "\n")
     return scriptfile
-
-# This method is not used anywhere; commented to remove pyslurm dependency
-# def run_slurm_cmd(cmd, name):
-#     """Run a simple shell command via slurm.
-
-#     cmd  --command that can be run from a shell
-#     name --job name
-
-#     returns --the job ID, which is used as a handle for other functions
-#     """
-#     daos_test_job = {"wrap": cmd, "job_name": name}
-#     jobid = pyslurm.job().submit_batch_job(daos_test_job)
-#     return jobid
 
 
 def run_slurm_script(script, logfile=None):
@@ -233,3 +221,30 @@ def watch_job(handle, maxwait, test_obj):
     params = {"handle": handle, "state": state}
     with W_LOCK:
         test_obj.job_done(params)
+
+
+def srun(nodes, cmd, srun_params=None):
+    """Run srun cmd on slurm partition.
+
+    Args:
+        hosts (str): hosts to allocate
+        cmd (str): cmdline to execute
+        srun_params(dict):  additional params for srun
+
+    Returns:
+        exit status: int
+
+    """
+    params_list = []
+    params = ""
+    if srun_params is not None:
+        for key, value in srun_params.items():
+            params_list.extend(["--{}={}".format(key, value)])
+            params = " ".join(params_list)
+    cmd = "srun --nodelist={} {} {}".format(nodes, params, cmd)
+    try:
+        result = process.run(cmd, shell=True, timeout=30)
+    except process.CmdError as error:
+        result = None
+        raise SlurmFailed("srun failed : {}".format(error))
+    return result

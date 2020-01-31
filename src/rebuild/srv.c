@@ -411,7 +411,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
+	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0,
+				   DSS_ULT_REBUILD);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -1570,7 +1571,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		rebuild_pool_tls_destroy(pool_tls);
 
 	/* close the rebuild pool/container on all main XS */
-	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
+	rc = dss_task_collective(rebuild_fini_one, rpt, 0, DSS_ULT_REBUILD);
 
 	rpt_put(rpt);
 	/* No one should access rpt after we stop puller and call
@@ -1911,7 +1912,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpt->rt_rebuild_fence = crt_hlc_get();
-	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
+	rc = dss_task_collective(rebuild_prepare_one, rpt, 0, DSS_ULT_REBUILD);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);

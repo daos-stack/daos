@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -890,6 +890,12 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ACL:
 			bits |= DAOS_CO_QUERY_PROP_ACL;
 			break;
+		case DAOS_PROP_CO_OWNER:
+			bits |= DAOS_CO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1173,6 +1179,8 @@ struct dc_cont_glob {
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	uint16_t	dcg_csum_type;
+	uint32_t	dcg_csum_chunksize;
 };
 
 static inline daos_size_t
@@ -1234,6 +1242,9 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
+	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
+	cont_glob->dcg_csum_chunksize =
+		daos_csummer_get_chunksize(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:
@@ -1265,6 +1276,19 @@ dc_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 
 out:
 	return rc;
+}
+
+static void
+csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
+{
+	struct csum_ft *csum_algo;
+
+	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
+	if (csum_algo != NULL)
+		daos_csummer_init(&cont->dc_csummer, csum_algo,
+				  cont_glob->dcg_csum_chunksize);
+	else
+		cont->dc_csummer = NULL;
 }
 
 static int
@@ -1311,6 +1335,8 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	csum_cont_g2l(cont_glob, cont);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
-#define UPDATE_CSUM_SIZE	32
 #define IOREQ_IOD_NR	5
 #define IOREQ_SG_NR	5
 #define IOREQ_SG_IOD_NR	5
@@ -55,10 +54,8 @@ struct ioreq {
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	d_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
 	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_csum_buf_t		csum;
-	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_iod_t		iod[IOREQ_SG_IOD_NR];

@@ -212,6 +212,7 @@ struct shard_rw_args {
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
+	struct dcs_iod_csums	*iod_csums;
 };
 
 struct shard_punch_args {
@@ -335,7 +336,8 @@ obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || daos_crt_network_error(err);
+	       err == -DER_EVICTED || err == -DER_CSUM ||
+	       daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -366,7 +368,6 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
-ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t

@@ -31,7 +31,7 @@ from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
-from test_utils import TestPool
+from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 import write_host_file
 
@@ -83,7 +83,8 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, self.log,
+                             dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool

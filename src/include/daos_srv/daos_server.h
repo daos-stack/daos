@@ -152,24 +152,6 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-/**
- * Different type of ES pools, there are 4 pools for now
- *
- *  DSS_POOL_URGENT	The highest priority pool. ULTs in this pool will be
- *			scheduled firstly.
- *  DSS_POOL_PRIV	Private pool: I/O requests will be added to this pool.
- *  DSS_POOL_SHARE	Shared pool: Other requests and ULT created during
- *			processing rpc.
- *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
- */
-enum {
-	DSS_POOL_URGENT,
-	DSS_POOL_PRIV,
-	DSS_POOL_SHARE,
-	DSS_POOL_REBUILD,
-	DSS_POOL_CNT,
-};
-
 #define DSS_XS_NAME_LEN		64
 
 /* Opaque xstream configuration data */
@@ -206,7 +188,7 @@ dss_get_module_info(void)
 }
 
 static inline struct dss_xstream *
-dss_get_xstream(void)
+dss_current_xstream(void)
 {
 	return dss_get_module_info()->dmi_xstream;
 }
@@ -317,8 +299,7 @@ struct dss_module {
 };
 
 /**
- * DSS_TGT_SELF can be passed to dss_ult_xs to indicate scheduling ULT on
- * caller's self XS.
+ * DSS_TGT_SELF indicates scheduling ULT on caller's self XS.
  */
 #define DSS_TGT_SELF	(-1)
 
@@ -344,8 +325,12 @@ enum dss_ult_type {
 	DSS_ULT_DRPC_LISTENER,
 	/** drpc handler ULT */
 	DSS_ULT_DRPC_HANDLER,
+	/** GC & batched commit ULTs */
+	DSS_ULT_GC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
+	/** I/O ULT */
+	DSS_ULT_IO,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -356,10 +341,10 @@ void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
-int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
-int dss_ult_create_execute(int (*func)(void *), void *arg,
-			   void (*user_cb)(void *), void *cb_args,
-			   int ult_type, int tgt_id, size_t stack_size);
+int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
+		    void *cb_args, int ult_type, int tgt_id, size_t stack_size);
+int dss_ult_create_all(void (*func)(void *), void *arg, int ult_type,
+		       bool main);
 
 struct dss_sleep_ult {
 	ABT_thread	dsu_thread;
@@ -446,13 +431,16 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag);
+			   struct dss_coll_args *coll_args, int flag,
+			   int ult_type);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag);
+			     struct dss_coll_args *coll_args, int flag,
+			     int ult_type);
 
-int dss_task_collective(int (*func)(void *), void *arg, int flag);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag);
+int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag,
+			  int ult_type);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -616,6 +604,7 @@ struct dss_enum_unpack_io {
 	daos_iod_t		*ui_iods;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
+	daos_epoch_t		*ui_rec_punch_ephs;
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;

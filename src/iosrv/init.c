@@ -212,7 +212,7 @@ modules_load(uint64_t *facs)
  * passed in preferred number of threads.
  */
 static int
-dss_tgt_nr_get(int ncores, int nr)
+dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 {
 	int nr_default;
 
@@ -231,10 +231,13 @@ dss_tgt_nr_get(int ncores, int nr)
 		nr_default = 1;
 
 	/* If user requires less target threads then set it as dss_tgt_nr,
-	 * if user requires more then uses the number calculated above
-	 * as creating more threads than #cores may hurt performance.
+	 * if user oversubscribes, then:
+	 *      . if oversubscribe is enabled, use the required number
+	 *      . if oversubscribe is disabled(default),
+	 *        use the number calculated above
+	 * Note: oversubscribing  may hurt performance.
 	 */
-	if (nr >= 1 && nr < nr_default)
+	if (nr >= 1 && ((nr < nr_default) || oversubscribe))
 		nr_default = nr;
 
 	if (nr_default != nr)
@@ -253,6 +256,7 @@ dss_topo_init()
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
+	bool            tgt_oversub = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -261,12 +265,14 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
+	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
+					    tgt_oversub);
 
 		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %d "
@@ -320,7 +326,8 @@ dss_topo_init()
 	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
 	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
+	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
+				    tgt_oversub);
 	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,

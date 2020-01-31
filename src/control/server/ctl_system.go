@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,127 +27,215 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	memberStopTimeout   = 10 * retryDelay
-	prepShutdownTimeout = 10 * retryDelay
-)
+func (svc *ControlService) getMSMemberAddress() (string, error) {
+	if svc.membership == nil || svc.harnessClient == nil {
+		return "", errors.New("host not an access point")
+	}
+
+	msInstance, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return "", errors.Wrap(err, "get MS instance")
+	}
+	if msInstance == nil {
+		return "", errors.New("MS instance not found")
+	}
+
+	if !msInstance.hasSuperblock() {
+		return "", errors.New("MS instance has no superblock")
+	}
+
+	msMember, err := svc.membership.Get(msInstance.getSuperblock().Rank.Uint32())
+	if err != nil {
+		return "", errors.WithMessage(err, "retrieving MS member")
+	}
+
+	return msMember.Addr.String(), nil
+}
+
+// updateMemberStatus requests registered harness to ping their instances (system
+// members) in order to determine IO Server process responsiveness. Update membership
+// appropriately.
+//
+// Each host address represents a gRPC server associated with a harness managing
+// one or more data-plane instances (DAOS system members).
+//
+// TODO: specify the ranks managed by the harness that should be started.
+func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
+	// exclude members with states that can't be updated with response check
+	statesToExclude := []system.MemberState{
+		system.MemberStateEvicted, system.MemberStateErrored,
+		system.MemberStateUnknown, system.MemberStateStopped,
+		system.MemberStateUnresponsive,
+	}
+	hostAddrs := svc.membership.Hosts(statesToExclude...)
+
+	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
+
+	// Update either:
+	// - members unresponsive to ping
+	// - members with stopped processes
+	// TODO: update members with ping errors
+	badRanks := make(map[uint32]system.MemberState)
+	for _, addr := range hostAddrs {
+		hResults, err := svc.harnessClient.Query(ctx, addr)
+		if err != nil {
+			return err
+		}
+
+		for _, result := range hResults {
+			if result.State == system.MemberStateUnresponsive ||
+				result.State == system.MemberStateStopped {
+
+				badRanks[result.Rank] = result.State
+			}
+		}
+	}
+
+	// only update members in the appropriate state (Started/Stopping)
+	// leave unresponsive members to be updated by a join
+	filteredMembers := svc.membership.Members(statesToExclude...)
+
+	for _, m := range filteredMembers {
+		if state, exists := badRanks[m.Rank]; exists {
+			if err := svc.membership.SetMemberState(m.Rank, state); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
 
 // SystemQuery implements the method defined for the Management Service.
 //
-// Return system membership list including member state.
+// Return system status.
 func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
-	resp := &ctlpb.SystemQueryResp{}
+	svc.log.Debug("Received SystemQuery RPC")
 
-	// verify we are running on a host with the MS leader and therefore will
-	// have membership list.
 	_, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	svc.log.Debug("Received SystemQuery RPC")
-
-	membersPB, err := proto.MembersToPB(svc.membership.Members())
-	if err != nil {
+	// Update status of each system member.
+	// TODO: Should only given rank be updated if supplied in request?
+	if err := svc.updateMemberStatus(ctx); err != nil {
 		return nil, err
 	}
-	resp.Members = membersPB
+
+	var members []*system.Member
+	// negative Rank in request indicates none specified
+	if req.Rank < 0 {
+		members = svc.membership.Members()
+	} else {
+		member, err := svc.membership.Get(uint32(req.Rank))
+		if err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+
+	resp := &ctlpb.SystemQueryResp{}
+	if err := convert.Types(members, &resp.Members); err != nil {
+		return nil, err
+	}
 
 	svc.log.Debug("Responding to SystemQuery RPC")
 
 	return resp, nil
 }
 
-// prepShutdown sends multicast PrepShutdown gRPC requests to system membership list.
-func (svc *ControlService) prepShutdown(ctx context.Context, leader *IOServerInstance) system.MemberResults {
-	members := svc.membership.Members()
-	results := make(system.MemberResults, 0, len(members))
+// prepShutdown requests registered harness to prepare their instances (system members)
+// for system shutdown.
+//
+// Each host address represents a gRPC server associated with a harness managing
+// one or more data-plane instances (DAOS system members).
+//
+// TODO: specify the ranks managed by the harness that should be started.
+func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResults, error) {
+	hostAddrs := svc.membership.Hosts()
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
-	// total retry timeout, allows for 10 retries
-	ctx, _ = context.WithTimeout(ctx, prepShutdownTimeout)
+	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostAddrs)
 
-	// TODO: parallelise and make async.
-	for _, member := range members {
-		result := system.NewMemberResult(member.Rank, "prep shutdown", nil)
+	msAddr, err := svc.getMSMemberAddress()
+	if err != nil {
+		return nil, errors.WithMessage(err, "retrieving MS address")
+	}
 
-		resp, err := leader.msClient.PrepShutdown(ctx, member.Addr.String(),
-			&mgmtpb.PrepShutdownReq{Rank: member.Rank})
+	for _, addr := range hostAddrs {
+		if addr == msAddr {
+			continue // leave MS harness until last
+		}
+
+		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr)
 		if err != nil {
-			result.Err = err
-		} else if resp.GetStatus() != 0 {
-			result.Err = errors.Errorf("DAOS returned error code: %d\n",
-				resp.GetStatus())
+			return nil, err
 		}
 
-		state := system.MemberStateStopping
-		if result.Err != nil {
-			state = system.MemberStateErrored
-			svc.log.Errorf("MgmtSvc.prepShutdown error %s\n", result.Err)
-		}
-		if err := svc.membership.SetMemberState(member.Rank, state); err != nil {
-			svc.log.Errorf("setting member state: %s", err)
-		}
-
-		results = append(results, result)
+		results = append(results, hResults...)
 	}
 
-	return results
+	hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	results = append(results, hResults...)
+
+	if err := svc.membership.UpdateMemberStates(results); err != nil {
+
+		return nil, err
+	}
+
+	return results, nil
 }
 
-func (svc *ControlService) stopMember(ctx context.Context, leader *IOServerInstance, member *system.Member) *system.MemberResult {
-	result := system.NewMemberResult(member.Rank, "stop", nil)
+// shutdown requests registered harnesses to stop its instances (system members).
+//
+// Each host address represents a gRPC server associated with a harness managing
+// one or more data-plane instances (DAOS system members).
+//
+// TODO: specify the ranks managed by the harness that should be started.
+func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.MemberResults, error) {
+	hostAddrs := svc.membership.Hosts()
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
-	// TODO: force should be applied if a number of retries fail
-	resp, err := leader.msClient.Stop(ctx, member.Addr.String(),
-		&mgmtpb.KillRankReq{Rank: member.Rank, Force: false})
+	svc.log.Debugf("stopping ranks on hosts: %v", hostAddrs)
+
+	msAddr, err := svc.getMSMemberAddress()
 	if err != nil {
-		result.Err = err
-	} else if resp.GetStatus() != 0 {
-		result.Err = errors.Errorf("DAOS returned error code: %d\n",
-			resp.GetStatus())
+		return nil, errors.WithMessage(err, "retrieving MS address")
 	}
 
-	state := system.MemberStateStopped
-	if result.Err != nil {
-		state = system.MemberStateErrored
-		svc.log.Errorf("MgmtSvc.stopMember error %s\n", result.Err)
-	}
-	if err := svc.membership.SetMemberState(member.Rank, state); err != nil {
-		svc.log.Errorf("setting member state: %s", err)
-	}
-
-	return result
-}
-
-// stopMembers sends multicast KillRank gRPC requests to system membership list.
-func (svc *ControlService) stopMembers(ctx context.Context, leader *IOServerInstance) (system.MemberResults, error) {
-	members := svc.membership.Members()
-	results := make(system.MemberResults, 0, len(members))
-
-	leaderMember, err := svc.membership.Get(leader.getSuperblock().Rank.Uint32())
-	if err != nil {
-		return nil, errors.WithMessage(err, "retrieving system leader from membership")
-	}
-
-	// total retry timeout, allows for 10 retries
-	ctx, _ = context.WithTimeout(ctx, memberStopTimeout)
-
-	// TODO: parallelise and make async.
-	for _, member := range members {
-		if member.Rank == leaderMember.Rank {
-			continue // leave leader until last
+	for _, addr := range hostAddrs {
+		if addr == msAddr {
+			continue // leave MS harness until last
 		}
 
-		results = append(results, svc.stopMember(ctx, leader, member))
+		hResults, err := svc.harnessClient.Stop(ctx, addr, force)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, hResults...)
 	}
 
-	results = append(results, svc.stopMember(ctx, leader, leaderMember))
+	hResults, err := svc.harnessClient.Stop(ctx, msAddr, force)
+	if err != nil {
+		return nil, err
+	}
+
+	results = append(results, hResults...)
+
+	if err := svc.membership.UpdateMemberStates(results); err != nil {
+		return nil, err
+	}
 
 	return results, nil
 }
@@ -155,40 +243,38 @@ func (svc *ControlService) stopMembers(ctx context.Context, leader *IOServerInst
 // SystemStop implements the method defined for the Management Service.
 //
 // Initiate controlled shutdown of DAOS system.
+//
+// TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
-	resp := &ctlpb.SystemStopResp{}
-
-	// verify we are running on a host with the MS leader and therefore will
-	// have membership list.
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
 	svc.log.Debug("Received SystemStop RPC")
+
+	resp := &ctlpb.SystemStopResp{}
 
 	// TODO: consider locking to prevent join attempts when shutting down
 
 	if req.Prep {
-		svc.log.Debug("Preparing to shutdown DAOS system")
-
 		// prepare system members for shutdown
-		prepResults := svc.prepShutdown(ctx, mi)
-		resp.Results = proto.MemberResultsToPB(prepResults)
+		prepResults, err := svc.prepShutdown(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := convert.Types(prepResults, &resp.Results); err != nil {
+			return nil, err
+		}
 		if prepResults.HasErrors() {
 			return resp, errors.New("PrepShutdown HasErrors")
 		}
 	}
 
 	if req.Kill {
-		svc.log.Debug("Stopping system members")
-
 		// shutdown by stopping system members
-		results, err := svc.stopMembers(ctx, mi)
+		stopResults, err := svc.shutdown(ctx, req.Force)
 		if err != nil {
 			return nil, err
 		}
-		resp.Results = proto.MemberResultsToPB(results)
+		if err := convert.Types(stopResults, &resp.Results); err != nil {
+			return nil, err
+		}
 	}
 
 	if resp.Results == nil {
@@ -200,86 +286,56 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 	return resp, nil
 }
 
-// startRemoteHarness starts ranks managed by harness running on remote host.
+// start requests registered harnesses to start their instances (system members)
+// after a controlled shutdown using information in the membership registry.
 //
-// TODO: specify specific rank(s) to start in request
-func (svc *ControlService) startRemoteHarness(ctx context.Context, leader *IOServerInstance, addr string, ranks ...uint32) error {
-	req := mgmtpb.StartRanksReq{}
-	req.Ranks = make([]uint32, 0, maxIoServers)
-
-	if len(ranks) > maxIoServers {
-		return errors.New("number of of ranks exceeds maximum")
-	}
-	if len(ranks) > 0 {
-		for _, rank := range ranks {
-			req.Ranks = append(req.Ranks, rank)
-		}
-	}
-
-	// TODO: populate response with DER codes for each rank start.
-	_, err := leader.msClient.Start(ctx, addr, &req)
-
-	return err
-}
-
-func resolveLeaderMemberAddr(leader *IOServerInstance, members system.Members) (string, error) {
-	var leaderMember *system.Member
-
-	msAddr, err := leader.msClient.LeaderAddress()
-	if err != nil {
-		return "", err
-	}
-
-	aps, err := resolveAccessPoints([]string{msAddr})
-	if err != nil {
-		return "", err
-	}
-
-	for _, member := range members {
-		if member.Addr.String() == aps[0].String() {
-			leaderMember = member
-		}
-	}
-	if leaderMember == nil {
-		return "", errors.Errorf("MS leader address %s not found in membership",
-			aps[0].String())
-	}
-
-	return leaderMember.Addr.String(), nil
-}
-
-// startMembers sends multicast StartRanks gRPC requests to host addresses in
-// system membership list. Each host address represents a gRPC server associated
-// with a harness managing one or more data-plane instances (DAOS system members).
+// Each host address represents a gRPC server associated with a harness managing
+// one or more data-plane instances (DAOS system members).
 //
 // TODO: specify the ranks managed by the harness that should be started.
-func (svc *ControlService) startMembers(ctx context.Context, leader *IOServerInstance) (map[string]error, error) {
-	members := svc.membership.Members()
-	results := make(map[string]error)
+func (svc *ControlService) start(ctx context.Context) (system.MemberResults, error) {
+	hostAddrs := svc.membership.Hosts()
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
 
-	leaderAddr, err := resolveLeaderMemberAddr(leader, members)
+	svc.log.Debugf("starting ranks on hosts: %v", hostAddrs)
+
+	msAddr, err := svc.getMSMemberAddress()
 	if err != nil {
-		return nil, errors.Wrap(err,
-			"couldn't resolve harness address of MS leader")
+		return nil, errors.WithMessage(err, "retrieving MS address")
 	}
 
-	// first start harness managing MS leader
-	if err := svc.startRemoteHarness(ctx, leader, leaderAddr); err != nil {
-		return nil, errors.Wrapf(err,
-			"couldn't start harness managing MS leader at %s", leaderAddr)
+	// first start harness managing MS member
+	hResults, err := svc.harnessClient.Start(ctx, msAddr)
+	if err != nil {
+		return nil, err
 	}
-	results[leaderAddr] = nil
 
-	// TODO: do we need to wait for the MS to be up before we start the rest?
+	results = append(results, hResults...)
 
-	// start each harness once only
-	for _, member := range members {
-		addr := member.Addr.String()
-		if _, exists := results[addr]; exists {
-			continue
+	for _, addr := range hostAddrs {
+		if addr == msAddr {
+			continue // MS member harness already started
 		}
 
-		results[addr] = svc.startRemoteHarness(ctx, leader, addr)
+		hResults, err := svc.harnessClient.Start(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, hResults...)
+	}
+
+	// in the case of start, don't manually update member states, members
+	// are updated as they join or bootstrap, only update state on errors
+	filteredResults := make(system.MemberResults, 0, len(results))
+	for _, r := range results {
+		if r.Errored {
+			filteredResults = append(filteredResults, r)
+		}
+	}
+
+	if err := svc.membership.UpdateMemberStates(filteredResults); err != nil {
+		return nil, err
 	}
 
 	return results, nil
@@ -291,24 +347,19 @@ func (svc *ControlService) startMembers(ctx context.Context, leader *IOServerIns
 //
 // TODO: specify the specific ranks that should be started in request.
 func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
+	svc.log.Debug("Received SystemStart RPC")
+
+	// start any stopped system members, note that instances will only
+	// be started on hosts with all instances stopped
+	startResults, err := svc.start(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	resp := &ctlpb.SystemStartResp{}
-
-	// verify we are running on a host with the MS leader and therefore will
-	// have membership list.
-	mi, err := svc.harness.GetMSLeaderInstance()
-	if err != nil {
+	if err := convert.Types(startResults, &resp.Results); err != nil {
 		return nil, err
 	}
-
-	svc.log.Debug("Received SystemStart RPC; starting system members")
-
-	// start stopped system members
-	_, err = svc.startMembers(ctx, mi)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: populate response
 
 	svc.log.Debug("Responding to SystemStart RPC")
 
