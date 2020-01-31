@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -324,7 +324,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	dfs_obj_t	*obj = NULL;
 	bool		 release = false;
 	daos_anchor_t	 anchor = {0};
-	int rc;
+	int rc = 0;
 
 	(void) offset;
 	(void) fi;

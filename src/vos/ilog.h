@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,5 +260,14 @@ ilog_fetch_finish(struct ilog_entries *entries);
 #define ilog_foreach_entry_reverse(ents, entry)				\
 	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
 	     entry != &(ents)->ie_entries[-1]; entry--)
+
+/** Fetch the address of the timestamp index from the ilog entry
+ *
+ * \param	entries[in]	The incarnation log
+ *
+ * \returns a pointer to the index
+ */
+uint32_t *
+ilog_ts_idx_get(struct ilog_df *ilog_df);
 
 #endif /* __ILOG_H__ */
