@@ -210,6 +210,31 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 }
 
 int
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
+			daos_event_t *ev)
+{
+	daos_prop_t	*prop;
+	int		rc;
+
+	if (daos_acl_cont_validate(acl) != 0) {
+		D_ERROR("invalid acl parameter\n");
+		return -DER_INVAL;
+	}
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+
+	rc = daos_cont_set_prop(coh, prop, ev);
+
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	daos_cont_aggregate_t	*args;
