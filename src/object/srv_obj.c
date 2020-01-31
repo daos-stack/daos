@@ -1203,7 +1203,7 @@ obj_log_csum_err(void)
 
 	info = dss_get_module_info();
 
-        bxc = info->dmi_nvme_ctxt;
+	bxc = info->dmi_nvme_ctxt;
 	if (bxc == NULL) {
 		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
 		info->dmi_xs_id, info->dmi_tgt_id);
