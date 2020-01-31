@@ -255,12 +255,13 @@ vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 
 int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     const daos_epoch_range_t *epr,
-		     struct vos_ilog_info *parent, struct vos_ilog_info *info)
+		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
+		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	daos_epoch_range_t	max_epr = *epr;
-	struct ilog_desc_cbs	cbs;
-	daos_handle_t		loh;
-	int			rc;
+	daos_epoch_range_t	 max_epr = *epr;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
+	int			 rc;
 
 	if (parent != NULL) {
 		D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
@@ -285,13 +286,20 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	}
 
 	rc = vos_ilog_update_check(info, &max_epr);
-	if (rc == 0)
+	if (rc == 0) {
+		if (cond == VOS_ILOG_COND_INSERT)
+			return -DER_EXIST;
 		return rc;
+	}
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 update:
+	if (rc == -DER_NONEXIST &&
+	    (cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_PUNCH))
+		return -DER_NONEXIST;
+
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
 	if (rc != 0) {
@@ -367,4 +375,58 @@ vos_ilog_init(void)
 	}
 
 	return 0;
+}
+
+bool
+vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog)
+{
+	struct vos_ts_entry	*entry;
+	uint32_t		*idx;
+
+	if (ts_set == NULL)
+		return true;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	return vos_ts_lookup(ts_set, idx, false, &entry);
+}
+
+void
+vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		  void *record, daos_size_t rec_size)
+{
+	uint32_t		*idx;
+	uint64_t		 hash;
+
+
+	if (ts_set == NULL)
+		return;
+
+	hash = vos_hash_get(record, rec_size);
+	if (ilog) {
+		idx = ilog_ts_idx_get(ilog);
+		vos_ts_alloc(ts_set, idx, hash);
+	} else {
+		vos_ts_get_negative(ts_set, hash, false);
+	}
+}
+
+void
+vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
+{
+	uint32_t		*idx = ilog_ts_idx_get(ilog);
+
+	vos_ts_set_mark_entry(ts_set, idx);
+}
+
+void
+vos_ilog_ts_evict(struct ilog_df *ilog)
+{
+	uint32_t	*idx;
+
+	idx = ilog_ts_idx_get(ilog);
+
+	D_PRINT("Evicting ilog idx %d\n", *idx);
+
+	return vos_ts_evict(idx);
 }

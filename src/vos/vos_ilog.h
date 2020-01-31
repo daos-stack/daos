@@ -31,22 +31,37 @@
 #define __VOS_ILOG_H__
 
 #include <daos/common.h>
-#include <ilog.h>
+#include "ilog.h"
+#include "vos_ts.h"
+
+/** Conditional mask for operation */
+enum {
+	/** No condition */
+	VOS_ILOG_COND_NONE,
+	/** Operation is conditional punch */
+	VOS_ILOG_COND_PUNCH,
+	/** Operation is conditional update */
+	VOS_ILOG_COND_UPDATE,
+	/** Operation is conditional insert */
+	VOS_ILOG_COND_INSERT,
+	/** Operation is conditional fetch */
+	VOS_ILOG_COND_FETCH,
+};
 
 struct vos_container;
 
 struct vos_ilog_info {
-	struct ilog_entries	ii_entries;
+	struct ilog_entries	 ii_entries;
 	/** If non-zero, earliest creation timestamp in current incarnation. */
-	daos_epoch_t		ii_create;
+	daos_epoch_t		 ii_create;
 	/** If non-zero, prior committed punch */
-	daos_epoch_t		ii_prior_punch;
+	daos_epoch_t		 ii_prior_punch;
 	/** If non-zero, prior committed or uncommitted punch */
-	daos_epoch_t		ii_prior_any_punch;
+	daos_epoch_t		 ii_prior_any_punch;
 	/** If non-zero, subsequent committed punch */
-	daos_epoch_t		ii_next_punch;
+	daos_epoch_t		 ii_next_punch;
 	/** The entity has no valid log entries */
-	bool			ii_empty;
+	bool			 ii_empty;
 };
 
 /** Initialize the incarnation log globals */
@@ -99,6 +114,8 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  *				log exists).  Fetch should have already been
  *				called at same epoch or parent.
  * \param	info[IN,OUT]	incarnation log info
+ * \param	cond[IN]	Conditional flags.
+ * \param	ts_set[IN]	timestamp set.
  *
  * \return	0		Successful update
  *		other		Appropriate error code
@@ -107,7 +124,8 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 int
 vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		 const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		 struct vos_ilog_info *info);
+		 struct vos_ilog_info *info, uint32_t cond_flag,
+		 struct vos_ts_set *ts_set);
 
 
 /**
@@ -178,15 +196,16 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	__rc;								\
 })
 
-#define vos_ilog_update(cont, ilog, epr, parent, info)			\
+#define vos_ilog_update(cont, ilog, epr, parent, info, cond, ts_set)	\
 ({									\
 	struct umem_instance	*__umm = vos_cont2umm(cont);		\
 	int			 __rc;					\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: log="DF_X64" epr="		\
-		DF_U64"-"DF_U64"\n", umem_ptr2off(__umm, ilog),		\
-		(epr)->epr_lo, (epr)->epr_hi);				\
-	__rc = vos_ilog_update_(cont, ilog, epr, parent, info);		\
+		DF_U64"-"DF_U64" cond=%d\n", umem_ptr2off(__umm, ilog),	\
+		(epr)->epr_lo, (epr)->epr_hi, (cond));			\
+	__rc = vos_ilog_update_(cont, ilog, epr, parent, info,		\
+				cond, ts_set);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
 		DF_U64" pap="DF_U64"\n", DP_RC(__rc), (info)->ii_create,\
 		(info)->ii_prior_any_punch);				\
@@ -214,5 +233,44 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 
 #endif
 
+/** Check if the timestamps associated with the ilog are in cache.  If so,
+ *  add them to the set.
+ *
+ *  \param	ts_set[in]	The timestamp set
+ *  \param	ilog[in]	The incarnation log
+ *
+ *  \return true if found or ts_set is NULL
+ */
+bool
+vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
+
+/** Allocate timestamps for the entry and add them to the set.  If ilog is
+ *  NULL, it pulls in the negative entry.  The hash is calculated using
+ *  vos_hash_get.
+ *
+ *  \param	ts_set[in]	The timestmap set
+ *  \param	ilog[in]	The incarnation log
+ *  \param	record[in]	The record to hash
+ *  \param	rec_size[in]	The size of the record to hash
+ *
+ *  \return the existing or new entry
+ */
+void
+vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
+		  void *record, daos_size_t rec_size);
+
+/** Mark the last timestamp entry corresponding to the ilog as newly created
+ *  \param	ts_set[in]	The timestmap set
+ *  \param	ilog[in]	The incarnation log
+ */
+void
+vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
+
+/** Evict the cached timestamp entry, if present
+ *
+ *  \param	ilog[in]	The incarnation log
+ */
+void
+vos_ilog_ts_evict(struct ilog_df *ilog);
 
 #endif /* __VOS_ILOG_H__ */

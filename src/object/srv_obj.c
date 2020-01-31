@@ -931,8 +931,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, dkey, orw->orw_nr, iods,
-				      orw->orw_iod_csums.ca_arrays, &ioh, dth);
+			      orw->orw_epoch,
+			      orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
+			      dkey, orw->orw_nr, iods,
+			      orw->orw_iod_csums.ca_arrays, &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -943,6 +945,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_PUT;
 
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
+				     orw->orw_api_flags | VOS_OF_USE_TIMESTAMPS,
 				     dkey, orw->orw_nr, iods, size_fetch, &ioh);
 
 		if (rc) {
@@ -1832,8 +1835,8 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_TGT_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
-				   opi->opi_epoch, opi->opi_map_ver, 0,
-				   NULL, 0, NULL, dth);
+				   opi->opi_epoch, opi->opi_map_ver,
+				   VOS_OF_USE_TIMESTAMPS, NULL, 0, NULL, dth);
 		break;
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1847,8 +1850,9 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
-				   opi->opi_epoch, opi->opi_map_ver, 0, dkey,
-				   opi->opi_akeys.ca_count,
+				   opi->opi_epoch, opi->opi_map_ver,
+				   opi->opi_api_flags | VOS_OF_USE_TIMESTAMPS,
+				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
 	}
@@ -2142,8 +2146,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 		akey = &okqo->okqo_akey;
 
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid,
-			       okqi->okqi_flags, okqi->okqi_epoch,
-			       dkey, akey, &okqo->okqo_recx);
+			       VOS_USE_TIMESTAMPS | okqi->okqi_flags,
+			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx);
 out:
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);

@@ -1521,7 +1521,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));

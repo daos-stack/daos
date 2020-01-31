@@ -1193,7 +1193,7 @@ daos_event_priv_wait()
 {
 	struct ev_progress_arg	epa;
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
-	int rc;
+	int rc = 0;
 
 	D_ASSERT(ev_thpriv_is_init);
 

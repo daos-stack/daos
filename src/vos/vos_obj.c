@@ -81,7 +81,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 
 		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
-				      &krec, &toh);
+				      &krec, &toh, NULL);
 		if (rc) {
 			D_ERROR("Error preparing dkey: rc="DF_RC"\n",
 				DP_RC(rc));
@@ -135,7 +135,7 @@ failed:
  */
 int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
+	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
@@ -163,7 +163,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  false, DAOS_INTENT_PUNCH, true, &obj);
+			  false, DAOS_INTENT_PUNCH, true, &obj, NULL);
 	if (rc == 0) {
 		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
@@ -201,7 +201,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	int			 rc;
 
 	rc = vos_obj_hold(occ, cont, oid, &epr, true, DAOS_INTENT_KILL, true,
-			  &obj);
+			  &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -267,7 +267,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 
 	rc = key_tree_prepare(obj, toh, key_type, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
-			      sub_toh);
+			      sub_toh, NULL);
 	if (rc == -DER_NONEXIST)
 		return rc;
 
@@ -463,7 +463,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
-			      NULL, &toh);
+			      NULL, &toh, NULL);
 	if (rc != 0) {
 		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
 			DP_RC(rc));
@@ -1045,7 +1045,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 			  param->ip_oid, &oiter->it_epr, true,
 			  vos_iter_intent(&oiter->it_iter),
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
-			  &oiter->it_obj);
+			  &oiter->it_obj, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
@@ -1154,7 +1154,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 			  info->ii_oid, &info->ii_epr, true,
 			  vos_iter_intent(&oiter->it_iter),
 			  (oiter->it_flags & VOS_IT_PUNCHED) == 0,
-			  &oiter->it_obj);
+			  &oiter->it_obj, NULL);
 
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Nested iterator called without setting probe");

@@ -324,7 +324,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	dfs_obj_t	*obj = NULL;
 	bool		 release = false;
 	daos_anchor_t	 anchor = {0};
-	int rc;
+	int rc = 0;
 
 	(void) offset;
 	(void) fi;

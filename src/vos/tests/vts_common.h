@@ -122,6 +122,7 @@ int run_dtx_tests(void);
 int run_gc_tests(void);
 int run_pm_tests(void);
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
+int run_ts_tests(void);
 
 int run_ilog_tests(void);
 

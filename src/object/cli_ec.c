@@ -515,7 +515,7 @@ obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 	uint32_t		 recx_nr, stripe_nr;
 	uint32_t		 i, j, m;
 	bool			 singv;
-	int			 rc;
+	int			 rc = 0;
 
 	if (recx_array->oer_stripe_total == 0)
 		D_GOTO(out, rc = 0);

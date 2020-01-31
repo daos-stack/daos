@@ -78,8 +78,6 @@ iov2rec_bundle(d_iov_t *val_iov)
 struct ktr_hkey {
 	/** murmur64 hash */
 	uint64_t		kh_hash[2];
-	/** cacheline alignment */
-	uint64_t		kh_pad_64;
 };
 
 /**
@@ -182,6 +180,7 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 					   VOS_BTR_MUR_SEED);
 	kkey->kh_hash[1] = d_hash_string_u32(key_iov->iov_buf,
 					     key_iov->iov_len);
+	vos_kh_set(kkey->kh_hash[0]);
 }
 
 /** compare the hashed key */
@@ -885,13 +884,18 @@ int
 key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 enum vos_tree_class tclass, daos_key_t *key, int flags,
 		 uint32_t intent, struct vos_krec_df **krecp,
-		 daos_handle_t *sub_toh)
+		 daos_handle_t *sub_toh, struct vos_ts_set *ts_set)
 {
-	struct vos_krec_df	*krec;
+	struct ilog_df		*ilog = NULL;
+	struct vos_krec_df	*krec = NULL;
 	struct dcs_csum_info	 csum;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
+	bool			 found;
 	int			 rc;
+
+	/** reset the saved hash */
+	vos_kh_set(0);
 
 	if (krecp != NULL)
 		*krecp = NULL;
@@ -921,7 +925,22 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	default:
 		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
+	case 0:
+		krec = rbund.rb_krec;
+		ilog = &krec->kr_ilog;
+		found = vos_ilog_ts_lookup(ts_set, ilog);
+		if (found)
+			break;
+		/** fall through to cache re-cache entry */
 	case -DER_NONEXIST:
+		/** Key hash already be calculated by dbtree_fetch so no need
+		 *  to pass in the key here.
+		 */
+		vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		break;
+	}
+
+	if (rc == -DER_NONEXIST) {
 		if (!(flags & SUBTR_CREATE))
 			goto out;
 
@@ -932,9 +951,9 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
-	case 0:
 		krec = rbund.rb_krec;
-		break;
+
+		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 	}
 
 	if (sub_toh)
@@ -942,6 +961,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (rc)
 		goto out;
 
+	D_ASSERT(krec != NULL);
 	/* For updates, we need to be able to modify the epoch range */
 	if (krecp != NULL)
 		*krecp = krec;

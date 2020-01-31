@@ -710,8 +710,9 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
-			      io->ui_iods, NULL, io->ui_sgls);
+			      io->ui_version, 0 /* flags */, &io->ui_dkey,
+			      io->ui_iods_top + 1, io->ui_iods, NULL,
+			      io->ui_sgls);
 }
 
 static int

@@ -47,6 +47,7 @@ struct vos_io_context {
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
+	struct vos_ts_set	*ic_ts_set;
 	/** Checksums for bio_iovs in \ic_biod */
 	struct dcs_csum_info	*ic_biov_csums;
 	uint32_t		 ic_biov_csums_at;
@@ -177,14 +178,15 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
 	vos_cont_decref(ioc->ic_cont);
+	vos_ts_set_free(ioc->ic_ts_set);
 	D_FREE(ioc);
 }
 
 static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
-	       daos_epoch_t epoch, unsigned int iod_nr, daos_iod_t *iods,
-	       struct dcs_iod_csums *iod_csums, bool size_fetch,
-	       struct vos_io_context **ioc_pp)
+	       daos_epoch_t epoch, uint64_t flags, unsigned int iod_nr,
+	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
+	       bool size_fetch, struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
 	struct vos_io_context *ioc = NULL;
@@ -222,6 +224,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (rc != 0)
 		goto error;
 
+	rc = vos_ts_set_allocate(&ioc->ic_ts_set, flags, iod_nr);
+	if (rc != 0)
+		goto error;
+
 	cont = vos_hdl2cont(coh);
 
 	bioc = cont->vc_pool->vp_io_ctxt;
@@ -235,8 +241,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_biov_csums_nr = 1;
 	ioc->ic_biov_csums_at = 0;
 	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
-	if (ioc->ic_biov_csums == NULL)
-		return -DER_NOMEM;
+	if (ioc->ic_biov_csums == NULL) {
+		rc = -DER_NOMEM;
+		goto error;
+	}
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
@@ -609,7 +617,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh);
+			      DAOS_INTENT_DEFAULT, &krec, &toh, NULL);
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -717,7 +725,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
-			      &toh);
+			      &toh, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
@@ -775,30 +783,29 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		bool size_fetch, daos_handle_t *ioh)
+		uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		daos_iod_t *iods, bool size_fetch, daos_handle_t *ioh)
 {
-	struct vos_io_context *ioc;
+	struct vos_io_context	*ioc;
 	int i, rc;
 
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), nr, epoch);
+		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, true, epoch, nr, iods, NULL,
-			    size_fetch,
-			    &ioc);
+	rc = vos_ioc_create(coh, oid, true, epoch, flags, iod_nr, iods, NULL,
+			    size_fetch, &ioc);
 	if (rc != 0)
 		return rc;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, true, DAOS_INTENT_DEFAULT, true,
-			  &ioc->ic_obj);
+			  &ioc->ic_obj, ioc->ic_ts_set);
 	if (rc != -DER_NONEXIST && rc != 0)
 		goto error;
 
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
-		for (i = 0; i < nr; i++)
+		for (i = 0; i < iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
 		rc = dkey_fetch(ioc, dkey);
@@ -807,6 +814,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	*ioh = vos_ioc2ioh(ioc);
+
 	return 0;
 error:
 	return vos_fetch_end(vos_ioc2ioh(ioc), rc);
@@ -932,11 +940,13 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 {
+	struct vos_ts_entry	*entry;
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
 	struct dcs_csum_info	*recx_csum = NULL;
+	uint32_t		 update_cond = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
@@ -952,12 +962,46 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
-			      &krec, &toh);
+			      &krec, &toh, ioc->ic_ts_set);
 	if (rc != 0)
 		return rc;
 
+	entry = vos_ts_set_get_entry(ioc->ic_ts_set);
+	if (entry != NULL) {
+		if (ioc->ic_epr.epr_hi <= entry->te_ts_rh) {
+			/** TODO: Handle same transaction but for now, that
+			 * shouldn't happen.   There is a read after this write
+			 * so tell caller to try again.
+			 */
+			return -DER_AGAIN;
+		}
+	}
+
+	if (ioc->ic_ts_set) {
+		switch (ioc->ic_ts_set->ts_flags & VOS_COND_AKEY_UPDATE_MASK) {
+		case VOS_OF_COND_AKEY_UPDATE:
+			update_cond = VOS_ILOG_COND_UPDATE;
+			break;
+		case VOS_OF_COND_AKEY_INSERT:
+			update_cond = VOS_ILOG_COND_INSERT;
+			break;
+		default:
+			break;
+		}
+	}
+
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
-			     &ioc->ic_dkey_info, &ioc->ic_akey_info);
+			     &ioc->ic_dkey_info, &ioc->ic_akey_info,
+			     update_cond, ioc->ic_ts_set);
+	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
+		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
+		goto out;
+	}
+	if (update_cond == VOS_ILOG_COND_INSERT && rc == -DER_EXIST) {
+		D_DEBUG(DB_IO, "Conditional insert on existent akey\n");
+		goto out;
+	}
+
 	if (rc != 0) {
 		D_ERROR("Failed to update akey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1007,8 +1051,10 @@ static int
 dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
+	struct vos_ts_entry	*entry;
 	daos_handle_t		 ak_toh;
 	struct vos_krec_df	*krec;
+	uint32_t		 update_cond = 0;
 	bool			 subtr_created = false;
 	int			 i, rc;
 
@@ -1017,15 +1063,49 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 		return rc;
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey,
-			      SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh);
+			      SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh,
+			      ioc->ic_ts_set);
 	if (rc != 0) {
 		D_ERROR("Error preparing dkey tree: rc="DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 	subtr_created = true;
 
+	entry = vos_ts_set_get_entry(ioc->ic_ts_set);
+	if (entry != NULL) {
+		if (ioc->ic_epr.epr_hi <= entry->te_ts_rl) {
+			/** TODO: Handle same transaction but for now, that
+			 * shouldn't happen.   There is a read after this write
+			 * so tell caller to try again.
+			 */
+			return -DER_AGAIN;
+		}
+	}
+
+	if (ioc->ic_ts_set) {
+		switch (ioc->ic_ts_set->ts_flags & VOS_COND_DKEY_UPDATE_MASK) {
+		case VOS_OF_COND_DKEY_UPDATE:
+			update_cond = VOS_ILOG_COND_UPDATE;
+			break;
+		case VOS_OF_COND_DKEY_INSERT:
+			update_cond = VOS_ILOG_COND_INSERT;
+			break;
+		default:
+			break;
+		}
+	}
+
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
-			     &obj->obj_ilog_info, &ioc->ic_dkey_info);
+			     &obj->obj_ilog_info, &ioc->ic_dkey_info,
+			     update_cond, ioc->ic_ts_set);
+	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
+		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
+		goto out;
+	}
+	if (update_cond == VOS_ILOG_COND_INSERT && rc == -DER_EXIST) {
+		D_DEBUG(DB_IO, "Conditional insert on existent akey\n");
+		goto out;
+	}
 	if (rc != 0) {
 		D_ERROR("Failed to update dkey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1354,17 +1434,79 @@ update_cancel(struct vos_io_context *ioc)
 			   VOS_IOS_GENERIC);
 }
 
+static void
+update_read_timestamps(struct vos_io_context *ioc, int err)
+{
+	struct vos_ts_set	*ts_set = ioc->ic_ts_set;
+	struct vos_ts_entry	*entry;
+	int			 akey_idx;
+
+	if (ts_set == NULL)
+		return;
+
+	/** No conditional flags, so no timestamp updates */
+	if ((ts_set->ts_flags & VOS_COND_UPDATE_MASK) == 0)
+		return;
+
+	/** Aborted for another reason, no timestamp updates */
+	if (err != 0 && err != -DER_NONEXIST && err != -DER_EXIST)
+		return;
+
+	if (err == 0) {
+		/** the update succeeded so any negative entries used for
+		 *  checks should be changed to positive entries
+		 */
+		vos_ts_set_upgrade(ts_set);
+	}
+
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_CONT, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_OBJ, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+	if (ts_set->ts_flags & VOS_COND_DKEY_MASK)
+		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+
+	if ((ts_set->ts_flags & VOS_COND_AKEY_MASK) == 0)
+		return;
+
+	for (akey_idx = 0; akey_idx < ioc->ic_iod_nr; akey_idx++) {
+		entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_AKEY,
+						  akey_idx);
+		entry->te_ts_rl = MAX(entry->te_ts_rl, ioc->ic_epr.epr_hi);
+		entry->te_ts_rh = MAX(entry->te_ts_rh, ioc->ic_epr.epr_hi);
+	}
+}
+
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
+	struct vos_ts_entry	*entry;
 
 	D_ASSERT(ioc->ic_update);
 
 	if (err != 0)
 		goto out;
+
+	if (!vos_ts_lookup(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, false,
+			   &entry)) {
+		/** Re-cache the container timestamps */
+		entry = vos_ts_alloc(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx,
+				     0);
+	}
+
+
+	/** TODO: Need to handle case where it's same transaction but this
+	 *  should never happen before distributed transactions.
+	 */
+	if (entry && ioc->ic_epr.epr_hi <= entry->te_ts_rl) {
+		err = -DER_AGAIN;
+		goto out;
+	}
 
 	umem = vos_ioc2umm(ioc);
 
@@ -1373,10 +1515,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto out;
 
 	vos_dth_set(dth);
-
 	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
 			  &ioc->ic_epr, false, DAOS_INTENT_UPDATE, true,
-			  &ioc->ic_obj);
+			  &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;
 
@@ -1401,7 +1542,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey);
 	if (err) {
-		D_ERROR("Failed to update tree index: %d\n", err);
+		D_CDEBUG(err == -DER_EXIST || err == -DER_NONEXIST, DB_IO,
+			 DLOG_ERR, "Failed to update tree index: "DF_RC"\n",
+			 DP_RC(err));
 		goto abort;
 	}
 
@@ -1419,6 +1562,9 @@ out:
 		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
 	}
+
+	update_read_timestamps(ioc, err);
+
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
@@ -1427,9 +1573,9 @@ out:
 
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 struct dcs_iod_csums *iods_csums, daos_handle_t *ioh,
-		 struct dtx_handle *dth)
+		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+		 daos_handle_t *ioh, struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	int			 rc;
@@ -1437,8 +1583,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_U64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
-			    false, &ioc);
+	rc = vos_ioc_create(coh, oid, false, epoch, flags, iod_nr, iods,
+			    iods_csums, false, &ioc);
 	if (rc != 0)
 		goto done;
 
@@ -1523,15 +1669,15 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-	       d_sg_list_t *sgls)
+	       uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods,
+	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	int rc;
 
-	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, iods_csums,
-			      &ioh, NULL);
+	rc = vos_update_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
+			      iods_csums, &ioh, NULL);
 	if (rc) {
 		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
@@ -1551,15 +1697,15 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	      d_sg_list_t *sgls)
+	      uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
+	      daos_iod_t *iods, d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	bool size_fetch = (sgls == NULL);
 	int rc;
 
-	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
-			     &ioh);
+	rc = vos_fetch_begin(coh, oid, epoch, flags, dkey, iod_nr, iods,
+			     size_fetch, &ioh);
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "

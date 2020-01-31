@@ -171,7 +171,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 					 "0123456789ABCDEF");
 
 	/** update with a checksum */
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0, &k.dkey, 1,
 			    &iod, &iod_csums, &sgl);
 	if (rc != 0)
 		fail_msg("vos_obj_update failed with error code %d", rc);
@@ -187,7 +187,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * have access to the vos io handler to get the checksums (this is
 	 * how the server object layer already interfaces with VOS)
 	 */
-	vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
+	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
 			false, &ioh);
 
 	biod = vos_ioh2desc(ioh);
@@ -466,13 +466,13 @@ csum_fault_injection(void **state)
 
 	set_csum_fi(DAOS_CHECKSUM_UPDATE_FAIL);
 
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0, &k.dkey, 1,
 			    &iod, &iod_csums, &sgl);
 	assert_int_equal(0, rc);
 	unset_csum_fi();
 
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			false, &ioh);
+	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+			     &iod, false, &ioh);
 	assert_int_equal(0, rc);
 
 	fetched_csums = vos_ioh2ci(ioh);
@@ -483,12 +483,12 @@ csum_fault_injection(void **state)
 
 	csum = 0xABCD;
 	set_csum_fi(DAOS_CHECKSUM_FETCH_FAIL);
-	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+	rc = vos_obj_update(k.container_hdl, k.object_id, 1, 0, 0, &k.dkey, 1,
 			    &iod, NULL, &sgl);
 	assert_int_equal(0, rc);
 
-	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
-			     false, &ioh);
+	rc = vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1,
+			     &iod, false, &ioh);
 	assert_int_equal(0, rc);
 
 	fetched_csums = vos_ioh2ci(ioh);

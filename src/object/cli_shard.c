@@ -411,6 +411,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 
+	orw->orw_api_flags = api_args->flags;
 	orw->orw_epoch = args->auxi.epoch;
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
@@ -566,6 +567,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	D_ASSERT(opi != NULL);
 
 	opi->opi_map_ver	 = args->pa_auxi.map_ver;
+	opi->opi_api_flags	 = obj_args->flags;
 	opi->opi_epoch		 = args->pa_auxi.epoch;
 	opi->opi_dkey_hash	 = args->pa_dkey_hash;
 	opi->opi_oid		 = oid;

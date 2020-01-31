@@ -1824,7 +1824,7 @@ static int
 btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 {
 	struct btr_record *rec;
-	char		  *rec_str;
+	char		  *rec_str = NULL;
 	char		   str[BTR_PRINT_BUF];
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
