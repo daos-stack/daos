@@ -554,6 +554,20 @@ int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
 
 /**
+ * Convert an Access Control Entry string to a verbose string.
+ *
+ * \param[in]	ace_str		ACE string
+ * \param[out]	buf		Output buffer
+ * \param[in]	buf_len		Length of output buffer
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input string
+ *		-DER_TRUNC	Output didn't fit in buffer
+ */
+int
+daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len);
+
+/**
  * Convert a list of Access Control Entries formatted as strings to a daos_acl
  * structure.
  *
