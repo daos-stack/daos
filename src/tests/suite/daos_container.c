@@ -605,6 +605,7 @@ co_set_prop(void **state)
 	prop_out = daos_prop_alloc(0);
 	assert_non_null(prop_out);
 	rc = daos_cont_query(arg->coh, NULL, prop_out, NULL);
+	assert_int_equal(rc, 0);
 
 	assert_non_null(prop_out->dpp_entries);
 	assert_true(prop_out->dpp_nr >= prop_in->dpp_nr);
