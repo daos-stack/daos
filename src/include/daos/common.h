@@ -645,6 +645,8 @@ bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+int daos_prop_entry_copy(struct daos_prop_entry *entry,
+			 struct daos_prop_entry *entry_dup);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)
