@@ -28,6 +28,7 @@ import (
 	"fmt"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
@@ -143,7 +144,7 @@ func groupScanResults(result *client.StorageScanResp, summary bool) (groups host
 	for _, srv := range result.Servers {
 		buf.Reset()
 
-		host, _, err = splitPort(srv, 0) // disregard port when grouping output
+		host, _, err = common.SplitPort(srv, 0) // disregard port when grouping output
 		if err != nil {
 			return
 		}
@@ -255,7 +256,7 @@ func groupFormatResults(results client.StorageFormatResults, summary bool) (grou
 		buf.Reset()
 		result := results[srv]
 
-		host, _, err = splitPort(srv, 0) // disregard port when grouping output
+		host, _, err = common.SplitPort(srv, 0) // disregard port when grouping output
 		if err != nil {
 			return
 		}
