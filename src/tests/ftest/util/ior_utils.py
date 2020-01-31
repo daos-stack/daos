@@ -181,7 +181,7 @@ class IorCommand(ExecutableCommand):
             self.daos_pool.update(
                 pool.pool.get_uuid_str(), "daos_pool" if display else None)
         else:
-             self.dfs_pool.update(
+            self.dfs_pool.update(
                 pool.pool.get_uuid_str(), "dfs_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 

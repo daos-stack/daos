@@ -41,50 +41,13 @@ class LargeFileCount(MdtestBase, IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=all,daosio,largefilecount
+        :avocado: tags=all,daosio,full_regression,largefilecount
         """
         apis = self.params.get("api", "/run/largefilecount/*")
-
-        commands = [u"ls -a {}".format(self.ior_cmd.test_file.value),
-                    u"ls -a {}".format(self.mdtest_cmd.test_dir.value),
-                    u"grep -i -r 'mdtest' {}".format(self.mdtest_cmd.test_dir.value),
-                    u"grep -i -r 'testfile' {}".format(self.ior_cmd.test_file.value)]
 
         for api in apis:
             self.ior_cmd.api.update(api)
             self.mdtest_cmd.api.update(api)
-            
+
             self.execute_mdtest()
             self.run_ior_with_pool()
-
-    def test_random(self):
-        """Jira ID: DAOS-1264.
-
-        Test Description:
-            Run IOR with 1,64 and 128 clients config in random order.
-
-        Use Cases:
-            Different combinations of 1/64/128 Clients and
-            1K/4K/32K/128K/512K/1M transfersize.
-
-        :avocado: tags=all,daosio,iorlarge_random,iorlarge
-        """
-        ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
-        self.ior_cmd.flags.update(ior_flags)
-        self.run_ior_with_pool()
-
-    def test_fpp(self):
-        """Jira ID: DAOS-2491.
-
-        Test Description:
-            Run IOR with 1,64 and 128 clients config file-per-process.
-
-        Use Cases:
-            Different combinations of 1/64/128 Clients and
-            1K/4K/32K/128K/512K/1M transfersize.
-
-        :avocado: tags=all,daosio,iorlarge_fpp,iorlarge
-        """
-        ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
-        self.ior_cmd.flags.update(ior_flags)
-        self.run_ior_with_pool()

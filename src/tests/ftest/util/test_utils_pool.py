@@ -88,7 +88,7 @@ class TestPool(TestDaosApiBase):
         self.uuid = None
         self.info = None
         self.svc_ranks = None
-        self.svc = None
+        self.svc_list = None
         self.connected = False
         self.dmg = dmg_command
 
@@ -215,12 +215,10 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
+        self.svc_list = ":".join(
+            [str(item) for item in self.svc_ranks])
         self.uuid = self.pool.get_uuid_str()
-        self.svc = ":".join(
-            [str(item) for item in [
-                int(self.pool.svc.rl_ranks[index])
-                for index in range(self.pool.svc.rl_nr)]])
-    
+
     @fail_on(DaosApiError)
     def connect(self, permission=2):
         """Connect to the pool.
