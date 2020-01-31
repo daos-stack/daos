@@ -224,6 +224,28 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	}
 }
 
+bool
+cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
+{
+	int			rc;
+	daos_prop_t		cont_prop = {0};
+	struct daos_prop_entry entry = {0};
+	uint32_t		csum_val;
+
+	entry.dpe_type = DAOS_PROP_CO_CSUM;
+	cont_prop.dpp_entries = &entry;
+	cont_prop.dpp_nr = 1;
+
+	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	if (rc != 0)
+		return false;
+	csum_val = daos_cont_prop2csum(&cont_prop);
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		return true;
+	else
+		return false;
+}
+
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
@@ -363,6 +385,28 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		rc = ret ? dss_abterr2der(ret) : *status;
 
 	ABT_eventual_free(&arg.eventual);
+	/* After RDMA is done, corrupt the server data */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_SDATA_CORRUPT)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+		struct ds_pool		*pool;
+
+		pool = ds_pool_lookup(orw->orw_pool_uuid);
+		if (pool == NULL)
+			return -DER_NONEXIST;
+		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
+			struct bio_sglist	*fbsgl;
+			d_sg_list_t		 fsgl;
+			int			*fbuffer;
+
+			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+			fbsgl = vos_iod_sgl_at(ioh, 0);
+			bio_sgl_convert(fbsgl, &fsgl);
+			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+			*fbuffer += 0x2;
+			daos_sgl_fini(&fsgl, false);
+		}
+		ds_pool_put(pool);
+	}
 	return rc;
 }
 
@@ -781,7 +825,8 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 					     &iod->iod_name,
 					     &csum->ic_akey);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for akey: %d", rc);
+			D_ERROR("daos_csummer_verify_key error for akey: %d",
+				rc);
 			return rc;
 		}
 	}
@@ -1246,6 +1291,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
+
 	rc = obj_ioc_begin(orw->orw_oid, orw->orw_map_ver,
 			   orw->orw_pool_uuid, orw->orw_co_hdl,
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);

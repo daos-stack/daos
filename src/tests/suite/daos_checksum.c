@@ -50,6 +50,11 @@ set_fetch_akey_fi()
 	set_fi(DAOS_CHECKSUM_FETCH_AKEY_FAIL);
 }
 static void
+set_client_data_corrupt_fi()
+{
+	daos_fail_loc_set(DAOS_CHECKSUM_CDATA_CORRUPT | DAOS_FAIL_ALWAYS);
+}
+static void
 set_fetch_dkey_fi()
 {
 	set_fi(DAOS_CHECKSUM_FETCH_DKEY_FAIL);
@@ -325,11 +330,14 @@ io_with_server_side_verify(void **state)
 	 * 1. Regular, server verify disabled and no corruption ... obviously
 	 *    should be success.
 	 * 2. Server verify enabled, and still no corruption. Should be success.
+	 *    Corruption under checksum field.
 	 * 3. Server verify disabled and there's corruption. Update should
 	 *    still be success because the corruption won't be caught until
-	 *    it's fetched.
+	 *    it's fetched. Corruption under checksum field.
 	 * 4. Server verify enabled and corruption occurs. The update should
 	 *    fail because the server will catch the corruption.
+	 * 5. Server verify enabled and corruption on data field.(Repeat
+	 *    test 3 and 4 with data field corrution)
 	 *
 	 */
 	/** 1. Server verify disabled, no corruption */
@@ -362,10 +370,57 @@ io_with_server_side_verify(void **state)
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
 	cleanup_cont_obj(&ctx);
-
 	unset_csum_fi();
 
+	/**5. Data corruption. Update should fail due CRC mismatch */
+	set_client_data_corrupt_fi();
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+	cleanup_cont_obj(&ctx);
+
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, -DER_CSUM);
+	cleanup_cont_obj(&ctx);
+	unset_csum_fi();
 	cleanup_data(&ctx);
+}
+
+static void
+test_server_data_corruption(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct csum_test_ctx	 ctx = {0};
+	int			 rc;
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
+
+	/**1. Simple server data corruption after RDMA */
+	setup_multiple_extent_data(&ctx);
+	/** Set the Server data corruption flag */
+	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				DAOS_CHECKSUM_SDATA_CORRUPT | DAOS_FAIL_ALWAYS,
+				0, NULL);
+	assert_int_equal(rc, 0);
+	/** Perform the update */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			&ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_int_equal(rc, 0);
+	/** Clear the fail injection flag */
+	rc = daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	assert_int_equal(rc, 0);
+	/** Fetch should result in checksum failure : SSD bad data*/
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(rc, -DER_CSUM);
+
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+
 }
 
 static void
@@ -377,7 +432,6 @@ test_fetch_array(void **state)
 	/**
 	 * Setup
 	 */
-
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
@@ -833,6 +887,7 @@ test_enumerate_d_key(void **state)
 	daos_key_desc_t		kds[KDS_NR] = {0};
 	d_sg_list_t		sgl = {0};
 	uint32_t		nr = KDS_NR;
+	uint32_t		key_count = 0;
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, OC_SX);
@@ -862,8 +917,7 @@ test_enumerate_d_key(void **state)
 	/** Sanity check that no failure still returns success */
 	nr = KDS_NR;
 	memset(&anchor, 0, sizeof(anchor));
-	uint32_t key_count = 0;
-	while(!daos_anchor_is_eof(&anchor)) {
+	while (!daos_anchor_is_eof(&anchor)) {
 		rc = daos_obj_list_dkey(ctx.oh, DAOS_TX_NONE, &nr, kds, &sgl,
 				   &anchor, NULL);
 		assert_int_equal(0, rc);
@@ -896,10 +950,12 @@ static const struct CMUnitTest tests[] = {
 	CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
 	CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
 		  fetch_with_multiple_extents),
-	CSUM_TEST("DAOS_CSUM04: Update/Fetch A Key", test_update_fetch_a_key),
-	CSUM_TEST("DAOS_CSUM05: Update/Fetch D Key", test_update_fetch_d_key),
-	CSUM_TEST("DAOS_CSUM06: Enumerate A Keys", test_enumerate_a_key),
-	CSUM_TEST("DAOS_CSUM07: Enumerate D Keys", test_enumerate_d_key),
+	CSUM_TEST("DAOS_CSUM04: Server data corrupted after RDMA",
+		test_server_data_corruption),
+	CSUM_TEST("DAOS_CSUM05: Update/Fetch A Key", test_update_fetch_a_key),
+	CSUM_TEST("DAOS_CSUM06: Update/Fetch D Key", test_update_fetch_d_key),
+	CSUM_TEST("DAOS_CSUM07: Enumerate A Keys", test_enumerate_a_key),
+	CSUM_TEST("DAOS_CSUM08: Enumerate D Keys", test_enumerate_d_key),
 };
 
 int

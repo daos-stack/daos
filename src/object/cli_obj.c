@@ -2279,7 +2279,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE ||
 		    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
 			/** checksums sent and not retrying,
-			 * can destroy now */
+			 * can destroy now
+			 */
 			obj_rw_csum_destroy(obj, dc_task_get_args(task));
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
