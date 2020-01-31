@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -189,7 +189,7 @@ update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
-			      &array->va_dkey, 1, &array->va_iod, sgls);
+			      &array->va_dkey, 1, &array->va_iod, NULL, sgls);
 }
 
 static int
@@ -252,7 +252,7 @@ update_meta(struct vts_array *array, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Writing metadata at epoch "DF_U64"\n", epoch);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
-			      &array->va_dkey, 1, &array->va_sv_iod, &sgl);
+			&array->va_dkey, 1, &array->va_sv_iod, NULL, &sgl);
 }
 
 static int

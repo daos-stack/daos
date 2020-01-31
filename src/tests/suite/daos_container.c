@@ -465,6 +465,103 @@ co_op_retry(void **state)
 	print_message("success\n");
 }
 
+static void
+co_acl(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	daos_prop_t		*prop_in;
+	daos_prop_t		*prop_out = NULL;
+	struct daos_prop_entry	*entry;
+	daos_pool_info_t	 info = {0};
+	int			 rc;
+	const char		*exp_owner = "fictionaluser@";
+	const char		*exp_owner_grp = "admins@";
+	struct daos_acl		*exp_acl, *actual_acl;
+
+	print_message("create container with access props, and verify.\n");
+	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Empty ACL is a weird case, but valid */
+	exp_acl = daos_acl_create(NULL, 0);
+	assert_non_null(exp_acl);
+	assert_int_equal(daos_acl_cont_validate(exp_acl), 0);
+
+	/*
+	 * Set up the container with non-default owner/group and ACL values
+	 */
+	prop_in = daos_prop_alloc(3);
+	assert_non_null(prop_in);
+	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
+	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_owner,
+		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner_grp,
+		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_ACL;
+	prop_in->dpp_entries[2].dpe_val_ptr = daos_acl_dup(exp_acl);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop_in);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("Getting the container ACL\n");
+	rc = daos_cont_get_acl(arg->coh, &prop_out, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_non_null(prop_out);
+	assert_int_equal(prop_out->dpp_nr, 3);
+
+	print_message("Checking ACL\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		print_message("ACL prop wasn't returned.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+	actual_acl = entry->dpe_val_ptr;
+	assert_int_equal(actual_acl->dal_ver, exp_acl->dal_ver);
+	assert_int_equal(actual_acl->dal_len, exp_acl->dal_len);
+
+	print_message("Checking owner\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	print_message("Checking owner-group\n");
+	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner_grp,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	daos_prop_free(prop_in);
+	daos_prop_free(prop_out);
+	daos_acl_free(exp_acl);
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -502,7 +599,9 @@ static const struct CMUnitTest co_tests[] = {
 	{ "CONT6: create container with properties and query",
 	  co_properties, NULL, test_case_teardown},
 	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
-	  co_op_retry, NULL, test_case_teardown}
+	  co_op_retry, NULL, test_case_teardown},
+	{ "CONT8: container ACL",
+	  co_acl, NULL, test_case_teardown},
 };
 
 int

@@ -224,7 +224,8 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, d_sg_list_t *dst_sgl,
 		break;
 	case IV_CONT_PROP:
 		memcpy(&dst->iv_prop, &src->iv_prop,
-		       cont_iv_prop_ent_size(src->iv_prop.cip_acl.dal_len));
+		       offsetof(struct cont_iv_prop,
+				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]));
 		break;
 	default:
 		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
@@ -919,7 +920,7 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_ACL:
 			acl = &iv_prop->cip_acl;
-			if (acl->dal_len > 0) {
+			if (acl->dal_ver != 0) {
 				D_ASSERT(daos_acl_validate(acl) == 0);
 				acl_alloc = daos_acl_dup(acl);
 				if (acl_alloc != NULL)

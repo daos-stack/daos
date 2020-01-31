@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -515,7 +515,7 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
 	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, 0 /* flags */,
-			      &rdb_dkey, n, iods, sgls);
+			      &rdb_dkey, n, iods, NULL, sgls);
 }
 
 int

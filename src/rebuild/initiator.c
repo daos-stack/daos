@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 					    rdone->ro_epoch, rdone->ro_version,
 					    0, &rdone->ro_dkey, iod_cnt,
-					    &rdone->ro_iods[start],
+					    &rdone->ro_iods[start], NULL,
 					    &sgls[start]);
 			if (rc) {
 				D_ERROR("rebuild failed: rc "DF_RC"\n",
@@ -158,7 +158,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		rc = vos_obj_update(ds_cont->sc_hdl, rdone->ro_oid,
 				    rdone->ro_epoch, rdone->ro_version,
 				    0, &rdone->ro_dkey, iod_cnt,
-				    &rdone->ro_iods[start], &sgls[start]);
+				    &rdone->ro_iods[start], NULL, &sgls[start]);
 
 	return rc;
 }
@@ -174,7 +174,7 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, rdone->ro_oid, rdone->ro_epoch,
 			      0, &rdone->ro_dkey, rdone->ro_iod_num,
-			      rdone->ro_iods, &ioh, NULL);
+			      rdone->ro_iods, NULL, &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
 			DP_UOID(rdone->ro_oid), rc);
@@ -287,7 +287,7 @@ rebuild_one_punch(struct rebuild_tgt_pool_tracker *rpt,
 				    rdone->ro_rec_punch_eph,
 				    rdone->ro_version, 0, &rdone->ro_dkey,
 				    rdone->ro_punch_iod_num,
-				    rdone->ro_punch_iods, NULL);
+				    rdone->ro_punch_iods, NULL, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch %d eph "DF_U64
 			" records: %d\n", DP_UOID(rdone->ro_oid), rdone,
 			rdone->ro_punch_iod_num, rdone->ro_rec_punch_eph, rc);
@@ -548,9 +548,6 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 	rdone->ro_rec_num += rec_cnt;
 	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
-	iod->iod_csums = NULL;
-	iod->iod_eprs = NULL;
-
 out:
 	return 0;
 }
@@ -582,8 +579,6 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, daos_epoch_t eph)
 		rdone->ro_rec_punch_eph = eph;
 	rdone->ro_punch_iod_num++;
 	iod->iod_recxs = NULL;
-	iod->iod_csums = NULL;
-	iod->iod_eprs = NULL;
 	return 0;
 }
 

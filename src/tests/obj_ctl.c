@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,8 +78,8 @@ ctl_update(struct dts_io_credit *cred)
 		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
-		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
-				    0xcafe, &cred->tc_dkey, 1, &cred->tc_iod,
+		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
+				    0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
 				    &cred->tc_sgl);
 	}
 	return rc;
