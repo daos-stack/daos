@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,10 @@ init(void)
 	if (rc)
 		D_GOTO(err, rc);
 
+	rc = ds_cont_prop_default_init();
+	if (rc)
+		D_GOTO(err, rc);
+
 	return 0;
 err:
 	ds_oid_iv_fini();
@@ -57,6 +61,8 @@ fini(void)
 {
 	ds_cont_iv_fini();
 	ds_oid_iv_fini();
+	ds_cont_prop_default_fini();
+
 	return 0;
 }
 

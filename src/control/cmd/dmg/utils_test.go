@@ -62,10 +62,10 @@ func TestFlattenAddrs(t *testing.T) {
 			addrPatterns: "localhost:10001,abc-[1-3]",
 			expAddrs:     "abc-1:9999,abc-2:9999,abc-3:9999,localhost:10001",
 		},
-		"too many colons":     {"bad:addr:here", "", "cannot parse \"bad:addr:here\""},
+		"too many colons":     {"bad:addr:here", "", "address bad:addr:here: too many colons in address"},
 		"no host":             {"valid:10001,:100", "", "invalid hostname \":100\""},
 		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
-		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
+		"bad port alphabetic": {"foo:bar", "", "invalid port \"bar\""},
 		"bad port empty":      {"foo:", "", "invalid port \"\""},
 	} {
 		t.Run(name, func(t *testing.T) {
