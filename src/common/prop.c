@@ -104,7 +104,7 @@ daos_prop_free(daos_prop_t *prop)
 }
 
 daos_prop_t *
-daos_prop_merge(daos_prop_t* old_prop, daos_prop_t *new_prop)
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 {
 	daos_prop_t		*result;
 	int			rc;

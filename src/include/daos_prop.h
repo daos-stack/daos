@@ -282,7 +282,7 @@ daos_prop_free(daos_prop_t *prop);
  * \return	Newly allocated merged property
  */
 daos_prop_t *
-daos_prop_merge(daos_prop_t* old_prop, daos_prop_t *new_prop);
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
  * Duplicate a generic pointer value from one DAOS prop entry to another.
