@@ -69,22 +69,45 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 }
 
 static void
-rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-		int *failed_tgts, int rank_nr, bool kill)
+rebuild_add_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
+		int tgt_idx)
 {
-	int	i;
+	int i;
+
+	for (i = 0; i < args_cnt; i++) {
+		if (!args[i]->pool.destroyed)
+			daos_add_target(args[i]->pool.pool_uuid,
+					args[i]->group,
+					&args[i]->pool.svc,
+					rank, tgt_idx);
+		sleep(2);
+	}
+}
+
+static void
+rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
+		int *tgts, int rank_nr, bool fail, bool kill)
+{
+	int i;
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_pre_cb)
 			args[i]->rebuild_pre_cb(args[i]);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	/** exclude the target from the pool */
+	/** include or exclude the target from the pool */
 	if (args[0]->myrank == 0) {
 		for (i = 0; i < rank_nr; i++) {
-			rebuild_exclude_tgt(args, args_cnt, failed_ranks[i],
-					    failed_tgts ? failed_tgts[i] : -1,
-					    kill);
+			if (fail) {
+				rebuild_exclude_tgt(args, args_cnt,
+						    ranks[i],
+						    tgts ? tgts[i] : -1,
+						    kill);
+			} else {
+				rebuild_add_tgt(args, args_cnt, ranks[i],
+						tgts ? tgts[i] : -1);
+
+			}
 			/* Sleep 5 seconds to make sure the rebuild start */
 			sleep(5);
 		}
@@ -107,22 +130,44 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 static void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 {
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, true, false);
+}
+
+static void
+reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, false);
 }
 
 static void
 rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr)
 {
-	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false);
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, true,
+			false);
 }
 
+static void
+reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+		    int ranks_nr)
+{
+	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr, false,
+			false);
+}
 void
 rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			   int failed_tgt)
 {
-	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false);
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, true, false);
 }
+
+void
+reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
+			   int failed_tgt)
+{
+	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false, false);
+}
+
 
 void
 rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
@@ -373,9 +418,10 @@ rebuild_drop_scan(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -404,9 +450,10 @@ rebuild_retry_rebuild(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -433,9 +480,10 @@ rebuild_retry_for_stale_pool(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -462,9 +510,10 @@ rebuild_drop_obj(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -493,7 +542,7 @@ rebuild_update_failed(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], &tgt, 1);
+	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
 }
 
 static void
@@ -527,8 +576,11 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_validate(args[0], oids, OBJ_NR, true);
 	rebuild_io_validate(args[1], oids, OBJ_NR, true);
 
+	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
+	rebuild_io_validate(args[0], oids, OBJ_NR, true);
+	rebuild_io_validate(args[1], oids, OBJ_NR, true);
+
 	rebuild_pool_destroy(args[1]);
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
 
 static int
@@ -789,10 +841,10 @@ rebuild_iv_tgt_fail(void **state)
 				     DAOS_FAIL_ONCE, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 	rebuild_single_pool_rank(arg, ranks_to_kill[0]);
-
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -859,7 +911,7 @@ rebuild_send_objects_fail(void **state)
 				     0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
 }
 
 static int
@@ -1046,7 +1098,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
 	arg->rebuild_cb = rebuild_pool_connect_cb;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_cb = NULL;
@@ -1087,7 +1139,7 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = rebuild_pool_disconnect_internal;
 	arg->rebuild_post_cb = rebuild_pool_connect_internal;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
@@ -1251,7 +1303,8 @@ rebuild_nospace(void **state)
 	arg->rebuild_cb = NULL;
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
 
-	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	rebuild_io_validate(arg, oids, OBJ_NR, true);
 }
 
 static void
@@ -1372,7 +1425,7 @@ rebuild_master_failure(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, 1, true, true);
 
 	/* Verify the data */
 	rebuild_io_validate(arg, oids, OBJ_NR, true);
@@ -1453,7 +1506,7 @@ rebuild_multiple_failures(void **state)
 #endif
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
-	rebuild_targets(&arg, 1, ranks_to_kill, NULL, MAX_KILLS, true);
+	rebuild_targets(&arg, 1, ranks_to_kill, NULL, MAX_KILLS, true, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;

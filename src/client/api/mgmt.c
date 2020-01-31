@@ -161,6 +161,7 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
+	DAOS_API_ARG_ASSERT(*args, POOL_ADD);
 	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -183,6 +184,7 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
+	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE_OUT);
 	rc = dc_task_create(dc_pool_exclude_out, NULL, ev, &task);
 	if (rc)
 		return rc;

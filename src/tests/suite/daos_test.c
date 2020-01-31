@@ -39,7 +39,7 @@
  * These tests will only be run if explicity specified. They don't get
  * run if no test is specified.
  */
-#define EXPLICIT_TESTS "x"
+#define EXPLICIT_TESTS "xt"
 static const char *all_tests = TESTS;
 static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
 
