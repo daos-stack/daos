@@ -1475,7 +1475,8 @@ ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_prop_set_in		*in  = crt_req_get(rpc);
 	daos_prop_t			*prop_in = in->cpsi_prop;
-	daos_prop_t			*prop_out = NULL;
+	daos_prop_t			*prop_old = NULL;
+	daos_prop_t			*prop_iv = NULL;
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
@@ -1492,32 +1493,32 @@ ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (!(hdl->ch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = cont_prop_write(tx, &cont->c_prop, prop_in);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = rdb_tx_commit(tx);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Read all props & update prop IV */
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_out);
+	/* Read all props for prop IV update */
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read prop for cont, rc=%d\n",
 			DP_UUID(cont->c_uuid), rc);
 		D_GOTO(out, rc);
 	}
-	D_ASSERT(prop_out != NULL);
+	D_ASSERT(prop_old != NULL);
+	prop_iv = daos_prop_merge(prop_old, prop_in);
+	if (prop_iv == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
+	rc = cont_prop_write(tx, &cont->c_prop, prop_in);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Update prop IV with merged prop */
 	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
-				 in->cpsi_op.ci_hdl, cont->c_uuid, prop_out);
+				 in->cpsi_op.ci_hdl, cont->c_uuid, prop_iv);
 	if (rc)
 		D_ERROR(DF_UUID": failed to update prop IV for cont, "
 			"%d.\n", DP_UUID(cont->c_uuid), rc);
 
-	daos_prop_free(prop_out);
-
 out:
+	daos_prop_free(prop_old);
+	daos_prop_free(prop_iv);
 	return rc;
 }
 
