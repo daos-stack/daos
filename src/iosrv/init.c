@@ -624,7 +624,7 @@ shared_memory_file_cleanup(void)
 		/* unlink spdk shared memory files for this stream */
 		char path[NAME_MAX];
 
-		/* remove shared memory dir created byi each daos io searver
+		/* remove shared memory dir created by each daos io searver
 		 * currently in /var/run/dpdk
 		 */
 		snprintf(path, NAME_MAX, "/var/run/dpdk/spdk%d",
