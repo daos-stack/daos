@@ -74,9 +74,7 @@ class DaosServer(DaosCommand):
         self.yaml_params = DaosServerConfig()
         self.timeout = 120
         self.server_list = []
-        self.format_required = False
-        self.patterns = []
-        self.reset_patterns()
+        self.mode = "normal"
 
         self.debug = FormattedParameter("-b", True)
         self.json = FormattedParameter("-j", False)
@@ -101,109 +99,48 @@ class DaosServer(DaosCommand):
         self.yaml_params.access_points.value = access_points.split()
         self.config.value = self.yaml_params.create_yaml(yamlfile)
 
-        # After updating the command parameters reset the subprocess start
-        # patterns for the next start
-        self.reset_patterns()
-
-    def reset_patterns(self):
-        """Reset the subprocess completion detection search patterns."""
-        self.patterns = [
-            "DAOS I/O server.*started",
-            "(SCM format required)(?!;)",
-        ]
-
-    def get_expected_pattern_count(self):
-        """Get the expected number of matches for each search pattern.
-
-        Returns:
-            list: a list of the number of expected daos_io_server started
-                messages and the number of expected format messages from each
-                daos_server process (when formatting is required)
-
-        """
-        server_count = len(self.server_list)
-        io_server_per_server = len(self.yaml_params.server_params)
-        io_server_count = server_count * io_server_per_server
-        return [io_server_count, server_count]
-
     def check_subprocess_status(self, sub_process):
         """Wait for message from command output.
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
         """
-        # Reset the format required flag
-        self.format_required = False
-
-        # Update the expected number of daos_server command output messages used
-        # to detect if the daos_server subprocess has started.
-        expected = self.get_expected_pattern_count()
-        detected = [0 for _ in expected]
-
+        server_count = len(self.server_list)
+        patterns = {
+            "format": "SCM format required",
+            "normal": "DAOS I/O server.*started",
+        }
+        expected = {
+            "format": server_count,
+            "normal": server_count * len(self.yaml_params.server_params),
+        }
+        detected = 0
         complete = False
         timed_out = False
         start_time = time.time()
 
-        # Search for patterns in the subprocess output until:
+        # Search for patterns in the 'daos_server start' output until:
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
         #   - the subprocess is no longer running (failure)
         while not complete and not timed_out and sub_process.poll() is None:
-            # Determine what number of daos_server processes are waiting for a
-            # format and what number of daos_io_server processes have been
-            # started
             output = sub_process.get_stdout()
-            for index, pattern in enumerate(self.patterns):
-                # Determine if all the expected number of patterns were found
-                detected[index] = len(re.findall(pattern, output))
-                complete = detected[index] == expected[index]
-
-                # If all the format patterns were detected set the format flag
-                if detected[index] == expected[index] and index > 0:
-                    self.format_required = True
-
-            # Handle the mixed started and format message case:
-            #   - The sub process is complete if every daos_server process is
-            #     awaiting format or all of its daos_io_server processes are
-            #     started
-            if not complete and len(self.patterns) > 1:
-                non_format_count = expected[1] - detected[1]
-                io_server_per_server = expected[0] / expected[1]
-                if detected[0] == non_format_count * io_server_per_server:
-                    complete = True
-                    self.format_required = True
-
-            # Deterime if the timeout has been reached
+            detected = len(re.findall(patterns[self.mode], output))
+            complete = detected == expected[self.mode]
             timed_out = time.time() - start_time > self.timeout
 
         # Summarize results
-        detected_msg = " and ".join([
-            "{}/{} '{}' messages".format(
-                detected[index], expected[index], pattern)
-            for index, pattern in enumerate(self.patterns)])
-
+        msg = "{}/{} {} messages detected in {}/{} seconds".format(
+            detected, expected[self.mode], self.mode, time.time() - start_time,
+            self.timeout)
         if not complete:
-            err_msg = "{} detected. Only {} detected after {} seconds".format(
+            self.log.info(
+                "%s detected - %s:\n%s",
                 "Time out" if timed_out else "Error",
-                detected_msg, time.time() - start_time)
-            self.log.info(
-                "%s:\n%s",
-                err_msg,
+                msg,
                 sub_process.get_stdout() if not self.verbose else "<See above>")
-
-        elif self.format_required:
-            self.log.info(
-                "Format required after detecting %s after %d seconds",
-                detected_msg, time.time() - start_time)
         else:
-            self.log.info(
-                "Successful start after detecting %s in %d seconds",
-                detected_msg, time.time() - start_time)
-
-        # Reduce the subprocess completion detection search pattern set to only
-        # include messages indicating the start of daos_io_server process if
-        # this method is called a second time for the same subprocess.
-        self.patterns = ["DAOS I/O server.*started"]
+            self.log.info("Server startup detected - %s", msg)
 
         return complete
 
@@ -597,30 +534,28 @@ class ServerManager(ExecutableCommand):
             self.storage_prepare(getpass.getuser(), storage_prep_flag)
             self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
+        # Start the server and wait for each host to require a SCM format
+        self.runner.job.mode = "format"
         try:
             self.run()
-        except CommandFailure as details:
-            self.log.info("<SERVER> Exception occurred: %s", str(details))
-            # Kill the subprocess, anything that might have started
-            self.kill()
+        except CommandFailure as error:
             raise ServerFailed(
-                "Failed to start server in {} mode.".format(
-                    self.runner.job.mode))
+                "Failed to start before format: {}".format(error))
 
-        if self.runner.job.format_required:
-            # Setup the hostlist to pass to dmg command
-            servers_with_ports = [
-                "{}:{}".format(host, self.runner.job.yaml_params.port)
-                for host in self._hosts]
+        # Format storage and wait for server to change ownership
+        self.log.info("Formatting hosts: <%s>", self._hosts)
+        servers_with_ports = [
+            "{}:{}".format(host, self.runner.job.yaml_params.port)
+            for host in self._hosts]
+        storage_format(self.daosbinpath, ",".join(servers_with_ports))
 
-            # Format storage and wait for server to change ownership
-            self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.daosbinpath, ",".join(servers_with_ports))
-            self.runner.job.mode = "normal"
-            try:
-                self.runner.job.check_subprocess_status(self.runner.process)
-            except CommandFailure as error:
-                self.log.info("Failed to start after format: %s", str(error))
+        # Wait for all the doas_io_servers to start
+        self.runner.job.mode = "normal"
+        try:
+            self.runner.job.check_subprocess_status(self.runner.process)
+        except CommandFailure as error:
+            raise ServerFailed(
+                "Failed to start after format: {}".format(error))
 
         return True
 
@@ -667,16 +602,16 @@ class ServerManager(ExecutableCommand):
         clean_cmds = set()
         for server_params in self.runner.job.yaml_params.server_params:
             scm_mount = server_params.scm_mount.value
-            if scm_mount:
-                self.log.info("Cleaning up the %s directory.", str(scm_mount))
-                clean_cmds.add(
-                    "find {} -mindepth 1 -maxdepth 1 -print0 | "
-                    "xargs -0r rm -rf".format(scm_mount))
-                if self.runner.job.yaml_params.is_nvme():
-                    #     clean_cmds.add("sudo rm -fr {}".format(scm_mount))
-                    clean_cmds.add(
-                        "while sudo umount {}; do continue; done".format(
-                            scm_mount))
+            self.log.info("Cleaning up the %s directory.", str(scm_mount))
+
+            # Remove the superblocks
+            clean_cmds.add(
+                "find {} -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf".format(scm_mount))
+
+            # Dismount the scm mount point
+            clean_cmds.add(
+                "while sudo umount {}; do continue; done".format(scm_mount))
 
             if self.runner.job.yaml_params.is_scm():
                 scm_list = server_params.scm_list.value
