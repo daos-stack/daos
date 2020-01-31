@@ -321,7 +321,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				rebuild_nr;
 	d_rank_t			myrank;
 	int				i;
-	int				rc;
+	int				rc = 0;
 
 	if (rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");

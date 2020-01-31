@@ -111,7 +111,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:hf:e:";
+	const char *short_options = "apcdglzni:mXA:hf:e:t";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -124,6 +124,7 @@ main(int argc, char **argv)
 		{"punch_model_tests",	no_argument, 0, 'm'},
 		{"garbage_collector",	no_argument, 0, 'g'},
 		{"ilog_tests",		no_argument, 0, 'l'},
+		{"epoch cache tests",	no_argument, 0, 't'},
 		{"csum_tests",		no_argument, 0, 'z'},
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
@@ -232,6 +233,9 @@ main(int argc, char **argv)
 			nr_failed += run_csum_extent_tests();
 			test_run = true;
 			break;
+		case 't':
+			nr_failed += run_ts_tests();
+			test_run = true;
 		case 'f':
 		case 'e':
 			/** already handled */

@@ -251,6 +251,8 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	uint64_t			cd_dtx_resync_gen;
+	uint32_t			cd_ts_idx;
+	uint32_t			cd_pad;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;

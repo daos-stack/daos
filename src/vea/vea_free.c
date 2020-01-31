@@ -319,7 +319,7 @@ migrate_end_cb(void *data, bool noop)
 	struct vea_free_extent	 vfe;
 	struct vea_unmap_extent	*vue, *tmp_vue;
 	d_list_t		 unmap_list;
-	uint64_t		 cur_time;
+	uint64_t		 cur_time = 0;
 	int			 rc;
 
 	if (noop)

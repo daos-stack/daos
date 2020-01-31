@@ -189,11 +189,13 @@ static btr_ops_t oi_btr_ops = {
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    struct vos_obj_df **obj_p)
+	    struct vos_obj_df **obj_p, struct vos_ts_set *ts_set)
 {
-	d_iov_t		key_iov;
-	d_iov_t		val_iov;
-	int		rc;
+	struct ilog_df		*ilog = NULL;
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc;
+	bool			 found = false;
 
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -206,7 +208,15 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 
 		D_ASSERT(daos_unit_obj_id_equal(obj->vo_id, oid));
 		*obj_p = obj;
+		ilog = &obj->vo_ilog;
+
+		found = vos_ilog_ts_lookup(ts_set, ilog);
+		if (found)
+			goto out;
 	}
+
+	vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+out:
 	return rc;
 }
 
@@ -215,7 +225,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p)
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
+		  struct vos_ts_set *ts_set)
 {
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
@@ -227,7 +238,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
-	rc = vos_oi_find(cont, oid, &obj);
+	rc = vos_oi_find(cont, oid, &obj, ts_set);
 	if (rc == 0)
 		goto do_log;
 	if (rc != -DER_NONEXIST)
@@ -247,6 +258,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+
+	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
 do_log:
 	if (!log)
 		goto skip_log;
@@ -271,7 +284,7 @@ skip_log:
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
+	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj)
 {
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	struct ilog_desc_cbs	 cbs;

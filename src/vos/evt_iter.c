@@ -133,7 +133,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	int			 start;
 	int			 end;
 	int			 mid;
-	int			 cmp;
+	int			 cmp = 0;
 
 	enta = &iter->it_entries;
 	start = 0;
