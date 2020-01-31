@@ -48,6 +48,7 @@ expect_ace_valid(enum daos_acl_principal_type type, const char *principal)
 	struct daos_ace *ace;
 
 	ace = daos_ace_create(type, principal);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 
 	assert_true(daos_ace_is_valid(ace));
 
@@ -323,6 +324,19 @@ test_ace_is_valid_undefined_access_type(void **state)
 
 	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace->dae_access_types |= (1 << 7); /* nonexistent type */
+
+	assert_false(daos_ace_is_valid(ace));
+
+	daos_ace_free(ace);
+}
+
+static void
+test_ace_is_valid_no_access_type(void **state)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
+	ace->dae_access_types = 0;
 
 	assert_false(daos_ace_is_valid(ace));
 
@@ -897,6 +911,7 @@ main(void)
 		cmocka_unit_test(test_ace_is_valid_undefined_perms),
 		cmocka_unit_test(test_ace_is_valid_valid_perms),
 		cmocka_unit_test(test_ace_is_valid_undefined_access_type),
+		cmocka_unit_test(test_ace_is_valid_no_access_type),
 		cmocka_unit_test(test_ace_is_valid_valid_access_types),
 		cmocka_unit_test(test_ace_is_valid_perms_for_unset_type),
 		cmocka_unit_test(test_ace_is_valid_audit_flags_with_only_allow),
