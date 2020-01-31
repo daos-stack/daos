@@ -235,7 +235,7 @@ cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
 	entry.dpe_type = DAOS_PROP_CO_CSUM;
 	cont_prop.dpp_entries = &entry;
 	cont_prop.dpp_nr = 1;
-	
+
 	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
 	if (rc != 0)
 		return false;
