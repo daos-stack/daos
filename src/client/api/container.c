@@ -157,6 +157,35 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 }
 
 int
+daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
+{
+	daos_prop_t	*prop;
+	const size_t	nr_entries = 3;
+	int		rc;
+
+	if (acl_prop == NULL) {
+		D_ERROR("invalid acl_prop parameter\n");
+		return -DER_INVAL;
+	}
+
+	prop = daos_prop_alloc(nr_entries);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
+	prop->dpp_entries[2].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+
+	rc = daos_cont_query(coh, NULL, prop, ev);
+	if (rc == 0)
+		*acl_prop = prop;
+	else
+		daos_prop_free(prop);
+
+	return rc;
+}
+
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	daos_cont_aggregate_t	*args;

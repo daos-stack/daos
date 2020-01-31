@@ -310,7 +310,11 @@ func (m *mockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.R
 	return &mgmtpb.RanksResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) KillRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+func (m *mockMgmtSvcClient) StopRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
 	return &mgmtpb.RanksResp{}, nil
 }
 

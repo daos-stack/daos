@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -317,13 +317,6 @@ int daos_obj_layout_alloc(struct daos_obj_layout **layout, uint32_t grp_nr,
 			  uint32_t grp_size);
 int daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 			struct daos_obj_layout **layout);
-
-/** Get a specific checksum given an index */
-static inline daos_csum_buf_t *
-daos_iod_csum(daos_iod_t *iod, int csum_index)
-{
-	return iod->iod_csums ? &iod->iod_csums[csum_index] : NULL;
-}
 
 int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);

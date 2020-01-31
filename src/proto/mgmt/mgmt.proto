@@ -34,6 +34,7 @@ import "acl.proto"; // ACL-related requests
 message RanksReq {
 	repeated uint32 ranks = 1;
 	float timeout = 2;
+	bool force = 3;
 }
 
 // Generic response containing DER result from multiple ranks.
@@ -95,8 +96,10 @@ service MgmtSvc {
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
-	// Kill DAOS IO servers on a host. (gRPC fanout)
-	rpc KillRanks(RanksReq) returns (RanksResp) {}
+	// Stop DAOS IO servers on a host. (gRPC fanout)
+	rpc StopRanks(RanksReq) returns (RanksResp) {}
+	// Ping DAOS IO servers on a host. (gRPC fanout)
+	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS IO servers on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 }

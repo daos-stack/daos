@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <daos_srv/vea.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
+#include <daos/checksum.h>
 
 enum dtx_cos_flags {
 	DCF_FOR_PUNCH	= (1 << 0),
@@ -265,7 +266,7 @@ typedef struct {
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
 			/** checksum */
-			daos_csum_buf_t		ie_csum;
+			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
 		};
