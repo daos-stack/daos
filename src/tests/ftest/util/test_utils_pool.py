@@ -153,12 +153,22 @@ class TestPool(TestDaosApiBase):
             # Define the "dmg pool create" command parameter values
             if self.uid is not None:
                 # Convert the user ID to a user name for the dmg command
-                self.dmg.action_command.user.value = getpwuid(self.uid).pw_name
+                try:
+                    self.dmg.action_command.user.value = \
+                        getpwuid(self.uid).pw_name
+                except (KeyError, OverflowError):
+                    # A user does not exist with that id, so just use the id str
+                    self.dmg.action_command.user.value = str(self.uid)
             else:
                 self.dmg.action_command.user.value = None
             if self.gid is not None:
                 # Convert the group ID to a group name for the dmg command
-                self.dmg.action_command.group.value = getgrgid(self.gid).gr_name
+                try:
+                    self.dmg.action_command.group.value = \
+                        getgrgid(self.gid).gr_name
+                except (KeyError, OverflowError):
+                    # A grp does not exist with that id, so just use the id str
+                    self.dmg.action_command.group.value = str(self.gid)
             else:
                 self.dmg.action_command.group.value = None
             self.dmg.action_command.scm_size.value = self.scm_size.value
