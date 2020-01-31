@@ -676,6 +676,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 			      obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
 		obj_auxi->flags |= ORF_DTX_SYNC;
+		obj_auxi->flags |= ORF_EC;
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
 			args->iods = reasb_req->orr_iods;
@@ -2368,9 +2369,6 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 				shard_auxi->shard - shard_auxi->start_shard);
 			D_ASSERT(toiod != NULL);
 			shard_arg->oiods = toiod->oto_oiods;
-			D_ASSERT(shard_arg->oiods[0].oiod_nr == 1 &&
-				 (shard_arg->oiods[0].oiod_flags &
-				  OBJ_SIOD_PROC_ONE) != 0);
 			shard_arg->offs = toiod->oto_offs;
 			D_ASSERT(shard_arg->offs != NULL);
 		} else {

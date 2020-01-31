@@ -772,18 +772,20 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 	tgt_idx = orw->orw_oid.id_shard - orw->orw_start_shard;
 	for (i = 0; i < orw->orw_nr; i++) {
 		iod = &iods[i];
-		if (iod->iod_type != DAOS_IOD_SINGLE || iod->iod_recxs == NULL)
+		if (iod->iod_type != DAOS_IOD_SINGLE ||
+		    (orw->orw_flags & ORF_EC) == 0)
 			continue;
 		/* for singv EC */
+		D_ASSERT(iod->iod_recxs == NULL);
 		if (iod->iod_size == DAOS_REC_ANY) /* punch */
 			continue;
 		if (oca == NULL) {
 			oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
 			D_ASSERT(oca != NULL && DAOS_OC_IS_EC(oca));
 		}
-		/* using rx_nr to pass ir_gsize (through akey_update_single) */
+		/* using iod_recxs to pass ir_gsize (akey_update_single) */
 		if (for_update)
-			iod->iod_recxs[0].rx_nr = iod->iod_size;
+			iod->iod_recxs = (void *)iod->iod_size;
 		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
 			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
 					      &loc);

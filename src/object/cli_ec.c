@@ -289,49 +289,21 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	uint32_t			*tgt_recx_nrs;
 	uint32_t			 recx_nr, tgt_nr, seg_nr = 0;
 	uint32_t			 partial_nr, oiod_flags = 0;
-	uint64_t			 stripe_rec_nr, cell_bytes;
+	uint64_t			 stripe_rec_nr;
 	uint64_t			 start, end, rec_nr, rec_off;
 	bool				 full_stripe_only = true;
 	bool				 parity_seg_counted = false;
 	bool				 frag_seg_counted = false;
-	bool				 punch, singv_parity = false;
+	bool				 punch;
 	int				 i, j, idx, rc;
 
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	ec_recx_array = &reasb_req->orr_recxs[iod_idx];
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
-	/* for single value case */
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (obj_ec_singv_one_tgt(iod, sgl, oca)) {
-			full_stripe_only = false;
-			/* small singv stores on one target and replica to all
-			 * parity targets.
-			 */
-			idx = obj_ec_singv_small_idx(oca, iod);
-			tgt_recx_nrs[idx] = 1;
-			if (update)
-				ec_parity_tgt_recx_nrs(oca, tgt_recx_nrs, j, 1);
-			goto data_init;
-		}
-		/* evenly distributed singv */
-		if (update) {
-			ec_all_tgt_recx_nrs(oca, tgt_recx_nrs, j);
-			if (!punch) {
-				seg_nr = obj_ec_parity_tgt_nr(oca);
-				singv_parity = true;
-				ec_recx_array->oer_stripe_total = 1;
-			}
-		} else {
-			ec_data_tgt_recx_nrs(oca, tgt_recx_nrs, j);
-		}
-		goto data_init;
-	}
-
-	/* for array case */
-	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	for (i = 0, idx = 0, rec_off = 0; i < iod->iod_nr; i++) {
 		recx = &iod->iod_recxs[i];
 		/* add segment number on data cells */
@@ -414,7 +386,6 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 		D_ASSERT(ec_recx_array->oer_nr == 0);
 	}
 
-data_init:
 	for (i = 0, recx_nr = 0, tgt_nr = 0; i < obj_ec_tgt_nr(oca); i++) {
 		ec_recx_array->oer_tgt_recx_idxs[i] = recx_nr;
 		recx_nr += tgt_recx_nrs[i];
@@ -446,12 +417,9 @@ data_init:
 		if (rc)
 			goto out;
 	}
-	if (update) {
-		cell_bytes = singv_parity ?
-			     obj_ec_singv_cell_bytes(iod->iod_size, oca) :
-			     obj_ec_cell_bytes(iod, oca);
-		rc = obj_ec_pbufs_init(ec_recx_array, cell_bytes);
-	}
+	if (update)
+		rc = obj_ec_pbufs_init(ec_recx_array,
+				       obj_ec_cell_bytes(iod, oca));
 
 out:
 	return rc;
@@ -844,9 +812,10 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 
 static void
 ec_parity_seg_add(struct obj_ec_recx_array *ec_recxs, daos_iod_t *iod,
-		  struct daos_oclass_attr *oca, uint64_t cell_bytes,
+		  struct daos_oclass_attr *oca,
 		  struct obj_ec_seg_sorter *sorter)
 {
+	uint64_t	cell_bytes = obj_ec_cell_bytes(iod, oca);
 	d_iov_t		iov;
 	uint32_t	i;
 
@@ -943,16 +912,18 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 		D_PRINT("\n");
 	}
 
-	D_PRINT("\nrecxs array [vos_idx, nr]:\n");
-	for (j = 0; j < iod->iod_nr; j++) {
-		recx = &iod->iod_recxs[j];
-		if (j % 8 == 0)
-			D_PRINT("[%3d]:", j);
-		dump_recx(recx, NULL, 0, 0);
-		if (j % 8 == 7)
-			D_PRINT("\n");
+	if (iod->iod_recxs != NULL) {
+		D_PRINT("\nrecxs array [vos_idx, nr]:\n");
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			if (j % 8 == 0)
+				D_PRINT("[%3d]:", j);
+			dump_recx(recx, NULL, 0, 0);
+			if (j % 8 == 7)
+				D_PRINT("\n");
+		}
+		D_PRINT("\n");
 	}
-	D_PRINT("\n");
 
 	D_PRINT("\nsgl, sg_nr %d, sg_nr_out %d\n", sgl->sg_nr, sgl->sg_nr_out);
 	D_PRINT("segments [iov_buf (offset), iov_len]:\n");
@@ -974,7 +945,7 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	D_PRINT("\noiod, oiod_nr %d, oiod_flags 0x%x\n",
 		oiod->oiod_nr, oiod->oiod_flags);
 	D_PRINT("siods [siod_tgt_idx, (siod_idx, siod_nr), siod_off]:\n");
-	for (j = 0; j < oiod->oiod_nr; j++) {
+	for (j = 0; oiod->oiod_siods != NULL && j < oiod->oiod_nr; j++) {
 		siod = &oiod->oiod_siods[j];
 		D_PRINT("[%3d]:", j);
 		D_PRINT(" [%d, (%d, %d), "DF_U64"]\n",
@@ -987,7 +958,8 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 		ec_recx_array->oer_nr);
 	D_PRINT("ec full stripes [oer_idx, oer_stripe_nr, oer_byte_off,"
 		" (start, end)]:\n");
-	for (j = 0; j < ec_recx_array->oer_nr; j++) {
+	for (j = 0; ec_recx_array->oer_recxs != NULL &&
+		    j < ec_recx_array->oer_nr; j++) {
 		ec_recx = &ec_recx_array->oer_recxs[j];
 		recx = &ec_recx->oer_recx;
 		if (j % 8 == 0)
@@ -1044,12 +1016,11 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_recx_t			*recx, *full_recx, tmp_recx;
 	d_iov_t				*iovs = NULL;
 	uint32_t			 i, j, k, idx, last;
-	uint32_t			 tgt_nr, empty_nr, seg_nr = 0;
+	uint32_t			 tgt_nr, empty_nr;
 	uint32_t			 iov_idx = 0, iov_nr = sgl->sg_nr;
 	uint64_t			 iov_off = 0, recx_end, full_end;
 	uint64_t			 rec_nr, iod_size = iod->iod_size;
-	uint64_t			 cell_bytes;
-	bool				 with_full_stripe, singv = false;
+	bool				 with_full_stripe;
 	bool				 punch;
 	int				 rc = 0;
 
@@ -1062,46 +1033,6 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			return -DER_NOMEM;
 	}
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
-
-	/* for single value case */
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		singv = true;
-		if (obj_ec_singv_one_tgt(iod, sgl, oca) && !punch) {
-			idx = obj_ec_singv_small_idx(oca, iod);
-			/* PARITY_INDICATOR flag to indicate singv EC */
-			ec_recx_add(riod->iod_recxs, ridx, tgt_recx_idxs,
-				    idx, PARITY_INDICATOR, 1);
-			obj_ec_seg_insert(sorter, 0, sgl->sg_iovs, sgl->sg_nr);
-			if (!update)
-				goto seg_pack;
-			/* replicate data on parity targets */
-			for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++) {
-				ec_recx_add(riod->iod_recxs, ridx,
-					    tgt_recx_idxs,
-					    obj_ec_data_tgt_nr(oca) + i,
-					    PARITY_INDICATOR, 1);
-			}
-			goto seg_pack;
-		}
-		/* evenly distributed single value */
-		tgt_nr = update ? obj_ec_tgt_nr(oca) : obj_ec_data_tgt_nr(oca);
-		for (i = 0; i < tgt_nr; i++)
-			ec_recx_add(riod->iod_recxs, ridx, tgt_recx_idxs, i,
-				    PARITY_INDICATOR, 1);
-		if (punch)
-			goto seg_pack;
-		if (update) {
-			daos_sgl_consume(sgl, iov_idx, iov_off, iod_size,
-					 iovs, seg_nr);
-			obj_ec_seg_insert(sorter, 0, iovs, seg_nr);
-			cell_bytes = obj_ec_singv_cell_bytes(iod_size, oca);
-			ec_parity_seg_add(ec_recx_array, iod, oca,
-					  cell_bytes, sorter);
-		} else {
-			obj_ec_seg_insert(sorter, 0, sgl->sg_iovs, sgl->sg_nr);
-		}
-		goto seg_pack;
-	}
 
 	/* for array case */
 	for (i = 0; i < iod->iod_nr; i++) {
@@ -1155,11 +1086,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 			ec_parity_recx_add(full_recx, riod->iod_recxs, ridx,
 					   tgt_recx_idxs, oca);
 		}
-		ec_parity_seg_add(ec_recx_array, iod, oca,
-				  obj_ec_cell_bytes(iod, oca), sorter);
+		ec_parity_seg_add(ec_recx_array, iod, oca, sorter);
 	}
 
-seg_pack:
 	if (!punch)
 		obj_ec_seg_pack(sorter, rsgl);
 
@@ -1204,8 +1133,7 @@ seg_pack:
 		siod->siod_tgt_idx = i;
 		siod->siod_idx = tgt_recx_idxs[i];
 		siod->siod_nr = tgt_recx_nrs[i];
-		/* for single value, server calculate offset by itself */
-		siod->siod_off = singv ? 0 : rec_nr * iod_size;
+		siod->siod_off = rec_nr * iod_size;
 		for (idx = last; idx < tgt_recx_idxs[i] + tgt_recx_nrs[i];
 		     idx++) {
 			rec_nr += riod->iod_recxs[idx].rx_nr;
@@ -1222,6 +1150,106 @@ seg_pack:
 	return rc;
 }
 
+#define obj_ec_set_tgt(tgt_bitmap, idx, start, end)			\
+	do {								\
+		for (idx = start; idx <= end; idx++)			\
+			setbit(tgt_bitmap, idx);			\
+	} while (0)
+
+static int
+obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
+		       struct daos_oclass_attr *oca,
+		       struct obj_reasb_req *reasb_req,
+		       uint32_t iod_idx, bool update)
+{
+	struct obj_ec_recx_array	*ec_recx_array;
+	uint8_t				*tgt_bitmap = reasb_req->tgt_bitmap;
+	d_sg_list_t			*r_sgl;
+	bool				 punch, singv_parity = false;
+	uint64_t			 cell_bytes;
+	uint32_t			 idx, tgt_nr;
+	int				 rc = 0;
+
+	ec_recx_array = &reasb_req->orr_recxs[iod_idx];
+	punch = (update && iod->iod_size == DAOS_REC_ANY);
+
+	ec_recx_array->oer_k = oca->u.ec.e_k;
+	ec_recx_array->oer_p = oca->u.ec.e_p;
+	if (obj_ec_singv_one_tgt(iod, sgl, oca)) {
+		/* small singv stores on one target and replicates to all
+		 * parity targets.
+		 */
+		idx = obj_ec_singv_small_idx(oca, iod);
+		setbit(tgt_bitmap, idx);
+		tgt_nr = 1;
+		if (update) {
+			tgt_nr += obj_ec_parity_tgt_nr(oca);
+			obj_ec_set_tgt(tgt_bitmap, idx, obj_ec_data_tgt_nr(oca),
+				       obj_ec_tgt_nr(oca) - 1);
+		}
+	} else {
+		/* large singv evenly distributed to all data targets */
+		if (update) {
+			tgt_nr = obj_ec_tgt_nr(oca);
+			obj_ec_set_tgt(tgt_bitmap, idx, 0,
+				       obj_ec_tgt_nr(oca) - 1);
+			if (!punch)
+				singv_parity = true;
+		} else {
+			tgt_nr = obj_ec_data_tgt_nr(oca);
+			obj_ec_set_tgt(tgt_bitmap, idx, 0,
+				       obj_ec_data_tgt_nr(oca) - 1);
+		}
+	}
+
+	reasb_req->orr_iods[iod_idx].iod_nr = 1;
+	rc = obj_io_desc_init(&reasb_req->orr_oiods[iod_idx], tgt_nr,
+			      OBJ_SIOD_SINGV);
+	if (rc)
+		goto out;
+
+	r_sgl = &reasb_req->orr_sgls[iod_idx];
+	if (singv_parity) {
+		/* encode the EC parity for evenly distributed singv update */
+		ec_recx_array->oer_stripe_total = 1;
+		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
+		cell_bytes = obj_ec_singv_cell_bytes(iod->iod_size, oca);
+		rc = obj_ec_pbufs_init(ec_recx_array, cell_bytes);
+		if (rc)
+			goto out;
+		rc = obj_ec_recx_encode(oid, iod, sgl, oca, ec_recx_array);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
+				DP_OID(oid), rc);
+			goto out;
+		}
+		/* reassemble the sgl */
+		rc = daos_sgl_init(r_sgl,
+				   sgl->sg_nr + obj_ec_parity_tgt_nr(oca));
+		if (rc)
+			goto out;
+		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
+		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+		for (idx = 0; idx < obj_ec_parity_tgt_nr(oca); idx++)
+			d_iov_set(&r_sgl->sg_iovs[sgl->sg_nr + idx],
+				  ec_recx_array->oer_pbufs[idx], cell_bytes);
+	} else {
+		/* copy the sgl */
+		rc = daos_sgl_init(r_sgl, sgl->sg_nr);
+		if (rc)
+			goto out;
+		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
+		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+	}
+
+#if EC_DEBUG
+	obj_reasb_req_dump(reasb_req, sgl, oca, 0, iod_idx);
+#endif
+
+out:
+	return rc;
+}
+
 int
 obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req,
@@ -1235,6 +1263,18 @@ obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
 	iods = args->iods;
 	sgls = args->sgls;
 	for (i = 0; i < iod_nr; i++) {
+		if (iods[i].iod_type == DAOS_IOD_SINGLE) {
+			rc = obj_ec_singv_req_reasb(oid, &iods[i], &sgls[i],
+						    oca, reasb_req, i, update);
+			if (rc) {
+				D_ERROR(DF_OID" singv_req_reasb failed %d.\n",
+					DP_OID(oid), rc);
+				goto out;
+			}
+			continue;
+		}
+
+		/* For array EC obj, scan/encode/reasb for each iod */
 		rc = obj_ec_recx_scan(&iods[i], &sgls[i], oca, reasb_req, i,
 				      update);
 		if (rc) {
@@ -1361,6 +1401,16 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	/* traverse reassembled oiod and fill the tgt_oiod (per target oiod) */
 	for (i = 0; i < iod_nr; i++) {
 		r_oiod = &r_oiods[i];
+		if (r_oiod->oiod_flags & OBJ_SIOD_SINGV) {
+			for (j = 0; j < tgt_nr; j++) {
+				tgt_oiod = &tgt_oiods[j];
+				oiod = &tgt_oiod->oto_oiods[i];
+				oiod->oiod_flags |= OBJ_SIOD_SINGV;
+				oiod->oiod_nr = 0;
+				oiod->oiod_siods = NULL;
+			}
+			continue;
+		}
 		for (j = 0; j < r_oiod->oiod_nr; j++) {
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;

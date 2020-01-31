@@ -981,7 +981,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n",
 			ioc->ic_epr.epr_hi);
 		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-			iod->iod_recxs[0].rx_nr;
+						   (uintptr_t)iod->iod_recxs;
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
 		goto out;
 	} /* else: array */

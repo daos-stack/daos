@@ -65,6 +65,8 @@ struct obj_shard_iod {
 #define OBJ_SIOD_EVEN_DIST	((uint32_t)1 << 0)
 /** Flag used only for proc func, to only proc to one specific target */
 #define OBJ_SIOD_PROC_ONE	((uint32_t)1 << 1)
+/** Flag of single value EC */
+#define OBJ_SIOD_SINGV		((uint32_t)1 << 2)
 
 /**
  * Object IO descriptor.
@@ -134,7 +136,6 @@ struct obj_tgt_oiod {
 	uint32_t		 oto_tgt_idx;
 	/* number of iods */
 	uint32_t		 oto_iod_nr;
-	uint32_t		 oto_tgt_nr;
 	/* offset array, oto_iod_nr offsets for each target */
 	uint64_t		*oto_offs;
 	/* oiod array, oto_iod_nr oiods for each target,
@@ -325,9 +326,12 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 		return 0;
 	}
 #endif
-	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
-	if (oiod->oiod_siods == NULL)
-		return -DER_NOMEM;
+	if ((flags & OBJ_SIOD_SINGV) == 0) {
+		D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
+		if (oiod->oiod_siods == NULL)
+			return -DER_NOMEM;
+	}
+	oiod->oiod_flags = flags;
 	oiod->oiod_nr = tgt_nr;
 	return 0;
 }
