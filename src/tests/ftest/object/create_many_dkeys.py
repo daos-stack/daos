@@ -28,7 +28,7 @@ import sys
 import ctypes
 import avocado
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
 
 
@@ -68,8 +68,6 @@ class CreateManyDkeys(TestWithServers):
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
-        epoch = self.container.get_new_tx()
-        c_epoch = ctypes.c_uint64(epoch)
 
         print("Started Writing the Dataset-----------\n")
         inc = 50000
@@ -83,15 +81,12 @@ class CreateManyDkeys(TestWithServers):
             ioreq.single_insert(c_dkey,
                                 c_akey,
                                 c_value,
-                                c_size,
-                                epoch)
+                                c_size)
 
             if key > last_key:
                 print("written: {}".format(key))
                 sys.stdout.flush()
                 last_key = key + inc
-
-        self.container.commit_tx(c_epoch)
 
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
@@ -101,8 +96,7 @@ class CreateManyDkeys(TestWithServers):
             the_data = "some data that gets stored with the key {0}".format(key)
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,
-                                     len(the_data)+1,
-                                     c_epoch)
+                                     len(the_data)+1)
 
             if the_data != (repr(val.value)[1:-1]):
                 self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
@@ -123,7 +117,6 @@ class CreateManyDkeys(TestWithServers):
         print("destroy complete")
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-1721")
     def test_many_dkeys(self):
         """Test ID: DAOS-1701.
 
@@ -134,7 +127,7 @@ class CreateManyDkeys(TestWithServers):
             1. large key counts
             2. space reclaimation after destroy
 
-        :avocado: tags=all,full,small,object,many_dkeys
+        :avocado: tags=all,full_regression,small,object,many_dkeys
         """
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 

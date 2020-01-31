@@ -361,7 +361,7 @@ class DaosServerYamlParameters(YamlParameters):
             #       AIO /tmp/aiofile AIO1 4096
             self.scm_mount = BasicParameter(None, "/mnt/daos")
             self.scm_class = BasicParameter(None, "ram")
-            self.scm_size = BasicParameter(None, 6)
+            self.scm_size = BasicParameter(None, 12)
             self.scm_list = BasicParameter(None)
             self.bdev_class = BasicParameter(None)
             self.bdev_list = BasicParameter(None)
@@ -635,7 +635,7 @@ class DaosServerCommand(YamlCommand):
             self.group = FormattedParameter("--group={}")
             self.sock_dir = FormattedParameter("--socket_dir={}")
             self.insecure = FormattedParameter("--insecure", False)
-            self.recreate = FormattedParameter("--recreate-superblocks", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", False)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server storage sub command."""
@@ -743,6 +743,16 @@ class DaosServerManager(SubprocessManager):
         """
         return self.manager.job.get_interface_envs(index)
 
+    def get_host_port_list(self):
+        """Get a list of hosts and port numbers.
+
+        Returns:
+            list: a list of '<host>:<port>' entries for each host
+
+        """
+        port = self.get_config_value("port")
+        return [":".join([host, port]) for host in self._hosts]
+
     def prepare(self):
         """Prepare the host to run the server."""
         self.log.info(
@@ -775,7 +785,7 @@ class DaosServerManager(SubprocessManager):
 
         # Update dmg command params to reflect access to the server
         self.dmg.hostlist.update(
-            self.get_config_value("access_points"), "dmg.hostlist")
+            ",".join(self.get_host_port_list()), "dmg.hostlist")
         self.dmg.insecure.update(
             self.get_config_value("allow_insecure"), "dmg.insecure")
 
@@ -847,36 +857,23 @@ class DaosServerManager(SubprocessManager):
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        scm_list = self.manager.job.get_config_value("scm_list")
-        scm_mount = self.manager.job.get_config_value("scm_mount")
-
-        # Support single or multiple scm_mount points
-        if not isinstance(scm_mount, list):
-            scm_mount = [scm_mount]
-
-        # Set up the list of commands used to clean up after the daos server
-        clean_cmds = []
-        for mount in scm_mount:
-            clean_cmds.append(
+        clean_cmds = set()
+        for server_param in self.manager.job.yaml.server_params:
+            scm_mount = server_param.get_value("scm_mount")
+            self.log.info("Cleaning the %s directory", str(scm_mount))
+            clean_cmds.add(
                 "find {} -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf".format(mount))
+                "xargs -0r rm -rf".format(scm_mount))
 
-        # # Add wiping all files in SCM mount points if using NVMe
-        # if self.job.using_nvme:
-        #     for mount in scm_mount:
-        #         clean_cmds.append("sudo rm -rf {}".format(mount))
+            if self.manager.job.using_nvme or self.manager.job.using_dcpm:
+                clean_cmds.add("sudo umount {}".format(scm_mount))
 
-        # Add unmounting all SCM mount points if using SCM or NVMe
-        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-            for mount in scm_mount:
-                clean_cmds.append("sudo umount {}".format(mount))
+            if self.manager.job.using_dcpm:
+                scm_list = server_param.get_value("scm_list")
+                for device in scm_list:
+                    self.log.info("Cleaning the %s device", str(device))
+                    clean_cmds.add("sudo wipefs -a {}".format(device))
 
-        # Add wiping the filesystem from each SCM device if using SCM
-        if self.manager.job.using_dcpm:
-            for value in scm_list:
-                clean_cmds.append("sudo wipefs -a {}".format(value))
-
-        self.log.info("Cleaning up directories: %s", str(scm_mount))
         pcmd(self._hosts, "; ".join(clean_cmds), verbose)
 
     def prepare_storage(self, user):

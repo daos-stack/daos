@@ -135,6 +135,14 @@ class OpenMPI(JobManager):
         super(OpenMPI, self).__init__(
             "/run/orterun", "orterun", job, path, subprocess)
 
+        # Default mca values to avoid queue pair errors
+        mca_default = {
+            "btl_openib_warn_default_gid_prefix": "0",
+            "btl": "tcp,self",
+            "oob": "tcp",
+            "pml": "ob1",
+        }
+
         self.hostfile = FormattedParameter("--hostfile {}", None)
         self.processes = FormattedParameter("--np {}", 1)
         self.display_map = FormattedParameter("--display-map", False)
@@ -144,7 +152,7 @@ class OpenMPI(JobManager):
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter(
             "--allow-run-as-root", False)
-        self.mca = FormattedParameter("--mca {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)

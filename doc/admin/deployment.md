@@ -118,17 +118,47 @@ To tell systemd to create the necessary directories for DAOS:
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
-Due to limitations introduced by recent security fixes in the kernel,
-DAOS I/O processes are also required to run with elevated privileges
-in order to access NVMe SSDs through the SPDK framework.
+#### Privileged Helper Configuration
 
-This is a temporary requirement that will be mitigated by moving to
-use VFIO driver with SPDK (requires IOMMU enabled) rather than UIO.
+When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
+to the correct location with the correct permissions. The RPM creates a "daos_admins"
+system group and configures permissions such that `daos_admin` may only be invoked
+from `daos_server`.
+
+For non-RPM installations, there are two supported scenarios:
+
+1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
+and therefore no additional setup is necessary
+2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
+manually installed and configured
+
+The steps to enable the second scenario are as follows (steps are assumed to be
+running out of a DAOS source tree which may be on a NFS share):
+
+```bash
+$ chmod -x $SL_PREFIX/bin/daos_admin # prevent this copy from being executed
+$ sudo cp $SL_PREFIX/bin/daos_admin /usr/bin/daos_admin
+$ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
+$ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
+$ sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
+           /usr/share/daos/control
+$ sudo mkdir -p /usr/share/spdk/scripts
+$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+           /usr/share/spdk/scripts
+$ sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+           /usr/share/spdk/scripts
+$ sudo ln -s $SL_PREFIX/include \
+           /usr/share/spdk/include
+```
+
+NOTES:
+ * The RPM installation is preferred for production scenarios. Manual installation
+ is most appropriate for development and predeployment proof-of-concept scenarios.
 
 ## DAOS Server Setup
 
 First of all, the DAOS server should be started to allow remote administration
-command to be executed via the dmg tool. This section describe the minimal
+command to be executed via the dmg tool. This section describes the minimal
 DAOS server configuration and how to start it on all the storage nodes.
 
 ### Server Configuration File
@@ -796,6 +826,115 @@ orterun -np <num_clients> --hostfile <hostfile> ./daos_test
 
 daos_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
 each storage node.
+
+## NVMe SSD Health Monitoring & Stats
+Useful admin dmg commands to query NVMe SSD health:
+
+- Query NVMe SSD Health Stats: **$dmg storage query nvme-health**
+
+Queries raw SPDK NVMe device health statistics for all NVMe SSDs on all hosts in
+list.
+
+```bash
+$dmg storage query nvme-health -l=boro-11:10001
+boro-11:10001: connected
+boro-11:10001
+        NVMe controllers and namespaces detail with health statistics:
+                PCI:0000:81:00.0 Model:INTEL SSDPEDKE020T7  FW:QDV10130 Socket:1
+Capacity:1.95TB
+                Health Stats:
+                        Temperature:288K(15C)
+                        Controller Busy Time:5h26m0s
+                        Power Cycles:4
+                        Power On Duration:16488h0m0s
+                        Unsafe Shutdowns:2
+                        Media Errors:0
+                        Error Log Entries:0
+                        Critical Warnings:
+                                Temperature: OK
+                                Available Spare: OK
+                                Device Reliability: OK
+                                Read Only: OK
+                                Volatile Memory Backup: OK
+```
+
+- Query Per-Server Metadata (SMD): **$dmg storage query smd**
+
+Queries persistently stored device and pool metadata tables. The device table
+maps device UUID to attached VOS target IDs. The pool table maps VOS target IDs
+to attached SPDK blob IDs.
+```bash
+$dmg storage query smd --devices --pools -l=boro-11:10001
+boro-11:10001: connected
+SMD Device List:
+boro-11:10001:
+        Device:
+                UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+                VOS Target IDs: 0 1 2 3
+SMD Pool List:
+boro-11:10001:
+        Pool:
+                UUID: 01b41f76-a783-462f-bbd2-eb27c2f7e326
+                VOS Target IDs: 0 1 3 2
+                SPDK Blobs: 4294967404 4294967405 4294967407 4294967406
+```
+
+- Query Blobstore Health Data: **$dmg storage query blobstore-health**
+
+Queries in-memory health data for the SPDK blobstore (ie NVMe SSD). This
+includes a subset of the SPDK device health stats, as well as I/O error and
+checksum counters.
+```bash
+$dmg storage query blobstore-health
+--devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 -l=boro-11:10001
+boro-11:10001: connected
+Blobstore Health Data:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        Read errors: 0
+        Write errors: 0
+        Unmap errors: 0
+        Checksum errors: 0
+        Device Health:
+                Error log entries: 0
+                Media errors: 0
+                Temperature: 289
+                Temperature: OK
+                Available Spare: OK
+                Device Reliability: OK
+                Read Only: OK
+                Volatile Memory Backup: OK
+```
+
+- Query Persistent Device State: **$dmg storage query device-state**
+
+Queries the current persistently stored device state of the specified NVMe SSD
+(either NORMAL or FAULTY).
+```
+$dmg storage query device-state --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: NORMAL
+```
+
+- Manually Set Device State to FAULTY: **$dmg storage set nvme-faulty**
+
+Allows the admin to manually set the device state of the given device to FAULTY,
+which will trigger faulty device reaction (all targets on the SSD will be
+rebuilt and the SSD will remain in an OUT state until reintegration is
+supported).
+```bash
+$dmg storage set nvme-faulty --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: FAULTY
+```
 
 [^1]: https://github.com/intel/ipmctl
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,7 +260,7 @@ small_io(void **state)
 	sgl.sg_iovs = &iov;
 
 	/** Write */
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
@@ -269,7 +269,7 @@ small_io(void **state)
 
 	d_iov_set(&iov, rbuf, BUFLEN);
 	sgl.sg_iovs = &iov;
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, 0);
 
@@ -401,7 +401,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -422,7 +422,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	sgl.sg_iovs = &iov;
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -563,7 +563,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -583,7 +583,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		assert_int_equal(rc, 0);
 	}
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -725,7 +725,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -748,7 +748,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl,
 			     arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 	if (arg->async) {
@@ -872,7 +872,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int);
 	}
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, NUM_ELEMS * sizeof(int));
 
@@ -894,7 +894,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
 	}
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -906,7 +906,7 @@ read_empty_records(void **state)
 			arg->myrank * sizeof(int);
 	}
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, (NUM_ELEMS-1) * sizeof(int));
 
@@ -980,14 +980,14 @@ strided_array(void **state)
 	}
 
 	/** Write */
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < NUM * 2; i++)
 		buf[i] = -1;
 
 	/** Read */
-	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, 0);
 
@@ -1066,7 +1066,7 @@ truncate_array(void **state)
 	d_iov_set(&iov, buf, 6);
 
 	/* perform small write */
-	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/* check array size */

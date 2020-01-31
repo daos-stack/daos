@@ -217,7 +217,6 @@ class ObjectDataValidation(TestWithServers):
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
@@ -227,11 +226,7 @@ class ObjectDataValidation(TestWithServers):
                 c_value = ctypes.create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
-                new_transaction = self.container.get_new_tx()
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
-                                         new_transaction)
-                self.container.commit_tx(new_transaction)
-                transaction.append(new_transaction)
+                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0
@@ -276,7 +271,6 @@ class ObjectDataValidation(TestWithServers):
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 c_values = []
@@ -288,11 +282,7 @@ class ObjectDataValidation(TestWithServers):
                 c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
                 c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
 
-                new_transaction = self.container.get_new_tx()
-                self.ioreq.insert_array(c_dkey, c_akey, c_values,
-                                        new_transaction)
-                self.container.commit_tx(new_transaction)
-                transaction.append(new_transaction)
+                self.ioreq.insert_array(c_dkey, c_akey, c_values)
 
                 record_index = record_index + 1
                 if record_index == len(self.record_length):

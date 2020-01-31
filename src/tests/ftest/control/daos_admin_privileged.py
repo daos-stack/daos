@@ -70,6 +70,9 @@ class DaosAdminPrivTest(TestWithServers):
             self.hostfile_servers_slots)
         self.server_managers[0].clean_files()
 
+        # Create the daos_server yaml file
+        self.server_managers[0].manager.job.create_yaml_file()
+
         # Get user
         user = getpass.getuser()
 
