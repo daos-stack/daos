@@ -24,7 +24,8 @@
 import os
 from apricot import TestWithServers
 import check_for_pool
-from dmg_utils import pool_create, pool_destroy,get_pool_uuid_service_replicas_from_stdout
+from dmg_utils import (pool_create, pool_destroy,
+                       get_pool_uuid_service_replicas_from_stdout)
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -61,7 +62,8 @@ class MultiServerCreateDeleteTest(TestWithServers):
         group = os.getlogin() if grouplist[0] == 'valid' else grouplist[0]
         expected_for_param.append(grouplist[1])
 
-        systemnamelist = self.params.get("systemname", '/run/tests/systemnames/*')
+        systemnamelist = self.params.get(
+            "systemname", '/run/tests/systemnames/*')
         system_name = systemnamelist[0]
         expected_for_param.append(systemnamelist[1])
 
@@ -84,7 +86,7 @@ class MultiServerCreateDeleteTest(TestWithServers):
             path=self.bin, scm_size="1GB", host_port=access_points,
             group=group, user=user, ranks=tgtlist, sys=system_name)
         if create_result is not None:
-            uuid, svc = get_pool_uuid_service_replicas_from_stdout(
+            uuid, _ = get_pool_uuid_service_replicas_from_stdout(
                 create_result.stdout)
             if expected_result == RESULT_FAIL:
                 self.fail("Test was expected to fail but it passed at pool " +
