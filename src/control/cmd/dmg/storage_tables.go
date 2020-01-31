@@ -39,7 +39,7 @@ func scmModuleScanTable(ms storage.ScmModules) string {
 	buf := &bytes.Buffer{}
 
 	if len(ms) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM modules found\n")
 		return buf.String()
 	}
 
@@ -77,7 +77,7 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	buf := &bytes.Buffer{}
 
 	if len(nss) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM namespaces found\n")
 		return buf.String()
 	}
 
@@ -107,7 +107,7 @@ func scmFormatTable(smr proto.ScmMountResults) string {
 	buf := &bytes.Buffer{}
 
 	if len(smr) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM mount results\n")
 		return buf.String()
 	}
 
@@ -144,7 +144,7 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 	buf := &bytes.Buffer{}
 
 	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo NVMe devices found\n")
 		return buf.String()
 	}
 
@@ -185,7 +185,7 @@ func nvmeFormatTable(ncr proto.NvmeControllerResults) string {
 	buf := &bytes.Buffer{}
 
 	if len(ncr) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo NVMe devices formatted\n")
 		return buf.String()
 	}
 

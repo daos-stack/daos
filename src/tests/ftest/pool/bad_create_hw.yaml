@@ -31,6 +31,6 @@ pool:
   debug: True
   control_method_mux: !mux
     api:
-      control_method: api
+      control_method: API
     dmg:
       control_method: dmg

@@ -162,6 +162,7 @@ class TestPool(TestDaosApiBase):
             else:
                 self.dmg.action_command.group.value = None
             self.dmg.action_command.scm_size.value = self.scm_size.value
+            self.dmg.action_command.nvme_size.value = self.nvme_size.value
             if isinstance(self.target_list.value, list):
                 # Convert the list of target ranks into a comma-separated list
                 self.dmg.action_command.ranks.value = ",".join(

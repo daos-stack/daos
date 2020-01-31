@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -43,6 +44,7 @@ type mockDrpcClientConfig struct {
 	CloseError      error
 	SendMsgResponse *drpc.Response
 	SendMsgError    error
+	ResponseDelay   time.Duration
 }
 
 func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []byte, err error) {
@@ -51,6 +53,10 @@ func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []b
 		Body:   body,
 	}
 	cfg.SendMsgError = err
+}
+
+func (cfg *mockDrpcClientConfig) setResponseDelay(duration time.Duration) {
+	cfg.ResponseDelay = duration
 }
 
 // mockDrpcClient is a mock of the DomainSocketClient interface
@@ -76,6 +82,9 @@ func (c *mockDrpcClient) Close() error {
 
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
+
+	<-time.After(c.cfg.ResponseDelay)
+
 	return c.cfg.SendMsgResponse, c.cfg.SendMsgError
 }
 
