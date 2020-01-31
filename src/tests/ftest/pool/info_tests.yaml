@@ -1,7 +1,8 @@
 hosts:
   test_servers:
     - server-A
-server_config:
+timeout: 120
+    server_config:
   name: daos_server
   servers:
     targets: 1
