@@ -347,7 +347,7 @@ attr_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 
 	i_args->length += key->iov_len;
 
-	if (i_args->available > key->iov_len && key->iov_len > 0) {
+	if (i_args->available >= key->iov_len && key->iov_len > 0) {
 		/*
 		 * Exponentially grow the array of IOVs if insufficient.
 		 * Considering the pathological case where each key is just

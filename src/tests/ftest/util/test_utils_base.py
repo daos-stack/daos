@@ -24,7 +24,7 @@
 from logging import getLogger
 from time import sleep
 
-from command_utils import ObjectWithParameters
+from command_utils import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
@@ -87,7 +87,20 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
+        self.debug = BasicParameter(None, False)
         self.log = getLogger(__name__)
+
+    def _log_method(self, name, kwargs):
+        """Log the method call with its arguments.
+
+        Args:
+            name (str): method name
+            kwargs (dict): dictionary of method arguments
+        """
+        if self.debug.value:
+            args = ", ".join(
+                ["{}={}".format(key, kwargs[key]) for key in sorted(kwargs)])
+            self.log.debug("  %s(%s)", name, args)
 
     def _call_method(self, method, kwargs):
         """Call the DAOS API class method with the optional callback method.
@@ -98,6 +111,10 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         if self.cb_handler:
             kwargs["cb_func"] = self.cb_handler.callback
+
+        # Optionally log the method call with its arguments if debug is set
+        self._log_method(
+            "{}.{}".format(method.im_class.__name__, method.__name__), kwargs)
 
         try:
             method(**kwargs)
