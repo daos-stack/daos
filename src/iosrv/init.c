@@ -601,21 +601,32 @@ server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
+	D_INFO("dss_module_cleanup_all() done\n");
 	drpc_fini();
+	D_INFO("drpc_fini() done\n");
 	server_init_state_fini();
+	D_INFO("server_init_state_fini() done\n");
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
 		pl_fini();
 		daos_hhash_fini();
 	}
+	D_INFO("daos_fini() or pl_fini() done\n");
 	dss_srv_fini(force);
+	D_INFO("dss_srv_fini() done\n");
 	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
+	D_INFO("ds_iv_fini() done\n");
 	crt_finalize();
+	D_INFO("crt_finalize() done\n");
 	dss_module_fini(force);
+	D_INFO("dss_module_fini() done\n");
 	abt_fini();
+	D_INFO("abt_fini() done\n");
 	daos_debug_fini();
+	D_INFO("daos_debug_fini() done\n");
 }
 
 static void
