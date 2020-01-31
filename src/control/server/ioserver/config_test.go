@@ -184,7 +184,7 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(constructed, fromDisk, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
@@ -270,7 +270,7 @@ func TestConfigToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotArgs, wantArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -278,7 +278,7 @@ func TestConfigToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotEnv, wantEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
