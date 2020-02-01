@@ -28,6 +28,7 @@
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/env.h>
+#include <spdk/nvme.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -50,6 +51,7 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+#define DAOS_NVME_MAX_CTRLRS	1024		/* Max trids read from nvme_conf */
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -859,7 +861,8 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 static int
-opts_add_pci_addr(struct spdk_app_opts *opts, struct spdk_pci_addr **list, char *traddr)
+opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
+		  char *traddr)
 {
 	struct spdk_pci_addr *tmp = *list;
 	size_t i = opts->num_pci_addr;
@@ -881,14 +884,13 @@ opts_add_pci_addr(struct spdk_app_opts *opts, struct spdk_pci_addr **list, char 
 }
 
 static int
-populate_whitelist(struct spdk_conf_section *sp, struct spdk_env_opts *opts)
+populate_whitelist(struct spdk_env_opts *opts)
 {
-	const char *val;
-	int rc = 0;
-	int64_t intval = 0;
-	size_t i;
-	struct spdk_pci_addr pci_addr;
-	struct spdk_nvme_transport_id trid;
+	struct spdk_nvme_transport_id	*trid;
+	struct spdk_conf_section	*sp;
+	const char			*val;
+	size_t				 i;
+	int				 rc = 0;
 
 	sp = spdk_conf_find_section(NULL, "Nvme");
 	if (sp == NULL) {
@@ -896,28 +898,32 @@ populate_whitelist(struct spdk_conf_section *sp, struct spdk_env_opts *opts)
 		return -1;
 	}
 
-	for (i = 0; i < NVME_MAX_CONTROLLERS; i++) {
-		memset(&trid, 0, sizeof(trid));
+	D_ALLOC_PTR(trid);
+	if (trid == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
+		memset(trid, 0, sizeof(*trid));
 
 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
 		if (val == NULL) {
 			break;
 		}
 
-		rc = spdk_nvme_transport_id_parse(&trid, val);
+		rc = spdk_nvme_transport_id_parse(trid, val);
 		if (rc < 0) {
 			D_ERROR("Unable to parse TransportID: %s\n", val);
 			return -1;
 		}
 
-		if (trid.trtype != SPDK_NVME_TRANSPORT_PCIE) {
+		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
 			D_ERROR("unexpected non-PCIE transport\n");
 			return -DER_INVAL;
 		}
 
-		rc = opts_add_pci_addr(opts, &opts->pci_whitelist, trid.traddr);
+		rc = opts_add_pci_addr(opts, &opts->pci_whitelist, trid->traddr);
 		if (rc < 0) {
-			D_ERROR("Invalid traddr=%s\n", trid.traddr);
+			D_ERROR("Invalid traddr=%s\n", trid->traddr);
 			return -DER_INVAL;
 		}
 	}
@@ -984,7 +990,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		spdk_conf_set_as_default(config);
 
 		spdk_env_opts_init(&opts);
-
 		opts.name = "daos";
 		rc = populate_whitelist(&opts);
 		if (rc != 0) {
