@@ -858,6 +858,73 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
+static int
+opts_add_pci_addr(struct spdk_app_opts *opts, struct spdk_pci_addr **list, char *traddr)
+{
+	struct spdk_pci_addr *tmp = *list;
+	size_t i = opts->num_pci_addr;
+
+	tmp = realloc(tmp, sizeof(*tmp) * (i + 1));
+	if (tmp == NULL) {
+		D_ERROR("realloc error\n");
+		return -ENOMEM;
+	}
+
+	*list = tmp;
+	if (spdk_pci_addr_parse(*list + i, traddr) < 0) {
+		D_ERROR("Invalid address %s\n", traddr);
+		return -EINVAL;
+	}
+
+	opts->num_pci_addr++;
+	return 0;
+}
+
+static int
+populate_whitelist(struct spdk_conf_section *sp, struct spdk_env_opts *opts)
+{
+	const char *val;
+	int rc = 0;
+	int64_t intval = 0;
+	size_t i;
+	struct spdk_pci_addr pci_addr;
+	struct spdk_nvme_transport_id trid;
+
+	sp = spdk_conf_find_section(NULL, "Nvme");
+	if (sp == NULL) {
+		D_ERROR("unexpected empty config\n");
+		return -1;
+	}
+
+	for (i = 0; i < NVME_MAX_CONTROLLERS; i++) {
+		memset(&trid, 0, sizeof(trid));
+
+		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
+		if (val == NULL) {
+			break;
+		}
+
+		rc = spdk_nvme_transport_id_parse(&trid, val);
+		if (rc < 0) {
+			D_ERROR("Unable to parse TransportID: %s\n", val);
+			return -1;
+		}
+
+		if (trid.trtype != SPDK_NVME_TRANSPORT_PCIE) {
+			D_ERROR("unexpected non-PCIE transport\n");
+			return -DER_INVAL;
+		}
+
+		rc = opts_add_pci_addr(opts, &opts->pci_whitelist, trid.traddr);
+		if (rc < 0) {
+			D_ERROR("Invalid traddr=%s\n", trid.traddr);
+			return -DER_INVAL;
+		}
+	}
+
+	return 0;
+}
+
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 {
@@ -917,21 +984,18 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		spdk_conf_set_as_default(config);
 
 		spdk_env_opts_init(&opts);
+
 		opts.name = "daos";
+		rc = populate_whitelist(&opts);
+		if (rc != 0) {
+			D_FREE(opts.pci_whitelist);
+			goto out;
+		}
 		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 			opts.shm_id = nvme_glb.bd_shm_id;
 
-		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
-			opts.mem_size = nvme_glb.bd_mem_size;
-			D_PRINT("Requesting %d MB memory allocation and"
-				" expecting SPDK primary process mode\n",
-				opts.mem_size);
-		} else {
-			D_PRINT("Expecting SPDK auto-detection of secondary"
-				" process mode\n");
-		}
-
 		rc = spdk_env_init(&opts);
+		D_FREE(opts.pci_whitelist);
 		if (rc != 0) {
 			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",
