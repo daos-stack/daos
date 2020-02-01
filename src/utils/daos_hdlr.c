@@ -1204,6 +1204,7 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 		return rc;
 
 	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
+	daos_acl_free(acl);
 	if (rc != 0) {
 		fprintf(stderr,
 			"failed to overwrite ACL for container: %d\n", rc);
@@ -1220,10 +1221,67 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 
 	rc = print_acl(stdout, prop_out, false);
 
+
 	daos_prop_free(prop_out);
 	return rc;
 }
 
+int
+cont_update_acl_hdlr(struct cmd_args_s *ap)
+{
+	int		rc;
+	struct daos_acl	*acl = NULL;
+	struct daos_ace	*ace = NULL;
+	daos_prop_t	*prop_out;
+
+	/* need one or the other, not both */
+	if (!ap->aclfile == !ap->entry) {
+		fprintf(stderr,
+			"either parameter --acl-file or --entry is required\n");
+		return -DER_INVAL;
+	}
+
+	if (ap->aclfile) {
+		rc = parse_acl_file(ap->aclfile, &acl);
+		if (rc != 0)
+			return rc;
+	} else {
+		rc = daos_ace_from_str(ap->entry, &ace);
+		if (rc != 0) {
+			fprintf(stderr, "failed to parse entry: %d\n", rc);
+			return rc;
+		}
+
+		acl = daos_acl_create(&ace, 1);
+		daos_ace_free(ace);
+		if (acl == NULL) {
+			fprintf(stderr, "failed to make ACL from entry: %d\n",
+				rc);
+			return rc;
+		}
+	}
+
+	rc = daos_cont_update_acl(ap->cont, acl, NULL);
+	daos_acl_free(acl);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to update ACL for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"update appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
 
 int
 obj_query_hdlr(struct cmd_args_s *ap)
