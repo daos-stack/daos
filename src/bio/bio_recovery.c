@@ -337,7 +337,10 @@ bio_media_error(void *msg_arg)
 
 	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
 		goto out;
-	/* Notify admin through Control Plane of BIO error callback */
+	/*
+	 * Notify admin through Control Plane of BIO error callback.
+	 * TODO: CSUM errors not currently supporte by Control Plane.
+	 */
 	if (mem->mem_err_type != MET_CSUM) {
 		rc = ract_ops->ioerr_reaction(mem->mem_err_type,
 					      mem->mem_tgt_id);
