@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import time
 import traceback
 import uuid
 
@@ -35,6 +34,7 @@ from avocado.core.exceptions import TestFail
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
+
 
 class OpenContainerTest(TestWithServers):
     """
@@ -131,7 +131,7 @@ class OpenContainerTest(TestWithServers):
             self.pool.append(TestPool(self.context, self.log))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
-            self.pool[-1].connect(1)
+            self.pool[-1].connect()
             self.container.append(TestContainer(self.pool[-1]))
             self.container[-1].get_params(self)
             self.container[-1].create()
@@ -169,6 +169,3 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][3])
-
-if __name__ == "__main__":
-    main()

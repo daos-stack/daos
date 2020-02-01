@@ -19,16 +19,16 @@
 ## Hosts can be specified with or without port, default port below
 ## assumed if not specified.
 #
-## default: hostname of this node at port 10000 for local testing
-#access_points: ['hostname1:10001']
+## default: hostname of this node
+#access_points: ['hostname1']
 #
 #
-## Force default port
+## Default port
 #
-## Force different port number to bind daos_server to, this will also
-## be used when connecting to access points if no port is specified.
+## Port number to bind daos_server to, this will also
+## be used when connecting to access points unless a port is specified.
 #
-## default: 10000
+## default: 10001
 #port: 10001
 #
 ## Transport Credentials Specifying certificates to secure communications
@@ -161,6 +161,12 @@
 #
 ## default: print to stderr
 #control_log_file: /tmp/daos_control.log
+#
+#
+## Enable daos_admin (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#helper_log_file: /tmp/daos_admin.log
 #
 #
 ## Username used to lookup user uid/gid to drop privileges to if started

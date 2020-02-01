@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,11 +126,12 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
  * -------------------------------------------------------------------------
  */
 struct vos_fetch_test_context {
-	size_t		 nr; /** Number of bsgl.bio_iov/biov_dcb pairs */
+	size_t			 nr; /** Num of bsgl.bio_iov/biov_csums pairs */
 	struct bio_sglist	 bsgl;
-	daos_csum_buf_t	*biov_dcbs;
+	struct dcs_csum_info	*biov_csums;
 	daos_iod_t		 iod;
 	struct daos_csummer	*csummer;
+	struct dcs_iod_csums	*iod_csum;
 };
 
 struct extent_info {
@@ -176,13 +177,13 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 	ctx->nr = nr;
 	bio_sgl_init(&ctx->bsgl, nr);
 	ctx->bsgl.bs_nr_out = nr;
-	D_ALLOC_ARRAY(ctx->biov_dcbs, nr);
+	D_ALLOC_ARRAY(ctx->biov_csums, nr);
 
 	for (i = 0; i < nr; i++) {
 		struct extent_info	*l;
 		char			*data;
 		struct bio_iov		*biov;
-		daos_csum_buf_t		*dcb;
+		struct dcs_csum_info	*info;
 		size_t			 data_len;
 		size_t			 num_of_csum;
 		bio_addr_t		 addr = {0};
@@ -207,16 +208,16 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 		/** Just a rough count */
 		num_of_csum = data_len / cs + 1;
 
-		dcb = &ctx->biov_dcbs[i];
-		D_ALLOC(dcb->cs_csum, csum_len * num_of_csum);
-		dcb->cs_buf_len = csum_len * num_of_csum;
-		dcb->cs_nr = num_of_csum;
-		dcb->cs_len = csum_len;
-		dcb->cs_chunksize = cs;
+		info = &ctx->biov_csums[i];
+		D_ALLOC(info->cs_csum, csum_len * num_of_csum);
+		info->cs_buf_len = csum_len * num_of_csum;
+		info->cs_nr = num_of_csum;
+		info->cs_len = csum_len;
+		info->cs_chunksize = cs;
 
 		for (j = 0; j < num_of_csum; j++) {
 			/** All csums will be the same so verify correctly */
-			dcb_insert(dcb, j, dummy_csums, csum_len);
+			ci_insert(info, j, dummy_csums, csum_len);
 		}
 	}
 
@@ -227,8 +228,8 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 	ctx->iod.iod_recxs->rx_idx = setup->request_idx;
 	ctx->iod.iod_recxs->rx_nr = setup->request_len;
 
-	daos_csummer_alloc_dcbs(ctx->csummer, &ctx->iod, 1,
-				&ctx->iod.iod_csums, NULL);
+	daos_csummer_alloc_iods_csums(ctx->csummer, &ctx->iod, 1,
+				      &ctx->iod_csum);
 }
 
 static void
@@ -236,7 +237,7 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 {
 	int i;
 
-	daos_csummer_free_dcbs(ctx->csummer, &ctx->iod.iod_csums);
+	daos_csummer_free_ic(ctx->csummer, &ctx->iod_csum);
 
 	for (i = 0; i < ctx->nr; i++) {
 		void *bio_buf = bio_iov2raw_buf(&ctx->bsgl.bs_iovs[i]);
@@ -244,8 +245,8 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 		if (bio_buf)
 			D_FREE(bio_buf);
 
-		if (ctx->biov_dcbs[i].cs_csum)
-			D_FREE(ctx->biov_dcbs[i].cs_csum);
+		if (ctx->biov_csums[i].cs_csum)
+			D_FREE(ctx->biov_csums[i].cs_csum);
 	}
 
 	if (ctx->iod.iod_recxs)
@@ -259,8 +260,8 @@ static int
 vos_fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 {
 	return ds_csum_add2iod(
-		&ctx->iod, ctx->csummer, &ctx->bsgl,
-		ctx->biov_dcbs, NULL);
+		&ctx->iod, ctx->csummer, &ctx->bsgl, ctx->biov_csums, NULL,
+		ctx->iod_csum);
 }
 
 /**
@@ -414,8 +415,8 @@ need_new_checksum_tests(void **state)
 }
 
 struct csum_idx {
-	int dcb_idx;
-	int csum_idx;
+	uint32_t ci_idx;
+	uint32_t csum_idx;
 };
 
 struct biov_iod_csum_compare {
@@ -430,13 +431,17 @@ void
 iod_biov_csum_same(struct vos_fetch_test_context *ctx,
 		   struct biov_iod_csum_compare idxs)
 {
-	daos_csum_buf_t *biov = &ctx->biov_dcbs[idxs.biov_csum.dcb_idx];
-	daos_csum_buf_t *iod = &ctx->iod.iod_csums[idxs.iod_csum.dcb_idx];
-	uint32_t csum_len = biov->cs_len;
+	struct dcs_csum_info	*biov;
+	struct dcs_csum_info	*iod;
+	uint32_t		 csum_len;
+
+	iod = &ctx->iod_csum->ic_data[idxs.iod_csum.ci_idx];
+	biov = &ctx->biov_csums[idxs.biov_csum.ci_idx];
+	csum_len = biov->cs_len;
 
 	assert_memory_equal(
-		dcb_idx2csum(biov, idxs.biov_csum.csum_idx),
-		dcb_idx2csum(iod, idxs.iod_csum.csum_idx), csum_len);
+		ci_idx2csum(biov, idxs.biov_csum.csum_idx),
+		ci_idx2csum(iod, idxs.iod_csum.csum_idx), csum_len);
 }
 
 /** Test cases */

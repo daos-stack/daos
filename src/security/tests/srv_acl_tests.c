@@ -1445,6 +1445,80 @@ test_check_pool_access_grps_beat_everyone(void **state)
 	daos_iov_free(&cred);
 }
 
+/*
+ * Default ACL tests
+ */
+
+static void
+expect_ace_is_type_with_perms(struct daos_ace *ace,
+			      enum daos_acl_principal_type exp_type,
+			      uint8_t exp_flags, uint64_t exp_perms)
+{
+	assert_int_equal(ace->dae_principal_type, exp_type);
+	assert_int_equal(ace->dae_access_types, DAOS_ACL_ACCESS_ALLOW);
+	assert_int_equal(ace->dae_access_flags, exp_flags);
+	assert_int_equal(ace->dae_allow_perms, exp_perms);
+}
+
+static void
+test_default_pool_acl(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_ace	*current = NULL;
+	uint64_t	exp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	acl = ds_sec_alloc_default_daos_pool_acl();
+
+	assert_non_null(acl);
+	assert_int_equal(daos_acl_pool_validate(acl), 0); /* valid pool ACL */
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0, exp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER_GROUP,
+				      DAOS_ACL_FLAG_GROUP, exp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_null(current); /* shouldn't be any more ACEs */
+
+	daos_acl_free(acl);
+}
+
+static void
+test_default_cont_acl(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_ace	*current = NULL;
+	uint64_t	exp_owner_perms = DAOS_ACL_PERM_CONT_ALL;
+	uint64_t	exp_grp_perms = DAOS_ACL_PERM_READ |
+					DAOS_ACL_PERM_WRITE |
+					DAOS_ACL_PERM_GET_PROP |
+					DAOS_ACL_PERM_SET_PROP;
+
+	acl = ds_sec_alloc_default_daos_cont_acl();
+
+	assert_non_null(acl);
+	assert_int_equal(daos_acl_cont_validate(acl), 0); /* valid cont ACL */
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0,
+				      exp_owner_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER_GROUP,
+				      DAOS_ACL_FLAG_GROUP, exp_grp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_null(current); /* shouldn't be any more ACEs */
+
+	daos_acl_free(acl);
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -1498,6 +1572,8 @@ main(void)
 		ACL_UTEST(test_check_pool_access_grp_no_match),
 		ACL_UTEST(test_check_pool_access_grp_check_includes_owner),
 		ACL_UTEST(test_check_pool_access_grps_beat_everyone),
+		cmocka_unit_test(test_default_pool_acl),
+		cmocka_unit_test(test_default_cont_acl),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
