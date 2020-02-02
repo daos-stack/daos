@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-    (C) Copyright 2019 Intel Corporation.
+    (C) Copyright 2020 Intel Corporation.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -27,7 +27,10 @@ import os
 from apricot import TestWithServers
 
 from mpio_utils import MpioUtils, MpioFailed
-from pydaos.raw import DaosPool, DaosApiError
+from pydaos.raw import DaosApiError
+from test_utils_pool import TestPool
+from command_utils import CommandFailure
+
 
 class LlnlMpi4pyHdf5(TestWithServers):
     """
@@ -45,21 +48,12 @@ class LlnlMpi4pyHdf5(TestWithServers):
         super(LlnlMpi4pyHdf5, self).setUp()
 
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/*/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-            self.createsvc = self.params.get("svcn", '/run/pool/createsvc/')
-
             # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None, None,
-                             self.createsvc)
-        except (DaosApiError) as excep:
+            self.pool = TestPool(
+                self.context, dmg_command=self.get_dmg_command())
+            self.pool.get_params(self)
+            self.pool.create()
+        except (CommandFailure) as excep:
             self.fail("<Test Failed at pool create> \n{}".format(excep))
 
     def run_test(self, test_repo, test_name):
@@ -77,17 +71,16 @@ class LlnlMpi4pyHdf5(TestWithServers):
             # initialise test specific variables
             client_processes = self.params.get("np", '/run/client_processes/')
 
-            # obtaining pool uuid and svc list
-            pool_uuid = self.pool.get_uuid_str()
+            # obtain svc list
             svc_list = ""
-            for i in range(self.createsvc):
-                svc_list += str(int(self.pool.svc.rl_ranks[i])) + ":"
+            for i in range(self.pool.svcn.value):
+                svc_list += str(int(self.pool.pool.svc.rl_ranks[i])) + ":"
             svc_list = svc_list[:-1]
 
             # running tests
-            self.mpio.run_llnl_mpi4py_hdf5(self.hostfile_clients, pool_uuid,
-                                           test_repo, test_name,
-                                           client_processes)
+            self.mpio.run_llnl_mpi4py_hdf5(
+                self.hostfile_clients, self.pool.uuid, test_repo, test_name,
+                client_processes)
 
             # Parsing output to look for failures
             # stderr directed to stdout
