@@ -1198,12 +1198,9 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 static void
 obj_log_csum_err(void)
 {
-	struct dss_module_info	*info;
-	struct bio_xs_context	*bxc;
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
 
-	info = dss_get_module_info();
-
-	bxc = info->dmi_nvme_ctxt;
 	if (bxc == NULL) {
 		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
 		info->dmi_xs_id, info->dmi_tgt_id);
