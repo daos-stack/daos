@@ -38,7 +38,7 @@ set_vfio_permissions()
 	MEMLOCK_AMNT="$(ulimit -l)"
 
 	if [ "$MEMLOCK_AMNT" != "unlimited" ] ; then
-		MEMLOCK_MB="$(($MEMLOCK_AMNT / 1024))"
+		MEMLOCK_MB="$((MEMLOCK_AMNT / 1024))"
 		echo ""
 		echo "Current user memlock limit: ${MEMLOCK_MB} MB"
 		echo ""

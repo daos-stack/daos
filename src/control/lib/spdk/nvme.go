@@ -58,6 +58,8 @@ type NVME interface {
 	Format(logging.Logger, string) error
 	// Cleanup NVMe object references
 	Cleanup()
+	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
+	CleanLockfiles(logging.Logger, ...string)
 }
 
 // Nvme is an NVME interface implementation.
@@ -108,115 +110,119 @@ type DeviceHealth struct {
 	VolatileWarn    bool
 }
 
-func (n *Nvme) cleanLockFiles(log logging.Logger, pciAddrs ...string) {
+type remFunc func(name string) error
+
+func realRemove(name string) error {
+	return os.Remove(name)
+}
+
+func cleanLockfiles(log logging.Logger, remove remFunc, pciAddrs ...string) error {
 	log.Debugf("removing lockfiles: %v", pciAddrs)
 
 	for _, pciAddr := range pciAddrs {
 		fName := lockfilePathPrefix + pciAddr
 
-		err := os.Remove(fName)
-		if err != nil {
+		if err := remove(fName); err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			log.Errorf("remove %s: %s", fName, err)
+			return errors.Wrapf(err, "remove %s", fName)
 		}
 
 		log.Debugf("%s removed", fName)
-	}
-}
-
-// Discover calls C.nvme_discover which returns
-// pointers to single linked list of ctrlr_t, ns_t and
-// dev_health_t structs.
-// These are converted to slices of Controller, Namespace
-// and DeviceHealth structs.
-func (n *Nvme) Discover(log logging.Logger) ([]Controller, error) {
-	failLocation := "NVMe Discover(): C.nvme_discover"
-
-	retPtr := C.nvme_discover()
-	if retPtr == nil {
-		return nil, errors.Errorf("%s unexpectedly returned NULL",
-			failLocation)
-	}
-
-	ctrlrs, err := processReturn(retPtr, failLocation)
-	if err != nil {
-		return nil, err
-	}
-
-	ctrlrPciAddrs := make([]string, 0, len(ctrlrs))
-	for _, c := range ctrlrs {
-		ctrlrPciAddrs = append(ctrlrPciAddrs, c.PCIAddr)
-	}
-	log.Debugf("discovered nvme ssds: %v", ctrlrPciAddrs)
-
-	// remove lock file for each discovered device
-	n.cleanLockFiles(log, ctrlrPciAddrs...)
-
-	return ctrlrs, err
-}
-
-// Format device at given pci address, destructive operation!
-func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) error {
-	// remove lock file for each discovered device
-	defer n.cleanLockFiles(log, ctrlrPciAddr)
-
-	csPci := C.CString(ctrlrPciAddr)
-	defer C.free(unsafe.Pointer(csPci))
-
-	failLocation := "NVMe Format(): C.nvme_"
-
-	// attempt wipe of namespace #1 LBA-0
-	log.Debugf("attempting quick format on %s\n", ctrlrPciAddr)
-	retPtr := C.nvme_wipe_first_ns(csPci)
-	if retPtr == nil {
-		return errors.Errorf("%swipe_first_ns() unexpectedly returned NULL",
-			failLocation)
-	}
-	if retPtr.rc == 0 {
-		return nil // quick format succeeded
-	}
-
-	log.Errorf("%swipe_first_ns() failed, rc: %d, %s",
-		failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
-
-	// fall back to full controller format if quick format failed
-	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
-	retPtr = C.nvme_format(csPci)
-	if retPtr == nil {
-		return errors.Errorf("%sformat() unexpectedly returned NULL",
-			failLocation)
-	}
-	if retPtr.rc != 0 {
-		return errors.Errorf("%sformat() failed, rc: %d, %s",
-			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 	}
 
 	return nil
 }
 
-// Update calls C.nvme_fwupdate to update controller firmware image.
-// Retrieves image from path and updates given firmware slot/register.
-func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) ([]Controller, error) {
-	// remove lock file for each discovered device
-	defer n.cleanLockFiles(log, ctrlrPciAddr)
+// wrapCleanErr encapsulates inErr inside any cleanErr.
+func wrapCleanErr(inErr error, cleanErr error) (outErr error) {
+	outErr = inErr
 
+	if cleanErr != nil {
+		outErr = errors.Wrap(inErr, cleanErr.Error())
+		if outErr == nil {
+			outErr = cleanErr
+		}
+	}
+
+	return
+}
+
+// CleanLockfiles removes SPDK lockfiles after binding operations.
+func (n *Nvme) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
+	return cleanLockfiles(log, realRemove, pciAddrs...)
+}
+
+// Discover NVMe devices accessible by SPDK on a given host.
+//
+// Calls C.nvme_discover which returns pointers to single linked list of
+// ctrlr_t structs. These are converted and returned as Controller slices
+// containing any Namespace and DeviceHealth structs. Afterwards remove
+// lockfile for each discovered device.
+func (n *Nvme) Discover(log logging.Logger) (ctrlrs []Controller, err error) {
+	ctrlrPciAddrs := make([]string, 0, len(ctrlrs))
+
+	ctrlrs, err = processReturn(C.nvme_discover(),
+		"NVMe Discover(): C.nvme_discover")
+	if err != nil {
+		goto clean
+	}
+
+	for _, c := range ctrlrs {
+		ctrlrPciAddrs = append(ctrlrPciAddrs, c.PCIAddr)
+	}
+	log.Debugf("discovered nvme ssds: %v", ctrlrPciAddrs)
+
+clean:
+	err = wrapCleanErr(err, n.CleanLockfiles(log, ctrlrPciAddrs...))
+	return
+}
+
+// Format device at given pci address, destructive operation!
+//
+// Attempt wipe of namespace #1 LBA-0 and fallss back to full controller
+// format if quick format failed. Afterwards remove lockfile for formatted
+// device.
+func (n *Nvme) Format(log logging.Logger, ctrlrPciAddr string) (err error) {
+	csPci := C.CString(ctrlrPciAddr)
+	defer C.free(unsafe.Pointer(csPci))
+
+	failMsg := "NVMe Format(): C.nvme_"
+	wipeMsg := failMsg + "wipe_first_ns()"
+
+	log.Debugf("attempting quick format on %s\n", ctrlrPciAddr)
+	_, err = processReturn(C.nvme_wipe_first_ns(csPci), wipeMsg)
+	if err == nil {
+		goto clean // quick format succeeded
+	}
+
+	log.Errorf("%s: %s", wipeMsg, err.Error())
+
+	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
+	_, err = processReturn(C.nvme_format(csPci), failMsg+"format()")
+
+clean:
+	return wrapCleanErr(err, n.CleanLockfiles(log, ctrlrPciAddr))
+}
+
+// Update calls C.nvme_fwupdate to update controller firmware image.
+//
+// Retrieves image from path and updates given firmware slot/register
+// then remove lockfile for updated device.
+func (n *Nvme) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) (ctrlrs []Controller, err error) {
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
 	csPci := C.CString(ctrlrPciAddr)
 	defer C.free(unsafe.Pointer(csPci))
 
-	failLocation := "NVMe Update(): C.nvme_fwupdate"
+	ctrlrs, err = processReturn(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
+		"NVMe Update(): C.nvme_fwupdate")
 
-	retPtr := C.nvme_fwupdate(csPci, csPath, C.uint(slot))
-	if retPtr == nil {
-		return nil, errors.Errorf("%s unexpectedly returned NULL",
-			failLocation)
-	}
+	err = wrapCleanErr(err, n.CleanLockfiles(log, ctrlrPciAddr))
 
-	return processReturn(retPtr, failLocation)
+	return
 }
 
 // Cleanup unlinks and detaches any controllers or namespaces,
@@ -265,19 +271,18 @@ func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 }
 
 // processReturn parses return structs
-func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Controller, err error) {
+func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
 	if retPtr == nil {
-		return nil, errors.New("empty return value")
+		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
+	ctrlrPtr := retPtr.ctrlrs
 
 	if retPtr.rc != 0 {
-		cleanReturn(retPtr)
-
-		return nil, errors.Errorf("%s failed, rc: %d, %s",
-			failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
+		err = errors.Wrap(FaultBindingNonZeroRC(int(retPtr.rc), C.GoString(&retPtr.err[0])),
+			failMsg)
+		goto clean
 	}
 
-	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
 		ctrlr := c2GoController(ctrlrPtr)
 
@@ -290,7 +295,8 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Contro
 
 		healthPtr := ctrlrPtr.dev_health
 		if healthPtr == nil {
-			return nil, errors.New("empty health stats")
+			err = FaultCtrlrNoHealth
+			goto clean
 		}
 		ctrlr.HealthStats = c2GoDeviceHealth(healthPtr)
 
@@ -299,9 +305,10 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Contro
 		ctrlrPtr = ctrlrPtr.next
 	}
 
+clean:
 	cleanReturn(retPtr)
 
-	return ctrlrs, nil
+	return
 }
 
 // cleanReturn frees memory that was allocated in C

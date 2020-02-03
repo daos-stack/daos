@@ -51,7 +51,7 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
-#define DAOS_NVME_MAX_CTRLRS	1024		/* Max trids read from nvme_conf */
+#define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -921,7 +921,8 @@ populate_whitelist(struct spdk_env_opts *opts)
 			return -DER_INVAL;
 		}
 
-		rc = opts_add_pci_addr(opts, &opts->pci_whitelist, trid->traddr);
+		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
+				       trid->traddr);
 		if (rc < 0) {
 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
 			return -DER_INVAL;
@@ -991,6 +992,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		spdk_env_opts_init(&opts);
 		opts.name = "daos";
+		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
+			opts.mem_size = nvme_glb.bd_mem_size;
+		}
 		rc = populate_whitelist(&opts);
 		if (rc != 0) {
 			D_FREE(opts.pci_whitelist);
