@@ -23,6 +23,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -62,6 +64,45 @@ var (
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
 )
+
+func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigDuplicateFabric,
+		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
+	)
+}
+
+func FaultConfigDuplicateLogFile(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateLogFile, "log_file", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmMount, "scm_mount", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateBdevDeviceList, "bdev_list", curIdx, seenIdx,
+	)
+}
+
+func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
+	return serverFault(code,
+		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+	)
+}
 
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

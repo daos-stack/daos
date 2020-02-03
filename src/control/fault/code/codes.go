@@ -76,6 +76,11 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigDuplicateBdevDeviceList
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

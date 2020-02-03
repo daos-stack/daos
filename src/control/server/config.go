@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,12 +28,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -380,7 +383,7 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution
 	defer func() {
-		if err != nil {
+		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
 			err = errors.WithMessage(FaultBadConfig,
 				err.Error()+", examples: "+examplesPath)
@@ -444,5 +447,86 @@ func (c *Configuration) Validate(log logging.Logger) (err error) {
 			}
 		}
 	}
+
+	if len(c.Servers) > 1 {
+		if err := validateMultiServerConfig(log, c); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// validateMultiServerConfig performs an extra level of validation
+// for multi-server configs. The goal is to ensure that each instance
+// has unique values for resources which cannot be shared (e.g. log files,
+// fabric configurations, PCI devices, etc.)
+func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
+	if len(c.Servers) < 2 {
+		return nil
+	}
+
+	seenValues := make(map[string]int)
+
+	for idx, srv := range c.Servers {
+		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+			srv.Fabric.Provider,
+			srv.Fabric.Interface,
+			srv.Fabric.InterfacePort)
+
+		if seenIn, exists := seenValues[fabricConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", fabricConfig, idx, seenIn)
+			return FaultConfigDuplicateFabric(idx, seenIn)
+		}
+		seenValues[fabricConfig] = idx
+
+		if srv.LogFile != "" {
+			logConfig := fmt.Sprintf("log_file:%s", srv.LogFile)
+			if seenIn, exists := seenValues[logConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", logConfig, idx, seenIn)
+				return FaultConfigDuplicateLogFile(idx, seenIn)
+			}
+			seenValues[logConfig] = idx
+		}
+
+		scmConf := srv.Storage.SCM
+		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
+		if seenIn, exists := seenValues[mountConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+			return FaultConfigDuplicateScmMount(idx, seenIn)
+		}
+		seenValues[mountConfig] = idx
+
+		if len(scmConf.DeviceList) > 0 {
+			devStr := fmt.Sprintf("scm_list:%s", sliceToString(scmConf.DeviceList))
+
+			if seenIn, exists := seenValues[devStr]; exists {
+				log.Debugf("%s in %d duplicates %d", devStr, idx, seenIn)
+				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+			}
+			seenValues[devStr] = idx
+		}
+
+		bdevConf := srv.Storage.Bdev
+		if len(bdevConf.DeviceList) > 0 {
+			devStr := fmt.Sprintf("bdev_list:%s", sliceToString(bdevConf.DeviceList))
+
+			if seenIn, exists := seenValues[devStr]; exists {
+				log.Debugf("%s in %d duplicates %d", devStr, idx, seenIn)
+				return FaultConfigDuplicateBdevDeviceList(idx, seenIn)
+			}
+			seenValues[devStr] = idx
+		}
+	}
+
+	return nil
+}
+
+// sliceToString converts a string slice to a stable string
+// representation
+func sliceToString(in []string) string {
+	out := make([]string, len(in))
+	copy(out, in)
+	sort.Strings(out)
+	return strings.Join(out, ",")
 }
