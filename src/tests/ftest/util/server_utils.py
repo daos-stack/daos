@@ -325,6 +325,13 @@ class DaosServerConfig(ObjectWithParameters):
                 if value is not None and value is not False:
                     yaml_data["servers"][index][name] = value
 
+        # Don't set scm_size when scm_class is "dcpm"
+        for index in range(len(self.server_params)):
+            srv_cfg = yaml_data["servers"][index]
+            scm_class = srv_cfg.get("scm_class", "ram")
+            if scm_class == "dcpm" and "scm_size" in srv_cfg:
+                del srv_cfg["scm_size"]
+
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
         try:
