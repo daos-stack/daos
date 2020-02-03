@@ -108,16 +108,11 @@ obj_ec_pbufs_init(struct obj_ec_recx_array *recxs, uint64_t cell_bytes)
 }
 
 static int
-obj_ec_riod_init(daos_iod_t *riod, uint32_t recx_nr, bool with_eprs)
+obj_ec_riod_init(daos_iod_t *riod, uint32_t recx_nr)
 {
 	riod->iod_nr = recx_nr;
 	D_ALLOC_ARRAY(riod->iod_recxs, recx_nr);
 	if (riod->iod_recxs == NULL)
-		return -DER_NOMEM;
-	if (!with_eprs)
-		return 0;
-	D_ALLOC_ARRAY(riod->iod_eprs, recx_nr);
-	if (riod->iod_eprs == NULL)
 		return -DER_NOMEM;
 	return 0;
 }
@@ -390,8 +385,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 			      oiod_flags);
 	if (rc)
 		goto out;
-	rc = obj_ec_riod_init(&reasb_req->orr_iods[iod_idx], recx_nr,
-			      (iod->iod_eprs != NULL));
+	rc = obj_ec_riod_init(&reasb_req->orr_iods[iod_idx], recx_nr);
 	if (rc)
 		goto out;
 	/* init the reassembled sgl and seg sorter with max possible sg_nr */

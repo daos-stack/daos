@@ -71,15 +71,14 @@ class ObjFetchBadParam(TestWithServers):
             self.datasize = len(thedata) + 1
             self.dkey = "this is the dkey"
             self.akey = "this is the akey"
-            self.obj, self.epoch = self.container.write_an_obj(thedata,
-                                                               self.datasize,
-                                                               self.dkey,
-                                                               self.akey, None,
-                                                               None, 2)
+            self.obj = self.container.write_an_obj(thedata,
+                                                   self.datasize,
+                                                   self.dkey,
+                                                   self.akey, None,
+                                                   None, 2)
 
             thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
-                                                  self.akey, self.obj,
-                                                  self.epoch)
+                                                  self.akey, self.obj)
             if thedata not in thedata2.value:
                 print(thedata)
                 print(thedata2.value)
@@ -108,7 +107,7 @@ class ObjFetchBadParam(TestWithServers):
             # expecting this to fail with -1002
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
                                                         self.dkey, self.akey,
-                                                        self.obj, self.epoch)
+                                                        self.obj)
 
             self.container.oh = saved_oh
             self.fail("Test was expected to return a -1002 but it has not.\n")
@@ -131,8 +130,7 @@ class ObjFetchBadParam(TestWithServers):
         try:
             # now try it with a bad dkey, expecting this to fail with -1003
             dummy_thedata2 = self.container.read_an_obj(self.datasize, None,
-                                                        self.akey, self.obj,
-                                                        self.epoch)
+                                                        self.akey, self.obj)
 
             self.container.close()
             self.container.destroy()
@@ -152,8 +150,7 @@ class ObjFetchBadParam(TestWithServers):
             test_hints = ['sglnull']
             dummy_thedata2 = self.container.read_an_obj(self.datasize,
                                                         self.dkey, self.akey,
-                                                        self.obj, self.epoch,
-                                                        test_hints)
+                                                        self.obj, test_hints)
 
             # behavior not as expect so commented out for now
             # when DAOS-1448 is complete, uncomment and retest
@@ -171,7 +168,7 @@ class ObjFetchBadParam(TestWithServers):
             # now try it with a null iod, expecting this to fail with -1003
             #test_hints = ['iodnull']
             #thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
-            #                                 self.obj, self.epoch, test_hints)
+            #                                 self.obj, test_hints)
             pass
             #self.fail("Test was expected to return a -1003 but it has not.\n")
 
