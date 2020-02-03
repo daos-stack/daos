@@ -264,13 +264,15 @@ class Soak(TestWithServers):
         datasize = len(data_pattern) + 1
         dkey = "dkey"
         akey = "akey"
-        obj, epoch = container.container.write_an_obj(
-            data_pattern, datasize, dkey, akey, obj_cls=obj_cls)
+        tx_handle = container.container.get_new_tx()
+        obj = container.container.write_an_obj(
+            data_pattern, datasize, dkey, akey, obj_cls=obj_cls, txn=tx_handle)
+        container.container.commit_tx(tx_handle)
         obj.close()
         # Take a snapshot of the container
         snapshot = DaosSnapshot(self.context)
         try:
-            snapshot.create(container.container.coh, epoch)
+            snapshot.create(container.container.coh, tx_handle)
         except (RuntimeError, TestFail, DaosApiError) as error:
             self.log.error("Snapshot failed", exc_info=error)
             status &= False
@@ -281,17 +283,16 @@ class Soak(TestWithServers):
             datasize2 = len(data_pattern2) + 1
             dkey = "dkey"
             akey = "akey"
-            obj2, _ = container.container.write_an_obj(
+            obj2 = container.container.write_an_obj(
                 data_pattern2, datasize2, dkey, akey, obj_cls=obj_cls)
             obj2.close()
             self.log.info("Wrote additional data to container")
             # open the snapshot and read the data
             obj.open()
-            snap_handle = snapshot.open(
-                container.container.coh, snapshot.epoch)
+            snap_handle = snapshot.open(container.container.coh)
             try:
                 data_pattern3 = container.container.read_an_obj(
-                    datasize, dkey, akey, obj, snap_handle.value)
+                    datasize, dkey, akey, obj, txn=snap_handle.value)
             except (RuntimeError, TestFail, DaosApiError) as error:
                 self.log.error(
                     "Error when retrieving the snapshot data %s", error)
@@ -301,7 +302,6 @@ class Soak(TestWithServers):
                 if data_pattern3.value != data_pattern:
                     self.log.error("Snapshot data miscompere")
                     status &= False
-
         # Destroy the snapshot
         try:
             snapshot.destroy(container.container.coh)
