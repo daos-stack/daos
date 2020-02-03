@@ -36,7 +36,6 @@ server_config:
    bdev_list: ["0000:81:00.0","0000:da:00.0"]
    scm_class: dcpm
    scm_list: ["/dev/pmem0"]
-   scm_size: 60
 pool:
   createmode:
     mode_RW:
