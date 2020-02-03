@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"strconv"
@@ -42,8 +43,10 @@ const (
 	msgSizeNoNumber = "size string doesn't specify a number"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
-	mibsInMB        = (10 ^ 6) / (2 ^ 20) // convert base2->base10
 )
+
+// to convert base2->base10
+var mibsInMB float64 = math.Pow(1000, 2) / math.Pow(1024, 2)
 
 // toBase10 converts base 2 ByteSize type to the base 10 equivalent.
 // i.e. if "10G" was specified then the output bytes would be the base 10
@@ -197,7 +200,7 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 				"will suffer!\n")
 	}
 	log.Infof(
-		"Creating DAOS pool with %s SCM and %s NvMe storage "+
+		"Creating DAOS pool with %s SCM and %s NVMe storage "+
 			"(%.3f ratio)\n",
 		scmBytes.Format("%.0f", "", false),
 		nvmeBytes.Format("%.0f", "", false),

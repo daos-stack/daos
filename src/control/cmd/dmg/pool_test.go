@@ -96,6 +96,7 @@ func TestCalcStorage(t *testing.T) {
 	}{
 		"defaults":     {"256M", "8G", 256 * MB, toBase10(8 * GB), ""},
 		"no nvme":      {"256M", "", 256 * MB, 0, ""},
+		"normal sizes": {"100G", "750G", 100 * GB, toBase10(750 * GB), ""},
 		"bad ratio":    {"99M", "1G", 99 * MB, toBase10(GB), ""}, // should issue ratio warning
 		"no scm":       {"", "8G", 0, 0, msgSizeZeroScm},
 		"zero scm":     {"0", "8G", 0, 0, msgSizeZeroScm},
@@ -104,6 +105,8 @@ func TestCalcStorage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer ShowBufferOnFailure(t, buf)
+
+			AssertEqual(t, 0.95367431640625, mibsInMB, "bad mibsInMB multiplier")
 
 			gotScmBytes, gotNvmeBytes, err := calcStorage(log, tc.scm, tc.nvme)
 			if tc.errMsg != "" {
