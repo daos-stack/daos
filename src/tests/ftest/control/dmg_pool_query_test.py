@@ -122,11 +122,15 @@ class DmgPoolQueryTest(IorTestBase):
         # Store orignal pool info and run ior
         self.log.info("Getting pool info before writting data")
         out_before_ior = pool_query(self.bin, self.host_p, self.uuid)
+        if out_before_ior.exit_status == 1:
+            self.fail("pool-query-failure: {}".format(out_before_ior.stderr))
         self.run_ior_with_pool()
 
         # Check pool written data
         self.log.info("Getting pool info after ior run")
         out_after_ior = pool_query(self.bin, self.host_p, self.uuid)
+        if out_after_ior.exit_status == 1:
+            self.fail("pool-query-failure: {}".format(out_after_ior.stderr))
 
         # Parse output of dmg command before running ior
         orig_pool_info = get_pool_query_info(out_before_ior.stdout)
