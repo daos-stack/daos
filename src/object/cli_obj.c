@@ -2429,20 +2429,15 @@ out:
 
 /* Sets initial shard so retry will know when all replicas have been tried.
  */
-static inline int
+static inline void
 obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		      uint64_t dkey_hash, unsigned int map_ver)
 {
 	int rc = obj_dkey2shard(obj, dkey_hash, map_ver, DAOS_OBJ_RPC_FETCH,
 				obj_auxi->to_leader);
 
-	if (rc < 0) {
-		obj_auxi->no_retry = 1;
-		rc = -DER_CSUM;
-		return rc;
-	}
-	obj_auxi->initial_shard = rc;
-	return 0;
+	if (rc >=  0)
+		obj_auxi->initial_shard = rc;
 }
 
 static int
@@ -2507,9 +2502,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			goto out_task;
 		tgt_bitmap = &csum_bitmap;
 	} else {
-		rc = obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
-		if (rc)
-			goto out_task;
+		obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
 		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
