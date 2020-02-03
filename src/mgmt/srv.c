@@ -366,15 +366,9 @@ ds_mgmt_init()
 {
 	int rc;
 
-	rc = ds_mgmt_tgt_init();
-	if (rc)
-		return rc;
-
 	rc = ds_mgmt_system_module_init();
-	if (rc != 0) {
-		ds_mgmt_tgt_fini();
+	if (rc != 0)
 		return rc;
-	}
 
 	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
@@ -384,14 +378,21 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_system_module_fini();
-	ds_mgmt_tgt_fini();
-	D_DEBUG(DB_MGMT, "successfull fini call\n");
+
+	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
+}
+
+static int
+ds_mgmt_setup()
+{
+	return ds_mgmt_tgt_setup();
 }
 
 static int
 ds_mgmt_cleanup()
 {
+	ds_mgmt_tgt_cleanup();
 	return ds_mgmt_svc_stop();
 }
 
@@ -401,6 +402,7 @@ struct dss_module mgmt_module = {
 	.sm_ver			= DAOS_MGMT_VERSION,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
+	.sm_setup		= ds_mgmt_setup,
 	.sm_cleanup		= ds_mgmt_cleanup,
 	.sm_proto_fmt		= &mgmt_proto_fmt,
 	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,

@@ -153,6 +153,7 @@ static int
 crc16_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	uint16_t *crc16 = (uint16_t *)obj->dcs_csum_buf;
+
 	*crc16 = crc16_t10dif(*crc16, buf, (int)buf_len);
 	return 0;
 }
@@ -339,8 +340,13 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		C_TRACE("\n");
 	}
 
-	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
+	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0) {
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
+		/* Corrupt data after calculating checksum */
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_CDATA_CORRUPT))
+			buf[0] += 0x2;
+	}
+
 
 	if (C_TRACE_ENABLED()) {
 		C_TRACE("CSUM: ...");

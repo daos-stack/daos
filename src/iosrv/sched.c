@@ -192,12 +192,11 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 		cycle->sc_new_cycle = 1;
 	}
 
-	/* XXX Enabled this check once dss_srv_handler() is revised */
-#if 0
-	/* The xstream without network poll ULT */
-	if (!dx->dx_comm)
-		return ABT_UNIT_NULL;
-#endif
+	/*
+	 * No matter if current xstream has comm(Cart) context attached or
+	 * not, there is always a server handler ULT in DSS_POOL_NET_POLL.
+	 * (see dss_srv_handler()).
+	 */
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
 		D_ERROR("XS(%d) failed to pop network poll ULT: %d\n",
