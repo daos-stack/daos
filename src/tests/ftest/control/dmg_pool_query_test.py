@@ -60,16 +60,21 @@ class DmgPoolQueryTest(IorTestBase):
         self.log.info("Running dmg pool query")
         dmg_out = pool_query(self.bin, self.host_p, self.uuid)
 
-        # Parse output
-        d_info = get_pool_query_info(dmg_out.stdout)
-        self.log.info("dmg values found: %s", d_info)
+        if dmg_out and dmg_out.stdout == 0:
+            # Parse output
+            d_info = get_pool_query_info(dmg_out.stdout)
+            self.log.info("dmg values found: %s", d_info)
 
-        e_info = self.params.get("exp_vals", "/run/*")
-        self.log.info("Expected values are: %s", e_info)
+            e_info = self.params.get("exp_vals", "/run/*")
+            self.log.info("Expected values are: %s", e_info)
 
-        # Verify
-        if d_info != e_info:
-            self.fail("dmg pool query expected output: {}".format(e_info))
+            # Verify
+            if d_info != e_info:
+                self.fail("dmg pool query expected output: {}".format(e_info))
+        else:
+            self.log.info("dmg pool query failed to execute.")
+            if dmg_out:
+                self.fail("pool-query-failure: {}".format(dmg_out.stderr))
 
     def test_pool_query_inputs(self):
         """

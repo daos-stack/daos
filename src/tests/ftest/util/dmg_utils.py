@@ -378,7 +378,6 @@ def pool_query(path, host_port, pool_uuid, insecure=True):
         result = dmg.run()
     except CommandFailure as details:
         print("Pool query command failed: {}".format(details))
-        return None
 
     return result
 

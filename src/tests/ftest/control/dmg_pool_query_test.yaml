@@ -8,6 +8,7 @@ hosts:
 timeout: 200
 server_config:
   name: daos_server
+  port: 10001
   servers:
     targets: 8
     bdev_class: nvme
@@ -19,7 +20,7 @@ ior:
   client_processes:
     np: 1
   ior_flags: "-w -W -k -G 1"
-  transfer_size: "500M"
+  transfer_size: "32M"
 exp_vals:
   ntarget: "8"
   s_mem: "3GB"
@@ -45,35 +46,35 @@ pool:
 
 pool_uuids:
   uuids:
-    - uuid:
+    -
       #alpha_upper
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
       - "FAIL"
-    - uuid:
+    -
       # alpha_lower
       - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
       - "FAIL"
-    - uuid:
+    -
       # alphanumeric
       - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
       - "FAIL"
-    - uuid:
+    -
       # numeric_01
       - "111-222-333-444-555"
       - "FAIL"
-    - uuid:
+    -
       # numeric_02
       - "0-0-0-0-0"
       - "FAIL"
-    - uuid:
+    -
       # random
       - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
       - "FAIL"
-    - uuid:
+    -
       # special_chars
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
       - "FAIL"
-    - uuid:
+    -
       # special_aplanumeric_chars
       - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
       - "FAIL"
