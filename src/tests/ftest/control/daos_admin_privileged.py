@@ -95,6 +95,7 @@ class DaosAdminPrivTest(TestWithServers):
         # Start server
         try:
             self.log.info("Starting server as non-root user")
+            server.runner.job.mode = "format"
             server.run()
         except CommandFailure as err:
             # Kill the subprocess, anything that might have started

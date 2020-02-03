@@ -540,7 +540,7 @@ class ServerManager(ExecutableCommand):
             self.run()
         except CommandFailure as error:
             raise ServerFailed(
-                "Failed to start before format: {}".format(error))
+                "Failed to start servers before format: {}".format(error))
 
         # Format storage and wait for server to change ownership
         self.log.info("Formatting hosts: <%s>", self._hosts)
@@ -551,11 +551,8 @@ class ServerManager(ExecutableCommand):
 
         # Wait for all the doas_io_servers to start
         self.runner.job.mode = "normal"
-        try:
-            self.runner.job.check_subprocess_status(self.runner.process)
-        except CommandFailure as error:
-            raise ServerFailed(
-                "Failed to start after format: {}".format(error))
+        if not self.runner.job.check_subprocess_status(self.runner.process):
+            raise ServerFailed("Failed to start servers after format")
 
         return True
 
@@ -599,26 +596,29 @@ class ServerManager(ExecutableCommand):
 
     def clean_files(self):
         """Clean the tmpfs on the servers."""
-        clean_cmds = set()
+        clean_cmds = []
         for server_params in self.runner.job.yaml_params.server_params:
             scm_mount = server_params.scm_mount.value
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
-            clean_cmds.add(
-                "find {} -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf".format(scm_mount))
+            cmd = "rm -fr {}/*".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
 
             # Dismount the scm mount point
-            clean_cmds.add(
-                "while sudo umount {}; do continue; done".format(scm_mount))
+            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
 
             if self.runner.job.yaml_params.is_scm():
                 scm_list = server_params.scm_list.value
                 if isinstance(server_params.scm_list.value, list):
                     for device in scm_list:
                         self.log.info("Cleaning up the %s device.", str(device))
-                        clean_cmds.add("sudo wipefs -a {}".format(device))
+                        cmd = "sudo wipefs -a {}".format(device)
+                        if cmd not in clean_cmds:
+                            clean_cmds.append(cmd)
 
         pcmd(self._hosts, "; ".join(clean_cmds), True)
 
