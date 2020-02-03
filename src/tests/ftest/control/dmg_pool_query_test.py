@@ -42,6 +42,7 @@ class DmgPoolQueryTest(IorTestBase):
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
+        self.uuid = self.pool.pool.get_uuid_str()
 
         # Get the host list with port to provide the dmg command
         self.port = self.params.get("port", "/run/server_config/*")
@@ -57,7 +58,7 @@ class DmgPoolQueryTest(IorTestBase):
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolquerybasic
         """
         self.log.info("Running dmg pool query")
-        dmg_out = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
+        dmg_out = pool_query(self.bin, self.host_p, self.uuid)
 
         # Parse output
         d_info = get_pool_query_info(dmg_out.stdout)
@@ -79,33 +80,32 @@ class DmgPoolQueryTest(IorTestBase):
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryinputs
         """
         # Get test UUID
-        uuid = self.params.get("uuid", '/run/pool_uuids/*/')
-        self.log.info("Using test UUID: %s", uuid[0])
+        uuids = self.params.get("uuids", '/run/pool_uuids/*/')
+        errors_list = []
+        for uuid in uuids:
+            self.log.info("Using test UUID: %s", uuid[0])
+            self.log.info("Running dmg pool query")
+            dmg_out = pool_query(self.bin, self.host_p, uuid[0])
 
-        self.log.info("Running dmg pool query")
-        dmg_out = pool_query(self.bin, self.host_p, uuid[0])
-
-        # Verify
-        self.log.info("Test is expected to finish with: %s", uuid[1])
-        if dmg_out is None:
-            exception = 2
-        else:
-            if dmg_out.exit_status == 0:
-                exception = None
-            else:
+            # Verify
+            self.log.info("Test is expected to finish with: %s", uuid[1])
+            if dmg_out is None:
                 exception = 1
+            else:
+                if dmg_out.exit_status == 0:
+                    exception = None
+                else:
+                    exception = 1
 
-        if uuid[1] == "FAIL" and exception is None:
-            self.log.error("Command was expected to fail")
-            self.fail("Test failed, dmg pool query command output: {}".format(
-                dmg_out.stdout))
-        elif uuid[1] == "PASS" and exception is not None:
-            self.log.error("Command was expected to pass")
-            if exception == 2:
-                self.fail("Test failed, dmg command failed while executing.")
-            if exception == 1:
-                self.fail("Test failed, dmg command failed with {}".format(
-                    dmg_out.stdout))
+            if uuid[1] == "FAIL" and exception is None:
+                errors_list.append("Command was expected to fail:" + uuid[0])
+            elif uuid[1] == "PASS" and exception:
+                errors_list.append("Command expected to pass: " + uuid[0])
+
+        if errors_list:
+            for err in errors_list:
+                self.log.error("Failure: %s", err)
+            self.fail("Failed dmg pool query input test")
 
     def test_pool_query_ior(self):
         """
@@ -116,12 +116,12 @@ class DmgPoolQueryTest(IorTestBase):
         """
         # Store orignal pool info and run ior
         self.log.info("Getting pool info before writting data")
-        out_before_ior = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
+        out_before_ior = pool_query(self.bin, self.host_p, self.uuid)
         self.run_ior_with_pool()
 
         # Check pool written data
         self.log.info("Getting pool info after ior run")
-        out_after_ior = pool_query(self.bin, self.host_p, self.pool.pool.uuid)
+        out_after_ior = pool_query(self.bin, self.host_p, self.uuid)
 
         # Parse output of dmg command before running ior
         orig_pool_info = get_pool_query_info(out_before_ior.stdout)

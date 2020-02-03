@@ -43,36 +43,37 @@ pool:
   nvme_size: 2000000000
   name: daos_server
 
-pool_uuids: !mux
-  alpha_upper:
-    uuid:
+pool_uuids:
+  uuids:
+    - uuid:
+      #alpha_upper
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
       - "FAIL"
-  alpha_lower:
-    uuid:
+    - uuid:
+      # alpha_lower
       - "eeeeeeee-ffff-gggg-hhhh-iiiiiiiiiiii"
       - "FAIL"
-  alphanumeric:
-    uuid:
+    - uuid:
+      # alphanumeric
       - "aaaa1111-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
       - "FAIL"
-  numeric_01:
-    uuid:
+    - uuid:
+      # numeric_01
       - "111-222-333-444-555"
       - "FAIL"
-  numeric_02:
-    uuid:
+    - uuid:
+      # numeric_02
       - "0-0-0-0-0"
       - "FAIL"
-  random:
-    uuid:
+    - uuid:
+      # random
       - "991d211c-ed28-4b6b-8e50-5f7103b36cb9"
       - "FAIL"
-  special_chars:
-    uuid:
+    - uuid:
+      # special_chars
       - "! @#$%^&*()_+{}|:<>?-=[];',./"
       - "FAIL"
-  special_aplanumeric_chars:
-    uuid:
+    - uuid:
+      # special_aplanumeric_chars
       - "abc-=*12----1@3c-4%DE-&5_,0789GHij)(+.k"
       - "FAIL"
