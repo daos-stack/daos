@@ -11,6 +11,7 @@ pool:
     name: daos_server
     size: 25000000000
     svcn: 1
+    control_method: dmg
 client_processes:
     np: 8
 test_repo:
