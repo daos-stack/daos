@@ -130,6 +130,7 @@ class PoolTestBase(TestWithServers):
 
         # Run all the variants of the test
         results = {"PASS": 0, "FAIL": 0, "SKIP": 0}
+        tickets = set()
         for index, test in enumerate(test_variants):
             self.log.info(
                 "[%03d/%03d] - START TEST VARIANT - %s", index + 1, total, test)
@@ -149,11 +150,20 @@ class PoolTestBase(TestWithServers):
                 index + 1, total, str(expected_to_pass))
 
             # Skip any tests with known issues
+            bad_id = 99999999999999
+            id_list = [self.pool.uid, self.pool.gid]
             if self.pool.target_list.value == [9999]:
                 self.log.info(
                     "[%03d/%03d] SKIP - Skipping test due to DAOS-4012",
                     index + 1, total)
                 results["SKIP"] += 1
+                tickets.add("DAOS-4012")
+            elif self.pool.using_dmg and bad_id in id_list:
+                self.log.info(
+                    "[%03d/%03d] SKIP - Skipping test due to DAOS-4091",
+                    index + 1, total)
+                results["SKIP"] += 1
+                tickets.add("DAOS-4091")
             else:
                 # Attempt to create the pool
                 try:
@@ -194,4 +204,4 @@ class PoolTestBase(TestWithServers):
                 "Detected {} error(s) creating {} pools".format(
                     results["FAIL"], total))
         if results["SKIP"] > 0:
-            self.cancelForTicket("DAOS-4012")
+            self.cancelForTicket(", ".join(tickets))
