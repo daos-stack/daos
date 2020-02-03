@@ -12,7 +12,6 @@ server_config:
     servers:
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        scm_size: 45
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:

@@ -31,7 +31,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
@@ -189,7 +192,88 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestConfigValidation(t *testing.T) {
+func TestIOServer_SCMConfigValidation(t *testing.T) {
+	baseValidConfig := func() *Config {
+		return NewConfig().
+			WithFabricProvider("test"). // valid enough to pass "not-blank" test
+			WithFabricInterface("test")
+	}
+
+	for name, tc := range map[string]struct {
+		cfg    *Config
+		expErr error
+	}{
+		"missing scm_mount": {
+			cfg:    baseValidConfig(),
+			expErr: errors.New("scm_mount"),
+		},
+		"missing scm_class": {
+			cfg: baseValidConfig().
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_class"),
+		},
+		"ramdisk valid": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+		},
+		"ramdisk missing scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk scm_size: 0": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(0).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk with scm_list": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm valid": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmMountPoint("test"),
+		},
+		"dcpm scm_list too long": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm scm_list empty": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm with scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
+	}
+}
+
+func TestIOServer_ConfigValidation(t *testing.T) {
 	bad := NewConfig()
 
 	if err := bad.Validate(); err == nil {
@@ -200,6 +284,7 @@ func TestConfigValidation(t *testing.T) {
 	good := NewConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
 		WithScmClass("ram").
+		WithScmRamdiskSize(1).
 		WithScmMountPoint("/foo/bar")
 
 	if err := good.Validate(); err != nil {
