@@ -47,9 +47,9 @@ var (
 	)
 )
 
-func FaultBindingNonZeroRC(rc int, errMsg string) *fault.Fault {
+func FaultBindingFailed(rc int, errMsg string) *fault.Fault {
 	return spdkFault(
-		code.SpdkBindingNonZeroRC,
+		code.SpdkBindingFailed,
 		fmt.Sprintf("SPDK binding failed, rc: %d, %s", rc, errMsg),
 		"",
 	)

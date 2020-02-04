@@ -865,18 +865,18 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
 {
 	struct spdk_pci_addr *tmp = *list;
-	size_t i = opts->num_pci_addr;
+	size_t count = opts->num_pci_addr;
 
-	tmp = realloc(tmp, sizeof(*tmp) * (i + 1));
+	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
 	if (tmp == NULL) {
 		D_ERROR("realloc error\n");
-		return -ENOMEM;
+		return -DER_NOMEM;
 	}
 
 	*list = tmp;
-	if (spdk_pci_addr_parse(*list + i, traddr) < 0) {
+	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
 		D_ERROR("Invalid address %s\n", traddr);
-		return -EINVAL;
+		return -DER_INVAL;
 	}
 
 	opts->num_pci_addr++;
@@ -903,7 +903,7 @@ populate_whitelist(struct spdk_env_opts *opts)
 		return -DER_NOMEM;
 
 	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
-		memset(trid, 0, sizeof(*trid));
+		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
 
 		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
 		if (val == NULL) {

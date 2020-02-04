@@ -96,7 +96,7 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 	}
 }
 
-func TestSpdk_WrapCleanErr(t *testing.T) {
+func TestSpdk_WrapCleanError(t *testing.T) {
 	wrappedErr := errors.Wrap(sampleErr1, sampleErr2.Error())
 
 	for name, tc := range map[string]struct {
@@ -110,7 +110,7 @@ func TestSpdk_WrapCleanErr(t *testing.T) {
 		"outer and clean errors": {sampleErr1, sampleErr2, wrappedErr},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotErr := wrapCleanErr(tc.inErr, tc.cleanErr)
+			gotErr := wrapCleanError(tc.inErr, tc.cleanErr)
 			common.CmpErr(t, tc.expOutErr, gotErr)
 		})
 	}

@@ -81,7 +81,7 @@ const (
 	SpdkUnknown Code = iota + 700
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
-	SpdkBindingNonZeroRC
+	SpdkBindingFailed
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900
