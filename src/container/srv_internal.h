@@ -153,6 +153,9 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
 void cont_svc_put_leader(struct cont_svc *svc);
+int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		     struct cont *cont, struct container_hdl *hdl,
+		     crt_rpc_t *rpc);
 
 /*
  * srv_epoch.c

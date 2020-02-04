@@ -186,6 +186,30 @@ daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 }
 
 int
+daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
+{
+	daos_cont_set_prop_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
+	if (prop != NULL && !daos_prop_valid(prop, false, true)) {
+		D_ERROR("invalid prop parameter.\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_cont_set_prop, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->prop	= prop;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	daos_cont_aggregate_t	*args;
