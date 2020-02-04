@@ -508,8 +508,8 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 		bdevConf := srv.Storage.Bdev
 		for _, dev := range bdevConf.DeviceList {
 			if seenIn, exists := seenBdevSet[dev]; exists {
-				log.Debugf("bdev_list entry %s in %d duplicates %d", dev, idx, seenIn)
-				return FaultConfigDuplicateBdevDeviceList(idx, seenIn)
+				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
 		}

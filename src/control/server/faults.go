@@ -91,9 +91,11 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
-func FaultConfigDuplicateBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
-	return dupeValue(
-		code.ServerConfigDuplicateBdevDeviceList, "bdev_list", curIdx, seenIdx,
+func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigOverlappingBdevDeviceList,
+		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique set of bdev_list entries and restart",
 	)
 }
 

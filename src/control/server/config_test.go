@@ -453,7 +453,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 				WithBdevDeviceList("a"),
 			configB: configB().
 				WithBdevDeviceList("b", "a"),
-			expErr: FaultConfigDuplicateBdevDeviceList(1, 0),
+			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -80,7 +80,7 @@ const (
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
-	ServerConfigDuplicateBdevDeviceList
+	ServerConfigOverlappingBdevDeviceList
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900
