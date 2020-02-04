@@ -96,7 +96,7 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	return c
 }
 
-func TestConfig_MarshalUnmarshal(t *testing.T) {
+func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath string
 		expErr error
@@ -176,12 +176,9 @@ func TestConfig_MarshalUnmarshal(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	defer os.RemoveAll(testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestServer_ConstructedConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
@@ -200,6 +197,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
+		WithHelperLogFile("/tmp/daos_admin.log").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -258,7 +256,7 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestConfig_Validation(t *testing.T) {
+func TestServer_ConfigValidation(t *testing.T) {
 	noopExtra := func(c *Configuration) *Configuration { return c }
 
 	for name, tt := range map[string]struct {
@@ -330,7 +328,7 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
-func TestConfig_RelativeWorkingPath(t *testing.T) {
+func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath    string
 		expErrMsg string

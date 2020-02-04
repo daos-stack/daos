@@ -85,11 +85,19 @@ def scons():
     prefix = denv.subst("$PREFIX")
     sprefix = denv.subst("$SPDK_PREFIX")
     if sprefix not in ["", prefix]:
+        def install_dir(env, srcdir, destdir):
+            """walk a directory and install targets"""
+            for root, _dirs, files in os.walk(srcdir):
+                dest_root = os.path.relpath(root, sprefix)
+                for fname in files:
+                    full_name = os.path.join(root, fname)
+                    dest = os.path.join(prefix, dest_root)
+                    env.Install(dest, full_name)
+
         for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
             target = join(prefix, _dir)
-            if not check_dir_exists(target):
-                denv.Command(target, join(sprefix, _dir), Copy("$TARGET",
-                                                               "$SOURCE"))
+            source = join(sprefix, _dir)
+            install_dir(denv, source, target)
 
     def check_go_version(context):
         """Check GO Version"""

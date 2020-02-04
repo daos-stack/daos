@@ -153,6 +153,7 @@ static int
 crc16_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	uint16_t *crc16 = (uint16_t *)obj->dcs_csum_buf;
+
 	*crc16 = crc16_t10dif(*crc16, buf, (int)buf_len);
 	return 0;
 }
@@ -289,19 +290,24 @@ daos_csummer_initialized(struct daos_csummer *obj)
 uint16_t
 daos_csummer_get_type(struct daos_csummer *obj)
 {
-	return obj->dcs_algo->cf_type;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_algo->cf_type;
+	return 0;
 }
 
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj)
 {
-	return obj->dcs_chunk_size;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_chunk_size;
+	return 0;
 }
 
 char *
 daos_csummer_get_name(struct daos_csummer *obj)
 {
-	if (obj->dcs_algo->cf_name)
+
+	if (daos_csummer_initialized(obj) && obj->dcs_algo->cf_name)
 		return obj->dcs_algo->cf_name;
 	return csum_unknown_name;
 }
@@ -334,8 +340,13 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		C_TRACE("\n");
 	}
 
-	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
+	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0) {
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
+		/* Corrupt data after calculating checksum */
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_CDATA_CORRUPT))
+			buf[0] += 0x2;
+	}
+
 
 	if (C_TRACE_ENABLED()) {
 		C_TRACE("CSUM: ...");

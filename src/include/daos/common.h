@@ -566,6 +566,8 @@ enum {
 
 #define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
 #define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+#define DAOS_CHECKSUM_CDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x22)
+#define DAOS_CHECKSUM_SDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x23)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -645,6 +647,8 @@ bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+int daos_prop_entry_copy(struct daos_prop_entry *entry,
+			 struct daos_prop_entry *entry_dup);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

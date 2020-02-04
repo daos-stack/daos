@@ -41,7 +41,6 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
-#include <daos/checksum.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -78,6 +77,7 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
+	DAOS_OPC_CONT_SET_PROP,
 	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
@@ -292,6 +292,11 @@ typedef struct {
 	daos_cont_info_t	*info;
 	daos_prop_t		*prop;
 } daos_cont_query_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_prop_t		*prop;
+} daos_cont_set_prop_t;
 
 typedef struct {
 	daos_handle_t		coh;

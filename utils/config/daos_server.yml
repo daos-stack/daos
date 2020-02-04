@@ -163,6 +163,12 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
+## Enable daos_admin (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#helper_log_file: /tmp/daos_admin.log
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
