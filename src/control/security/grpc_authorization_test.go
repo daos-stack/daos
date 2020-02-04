@@ -76,7 +76,6 @@ func TestHasAccess(t *testing.T) {
 		{"BioHealthQuery", ComponentAdmin, "/mgmt.MgmtSvc/BioHealthQuery"},
 		{"SmdListDevs", ComponentAdmin, "/mgmt.MgmtSvc/SmdListDevs"},
 		{"SmdListPools", ComponentAdmin, "/mgmt.MgmtSvc/SmdListPools"},
-		{"KillRank", ComponentAdmin, "/mgmt.MgmtSvc/KillRank"},
 		{"ListPools", ComponentAdmin, "/mgmt.MgmtSvc/ListPools"},
 	}
 

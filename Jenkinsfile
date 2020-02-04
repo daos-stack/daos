@@ -400,6 +400,7 @@ pipeline {
                                                  build/src/common/tests/acl_util_tests,
                                                  build/src/common/tests/acl_principal_tests,
                                                  build/src/common/tests/acl_real_tests,
+                                                 build/src/common/tests/prop_tests,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
