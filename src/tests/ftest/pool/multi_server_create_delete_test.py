@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2017-2019 Intel Corporation.
+  (C) Copyright 2017-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,16 +21,15 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
 import os
-import traceback
-from avocado.utils import process
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 import check_for_pool
+from dmg_utils import get_pool_uuid_service_replicas_from_stdout
+
+RESULT_PASS = "PASS"
+RESULT_FAIL = "FAIL"
 
 
-# pylint: disable=broad-except
 class MultiServerCreateDeleteTest(TestWithServers):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
@@ -38,9 +37,14 @@ class MultiServerCreateDeleteTest(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-3621")
     def test_create(self):
-        """Test basic pool creation.
+        """Test dmg pool create and destroy with various parameters.
+
+        Create a pool and verify that the pool was created by comparing the
+        UUID returned from the dmg command against the directory name in
+        /mnt/daos
+
+        Destroy the pool and verify that the directory is deleted.
 
         :avocado: tags=all,pool,full_regression,small,multitarget
         """
@@ -57,73 +61,67 @@ class MultiServerCreateDeleteTest(TestWithServers):
         group = os.getlogin() if grouplist[0] == 'valid' else grouplist[0]
         expected_for_param.append(grouplist[1])
 
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
-        expected_for_param.append(setidlist[1])
+        systemnamelist = self.params.get(
+            "systemname", '/run/tests/systemnames/*')
+        system_name = systemnamelist[0]
+        expected_for_param.append(systemnamelist[1])
 
         tgtlistlist = self.params.get("tgt", '/run/tests/tgtlist/*')
         tgtlist = tgtlistlist[0]
         expected_for_param.append(tgtlistlist[1])
 
         # if any parameter is FAIL then the test should FAIL
-        expected_result = 'PASS'
-        for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
-                break
+        expected_result = RESULT_PASS
+        if RESULT_FAIL in expected_for_param:
+            expected_result = RESULT_FAIL
 
         host1 = self.hostlist_servers[0]
         host2 = self.hostlist_servers[1]
+        test_destroy = True
 
-        dmg = os.path.join(self.bin, "dmg")
-
-        try:
-            cmd = (
-                "{} pool create "
-                "--user={} "
-                "--group={} "
-                "--sys={} "
-                "--ranks={}".format(dmg, user, group, setid, tgtlist))
-
-            uuid_str = (
-                """{0}""".format(process.system_output(cmd)).split(" ")[0])
-            print("uuid is {0}\n".format(uuid_str))
-
+        create_result = self.server_managers[0].dmg.pool_create(
+            scm_size="1GB", uid=user, gid=group, target_list=tgtlist.split(","),
+            group=system_name)
+        if create_result is not None:
+            uuid, _ = get_pool_uuid_service_replicas_from_stdout(
+                create_result.stdout)
+            if expected_result == RESULT_FAIL:
+                self.fail("Test was expected to fail but it passed at pool " +
+                          "create.")
             if '0' in tgtlist:
-                exists = check_for_pool.check_for_pool(host1, uuid_str)
+                # check_for_pool checks if the uuid directory exists in host1
+                exists = check_for_pool.check_for_pool(host1, uuid)
                 if exists != 0:
                     self.fail("Pool {0} not found on host {1}.\n"
-                              .format(uuid_str, host1))
+                              .format(uuid, host1))
             if '1' in tgtlist:
-                exists = check_for_pool.check_for_pool(host2, uuid_str)
+                exists = check_for_pool.check_for_pool(host2, uuid)
                 if exists != 0:
                     self.fail("Pool {0} not found on host {1}.\n"
-                              .format(uuid_str, host2))
+                              .format(uuid, host2))
+        else:
+            test_destroy = False
+            if expected_result == RESULT_PASS:
+                self.fail("Test was expected to pass but it failed at pool " +
+                          "create.")
 
-            delete_cmd = (
-                "{} pool destroy "
-                "--pool={} "
-                # "--group={2} "  TODO: should this be implemented?
-                "--force".format(dmg, uuid_str))  # , setid))
-
-            process.system(delete_cmd)
-
-            if '0' in tgtlist:
-                exists = check_for_pool.check_for_pool(host1, uuid_str)
-                if exists == 0:
-                    self.fail("Pool {0} found on host {1} after destroy.\n"
-                              .format(uuid_str, host1))
-            if '1' in tgtlist:
-                exists = check_for_pool.check_for_pool(host2, uuid_str)
-                if exists == 0:
-                    self.fail("Pool {0} found on host {1} after destroy.\n"
-                              .format(uuid_str, host2))
-
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
-
-        except Exception as exc:
-            print(exc)
-            print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+        if test_destroy:
+            destroy_result = self.server_managers[0].dmg.pool_destroy(pool=uuid)
+            if destroy_result is not None:
+                if expected_result == RESULT_FAIL:
+                    self.fail("Test was expected to fail but it passed at " +
+                              "pool create.")
+                if '0' in tgtlist:
+                    exists = check_for_pool.check_for_pool(host1, uuid)
+                    if exists == 0:
+                        self.fail("Pool {0} found on host {1} after destroy.\n"
+                                  .format(uuid, host1))
+                if '1' in tgtlist:
+                    exists = check_for_pool.check_for_pool(host2, uuid)
+                    if exists == 0:
+                        self.fail("Pool {0} found on host {1} after destroy.\n"
+                                  .format(uuid, host2))
+            else:
+                if expected_result == RESULT_PASS:
+                    self.fail("Test was expected to pass but it failed at " +
+                              "pool destroy.")

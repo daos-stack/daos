@@ -382,6 +382,11 @@ class DaosServerYamlParameters(YamlParameters):
             if hasattr(test, "server_log") and test.server_log is not None:
                 self.log_file.value = test.server_log
 
+            # Ignore the scm_size param when using dcpm
+            if self.using_dcpm:
+                self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
+                self.scm_size.update(None, "scm_size")
+
         @property
         def using_nvme(self):
             """Is the configuration file setup to use NVMe devices.
@@ -743,6 +748,19 @@ class DaosServerManager(SubprocessManager):
         """
         return self.manager.job.get_interface_envs(index)
 
+    def _get_port_list(self, hosts):
+        """Get a list of hosts and port numbers.
+
+        Args:
+            hosts (list): a list of hosts to join with the port number
+
+        Returns:
+            list: a list of '<host>:<port>' entries for each host
+
+        """
+        port = self.get_config_value("port")
+        return [":".join([host, str(port)]) for host in hosts]
+
     def get_host_port_list(self):
         """Get a list of hosts and port numbers.
 
@@ -750,8 +768,18 @@ class DaosServerManager(SubprocessManager):
             list: a list of '<host>:<port>' entries for each host
 
         """
-        port = self.get_config_value("port")
-        return [":".join([host, port]) for host in self._hosts]
+        return self._get_port_list(self._hosts)
+
+    def get_access_port_list(self):
+        """Get a list of access point hosts and port numbers.
+
+        Returns:
+            list: a list of '<host>:<port>' entries for each access point host
+
+        """
+        # For now only include the first host in the access point list
+        hosts = self.manager.job.yaml.other_params.access_points.hosts[:1]
+        return self._get_port_list(hosts)
 
     def prepare(self):
         """Prepare the host to run the server."""
@@ -776,14 +804,16 @@ class DaosServerManager(SubprocessManager):
         if self.manager.job.using_nvme or self.manager.job.using_dcpm:
             self.log.info("Preparing storage in <format> mode")
             self.prepare_storage("root")
-            self.manager.mca.value = {"plm_rsh_args": "-l root"}
+            if hasattr(self.manager, "mca"):
+                self.manager.mca.update(
+                    {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
     def start(self):
         """Start the server through the runner."""
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
 
-        # Update dmg command params to reflect access to the server
+        # Update dmg command params to reflect access to all of the servers
         self.dmg.hostlist.update(
             ",".join(self.get_host_port_list()), "dmg.hostlist")
         self.dmg.insecure.update(
@@ -792,30 +822,31 @@ class DaosServerManager(SubprocessManager):
         # Prepare the servers
         self.prepare()
 
-        # Start the servers
+        # Start the servers and wait for each host to require a SCM format
         self.log.info(
             "--- STARTING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
+        self.manager.job.update_pattern("format")
         try:
             self.manager.run()
-        except CommandFailure as details:
-            self.log.info("<SERVER> Exception occurred: %s", str(details))
-            # Kill the subprocess, anything that might have started
+        except CommandFailure as error:
             self.kill()
             raise ServerFailed(
-                "Failed to start server in {} mode.".format(
-                    self.manager.job.mode))
+                "Failed to start servers before format: {}".format(error))
 
-        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-            # Format storage and wait for server to change ownership
-            self.log.info("Formatting hosts: <%s>", self._hosts)
-            self.dmg.storage_format()
+        # Format storage and wait for server to change ownership
+        self.log.info("Formatting hosts: <%s>", self._hosts)
+        self.dmg.storage_format()
 
-            self.manager.job.update_pattern("normal")
-            try:
-                self.manager.job.check_subprocess_status(self.manager.process)
-            except CommandFailure as error:
-                self.log.info("Failed to start after format: %s", str(error))
+        # Wait for all the doas_io_servers to start
+        self.manager.job.update_pattern("normal")
+        if not self.manager.job.check_subprocess_status(self.manager.process):
+            self.kill()
+            raise ServerFailed("Failed to start servers after format")
+
+        # Update the dmg command host list to work with pool create/destroy
+        self.dmg.hostlist.update(
+            ",".join(self.get_access_port_list()), "dmg.hostlist")
 
         return True
 

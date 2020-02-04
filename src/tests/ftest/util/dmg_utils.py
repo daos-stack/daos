@@ -335,8 +335,8 @@ class DmgCommand(CommandWithSubCommand):
         result = None
         try:
             result = self.run()
-        except CommandFailure as details:
-            raise CommandFailure("<dmg> command failed: %s", str(details))
+        except CommandFailure as error:
+            raise CommandFailure("<dmg> command failed: {}".format(error))
 
         return result
 
@@ -397,10 +397,14 @@ class DmgCommand(CommandWithSubCommand):
                     target_list=None, svcn=None, group=None):
         """Create a pool with the dmg command.
 
+        The uid and gid method arguments can be specified as either an integer
+        or a string.  If an integer value is specified it will be converted into
+        the corresponding user/group name string.
+
         Args:
             scm_size (int): SCM pool size to create.
-            uid (int, optional): User ID with privileges. Defaults to None.
-            gid (int, otional): Group ID with privileges. Defaults to None.
+            uid (object, optional): User ID with privileges. Defaults to None.
+            gid (object, otional): Group ID with privileges. Defaults to None.
             nvme_size (str, optional): NVMe size. Defaults to None.
             target_list (list, optional): a list of storage server unique
                 identifiers (ranks) for the DAOS pool
@@ -421,9 +425,9 @@ class DmgCommand(CommandWithSubCommand):
         self.set_sub_command("pool")
         self.sub_command_class.set_sub_command("create")
         self.sub_command_class.sub_command_class.user.value = \
-            getpwuid(uid).pw_name if uid is not None else uid
+            getpwuid(uid).pw_name if isinstance(uid, int) else uid
         self.sub_command_class.sub_command_class.group.value = \
-            getgrgid(gid).gr_name if gid is not None else gid
+            getgrgid(gid).gr_name if isinstance(gid, int) else gid
         self.sub_command_class.sub_command_class.scm_size.value = scm_size
         self.sub_command_class.sub_command_class.nvme_size.value = nvme_size
         if target_list is not None:

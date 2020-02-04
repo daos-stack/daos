@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +20,9 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import subprocess
-
+"""
 from ClusterShell.NodeSet import NodeSet
+
 from apricot import TestWithServers
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
@@ -57,7 +54,9 @@ class FioBase(TestWithServers):
         super(FioBase, self).setUp()
 
         # removing runner node from hostlist_client, only need one client node.
-        self.hostlist_clients = self.hostlist_clients[:-1]
+        self.hostlist_clients = self.hostlist_clients[:1]
+        self.assertEqual(
+            len(self.hostlist_clients), 1, "This test requires one client")
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
