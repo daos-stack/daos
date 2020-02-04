@@ -448,9 +448,9 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 				WithScmDeviceList("a"),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
 		},
-		"duplicate bdev_list": {
+		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList("a", "b"),
+				WithBdevDeviceList("a"),
 			configB: configB().
 				WithBdevDeviceList("b", "a"),
 			expErr: FaultConfigDuplicateBdevDeviceList(1, 0),

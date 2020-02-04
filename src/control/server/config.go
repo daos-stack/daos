@@ -28,9 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -467,6 +465,8 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 	}
 
 	seenValues := make(map[string]int)
+	seenScmSet := make(map[string]int)
+	seenBdevSet := make(map[string]int)
 
 	for idx, srv := range c.Servers {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -497,36 +497,23 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 		}
 		seenValues[mountConfig] = idx
 
-		if len(scmConf.DeviceList) > 0 {
-			devStr := fmt.Sprintf("scm_list:%s", sliceToString(scmConf.DeviceList))
-
-			if seenIn, exists := seenValues[devStr]; exists {
-				log.Debugf("%s in %d duplicates %d", devStr, idx, seenIn)
+		for _, dev := range scmConf.DeviceList {
+			if seenIn, exists := seenScmSet[dev]; exists {
+				log.Debugf("scm device %s in %d duplicates %d", dev, idx, seenIn)
 				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
 			}
-			seenValues[devStr] = idx
+			seenScmSet[dev] = idx
 		}
 
 		bdevConf := srv.Storage.Bdev
-		if len(bdevConf.DeviceList) > 0 {
-			devStr := fmt.Sprintf("bdev_list:%s", sliceToString(bdevConf.DeviceList))
-
-			if seenIn, exists := seenValues[devStr]; exists {
-				log.Debugf("%s in %d duplicates %d", devStr, idx, seenIn)
+		for _, dev := range bdevConf.DeviceList {
+			if seenIn, exists := seenBdevSet[dev]; exists {
+				log.Debugf("bdev device %s in %d duplicates %d", dev, idx, seenIn)
 				return FaultConfigDuplicateBdevDeviceList(idx, seenIn)
 			}
-			seenValues[devStr] = idx
+			seenBdevSet[dev] = idx
 		}
 	}
 
 	return nil
-}
-
-// sliceToString converts a string slice to a stable string
-// representation
-func sliceToString(in []string) string {
-	out := make([]string, len(in))
-	copy(out, in)
-	sort.Strings(out)
-	return strings.Join(out, ",")
 }
