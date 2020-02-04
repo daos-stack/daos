@@ -153,7 +153,7 @@ def scons():
                   "See https://github.com/{}/daos/branches".format(branch,
                                                                    org_name))
             exit(1)
-
+            
         # and check it out
         print("Checking out branch for the PR...")
         repo.checkout(repo.lookup_branch(branch))
@@ -276,7 +276,7 @@ def scons():
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
     opts.Save(opts_file, env)
-
+    
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
     Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
@@ -288,9 +288,9 @@ def scons():
     set_defaults(env)
 
     build_prefix = prereqs.get_src_build_dir()
-
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir(build_prefix, '.', duplicate=0)
+    
     SConscript('{}/src/SConscript'.format(build_prefix))
 
     buildinfo = prereqs.get_build_info()
@@ -309,6 +309,9 @@ def scons():
 
     # install certificate generation files
     SConscript('utils/certs/SConscript')
+    
+    # build java
+    SConscript('{}/java/SConscript'.format(build_prefix))
 
     Default(build_prefix)
     Depends('install', build_prefix)

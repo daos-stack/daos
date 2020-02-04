@@ -31,6 +31,11 @@ DaosInputStream and DaosOutputStream.
 * DaosInputStream, for reading file, preload is also possible in this class.
 * DaosOutputStream, for writing file.
 
+#### Hadoop DAOS FileSystem Configuration
+DAOS FileSystem binds to schema, "daos". All DAOS FileSystem configuration will be read from daos-site.xml. So make 
+sure daos-site.xml can be loaded by Hadoop. Please check [example](hadoop-daos/src/main/resources/daos-site-example.xml)
+for configuration items, defaults and their description. 
+
 ## Build
 It's Java module and built by Maven. Java 1.8 and Maven 3 are required to build this module. After they are installed,
 you can change to this <DAOS>/java folder and build by below command line.

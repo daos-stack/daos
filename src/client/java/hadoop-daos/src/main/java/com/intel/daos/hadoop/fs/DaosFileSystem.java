@@ -45,56 +45,91 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * Before instantiating this class, we need to do some configuration visible to
- * Hadoop. See below table for all mandatory and optional configuration items.
+ * Hadoop. They are configured in daos-site.xml. See below table for
+ * all mandatory and optional configuration items.
  *
  * <table>
- * <th><td>Item</td><td>Default</td><td>Range</td><td>Mandatory</td><td>Description</td></th>
+ * <thead>
+ *   <tr>
+ *   <td>Item</td>
+ *   <td>Default</td>
+ *   <td>Range</td>
+ *   <td>mandatory</td>
+ *   <td>Description</td>
+ *   </tr>
+ * </thead>
+ * <tbody>
  * <tr>
- * <td>{@link Constants#DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
+ *   <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_POOL_UUID}</td>
+ *   <td></td>
+ *   <td></td>
+ *   <td>true</td>
+ *   <td>UUID of DAOS pool</td>
+ * </tr>
+ * <tr>
+ *   <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_CONTAINER_UUID}</td>
+ *   <td></td>
+ *   <td></td>
+ *   <td>true</td>
+ *   <td>UUID od DAOS container which created with "--type posix"</td>
+ * </tr>
+ * <tr>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_READ_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
  * <td>false</td>
  * <td>size of direct buffer for reading data from DAOS</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
  * <td>false</td>
  * <td>size of direct buffer for writing data to DAOS</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_BLOCK_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_BLOCK_SIZE} - {@link Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_BLOCK_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
+ * <td>false</td>
  * <td>size for splitting large file into blocks when read by Hadoop</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_CHUNK_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_CHUNK_SIZE} - {@link Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_CHUNK_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
+ * <td>false</td>
  * <td>size of DAOS file chunk</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_PRELOAD_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_PRELOAD_SIZE} - {@link Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_PRELOAD_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ * <td>false</td>
  * <td>size for pre-loading more than requested data from DAOS into internal buffer when read</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_BUFFERED_READ_ENABLED}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_BUFFERED_READ_ENABLED}</td>
  * <td>true</td>
  * <td>true or false</td>
+ * <td>false</td>
  * <td>true for pre-loading more than requested data. false for loading exactly requested data</td>
  * </tr>
+ * </tbody>
  * </table>
  *
- * <p>
+ * <pre>
  * User can use below statement to make their configuration visible to Hadoop.
  * <code>
  * Configuration cfg = new Configuration();
  * cfg.addResource("path to your configuration file");
  * </code>
+ * </pre>
  *
  * <p>
  * To get instance of this class via Hadoop FileSystem, please refer to the package description.
@@ -122,13 +157,18 @@ public class DaosFileSystem extends FileSystem {
     }
     if (StringUtils.isEmpty(name.getAuthority())) {
       throw new IllegalArgumentException("authority (ip:port) cannot be empty. we need it to identify a " +
-              "unique DAOS File System");
+              "unique DAOS File System.");
+    }
+    String[] ipPort = name.getAuthority().split(":");
+    if (ipPort.length != 2 || StringUtils.isEmpty(ipPort[0]) || StringUtils.isEmpty(ipPort[1])) {
+      throw new IllegalArgumentException("authority should be in format ip:port. No colon in ip or port");
     }
 
     super.initialize(name, conf);
 
-    try {
+    conf = DaosConfig.getInstance().parseConfig(ipPort[0], ipPort[1], conf);
 
+    try {
       this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
       this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);

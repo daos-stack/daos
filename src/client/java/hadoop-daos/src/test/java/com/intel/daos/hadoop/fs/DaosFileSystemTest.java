@@ -1,6 +1,7 @@
 package com.intel.daos.hadoop.fs;
 
 import com.intel.daos.client.DaosFsClient;
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -13,6 +14,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.core.classloader.annotations.SuppressStaticInitializationFor;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.io.File;
+import java.io.InputStream;
 import java.net.URI;
 
 import static org.mockito.Mockito.*;
@@ -149,12 +152,43 @@ public class DaosFileSystemTest {
     conf.setBoolean(Constants.DAOS_BUFFERED_READ_ENABLED, defaultEnabled ^ true);
     DaosFileSystem fs = new DaosFileSystem();
     fs.initialize(URI.create("daos://1234:56"), conf);
-    assert (fs.isBufferedReadEnabled() == defaultEnabled ^ true);
+    Assert.assertTrue (fs.isBufferedReadEnabled() == defaultEnabled ^ true);
     fs.close();
     // if not set, should be default
     conf.unset(Constants.DAOS_BUFFERED_READ_ENABLED);
     fs.initialize(URI.create("daos://1234:56"), conf);
-    assert (fs.isBufferedReadEnabled() == defaultEnabled);
+    Assert.assertTrue (fs.isBufferedReadEnabled() == defaultEnabled);
     fs.close();
+  }
+
+  @Test
+  public void testLoadingConfig() throws Exception {
+    Configuration cfg = new Configuration(false);
+    cfg.addResource("daos-site.xml");
+    String s = cfg.get("fs.defaultFS");
+    Assert.assertEquals("daos://default:0", s);
+    Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
+  }
+
+  @Test
+  public void testLoadingConfigFromStream() throws Exception {
+    Configuration cfg = new Configuration(false);
+
+    File tempFile = File.createTempFile("daos", "");
+    try (InputStream is = this.getClass().getResourceAsStream("/daos-site.xml")) {
+      FileUtils.copyInputStreamToFile(is, tempFile);
+    }
+    cfg.addResource(tempFile.toURI().toURL(), false);
+    String s = cfg.get("fs.defaultFS");
+    Assert.assertEquals("daos://default:0", s);
+    Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
+  }
+
+  @Test
+  public void testLoadingConfigFromCoreSite() throws Exception {
+    Configuration cfg = new Configuration(true);
+    String s = cfg.get("fs.defaultFS");
+    Assert.assertEquals("daos://id:1", s);
+    Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
   }
 }

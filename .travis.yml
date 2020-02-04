@@ -7,6 +7,9 @@ env:
 
 language: c
 
+language: java
+jdk: openjdk8
+
 services:
  - docker
 

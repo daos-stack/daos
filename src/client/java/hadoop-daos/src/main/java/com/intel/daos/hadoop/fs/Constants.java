@@ -30,6 +30,15 @@ public final class Constants {
 
   public static final String DAOS_SCHEMA = "daos";
 
+  public static final String DAOS_CONFIG_FILE_NAME = "daos-site.xml";
+
+  public static final String DAOS_CONFIG_POOL_KEY_DEFAULT = "default";
+
+  public static final String DAOS_CONFIG_CONTAINER_KEY_DEFAULT = "0";
+
+  public static final String DAOS_CONFIG_CONTAINER_KEY_PREFIX = "c";
+
+  public static final String DAOS_DEFAULT_FS = "fs.defaultFS";
   // daos pool
   public static final String DAOS_POOL_UUID = "fs.daos.pool.uuid";
 
