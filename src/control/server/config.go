@@ -499,7 +499,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 
 		for _, dev := range scmConf.DeviceList {
 			if seenIn, exists := seenScmSet[dev]; exists {
-				log.Debugf("scm device %s in %d duplicates %d", dev, idx, seenIn)
+				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
 				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
 			}
 			seenScmSet[dev] = idx
@@ -508,7 +508,7 @@ func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
 		bdevConf := srv.Storage.Bdev
 		for _, dev := range bdevConf.DeviceList {
 			if seenIn, exists := seenBdevSet[dev]; exists {
-				log.Debugf("bdev device %s in %d duplicates %d", dev, idx, seenIn)
+				log.Debugf("bdev_list entry %s in %d duplicates %d", dev, idx, seenIn)
 				return FaultConfigDuplicateBdevDeviceList(idx, seenIn)
 			}
 			seenBdevSet[dev] = idx
