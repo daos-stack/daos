@@ -2282,8 +2282,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 					obj_auxi->csum_report = 0;
 					obj_auxi->csum_retry = 1;
 				}
-			} else
+			} else {
+				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
+			}
 		}
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
@@ -2435,6 +2437,11 @@ obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 {
 	int rc = obj_dkey2shard(obj, dkey_hash, map_ver, DAOS_OBJ_RPC_FETCH,
 				obj_auxi->to_leader);
+
+	/* rc < 0 means no available targets. Fetch with error out with
+	 * -DER_NONEXIST. Hence, it's okay to leave initial shard as initialized
+	 * (set to shard 0).
+	 */
 
 	if (rc >=  0)
 		obj_auxi->initial_shard = rc;
