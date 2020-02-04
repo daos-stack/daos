@@ -334,23 +334,23 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 uint32_t
 count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
-		uint32_t failed_in_layout) {
+		uint32_t failed_in_layout)
+{
+	uint32_t num_failed;
+	uint32_t spares_left;
 
-	int num_failed;
-	int spares_left;
-
-	spares_left = 0;
+	spares_left = jmap->jmp_domain_nr;
 	num_failed = pool_map_get_failed_cnt(jmap->jmp_map.pl_poolmap,
 			jmap->min_redundant_dom);
 
-	spares_left = jmap->jmp_domain_nr;
-	spares_left = spares_left - (num_failed + layout->ol_nr);
+	if (spares_left + failed_in_layout < (num_failed + layout->ol_nr))
+		return 0;
 
 	/* Add back the ones already counted as failed in the layout
 	 * Or we would double count them.
 	 */
+	spares_left = spares_left - (num_failed + layout->ol_nr);
 	spares_left += failed_in_layout;
-
 	return spares_left;
 }
 
