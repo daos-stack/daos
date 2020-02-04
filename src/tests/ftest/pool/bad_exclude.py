@@ -160,5 +160,4 @@ class BadExcludeTest(TestWithoutServers):
                     pool.group = saved_grp
                 if saved_uuid is not None:
                     ctypes.memmove(pool.uuid, saved_uuid, 16)
-                pool.disconnect()
                 pool.destroy(1)

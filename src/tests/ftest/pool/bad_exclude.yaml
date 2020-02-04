@@ -1,3 +1,5 @@
+agent_config:
+   name: test_server
 server_config:
    name: test_server
 hosts:

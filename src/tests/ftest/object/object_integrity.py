@@ -98,7 +98,6 @@ class ObjectDataValidation(TestWithoutServers):
                 self.container.close()
                 self.container.destroy()
             if self.pool:
-                self.pool.disconnect()
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:

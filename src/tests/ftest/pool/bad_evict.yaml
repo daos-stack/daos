@@ -1,3 +1,5 @@
+agent_config:
+   name: scott_server
 server_config:
    name: scott_server
 hosts:

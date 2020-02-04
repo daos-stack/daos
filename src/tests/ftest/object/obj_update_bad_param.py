@@ -94,7 +94,6 @@ class ObjUpdateBadParam(TestWithServers):
             container.oh = saved_oh
             container.close()
             container.destroy()
-            pool.disconnect()
             pool.destroy(1)
             self.fail("Test was expected to return a -1002 but it has not.\n")
 
@@ -102,7 +101,6 @@ class ObjUpdateBadParam(TestWithServers):
             container.oh = saved_oh
             container.close()
             container.destroy()
-            pool.disconnect()
             pool.destroy(1)
             self.plog.info("Test Complete")
             if '-1002' not in str(excep):
@@ -164,7 +162,6 @@ class ObjUpdateBadParam(TestWithServers):
 
             container.close()
             container.destroy()
-            pool.disconnect()
             pool.destroy(1)
             self.plog.error("Didn't get expected return code.")
             self.fail("Test was expected to return a -1003 but it has not.\n")
@@ -173,7 +170,6 @@ class ObjUpdateBadParam(TestWithServers):
             if '-1003' not in str(excep):
                 container.close()
                 container.destroy()
-                pool.disconnect()
                 pool.destroy(1)
                 self.plog.error("Didn't get expected return code.")
                 print(excep)
@@ -209,7 +205,6 @@ class ObjUpdateBadParam(TestWithServers):
         except DaosApiError as excep:
             container.close()
             container.destroy()
-            pool.disconnect()
             pool.destroy(1)
             print(excep)
             print(traceback.format_exc())
@@ -218,7 +213,6 @@ class ObjUpdateBadParam(TestWithServers):
 
         container.close()
         container.destroy()
-        pool.disconnect()
         pool.destroy(1)
         self.plog.info("Test Complete")
 

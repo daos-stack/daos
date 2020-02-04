@@ -134,7 +134,6 @@ class ObjFetchBadParam(TestWithServers):
 
             self.container.close()
             self.container.destroy()
-            self.pool.disconnect()
             self.pool.destroy(1)
             self.fail("Test was expected to return a -1003 but it has not.\n")
 

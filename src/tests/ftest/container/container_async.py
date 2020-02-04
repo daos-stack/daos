@@ -106,7 +106,6 @@ class ContainerAsync(TestWithServers):
 
             # Try to recreate container after destroying pool,
             # this should fail. Checking rc after failure.
-            self.pool.disconnect()
             self.pool.destroy(1)
             GLOB_SIGNAL = threading.Event()
             GLOB_RC = -9900000
