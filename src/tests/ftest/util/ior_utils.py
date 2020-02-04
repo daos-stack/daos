@@ -275,8 +275,8 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        logger.info(metrics[0])
-        logger.info(metrics[1])
+        for m in metrics:
+            logger.info(m)
         logger.info("\n")
 
 
