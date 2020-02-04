@@ -65,9 +65,9 @@ type harnessClient struct {
 	client       *mgmtSvcClient
 }
 
-// prepareRPC will make sure we have a MgmtSvcClient and return a populated
+// prepareRequest will make sure we have a MgmtSvcClient and return a populated
 // RanksReq proto message from a provided RemoteHarnessReq.
-func (hc *harnessClient) prepareRPC(req RemoteHarnessReq) (*mgmtpb.RanksReq, error) {
+func (hc *harnessClient) prepareRequest(req RemoteHarnessReq) (*mgmtpb.RanksReq, error) {
 	// Populate MS instance to use as MgmtSvcClient
 	if hc.client == nil {
 		mi, err := hc.localHarness.GetMSLeaderInstance()
@@ -84,8 +84,8 @@ func (hc *harnessClient) prepareRPC(req RemoteHarnessReq) (*mgmtpb.RanksReq, err
 	return &mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: req.Timeout, Force: req.Force}, nil
 }
 
-// processRPC takes a RanksResp proto message and converts to system.MemberResults.
-func (hc *harnessClient) processRPC(rpcResp *mgmtpb.RanksResp) (system.MemberResults, error) {
+// processReturn takes a RanksResp proto message and converts to system.MemberResults.
+func (hc *harnessClient) processReturn(rpcResp *mgmtpb.RanksResp) (system.MemberResults, error) {
 	memberResults := make(system.MemberResults, 0, maxIoServers)
 	if err := convert.Types(rpcResp.GetResults(), &memberResults); err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (hc *harnessClient) processRPC(rpcResp *mgmtpb.RanksResp) (system.MemberRes
 func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Query request to harness at %s", addr)
 
-	rpcReq, err := hc.prepareRPC(RemoteHarnessReq{
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
 		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32
 		return nil, err
 	}
 
-	return hc.processRPC(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
 // PrepShutdown sends PrepShutdown gRPC using the MgmtSvcClient to the control
@@ -127,7 +127,7 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32
 func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing PrepShutdown request to harness at %s", addr)
 
-	rpcReq, err := hc.prepareRPC(RemoteHarnessReq{
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
 		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
 	})
 	if err != nil {
@@ -140,7 +140,7 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 		return nil, err
 	}
 
-	return hc.processRPC(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
 // Stop sends Stop gRPC using the MgmtSvcClient to the control server at the
@@ -153,7 +153,7 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Stop request to harness at %s", addr)
 
-	rpcReq, err := hc.prepareRPC(RemoteHarnessReq{
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
 		Addr: addr, Ranks: ranks, Force: force, Timeout: float32(defaultTimeout),
 	})
 	if err != nil {
@@ -166,7 +166,7 @@ func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, rank
 		return nil, err
 	}
 
-	return hc.processRPC(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
 // Start sends Stop gRPC using the MgmtSvcClient to the control server at the
@@ -177,7 +177,7 @@ func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, rank
 func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Start request to harness at %s", addr)
 
-	rpcReq, err := hc.prepareRPC(RemoteHarnessReq{
+	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
 		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
 	})
 	if err != nil {
@@ -190,7 +190,7 @@ func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32
 		return nil, err
 	}
 
-	return hc.processRPC(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
 // NewHarnessClient returns a new harnessClient reference containing a reference
