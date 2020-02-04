@@ -60,7 +60,7 @@ class DmgPoolQueryTest(IorTestBase):
         self.log.info("Running dmg pool query")
         dmg_out = pool_query(self.bin, self.host_p, self.uuid)
 
-        if dmg_out and dmg_out.stdout == 0:
+        if dmg_out and dmg_out.exit_status == 0:
             # Parse output
             d_info = get_pool_query_info(dmg_out.stdout)
             self.log.info("dmg values found: %s", d_info)
@@ -85,7 +85,7 @@ class DmgPoolQueryTest(IorTestBase):
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryinputs
         """
         # Get test UUID
-        uuids = self.params.get("uuids", '/run/pool_uuids/*/')
+        uuids = self.params.get("uuids", '/run/pool_uuids/uuids/*')
         errors_list = []
         for uuid in uuids:
             self.log.info("Using test UUID: %s", uuid[0])
