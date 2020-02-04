@@ -20,7 +20,8 @@ ior:
   client_processes:
     np: 1
   ior_flags: "-w -W -k -G 1"
-  transfer_size: "32M"
+  transfer_size: "4K"
+  block_size: "64M"
 exp_vals:
   ntarget: "8"
   s_mem: "3GB"
