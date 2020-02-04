@@ -2,10 +2,13 @@ package com.intel.daos.hadoop.fs;
 
 import com.intel.daos.client.DaosFsClient;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.core.classloader.annotations.SuppressStaticInitializationFor;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -15,9 +18,36 @@ import java.net.URI;
 import static org.mockito.Mockito.*;
 
 @RunWith(PowerMockRunner.class)
+@PowerMockIgnore("javax.management.*")
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class})
 @SuppressStaticInitializationFor("com.intel.daos.client.DaosFsClient")
 public class DaosFileSystemTest {
+
+  @Test
+  public void testNewDaosFileSystemByDifferentURIs() throws Exception {
+    PowerMockito.mockStatic(DaosFsClient.class);
+    DaosFsClient.DaosFsClientBuilder builder = mock(DaosFsClient.DaosFsClientBuilder.class);
+    PowerMockito.whenNew(DaosFsClient.DaosFsClientBuilder.class).withNoArguments().thenReturn(builder);
+
+    Configuration cfg = new Configuration();
+    cfg.set(Constants.DAOS_POOL_UUID, "123");
+    cfg.set(Constants.DAOS_CONTAINER_UUID, "56");
+    cfg.set(Constants.DAOS_POOL_SVC, "0");
+
+    DaosFsClient client = mock(DaosFsClient.class);
+    when(builder.poolId(anyString())).thenReturn(builder);
+    when(builder.containerId(anyString())).thenReturn(builder);
+    when(builder.ranks(anyString())).thenReturn(builder);
+    when(builder.build()).thenReturn(client);
+
+    UserGroupInformation.setLoginUser(UserGroupInformation.createRemoteUser("test"));
+
+    FileSystem fs1 = FileSystem.get(URI.create("daos://1234:56/"), cfg);
+    FileSystem fs2 = FileSystem.get(URI.create("daos://12345:567/"), cfg);
+    Assert.assertNotSame(fs1, fs2);
+    fs1.close();
+    fs2.close();
+  }
 
   @Test
   public void testNewDaosFileSystemSuccessfulAndCreateRootDir() throws Exception {

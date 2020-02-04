@@ -56,8 +56,7 @@ public class DaosInputStream extends FSInputStream {
 
   private final DaosFile daosFile;
   private final FileSystem.Statistics stats;
-  // TODO: make it final after conditional update
-  private long fileLen;
+  private final long fileLen;
   private final int bufferCapacity;
   private final int preLoadSize;
   private final boolean bufferedReadEnabled;
@@ -117,24 +116,6 @@ public class DaosInputStream extends FSInputStream {
     }
   }
 
-  /**
-   * TODO: remove it after conditional update.
-   *
-   * @param expectedLen
-   * expected length
-   * @throws IOException
-   */
-  private void refetchFileLen(long expectedLen) throws IOException {
-    fileLen = daosFile.length();
-    if (expectedLen > 0) {
-      int count = 0;
-      while (fileLen < expectedLen && count < MAX_RETRIES) {
-        fileLen = daosFile.length();
-        count++;
-      }
-    }
-  }
-
   @Override
   public synchronized void seek(long targetPos) throws IOException {
     if (LOG.isDebugEnabled()) {
@@ -143,12 +124,10 @@ public class DaosInputStream extends FSInputStream {
     }
     checkNotClose();
 
-    refetchFileLen(targetPos);
     if (targetPos < 0) {
       throw new EOFException("Cannot seek to negative position " + targetPos);
     }
     if (this.fileLen < targetPos) {
-      refetchFileLen(targetPos);
       throw new EOFException("Cannot seek after EOF ,file length :" + fileLen + " ; targetPos: " + targetPos);
     }
 
@@ -329,7 +308,6 @@ public class DaosInputStream extends FSInputStream {
       LOG.debug("DaosInputStream available");
     }
     checkNotClose();
-    refetchFileLen(0);
     long remaining = this.fileLen - this.nextReadPos;
     if (remaining > Integer.MAX_VALUE) {
       return Integer.MAX_VALUE;
