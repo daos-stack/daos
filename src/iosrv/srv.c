@@ -326,13 +326,42 @@ dss_nvme_poll_ult(void *args)
 	}
 }
 
-/**
- *
- * The handling process would like
- *
- * 1. The execution stream creates a private CRT context
- *
- * 2. Then polls the request from CRT context
+/*
+ * Wait all other ULTs exited before the srv handler ULT dss_srv_handler()
+ * exits, since the per-xstream TLS, comm context, NVMe context, etc. will
+ * be destroyed on server handler ULT exiting.
+ */
+static void
+wait_all_exited(struct dss_xstream *dx)
+{
+	size_t	total_size = 0, pool_size;
+	int	rc, i;
+
+	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
+	while (1) {
+		for (i = 0; i < DSS_POOL_CNT; i++) {
+			rc = ABT_pool_get_total_size(dx->dx_pools[i],
+						     &pool_size);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			total_size += pool_size;
+		}
+		/*
+		 * Current running srv handler ULT is popped, so it's not
+		 * counted in pool size by argobots.
+		 */
+		if (total_size == 0)
+			break;
+
+		ABT_thread_yield();
+	}
+	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
+}
+
+/*
+ * The server handler ULT first sets CPU affinity, initialize the per-xstream
+ * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
+ * poll), then it starts to poll the network requests in a loop until service
+ * shutdown.
  */
 static void
 dss_srv_handler(void *arg)
@@ -432,15 +461,15 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		/*
-		 * TODO: This whole dss_srv_handler() needs be revised, it
-		 * should be a pure network poll ULT function, all other
-		 * stuff needs be moved out.
-		 */
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
 				       dss_nvme_poll_ult, NULL,
 				       ABT_THREAD_ATTR_NULL, NULL);
-		D_ASSERT(rc == ABT_SUCCESS);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
+		}
 	}
 
 	dmi->dmi_xstream = dx;
@@ -481,28 +510,9 @@ dss_srv_handler(void *arg)
 		check_sleep_list();
 		ABT_thread_yield();
 	}
-
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
-	/* Let's wait until all of queue ULTs has been executed, in case dmi_ctx
-	 * might be used by some other ULTs.
-	 */
-	while (1) {
-		size_t total_size = 0;
-		int i;
 
-		for (i = 0; i < DSS_POOL_CNT; i++) {
-			size_t pool_size;
-
-			rc = ABT_pool_get_total_size(dx->dx_pools[i],
-						     &pool_size);
-			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-			total_size += pool_size;
-		}
-		if (total_size == 0)
-			break;
-
-		ABT_thread_yield();
-	}
+	wait_all_exited(dx);
 nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);

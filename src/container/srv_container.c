@@ -131,10 +131,14 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 		return -DER_INVAL;
 	}
 
-	if (num_allowed_failures <= num_failed)
+	if (num_allowed_failures >= num_failed)
 		return 0;
-	else
+	else {
+		D_ERROR("Domain contains %d failed "
+			"components, allows at most %d", num_failed,
+			num_allowed_failures);
 		return -DER_INVAL;
+	}
 }
 
 static int

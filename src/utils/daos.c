@@ -80,6 +80,8 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
+	else if (strcmp(str, "get-acl") == 0)
+		return CONT_GET_ACL;
 	return -1;
 }
 
@@ -461,6 +463,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"oid",		required_argument,	NULL,	'i'},
 		{"force",	no_argument,		NULL,	'f'},
 		{"properties",	required_argument,	NULL,	DAOS_PROPERTIES_OPTION},
+		{"outfile",	required_argument,	NULL,	'O'},
+		{"verbose",	no_argument,		NULL,	'V'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -625,8 +629,15 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'f':
-			/* only applies to cont destroy */
-			ap->force_destroy = 1;
+			ap->force = 1;
+			break;
+		case 'O':
+			D_STRNDUP(ap->outfile, optarg, strlen(optarg));
+			if (ap->outfile == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'V':
+			ap->verbose = true;
 			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
@@ -705,6 +716,8 @@ out_free:
 		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 		daos_prop_free(ap->props);
 	}
+	if (ap->outfile != NULL)
+		D_FREE(ap->outfile);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -874,6 +887,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
+		break;
+	case CONT_GET_ACL:
+		rc = cont_get_acl_hdlr(ap);
 		break;
 	default:
 		break;

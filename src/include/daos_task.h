@@ -41,7 +41,6 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
-#include <daos/checksum.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {

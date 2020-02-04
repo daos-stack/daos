@@ -265,6 +265,10 @@ cc_remember_to_copy(struct csum_context *ctx, struct dcs_csum_info *info,
 		    uint32_t idx, uint8_t *csum, uint16_t len)
 {
 	C_TRACE("Remember to copy csum (idx=%d, len=%d)\n", idx, len);
+	if (csum == NULL) {
+		D_ERROR("Expected to have checksums to copy for fetch.");
+		return;
+	}
 	if (ctx->cc_csums_to_copy_to == NULL) {
 		ctx->cc_csums_to_copy_to = info;
 		ctx->cc_csums_to_copy_to_csum_idx = idx;
@@ -492,6 +496,16 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 
 	if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
 		return 0;
+
+	/** Verify have correct csums for extents returned.
+	 * Should be 1 biov_csums for each biov in bsgl
+	 */
+	for (i = 0; i < bsgl->bs_nr_out; i++) {
+		if (!ci_is_valid(&biov_csums[i])) {
+			D_ERROR("Invalid csum for biov %d.", i);
+			return -DER_CSUM;
+		}
+	}
 
 	/** setup the context */
 	ctx.cc_csummer = csummer;

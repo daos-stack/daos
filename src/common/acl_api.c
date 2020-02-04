@@ -1205,6 +1205,10 @@ daos_ace_is_valid(struct daos_ace *ace)
 	if (ace->dae_access_types & ~valid_types)
 		return false;
 
+	/* No access type defined */
+	if (ace->dae_access_types == 0)
+		return false;
+
 	if (ace->dae_access_flags & ~valid_flags)
 		return false;
 
