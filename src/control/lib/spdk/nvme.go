@@ -276,9 +276,7 @@ func processReturn(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
 	}
 
-	defer func() {
-		freeReturn(retPtr)
-	}()
+	defer freeReturn(retPtr)
 
 	ctrlrPtr := retPtr.ctrlrs
 
