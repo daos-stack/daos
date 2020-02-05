@@ -888,24 +888,31 @@ class DaosServerManager(SubprocessManager):
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
         """
-        clean_cmds = set()
-        for server_param in self.manager.job.yaml.server_params:
-            scm_mount = server_param.get_value("scm_mount")
-            self.log.info("Cleaning the %s directory", str(scm_mount))
-            clean_cmds.add(
-                "find {} -mindepth 1 -maxdepth 1 -print0 | "
-                "xargs -0r rm -rf".format(scm_mount))
+        clean_cmds = []
+        for server_params in self.manager.job.yaml.server_params:
+            scm_mount = server_params.get_value("scm_mount")
+            self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
-            if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-                clean_cmds.add("sudo umount {}".format(scm_mount))
+            # Remove the superblocks
+            cmd = "rm -fr {}/*".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
+
+            # Dismount the scm mount point
+            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
 
             if self.manager.job.using_dcpm:
-                scm_list = server_param.get_value("scm_list")
-                for device in scm_list:
-                    self.log.info("Cleaning the %s device", str(device))
-                    clean_cmds.add("sudo wipefs -a {}".format(device))
+                scm_list = server_params.get_value("scm_list")
+                if isinstance(server_params.scm_list.value, list):
+                    for device in scm_list:
+                        self.log.info("Cleaning up the %s device.", str(device))
+                        cmd = "sudo wipefs -a {}".format(device)
+                        if cmd not in clean_cmds:
+                            clean_cmds.append(cmd)
 
-        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
+        pcmd(self._hosts, "; ".join(clean_cmds), True)
 
     def prepare_storage(self, user):
         """Prepare the server storage.
