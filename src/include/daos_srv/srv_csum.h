@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #define __DAOS_IOSRV_CHECKSUM_H__
 
 #include <daos_srv/bio.h>
+#include <daos/checksum.h>
 
 /**
  * Determine if the saved checksum for a chunk can be used, or if a
@@ -57,13 +58,13 @@ ds_csum_calc_needed(struct daos_csum_range *raw_ext,
  * @param csummer[in]			csummer object for calculating and csum
  *					logic
  * @param bsgl[in]			bio scatter gather list with the data
- * @param biov_dcbs[in]			list csum info for each \bsgl
- * @param biov_dcbs_used[in/out]	track the number of dcbs used
+ * @param biov_csums[in]			list csum info for each \bsgl
+ * @param biov_csums_used[in/out]	track the number of csums used
  * @return
  */
 int
 ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, daos_csum_buf_t *biov_dcbs,
-		size_t *biov_dcbs_used);
+		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
+		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums);
 
 #endif
