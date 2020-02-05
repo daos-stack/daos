@@ -26,7 +26,7 @@ import traceback
 import uuid
 import threading
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from pydaos.raw import  DaosContainer, DaosApiError
 
 
@@ -39,7 +39,6 @@ def cb_func(event):
     """
     Callback function for asynchronous container functionality.
     """
-
     global GLOB_SIGNAL
     global GLOB_RC
 
@@ -60,6 +59,7 @@ class ContainerAsync(TestWithServers):
         self.container1 = None
         self.container2 = None
 
+    @skipForTicket("DAOS-4106")
     def test_createasync(self):
         """
         Test container create for asynchronous mode.
@@ -81,7 +81,7 @@ class ContainerAsync(TestWithServers):
             self.container2 = DaosContainer(self.context)
 
             GLOB_SIGNAL = threading.Event()
-            self.container1.create(poh, None, cb_func)
+            self.container1.create(poh=poh, con_uuid=None, cb_func=cb_func)
 
             GLOB_SIGNAL.wait()
             if GLOB_RC != 0:

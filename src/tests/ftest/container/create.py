@@ -56,6 +56,7 @@ class CreateContainerTest(TestWithServers):
         if handleparam == 'VALID':
             poh = self.pool.pool.handle
         else:
+            self.cancel("skipping this test case until DAOS-4099 is fixed")
             poh = handleparam
             expected_results.append('FAIL')
 
