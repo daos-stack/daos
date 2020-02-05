@@ -965,7 +965,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(timeout):
 	}
 
-	// either all instances st timeout occurred
+	// either all instances started or timeout occurred
 	for _, i := range svc.harness.instances {
 		state := system.MemberStateStopped
 		rrErr := errors.Errorf("want %s, got %s", system.MemberStateStarted, state)

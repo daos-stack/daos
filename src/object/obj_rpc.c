@@ -32,6 +32,10 @@
 #include "obj_rpc.h"
 #include "rpc_csum.h"
 
+/** proc functions defined in other files */
+int
+crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum);
+
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 {
@@ -178,7 +182,7 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 			return rc;
 	}
 
-	for (i = 0; i < oiod->oiod_nr; i++) {
+	for (i = 0; oiod->oiod_siods != NULL && i < oiod->oiod_nr; i++) {
 		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
@@ -226,8 +230,14 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
-		start = oiod->oiod_siods[0].siod_idx;
-		nr = oiod->oiod_siods[0].siod_nr;
+		if (oiod->oiod_siods != NULL) {
+			start = oiod->oiod_siods[0].siod_idx;
+			nr = oiod->oiod_siods[0].siod_nr;
+		} else {
+			D_ASSERT(oiod->oiod_flags & OBJ_SIOD_SINGV);
+			start = 0;
+			nr = 1;
+		}
 		D_ASSERT(start < dvi->iod_nr &&
 			 start + nr <= dvi->iod_nr);
 		rc = crt_proc_uint32_t(proc, &nr);
@@ -294,7 +304,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 
 	if (proc_op == CRT_PROC_FREE) {
 free:
-		if (dvi->iod_recxs != NULL)
+		if ((existing_flags & IOD_REC_EXIST) && dvi->iod_recxs != NULL)
 			D_FREE(dvi->iod_recxs);
 	}
 
