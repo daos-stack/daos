@@ -41,8 +41,8 @@ exp_vals:
 pool:
   control_method: dmg
   mode: 146
-  scm_size: 3000000000
-  nvme_size: 2000000000
+  scm_size: "3G"
+  nvme_size: "2G"
   name: daos_server
 
 pool_uuids:
