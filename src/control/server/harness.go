@@ -173,7 +173,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 				continue
 			}
 		}
-		h.log.Info("SCM format required")
+		h.log.Infof("SCM format required on instance %d", instance.Index())
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
