@@ -557,8 +557,10 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 				tgts_per_node;
 		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
-				print_message("Not enough targets, skipping "
+				print_message("Not enough targets(need %d),"
+					      " skipping "
 					      "(%d/%d)\n",
+					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
 			runable = false;

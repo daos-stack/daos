@@ -774,8 +774,12 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 
 	match = daos_csummer_compare_csum_info(obj, csum, csum_info_verify);
 	daos_csummer_free_ci(obj, &csum_info_verify);
+	if (!match) {
+		D_ERROR("Key checksums don't match");
+		return -DER_CSUM;
+	}
 
-	return match ? 0 : -DER_CSUM;
+	return 0;
 }
 
 /**

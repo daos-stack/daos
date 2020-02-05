@@ -2430,9 +2430,9 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 
 	/** fault injection */
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
-		((char *) args->dkey->iov_buf)[0]++;
+		dkey_csum->cs_csum[0]++;
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL))
-		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
+		iod_csums[0].ic_akey.cs_csum[0]++;
 
 	obj_auxi->rw_args.iod_csums = iod_csums;
 	obj_auxi->rw_args.dkey_csum = dkey_csum;
