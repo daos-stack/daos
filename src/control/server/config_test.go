@@ -36,7 +36,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -80,12 +79,6 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 // external interfacing implementation.
 func emptyMockConfig(t *testing.T) *Configuration {
 	return newDefaultConfiguration(defaultMockExt())
-}
-
-// defaultMockConfig returns configuration populated from blank config file
-// with mocked external interface.
-func defaultMockConfig(t *testing.T) *Configuration {
-	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
 }
 
 // supply mock external interface, populates config from given file path
@@ -184,7 +177,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 }
 
 func TestServer_ConstructedConfig(t *testing.T) {
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -205,8 +198,6 @@ func TestServer_ConstructedConfig(t *testing.T) {
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
-		WithUserName("daosuser").
-		WithGroupName("daosgroup").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
