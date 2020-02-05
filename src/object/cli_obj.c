@@ -678,6 +678,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 			      obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
 		obj_auxi->flags |= ORF_DTX_SYNC;
+		obj_auxi->flags |= ORF_EC;
 		obj_auxi->req_reasbed = true;
 		if (reasb_req->orr_iods != NULL)
 			args->iods = reasb_req->orr_iods;
@@ -1405,9 +1406,9 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 }
 
 static int
-obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size, bool update)
+obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 {
-	if (iod_size != (daos_size_t)-1 && iod_size > sgl_size) {
+	if (iod_size > sgl_size) {
 		D_ERROR("invalid req - iod size "DF_U64", sgl size "DF_U64"\n",
 			iod_size, sgl_size);
 		return -DER_REC2BIG;
@@ -1443,7 +1444,7 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		case DAOS_IOD_ARRAY:
 			if (sgls == NULL) {
 				/* size query or punch */
-				if (!update || iods[i].iod_size == 0)
+				if (!update || iods[i].iod_size == DAOS_REC_ANY)
 					continue;
 				D_ERROR("invalid update req with NULL sgl\n");
 				return -DER_INVAL;
@@ -1453,8 +1454,10 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 				D_ERROR("IOD_ARRAY should have valid recxs\n");
 				return -DER_INVAL;
 			}
+			if (iods[i].iod_size == DAOS_REC_ANY)
+				continue;
 			rc = obj_req_size_valid(daos_iods_len(&iods[i], 1),
-					daos_sgl_buf_size(&sgls[i]), update);
+						daos_sgl_buf_size(&sgls[i]));
 			if (rc)
 				return rc;
 			break;
@@ -1467,13 +1470,15 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 			}
 			if (sgls == NULL) {
 				/* size query or punch */
-				if (!update || iods[i].iod_size == 0)
+				if (!update || iods[i].iod_size == DAOS_REC_ANY)
 					continue;
 				D_ERROR("invalid update req with NULL sgl\n");
 				return -DER_INVAL;
 			}
+			if (iods[i].iod_size == DAOS_REC_ANY)
+				continue;
 			rc = obj_req_size_valid(iods[i].iod_size,
-					daos_sgl_buf_size(&sgls[i]), update);
+						daos_sgl_buf_size(&sgls[i]));
 			if (rc)
 				return rc;
 			break;
@@ -2373,9 +2378,6 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 				shard_auxi->shard - shard_auxi->start_shard);
 			D_ASSERT(toiod != NULL);
 			shard_arg->oiods = toiod->oto_oiods;
-			D_ASSERT(shard_arg->oiods[0].oiod_nr == 1 &&
-				 (shard_arg->oiods[0].oiod_flags &
-				  OBJ_SIOD_PROC_ONE) != 0);
 			shard_arg->offs = toiod->oto_offs;
 			D_ASSERT(shard_arg->offs != NULL);
 		} else {

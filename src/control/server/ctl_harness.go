@@ -50,7 +50,7 @@ type HarnessClient interface {
 	Start(context.Context, string, ...uint32) (system.MemberResults, error)
 }
 
-// RemoteHarnessReq provides request parameters to HarnessClient methods
+// RemoteHarnessReq provides request parameters to HarnessClient methods.
 type RemoteHarnessReq struct {
 	Addr    string
 	Ranks   []uint32
@@ -58,16 +58,15 @@ type RemoteHarnessReq struct {
 	Timeout float32
 }
 
-// harnessClient implements the HarnessClient interface
+// harnessClient implements the HarnessClient interface.
 type harnessClient struct {
 	log          logging.Logger
 	localHarness *IOServerHarness
 	client       *mgmtSvcClient
 }
 
-// request is a wrapper that will operate over any provided requestFn.
-//
-// requestFn is a type alias for MgmtSvc fanout gRPCs that operate on a harness.
+// prepareRequest will make sure we have a MgmtSvcClient and return a populated
+// RanksReq proto message from a provided RemoteHarnessReq.
 func (hc *harnessClient) prepareRequest(req RemoteHarnessReq) (*mgmtpb.RanksReq, error) {
 	// Populate MS instance to use as MgmtSvcClient
 	if hc.client == nil {
@@ -85,7 +84,8 @@ func (hc *harnessClient) prepareRequest(req RemoteHarnessReq) (*mgmtpb.RanksReq,
 	return &mgmtpb.RanksReq{Ranks: req.Ranks, Timeout: req.Timeout, Force: req.Force}, nil
 }
 
-func (hc *harnessClient) processResponse(rpcResp *mgmtpb.RanksResp) (system.MemberResults, error) {
+// processReturn takes a RanksResp proto message and converts to system.MemberResults.
+func (hc *harnessClient) processReturn(rpcResp *mgmtpb.RanksResp) (system.MemberResults, error) {
 	memberResults := make(system.MemberResults, 0, maxIoServers)
 	if err := convert.Types(rpcResp.GetResults(), &memberResults); err != nil {
 		return nil, err
@@ -94,6 +94,11 @@ func (hc *harnessClient) processResponse(rpcResp *mgmtpb.RanksResp) (system.Memb
 	return memberResults, nil
 }
 
+// Query sends Status gRPC using the MgmtSvcClient to the control server at the
+// specified address to guage the responsiveness of the specified ranks.
+//
+// Results are returned for the ranks specified in the input parameter
+// if they are being managed by the remote control server.
 func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Query request to harness at %s", addr)
 
@@ -110,9 +115,15 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32
 		return nil, err
 	}
 
-	return hc.processResponse(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
+// PrepShutdown sends PrepShutdown gRPC using the MgmtSvcClient to the control
+// server at the specified address to prepare the specified ranks for a
+// controlled shutdown.
+//
+// Results are returned for the ranks specified in the input parameter
+// if they are being managed by the remote control server.
 func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing PrepShutdown request to harness at %s", addr)
 
@@ -129,9 +140,16 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 		return nil, err
 	}
 
-	return hc.processResponse(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
+// Stop sends Stop gRPC using the MgmtSvcClient to the control server at the
+// specified address to terminate the specified ranks.
+//
+// Results are returned for the ranks specified in the input parameter
+// if they are being managed by the remote control server.
+//
+// Ranks will be forcefully stopped if the force parameter is specified.
 func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Stop request to harness at %s", addr)
 
@@ -148,9 +166,14 @@ func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, rank
 		return nil, err
 	}
 
-	return hc.processResponse(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
+// Start sends Stop gRPC using the MgmtSvcClient to the control server at the
+// specified address to start the specified ranks.
+//
+// Results are returned for the ranks specified in the input parameter
+// if they are being managed by the remote control server.
 func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Start request to harness at %s", addr)
 
@@ -167,9 +190,11 @@ func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32
 		return nil, err
 	}
 
-	return hc.processResponse(rpcResp)
+	return hc.processReturn(rpcResp)
 }
 
+// NewHarnessClient returns a new harnessClient reference containing a reference
+// to the harness on the locally running control server.
 func NewHarnessClient(l logging.Logger, h *IOServerHarness) HarnessClient {
 	return &harnessClient{log: l, localHarness: h}
 }

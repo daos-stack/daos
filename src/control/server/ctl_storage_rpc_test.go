@@ -93,8 +93,7 @@ func newMockStorageConfig(
 	bdevClass storage.BdevClass, bdevDevs []string, existsRet bool, isRoot bool,
 ) *Configuration {
 
-	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
-		true, unmountRet, mkdirRet, removeRet, isRoot))
+	c := newDefaultConfiguration(newMockExt(isRoot))
 
 	c.Servers = append(c.Servers,
 		ioserver.NewConfig().
