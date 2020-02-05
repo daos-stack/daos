@@ -110,8 +110,8 @@ def define_mercury(reqs):
                           '\\/usr\\/lib\\)64/\\1/" ' +
                           '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
                           'Makefile compat/Makefile',
-                          'make $JOBS_OPT',
-                          'make DESTDIR=$PSM2_PREFIX install'],
+                          'make $JOBS_OPT LIBDIR="/lib64"',
+                          'make DESTDIR=$PSM2_PREFIX LIBDIR="/lib64" install'],
                 headers=['psm2.h'],
                 libs=['psm2'])
 
@@ -125,7 +125,7 @@ def define_mercury(reqs):
                                   check(reqs, 'psm2',
                                         "=$PSM2_PREFIX "
                                         'LDFLAGS="-Wl,--enable-new-dtags '
-                                        '-Wl,-rpath=$PSM2_PREFIX/lib" ', ''),
+                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ', ''),
                                   ''),
                           'make $JOBS_OPT',
                           'make install'],
