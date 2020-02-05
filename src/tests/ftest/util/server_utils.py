@@ -540,7 +540,8 @@ class ServerManager(ExecutableCommand):
                 pcmd(self._hosts, cmd_touch_log, False)
         if storage_prep_flag != "ram":
             self.storage_prepare(getpass.getuser(), storage_prep_flag)
-            self.runner.mca.value = {"plm_rsh_args": "-l root"}
+            self.runner.mca.update(
+                {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
         # Start the server and wait for each host to require a SCM format
         self.runner.job.mode = "format"
