@@ -631,7 +631,9 @@ class ServerManager(ExecutableCommand):
                         "for dev in {}".format(" ".join(scm_list)),
                         "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
                         "if [ ! -z $mount ]",
-                        "then sudo umount $mount",
+                        "then while sudo umount $mount",
+                        "do continue",
+                        "done",
                         "fi",
                         "sudo wipefs -a $dev",
                         "done"
