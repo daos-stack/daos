@@ -107,7 +107,7 @@ class DaosServer(DaosCommand):
         """
         server_count = len(self.server_list)
         patterns = {
-            "format": "SCM format required",
+            "format": "(SCM format required)(?!;)",
             "normal": "DAOS I/O server.*started",
         }
         expected = {
