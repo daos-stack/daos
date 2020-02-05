@@ -274,6 +274,17 @@ void
 daos_prop_free(daos_prop_t *prop);
 
 /**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ *
+ * \return	Newly allocated merged property
+ */
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
+
+/**
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *

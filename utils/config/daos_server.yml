@@ -163,6 +163,12 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
+## Enable daos_admin (privileged helper) logging.
+#
+## default: disabled (errors only to control plane log)
+#helper_log_file: /tmp/daos_admin.log
+#
+#
 ## Username used to lookup user uid/gid to drop privileges to if started
 ## as root. After control plane start-up and configuration, before starting
 ## data plane, process ownership will be dropped to those of supplied user.
