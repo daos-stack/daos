@@ -148,7 +148,7 @@ class DaosServer(DaosCommand):
             self.group = FormattedParameter("-g {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
-            self.recreate = FormattedParameter("--recreate-superblocks", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", False)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -373,7 +373,7 @@ class ServerManager(ExecutableCommand):
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.recreate = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, False)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
