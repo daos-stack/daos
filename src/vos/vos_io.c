@@ -976,10 +976,13 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		uint64_t	gsize;
+
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n",
 			ioc->ic_epr.epr_hi);
-		rc = akey_update_single(toh, pm_ver, iod->iod_size,
-					iod->iod_size, ioc);
+		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
+						   (uintptr_t)iod->iod_recxs;
+		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
 		goto out;
 	} /* else: array */
 

@@ -62,10 +62,11 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 	D_ASSERT(tgt_nr >= 2);
 	D_ASSERT(oiods != NULL);
 	/* as we select the last parity node as leader, and for any update
-	 * there must be a siod (the last siod) for leader.
+	 * there must be a siod (the last siod) for leader except for singv.
 	 */
-	D_ASSERT(oiods[0].oiod_nr >= 2);
-	tgt_max_idx = oiods[0].oiod_siods[oiods[0].oiod_nr - 1].siod_tgt_idx;
+	D_ASSERT((oiods[0].oiod_flags & OBJ_SIOD_SINGV) ||
+		 oiods[0].oiod_nr >= 2);
+	tgt_max_idx = orw->orw_oid.id_shard - start_shard;
 
 	req_size = roundup(sizeof(struct obj_ec_split_req), 8);
 	iods_size = roundup(sizeof(daos_iod_t) * iod_nr, 8);
@@ -94,15 +95,24 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 
 	split_iods = req->osr_iods;
 	for (i = 0; i < iod_nr; i++) {
+		int	idx;
+
 		iod = &iods[i];
 		split_iod = &split_iods[i];
 		split_iod->iod_name = iod->iod_name;
 		split_iod->iod_type = iod->iod_type;
 		split_iod->iod_size = iod->iod_size;
-		siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
-		split_iod->iod_nr = siod->siod_nr;
+		if (tgt_oiod->oto_oiods[i].oiod_flags & OBJ_SIOD_SINGV) {
+			D_ASSERT(iod->iod_type == DAOS_IOD_SINGLE);
+			idx = 0;
+			split_iod->iod_nr = 1;
+		} else {
+			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
+			split_iod->iod_nr = siod->siod_nr;
+			idx = siod->siod_idx;
+		}
 		if (iod->iod_recxs != NULL)
-			split_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
+			split_iod->iod_recxs = &iod->iod_recxs[idx];
 	}
 
 	*split_req = req;

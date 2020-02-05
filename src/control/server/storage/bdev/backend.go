@@ -85,7 +85,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(initShmID ...int) (err error) {
+func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 	if w.initialized {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (w *spdkWrapper) init(initShmID ...int) (err error) {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	cs, err := w.Discover()
+	cs, err := w.Discover(log)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover NVMe")
 	}
@@ -141,7 +141,7 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 }
 
 func (b *spdkBackend) Init(shmID ...int) error {
-	if err := b.binding.init(shmID...); err != nil {
+	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
 	}
 
