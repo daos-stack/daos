@@ -173,7 +173,6 @@ class TestPool(TestDaosApiBase):
             self.dmg.action_command.group.value = self.groupname.value
             self.dmg.action_command.user.value = self.username.value
             self.dmg.action_command.scm_size.value = self.scm_size.value
-            self.dmg.action_command.nvme_size.value = self.nvme_size.value
             self.dmg.action_command.ranks.value = ranks_comma_separated
             self.dmg.action_command.nsvc.value = self.svcn.value
             create_result = self.dmg.run()
