@@ -316,7 +316,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: qib1
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #

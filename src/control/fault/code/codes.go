@@ -76,6 +76,11 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

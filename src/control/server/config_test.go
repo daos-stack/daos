@@ -245,7 +245,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("/dev/sdc", "/dev/sdd").
 				WithBdevDeviceCount(1).
 				WithBdevFileSize(16).
-				WithFabricInterface("qib0").
+				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
@@ -388,6 +388,84 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
 				}
 			}
+		})
+	}
+}
+
+func TestServer_ConfigDuplicateValues(t *testing.T) {
+	configA := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("a").
+			WithFabricInterface("a").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("a")
+	}
+	configB := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("b").
+			WithFabricInterface("b").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("b")
+	}
+
+	for name, tc := range map[string]struct {
+		configA *ioserver.Config
+		configB *ioserver.Config
+		expErr  error
+	}{
+		"successful validation": {
+			configA: configA(),
+			configB: configB(),
+		},
+		"duplicate fabric config": {
+			configA: configA(),
+			configB: configB().
+				WithFabricInterface(configA().Fabric.Interface),
+			expErr: FaultConfigDuplicateFabric(1, 0),
+		},
+		"duplicate log_file": {
+			configA: configA(),
+			configB: configB().
+				WithLogFile(configA().LogFile),
+			expErr: FaultConfigDuplicateLogFile(1, 0),
+		},
+		"duplicate scm_mount": {
+			configA: configA(),
+			configB: configB().
+				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+			expErr: FaultConfigDuplicateScmMount(1, 0),
+		},
+		"duplicate scm_list": {
+			configA: configA().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			configB: configB().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
+		},
+		"overlapping bdev_list": {
+			configA: configA().
+				WithBdevDeviceList("a"),
+			configB: configB().
+				WithBdevDeviceList("b", "a"),
+			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			conf := NewConfiguration().
+				WithFabricProvider("test").
+				WithServers(tc.configA, tc.configB)
+
+			gotErr := conf.Validate(log)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
