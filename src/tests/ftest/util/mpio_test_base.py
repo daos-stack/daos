@@ -84,5 +84,4 @@ class LlnlMpi4pyHdf5(TestWithServers):
             for error in error_message:
                 if error in line:
                     self.fail(
-                        "Test Failed with error_message: {}".format(
-                            error_message[i]))
+                        "Test Failed with error_message: {}".format(error))
