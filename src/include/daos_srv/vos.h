@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -494,6 +494,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods [IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
  * \param sgls	[IN/OUT]
  *			Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
@@ -506,7 +509,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, d_sg_list_t *sgls);
+	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+	       d_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -600,8 +604,11 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of I/O descriptors in \a iods.
+ * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -609,8 +616,9 @@ vos_fetch_end(daos_handle_t ioh, int err);
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		 struct dcs_iod_csums *iods_csums, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -640,11 +648,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
-daos_csum_buf_t *
-vos_ioh2dcbs(daos_handle_t ioh);
+struct dcs_csum_info *
+vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
-vos_ioh2dcbs_nr(daos_handle_t ioh);
+vos_ioh2ci_nr(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.

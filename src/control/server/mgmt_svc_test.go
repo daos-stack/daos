@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,24 +53,6 @@ func makeBadBytes(count int) (badBytes []byte) {
 		badBytes[i] = byte(i)
 	}
 	return
-}
-
-func TestHasPort(t *testing.T) {
-	tests := []struct {
-		addr        string
-		expectedHas bool
-	}{
-		{"localhost", false},
-		{"localhost:10000", true},
-		{"192.168.1.1", false},
-		{"192.168.1.1:10000", true},
-	}
-
-	for _, test := range tests {
-		if has := hasPort(test.addr); has != test.expectedHas {
-			t.Errorf("hasPort(%q) = %v", test.addr, has)
-		}
-	}
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
@@ -1793,7 +1775,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 	}
 }
 
-func TestMgmtSvc_KillRanks(t *testing.T) {
+func TestMgmtSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		setupAP          bool
 		missingSB        bool
@@ -1909,7 +1891,167 @@ func TestMgmtSvc_KillRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			gotResp, gotErr := svc.KillRanks(context.TODO(), tc.req)
+			gotResp, gotErr := svc.StopRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PingRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		responseDelay    time.Duration
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"instances stopped": {
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 3},
+					{Rank: 2, Action: "ping", State: 3},
+				},
+			},
+		},
+		"dRPC resp fails": {
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": {
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"successful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 1},
+					{Rank: 2, Action: "ping", State: 1},
+				},
+			},
+		},
+		"ping timeout": {
+			req:           &mgmtpb.RanksReq{},
+			responseDelay: 200 * time.Millisecond,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 6, Errored: true},
+					{Rank: 2, Action: "ping", State: 6, Errored: true},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+
+					if tc.responseDelay != time.Duration(0) {
+						cfg.setResponseDelay(tc.responseDelay)
+					}
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			if tc.req != nil && tc.req.Timeout == 0 {
+				tc.req.Timeout = float32(100 * time.Millisecond)
+			}
+
+			gotResp, gotErr := svc.PingRanks(context.TODO(), tc.req)
+
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

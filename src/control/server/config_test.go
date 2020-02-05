@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -80,12 +81,6 @@ func emptyMockConfig(t *testing.T) *Configuration {
 	return newDefaultConfiguration(defaultMockExt())
 }
 
-// defaultMockConfig returns configuration populated from blank config file
-// with mocked external interface.
-func defaultMockConfig(t *testing.T) *Configuration {
-	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
-}
-
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
@@ -101,39 +96,27 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	return c
 }
 
-func TestConfigMarshalUnmarshal(t *testing.T) {
+func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
-		inExt  External
 		inPath string
-		errMsg string
+		expErr error
 	}{
-		"uncommented default config": {
-			defaultMockExt(),
-			"uncommentedDefault",
-			"",
-		},
-		"socket example config": {
-			defaultMockExt(),
-			socketsExample,
-			"",
-		},
-		"psm2 example config": {
-			defaultMockExt(),
-			psm2Example,
-			"",
-		},
+		"uncommented default config": {inPath: "uncommentedDefault"},
+		"socket example config":      {inPath: socketsExample},
+		"psm2 example config":        {inPath: psm2Example},
 		"default empty config": {
-			defaultMockExt(),
-			defaultConfig,
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigNoProvider,
+			inPath: defaultConfig,
+			expErr: FaultConfigNoProvider,
 		},
 		"nonexistent config": {
-			defaultMockExt(),
-			"/foo/bar/baz.yml",
-			"reading file: open /foo/bar/baz.yml: no such file or directory",
+			inPath: "/foo/bar/baz.yml",
+			expErr: errors.New("reading file: open /foo/bar/baz.yml: no such file or directory"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
 			if err != nil {
@@ -146,17 +129,17 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt).
+			configA := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if err == nil {
-				err = configA.Validate()
+				err = configA.Validate(log)
 			}
 
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, name)
+			CmpErr(t, tt.expErr, err)
+			if tt.expErr != nil {
 				return
 			}
 
@@ -164,7 +147,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt).
+			configB := newDefaultConfiguration(defaultMockExt()).
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			if err := configB.SetPath(testFile); err != nil {
@@ -173,7 +156,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate()
+				err = configB.Validate(log)
 			}
 
 			if err != nil {
@@ -193,12 +176,9 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	defer os.RemoveAll(testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestServer_ConstructedConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
@@ -217,12 +197,11 @@ func TestConstructedConfig(t *testing.T) {
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
-		WithUserName("daosuser").
-		WithGroupName("daosgroup").
+		WithHelperLogFile("/tmp/daos_admin.log").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithAccessPoints("hostname1:10001").
+		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
@@ -257,7 +236,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("/dev/sdc", "/dev/sdd").
 				WithBdevDeviceCount(1).
 				WithBdevFileSize(16).
-				WithFabricInterface("qib0").
+				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
@@ -277,37 +256,59 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestConfigValidation(t *testing.T) {
+func TestServer_ConfigValidation(t *testing.T) {
 	noopExtra := func(c *Configuration) *Configuration { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Configuration) *Configuration
-		errMsg      string
+		expErr      error
 	}{
 		"example config": {
 			noopExtra,
-			"",
+			nil,
 		},
 		"single access point": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4:1234")
 			},
-			"",
+			nil,
 		},
 		"multiple access points": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+			FaultConfigBadAccessPoints,
 		},
 		"no access points": {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints()
 			},
-			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+			FaultConfigBadAccessPoints,
+		},
+		"single access point no port": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4")
+			},
+			nil,
+		},
+		"single access point invalid port": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4").
+					WithControlPort(0)
+			},
+			FaultConfigBadControlPort,
+		},
+		"single access point including invalid port": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:0")
+			},
+			FaultConfigBadControlPort,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
 			if err != nil {
@@ -322,15 +323,140 @@ func TestConfigValidation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			err = config.Validate()
-			if tt.errMsg != "" {
-				ExpectError(t, err, tt.errMsg, name)
-				return
-			}
+			CmpErr(t, tt.expErr, config.Validate(log))
+		})
+	}
+}
 
+func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
+	for name, tt := range map[string]struct {
+		inPath    string
+		expErrMsg string
+	}{
+		"path exists":       {inPath: "uncommentedDefault"},
+		"path doesnt exist": {expErrMsg: "no such file or directory"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+			defer os.RemoveAll(testDir)
 			if err != nil {
 				t.Fatal(err)
 			}
+			testFile := filepath.Join(testDir, "test.yml")
+
+			if tt.inPath == "uncommentedDefault" {
+				tt.inPath = filepath.Join(testDir, sConfigUncomment)
+				uncommentServerConfig(t, testFile)
+			}
+
+			cwd, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var pathToRoot string
+			depth := strings.Count(cwd, "/")
+			for i := 0; i < depth; i++ {
+				pathToRoot += "../"
+			}
+
+			relPath := filepath.Join(pathToRoot, testFile)
+			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
+
+			config := newDefaultConfiguration(defaultMockExt()).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
+
+			err = config.SetPath(relPath)
+			if err != nil {
+				if tt.expErrMsg == "" {
+					t.Fatal(err)
+				}
+				if !strings.Contains(err.Error(), tt.expErrMsg) {
+					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
+				}
+			} else {
+				if tt.expErrMsg != "" {
+					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
+				}
+			}
+		})
+	}
+}
+
+func TestServer_ConfigDuplicateValues(t *testing.T) {
+	configA := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("a").
+			WithFabricInterface("a").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("a")
+	}
+	configB := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("b").
+			WithFabricInterface("b").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("b")
+	}
+
+	for name, tc := range map[string]struct {
+		configA *ioserver.Config
+		configB *ioserver.Config
+		expErr  error
+	}{
+		"successful validation": {
+			configA: configA(),
+			configB: configB(),
+		},
+		"duplicate fabric config": {
+			configA: configA(),
+			configB: configB().
+				WithFabricInterface(configA().Fabric.Interface),
+			expErr: FaultConfigDuplicateFabric(1, 0),
+		},
+		"duplicate log_file": {
+			configA: configA(),
+			configB: configB().
+				WithLogFile(configA().LogFile),
+			expErr: FaultConfigDuplicateLogFile(1, 0),
+		},
+		"duplicate scm_mount": {
+			configA: configA(),
+			configB: configB().
+				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+			expErr: FaultConfigDuplicateScmMount(1, 0),
+		},
+		"duplicate scm_list": {
+			configA: configA().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			configB: configB().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
+		},
+		"overlapping bdev_list": {
+			configA: configA().
+				WithBdevDeviceList("a"),
+			configB: configB().
+				WithBdevDeviceList("b", "a"),
+			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			conf := NewConfiguration().
+				WithFabricProvider("test").
+				WithServers(tc.configA, tc.configB)
+
+			gotErr := conf.Validate(log)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
