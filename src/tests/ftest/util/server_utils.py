@@ -622,12 +622,23 @@ class ServerManager(ExecutableCommand):
 
             if self.runner.job.yaml_params.is_scm():
                 scm_list = server_params.scm_list.value
-                if isinstance(server_params.scm_list.value, list):
-                    for device in scm_list:
-                        self.log.info("Cleaning up the %s device.", str(device))
-                        cmd = "sudo wipefs -a {}".format(device)
-                        if cmd not in clean_cmds:
-                            clean_cmds.append(cmd)
+                if isinstance(scm_list, list):
+                    self.log.info(
+                        "Cleaning up the following device(s): %s.",
+                        ", ".join(scm_list))
+                    # Umount and wipefs the dcpm device
+                    cmd_list = [
+                        "for dev in {}".format(" ".join(scm_list)),
+                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                        "if [ ! -z $mount ]",
+                        "then sudo umount $mount",
+                        "fi",
+                        "sudo wipefs -a $dev",
+                        "done"
+                    ]
+                    cmd = "; ".join(cmd_list)
+                    if cmd not in clean_cmds:
+                        clean_cmds.append(cmd)
 
         pcmd(self._hosts, "; ".join(clean_cmds), True)
 
