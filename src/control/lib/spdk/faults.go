@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,39 +20,46 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
-package server
+package spdk
 
 import (
-	"sync"
+	"fmt"
+
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-// mockExt implements the External interface.
-type mockExt struct {
-	sync.RWMutex
-	isRoot  bool
-	history []string
+var (
+	FaultUnknown = spdkFault(
+		code.SpdkUnknown,
+		"unknown SPDK bindings error",
+		"",
+	)
+	FaultCtrlrNoHealth = spdkFault(
+		code.SpdkCtrlrNoHealth,
+		"NVMe controller details are missing health statistics",
+		"",
+	)
+	FaultBindingRetNull = spdkFault(
+		code.SpdkBindingRetNull,
+		"SPDK binding unexpectedly returned NULL",
+		"",
+	)
+)
+
+func FaultBindingFailed(rc int, errMsg string) *fault.Fault {
+	return spdkFault(
+		code.SpdkBindingFailed,
+		fmt.Sprintf("SPDK binding failed, rc: %d, %s", rc, errMsg),
+		"",
+	)
 }
 
-func (m *mockExt) getHistory() []string {
-	m.RLock()
-	defer m.RUnlock()
-
-	return m.history
-}
-
-func (m *mockExt) getAbsInstallPath(path string) (string, error) {
-	return path, nil
-}
-
-func (m *mockExt) checkSudo() (bool, string) {
-	return m.isRoot, ""
-}
-
-func newMockExt(isRoot bool) External {
-	return &mockExt{sync.RWMutex{}, isRoot, []string{}}
-}
-
-func defaultMockExt() External {
-	return &mockExt{}
+func spdkFault(code code.Code, desc, res string) *fault.Fault {
+	return &fault.Fault{
+		Domain:      "spdk",
+		Code:        code,
+		Description: desc,
+		Resolution:  res,
+	}
 }
