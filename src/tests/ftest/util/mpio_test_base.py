@@ -21,15 +21,13 @@
     Any reproduction of computer software, computer software documentation, or
     portions thereof marked with this legend must also reproduce the markings.
     '''
-
 from __future__    import print_function
-import os
-from apricot import TestWithServers
 
+import os
+
+from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
-from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
-from command_utils import CommandFailure
 
 
 class LlnlMpi4pyHdf5(TestWithServers):
@@ -47,14 +45,11 @@ class LlnlMpi4pyHdf5(TestWithServers):
     def setUp(self):
         super(LlnlMpi4pyHdf5, self).setUp()
 
-        try:
-            # initialize a python pool object then create the underlying
-            self.pool = TestPool(
-                self.context, dmg_command=self.get_dmg_command())
-            self.pool.get_params(self)
-            self.pool.create()
-        except (CommandFailure) as excep:
-            self.fail("<Test Failed at pool create> \n{}".format(excep))
+        # initialize a python pool object then create the underlying
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
 
     def run_test(self, test_repo, test_name):
         """
@@ -67,34 +62,27 @@ class LlnlMpi4pyHdf5(TestWithServers):
         if not self.mpio.mpich_installed(self.hostlist_clients):
             self.fail("Exiting Test: Mpich not installed")
 
+        # initialise test specific variables
+        client_processes = self.params.get("np", '/run/client_processes/')
+
         try:
-            # initialise test specific variables
-            client_processes = self.params.get("np", '/run/client_processes/')
-
-            # obtain svc list
-            svc_list = ""
-            for i in range(self.pool.svcn.value):
-                svc_list += str(int(self.pool.pool.svc.rl_ranks[i])) + ":"
-            svc_list = svc_list[:-1]
-
             # running tests
             self.mpio.run_llnl_mpi4py_hdf5(
                 self.hostfile_clients, self.pool.uuid, test_repo, test_name,
                 client_processes)
-
-            # Parsing output to look for failures
-            # stderr directed to stdout
-            stdout = self.logdir + "/stdout"
-            searchfile = open(stdout, "r")
-            error_message = ["non-zero exit code", "MPI_Abort", "MPI_ABORT",
-                             "ERROR"]
-
-            for line in searchfile:
-                # pylint: disable=C0200
-                for i in range(len(error_message)):
-                    if error_message[i] in line:
-                        self.fail("Test Failed with error_message: {}"
-                                  .format(error_message[i]))
-
-        except (MpioFailed, DaosApiError) as excep:
+        except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
+
+        # Parsing output to look for failures
+        # stderr directed to stdout
+        stdout = os.path.join(self.logdir, "stdout")
+        searchfile = open(stdout, "r")
+        error_message = ["non-zero exit code", "MPI_Abort", "MPI_ABORT",
+                         "ERROR"]
+
+        for line in searchfile:
+            for error in error_message:
+                if error in line:
+                    self.fail(
+                        "Test Failed with error_message: {}".format(
+                            error_message[i]))

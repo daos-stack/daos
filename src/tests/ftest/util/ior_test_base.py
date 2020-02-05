@@ -85,7 +85,7 @@ class IorTestBase(TestWithServers):
         """Create a TestPool object to use with ior."""
         # Get the pool params
         self.pool = TestPool(
-            self.context, self.log, dmg_command=self.get_dmg_command())
+            self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool

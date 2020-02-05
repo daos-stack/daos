@@ -26,7 +26,6 @@ from __future__ import print_function
 import os
 import avocado
 
-from pydaos.raw import DaosApiError
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
 
@@ -41,7 +40,6 @@ class NvmeIo(IorTestBase):
     :avocado: recursive
     """
 
-    @avocado.fail_on(DaosApiError)
     def test_nvme_io(self):
         """Jira ID: DAOS-2082.
 
@@ -90,10 +88,8 @@ class NvmeIo(IorTestBase):
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, ior_param[4])
 
-                try:
-                    if self.pool:
-                        self.destroy_pools(self.pool)
-                except DaosApiError as error:
-                    self.log.error(
-                        "Pool disconnect/destroy error: %s", str(error))
-                    self.fail("Failed to Destroy/Disconnect the Pool")
+                errors = self.destroy_pools(self.pool)
+                if errors:
+                    self.fail(
+                        "Errors detected during destroy pool:\n  - {}".format(
+                            "\n  - ".join(errors)))
