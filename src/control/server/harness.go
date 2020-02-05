@@ -178,7 +178,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 			return FaultScmUnmanaged(instance.scmConfig().MountPoint)
 		}
 
-		h.log.Info("SCM format required")
+		h.log.Infof("SCM format required on instance %d", instance.Index())
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
@@ -408,10 +408,6 @@ func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
 
 func (h *IOServerHarness) setRestartable() {
 	atomic.StoreUint32(&h.restartable, 1)
-}
-
-func (h *IOServerHarness) setNotRestartable() {
-	atomic.StoreUint32(&h.restartable, 0)
 }
 
 func (h *IOServerHarness) IsRestartable() bool {

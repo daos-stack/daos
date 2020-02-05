@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,7 @@ CRT_RPC_DEFINE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 		DAOS_OSEQ_CONT_TGT_EPOCH_AGGREGATE)
 CRT_RPC_DEFINE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
+CRT_RPC_DEFINE(cont_prop_set, DAOS_ISEQ_CONT_PROP_SET, DAOS_OSEQ_CONT_PROP_SET)
 
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition

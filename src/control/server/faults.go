@@ -73,6 +73,47 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	)
 }
 
+func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigDuplicateFabric,
+		fmt.Sprintf("the fabric configuration in IO server %d is a duplicate of server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
+	)
+}
+
+func FaultConfigDuplicateLogFile(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateLogFile, "log_file", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmMount, "scm_mount", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return dupeValue(
+		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
+	return serverFault(
+		code.ServerConfigOverlappingBdevDeviceList,
+		fmt.Sprintf("the bdev_list value in IO server %d overlaps with entries in server %d", curIdx, seenIdx),
+		"ensure that each IO server has a unique set of bdev_list entries and restart",
+	)
+}
+
+func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
+	return serverFault(code,
+		fmt.Sprintf("the %s value in IO server %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("ensure that each IO server has a unique %s value and restart", name),
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",
