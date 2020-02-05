@@ -212,7 +212,7 @@ class BashCmd(TestWithServers):
                                 raise CommandFailure(
                                     "Error running '{}' on the following "
                                     "hosts: {}".format(cmd, error_hosts))
-
+                        # report error if any command fails
                         except CommandFailure as error:
                             self.log.error("BashCmd Test Failed: %s",
                                            str(error))
