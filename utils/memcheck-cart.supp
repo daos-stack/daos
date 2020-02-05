@@ -136,7 +136,7 @@
    fun:NA_Progress
 }
 {
-   oreterun --mca pml ob1 leak
+   orterun --mca pml ob1 leak
    Memcheck:Param
    socketcall.sendto(msg)
    fun:send
@@ -145,4 +145,20 @@
    fun:opal_libevent2022_event_base_loop
    fun:opal_progress
    ...
+}
+{
+   libfabric leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:ofi_rbmap_insert
+   fun:ofi_mr_map_insert
+   fun:sock_regattr
+   fun:sock_reg
+   fun:fi_mr_reg
+   fun:na_ofi_domain_open
+   fun:na_ofi_initialize
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
 }
