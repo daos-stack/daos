@@ -63,12 +63,12 @@ const (
 	SystemMemberMissing
 	SystemMemberChanged
 
-	// Client fault codes
+	// client fault codes
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
 
-	// Server fault codes
+	// server fault codes
 	ServerUnknown Code = iota + 600
 	ServerBadConfig
 	ServerNoConfigPath
@@ -76,6 +76,17 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
+
+	// spdk library bindings codes
+	SpdkUnknown Code = iota + 700
+	SpdkCtrlrNoHealth
+	SpdkBindingRetNull
+	SpdkBindingFailed
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900
