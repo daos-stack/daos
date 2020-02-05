@@ -324,6 +324,8 @@ dss_rpc_hdlr(crt_context_t *ctx, crt_rpc_t *rpc,
 	return dss_abterr2der(rc);
 }
 
+#define PROGRESS_MESG_INTV	2 /* Seconds */
+
 static void
 dss_nvme_poll_ult(void *args)
 {
@@ -332,6 +334,17 @@ dss_nvme_poll_ult(void *args)
 
 	D_ASSERT(dx->dx_main_xs);
 	while (!dss_xstream_exiting(dx)) {
+		uint64_t now = 0;
+
+		daos_gettime_coarse(&now);
+		if (dmi->dmi_last_nvme_poll_time == 0) {
+			dmi->dmi_last_nvme_poll_time = now;
+		} else if (dmi->dmi_last_nvme_poll_time +
+			   PROGRESS_MESG_INTV < now) {
+			D_DEBUG(DB_MD, "%d progress on "DF_U64"\n",
+				dmi->dmi_xs_id, now);
+			dmi->dmi_last_nvme_poll_time = now;
+		}
 		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
 	}
@@ -509,6 +522,8 @@ dss_srv_handler(void *arg)
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
+			uint64_t now = 0;
+
 			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
 					  NULL);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
@@ -517,6 +532,16 @@ dss_srv_handler(void *arg)
 				/* XXX Sometimes the failure might be just
 				 * temporary, Let's keep progressing for now.
 				 */
+			}
+
+			daos_gettime_coarse(&now);
+			if (dmi->dmi_last_crt_progress_time == 0) {
+				dmi->dmi_last_crt_progress_time = now;
+			} else if (dmi->dmi_last_crt_progress_time +
+				   PROGRESS_MESG_INTV < now) {
+				D_DEBUG(DB_MD, "%d progress on "DF_U64"\n",
+					dmi->dmi_xs_id, now);
+				dmi->dmi_last_crt_progress_time = now;
 			}
 		}
 

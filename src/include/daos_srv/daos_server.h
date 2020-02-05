@@ -163,7 +163,9 @@ bool dss_xstream_is_busy(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
+	uint64_t		dmi_last_crt_progress_time;
 	struct bio_xs_context  *dmi_nvme_ctxt;
+	uint64_t		dmi_last_nvme_poll_time;
 	struct dss_xstream     *dmi_xstream;
 	/* the xstream id */
 	int			dmi_xs_id;
