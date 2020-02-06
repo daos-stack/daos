@@ -37,6 +37,11 @@
     <description>UUID od DAOS container which created with "--type posix"</description>
   </property>
   <property>
+    <name>fs.daos.pool.svc</name>
+    <value>0</value>
+    <description>service list separated by ":" if more than one service</description>
+  </property>
+  <property>
     <name>fs.daos.read.buffer.size</name>
     <value>8388608</value>
     <description>size of direct buffer for reading data from DAOS. Default is 8m.

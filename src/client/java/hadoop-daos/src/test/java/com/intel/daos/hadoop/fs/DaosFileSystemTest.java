@@ -89,8 +89,17 @@ public class DaosFileSystemTest {
 
     DaosFileSystem fs = new DaosFileSystem();
     Configuration cfg = new Configuration();
-    fs.initialize(URI.create("daos://1234:56/root"), cfg);
-    fs.close();
+    cfg.set(Constants.DAOS_POOL_UUID, "");
+    cfg.set(Constants.DAOS_CONTAINER_UUID, "123");
+    cfg.set(Constants.DAOS_POOL_SVC, "0");
+    try {
+      fs.initialize(URI.create("daos://1234:56/root"), cfg);
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(e.getMessage().contains(Constants.DAOS_POOL_UUID));
+      throw e;
+    } finally {
+      fs.close();
+    }
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -108,8 +117,16 @@ public class DaosFileSystemTest {
     DaosFileSystem fs = new DaosFileSystem();
     Configuration cfg = new Configuration();
     cfg.set(Constants.DAOS_POOL_UUID, "123");
-    fs.initialize(URI.create("daos://1234:56/root"), cfg);
-    fs.close();
+    cfg.set(Constants.DAOS_CONTAINER_UUID, "");
+    cfg.set(Constants.DAOS_POOL_SVC, "0");
+    try {
+      fs.initialize(URI.create("daos://1234:56/root"), cfg);
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(e.getMessage().contains(Constants.DAOS_CONTAINER_UUID));
+      throw e;
+    } finally {
+      fs.close();
+    }
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -128,8 +145,15 @@ public class DaosFileSystemTest {
     Configuration cfg = new Configuration();
     cfg.set(Constants.DAOS_POOL_UUID, "123");
     cfg.set(Constants.DAOS_CONTAINER_UUID, "123");
-    fs.initialize(URI.create("daos://1234:56/root"), cfg);
-    fs.close();
+    cfg.set(Constants.DAOS_POOL_SVC, "");
+    try {
+      fs.initialize(URI.create("daos://1234:56/root"), cfg);
+    } catch (IllegalArgumentException e) {
+      Assert.assertTrue(e.getMessage().contains(Constants.DAOS_POOL_SVC));
+      throw e;
+    } finally {
+      fs.close();
+    }
   }
 
   @Test

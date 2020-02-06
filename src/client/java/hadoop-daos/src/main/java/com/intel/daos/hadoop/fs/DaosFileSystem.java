@@ -205,17 +205,17 @@ public class DaosFileSystem extends FileSystem {
       String poolUuid = conf.get(Constants.DAOS_POOL_UUID);
       if (StringUtils.isEmpty(poolUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_UUID +
-                " is null , need to set up " + Constants.DAOS_POOL_UUID + " in hdfs.xml .");
+                " is null , need to set " + Constants.DAOS_POOL_UUID);
       }
       String contUuid = conf.get(Constants.DAOS_CONTAINER_UUID);
       if (StringUtils.isEmpty(contUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_CONTAINER_UUID +
-                " is null, need to set up " + Constants.DAOS_CONTAINER_UUID + " in hdfs.xml .");
+                " is null, need to set " + Constants.DAOS_CONTAINER_UUID);
       }
       String svc = conf.get(Constants.DAOS_POOL_SVC);
       if (StringUtils.isEmpty(svc)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_SVC +
-                " is null, need to set up " + Constants.DAOS_POOL_SVC + " in hdfs.xml .");
+                " is null, need to set " + Constants.DAOS_POOL_SVC);
       }
 
       // daosFSclient build

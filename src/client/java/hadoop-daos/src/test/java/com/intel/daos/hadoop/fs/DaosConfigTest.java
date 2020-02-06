@@ -86,7 +86,7 @@ public class DaosConfigTest {
     Assert.assertEquals("hadoop pid", hadoopConfig.get(Constants.DAOS_POOL_UUID));
     Assert.assertEquals("hadoop cid", hadoopConfig.get(Constants.DAOS_CONTAINER_UUID));
     Assert.assertEquals("9876", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
-    Assert.assertEquals("45678", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
+    Assert.assertEquals("0", hadoopConfig.get(Constants.DAOS_POOL_SVC));
   }
 
   private void parseConfigWithDifferentDaosFile(String newDaosFile, Consumer<Constructor<DaosConfig>> function)
