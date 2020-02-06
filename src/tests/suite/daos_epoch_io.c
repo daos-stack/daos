@@ -143,8 +143,15 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	struct ioreq			 req;
 	struct test_punch_arg		*pu_arg = &op->pu_arg;
 
-	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
+	if (pu_arg->pa_singv) {
+		ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_SINGLE,
+			   arg);
+		punch_single(key_rec->or_dkey, key_rec->or_akey, 0,
+			     DAOS_TX_NONE, &req);
+		goto fini;
+	}
 
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
 	if (pu_arg->pa_recxs_num == 0)
 		punch_akey(key_rec->or_dkey, key_rec->or_akey,
 			   DAOS_TX_NONE, &req);
@@ -153,6 +160,7 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 			    pu_arg->pa_recxs, pu_arg->pa_recxs_num,
 			    DAOS_TX_NONE, &req);
 
+fini:
 	ioreq_fini(&req);
 	return 0;
 }
@@ -869,6 +877,7 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 		{"--akey",	true,	'a'},
 		{"--tx",	true,	'e'},
 		{"--recx",	true,	'r'},
+		{"--single",	false,	's'},
 		{0}
 	};
 
@@ -899,6 +908,9 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 			}
 			pu_arg->pa_recxs = recxs;
 			pu_arg->pa_recxs_num = recxs_num;
+			break;
+		case 's':
+			pu_arg->pa_singv = true;
 			break;
 		default:
 			print_message("Unknown Option %c\n", opt);
