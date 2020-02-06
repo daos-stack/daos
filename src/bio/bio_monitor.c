@@ -76,23 +76,15 @@ bio_dev_set_faulty_internal(void *msg_arg)
 void
 bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 {
-	struct media_error_msg	mem;
-	ABT_eventual		eventual;
-	int			rc;
+	struct media_error_msg	*mem;
 
-	mem.mem_bs		= bxc->bxc_blobstore;
-	mem.mem_err_type        = MET_CSUM;
-	mem.mem_tgt_id          = tgt_id;
-
-	rc = ABT_eventual_create(0, &eventual);
-	if (rc != ABT_SUCCESS)
-		D_ERROR("BIO log CSUM error ABT future not created\n");
-
-	spdk_thread_send_msg(owner_thread(mem.mem_bs), bio_media_error, &mem);
-	ABT_eventual_wait(eventual, NULL);
-	rc = ABT_eventual_free(&eventual);
-	if (rc != ABT_SUCCESS)
-		D_ERROR("BIO log CSUM error ABT future not freed\n");
+	D_ALLOC_PTR(mem);
+	if (mem == NULL)
+		return;
+	mem->mem_bs		= bxc->bxc_blobstore;
+	mem->mem_err_type	= MET_CSUM;
+	mem->mem_tgt_id		= tgt_id;
+	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 }
 
 
