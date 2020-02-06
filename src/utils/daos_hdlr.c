@@ -1172,19 +1172,16 @@ parse_acl_file(const char *path, struct daos_acl **acl)
 
 	if (daos_acl_validate(tmp_acl) != 0) {
 		fprintf(stderr, "Content of ACL file is invalid\n");
-		daos_acl_free(tmp_acl);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(parse_err, rc = -DER_INVAL);
 	}
 
 	*acl = tmp_acl;
-
-out:
-	fclose(instream);
-	return rc;
+	D_GOTO(out, rc = 0);
 
 parse_err:
 	D_FREE(line);
 	daos_acl_free(tmp_acl);
+out:
 	fclose(instream);
 	return rc;
 }
@@ -1222,6 +1219,8 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
 	return rc;
 }
 
