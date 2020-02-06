@@ -863,7 +863,7 @@ test_enumerate_a_key(void **state)
 	unset_csum_fi();
 
 	/** Sanity check that no failure still returns success */
-	nr = 10;
+	nr = KDS_NR;
 	memset(&anchor, 0, sizeof(anchor));
 	rc = daos_obj_list_akey(ctx.oh, DAOS_TX_NONE, &ctx.dkey, &nr, kds, &sgl,
 				&anchor, NULL);
@@ -880,7 +880,7 @@ static void
 test_enumerate_d_key(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
-	int			rc;
+	int			rc = 0;
 	uint32_t		i;
 	daos_anchor_t		anchor = {0};
 	daos_key_desc_t		kds[KDS_NR] = {0};
@@ -908,8 +908,14 @@ test_enumerate_d_key(void **state)
 
 	/** inject failure ... should return CSUM error */
 	set_fetch_dkey_fi();
-	rc = daos_obj_list_dkey(ctx.oh, DAOS_TX_NONE, &nr, kds, &sgl,
-			   &anchor, NULL);
+
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor) && rc == 0) {
+		rc = daos_obj_list_dkey(ctx.oh, DAOS_TX_NONE, &nr, kds, &sgl,
+					&anchor, NULL);
+		nr = KDS_NR;
+	}
+
 	assert_int_equal(-DER_CSUM, rc);
 	unset_csum_fi();
 

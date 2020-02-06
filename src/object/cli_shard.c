@@ -630,9 +630,12 @@ int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
 	struct daos_sgl_idx	 sgl_idx = {0};
 	d_sg_list_t		 sgl = oeo->oeo_sgl;
 
+	if (enum_args->eaa_nr == NULL || *enum_args->eaa_nr == 0)
+		return 0; /** no keys to verify */
+
 	csummer = dc_cont_hdl2csummer(enum_args->eaa_obj->do_co_hdl);
 	if (!daos_csummer_initialized(csummer))
-		return 0;
+		return 0; /** csums not enabled */
 
 	csum_ptr = oeo->oeo_csum_iov.iov_buf;
 	if (csum_ptr == NULL) {
