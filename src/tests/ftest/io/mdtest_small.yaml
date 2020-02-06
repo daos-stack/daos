@@ -6,8 +6,6 @@ hosts:
     - client-E
     - client-F
 timeout: 1500
-server_manager:
-    recreate: true
 server_config:
   servers_per_host: 2
   name: daos_server
