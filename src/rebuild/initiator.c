@@ -87,7 +87,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 	char		iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool		fetch = false;
 	int		i;
-	int		rc;
+	int		rc = 0;
 
 	D_ASSERT(rdone->ro_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < rdone->ro_iod_num; i++) {
