@@ -153,8 +153,10 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			continue;
 
 		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("Verify failed: %d\n", rc);
 			break;
+		}
 	}
 
 	return rc;

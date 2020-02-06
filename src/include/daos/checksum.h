@@ -417,10 +417,13 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 static inline bool
 csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
 {
-	/** Only support ARRAY Type currently */
-	return iod->iod_type == DAOS_IOD_ARRAY &&
-	       iod->iod_size > 0 &&
-	       iod->iod_size <= chunksize;
+	/**
+	 * iod_size must be greater than 1 and chunksize must be larger
+	 * than iod size if it's an array type. Doesn't support very large
+	 * record size yet for array types
+	 */
+	return iod->iod_size > 0 &&
+	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
 }
 
 /**
