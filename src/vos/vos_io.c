@@ -235,8 +235,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_biov_csums_nr = 1;
 	ioc->ic_biov_csums_at = 0;
 	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
-	if (ioc->ic_biov_csums == NULL)
-		return -DER_NOMEM;
+	if (ioc->ic_biov_csums == NULL) {
+		rc = -DER_NOMEM;
+		goto error;
+	}
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
