@@ -429,7 +429,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
 		} else {
-			D_DEBUG(DB_MGMT, "Successfully assgin blob:"DF_U64" "
+			D_DEBUG(DB_MGMT, "Successfully assign blob:"DF_U64" "
 				"to pool:"DF_UUID":%d\n", ba->bca_id,
 				DP_UUID(uuid), xs_ctxt->bxc_tgt_id);
 		}

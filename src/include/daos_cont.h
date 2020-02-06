@@ -280,6 +280,24 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
 int
 daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
 		  daos_event_t *ev);
+/**
+ * Sets the container properties.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	prop	Property entries to update
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.

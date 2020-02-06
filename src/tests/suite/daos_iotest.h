@@ -226,6 +226,7 @@ struct test_add_exclude_arg {
 };
 
 struct test_punch_arg {
+	bool		 pa_singv;
 	daos_recx_t	*pa_recxs;
 	int		 pa_recxs_num;
 };

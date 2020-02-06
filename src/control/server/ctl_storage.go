@@ -37,7 +37,6 @@ const (
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
 		"and can be discovered, you may need to run `sudo daos_server " +
 		"storage prepare --nvme-only` to setup SPDK to access SSDs"
-	msgBdevNoDevs      = "no controllers specified"
 	msgBdevScmNotReady = "nvme format not performed because scm not ready"
 )
 

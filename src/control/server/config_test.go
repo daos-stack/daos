@@ -81,12 +81,6 @@ func emptyMockConfig(t *testing.T) *Configuration {
 	return newDefaultConfiguration(defaultMockExt())
 }
 
-// defaultMockConfig returns configuration populated from blank config file
-// with mocked external interface.
-func defaultMockConfig(t *testing.T) *Configuration {
-	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
-}
-
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
@@ -102,7 +96,7 @@ func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	return c
 }
 
-func TestConfig_MarshalUnmarshal(t *testing.T) {
+func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath string
 		expErr error
@@ -182,12 +176,9 @@ func TestConfig_MarshalUnmarshal(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	defer os.RemoveAll(testDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestServer_ConstructedConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
@@ -206,8 +197,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_control.log").
-		WithUserName("daosuser").
-		WithGroupName("daosgroup").
+		WithHelperLogFile("/tmp/daos_admin.log").
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
@@ -246,7 +236,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("/dev/sdc", "/dev/sdd").
 				WithBdevDeviceCount(1).
 				WithBdevFileSize(16).
-				WithFabricInterface("qib0").
+				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
@@ -266,7 +256,7 @@ func TestConstructedConfig(t *testing.T) {
 	}
 }
 
-func TestConfig_Validation(t *testing.T) {
+func TestServer_ConfigValidation(t *testing.T) {
 	noopExtra := func(c *Configuration) *Configuration { return c }
 
 	for name, tt := range map[string]struct {
@@ -338,7 +328,7 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
-func TestConfig_RelativeWorkingPath(t *testing.T) {
+func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath    string
 		expErrMsg string
@@ -389,6 +379,84 @@ func TestConfig_RelativeWorkingPath(t *testing.T) {
 					t.Fatalf("want contains: %s, got %s", tt.expErrMsg, err)
 				}
 			}
+		})
+	}
+}
+
+func TestServer_ConfigDuplicateValues(t *testing.T) {
+	configA := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("a").
+			WithFabricInterface("a").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("a")
+	}
+	configB := func() *ioserver.Config {
+		return ioserver.NewConfig().
+			WithLogFile("b").
+			WithFabricInterface("b").
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint("b")
+	}
+
+	for name, tc := range map[string]struct {
+		configA *ioserver.Config
+		configB *ioserver.Config
+		expErr  error
+	}{
+		"successful validation": {
+			configA: configA(),
+			configB: configB(),
+		},
+		"duplicate fabric config": {
+			configA: configA(),
+			configB: configB().
+				WithFabricInterface(configA().Fabric.Interface),
+			expErr: FaultConfigDuplicateFabric(1, 0),
+		},
+		"duplicate log_file": {
+			configA: configA(),
+			configB: configB().
+				WithLogFile(configA().LogFile),
+			expErr: FaultConfigDuplicateLogFile(1, 0),
+		},
+		"duplicate scm_mount": {
+			configA: configA(),
+			configB: configB().
+				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+			expErr: FaultConfigDuplicateScmMount(1, 0),
+		},
+		"duplicate scm_list": {
+			configA: configA().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			configB: configB().
+				WithScmClass("dcpm").
+				WithScmRamdiskSize(0).
+				WithScmDeviceList("a"),
+			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
+		},
+		"overlapping bdev_list": {
+			configA: configA().
+				WithBdevDeviceList("a"),
+			configB: configB().
+				WithBdevDeviceList("b", "a"),
+			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			conf := NewConfiguration().
+				WithFabricProvider("test").
+				WithServers(tc.configA, tc.configB)
+
+			gotErr := conf.Validate(log)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
