@@ -86,6 +86,8 @@ cont_op_parse(const char *str)
 		return CONT_OVERWRITE_ACL;
 	else if (strcmp(str, "update-acl") == 0)
 		return CONT_UPDATE_ACL;
+	else if (strcmp(str, "delete-acl") == 0)
+		return CONT_DELETE_ACL;
 	return -1;
 }
 
@@ -471,6 +473,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"verbose",	no_argument,		NULL,	'V'},
 		{"acl-file",	required_argument,	NULL,	'A'},
 		{"entry",	required_argument,	NULL,	'E'},
+		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -655,6 +658,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->entry == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'P':
+			D_STRNDUP(ap->principal, optarg, strlen(optarg));
+			if (ap->principal == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
 			/* alloc max */
@@ -738,6 +746,8 @@ out_free:
 		D_FREE(ap->aclfile);
 	if (ap->entry != NULL)
 		D_FREE(ap->entry);
+	if (ap->principal != NULL)
+		D_FREE(ap->principal);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -917,6 +927,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_UPDATE_ACL:
 		rc = cont_update_acl_hdlr(ap);
 		break;
+	case CONT_DELETE_ACL:
+		rc = cont_delete_acl_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -1084,6 +1097,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	  get-acl          get a container's ACL\n"
 "	  overwrite-acl    replace a container's ACL\n"
 "	  update-acl       add/modify entries in a container's ACL\n"
+"	  delete-acl       delete an entry from a container's ACL\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1156,6 +1170,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	--acl-file=PATH    input file containing ACL (overwrite-acl, "
 "			   update-acl)\n"
 "	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
+"	--principal=ID     principal of entry (delete-acl)\n"
+"			   for users: u:name@[domain]\n"
+"			   for groups: g:name@[domain]\n"
+"			   special principals: OWNER@, GROUP@, EVERYONE@\n"
 "	--verbose          verbose mode (get-acl)\n"
 "	--outfile=PATH     write ACL to file (get-acl)\n");
 

@@ -545,8 +545,10 @@ co_acl(void **state)
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl;
 	struct daos_ace		*ace;
-	uid_t			uid;
+	uid_t			 uid;
 	char			*user;
+	d_string_t		 name_to_remove = "friendlyuser@";
+	uint8_t			 type_to_remove = DAOS_ACL_USER;
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -652,6 +654,25 @@ co_acl(void **state)
 	assert_int_equal(rc, 0);
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 4: delete entry from ACL\n");
+
+	/* Update expected ACL to remove the entry */
+	assert_int_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
+					     name_to_remove), 0);
+
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 5: delete entry no longer in ACL\n");
+
+	/* try deleting same entry again - should be gone */
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
 
 	/* Clean up */
 	if (arg->myrank == 0)

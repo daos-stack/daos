@@ -1284,6 +1284,49 @@ cont_update_acl_hdlr(struct cmd_args_s *ap)
 }
 
 int
+cont_delete_acl_hdlr(struct cmd_args_s *ap)
+{
+	int				rc;
+	enum daos_acl_principal_type	type;
+	char				*name;
+	daos_prop_t			*prop_out;
+
+	if (!ap->principal) {
+		fprintf(stderr,
+			"parameter --principal is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
+	if (rc != 0) {
+		fprintf(stderr, "unable to parse principal string '%s': %d\n",
+			ap->principal, rc);
+		return rc;
+	}
+
+	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
+	D_FREE(name);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to delete ACL entry for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"delete appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
+
+int
 obj_query_hdlr(struct cmd_args_s *ap)
 {
 	struct daos_obj_layout *layout;
