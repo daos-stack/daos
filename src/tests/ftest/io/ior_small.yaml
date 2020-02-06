@@ -1,5 +1,5 @@
-server_manager:
-    srv_timeout: 500
+daos_server:
+  pattern_timeout: 500
 hosts:
   test_servers:
     - server-A

@@ -316,17 +316,35 @@ class SubProcessCommand(CommandWithSubCommand):
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
-        self.timeout = timeout
         self.pattern = None
         self.pattern_count = 1
+        self.pattern_timeout = BasicParameter(timeout, timeout)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Exclude the 'pattern_timeout' BasicParameter value from the command
+        string as it is only used internally to the class.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        names = self.get_param_names()
+        names.remove("pattern_timeout")
+        if self.sub_command_class is not None:
+            index = names.index("sub_command")
+            names[index] = "sub_command_class"
+        return names
 
     def check_subprocess_status(self, sub_process):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
         until the expected number of patterns (self.pattern_count) have been
-        found (typically one per host) or the timeout (self.timeout) is reached
-        or the process has stopped.
+        found (typically one per host) or the timeout (self.pattern_timeout)
+        is reached or the process has stopped.
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
@@ -338,13 +356,13 @@ class SubProcessCommand(CommandWithSubCommand):
         complete = True
         self.log.info(
             "Checking status of the %s command in %s with a %s second timeout",
-            self._command, sub_process, self.timeout)
+            self._command, sub_process, self.pattern_timeout.value)
 
         if self.pattern is not None:
             detected = 0
             complete = False
             timed_out = False
-            start_time = time.time()
+            start = time.time()
 
             # Search for patterns in the subprocess output until:
             #   - the expected number of pattern matches are detected (success)
@@ -354,12 +372,12 @@ class SubProcessCommand(CommandWithSubCommand):
                 output = sub_process.get_stdout()
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
-                timed_out = time.time() - start_time > self.timeout
+                timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
             msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
                 detected, self.pattern_count, self.pattern,
-                time.time() - start_time, self.timeout)
+                time.time() - start, self.pattern_timeout.value)
 
             if not complete:
                 # Report the error / timeout

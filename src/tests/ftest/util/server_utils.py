@@ -443,7 +443,7 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O server.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=300):
+    def __init__(self, path="", yaml_cfg=None, timeout=90):
         """Create a daos_server command object.
 
         Args:
@@ -451,7 +451,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 120 seconds.
+                appear in the subprocess output. Defaults to 90 seconds.
         """
         super(DaosServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -730,39 +730,6 @@ class DaosServerManager(SubprocessManager):
 
         """
         return self.manager.job.get_interface_envs(index)
-
-    # def _get_port_list(self, hosts):
-    #     """Get a list of hosts and port numbers.
-
-    #     Args:
-    #         hosts (list): a list of hosts to join with the port number
-
-    #     Returns:
-    #         list: a list of '<host>:<port>' entries for each host
-
-    #     """
-    #     port = self.get_config_value("port")
-    #     return [":".join([host, str(port)]) for host in hosts]
-
-    # def get_host_port_list(self):
-    #     """Get a list of hosts and port numbers.
-
-    #     Returns:
-    #         list: a list of '<host>:<port>' entries for each host
-
-    #     """
-    #     return self._get_port_list(self._hosts)
-
-    # def get_access_port_list(self):
-    #     """Get a list of access point hosts and port numbers.
-
-    #     Returns:
-    #         list: a list of '<host>:<port>' entries for each access point host
-
-    #     """
-    #     # For now only include the first host in the access point list
-    #     hosts = self.manager.job.yaml.other_params.access_points.hosts[:1]
-    #     return self._get_port_list(hosts)
 
     def prepare(self):
         """Prepare the host to run the server."""
