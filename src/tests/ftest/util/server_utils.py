@@ -187,7 +187,8 @@ class DaosServerConfig(ObjectWithParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG")
-            self.log_file = BasicParameter(None, "/tmp/server.log")
+#            self.log_file = BasicParameter(None, "/tmp/server.log")
+            self.log_file = BasicParameter(None, "/tmp/kccain/server.log")
             self.env_vars = BasicParameter(
                 None,
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",
@@ -255,13 +256,16 @@ class DaosServerConfig(ObjectWithParameters):
         # Parameters
         self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)       # e.g. "<host>:<port>"
-        self.port = BasicParameter(None, 10001)
+        self.port = BasicParameter(None, 10007)
         self.provider = BasicParameter(None, "ofi+sockets")
-        self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
+#        self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
+        self.socket_dir = BasicParameter(None, "/tmp/kccain/daos_sockets")
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
-        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
-        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
+#        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.control_log_file = BasicParameter(None, "/tmp/kccain/daos_control.log")
+#        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/kccain/daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -660,10 +664,13 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                 "xargs -0r rm -rf",
                 verbose=False)
             if len(result) > 1 or 0 not in result:
-                raise ServerFailed(
-                    "Error cleaning tmpfs on servers: {}".format(
-                        ", ".join(
-                            [str(result[key]) for key in result if key != 0])))
+                print("kccain WARNING: trouble cleaning tmpfs on servers")
+
+#            if len(result) > 1 or 0 not in result:
+#                raise ServerFailed(
+#                    "Error cleaning tmpfs on servers: {}".format(
+#                        ", ".join(
+#                            [str(result[key]) for key in result if key != 0])))
         load_mpi('openmpi')
         orterun_bin = find_executable('orterun')
         if orterun_bin is None:

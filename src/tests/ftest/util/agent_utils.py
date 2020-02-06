@@ -74,10 +74,12 @@ class DaosAgentConfig(ObjectWithParameters):
         #   log_file: /tmp/daos_agent.log
         self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)
-        self.port = BasicParameter(None, 10001)
+        self.port = BasicParameter(None, 10007)
         self.hostlist = BasicParameter(None)
-        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
-        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+#        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
+        self.runtime_dir = BasicParameter(None, "/tmp/kccain/agent")
+#        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+        self.log_file = BasicParameter(None, "/tmp/kccain/daos_agent.log")
 
         # Agent transport_config parameters
         self.transport_params = self.AgentSecurityConfig()
@@ -168,9 +170,13 @@ def run_agent(test, server_list, client_list=None):
     agent_config.create_yaml(agent_yaml)
 
     # Verify the domain socket directory is present and owned by this user
+#    file_checks = (
+#        ("Server", server_list, "/var/run/daos_server"),
+#        ("Client", client_list, "/var/run/daos_agent"),
+#    )
     file_checks = (
-        ("Server", server_list, "/var/run/daos_server"),
-        ("Client", client_list, "/var/run/daos_agent"),
+        ("Server", server_list, "/tmp/kccain/daos_sockets"),
+        ("Client", client_list, "/tmp/kccain/agent"),
     )
     for host_type, host_list, directory in file_checks:
         status, nodeset = check_file_exists(host_list, directory, user)
