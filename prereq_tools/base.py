@@ -1662,6 +1662,10 @@ class _Component():
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
+        if self.component_prefix == "/usr":
+            #hack until we have everything installed in lib64
+            env.AppendUnique(RPATH=["/usr/lib"])
+            env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
 
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])
