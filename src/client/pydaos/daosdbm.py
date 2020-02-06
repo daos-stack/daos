@@ -45,9 +45,12 @@ class daos_named_kv():
         except Exception:
             pass
 
-        os.environ['CRT_PHY_ADDR_STR'] = transport
-        os.environ['OFI_INTERFACE'] = interface
-        os.environ['DAOS_SINGLETON_CLI'] = '1'
+        if 'CRT_PHY_ADDR_STR' not in os.environ:
+            os.environ['CRT_PHY_ADDR_STR'] = transport
+        # DAOS can run without OFI_INTERFACE set in some modes, so allow
+        # for not settng this, and do not override anything in the environment.
+        if interface and 'OFI_INTERFACE' not in os.environ:
+            os.environ['OFI_INTERFACE'] = interface
 
         self.daos = __import__('pydaos')
 
@@ -80,7 +83,7 @@ def main():
     CUID = sys.argv[2]
 
     my_kv = daos_named_kv('ofi+sockets',
-                          'lo',
+                          None,
                           PUID,
                           CUID)
 
@@ -112,8 +115,6 @@ def main():
     except KeyError:
         start_count = 0
 
-    start_count = 0
-
     print('Copying records from {} to {}'.format(start_count, count))
 
     start_time = time.perf_counter()
@@ -122,12 +123,12 @@ def main():
     last_report_time = start_time
     to_copy = count - start_count + 1
     # CHANGE THIS TO MODIFY REPORTING FREQUENCY
-    report_freq = 0.1
+    report_freq = 2
 
     bytes_total = 0
 
     try:
-        for idx in range(start_count, count + 1):
+        for idx in range(start_count, count):
             key = str(idx)
             value = db[key]
             value_len = len(value)

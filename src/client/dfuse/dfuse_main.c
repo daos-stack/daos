@@ -206,7 +206,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (dfuse_info->di_caching and !dfuse_info->threaded) {
+	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
 		printf("Caching not compatible with single-threaded mode\n");
 		exit(1);
 	}

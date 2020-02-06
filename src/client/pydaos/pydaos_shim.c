@@ -146,7 +146,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 		goto out;
 	}
 
-	svcl = daos_rank_list_parse("0", ":");
+	svcl = daos_rank_list_parse("1", ":");
 	if (svcl == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -469,7 +469,7 @@ __shim_handle__obj_close(PyObject *self, PyObject *args)
 /** max number of concurrent put/get requests */
 #define MAX_INFLIGHT 16
 
-#define VAL_SZ		1024
+#define VAL_SZ		(1024*1024*16)
 
 struct kv_op {
 	daos_event_t	 ev;
