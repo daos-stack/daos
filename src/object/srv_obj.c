@@ -802,6 +802,44 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	return rc;
 }
 
+/** Filter and prepare for the sing value EC update/fetch */
+static void
+obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
+		       bool for_update)
+{
+	struct daos_oclass_attr		*oca = NULL;
+	daos_iod_t			*iod;
+	struct obj_ec_singv_local	 loc;
+	uint32_t			 tgt_idx;
+	uint32_t			 i;
+
+	tgt_idx = orw->orw_oid.id_shard - orw->orw_start_shard;
+	for (i = 0; i < orw->orw_nr; i++) {
+		iod = &iods[i];
+		if (iod->iod_type != DAOS_IOD_SINGLE ||
+		    (orw->orw_flags & ORF_EC) == 0)
+			continue;
+		/* for singv EC */
+		D_ASSERT(iod->iod_recxs == NULL);
+		if (iod->iod_size == DAOS_REC_ANY) /* punch */
+			continue;
+		if (oca == NULL) {
+			oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
+			D_ASSERT(oca != NULL && DAOS_OC_IS_EC(oca));
+		}
+		/* using iod_recxs to pass ir_gsize (akey_update_single) */
+		if (for_update)
+			iod->iod_recxs = (void *)iod->iod_size;
+		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
+			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
+					      &loc);
+			offs[i] = loc.esl_off;
+			if (for_update)
+				iod->iod_size = loc.esl_size;
+		}
+	}
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
@@ -850,6 +888,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
+		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 				      orw->orw_epoch, dkey, orw->orw_nr, iods,
@@ -887,6 +926,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
 			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
 		}
+		obj_singv_ec_rw_filter(orw, iods, offs, false);
 	}
 
 	biod = vos_ioh2desc(ioh);
@@ -2134,16 +2174,16 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		return 0;
 	}
 
-	for (i = 0; i < iods_nr && rc == 0; i++) {
+	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		struct bio_sglist	*bsgl = bio_iod_sgl(biod, i);
 		d_sg_list_t		 sgl;
-		/** Currently only supporting array types */
-		bool			 type_is_supported =
-						iod->iod_type == DAOS_IOD_ARRAY;
 
-		if (!type_is_supported)
-			continue;
+		if (!ci_is_valid(iods_csums[i].ic_data)) {
+			D_ERROR("Checksums is enabled but the csum info is "
+				"invalid.");
+			return -DER_CSUM;
+		}
 
 		rc = bio_sgl_convert(bsgl, &sgl);
 
@@ -2152,6 +2192,11 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 						 &iods_csums[i]);
 
 		daos_sgl_fini(&sgl, false);
+
+		if (rc != 0) {
+			D_ERROR("Verify failed: %d\n", rc);
+			break;
+		}
 	}
 
 	ds_pool_put(pool);

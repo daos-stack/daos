@@ -169,21 +169,6 @@
 #helper_log_file: /tmp/daos_admin.log
 #
 #
-## Username used to lookup user uid/gid to drop privileges to if started
-## as root. After control plane start-up and configuration, before starting
-## data plane, process ownership will be dropped to those of supplied user.
-#
-#user_name: daosuser
-#
-#
-## Group name used to lookup group gid to drop privileges to when user_name
-## is root. If user is a member of group, this group gid is set for the running
-## process. If group look up fails or user is not member, use uid return from
-## user lookup.
-#
-#group_name: daosgroup
-#
-#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will
@@ -316,7 +301,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: qib1
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #

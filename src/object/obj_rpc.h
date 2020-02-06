@@ -123,6 +123,11 @@ enum obj_rpc_flags {
 	ORF_RESEND		= (1 << 1),
 	/** Commit DTX synchronously. */
 	ORF_DTX_SYNC		= (1 << 2),
+	/**
+	 * Erasure coding flag, to avoid server recheck from oca,
+	 * now only used for single value EC handling.
+	 */
+	ORF_EC			= (1 << 3),
 };
 
 struct obj_iod_array {
