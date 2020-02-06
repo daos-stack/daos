@@ -4,6 +4,8 @@ hosts:
     - server-B
     - server-C
 timeout: 80
+server_manager:
+  recreate: true
 server_config:
     name: daos_server
 createtests:

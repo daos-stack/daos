@@ -3,6 +3,8 @@
 hosts:
   test_servers:
     - server-A
+server_manager:
+  recreate: true
 server_config:
   name: daos_server
 pool:

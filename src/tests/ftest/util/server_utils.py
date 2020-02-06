@@ -148,7 +148,7 @@ class DaosServer(DaosCommand):
             self.group = FormattedParameter("-g {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
-            self.recreate = FormattedParameter("--recreate-superblocks", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", False)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -187,8 +187,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG")
-#            self.log_file = BasicParameter(None, "/tmp/server.log")
-            self.log_file = BasicParameter(None, "/tmp/kccain/server.log")
+            self.log_file = BasicParameter(None, "/tmp/server.log")
             self.env_vars = BasicParameter(
                 None,
                 ["ABT_ENV_MAX_NUM_XSTREAMS=100",
@@ -256,16 +255,13 @@ class DaosServerConfig(ObjectWithParameters):
         # Parameters
         self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)       # e.g. "<host>:<port>"
-        self.port = BasicParameter(None, 10007)
+        self.port = BasicParameter(None, 10001)
         self.provider = BasicParameter(None, "ofi+sockets")
-#        self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
-        self.socket_dir = BasicParameter(None, "/tmp/kccain/daos_sockets")
+        self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
-#        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
-        self.control_log_file = BasicParameter(None, "/tmp/kccain/daos_control.log")
-#        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
-        self.helper_log_file = BasicParameter(None, "/tmp/kccain/daos_admin.log")
+        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
+        self.helper_log_file = BasicParameter(None, "/tmp/daos_admin.log")
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -377,7 +373,7 @@ class ServerManager(ExecutableCommand):
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.recreate = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, False)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -664,13 +660,10 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                 "xargs -0r rm -rf",
                 verbose=False)
             if len(result) > 1 or 0 not in result:
-                print("kccain WARNING: trouble cleaning tmpfs on servers")
-
-#            if len(result) > 1 or 0 not in result:
-#                raise ServerFailed(
-#                    "Error cleaning tmpfs on servers: {}".format(
-#                        ", ".join(
-#                            [str(result[key]) for key in result if key != 0])))
+                raise ServerFailed(
+                    "Error cleaning tmpfs on servers: {}".format(
+                        ", ".join(
+                            [str(result[key]) for key in result if key != 0])))
         load_mpi('openmpi')
         orterun_bin = find_executable('orterun')
         if orterun_bin is None:

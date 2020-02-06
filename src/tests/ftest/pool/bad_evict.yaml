@@ -1,5 +1,7 @@
 agent_config:
    name: scott_server
+server_manager:
+  recreate: true
 server_config:
    name: scott_server
 hosts:
