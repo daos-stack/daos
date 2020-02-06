@@ -23,11 +23,11 @@ pool:
     - [[9999], FAIL]
     - [NULLPTR, PASS]
   scm_size_list:
-    - [1073741824, PASS]
-    - [9999999999999999999999, FAIL]
+    - [1G, PASS]
+    - [9999999999999999999999G, FAIL]
   nvme_size_list:
-    - [3221225472, PASS]
-    - [9999999999999999999999, FAIL]
+    - [1G, PASS]
+    - [9999999999999999999999G, FAIL]
   debug: True
   control_method_mux: !mux
     api:
