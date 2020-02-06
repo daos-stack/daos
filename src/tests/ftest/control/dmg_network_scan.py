@@ -43,25 +43,6 @@ class DmgNetworkScanTest(TestWithServers):
         super(DmgNetworkScanTest, self).__init__(*args, **kwargs)
         self.setup_start_agents = False
 
-    def get_net_info(self, provider):
-        """Get expected values of domain with fi_info."""
-        fi_info = os.path.join(self.bin, "fi_info -p {}".format(provider))
-        try:
-            output = run_cmd(fi_info)
-        except process.CmdError as error:
-            # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(fi_info, error)
-            self.fail(msg)
-
-        devices = []
-        for line in output.stdout.splitlines():
-            if 'domain' in line:
-                dev = line.strip().split()[-1]
-                if dev not in devices:
-                    devices.append(dev)
-
-        return devices
-
     def get_numa_info(self):
         """Get expected values of numa nodes with lstopo."""
         lstopo = "lstopo-no-graphics"
@@ -89,7 +70,11 @@ class DmgNetworkScanTest(TestWithServers):
         return numas_devs
 
     def get_dev_provider(self, device):
-        """Get expected values of provider with fi_info."""
+        """Get expected values of provider with fi_info.
+
+        Args:
+            device (str): network device name
+        """
         fi_info = os.path.join(self.bin, "fi_info -d {}".format(device))
         try:
             output = process.run(fi_info)
