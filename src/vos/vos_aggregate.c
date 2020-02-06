@@ -57,6 +57,7 @@ struct agg_phy_ent {
 	struct evt_rect		pe_rect;
 	/* Entry payload address */
 	bio_addr_t		pe_addr;
+	struct dcs_csum_info	pe_csum_info;
 	/*
 	 * Extent start offset for the truncated physical entry. (Entry
 	 * straddles window end could be truncated on merge window flush)
@@ -601,13 +602,16 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct bio_io_context	*bio_ctxt;
 	struct bio_sglist	 bsgl;
 	d_sg_list_t		 sgl;
-	d_iov_t		 iov;
+	d_iov_t			 iov;
 	bio_addr_t		 addr_dst, addr_src;
 	daos_size_t		 seg_size, copy_size, buf_max;
 	struct evt_extent	 ext = { 0 };
 	daos_off_t		 phy_lo;
 	unsigned int		 i, biov_idx = 0;
+	unsigned int		 buf_add = 0;
+	bool			 csum_widened = false;
 	int			 rc;
+
 
 	D_ASSERT(obj != NULL);
 	D_ASSERT(mw->mw_rsize > 0);
@@ -647,6 +651,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	rc = bio_sgl_init(&bsgl, lgc_seg->ls_idx_end -
 			  lgc_seg->ls_idx_start + 1);
+
+	/* if csums, add array pointers to phy_ents, same size as above */
+
 	if (rc) {
 		D_ERROR("Init bsgl error: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -656,6 +663,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	i = lgc_seg->ls_idx_start;
 	while (i <= lgc_seg->ls_idx_end) {
+		int wider;
+
 		if (lgc_seg->ls_phy_ent != NULL) {
 			phy_ent = lgc_seg->ls_phy_ent;
 			ext = ent_in->ei_rect.rc_ex;
@@ -688,12 +697,24 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
 		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
+		if (cont_has_csums) {
+			wider = widen_biov(&bsgl.bs_iovs[biov_idx], phy_ent,
+					   &ext);
+			if (wider) {
+				// realloc io->ic_buf
+				// add phy_ent at bio_idx
+				buf_add += wider;
+				iov_buf_len += wider;
+				copy_size += wider;
+				csum_widened = true;
+			}
+		}
 		biov_idx++;
-
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 		iov.iov_buf_len -= copy_size;
+
 	}
-	D_ASSERT(seg_size == (io->ic_buf_len - iov.iov_buf_len));
+	D_ASSERT(seg_size == (io->ic_buf_len - buf_add - iov.iov_buf_len));
 
 	iov.iov_buf = io->ic_buf;
 	iov.iov_len = 0;
@@ -707,21 +728,31 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		bio_sgl_fini(&bsgl);
 		return rc;
 	}
-	D_ASSERT(iov.iov_len == seg_size);
+	D_ASSERT(iov.iov_len == seg_size + buf_add);
+
+	if (csum_widened)
+		// call calc-recalc
+	else if (cont_has_csums)
+		// just copy appropriate csums
 
 	addr_dst = ent_in->ei_addr;
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
 	mark_yield(&addr_dst, acts);
 
-	iov.iov_buf = io->ic_buf;
-	iov.iov_buf_len = io->ic_buf_len;
-	iov.iov_len = seg_size;
-	rc = bio_write(bio_ctxt, addr_dst, &iov);
+	if (csum_widened)
+		// writev
+	else {
+		iov.iov_buf = io->ic_buf;
+		iov.iov_buf_len = io->ic_buf_len;
+		iov.iov_len = seg_size;
+		rc = bio_write(bio_ctxt, addr_dst, &iov);
+	}
 	if (rc)
 		D_ERROR("Write "DF_RECT" error: "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 
 	bio_sgl_fini(&bsgl);
+	// if csum, free phy_ent array;
 	return rc;
 }
 
@@ -1058,7 +1089,8 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 
 static struct agg_phy_ent *
 enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
-		daos_epoch_t epoch, bio_addr_t *addr, uint32_t ver)
+		daos_epoch_t epoch, bio_addr_t *addr,
+		struct dcs_csum_info *csum_info, uint32_t ver)
 {
 	struct agg_phy_ent	*phy_ent;
 
@@ -1069,6 +1101,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_ex = *phy_ext;
 	phy_ent->pe_rect.rc_epc = epoch;
 	phy_ent->pe_addr = *addr;
+	phy_ent->pe_csum_info = *csum_info;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -1270,7 +1303,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry->ie_epoch,
 					  &entry->ie_biov.bi_addr,
-					  entry->ie_ver);
+					  &entry->ie_csum, entry->ie_ver);
 		if (phy_ent == NULL) {
 			rc = -DER_NOMEM;
 			D_ERROR("Enqueue phy_ent win:"DF_EXT", ent:"DF_EXT" "
