@@ -3170,7 +3170,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3196,8 +3197,8 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
@@ -3313,7 +3314,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
 	if (entry == NULL) {
@@ -3340,8 +3342,8 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 
 out_prop:
-	daos_prop_free(prop);
-out_lock:
+	if (prop != NULL)
+		daos_prop_free(prop);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
