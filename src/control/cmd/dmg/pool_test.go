@@ -26,6 +26,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -41,9 +42,9 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// TestGetSize verifies the correct number of bytes are returned from input
-// human readable strings
-func TestGetSize(t *testing.T) {
+// TestDmg_Pool_GetSize verifies the correct number of bytes are returned from
+// input "human readable" string parameters.
+func TestDmg_Pool_GetSize(t *testing.T) {
 	var tests = []struct {
 		in     string
 		out    uint64
@@ -85,8 +86,14 @@ func TestGetSize(t *testing.T) {
 	}
 }
 
-// TestCalcStorage verifies the correct scm/nvme bytes are returned from input
-func TestCalcStorage(t *testing.T) {
+// TestDmg_Pool_CalcStorage verifies the correct scm/nvme bytes are returned
+// from input.
+//
+// Size strings converted to base-2 for SCM and base-10 for NVMe.
+func TestDmg_Pool_CalcStorage(t *testing.T) {
+	pow2 := func(exponent float64) float64 { return math.Pow(2, exponent) }
+	pow10 := func(exponent float64) float64 { return math.Pow(10, exponent) }
+
 	for name, tc := range map[string]struct {
 		scm          string
 		nvme         string
@@ -94,10 +101,15 @@ func TestCalcStorage(t *testing.T) {
 		expNvmeBytes ByteSize
 		errMsg       string
 	}{
-		"defaults":     {"256M", "8G", 256 * MB, toBase10(8 * GB), ""},
+		"defaults":     {"256M", "8G", 256 * MB, New(8 * pow10(9)), ""},
 		"no nvme":      {"256M", "", 256 * MB, 0, ""},
-		"normal sizes": {"100G", "750G", 100 * GB, toBase10(750 * GB), ""},
-		"bad ratio":    {"99M", "1G", 99 * MB, toBase10(GB), ""}, // should issue ratio warning
+		"mebi mega":    {"750M", "750M", New(750 * pow2(20)), New(750 * pow10(6)), ""},
+		"gibi giga":    {"750G", "750G", New(750 * pow2(30)), New(750 * pow10(9)), ""},
+		"tebi tera":    {"750T", "750T", New(750 * pow2(40)), New(750 * pow10(12)), ""},
+		"pebi peta":    {"750P", "750P", New(750 * pow2(50)), New(750 * pow10(15)), ""},
+		"exbi exa":     {"750E", "750E", New(750 * pow2(60)), New(750 * pow10(18)), ""},
+		"raw bytes":    {"1000000000", "7000000000", New(1000000000), New(7000000000), ""},
+		"bad ratio":    {"99M", "1G", 99 * MB, New(pow10(9)), ""}, // should issue ratio warning
 		"no scm":       {"", "8G", 0, 0, msgSizeZeroScm},
 		"zero scm":     {"0", "8G", 0, 0, msgSizeZeroScm},
 		"bad scm size": {"Z0", "Z8G", 0, 0, "illegal scm size: Z0: Unrecognized size suffix Z0B"},
@@ -105,8 +117,6 @@ func TestCalcStorage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer ShowBufferOnFailure(t, buf)
-
-			AssertEqual(t, 0.95367431640625, mibsInMB, "bad mibsInMB multiplier")
 
 			gotScmBytes, gotNvmeBytes, err := calcStorage(log, tc.scm, tc.nvme)
 			if tc.errMsg != "" {
@@ -142,9 +152,9 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	}
 }
 
-func TestPoolCommands(t *testing.T) {
+func TestDmg_Pool_Commands(t *testing.T) {
 	testSizeStr := "512GB"
-	testSize, err := getSize(testSizeStr)
+	testSizeNvme, testSizeScm, err := getBaseTenSize(testSizeStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +213,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testSizeScm),
 					NumSvcReps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
 					Usr:        eUsr.Username + "@",
@@ -219,8 +229,8 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
-					NvmeBytes:  uint64(toBase10(testSize)),
+					ScmBytes:   uint64(testSizeScm),
+					NvmeBytes:  uint64(testSizeNvme),
 					NumSvcReps: 3,
 					Sys:        "fnord",
 					Usr:        "foo@",
@@ -236,7 +246,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testSizeScm),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Usr:        "foo@home",
@@ -251,7 +261,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testSizeScm),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Usr:        "foo@",
@@ -265,7 +275,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testSizeScm),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Grp:        "foo@",
@@ -505,7 +515,7 @@ func TestPoolCommands(t *testing.T) {
 	})
 }
 
-func TestPoolGetACLToFile_Success(t *testing.T) {
+func TestDmg_Pool_GetACLToFile_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)
 

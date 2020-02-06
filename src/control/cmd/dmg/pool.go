@@ -28,6 +28,7 @@ import (
 	"math"
 	"os"
 	"os/user"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -44,17 +45,6 @@ const (
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
 )
-
-// to convert base2->base10
-var mibsInMB float64 = math.Pow(1000, 2) / math.Pow(1024, 2)
-
-// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
-// i.e. if "10G" was specified then the output bytes would be the base 10
-// equivalent of this specified size as opposed to base 2.
-// SSD/NVMe size is conventionally specified as base 10.
-func toBase10(in bytesize.ByteSize) bytesize.ByteSize {
-	return bytesize.New(float64(in) * float64(mibsInMB))
-}
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
@@ -163,6 +153,44 @@ func getSize(sizeStr string) (bytesize.ByteSize, error) {
 	return bytesize.Parse(sizeStr)
 }
 
+// getBaseTenSize parses string as base10, return true if adjustment was made
+func getBaseTenSize(sizeStr string) (baseTen, baseTwo bytesize.ByteSize, err error) {
+	if sizeStr == "" {
+		return
+	}
+	// validate input
+	baseTwo, err = getSize(sizeStr)
+	if err != nil {
+		return
+	}
+
+	var reg *regexp.Regexp
+	reg, err = regexp.Compile("[A-Z]+")
+	if err != nil {
+		return
+	}
+
+	sizeStr = strings.ToUpper(sizeStr)
+	// store numeric part of sizeStr
+	num, err := strconv.Atoi(reg.ReplaceAllString(sizeStr, ""))
+	if err != nil {
+		return
+	}
+
+	// map any units to respective power of base-10
+	powMap := map[string]float64{"M": 6, "G": 9, "T": 12, "P": 15, "E": 18}
+	for ch, pow := range powMap {
+		if strings.Contains(sizeStr, ch) {
+			baseTen = bytesize.New(float64(num) * math.Pow(10, pow))
+			fmt.Printf("%s, %d, %.2f, %s\n", ch, num, pow, baseTen)
+			return
+		}
+	}
+
+	// no units registered so return rawBytes (as base is irrelevant)
+	return baseTwo, baseTwo, nil
+}
+
 // calcStorage calculates SCM & NVMe size for pool from user supplied parameters
 func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
@@ -179,15 +207,14 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 		return
 	}
 
-	nvmeBytes, err = getSize(nvmeSize)
+	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
+	var baseTenNvmeBytes bytesize.ByteSize
+	baseTenNvmeBytes, nvmeBytes, err = getBaseTenSize(nvmeSize)
 	if err != nil {
 		err = errors.WithMessagef(
 			err, "illegal nvme size: %s", nvmeSize)
 		return
 	}
-
-	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
-	baseTenNvmeBytes := toBase10(nvmeBytes)
 
 	ratio := 1.00
 	if nvmeBytes > 0 {
