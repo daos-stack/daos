@@ -28,7 +28,6 @@ from apricot import TestWithServers
 from command_utils import (EnvironmentVariables, ExecutableCommand,
                            FormattedParameter, CommandFailure)
 from job_manager_utils import OpenMPI
-from server_utils import DaosServerTransportCredentials
 
 
 class SelfTest(ExecutableCommand):
@@ -77,16 +76,14 @@ class CartSelfTest(TestWithServers):
         super(CartSelfTest, self).setUp()
 
         # Configure the daos server
-        transport = DaosServerTransportCredentials()
-        self.add_server_manager(
-            self.get_config_file(self.server_group, "server"),
-            self.get_common_config(
-                transport, self.server_group, self.hostlist_servers))
+        config_file = self.get_config_file(self.server_group, "server")
+        self.add_server_manager(config_file)
         self.configure_manager(
             "server",
             self.server_managers[-1],
             self.hostlist_servers,
-            self.hostfile_servers_slots)
+            self.hostfile_servers_slots,
+            self.hostlist_servers)
 
         # Configure the daos server to use a uri file - if supported by the
         # daos_server job manager

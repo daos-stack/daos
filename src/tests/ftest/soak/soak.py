@@ -27,6 +27,7 @@ import time
 from apricot import TestWithServers
 from agent_utils import (DaosAgentTransportCredentials, DaosAgentYamlParameters,
                          DaosAgentCommand, DaosAgentManager)
+from command_daos_utils import CommonConfig
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
@@ -343,7 +344,7 @@ class Soak(TestWithServers):
         # Create the common config yaml entries for the daos_agent command
         transport = DaosAgentTransportCredentials()
         config_file = self.get_config_file(self.server_group, "agent")
-        common_cfg = self.get_common_config(transport, self.server_group)
+        common_cfg = CommonConfig(self.server_group, transport)
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
@@ -353,6 +354,9 @@ class Soak(TestWithServers):
 
         # Get any daos_agent command/yaml options from the test yaml
         agent_mgr.manager.job.get_params(self)
+
+        # Assign the access points list
+        agent_mgr.set_config_value("access_points", self.hostlist_servers[:1])
 
         # TO-DO:  daos_agents start with systemd
         return " ".join([str(agent_mgr), "&"])

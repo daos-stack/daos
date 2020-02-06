@@ -78,35 +78,19 @@ class LogParameter(FormattedParameter):
         super(LogParameter, self).get_yaml_value(name, test, path)
         self._add_directory()
 
-    def update(self, value, name=None):
+    def update(self, value, name=None, append=False):
         """Update the value of the parameter.
 
         Args:
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
+            append (bool, optional): appemnd/extend/update the current list/dict
+                with the provided value.  Defaults to False - override the
+                current value.
         """
-        super(LogParameter, self).update(value, name)
+        super(LogParameter, self).update(value, name, append)
         self._add_directory()
-
-
-class AccessPoints(object):
-    # pylint: disable=too-few-public-methods
-    """Defines an object for storing access point data."""
-
-    def __init__(self, port=10001):
-        """Initialize a AccessPoints object.
-
-        Args:
-            port (int, optional): port number. Defaults to 10001.
-        """
-        self.hosts = []
-        self.port = port
-
-    def __str__(self):
-        """Return a comma-separated list of <host>:<port>."""
-        return ",".join(
-            [":".join([host, str(self.port)]) for host in self.hosts])
 
 
 class YamlParameters(ObjectWithParameters):
@@ -127,6 +111,19 @@ class YamlParameters(ObjectWithParameters):
         self.filename = filename
         self.title = title
         self.other_params = other_params
+
+    def get_params(self, test):
+        """Get values for the yaml parameters from the test yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        # Get the values for the yaml parameters defined by this class
+        super(YamlParameters, self).get_params(test)
+
+        # Get the values for the yaml parameters defined by the other class
+        if self.other_params is not None:
+            self.other_params.get_params(test)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -163,6 +160,30 @@ class YamlParameters(ObjectWithParameters):
                 "Error writing the yaml file {}: {}".format(
                     self.filename, error))
 
+    def set_value(self, name, value):
+        """Set the value for a specified attribute name.
+
+        Args:
+            name (str): name of the attribute for which to set the value
+            value (object): the value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = False
+        setting = getattr(self, name, None)
+        if isinstance(setting, BasicParameter):
+            setting.update(value, name)
+            status = True
+        elif setting is not None:
+            setattr(self, name, value)
+            self.log.debug("Updated param %s => %s", name, value)
+            status = True
+        elif self.other_params is not None:
+            status = self.other_params.set_value(name, value)
+        return status
+
     def get_value(self, name):
         """Get the value of the specified attribute name.
 
@@ -174,7 +195,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         setting = getattr(self, name, None)
-        if setting is not None and isinstance(setting, BasicParameter):
+        if isinstance(setting, BasicParameter):
             value = setting.value
         elif setting is not None:
             value = setting
@@ -270,53 +291,8 @@ class CommonConfig(YamlParameters):
         #       only contains host names.
         #
         self.name = BasicParameter(None, name)
-        self.access_points = AccessPoints(10001)
+        self.access_points = BasicParameter(None, ["localhost"])
         self.port = BasicParameter(None, 10001)
-
-    def update_hosts(self, hosts):
-        """Update the list of hosts for the access point.
-
-        Args:
-            hosts (list): list of access point hosts
-        """
-        if isinstance(hosts, list):
-            self.access_points.hosts = [host for host in hosts]
-        else:
-            self.access_points.hosts = []
-
-    def get_params(self, test):
-        """Get values for starting agents and server from the yaml file.
-
-        Obtain the lists of hosts from the BasicParameter class attributes.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        # Get the common parameters: name & port
-        super(CommonConfig, self).get_params(test)
-        self.access_points.port = self.port.value
-
-        # Get the transport credentials parameters
-        self.other_params.get_params(test)
-
-    def get_yaml_data(self):
-        """Convert the parameters into a dictionary to use to write a yaml file.
-
-        Returns:
-            dict: a dictionary of parameter name keys and values
-
-        """
-        yaml_data = super(CommonConfig, self).get_yaml_data()
-        yaml_data.pop("pmix", None)
-
-        # For now only include the first host in the access point list
-        if self.access_points.hosts:
-            yaml_data["access_points"] = [
-                ":".join([host, str(self.port.value)])
-                for host in self.access_points.hosts[:1]
-            ]
-
-        return yaml_data
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -359,33 +335,39 @@ class SubProcessCommand(CommandWithSubCommand):
             bool: whether or not the command progress has been detected
 
         """
-        status = True
+        complete = True
         self.log.info(
             "Checking status of the %s command in %s with a %s second timeout",
             self._command, sub_process, self.timeout)
 
         if self.pattern is not None:
-            pattern_matches = 0
+            detected = 0
+            complete = False
             timed_out = False
-            status = False
             start_time = time.time()
 
             # Search for patterns in the subprocess output until:
             #   - the expected number of pattern matches are detected (success)
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
-            while not status and not timed_out and sub_process.poll() is None:
+            while not complete and not timed_out and sub_process.poll() is None:
                 output = sub_process.get_stdout()
-                pattern_matches = len(re.findall(self.pattern, output))
-                status = pattern_matches == self.pattern_count
+                detected = len(re.findall(self.pattern, output))
+                complete = detected == self.pattern_count
                 timed_out = time.time() - start_time > self.timeout
 
-            if not status:
+            # Summarize results
+            msg = "{}/{} '{}' messages detected in {}/{} seconds".format(
+                detected, self.pattern_count, self.pattern,
+                time.time() - start_time, self.timeout)
+
+            if not complete:
                 # Report the error / timeout
-                err_msg = "{} detected. Only {}/{} messages received".format(
+                self.log.info(
+                    "%s detected - %s:\n%s",
                     "Time out" if timed_out else "Error",
-                    pattern_matches, self.pattern_count)
-                self.log.info("%s:\n%s", err_msg, sub_process.get_stdout())
+                    msg,
+                    sub_process.get_stdout())
 
                 # Stop the timed out process
                 if timed_out:
@@ -393,10 +375,9 @@ class SubProcessCommand(CommandWithSubCommand):
             else:
                 # Report the successful start
                 self.log.info(
-                    "%s subprocess started in %f seconds",
-                    self._command, time.time() - start_time)
+                    "%s subprocess startup detected - %s", self._command, msg)
 
-        return status
+        return complete
 
 
 class YamlCommand(SubProcessCommand):
@@ -444,6 +425,22 @@ class YamlCommand(SubProcessCommand):
         if isinstance(self.yaml, YamlParameters):
             self.yaml.create_yaml()
 
+    def set_config_value(self, name, value):
+        """Set the yaml configuration parameter value.
+
+        Args:
+            name (str): name of the yaml configuration parameter
+            value (object): value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = False
+        if isinstance(self.yaml, YamlParameters):
+            status = self.yaml.set_value(name, value)
+        return status
+
     def get_config_value(self, name):
         """Get the value of the yaml configuration parameter name.
 
@@ -458,20 +455,6 @@ class YamlCommand(SubProcessCommand):
         value = None
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.get_value(name)
-        return value
-
-    @property
-    def access_points(self):
-        """Get the access points used with this command.
-
-        Returns:
-            AccessPoints: an object with the list of hosts and ports that serve
-                as access points for the command.
-
-        """
-        value = None
-        if isinstance(self.yaml, YamlParameters):
-            value = self.yaml.get_config_value("access_points")
         return value
 
 
@@ -600,6 +583,22 @@ class SubprocessManager(object):
                 raise CommandFailure(
                     "{}: Server missing socket directory {} for user {}".format(
                         nodes, directory, user))
+
+    def set_config_value(self, name, value):
+        """Set the yaml configuration parameter value.
+
+        Args:
+            name (str): name of the yaml configuration parameter
+            value (object): value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = False
+        if self.manager.job and hasattr(self.manager.job, "set_config_value"):
+            status = self.manager.job.set_config_value(name, value)
+        return status
 
     def get_config_value(self, name):
         """Get the value of the yaml configuration parameter name.

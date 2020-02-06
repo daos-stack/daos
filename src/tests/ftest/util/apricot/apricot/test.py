@@ -276,13 +276,14 @@ class TestWithServers(TestWithoutServers):
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "agent")
                 # Setup the access points with the server hosts
-                common_cfg = self.get_common_config(transport, group, servers)
+                common_cfg = CommonConfig(group, transport)
                 self.add_agent_manager(config_file, common_cfg)
                 self.configure_manager(
                     "agent",
                     self.agent_managers[-1],
                     hosts,
-                    self.hostfile_clients_slots)
+                    self.hostfile_clients_slots,
+                    servers)
             self.start_agent_managers()
 
     def start_servers(self, server_groups=None):
@@ -311,13 +312,14 @@ class TestWithServers(TestWithoutServers):
                 # Use the unique agent group name to create a unique yaml file
                 config_file = self.get_config_file(group, "server")
                 # Setup the access points with the server hosts
-                common_cfg = self.get_common_config(transport, group, hosts)
+                common_cfg = CommonConfig(group, transport)
                 self.add_server_manager(config_file, common_cfg)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
                     hosts,
-                    self.hostfile_servers_slots)
+                    self.hostfile_servers_slots,
+                    hosts)
             self.start_server_managers()
 
     def get_config_file(self, name, command):
@@ -332,28 +334,6 @@ class TestWithServers(TestWithoutServers):
 
         """
         return os.path.join(self.tmp, "test_{}_{}.yaml".format(name, command))
-
-    def get_common_config(self, transport, group, hosts=None):
-        """Get the daos_agent common yaml configuration file parameters.
-
-        Args:
-            transport (TransportCredentials): the transport credentials
-                configuration parameters
-            group (str): server group name
-            hosts (list, optional): list of hosts to be used as access points in
-                the configuration file. Defaulys to None, which will use all the
-                server hosts
-
-        Returns:
-            CommonConfig: common yaml configuration file parameters
-
-        """
-        if hosts is None:
-            hosts = self.hostlist_servers
-
-        common_cfg = CommonConfig(group, transport)
-        common_cfg.update_hosts(hosts[:1])
-        return common_cfg
 
     def add_agent_manager(self, config_file=None, common_cfg=None, timeout=60):
         """Add a new daos agent manager object to the agent manager list.
@@ -373,9 +353,8 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "agent")
         if common_cfg is None:
-            common_cfg = self.get_common_config(
-                DaosAgentTransportCredentials(), self.server_group,
-                self.hostlist_servers)
+            common_cfg = CommonConfig(
+                self.server_group, DaosAgentTransportCredentials())
 
         # Create an AgentCommand to manage with a new AgentManager object
         agent_cfg = DaosAgentYamlParameters(config_file, common_cfg)
@@ -404,9 +383,8 @@ class TestWithServers(TestWithoutServers):
         if config_file is None:
             config_file = self.get_config_file("daos", "server")
         if common_cfg is None:
-            common_cfg = self.get_common_config(
-                DaosServerTransportCredentials(), self.server_group,
-                self.hostlist_servers)
+            common_cfg = CommonConfig(
+                self.server_group, DaosServerTransportCredentials())
 
         # Create an ServerCommand to manage with a new ServerManager object
         server_cfg = DaosServerYamlParameters(config_file, common_cfg)
@@ -414,7 +392,7 @@ class TestWithServers(TestWithoutServers):
         self.server_managers.append(
             DaosServerManager(server_cmd, self.manager_class))
 
-    def configure_manager(self, name, manager, hosts, slots):
+    def configure_manager(self, name, manager, hosts, slots, access_list=None):
         """Configure the agent/server manager object.
 
         Defines the environment variables, host list, and hostfile settings used
@@ -425,10 +403,15 @@ class TestWithServers(TestWithoutServers):
             manager (SubprocessManager): the daos agent/server process manager
             hosts (list): list of hosts on which to start the daos agent/server
             slots (int): number of slots per server to define in the hostfile
+            access_list (list): list of access point hosts
         """
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
+        if access_list is None:
+            access_list = self.hostlist_servers
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
+        # Only use the first host in the access list
+        manager.set_config_value("access_points", access_list[:1])
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)

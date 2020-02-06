@@ -156,6 +156,27 @@ class DaosServerYamlParameters(YamlParameters):
 
         return yaml_data
 
+    def set_value(self, name, value):
+        """Set the value for a specified attribute name.
+
+        Args:
+            name (str): name of the attribute for which to set the value
+            value (object): the value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = super(DaosServerYamlParameters, self).set_value(name, value)
+
+        # Set the value for each per-server configuration attribute name
+        if not status:
+            for server_params in self.server_params:
+                if server_params.set_value(name, value):
+                    status = True
+
+        return status
+
     def get_value(self, name):
         """Get the value of the specified attribute name.
 
@@ -420,9 +441,9 @@ class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
     NORMAL_PATTERN = "DAOS I/O server.*started"
-    FORMAT_PATTERN = "SCM format required"
+    FORMAT_PATTERN = "(SCM format required)(?!;)"
 
-    def __init__(self, path="", yaml_cfg=None, timeout=120):
+    def __init__(self, path="", yaml_cfg=None, timeout=300):
         """Create a daos_server command object.
 
         Args:
@@ -486,7 +507,6 @@ class DaosServerCommand(YamlCommand):
             test (Test): avocado Test object
         """
         super(DaosServerCommand, self).get_params(test)
-        self.update_pattern()
 
         # Run daos_server with test variant specific log file names if specified
         self.yaml.update_log_files(
@@ -495,26 +515,19 @@ class DaosServerCommand(YamlCommand):
             getattr(test, "server_log")
         )
 
-    def update_pattern(self, override=None):
+    def update_pattern(self, mode, host_qty):
         """Update the pattern used to determine if the daos_server started.
 
         Args:
-            override (str, optional): operation mode used to override the mode
-                determined from the yaml parameter values. Defaults to None -
-                no override.
+            mode (str): operation mode for the 'daos_server start' command
+            host_qty (int): number of hosts issuing 'daos_server start'
         """
-        # Determine the mode from either the override (if specified) or the yaml
-        # parameter values (if no override specified)
-        mode = "normal"
-        if isinstance(override, str):
-            mode = override.lower()
-        elif self.using_nvme or self.using_dcpm:
-            mode = "format"
-
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
+            self.pattern_count = host_qty
         else:
             self.pattern = self.NORMAL_PATTERN
+            self.pattern_count = host_qty * len(self.yaml.server_params)
 
     @property
     def using_nvme(self):
@@ -541,19 +554,6 @@ class DaosServerCommand(YamlCommand):
         if isinstance(self.yaml, YamlParameters):
             value = self.yaml.using_dcpm
         return value
-
-    @property
-    def mode(self):
-        """Get the current operation mode.
-
-        Returns:
-            str: current mode
-
-        """
-        mode = "normal"
-        if self.using_dcpm or self.using_nvme:
-            mode = "format"
-        return mode
 
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
@@ -716,23 +716,6 @@ class DaosServerManager(SubprocessManager):
         # to access the doas_servers when they are started
         self.dmg = DmgCommand(self.manager.job.command_path)
 
-    def _set_hosts(self, hosts, path, slots):
-        """Set the hosts used to execute the daos command.
-
-        Update the number of daos_io_servers to expect in the process output.
-
-        Args:
-            hosts (list): list of hosts on which to run the command
-            path (str): path in which to create the hostfile
-            slots (int): number of slots per host to specify in the hostfile
-        """
-        super(DaosServerManager, self)._set_hosts(hosts, path, slots)
-
-        # Update the expected number of messages to reflect the number of
-        # daos_io_server processes that will be started by the command
-        self.manager.job.pattern_count = \
-            len(self._hosts) * len(self.manager.job.yaml.server_params)
-
     def get_interface_envs(self, index=0):
         """Get the environment variable names and values for the interfaces.
 
@@ -748,38 +731,38 @@ class DaosServerManager(SubprocessManager):
         """
         return self.manager.job.get_interface_envs(index)
 
-    def _get_port_list(self, hosts):
-        """Get a list of hosts and port numbers.
+    # def _get_port_list(self, hosts):
+    #     """Get a list of hosts and port numbers.
 
-        Args:
-            hosts (list): a list of hosts to join with the port number
+    #     Args:
+    #         hosts (list): a list of hosts to join with the port number
 
-        Returns:
-            list: a list of '<host>:<port>' entries for each host
+    #     Returns:
+    #         list: a list of '<host>:<port>' entries for each host
 
-        """
-        port = self.get_config_value("port")
-        return [":".join([host, str(port)]) for host in hosts]
+    #     """
+    #     port = self.get_config_value("port")
+    #     return [":".join([host, str(port)]) for host in hosts]
 
-    def get_host_port_list(self):
-        """Get a list of hosts and port numbers.
+    # def get_host_port_list(self):
+    #     """Get a list of hosts and port numbers.
 
-        Returns:
-            list: a list of '<host>:<port>' entries for each host
+    #     Returns:
+    #         list: a list of '<host>:<port>' entries for each host
 
-        """
-        return self._get_port_list(self._hosts)
+    #     """
+    #     return self._get_port_list(self._hosts)
 
-    def get_access_port_list(self):
-        """Get a list of access point hosts and port numbers.
+    # def get_access_port_list(self):
+    #     """Get a list of access point hosts and port numbers.
 
-        Returns:
-            list: a list of '<host>:<port>' entries for each access point host
+    #     Returns:
+    #         list: a list of '<host>:<port>' entries for each access point host
 
-        """
-        # For now only include the first host in the access point list
-        hosts = self.manager.job.yaml.other_params.access_points.hosts[:1]
-        return self._get_port_list(hosts)
+    #     """
+    #     # For now only include the first host in the access point list
+    #     hosts = self.manager.job.yaml.other_params.access_points.hosts[:1]
+    #     return self._get_port_list(hosts)
 
     def prepare(self):
         """Prepare the host to run the server."""
@@ -814,8 +797,7 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.create_yaml_file()
 
         # Update dmg command params to reflect access to all of the servers
-        self.dmg.hostlist.update(
-            ",".join(self.get_host_port_list()), "dmg.hostlist")
+        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
         self.dmg.insecure.update(
             self.get_config_value("allow_insecure"), "dmg.insecure")
 
@@ -826,7 +808,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info(
             "--- STARTING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
-        self.manager.job.update_pattern("format")
+        self.manager.job.update_pattern("format", len(self._hosts))
         try:
             self.manager.run()
         except CommandFailure as error:
@@ -839,14 +821,14 @@ class DaosServerManager(SubprocessManager):
         self.dmg.storage_format()
 
         # Wait for all the doas_io_servers to start
-        self.manager.job.update_pattern("normal")
+        self.manager.job.update_pattern("normal", len(self._hosts))
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
             raise ServerFailed("Failed to start servers after format")
 
         # Update the dmg command host list to work with pool create/destroy
         self.dmg.hostlist.update(
-            ",".join(self.get_access_port_list()), "dmg.hostlist")
+            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
 
         return True
 
@@ -912,7 +894,7 @@ class DaosServerManager(SubprocessManager):
                         if cmd not in clean_cmds:
                             clean_cmds.append(cmd)
 
-        pcmd(self._hosts, "; ".join(clean_cmds), True)
+        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
 
     def prepare_storage(self, user):
         """Prepare the server storage.
@@ -921,7 +903,7 @@ class DaosServerManager(SubprocessManager):
             user (str): username
 
         Raises:
-            ServerFailed: if there was an error preparing the storage.
+            ServerFailed: if there was an error preparing the storage
 
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
@@ -951,7 +933,12 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def reset_storage(self):
-        """Reset the server storage."""
+        """Reset the server storage.
+
+        Raises:
+            ServerFailed: if there was an error resetting the storage
+
+        """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False

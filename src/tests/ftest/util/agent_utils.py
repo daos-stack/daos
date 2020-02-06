@@ -88,18 +88,6 @@ class DaosAgentYamlParameters(YamlParameters):
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
 
-    def get_params(self, test):
-        """Get values for the daos agent yaml config file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super(DaosAgentYamlParameters, self).get_params(test)
-
-        # Override the log file file name with the test log file name
-        if hasattr(test, "client_log") and test.client_log is not None:
-            self.log_file.value = test.client_log
-
     def update_log_file(self, name):
         """Update the log file name for the daos agent.
 
