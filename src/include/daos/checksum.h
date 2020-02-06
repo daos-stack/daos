@@ -289,7 +289,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  * @param[in]	obj		the daos_csummer obj
  * @param[in]	iods		list of iods
  * @param[in]	nr		number of iods
- * @param[in]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_iods_csums	pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
