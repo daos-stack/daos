@@ -74,6 +74,13 @@ trace_chars(const uint8_t *buf, const size_t buf_len, const uint32_t max)
 	C_TRACE("%s", str);
 }
 
+static bool
+is_array(const daos_iod_t *iod)
+{
+	return iod->iod_type == DAOS_IOD_ARRAY;
+}
+
+
 static void
 daos_csummer_trace_csum(struct daos_csummer *obj, uint8_t *csum)
 {
@@ -424,9 +431,11 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 			daos_recx_t	*recx = &iod->iod_recxs[j];
 			uint32_t	 csum_count;
 
-			csum_count = daos_recx_calc_chunks(*recx,
+			csum_count = is_array(iod) ?
+				     daos_recx_calc_chunks(*recx,
 							   iod->iod_size,
-							   chunksize);
+							   chunksize) :
+				     1; /** sv only has 1 checksum */
 			result += sizeof(struct dcs_csum_info) +
 				  csum_count * csum_size;
 		}
@@ -487,26 +496,36 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj,
 		       used, buf_len);
 
 		for (j = 0; j < iod->iod_nr; j++) {
-			daos_recx_t		*recx;
-			struct dcs_csum_info	*recx_csum;
+			struct dcs_csum_info	*csum_info;
 			uint32_t		 csum_count;
 
-			recx = &iod->iod_recxs[j];
-			recx_csum = &iod_csum->ic_data[j];
-			csum_count = daos_recx_calc_chunks(*recx,
-							   iod->iod_size,
-							   chunksize);
+			csum_info = &iod_csum->ic_data[j];
+			if (is_array(iod)) {
+
+				daos_recx_t *recx;
+
+				recx = &iod->iod_recxs[j];
+				csum_count = daos_recx_calc_chunks(*recx,
+						iod->iod_size, chunksize);
+				ci_set(csum_info, NULL, csum_count * csum_size,
+				       csum_size, csum_count,
+				       chunksize, csum_type);
+			} else { /** single value */
+				csum_count = 1;
+				ci_set(csum_info, NULL, csum_count * csum_size,
+				       csum_size, csum_count,
+				       CSUM_NO_CHUNK, csum_type);
+			}
 
 			/**
-			 * set buffer to null first, then set it using
+			 * buffer set to null first by ci_set, now set it using
 			 * the setptr macro so that amount of memory
 			 * used from allocated buffer is tracked.
 			 */
-			ci_set(recx_csum, NULL, csum_count * csum_size,
-			       csum_size, csum_count, chunksize, csum_type);
-			setptr(recx_csum->cs_csum, buf, csum_count * csum_size,
+			setptr(csum_info->cs_csum, buf, csum_count * csum_size,
 			       used, buf_len);
 		}
+		iod_csum->ic_nr = iod->iod_nr;
 	}
 
 done:
@@ -518,9 +537,9 @@ done:
 
 
 static int
-calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
-	  size_t rec_len, daos_recx_t *recxs, size_t nr,
-	  struct dcs_csum_info *csums)
+calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl,
+	       size_t rec_len, daos_recx_t *recxs, size_t nr,
+	       struct dcs_csum_info *csums)
 {
 	uint8_t			*buf;
 	size_t			 bytes_for_csum;
@@ -562,6 +581,31 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 	return 0;
 }
 
+static int
+calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
+	     struct dcs_csum_info *csums)
+{
+	size_t			 bytes_for_csum;
+	struct daos_sgl_idx	 idx = {0};
+	int			 rc;
+
+	if (!(daos_csummer_initialized(obj)))
+		return 0;
+
+	daos_csummer_set_buffer(obj, csums->cs_csum, csums->cs_len);
+	daos_csummer_reset(obj);
+
+	bytes_for_csum = rec_len;
+	rc = daos_sgl_processor(sgl, &idx, bytes_for_csum,
+				checksum_sgl_cb, obj);
+	if (rc)
+		return rc;
+
+	daos_csummer_finish(obj);
+
+	return 0;
+}
+
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		  daos_iod_t *iods, uint32_t nr,
@@ -592,9 +636,12 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		if (!csum_iod_is_supported(chunksize, iod))
 			continue;
 
-		rc = calc_csum(obj, &sgls[i], iod->iod_size,
-			       iod->iod_recxs, iod->iod_nr,
-			       csums->ic_data);
+		rc = is_array(iod) ?
+		     calc_csum_recx(obj, &sgls[i], iod->iod_size,
+				    iod->iod_recxs, iod->iod_nr,
+				    csums->ic_data) :
+		     calc_csum_sv(obj, &sgls[i], iod->iod_size,
+				  csums->ic_data);
 		csums->ic_nr = iod->iod_nr;
 
 		if (rc != 0) {
@@ -605,7 +652,6 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 	*p_iods_csums = iods_csums;
 
 	return 0;
-
 }
 
 void
@@ -625,6 +671,14 @@ daos_csummer_verify(struct daos_csummer *obj, daos_iod_t *iod, d_sg_list_t *sgl,
 	int			 i;
 	int			 rc;
 	bool			 match;
+
+	if (!daos_csummer_initialized(obj))
+		return 0;
+
+	if (iod == NULL || sgl == NULL || iod_csums == NULL) {
+		D_ERROR("Invalid params");
+		return -DER_INVAL;
+	}
 
 	rc = daos_csummer_calc_iods(obj, sgl, iod, 1, &new_iod_csums);
 	if (rc != 0)
