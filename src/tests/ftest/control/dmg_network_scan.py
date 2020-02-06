@@ -126,53 +126,45 @@ class DmgNetworkScanTest(TestWithServers):
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 
         try:
-            dmg_out = dmg.run()
+            dmg_cmd_out = dmg.run()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
 
         # This parse asumes that the device information is listed on separate
         # lines and with this format 'info_type: info'
-        if isinstance(dmg_out.stdout, str):
+        if isinstance(dmg_cmd_out.stdout, str):
             pout = {}
             net_items = ["numa_node:", "iface:", "provider:"]
-            for i, line in enumerate(dmg_out.stdout.splitlines()):
+            for i, line in enumerate(dmg_cmd_out.stdout.splitlines()):
                 for j, item in enumerate(net_items):
                     if item in line:
                         pout[i + j] = line.strip('\t')
 
-        # Get info from tools
-        exp_out = []
-        exp_devs = self.get_net_info("sockets") + self.get_net_info("psm2")
-        t_hfi = {"hfi1_0": "ib0", "hfi1_1": "ib1"}
-        for numa, devs in self.get_numa_info().items():
-            # If numa node has net devices, check which devices are expected
-            if devs:
-                n_devs = [dev for dev in devs if dev in exp_devs]
-                # lo device will always be on numa node 0
-                if numa == 0:
-                    n_devs.append("lo")
-                numa = [numa] * len(n_devs)
-                dev_prov = {dev: self.get_dev_provider(dev) for dev in n_devs}
-                # Unpack expected numa node, devices, providers into a string
-                # similar to dmg
-                for n, d, p in zip(numa, dev_prov.keys(), dev_prov.values()):
-                    if d in t_hfi:
-                        d = t_hfi[d]
-                    net_obj = [
-                        'fabric_iface: ' + d,
-                        'provider: ofi+' + p,
-                        'pinned_numa_node: ' + str(n),
-                    ]
-                    exp_out.append(net_obj)
-
         # Format the dict of values into list pairs
-        dmg_out = [list(pout.values())[i:(i + (len(pout) / 3) - 1)]
-                   for i in range(0, len(pout.items()), (len(pout) / 3) - 1)]
+        dmg_out = [pout.values()[i:(i + 3)] for i in range(0, len(pout), 3)]
+        self.log.info("Received data from dmg output: %s", str(dmg_out))
 
-        # Verify
-        _ = [dev.sort() for dev in dmg_out]
-        _ = [dev.sort() for dev in exp_out]
+        # Validate dmg output against 3rd party tools: lstopo, fi_info
+        covered = []
         for dev in dmg_out:
-            if dev not in exp_out:
-                self.fail(
-                    "Can't find device: {} info on dmg ouput".format(dev))
+            dmg_iface = dev[0].split()[1]
+            dmg_numa = int(dev[1].split()[1])
+            dmg_prov = dev[2].split()[1].split("+")[1]
+            tr = {"ib0": "hfi1_0", "ib1": "hfi1_1"}
+            for sys_numa, sys_ifaces in self.get_numa_info().items():
+                if sys_numa == 0:
+                    sys_ifaces.append("lo")
+                if sys_numa == dmg_numa and dmg_iface in sys_ifaces:
+                    # Verify that the provider is supported for this device
+                    if dmg_prov in self.get_dev_provider(dmg_iface):
+                        covered.append(dev)
+                    if (dmg_iface in tr and
+                            dmg_prov in self.get_dev_provider(tr[dmg_iface])):
+                        covered.append(dev)
+
+        # Sort both lists
+        dmg_out.sort()
+        covered.sort()
+
+        if covered != dmg_out:
+            self.fail("dmg output does not match network devices found.")
