@@ -187,11 +187,11 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 	}
 
 	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
-	nvmeBytes = toBase10(nvmeBytes)
+	baseTenNvmeBytes := toBase10(nvmeBytes)
 
 	ratio := 1.00
 	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(nvmeBytes)
+		ratio = float64(scmBytes) / float64(baseTenNvmeBytes)
 	}
 
 	if ratio < 0.01 {
@@ -203,10 +203,10 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 		"Creating DAOS pool with %s SCM and %s NVMe storage "+
 			"(%.3f ratio)\n",
 		scmBytes.Format("%.0f", "", false),
-		nvmeBytes.Format("%.0f", "", false),
+		nvmeBytes.Format("%.0f", "", false), // print what was specified
 		ratio)
 
-	return scmBytes, nvmeBytes, nil
+	return scmBytes, baseTenNvmeBytes, nil
 }
 
 // formatNameGroup converts system names to principal and if both user and group
