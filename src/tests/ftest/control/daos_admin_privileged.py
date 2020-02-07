@@ -27,7 +27,6 @@ import os
 import getpass
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
 from server_utils import ServerFailed
 
 
