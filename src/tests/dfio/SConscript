@@ -1,0 +1,31 @@
+"""Build dfio plugin"""
+import daos_build
+from prereq_tools import GitRepoRetriever
+
+def scons():
+    """Execute build"""
+
+    Import('env', 'prereqs')
+
+    dfio_libs = ['daos_common', 'daos', 'dfs', 'gurt', 'uuid', 'dl']
+
+    denv = env.Clone()
+
+    AddOption('--dfio',
+              dest='dfio',
+              action='store_true',
+              default=False,
+              help='Include dfio plugin')
+    if GetOption("dfio"):
+        denv.Append(CCFLAGS=['-rdynamic', '-z', 'nodelet', '-fPIC', \
+                             '-I/home/huakuang/daos/_build.external/fio'])
+        denv.AppendUnique(LIBPATH=["$PREFIX/lib64/"])
+        denv.AppendUnique(CPPDEFINES=['-D_GNU_SOURCE'])
+
+        daos_fio = denv.Program('daos_fio', ['daos_fio.c'], LIBS=dfio_libs)
+
+        daos_fio_async = denv.Program('daos_fio_async', ['daos_fio_async.c'],
+                                  LIBS=dfio_libs)
+
+if __name__ == "SCons.Script":
+    scons()

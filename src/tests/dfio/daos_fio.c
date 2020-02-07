@@ -24,7 +24,7 @@
 /*
  * Implementation of DAOS File System Fio Plugin
  */
-#include <string.h>
+// #include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -186,12 +186,11 @@ static void
 daos_fio_cleanup(struct thread_data *td)
 {
 	struct daos_data *dd = td->io_ops_data;
-	int rc;
 
-	rc = dfs_umount(dd->dfs);
-	rc = daos_cont_close(dd->coh, NULL);
-	rc = daos_pool_disconnect(dd->poh, NULL);
-	rc = daos_fini();
+	dfs_umount(dd->dfs);
+	daos_cont_close(dd->coh, NULL);
+	daos_pool_disconnect(dd->poh, NULL);
+	daos_fini();
 
 	free(dd->io_us);
 	free(dd);
@@ -288,7 +287,6 @@ static int
 daos_fio_close(struct thread_data *td, struct fio_file *f)
 {
 	struct daos_data *dd = td->io_ops_data;
-	dfs_obj_t *parent = NULL;
 	int rc;
 
 	rc = dfs_release(dd->obj);
