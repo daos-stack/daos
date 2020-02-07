@@ -28,7 +28,6 @@ import getpass
 
 from dmg_utils import storage_format
 from general_utils import check_file_exists
-from server_utils import ServerManager, ServerFailed
 from apricot import TestWithServers
 
 
@@ -38,16 +37,28 @@ class SuperBlockVersioning(TestWithServers):
     :avocado: recursive
     """
 
-    def test_super_block_versioning(self):
+    def test_super_block_version_basic(self):
         """
         JIRA ID: DAOS-2895
         Test Description: Basic test to verify that superblock file is
         versioned.
         :avocado: tags=all,tiny,pr,ds_versioning,basic
         """
-        # we can use VMs to run this test.
-        # We need to make sure the server starts up with /mnt/daos
         # Check that the superblock file exists under the scm_mount dir.
-        # If it does exist, we need to make sure that 'version' is specified in
-        #   the file.
+        params = self.server_managers[-1].runner.job.yaml_params
+        fname = os.path.join(params.server_params[-1].scm_mount, "superblock")
+        check_result = check_file_exists(self.hostlist_servers, fname)
+        if not check_result[0]:
+            self.fail("%s: %s not found", check_result[1], fname)
 
+        # Make sure that 'version' is in the file.
+        ver = False
+        fp = open(fname, 'r')
+        for line in fp.readlines():
+            if "version" in line:
+                ver = True
+                self.log.info("Found version in superblock file: {}".format(
+                    line.split()[1]))
+
+        if not ver:
+            self.fail("Was not able to find version in {} file".format(fname))
