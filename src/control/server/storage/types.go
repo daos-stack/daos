@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/inhies/go-bytesize"
+	"gopkg.in/dustin/go-humanize.v1"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -99,7 +99,7 @@ type (
 	// NvmeNamespace represents an individual NVMe namespace on a device.
 	NvmeNamespace struct {
 		ID   int32
-		Size int32
+		Size uint64
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
@@ -118,9 +118,16 @@ type (
 	NvmeControllers []*NvmeController
 )
 
+func (nc *NvmeController) NamespaceCapacity() (tCap uint64) {
+	for _, ns := range nc.Namespaces {
+		tCap += ns.Size
+	}
+	return
+}
+
 func (m *ScmModule) String() string {
 	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, bytesize.New(float64(m.Capacity)),
+		"chan:%d pos:%d)", m.PhysicalID, humanize.IBytes(m.Capacity),
 		m.SocketID, m.ControllerID, m.ChannelID, m.ChannelPosition)
 }
 
@@ -140,20 +147,23 @@ func (ms ScmModules) String() string {
 	return buf.String()
 }
 
+// TotalCapacity sums capacity of all modules
+func (ms ScmModules) TotalCapacity() (tCap uint64) {
+	for _, m := range ms {
+		tCap += m.Capacity
+	}
+	return
+}
+
 // Summary reports accumulated storage space and the number of modules.
 func (ms ScmModules) Summary() string {
-	tCap := bytesize.New(0)
-	for _, m := range ms {
-		tCap += bytesize.New(float64(m.Capacity))
-	}
-
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ms), common.Pluralise("module", len(ms)))
+	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(ms.TotalCapacity()),
+		len(ms), common.Pluralise("module", len(ms)))
 }
 
 func (n *ScmNamespace) String() string {
 	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
-		bytesize.New(float64(n.Size)))
+		humanize.Bytes(n.Size))
 }
 
 func (ns ScmNamespaces) String() string {
@@ -172,15 +182,18 @@ func (ns ScmNamespaces) String() string {
 	return buf.String()
 }
 
+// TotalCapacity sums capacity of all namespaces
+func (ns ScmNamespaces) TotalCapacity() (tCap uint64) {
+	for _, n := range ns {
+		tCap += n.Size
+	}
+	return
+}
+
 // Summary reports accumulated storage space and the number of namespaces.
 func (ns ScmNamespaces) Summary() string {
-	tCap := bytesize.New(0)
-	for _, n := range ns {
-		tCap += bytesize.New(float64(n.Size))
-	}
-
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ns), common.Pluralise("namespace", len(ns)))
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ns.TotalCapacity()),
+		len(ns), common.Pluralise("namespace", len(ns)))
 }
 
 // ctrlrDetail provides custom string representation for Controller type
@@ -191,13 +204,8 @@ func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *NvmeController) {
 		return
 	}
 
-	tCap := bytesize.New(0)
-	for _, n := range c.Namespaces {
-		tCap += bytesize.GB * bytesize.New(float64(n.Size))
-	}
-
 	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		c.PciAddr, c.Model, c.FwRev, c.SocketID, tCap)
+		c.PciAddr, c.Model, c.FwRev, c.SocketID, humanize.Bytes(c.NamespaceCapacity()))
 }
 
 func (ncs NvmeControllers) String() string {

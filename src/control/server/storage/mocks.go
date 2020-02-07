@@ -56,7 +56,7 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := getIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   idx,
-		Size: idx,
+		Size: uint64(idx),
 	}
 }
 

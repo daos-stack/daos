@@ -44,14 +44,14 @@
   name = "gopkg.in/yaml.v2"
   version = "2.2.1"
 
-# go-bytesize: BSD 3-Clause, handle conversion from human readable size
-# strings to bytes.
-[[constraint]]
-  branch = "master"
-  name = "github.com/inhies/go-bytesize"
-
 # go-cmp: BSD 3-Clause, allows comparison of complex structures in
 # tests
 [[constraint]]
   name = "github.com/google/go-cmp"
   version = "~0.3.1"
+
+# go-humanize: MIT, used for parsing and displaying string representations
+# of various numbers (sizes, times, etc.)
+[[constraint]]
+  name = "gopkg.in/dustin/go-humanize.v1"
+  version = "~1.0.0"

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"sort"
 	"time"
 
-	bytesize "github.com/inhies/go-bytesize"
+	"gopkg.in/dustin/go-humanize.v1"
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -169,13 +169,9 @@ func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
 // ctrlrDetail provides custom string representation for Controller type
 // defined outside this package.
 func ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	tCap := bytesize.New(0)
-	for _, n := range c.Namespaces {
-		tCap += bytesize.GB * bytesize.New(float64(n.Size))
-	}
-
 	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		c.Pciaddr, c.Model, c.Fwrev, c.Socketid, tCap)
+		c.Pciaddr, c.Model, c.Fwrev, c.Socketid,
+		humanize.Bytes(c.NamespaceCapacity()))
 }
 
 func (ncs NvmeControllers) String() string {
@@ -216,15 +212,13 @@ func (ncs NvmeControllers) StringHealthStats() string {
 
 // Summary reports accumulated storage space and the number of controllers.
 func (ncs NvmeControllers) Summary() string {
-	tCap := bytesize.New(0)
+	tCap := uint64(0)
 	for _, c := range ncs {
-		for _, n := range c.Namespaces {
-			tCap += bytesize.GB * bytesize.New(float64(n.Size))
-		}
+		tCap += c.NamespaceCapacity()
 	}
 
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(tCap),
+		len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages

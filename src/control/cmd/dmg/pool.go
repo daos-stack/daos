@@ -25,36 +25,23 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"os/user"
 	"strconv"
 	"strings"
 
-	"github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
+	"gopkg.in/dustin/go-humanize.v1"
 
 	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
 	msgSizeNoNumber = "size string doesn't specify a number"
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
+	minStorageRatio = 0.01
 )
-
-// to convert base2->base10
-var mibsInMB float64 = math.Pow(1000, 2) / math.Pow(1024, 2)
-
-// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
-// i.e. if "10G" was specified then the output bytes would be the base 10
-// equivalent of this specified size as opposed to base 2.
-// SSD/NVMe size is conventionally specified as base 10.
-func toBase10(in bytesize.ByteSize) bytesize.ByteSize {
-	return bytesize.New(float64(in) * float64(mibsInMB))
-}
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
@@ -82,14 +69,41 @@ type PoolCreateCmd struct {
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
 }
 
+func parseSize(sizeStr string) (size uint64, err error) {
+	if sizeStr == "" {
+		return
+	}
+	return humanize.ParseBytes(sizeStr)
+}
+
+func calcStorageRatio(scmSize, nvmeSize uint64) (ratio float64) {
+	ratio = 1.0
+	if nvmeSize > 0 {
+		ratio = float64(scmSize) / float64(nvmeSize)
+	}
+	return
+}
+
 // Execute is run when PoolCreateCmd subcommand is activated
 func (c *PoolCreateCmd) Execute(args []string) error {
 	msg := "SUCCEEDED: "
 
-	scmBytes, nvmeBytes, err := calcStorage(c.log, c.ScmSize, c.NVMeSize)
+	scmSize, err := parseSize(c.ScmSize)
 	if err != nil {
-		return errors.Wrap(err, "calculating pool storage sizes")
+		return errors.Wrapf(err, "failed to parse %q as SCM size", c.ScmSize)
 	}
+	nvmeSize, err := parseSize(c.NVMeSize)
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse %q as NVMe size", c.NVMeSize)
+	}
+
+	ratio := calcStorageRatio(scmSize, nvmeSize)
+	if ratio < minStorageRatio {
+		c.log.Infof("SCM:NVMe ratio is less than %.0f%%, DAOS performance will suffer!",
+			minStorageRatio*100)
+	}
+	c.log.Infof("Creating DAOS pool with %s SCM and %s NVMe storage (%.3f ratio)",
+		humanize.Bytes(scmSize), humanize.Bytes(nvmeSize), ratio)
 
 	var acl *client.AccessControlList
 	if c.ACLFile != "" {
@@ -125,7 +139,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	req := &client.PoolCreateReq{
-		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
+		ScmBytes: scmSize, NvmeBytes: nvmeSize,
 		RankList: ranks, NumSvcReps: c.NumSvcReps, Sys: c.Sys,
 		Usr: usr, Grp: grp, ACL: acl,
 	}
@@ -141,72 +155,6 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	c.log.Infof("Pool-create command %s\n", msg)
 
 	return err
-}
-
-// getSize retrieves number of bytes from human readable string representation
-func getSize(sizeStr string) (bytesize.ByteSize, error) {
-	if sizeStr == "" {
-		return bytesize.New(0.00), nil
-	}
-	if common.IsAlphabetic(sizeStr) {
-		return bytesize.New(0.00), errors.New(msgSizeNoNumber)
-	}
-
-	// change any alphabetic characters to upper before ByteSize.parse()
-	sizeStr = strings.ToUpper(sizeStr)
-
-	// append "B" character if absent (required by ByteSize.parse())
-	if !strings.HasSuffix(sizeStr, "B") {
-		sizeStr += "B"
-	}
-
-	return bytesize.Parse(sizeStr)
-}
-
-// calcStorage calculates SCM & NVMe size for pool from user supplied parameters
-func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
-	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
-
-	scmBytes, err = getSize(scmSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal scm size: %s", scmSize)
-		return
-	}
-
-	if scmBytes == 0 {
-		err = errors.New(msgSizeZeroScm)
-		return
-	}
-
-	nvmeBytes, err = getSize(nvmeSize)
-	if err != nil {
-		err = errors.WithMessagef(
-			err, "illegal nvme size: %s", nvmeSize)
-		return
-	}
-
-	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
-	baseTenNvmeBytes := toBase10(nvmeBytes)
-
-	ratio := 1.00
-	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(baseTenNvmeBytes)
-	}
-
-	if ratio < 0.01 {
-		log.Infof(
-			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
-				"will suffer!\n")
-	}
-	log.Infof(
-		"Creating DAOS pool with %s SCM and %s NVMe storage "+
-			"(%.3f ratio)\n",
-		scmBytes.Format("%.0f", "", false),
-		nvmeBytes.Format("%.0f", "", false), // print what was specified
-		ratio)
-
-	return scmBytes, baseTenNvmeBytes, nil
 }
 
 // formatNameGroup converts system names to principal and if both user and group
@@ -280,10 +228,6 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 		return errors.Wrap(err, "pool query failed")
 	}
 
-	formatBytes := func(size uint64) string {
-		return bytesize.ByteSize(size).Format("%.0f", "", false)
-	}
-
 	// Maintain output compability with the `daos pool query` output.
 	var bld strings.Builder
 	fmt.Fprintf(&bld, "Pool %s, ntarget=%d, disabled=%d\n",
@@ -292,17 +236,17 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
 	if resp.Scm != nil {
 		bld.WriteString("- SCM:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Scm.Total))
+		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.Bytes(resp.Scm.Total))
 		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			formatBytes(resp.Scm.Free), formatBytes(resp.Scm.Min),
-			formatBytes(resp.Scm.Max), formatBytes(resp.Scm.Mean))
+			humanize.Bytes(resp.Scm.Free), humanize.Bytes(resp.Scm.Min),
+			humanize.Bytes(resp.Scm.Max), humanize.Bytes(resp.Scm.Mean))
 	}
 	if resp.Nvme != nil {
 		bld.WriteString("- NVMe:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", formatBytes(resp.Nvme.Total))
+		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.Bytes(resp.Nvme.Total))
 		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			formatBytes(resp.Nvme.Free), formatBytes(resp.Nvme.Min),
-			formatBytes(resp.Nvme.Max), formatBytes(resp.Nvme.Mean))
+			humanize.Bytes(resp.Nvme.Free), humanize.Bytes(resp.Nvme.Min),
+			humanize.Bytes(resp.Nvme.Max), humanize.Bytes(resp.Nvme.Mean))
 	}
 	if resp.Rebuild != nil {
 		if resp.Rebuild.Status == 0 {

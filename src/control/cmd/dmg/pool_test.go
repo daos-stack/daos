@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,99 +33,13 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	. "github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
+	"gopkg.in/dustin/go-humanize.v1"
 
 	"github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-// TestGetSize verifies the correct number of bytes are returned from input
-// human readable strings
-func TestGetSize(t *testing.T) {
-	var tests = []struct {
-		in     string
-		out    uint64
-		errMsg string
-	}{
-		{"", uint64(0), ""},
-		{"0", uint64(0), ""},
-		{"B", uint64(0), msgSizeNoNumber},
-		{"0B", uint64(0), ""},
-		{"2g", uint64(2 * GB), ""},
-		{"2G", uint64(2 * GB), ""},
-		{"2gb", uint64(2 * GB), ""},
-		{"2Gb", uint64(2 * GB), ""},
-		{"2gB", uint64(2 * GB), ""},
-		{"2GB", uint64(2 * GB), ""},
-		{"8000M", uint64(8000 * MB), ""},
-		{"8000m", uint64(8000 * MB), ""},
-		{"8000MB", uint64(8000 * MB), ""},
-		{"8000mb", uint64(8000 * MB), ""},
-		{"16t", uint64(16 * TB), ""},
-		{"16T", uint64(16 * TB), ""},
-		{"16tb", uint64(16 * TB), ""},
-		{"16Tb", uint64(16 * TB), ""},
-		{"16tB", uint64(16 * TB), ""},
-		{"16TB", uint64(16 * TB), ""},
-	}
-
-	for _, tt := range tests {
-		bytes, err := getSize(tt.in)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, "")
-			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		AssertEqual(t, uint64(bytes), tt.out, "bad output")
-	}
-}
-
-// TestCalcStorage verifies the correct scm/nvme bytes are returned from input
-func TestCalcStorage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		scm          string
-		nvme         string
-		expScmBytes  ByteSize
-		expNvmeBytes ByteSize
-		errMsg       string
-	}{
-		"defaults":     {"256M", "8G", 256 * MB, toBase10(8 * GB), ""},
-		"no nvme":      {"256M", "", 256 * MB, 0, ""},
-		"normal sizes": {"100G", "750G", 100 * GB, toBase10(750 * GB), ""},
-		"bad ratio":    {"99M", "1G", 99 * MB, toBase10(GB), ""}, // should issue ratio warning
-		"no scm":       {"", "8G", 0, 0, msgSizeZeroScm},
-		"zero scm":     {"0", "8G", 0, 0, msgSizeZeroScm},
-		"bad scm size": {"Z0", "Z8G", 0, 0, "illegal scm size: Z0: Unrecognized size suffix Z0B"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer ShowBufferOnFailure(t, buf)
-
-			AssertEqual(t, 0.95367431640625, mibsInMB, "bad mibsInMB multiplier")
-
-			gotScmBytes, gotNvmeBytes, err := calcStorage(log, tc.scm, tc.nvme)
-			if tc.errMsg != "" {
-				ExpectError(t, err, tc.errMsg, name)
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(tc.expScmBytes, gotScmBytes, DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected number of SCM bytes (-want, +got)\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.expNvmeBytes, gotNvmeBytes, DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected number of NVMe bytes (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
 
 func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 	t.Helper()
@@ -144,7 +58,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 
 func TestPoolCommands(t *testing.T) {
 	testSizeStr := "512GB"
-	testSize, err := getSize(testSizeStr)
+	testSize, err := humanize.ParseBytes(testSizeStr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +102,9 @@ func TestPoolCommands(t *testing.T) {
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
-	os.Mkdir(testNoPermDir, 0444)
+	if err := os.Mkdir(testNoPermDir, 0444); err != nil {
+		t.Fatal(err)
+	}
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -220,7 +136,7 @@ func TestPoolCommands(t *testing.T) {
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
 					ScmBytes:   uint64(testSize),
-					NvmeBytes:  uint64(toBase10(testSize)),
+					NvmeBytes:  uint64(testSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
 					Usr:        "foo@",

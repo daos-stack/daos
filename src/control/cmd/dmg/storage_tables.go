@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"sort"
 
-	bytesize "github.com/inhies/go-bytesize"
+	"gopkg.in/dustin/go-humanize.v1"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -63,7 +63,7 @@ func scmModuleScanTable(ms storage.ScmModules) string {
 		row[memCtrlrTitle] = fmt.Sprint(m.ControllerID)
 		row[channelTitle] = fmt.Sprint(m.ChannelID)
 		row[slotTitle] = fmt.Sprint(m.ChannelPosition)
-		row[capacityTitle] = bytesize.New(float64(m.Capacity)).String()
+		row[capacityTitle] = humanize.IBytes(m.Capacity)
 
 		table = append(table, row)
 	}
@@ -93,7 +93,7 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	for _, ns := range nss {
 		row := txtfmt.TableRow{deviceTitle: ns.BlockDevice}
 		row[socketTitle] = fmt.Sprint(ns.NumaNode)
-		row[capacityTitle] = bytesize.New(float64(ns.Size)).String()
+		row[capacityTitle] = humanize.Bytes(ns.Size)
 
 		table = append(table, row)
 	}
@@ -162,16 +162,11 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
 	for _, ctrlr := range ncs {
-		tCap := bytesize.New(0)
-		for _, ns := range ctrlr.Namespaces {
-			tCap += bytesize.GB * bytesize.New(float64(ns.Size))
-		}
-
 		row := txtfmt.TableRow{pciTitle: ctrlr.Pciaddr}
 		row[modelTitle] = ctrlr.Model
 		row[fwTitle] = ctrlr.Fwrev
 		row[socketTitle] = fmt.Sprint(ctrlr.Socketid)
-		row[capacityTitle] = tCap.String()
+		row[capacityTitle] = humanize.Bytes(ctrlr.NamespaceCapacity())
 
 		table = append(table, row)
 	}
