@@ -631,7 +631,7 @@ static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
 			}
 			goto out;
 		}
-		rc = dfs_mkdir(dfs, parent_handle, base, mode);
+		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
 		// code to mitigate DAOS concurrency issue
 		// to be fixed by the conditional update feature in DAOS
 		if (rc == ERROR_NOT_EXIST) {
@@ -710,7 +710,7 @@ Java_com_intel_daos_client_DaosFsClient_mkdir(JNIEnv *env, jobject client,
 		sprintf(msg, tmp, dir_msg);
 		throw_exception(env, msg, rc);
 	} else {
-		rc = dfs_mkdir(dfs, parent_handle, base, mode);
+		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
 		if (rc) {
 			char *tmp = "Failed to create directory (%s) " \
 					"under parent directory (%s)";
