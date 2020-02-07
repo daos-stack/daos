@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,14 +296,11 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 	d_iov_set(&dkey, (void *)name, strlen(name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
-		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
+			    sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 	i = 0;
@@ -403,14 +400,11 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 	d_iov_set(&dkey, (void *)name, strlen(name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(mode_t) + sizeof(time_t) * 3 +
 		sizeof(daos_obj_id_t) + sizeof(daos_size_t);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 	i = 0;
@@ -908,12 +902,9 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
 
-		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
 		iods[i].iod_size	= DAOS_REC_ANY;
 		iods[i].iod_recxs	= NULL;
-		iods[i].iod_eprs	= NULL;
-		iods[i].iod_csums	= NULL;
 		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
 
@@ -2641,7 +2632,6 @@ dfs_read_int(tse_task_t *task)
 	read_args->th		= DAOS_TX_NONE;
 	read_args->iod		= &params->arr_iod;
 	read_args->sgl		= params->sgl;
-	read_args->csums	= NULL;
 
 	daos_task_set_priv(read_task, params);
 	rc = tse_task_register_cbs(read_task, NULL, 0, 0, read_cb, NULL, 0);
@@ -2794,7 +2784,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 
 	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
 
-	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL, ev);
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 
@@ -2829,7 +2819,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 	arr_iod.arr_nr = iod->iod_nr;
 	arr_iod.arr_rgs = iod->iod_rgs;
 
-	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, NULL, ev);
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 
@@ -3061,13 +3051,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)name, strlen(name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	recx.rx_idx	= MODE_IDX;
 	recx.rx_nr	= sizeof(mode_t);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 
@@ -3127,10 +3114,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_recxs	= recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	iod.iod_size	= 1;
 
@@ -3634,11 +3618,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	/** set akey as the xattr name */
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** if not default flag, check for xattr existence */
@@ -3719,11 +3700,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 
 	/** set akey as the xattr name */
 	d_iov_set(&iod.iod_name, xname, strlen(xname));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= NULL;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 
 	if (*size) {

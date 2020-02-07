@@ -38,6 +38,7 @@ type SystemStopReq struct {
 	Prep  bool
 	Kill  bool
 	Ranks []uint32
+	Force bool
 }
 
 // SystemStopResp contains the request response.
@@ -55,7 +56,7 @@ func (c *connList) SystemStop(req SystemStopReq) (*SystemStopResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill}
+	rpcReq := &ctlpb.SystemStopReq{Prep: req.Prep, Kill: req.Kill, Force: req.Force}
 
 	c.log.Debugf("DAOS system stop request: %s\n", rpcReq)
 

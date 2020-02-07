@@ -2079,7 +2079,7 @@ pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
 
 	for (i = 0; i < map->po_domain_layers; ++i) {
 		if (map->po_comp_fail_cnts[i].comp_type == type) {
-			fail_cnt = map->po_comp_fail_cnts[i].comp_type;
+			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
 	}

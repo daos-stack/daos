@@ -128,8 +128,8 @@ int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp);
 int ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp);
 
 /** srv_target.c */
-int ds_mgmt_tgt_init(void);
-void ds_mgmt_tgt_fini(void);
+int ds_mgmt_tgt_setup(void);
+void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
@@ -144,5 +144,6 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 			 int nservers, uint32_t version);
+void ds_mgmt_kill_rank(bool force);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

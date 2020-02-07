@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/env.h>
+#include <spdk/nvme.h>
 #include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
@@ -50,6 +51,7 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
+#define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -858,6 +860,78 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
+static int
+opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
+		  char *traddr)
+{
+	struct spdk_pci_addr *tmp = *list;
+	size_t count = opts->num_pci_addr;
+
+	tmp = realloc(tmp, sizeof(struct spdk_pci_addr) * (count + 1));
+	if (tmp == NULL) {
+		D_ERROR("realloc error\n");
+		return -DER_NOMEM;
+	}
+
+	*list = tmp;
+	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
+		D_ERROR("Invalid address %s\n", traddr);
+		return -DER_INVAL;
+	}
+
+	opts->num_pci_addr++;
+	return 0;
+}
+
+static int
+populate_whitelist(struct spdk_env_opts *opts)
+{
+	struct spdk_nvme_transport_id	*trid;
+	struct spdk_conf_section	*sp;
+	const char			*val;
+	size_t				 i;
+	int				 rc = 0;
+
+	sp = spdk_conf_find_section(NULL, "Nvme");
+	if (sp == NULL) {
+		D_ERROR("unexpected empty config\n");
+		return -1;
+	}
+
+	D_ALLOC_PTR(trid);
+	if (trid == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < DAOS_NVME_MAX_CTRLRS; i++) {
+		memset(trid, 0, sizeof(struct spdk_nvme_transport_id));
+
+		val = spdk_conf_section_get_nmval(sp, "TransportID", i, 0);
+		if (val == NULL) {
+			break;
+		}
+
+		rc = spdk_nvme_transport_id_parse(trid, val);
+		if (rc < 0) {
+			D_ERROR("Unable to parse TransportID: %s\n", val);
+			return -1;
+		}
+
+		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
+			D_ERROR("unexpected non-PCIE transport\n");
+			return -DER_INVAL;
+		}
+
+		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
+				       trid->traddr);
+		if (rc < 0) {
+			D_ERROR("Invalid traddr=%s\n", trid->traddr);
+			return -DER_INVAL;
+		}
+	}
+
+	return 0;
+}
+
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 {
@@ -918,20 +992,19 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 		spdk_env_opts_init(&opts);
 		opts.name = "daos";
+		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
+			opts.mem_size = nvme_glb.bd_mem_size;
+		}
+		rc = populate_whitelist(&opts);
+		if (rc != 0) {
+			D_FREE(opts.pci_whitelist);
+			goto out;
+		}
 		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 			opts.shm_id = nvme_glb.bd_shm_id;
 
-		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
-			opts.mem_size = nvme_glb.bd_mem_size;
-			D_PRINT("Requesting %d MB memory allocation and"
-				" expecting SPDK primary process mode\n",
-				opts.mem_size);
-		} else {
-			D_PRINT("Expecting SPDK auto-detection of secondary"
-				" process mode\n");
-		}
-
 		rc = spdk_env_init(&opts);
+		D_FREE(opts.pci_whitelist);
 		if (rc != 0) {
 			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",

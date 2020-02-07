@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,12 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
-#include "obj_rpc.h"
+
+#include "obj_internal.h"
+
+/** proc functions defined in other files */
+int
+crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum);
 
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
@@ -139,61 +144,6 @@ crt_proc_daos_epoch_range_t(crt_proc_t proc, daos_epoch_range_t *erange)
 	return 0;
 }
 
-static int
-crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
-{
-	crt_proc_op_t	proc_op;
-	int		rc;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &csum->cs_nr);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &csum->cs_chunksize);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &csum->cs_type);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint16_t(proc, &csum->cs_len);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &csum->cs_buf_len);
-	if (rc != 0)
-		return -DER_HG;
-
-	if (csum->cs_buf_len < csum->cs_len * csum->cs_nr) {
-		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
-			csum->cs_buf_len, csum->cs_len);
-		return -DER_HG;
-	}
-
-	if (proc_op == CRT_PROC_DECODE && csum->cs_buf_len > 0) {
-		D_ALLOC(csum->cs_csum, csum->cs_buf_len);
-		if (csum->cs_csum == NULL)
-			return -DER_NOMEM;
-	} else if (proc_op == CRT_PROC_FREE && csum->cs_buf_len > 0) {
-		D_FREE(csum->cs_csum);
-	}
-
-	if (csum->cs_buf_len > 0 && proc_op != CRT_PROC_FREE) {
-		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_buf_len);
-		if (rc != 0) {
-			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(csum->cs_csum);
-			return -DER_HG;
-		}
-	}
-
-	return 0;
-}
 
 static int
 crt_proc_struct_obj_shard_iod(crt_proc_t proc, struct obj_shard_iod *siod)
@@ -232,7 +182,7 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 			return rc;
 	}
 
-	for (i = 0; i < oiod->oiod_nr; i++) {
+	for (i = 0; oiod->oiod_siods != NULL && i < oiod->oiod_nr; i++) {
 		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
@@ -248,8 +198,6 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 }
 
 #define IOD_REC_EXIST	(1 << 0)
-#define IOD_CSUM_EXIST	(1 << 1)
-#define IOD_EPRS_EXIST	(1 << 2)
 static int
 crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 		    struct obj_io_desc *oiod)
@@ -268,7 +216,6 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	if (rc != 0)
 		return rc;
 
-	rc = crt_proc_daos_csum_buf_t(proc, &dvi->iod_kcsum);
 	if (rc != 0)
 		return rc;
 
@@ -283,8 +230,14 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	if (proc_op == CRT_PROC_ENCODE && oiod != NULL &&
 	    (oiod->oiod_flags & OBJ_SIOD_PROC_ONE) != 0) {
 		proc_one = true;
-		start = oiod->oiod_siods[0].siod_idx;
-		nr = oiod->oiod_siods[0].siod_nr;
+		if (oiod->oiod_siods != NULL) {
+			start = oiod->oiod_siods[0].siod_idx;
+			nr = oiod->oiod_siods[0].siod_nr;
+		} else {
+			D_ASSERT(oiod->oiod_flags & OBJ_SIOD_SINGV);
+			start = 0;
+			nr = 1;
+		}
 		D_ASSERT(start < dvi->iod_nr &&
 			 start + nr <= dvi->iod_nr);
 		rc = crt_proc_uint32_t(proc, &nr);
@@ -315,10 +268,6 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
-		if (dvi->iod_csums != NULL)
-			existing_flags |= IOD_CSUM_EXIST;
-		if (dvi->iod_eprs != NULL)
-			existing_flags |= IOD_EPRS_EXIST;
 	}
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
@@ -331,46 +280,11 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 			if (dvi->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
-
-		if (existing_flags & IOD_CSUM_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_csums, nr);
-			if (dvi->iod_csums == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
-		}
-
-		if (existing_flags & IOD_EPRS_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_eprs, nr);
-			if (dvi->iod_eprs == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
-		}
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
 		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
-			if (rc != 0) {
-				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
-				return rc;
-			}
-		}
-	}
-
-	if (existing_flags & IOD_CSUM_EXIST) {
-		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_csum_buf_t(proc, &dvi->iod_csums[i]);
-			if (rc != 0) {
-				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
-				return rc;
-			}
-		}
-	}
-
-	if (existing_flags & IOD_EPRS_EXIST) {
-		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_epoch_range_t(proc,
-							 &dvi->iod_eprs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
@@ -390,12 +304,8 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 
 	if (proc_op == CRT_PROC_FREE) {
 free:
-		if (dvi->iod_recxs != NULL)
+		if ((existing_flags & IOD_REC_EXIST) && dvi->iod_recxs != NULL)
 			D_FREE(dvi->iod_recxs);
-		if (dvi->iod_csums != NULL)
-			D_FREE(dvi->iod_csums);
-		if (dvi->iod_eprs != NULL)
-			D_FREE(dvi->iod_eprs);
 	}
 
 	return rc;
