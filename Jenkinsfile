@@ -39,20 +39,25 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-
+@Library(["system-pipeline-lib@corci-854","pipeline-lib@corci-854"]) _
 
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def daos_packages_version = ""
 def el7_component_repos = ""
+def leap15_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
-                       "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
+def leap15_daos_repos = leap15_component_repos + ' ' + component_repos + '' + daos_repo
+def functional_rpms  = "openmpi3 hwloc ndctl " +
+                       "ior-hpc-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
+def el7_functional_rpms = "--exclude openmpi mpich-autoload-cart-4-daos-0 " +
+                          functional_rpms
+def leap15_functional_rpms = " mpich-cart-4-daos-0 " + functional_rpms
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -351,6 +356,9 @@ pipeline {
                         unsuccessful {
                             sh label: "Collect artifacts",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
+                                          echo "---CUT---"
+                                          cat /etc/mock/opensuse-leap-15.1-x86_64.cfg
+                                          echo "---CUT----"
                                           cat $mockroot/result/{root,build}.log
                                           artdir=$PWD/artifacts/leap15
                                           if srpms=$(ls _topdir/SRPMS/*); then
@@ -641,13 +649,13 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
-                        }
-                    }
+                    //when {
+                    //    beforeAgent true
+                    //    allOf {
+                    //        branch 'master'
+                    //        expression { return env.QUICKBUILD == '1' }
+                    //    }
+                    //}
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -659,6 +667,35 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-leap15-gcc'
+                        stash name: 'Leap15-install', includes: 'install/**'
+                        stash name: 'Leap15-build-vars', includes: ".build_vars${arch}.*"
+                        stash name: 'Leap15-tests',
+                                    includes: '''build/src/rdb/raft/src/tests_main,
+                                                 build/src/common/tests/btree_direct,
+                                                 build/src/common/tests/btree,
+                                                 build/src/common/tests/sched,
+                                                 build/src/common/tests/drpc_tests,
+                                                 build/src/common/tests/acl_api_tests,
+                                                 build/src/common/tests/acl_util_tests,
+                                                 build/src/common/tests/acl_principal_tests,
+                                                 build/src/common/tests/acl_real_tests,
+                                                 build/src/iosrv/tests/drpc_progress_tests,
+                                                 build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
+                                                 build/src/client/api/tests/eq_tests,
+                                                 build/src/iosrv/tests/drpc_handler_tests,
+                                                 build/src/iosrv/tests/drpc_listener_tests,
+                                                 build/src/mgmt/tests/srv_drpc_tests,
+                                                 build/src/security/tests/cli_security_tests,
+                                                 build/src/security/tests/srv_acl_tests,
+                                                 build/src/vos/vea/tests/vea_ut,
+                                                 build/src/common/tests/umem_test,
+                                                 build/src/bio/smd/tests/smd_ut,
+                                                 scons_local/build_info/**,
+                                                 src/common/tests/btree.sh,
+                                                 src/control/run_go_tests.sh,
+                                                 src/rdb/raft_tests/raft_tests.py,
+                                                 src/vos/tests/evt_ctl.sh
+                                                 src/control/lib/netdetect/netdetect.go'''
                     }
                     post {
                         always {
@@ -766,6 +803,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                             expression { return env.QUICKBUILD == '1' }
@@ -849,11 +887,13 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
+                                       profile: 'daos_ci',
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'openmpi3 hwloc-devel argobots ' +
                                                   "cart-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
-                                                  'spdk-devel libfabric-devel pmix numactl-devel'
+                                                  'spdk-devel libfabric-devel pmix numactl-devel ' +
+                                                  'libipmctl-devel'
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -951,8 +991,162 @@ pipeline {
                             archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
-                }
-            }
+                } // stage('run_test.sh')
+                stage('Functional_Hardware_setup 1') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { env.DAOS_STACK_CI_HARDWARE_SETUP != 'true' }
+                            expression {
+                              ! commitPragma(pragma: 'Skip-func-hw-setup').contains('true')
+                            }
+                        }
+                    }
+                    agent {
+                        label 'stage_nvme4'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 4,
+                                       profile: 'daos_ci',
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  el7_functional_rpms
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''tnodes=$(echo $NODELIST | cut -d ',' -f 1-4)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                               "sudo mkdir -p $DAOS_BASE;sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE"
+
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                             "if [ -e /dev/pmem0 ]; then sudo ${DAOS_BASE}/install/bin/daos_server storage prepare --scm-only --reset --force; fi"''',
+                                failure_artifacts: env.STAGE_NAME
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 4,
+                                       power_only: true,
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  el7_functional_rpms
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''tnodes=$(echo $NODELIST | cut -d ',' -f 1-4)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                               "sudo mkdir -p $DAOS_BASE;sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE"
+
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                             "if [ ! -e /dev/pmem0 ]; then sudo ${DAOS_BASE}/install/bin/daos_server storage prepare --scm-only --force; fi"''',
+                                failure_artifacts: env.STAGE_NAME
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 4,
+                                       power_only: true,
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  el7_functional_rpms
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                               "sudo mkdir -p $DAOS_BASE;sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE"
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                             "if [ ! -e /dev/pmem0 ]; then sudo ${DAOS_BASE}/install/bin/daos_server storage prepare --scm-only --force; fi"'''
+                    }
+                    //post {
+                    //    always {
+                    //        // Dismount is currently failing.
+                    //        sh '''. ./.build_vars.sh
+                    //              DAOS_BASE=${SL_PREFIX%/install*}
+                    //              NODE=${NODELIST%%,*}
+                    //              . ./.build_vars.sh
+                    //              DAOS_BASE=${SL_PREFIX%/install*}
+                    //              clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                    //                "if ! sudo umount ${DAOS_BASE}; then echo \"Failed to unmount $DAOS_BASE\"; ps axf; fi"
+                    //              '''
+                    //    }
+                    //}
+                } // stage('Functional_Hardware_setup 1') {
+                stage('Functional_Hardware_setup 2') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { env.DAOS_STACK_CI_HARDWARE_SETUP != 'true' }
+                            expression {
+                              ! commitPragma(pragma: 'Skip-func-hw-setup').contains('true')
+                            }
+                        }
+                    }
+                    agent {
+                        label 'stage_nvme4'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 4,
+                                       profile: 'daos_ci',
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  el7_functional_rpms
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''tnodes=$(echo $NODELIST | cut -d ',' -f 1-4)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                               "sudo mkdir -p $DAOS_BASE;sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE"
+
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                             "if [ ! -e /dev/pmem0 ]; then sudo ${DAOS_BASE}/install/bin/daos_server storage prepare --scm-only --force; fi"''',
+                                failure_artifacts: env.STAGE_NAME
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 4,
+                                       power_only: true,
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'daos-' + daos_packages_version +
+                                                  ' daos-client-' + daos_packages_version +
+                                                  ' cart-' + env.CART_COMMIT + ' ' +
+                                                  el7_functional_rpms
+                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                script: '''tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           # set DAOS_TARGET_OVERSUBSCRIBE env here
+                                           export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           . ./.build_vars.sh
+                                           DAOS_BASE=${SL_PREFIX%/install*}
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                               "sudo mkdir -p $DAOS_BASE;sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE"
+                                           clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                                             "if [ ! -e /dev/pmem0 ]; then sudo ${DAOS_BASE}/install/bin/daos_server storage prepare --scm-only --force; fi"'''
+                    }
+                    //post {
+                    //    always {
+                    //        // Dismount is currently failing.
+                    //        sh '''. ./.build_vars.sh
+                    //              DAOS_BASE=${SL_PREFIX%/install*}
+                    //              NODE=${NODELIST%%,*}
+                    //              . ./.build_vars.sh
+                    //              DAOS_BASE=${SL_PREFIX%/install*}
+                    //              clush -B -S -o '-i ci_key' -l jenkins -w ${tnodes} \
+                    //                "if ! sudo umount ${DAOS_BASE}; then echo \"Failed to unmount $DAOS_BASE\"; ps axf; fi"
+                    //              '''
+                    //    }
+                    //}
+                } // stage('Functional_Hardware_setup 2') {
+            } // parallel
         }
         stage('Test') {
             when {
@@ -969,20 +1163,20 @@ pipeline {
                     // Unfortunately for now, a PR build could break
                     // the quickbuild, which would not be detected until
                     // the master build fails.
-//                    when {
-//                        beforeAgent true
-//                        anyOf {
-//                            branch 'master'
-//                            not {
-//                                // expression returns false on grep match
-//                                expression {
-//                                    sh script: 'git show -s --format=%B |' +
-//                                               ' grep "^Coverity-test: true"',
-//                                    returnStatus: true
-//                                }
-//                            }
-//                        }
-//                    }
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            branch 'master'
+                            not {
+                                // expression returns false on grep match
+                                expression {
+                                    sh script: 'git show -s --format=%B |' +
+                                               ' grep "^Coverity-test: true"',
+                                    returnStatus: true
+                                }
+                            }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -1035,7 +1229,7 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label 'stage_vm9'
                     }
                     steps {
                         unstash 'CentOS-rpm-version'
@@ -1045,11 +1239,12 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
+                                       profile: 'daos_ci',
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  el7_functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1112,6 +1307,80 @@ pipeline {
                         */
                     }
                 }
+                stage('Functional-Leap15') {
+                    when {
+                        beforeAgent true
+                        expression {
+                            ! commitPragma(pragma: 'Skip-func-leap15-test').contains('true')
+                        }
+                    }
+                    agent {
+                        label 'stage_vm9'
+                    }
+                    steps {
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 9,
+                                       snapshot: true,
+                                       distro: 'opensuse15',
+                                       profile: 'daos_ci',
+                                       inst_repos: leap15_daos_repos,
+                                       inst_rpms: 'openmpi3 hwloc cart-' + env.CART_COMMIT + ' ' +
+                                                  leap15_functional_rpms
+                        runTest stashes: [ 'Leap15-install', 'Leap15-build-vars' ],
+                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+                                           if [ -z "$test_tag" ]; then
+                                               test_tag=pr,-hw
+                                           fi
+                                           tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           ./ftest.sh "$test_tag" $tnodes''',
+                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
+                                failure_artifacts: env.STAGE_NAME
+                    }
+                    post {
+                        always {
+                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
+                                  if [ -n "$STAGE_NAME" ]; then
+                                      rm -rf "$STAGE_NAME/"
+                                      mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
+                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
+                                      if [ -n "$arts" ]; then
+                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                      fi
+                                  else
+                                      echo "The STAGE_NAME environment variable is missing!"
+                                      false
+                                  fi'''
+                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
+                        }
+                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
+                        success {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'SUCCESS'
+                        }
+                        unstable {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'FAILURE'
+                        }
+                        failure {
+                            githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                         description: env.STAGE_NAME,
+                                         context: 'test/' + env.STAGE_NAME,
+                                         status: 'ERROR'
+                        }
+                        */
+                    }
+                }
                 stage('Functional_Hardware') {
                     when {
                         beforeAgent true
@@ -1123,31 +1392,21 @@ pipeline {
                         }
                     }
                     agent {
-                        label 'ci_nvme9'
+                        label 'stage_nvme9'
                     }
                     steps {
                         unstash 'CentOS-rpm-version'
                         script {
                             daos_packages_version = readFile('centos7-rpm-version').trim()
                         }
-                        // First snapshot provision the VM at beginning of list
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos,
-                                       inst_rpms: 'daos-' + daos_packages_version +
-                                                  ' daos-client-' + daos_packages_version +
-                                                  ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
-                        // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       power_only: true,
+                                       profile: 'daos_ci',
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
                                                   ' cart-' + env.CART_COMMIT + ' ' +
-                                                  functional_rpms
+                                                  el7_functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1156,6 +1415,9 @@ pipeline {
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
+                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} "ifconfig"
+                                           NODELIST=${tnodes}
+                                           ./nvme_dimm_fix.sh
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
                                            ./ftest.sh "$test_tag" $tnodes''',
@@ -1226,7 +1488,9 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos
+                                       profile: 'daos_ci',
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo yum -y install daos-client
