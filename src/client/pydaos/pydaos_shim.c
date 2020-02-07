@@ -471,7 +471,8 @@ __shim_handle__obj_close(PyObject *self, PyObject *args)
 /** max number of concurrent put/get requests */
 #define MAX_INFLIGHT 16
 
-#define VAL_SZ		1024
+/** Initial value size for KV get */
+#define VAL_SZ		(4*1024)
 
 struct kv_op {
 	daos_event_t	 ev;
@@ -543,18 +544,20 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			rc = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
-			D_ALLOC(op->buf, VAL_SZ);
+			op->size = VAL_SZ;
+			D_ALLOC(op->buf, op->size);
 			if (op->buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
 			}
-			op->size = VAL_SZ;
+
 			i++;
 		} else {
 			/**
 			 * max request request in flight reached, wait
 			 * for one i/o to complete to reuse the slot
 			 */
+rewait:
 			rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
 			if (rc < 0)
 				break;
@@ -571,10 +574,30 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 				if (rc != DER_SUCCESS)
 					D_GOTO(err, 0);
 			} else if (evp->ev_error == -DER_REC2BIG) {
-				/**
-				 * op->size = VAL_SZ;
-				 * D_REALLOC(op->buf, op->buf, op->size);
-				 */
+				char *new_buff;
+
+				if (op->size == VAL_SZ)
+					op->size = (1024*1024);
+				else
+					op->size *= 2;
+				D_REALLOC(new_buff, op->buf, op->size);
+				if (new_buff == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+
+				op->buf = new_buff;
+
+				daos_event_fini(evp);
+				rc = daos_event_init(evp, eq, NULL);
+				if (rc != -DER_SUCCESS)
+					break;
+
+				rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
+						&op->size, op->buf, evp);
+				if (rc != -DER_SUCCESS)
+					break;
+				D_GOTO(rewait, 0);
 			} else {
 				rc = evp->ev_error;
 				break;
@@ -598,8 +621,9 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			D_GOTO(err, 0);
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
 				 op->buf, evp);
-		if (rc)
+		if (rc) {
 			break;
+		}
 	}
 
 	/** wait for completion of all in-flight requests */
@@ -613,19 +637,33 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 				op = container_of(evp, struct kv_op, ev);
 				rc2 = kv_get_comp(op, daos_dict);
 				if (rc == DER_SUCCESS && rc2 != DER_SUCCESS)
-					D_GOTO(err, 0);
-					rc = rc2;
+					D_GOTO(err, rc = rc2);
 				continue;
 			} else if (evp->ev_error == -DER_REC2BIG) {
-				/**
-				 * XXX: TODO
-				 * op->size = VAL_SZ;
-				 * D_REALLOC(op->buf, op->buf, op->size);
-				 */
-			}
+				char *new_buff;
 
-			if (rc == DER_SUCCESS)
-				rc = evp->ev_error;
+				daos_event_fini(evp);
+				rc2 = daos_event_init(evp, eq, NULL);
+
+				op = container_of(evp, struct kv_op, ev);
+				if (op->size == VAL_SZ)
+					op->size = (1024*1024);
+				else
+					op->size *= 2;
+				D_REALLOC(new_buff, op->buf, op->size);
+				if (new_buff == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+
+				op->buf = new_buff;
+
+				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
+						&op->size, op->buf, evp);
+				if (rc2 != -DER_SUCCESS)
+					D_GOTO(out, 0);
+			} else {
+				if (rc == DER_SUCCESS)
+					rc = evp->ev_error;
+			}
 		}
 		if (rc == DER_SUCCESS && ret == 1)
 			rc = evp->ev_error;
@@ -637,16 +675,14 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	/** free up all buffers */
 	for (i = 0; i < MAX_INFLIGHT; i++) {
 		op = &kv_array[i];
-		if (op->buf != NULL)
-			D_FREE(op->buf);
+		D_FREE(op->buf);
 	}
 
 out:
-	if (kv_array != NULL)
-		D_FREE(kv_array);
+	D_FREE(kv_array);
 
 	/** destroy event queue */
-	ret = daos_eq_destroy(eq, 0);
+	ret = daos_eq_destroy(eq, DAOS_EQ_DESTROY_FORCE);
 	if (rc == DER_SUCCESS && ret < 0)
 		rc = ret;
 
