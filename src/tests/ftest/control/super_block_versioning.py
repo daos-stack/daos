@@ -45,17 +45,6 @@ class SuperBlockVersioning(TestWithServers):
         versioned.
         :avocado: tags=all,tiny,pr,ds_versioning,basic
         """
-        # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/server_config/*")
-        h_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-
-        # Run format command under non-root user
-        self.log.info("Performing SCM format")
-        format_res = storage_format(os.path.join(self.prefix, "bin"), h_ports)
-        if format_res is None:
-            self.fail("Failed to format storage")
-
         # we can use VMs to run this test.
         # We need to make sure the server starts up with /mnt/daos
         # Check that the superblock file exists under the scm_mount dir.
