@@ -5,9 +5,11 @@ hosts:
     - server-C
 timeout: 80
 server_config:
-    name: daos_server
+  name: daos_server
 pool:
-    control_method: dmg
-    name: daos_server
-    scm_size: 1073741
-    mode: 146
+  control_method: dmg
+  name: daos_server
+  scm_size: 1073741
+  mode: 146
+server_manager:
+  recreate: true

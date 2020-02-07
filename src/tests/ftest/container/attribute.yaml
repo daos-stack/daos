@@ -11,6 +11,8 @@ pool:
   mode: 511
   scm_size: 1073741824
   name: daos_server
+server_manager:
+  recreate: true
 attrtests:
   name_handles: !mux
     validlongname:
