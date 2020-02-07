@@ -6,9 +6,11 @@ hosts:
     - server-B
   test_clients:
     - client-C
-timeout: 1500
+timeout: 1200
 server_config:
     name: daos_server
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
 pool:
     createmode:
         mode_RW:
