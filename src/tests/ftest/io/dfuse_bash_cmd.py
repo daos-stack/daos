@@ -155,7 +155,7 @@ class BashCmd(TestWithServers):
               Rename file
               Verify renamed file exist using list.
               Remove a directory
-        :avocado: tags=all,daosio,small,full_regression,bashcmd
+        :avocado: tags=all,hw,daosio,small,full_regression,bashcmd
         """
         self.cont_count = self.params.get("cont_count", '/run/cont/*')
         self.pool_count = self.params.get("pool_count", '/run/pool/*')
