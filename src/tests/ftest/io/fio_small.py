@@ -28,13 +28,16 @@ from fio_test_base import FioBase
 class FioSmall(FioBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs Fio with in small config.
+
     :avocado: recursive
     """
 
     def test_fio_small(self):
         """Jira ID: DAOS-2493.
+
         Test Description:
             Test Fio in small config.
+
         Use Cases:
             Aim of this test is to test different combinations
             of following fio configs:
