@@ -459,6 +459,8 @@ ds_pool_map_refresh_ult(void *arg)
 unlock:
 	ABT_mutex_unlock(pool->sp_iv_refresh_lock);
 out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE_PTR(iv_arg);
