@@ -913,19 +913,19 @@ populate_whitelist(struct spdk_env_opts *opts)
 		rc = spdk_nvme_transport_id_parse(trid, val);
 		if (rc < 0) {
 			D_ERROR("Unable to parse TransportID: %s\n", val);
-			D_GOTO(out, rc=-1);
+			D_GOTO(out, rc = -1);
 		}
 
 		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
 			D_ERROR("unexpected non-PCIE transport\n");
-			D_GOTO(out, rc=-DER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
 				       trid->traddr);
 		if (rc < 0) {
 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
-			D_GOTO(out, rc=-DER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
