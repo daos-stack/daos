@@ -731,11 +731,24 @@ class DaosServerManager(SubprocessManager):
         """
         return self.manager.job.get_interface_envs(index)
 
-    def prepare(self):
-        """Prepare the host to run the server."""
+    def prepare(self, storage=True):
+        """Prepare to start daos_server.
+
+        Args:
+            storage (bool, optional): whether or not to prepare dspm/nvme
+                storage. Defaults to True.
+        """
         self.log.info(
             "--- PREPARING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
+
+        # Create the daos_server yaml file
+        self.manager.job.create_yaml_file()
+
+        # Prepare dmg for running storage format on all server hosts
+        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
+        self.dmg.insecure.update(
+            self.get_config_value("allow_insecure"), "dmg.insecure")
 
         # Kill any doas servers running on the hosts
         self.kill()
@@ -750,24 +763,17 @@ class DaosServerManager(SubprocessManager):
                 self.log.info("Creating log file: %s", log_file)
                 pcmd(self._hosts, "touch {}".format(log_file), False)
 
-        # Prepare server storage
-        if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-            self.log.info("Preparing storage in <format> mode")
-            self.prepare_storage("root")
-            if hasattr(self.manager, "mca"):
-                self.manager.mca.update(
-                    {"plm_rsh_args": "-l root"}, "orterun.mca", True)
+        if storage:
+            # Prepare server storage
+            if self.manager.job.using_nvme or self.manager.job.using_dcpm:
+                self.log.info("Preparing storage in <format> mode")
+                self.prepare_storage("root")
+                if hasattr(self.manager, "mca"):
+                    self.manager.mca.update(
+                        {"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
     def start(self):
         """Start the server through the runner."""
-        # Create the daos_server yaml file
-        self.manager.job.create_yaml_file()
-
-        # Update dmg command params to reflect access to all of the servers
-        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
-        self.dmg.insecure.update(
-            self.get_config_value("allow_insecure"), "dmg.insecure")
-
         # Prepare the servers
         self.prepare()
 
@@ -775,6 +781,22 @@ class DaosServerManager(SubprocessManager):
         self.log.info(
             "--- STARTING SERVERS ON %s ---",
             ", ".join([host.upper() for host in self._hosts]))
+
+        # Start the servers and wait for them to be ready for storage format
+        self.detect_format_ready()
+
+        # Format storage and wait for server to change ownership
+        self.log.info("Formatting hosts: <%s>", self._hosts)
+        self.dmg.storage_format()
+
+        # Wait for all the doas_io_servers to start
+        self.detect_io_server_start()
+
+        return True
+
+    def detect_format_ready(self):
+        """Detect when all the daos_servers are ready for storage format."""
+        self.log.info("Waiting for servers to be ready for format")
         self.manager.job.update_pattern("format", len(self._hosts))
         try:
             self.manager.run()
@@ -783,11 +805,9 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error))
 
-        # Format storage and wait for server to change ownership
-        self.log.info("Formatting hosts: <%s>", self._hosts)
-        self.dmg.storage_format()
-
-        # Wait for all the doas_io_servers to start
+    def detect_io_server_start(self):
+        """Detect when all the daos_io_servers have started."""
+        self.log.info("Waiting for the daos_io_servers to start")
         self.manager.job.update_pattern("normal", len(self._hosts))
         if not self.manager.job.check_subprocess_status(self.manager.process):
             self.kill()
@@ -796,8 +816,6 @@ class DaosServerManager(SubprocessManager):
         # Update the dmg command host list to work with pool create/destroy
         self.dmg.hostlist.update(
             ",".join(self.get_config_value("access_points")), "dmg.hostlist")
-
-        return True
 
     def stop(self):
         """Stop the server through the runner."""

@@ -68,10 +68,7 @@ class DaosAdminPrivTest(TestWithServers):
         self.configure_manager(
             "server", self.server_managers[0], self.hostlist_servers,
             self.hostfile_servers_slots)
-        self.server_managers[0].clean_files()
-
-        # Create the daos_server yaml file
-        self.server_managers[0].manager.job.create_yaml_file()
+        self.server_managers[0].prepare(False)
 
         # Get user
         user = getpass.getuser()
@@ -80,23 +77,29 @@ class DaosAdminPrivTest(TestWithServers):
         self.log.info("Performing SCM/NVMe storage prepare")
         try:
             self.server_managers[0].prepare_storage(user)
-        except ServerFailed as err:
+        except ServerFailed as error:
             self.fail(
-                "Failed preparing server as user {}: {}".format(user, err))
+                "Failed preparing server as user {}: {}".format(user, error))
 
         # Start server
+        self.log.info("Starting server as non-root")
         try:
-            self.log.info("Starting server as non-root")
-            self.server_managers[0].manager.job.update_pattern(
-                "format", len(self.hostlist_servers))
-            self.server_managers[0].manager.run()
-        except CommandFailure as err:
-            # Kill the subprocess, anything that might have started
-            self.server_managers[0].kill()
-            self.fail("Failed starting server as non-root user: {}".format(err))
+            self.server_managers[0].detect_format_ready()
+        except ServerFailed as error:
+            self.fail(
+                "Failed starting server before format as non-root user: "
+                "{}".format(error))
 
         # Run format command under non-root user
         self.log.info("Performing SCM format")
         result = self.server_managers[0].dmg.storage_format()
         if result is None:
             self.fail("Failed to format storage")
+
+        # Verify format success when all the doas_io_servers start
+        try:
+            self.server_managers[0].self.detect_io_server_start()
+        except ServerFailed as error:
+            self.fail(
+                "Failed starting server after format as non-root user: "
+                "{}".format(error))
