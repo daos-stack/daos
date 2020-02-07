@@ -244,44 +244,6 @@ checksum_disabled(void **state)
 }
 
 static void
-sv_still_works(void **state)
-{
-	struct csum_test_ctx	 ctx = {0};
-	int			 rc;
-
-	/**
-	 * Setup
-	 */
-	setup_from_test_args(&ctx, (test_arg_t *)*state);
-	setup_simple_data(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_OFF, false, 0, OC_SX);
-
-	/** force to be SV */
-	ctx.update_iod.iod_type = DAOS_IOD_SINGLE;
-	ctx.update_iod.iod_recxs = NULL;
-	ctx.update_iod.iod_size = daos_sgl_buf_size(&ctx.update_sgl);
-
-	/**
-	 * Act
-	 */
-	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
-			     &ctx.update_iod, &ctx.update_sgl, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
-			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
-	assert_int_equal(rc, 0);
-
-	/**
-	 * Clean up
-	 */
-
-	cleanup_cont_obj(&ctx);
-	cleanup_data(&ctx);
-
-}
-
-static void
 io_with_server_side_verify(void **state)
 {
 	struct csum_test_ctx	 ctx = {0};
@@ -514,7 +476,18 @@ void
 iov_alloc(d_iov_t *iov, size_t len)
 {
 	D_ALLOC(iov->iov_buf, len);
+	assert_non_null(iov->iov_buf);
 	iov->iov_buf_len = iov->iov_len = len;
+}
+
+#define	IOV_ALLOC_WITH_STR(iov, str) \
+	iov_alloc_with_str(iov, str, strlen(str) + 1)
+void
+iov_alloc_with_str(d_iov_t *iov, char *str, size_t len)
+{
+	D_ALLOC(iov->iov_buf, len);
+	iov->iov_buf_len = iov->iov_len = len;
+	strncpy(iov->iov_buf, str, len);
 }
 
 /** For defining an extent and data it represents in a test */
@@ -534,6 +507,35 @@ struct partial_unaligned_fetch_testcase_args {
 	struct recx_config	 recx_cfgs[RECX_CONFIGS_NR];
 	daos_recx_t		 fetch_recx;
 };
+
+static void
+setup_obj_data_for_sv(struct csum_test_ctx *ctx)
+{
+	d_iov_set(&ctx->dkey, "dkey", strlen("dkey"));
+
+	d_iov_set(&ctx->update_iod.iod_name, "akey", strlen("akey"));
+
+	/** setup the buffers for update & fetch */
+	dts_sgl_init_with_strings(&ctx->update_sgl, 1, "ABCDEFGHIJKLMNOP");
+
+	d_sgl_init(&ctx->fetch_sgl, 1);
+	iov_alloc(&ctx->fetch_sgl.sg_iovs[0],
+		  daos_sgl_buf_size(&ctx->update_sgl));
+
+	/** Setup Update IOD */
+	ctx->update_iod.iod_size = daos_sgl_buf_size(&ctx->update_sgl);
+	/** These test cases always use 1 recx at a time */
+	ctx->update_iod.iod_nr	= 1;
+	ctx->update_iod.iod_recxs = NULL;
+	ctx->update_iod.iod_type  = DAOS_IOD_SINGLE;
+
+	/** Setup Fetch IOD*/
+	ctx->fetch_iod.iod_name = ctx->update_iod.iod_name;
+	ctx->fetch_iod.iod_size = ctx->update_iod.iod_size;
+	ctx->fetch_iod.iod_nr = ctx->update_iod.iod_nr;
+	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
+	ctx->fetch_iod.iod_recxs = NULL;
+}
 
 /** Fill an iov buf with data, using \data (duplicate if necessary)
  */
@@ -733,6 +735,210 @@ ARRAY_UPDATE_FETCH_TESTCASE(state, {
 #endif
 }
 
+static void
+single_value(void **state)
+{
+	struct csum_test_ctx	ctx = {0};
+	int			rc;
+
+	setup_from_test_args(&ctx, *state);
+
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, OC_SX);
+	setup_obj_data_for_sv(&ctx);
+
+	/** Base case ... no fault injection */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(0, rc);
+
+	/**
+	 * fault injection on update
+	 * - update will succeed because server side verification is disabled
+	 * - fetch will fail because data was corrupted on update
+	 */
+	set_update_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(-DER_CSUM, rc);
+	unset_csum_fi();
+
+	/**
+	 * fault injection on fetch
+	 * - update will succeed
+	 * - fetch will fail because data was corrupted on fetch
+	 */
+	set_fetch_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(-DER_CSUM, rc);
+	unset_csum_fi();
+
+	/** Reset the container with server side verification enabled */
+	cleanup_cont_obj(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, OC_SX);
+
+	/**
+	 * fault injection on update
+	 * - update will fail because server side verification is enabled
+	 * - fetch will not get data
+	 */
+	set_update_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl,
+			     NULL);
+	assert_int_equal(-DER_CSUM, rc);
+
+	memset(ctx.fetch_sgl.sg_iovs->iov_buf, 0,
+	       ctx.fetch_sgl.sg_iovs->iov_buf_len);
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_int_equal(0, rc);
+	assert_string_equal("", (char *)ctx.fetch_sgl.sg_iovs->iov_buf);
+
+	unset_csum_fi();
+
+	/** Clean up */
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+}
+
+static void
+mix_test(void **state)
+{
+	struct csum_test_ctx	ctx = {0};
+	int			rc;
+	daos_key_t		 dkey;
+	daos_iod_t		 iods[2] = {0};
+	daos_iod_t		*sv_iod = &iods[0];
+	daos_iod_t		*array_iod = &iods[1];
+	daos_recx_t		 recxs[2] = {0};
+	d_sg_list_t		 sgls[2] = {0};
+	d_sg_list_t		*sv_sgl = &sgls[0];
+	d_sg_list_t		*array_sgl = &sgls[1];
+	d_sg_list_t		 fetch_sgls[2] = {0};
+	d_sg_list_t		*fetch_sv_sgl = &fetch_sgls[0];
+	d_sg_list_t		*fetch_array_sgl = &fetch_sgls[1];
+
+	setup_from_test_args(&ctx, *state);
+
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, OC_SX);
+
+	IOV_ALLOC_WITH_STR(&dkey, "dkey");
+
+	/** setup single value iod */
+	dts_sgl_init_with_strings(sv_sgl, 1,
+		"This is for a single value");
+	dts_sgl_init_with_strings(fetch_sv_sgl, 1,
+		"XXXXXXXXXXXXXXXXXXXXXXXXXX");
+	IOV_ALLOC_WITH_STR(&sv_iod->iod_name, "single value akey");
+	sv_iod->iod_type = DAOS_IOD_SINGLE;
+	sv_iod->iod_size = daos_sgl_buf_size(sv_sgl);
+	sv_iod->iod_nr = 1;
+
+	/** setup array value iod */
+	dts_sgl_init_with_strings(array_sgl, 1,
+		"This is for an array value");
+	dts_sgl_init_with_strings(fetch_array_sgl, 1,
+		"XXXXXXXXXXXXXXXXXXXXXXXXXX");
+	IOV_ALLOC_WITH_STR(&array_iod->iod_name, "array value akey");
+	array_iod->iod_type = DAOS_IOD_ARRAY;
+	array_iod->iod_nr = 2; /** split up into two recxs */
+	array_iod->iod_size = 1;
+	array_iod->iod_recxs = recxs;
+	recxs[0].rx_idx = 0;
+	recxs[0].rx_nr = 10;
+	recxs[1].rx_idx = 10;
+	recxs[1].rx_nr = daos_sgl_buf_size(array_sgl) - 10;
+
+	/** Base case ... no fault injection */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			     iods, sgls, NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			    iods, fetch_sgls, NULL, NULL);
+	assert_int_equal(0, rc);
+
+	/**
+	 * fault injection on update
+	 * - update will succeed because server side verification is disabled
+	 * - fetch will fail because data was corrupted on update
+	 */
+	set_update_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			     iods, sgls, NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			    iods, fetch_sgls, NULL, NULL);
+	assert_int_equal(-DER_CSUM, rc);
+	unset_csum_fi();
+
+	/**
+	 * fault injection on fetch
+	 * - update will succeed
+	 * - fetch will fail because data was corrupted on fetch
+	 */
+	set_fetch_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			     iods, sgls, NULL);
+	assert_int_equal(0, rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			    iods, fetch_sgls, NULL, NULL);
+	assert_int_equal(-DER_CSUM, rc);
+	unset_csum_fi();
+
+	/** Reset the container with server side verification enabled */
+	cleanup_cont_obj(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, OC_SX);
+
+	/**
+	 * fault injection on update
+	 * - update will fail because server side verification is enabled
+	 * - fetch will not get data
+	 */
+	set_update_csum_fi();
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			     iods, sgls, NULL);
+	assert_int_equal(-DER_CSUM, rc);
+
+	memset(fetch_sv_sgl->sg_iovs->iov_buf, 0,
+	       fetch_sv_sgl->sg_iovs->iov_buf_len);
+	memset(fetch_array_sgl->sg_iovs->iov_buf, 0,
+	       fetch_array_sgl->sg_iovs->iov_buf_len);
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &dkey, 2,
+			    iods, fetch_sgls, NULL, NULL);
+	assert_int_equal(0, rc);
+	assert_string_equal("", (char *)fetch_sv_sgl->sg_iovs->iov_buf);
+	assert_string_equal("", (char *)fetch_array_sgl->sg_iovs->iov_buf);
+
+	unset_csum_fi();
+
+	/** Clean up */
+	d_sgl_fini(sv_sgl, true);
+	d_sgl_fini(array_sgl, true);
+	d_sgl_fini(fetch_sv_sgl, true);
+	d_sgl_fini(fetch_array_sgl, true);
+	cleanup_data(&ctx);
+	cleanup_cont_obj(&ctx);
+}
+
 static int
 setup(void **state)
 {
@@ -743,8 +949,6 @@ setup(void **state)
 static const struct CMUnitTest tests[] = {
 	{ "DAOS_CSUM00: csum disabled",
 		checksum_disabled, async_disable, test_case_teardown},
-	{ "DAOS_CSUM00: SV still works",
-		sv_still_works, async_disable, test_case_teardown},
 	{ "DAOS_CSUM01: simple update with server side verify",
 		io_with_server_side_verify, async_disable, test_case_teardown},
 	{ "DAOS_CSUM02: Fetch Array Type",
@@ -753,6 +957,10 @@ static const struct CMUnitTest tests[] = {
 		fetch_with_multiple_extents, async_disable, test_case_teardown},
 	{ "DAOS_CSUM04: Server data corrupted after RDMA",
 		test_server_data_corruption, async_disable, test_case_teardown},
+	{ "DAOS_CSUM05: Single Value Checksum",
+		single_value, async_disable, test_case_teardown},
+	{ "DAOS_CSUM06: Mix of Single Value and Array values iods",
+		mix_test, async_disable, test_case_teardown},
 };
 
 int
