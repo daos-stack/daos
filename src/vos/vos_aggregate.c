@@ -28,6 +28,7 @@
 #include <daos_srv/vos.h>
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include "vos_internal.h"
+#include "evt_priv.h"
 
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
@@ -591,6 +592,27 @@ merge_window_size(struct agg_merge_window *mw)
 }
 
 static int
+widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
+	   struct evt_extent *ext, uint32_t rsize)
+{
+	struct evt_entry	ent;
+	struct evt_extent	aligned_extent = { 0 };
+
+	ent.en_ext = phy_ent->pe_rect.rc_ex;
+	ent.en_sel_ext = *ext;
+	ent.en_csum = phy_ent->pe_csum_info;
+	aligned_extent = evt_entry_align_to_csum_chunk(&ent, rsize);
+	bio_iov_set_extra(biov,
+			  (ent.en_sel_ext.ex_lo - aligned_extent.ex_lo) *
+			  rsize,
+			  (aligned_extent.ex_hi - ent.en_sel_ext.ex_hi) *
+			  rsize);
+	return biov->bi_prefix_len + biov->bi_suffix_len;
+}
+
+static bool cont_has_csums = true;
+
+static int
 fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		 struct agg_lgc_seg *lgc_seg, unsigned int *acts)
 {
@@ -652,8 +674,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	rc = bio_sgl_init(&bsgl, lgc_seg->ls_idx_end -
 			  lgc_seg->ls_idx_start + 1);
 
-	/* if csums, add array pointers to phy_ents, same size as above */
-
+	/* if csums, add array pointers to agg_csum_recalc_ent,
+	 * same size as above.
+	 *
+	 * Initialize csum struct in ent_in */
 	if (rc) {
 		D_ERROR("Init bsgl error: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -663,8 +687,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	i = lgc_seg->ls_idx_start;
 	while (i <= lgc_seg->ls_idx_end) {
-		int wider;
-
 		if (lgc_seg->ls_phy_ent != NULL) {
 			phy_ent = lgc_seg->ls_phy_ent;
 			ext = ent_in->ei_rect.rc_ex;
@@ -698,13 +720,23 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ASSERT(biov_idx < bsgl.bs_nr);
 		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 		if (cont_has_csums) {
-			wider = widen_biov(&bsgl.bs_iovs[biov_idx], phy_ent,
-					   &ext);
+			int wider =
+				widen_biov(&bsgl.bs_iovs[biov_idx], phy_ent,
+					   &ext, ent_in->ei_inob);
+
 			if (wider) {
-				// realloc io->ic_buf
-				// add phy_ent at bio_idx
+				void *buffer;
+
+				D_REALLOC(buffer, io->ic_buf,
+					  io->ic_buf_len + wider);
+				if (buffer == NULL)
+					return -DER_NOMEM;
+				io->ic_buf = buffer;
+				io->ic_buf_len = buf_max;
+
+				//add phy_ent at bio_idx
 				buf_add += wider;
-				iov_buf_len += wider;
+				iov.iov_buf_len += wider;
 				copy_size += wider;
 				csum_widened = true;
 			}
@@ -712,7 +744,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		biov_idx++;
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 		iov.iov_buf_len -= copy_size;
-
 	}
 	D_ASSERT(seg_size == (io->ic_buf_len - buf_add - iov.iov_buf_len));
 
@@ -729,24 +760,26 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 	}
 	D_ASSERT(iov.iov_len == seg_size + buf_add);
-
 	if (csum_widened)
-		// call calc-recalc
+		D_INFO("csum widened\n");
+/*
+		 call calc-recalc
 	else if (cont_has_csums)
-		// just copy appropriate csums
-
+		 just copy appropriate csums
+*/
 	addr_dst = ent_in->ei_addr;
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
 	mark_yield(&addr_dst, acts);
-
+/*
 	if (csum_widened)
 		// writev
 	else {
+*/
 		iov.iov_buf = io->ic_buf;
 		iov.iov_buf_len = io->ic_buf_len;
 		iov.iov_len = seg_size;
 		rc = bio_write(bio_ctxt, addr_dst, &iov);
-	}
+	//}
 	if (rc)
 		D_ERROR("Write "DF_RECT" error: "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
@@ -897,7 +930,12 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			continue;
 		}
 
-		/* Update extent start of truncated physical entry */
+		/* Update extent start of truncated physical entry.
+		 * 
+		 * Will have to re-calc csum at boundary and truncate
+		 * csum array, csum count. UPDATE: no, I can ignore it.
+		 */
+
 		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		phy_ent->pe_off = rect.rc_ex.ex_lo -
 				phy_ent->pe_rect.rc_ex.ex_lo;
