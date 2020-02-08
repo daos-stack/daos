@@ -186,6 +186,7 @@ cc_remember_to_verify(struct csum_context *ctx, uint8_t *biov_csum,
 		((ctx->cc_raw_chunk.dcr_lo - ctx->cc_raw.dcr_lo) *
 		 ctx->cc_rec_len);
 
+	D_ASSERT(biov_csum != NULL);
 	ver->tv_csum = biov_csum;
 	C_TRACE("To Verify len: %lu\n", ver->tv_len);
 	ctx->cc_to_verify_nr++;
@@ -491,11 +492,23 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	int			rc = 0;
 	uint32_t		i;
 
-	if (!(daos_csummer_initialized(csummer) && iod->iod_recxs && bsgl))
+	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
 
 	if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
 		return 0;
+
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		ci_insert(&iod_csums->ic_data[0], 0,
+			   biov_csums[0].cs_csum, biov_csums[0].cs_len);
+		if (biov_csums_used != NULL)
+			(*biov_csums_used)++;
+		return 0;
+	}
+
+	/**
+	 * Array value IOD ...
+	 */
 
 	/** Verify have correct csums for extents returned.
 	 * Should be 1 biov_csums for each biov in bsgl
