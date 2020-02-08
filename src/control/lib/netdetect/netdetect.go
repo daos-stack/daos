@@ -153,11 +153,25 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		return nil, errors.Errorf("Invalid flag provided: %v", flags)
 	}
 
-	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES|hwlocFlags)
+	status = C.hwloc_topology_set_flags(topology, hwlocFlags)
 	if status != 0 {
 		// Call cleanUp because we failed after hwloc_topology_init succeeded.
 		cleanUp(topology)
 		return nil, errors.Errorf("hwloc_topology_set_flags failure: %v", status)
+	}
+
+	status = C.hwloc_topology_set_type_filter(topology, C.HWLOC_OBJ_PCI_DEVICE, C.HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
+	if status != 0 {
+		// Call cleanUp because we failed after hwloc_topology_init succeeded.
+		cleanUp(topology)
+		return nil, errors.Errorf("hwloc_topology_set_type_filter failure: %v", status)
+	}
+
+	status = C.hwloc_topology_set_type_filter(topology, C.HWLOC_OBJ_OS_DEVICE, C.HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
+	if status != 0 {
+		// Call cleanUp because we failed after hwloc_topology_init succeeded.
+		cleanUp(topology)
+		return nil, errors.Errorf("hwloc_topology_set_type_filter failure: %v", status)
 	}
 
 	status = C.hwloc_topology_load(topology)
@@ -186,7 +200,7 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 	}
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
+		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -217,7 +231,7 @@ func initDeviceScan() (DeviceScan, error) {
 	}
 	deviceScanCfg.depth = int(depth)
 
-	deviceScanCfg.numObj = uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	deviceScanCfg.numObj = uint(C.hwloc_get_nbobjs_by_depth(topology, C.int(depth)))
 	if deviceScanCfg.numObj == 0 {
 		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg,
@@ -280,7 +294,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
+		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -404,7 +418,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	}
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.int(depth)))
 	if numObj == 0 {
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
@@ -413,7 +427,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	log.Debugf("There are %d NUMA nodes.", numObj)
 
 	for i = 0; i < numObj; i++ {
-		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
+		numanode := C.hwloc_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if numanode == nil {
 			// We don't want the lack of NUMA information to be an error.
 			// If we get this far and can't access the NUMA topology data,
@@ -421,7 +435,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 			return 0, nil
 		}
-		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
+		if C.hwloc_bitmap_isincluded(ancestorNode.cpuset, numanode.cpuset) != 0 {
 			return uint(numanode.logical_index), nil
 		}
 	}
@@ -469,12 +483,12 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 		netNames[deviceName] = struct{}{}
 	}
 
-	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.int(depth)))
 	// for any OS object found in the network device list,
 	// detect and store the cpuset and nodeset of the ancestor node
 	// containing this object
 	for i = 0; i < numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
+		node := C.hwloc_get_obj_by_depth(topology, C.int(depth), C.uint(i))
 		if node == nil {
 			continue
 		}
