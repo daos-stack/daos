@@ -1,4 +1,4 @@
-From b580971d17ad460529a4516e4c79f0aead7b1515 Mon Sep 17 00:00:00 2001
+From bb3fafb15ffab4c2b7a84d3262cc439435526ee8 Mon Sep 17 00:00:00 2001
 From: Yulu Jia <yulu.jia@intel.com>
 Date: Tue, 15 Oct 2019 11:00:17 -0700
 Subject: [PATCH] NA OFI: use ip addr for psm2
@@ -8,10 +8,10 @@ init time.
 
 Signed-off-by: Yulu Jia <yulu.jia@intel.com>
 ---
- Testing/CMakeLists.txt |  11 ++-
- Testing/na/na_test.c   |  33 ++++++-
- src/na/na_ofi.c        | 219 ++++++++++++++++++++++++++++++++---------
- 3 files changed, 213 insertions(+), 50 deletions(-)
+ Testing/CMakeLists.txt |  11 +-
+ Testing/na/na_test.c   |  33 +++++-
+ src/na/na_ofi.c        | 221 +++++++++++++++++++++++++++++++++--------
+ 3 files changed, 215 insertions(+), 50 deletions(-)
 
 diff --git a/Testing/CMakeLists.txt b/Testing/CMakeLists.txt
 index 4147f477..5aec2464 100644
@@ -110,7 +110,7 @@ index 2d550555..60296a60 100644
      if (ret != NA_SUCCESS)
          NA_Test_finalize(na_test_info);
 diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
-index 5c13067a..3f888777 100644
+index 5c13067a..c52168ee 100644
 --- a/src/na/na_ofi.c
 +++ b/src/na/na_ofi.c
 @@ -1,5 +1,5 @@
@@ -309,7 +309,7 @@ index 5c13067a..3f888777 100644
          &na_ofi_endpoint->fi_prov);
      NA_CHECK_ERROR(rc != 0, out, ret, NA_PROTOCOL_ERROR,
          "fi_getinfo(%s) failed, rc: %d(%s)", node, rc, fi_strerror(-rc));
-@@ -2174,9 +2260,14 @@ na_ofi_get_ep_addr(na_class_t *na_class, struct na_ofi_addr **na_ofi_addr_ptr)
+@@ -2174,9 +2260,16 @@ na_ofi_get_ep_addr(na_class_t *na_class, struct na_ofi_addr **na_ofi_addr_ptr)
          free(addr);
          goto retry;
      }
@@ -321,13 +321,15 @@ index 5c13067a..3f888777 100644
 +     * addr now contains the ip:service string internal to psm2. overwrite it
 +     * the external ip:port string
 +     */
-+    struct sockaddr_in *my_sin_addr = addr;
-+    my_sin_addr->sin_addr.s_addr = inet_addr(priv->endpoint->src_node);
-+    my_sin_addr->sin_port = htons(atoi(priv->endpoint->src_service));
++    if (na_ofi_domain->prov_type == NA_OFI_PROV_PSM2) {
++        struct sockaddr_in *my_sin_addr = addr;
++        my_sin_addr->sin_addr.s_addr = inet_addr(priv->endpoint->src_node);
++        my_sin_addr->sin_port = htons(atoi(priv->endpoint->src_service));
++    }
  
      na_ofi_addr->addr = addr;
      na_ofi_addr->addrlen = addrlen;
-@@ -2202,6 +2293,7 @@ na_ofi_get_ep_addr(na_class_t *na_class, struct na_ofi_addr **na_ofi_addr_ptr)
+@@ -2202,6 +2295,7 @@ na_ofi_get_ep_addr(na_class_t *na_class, struct na_ofi_addr **na_ofi_addr_ptr)
  static na_return_t
  na_ofi_get_uri(na_class_t *na_class, const void *addr, char **uri_ptr)
  {
@@ -335,7 +337,7 @@ index 5c13067a..3f888777 100644
      struct na_ofi_domain *na_ofi_domain = NA_OFI_CLASS(na_class)->domain;
      char addr_str[NA_OFI_MAX_URI_LEN] = {'\0'},
          fi_addr_str[NA_OFI_MAX_URI_LEN] = {'\0'},
-@@ -2210,21 +2302,28 @@ na_ofi_get_uri(na_class_t *na_class, const void *addr, char **uri_ptr)
+@@ -2210,21 +2304,28 @@ na_ofi_get_uri(na_class_t *na_class, const void *addr, char **uri_ptr)
      na_return_t ret = NA_SUCCESS;
      int rc;
  
@@ -378,7 +380,7 @@ index 5c13067a..3f888777 100644
  
      /* Generate URI */
      rc = snprintf(addr_str, NA_OFI_MAX_URI_LEN, "%s://%s",
-@@ -2523,7 +2622,7 @@ na_ofi_msg_unexpected_op_remove(na_context_t *context,
+@@ -2523,7 +2624,7 @@ na_ofi_msg_unexpected_op_remove(na_context_t *context,
  
  /*---------------------------------------------------------------------------*/
  static na_return_t
@@ -387,7 +389,7 @@ index 5c13067a..3f888777 100644
      struct fi_cq_tagged_entry cq_events[], fi_addr_t src_addrs[],
      void **src_err_addr, size_t *src_err_addrlen, size_t *actual_count)
  {
-@@ -2584,14 +2683,43 @@ na_ofi_cq_read(na_context_t *context, size_t max_count,
+@@ -2584,14 +2685,43 @@ na_ofi_cq_read(na_context_t *context, size_t max_count,
           }
              break;
  
@@ -433,7 +435,7 @@ index 5c13067a..3f888777 100644
          default:
              /* Ignore errors from OFI that we cannot handle */
              NA_LOG_WARNING(
-@@ -2904,6 +3032,7 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
+@@ -2904,6 +3034,7 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
      char *host_name = NULL;
      unsigned int port = 0;
      const char *node_ptr = NULL;
@@ -441,7 +443,7 @@ index 5c13067a..3f888777 100644
      char node[NA_OFI_MAX_URI_LEN] = {'\0'};
      char *domain_name_ptr = NULL;
      char domain_name[NA_OFI_MAX_URI_LEN] = {'\0'};
-@@ -2942,9 +3071,8 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
+@@ -2942,9 +3073,8 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
  
          /* Extract hostname */
          if (strstr(host_name, ":")) {
@@ -453,7 +455,7 @@ index 5c13067a..3f888777 100644
          }
  
          /* Extract domain (if specified) */
-@@ -2982,7 +3110,8 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
+@@ -2982,7 +3112,8 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
                  strncpy(domain_name, resolve_name, NA_OFI_MAX_URI_LEN - 1);
                  domain_name_ptr = domain_name;
              }
@@ -463,7 +465,7 @@ index 5c13067a..3f888777 100644
              struct na_ofi_sin_addr *na_ofi_sin_addr = NULL;
              const char *ptr;
  
-@@ -3041,10 +3170,12 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
+@@ -3041,10 +3172,12 @@ na_ofi_initialize(na_class_t *na_class, const struct na_info *na_info,
          na_ofi_prov_name[prov_type], domain_name_ptr);
  
      /* Create endpoint */
@@ -480,7 +482,7 @@ index 5c13067a..3f888777 100644
  
      /* Get address from endpoint */
      ret = na_ofi_get_ep_addr(na_class, &priv->endpoint->src_addr);
-@@ -4346,8 +4477,8 @@ na_ofi_progress(na_class_t *na_class, na_context_t *context,
+@@ -4346,8 +4479,8 @@ na_ofi_progress(na_class_t *na_class, na_context_t *context,
          }
  
          /* Read from CQ */
