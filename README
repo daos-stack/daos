@@ -18,15 +18,6 @@ Option                             Description
 --build-deps=<yes|no|build-only>   This controls if tarballs will be
                                    automatically downloaded and built.
 
---update-prereq=<component>        Tells the prerequisite builder
-                                   to attempt to update the repository
-                                   for a prerequisite component if
-                                   applicable and to check the source
-                                   directory for changes.   A build is
-                                   only triggered if something has
-                                   changed since the last build.
-                                   use 'all' to update all components.
-
 --require-optional                 Tells the prerequisite builder
                                    to fail the build if calls to
                                    check_component will return False.

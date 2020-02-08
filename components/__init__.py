@@ -148,7 +148,6 @@ def define_mercury(reqs):
                          True)
     reqs.define('mercury',
                 retriever=retriever,
-                patch="$PATCH_PREFIX/c2c262813811c3ede28ee32fdebbffd417a7cb80..bb3fafb15ffab4c2b7a84d3262cc439435526ee8.patch",
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
                           '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
                           check(reqs, 'openpa', '', '64') + '/libopa.a '

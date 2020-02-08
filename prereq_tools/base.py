@@ -427,7 +427,6 @@ class GitRepoRetriever():
         self.has_submodules = has_submodules
         self.branch = branch
         self.commit_sha = None
-        self.patch = None
 
     def checkout_commit(self, subdir):
         """ checkout a certain commit SHA or branch """
@@ -436,13 +435,14 @@ class GitRepoRetriever():
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
-    def apply_patch(self, subdir):
+    def apply_patches(self, subdir, patches):
         """ git-apply a certain hash """
-        if self.patch is not None:
-            print("Applying patch %s" % (self.patch))
-            commands = ['git apply %s' % (self.patch)]
-            if not RUNNER.run_commands(commands, subdir=subdir):
-                raise DownloadFailure(self.url, subdir)
+        if patches is not None:
+            for patch in patches:
+                print("Applying patch %s" % (patch))
+                commands = ['git apply %s' % (patch)]
+                if not RUNNER.run_commands(commands, subdir=subdir):
+                    raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
         """ update the git submodules """
@@ -477,19 +477,8 @@ class GitRepoRetriever():
             self.checkout_commit(subdir)
 
         # Now apply any patches specified
-        self.patch = kw.get("patch", None)
-        self.apply_patch(subdir)
+        self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
-
-    def update(self, subdir, **kw):
-        """ update a repository """
-        #Fetch all changes and then reset head to origin/master
-        commands = ['git fetch --all',
-                    'git reset --hard']
-        if not RUNNER.run_commands(commands, subdir=subdir):
-            raise DownloadFailure(self.url, subdir)
-        self.get_specific(subdir, **kw)
-
 
 class WebRetriever():
     """Identify a location from where to download a source package"""
@@ -574,12 +563,6 @@ class WebRetriever():
                 raise ExtractionError(subdir)
         else:
             raise UnsupportedCompression(subdir)
-
-    def update(self, subdir, **kw):
-        """ update the code if the url has changed """
-        # Will download the file if the name has changed
-        self.get(subdir, **kw)
-
 
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
@@ -697,7 +680,6 @@ class PreReqComponent():
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
-        self.__update = GetOption('update_prereq')
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -785,7 +767,6 @@ class PreReqComponent():
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_path_var('GOPATH')
-        self.setup_patch_prefix()
         self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
@@ -892,16 +873,6 @@ class PreReqComponent():
     def add_options():
         """Add common options to environment"""
 
-        AddOption('--update-prereq',
-                  dest='update_prereq',
-                  type='string',
-                  nargs=1,
-                  action='append',
-                  default=[],
-                  metavar='COMPONENT',
-                  help='Force an update of a prerequisite COMPONENT.  Use '
-                       '\'all\' to update all components')
-
         AddOption('--require-optional',
                   dest='require_optional',
                   action='store_true',
@@ -960,17 +931,6 @@ class PreReqComponent():
                        '(warning|error} [error]')
         SetOption("implicit_cache", True)
 
-    def setup_patch_prefix(self):
-        """Discovers the location of the patches directory and adds it to
-           the construction environment."""
-        patch_dirs = [os.path.join(self.__top_dir,
-                                   "scons_local", "sl_patches"),
-                      os.path.join(self.__top_dir, "sl_patches")]
-        for patch_dir in patch_dirs:
-            if os.path.exists(patch_dir):
-                self.replace_env(**{'PATCH_PREFIX': patch_dir})
-                break
-
     def __setup_unit_test_builders(self):
         """Setup unit test builders for general use"""
         AddOption('--utest-mode',
@@ -994,12 +954,6 @@ class PreReqComponent():
             self.download_deps = True
             self.build_deps = True
         elif build_deps == 'build-only':
-            self.build_deps = True
-
-        # If the --update-prereq option is given then it is OK to build
-        # code but not to download it unless --build-deps=yes is also
-        # given.
-        if self.__update:
             self.build_deps = True
 
     def setup_path_var(self, var, multiple=False):
@@ -1050,22 +1004,17 @@ class PreReqComponent():
         required_libs -- A list of system libraries to be checked for
         defines -- Defines needed to use the component
         package -- Name of package to install
-        patch -- Patch to apply to sources after checkout and before building
         commands -- A list of commands to run to build the component
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
         """
-        update = False
         use_installed = False
         if 'all' in self.installed or name in self.installed:
             use_installed = True
-        if 'all' in self.__update or name in self.__update:
-            update = True
         comp = _Component(self,
                           name,
-                          update,
                           use_installed,
                           **kw)
         self.__defined[name] = comp
@@ -1319,7 +1268,6 @@ class _Component():
     Args:
         prereqs -- A PreReqComponent object
         name -- The name of the component definition
-        update -- update the component
         use_installed -- check if the component is installed
 
     Keyword arguments:
@@ -1329,7 +1277,6 @@ class _Component():
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
         package -- Name of package to install
-        patch -- Patch to apply to sources after checkout and before building
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
@@ -1339,7 +1286,6 @@ class _Component():
     def __init__(self,
                  prereqs,
                  name,
-                 update,
                  use_installed,
                  **kw):
 
@@ -1347,7 +1293,6 @@ class _Component():
         self.__dry_run = GetOption('no_exec')
         self.targets_found = False
         self.use_installed = use_installed
-        self.update = update
         self.build_path = None
         self.prebuilt_path = None
         self.src_path = None
@@ -1362,7 +1307,6 @@ class _Component():
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
-        self.patch = kw.get("patch", None)
         self.prereqs = prereqs
         self.pkgconfig = kw.get("pkgconfig", None)
         self.name = name
@@ -1378,6 +1322,7 @@ class _Component():
         self.prebuilt_opt = '%s_PREBUILT' % name.upper()
         self.crc_file = os.path.join(self.prereqs.get_build_dir(),
                                      '_%s.crc' % self.name)
+        self.patch_path = self.prereqs.get_build_dir()
 
     def src_exists(self):
         """Check if the source directory exists"""
@@ -1393,6 +1338,28 @@ class _Component():
             else:
                 os.unlink(path)
 
+    def resolve_patches(self):
+        """parse the patches variable"""
+        patchnum = 1
+        patchstr = self.prereqs.get_config("patch_versions", self.name)
+        if patchstr is None:
+            return []
+        patches = []
+        patch_strs = patchstr.split(",")
+        for raw in patch_strs:
+            if "https://" not in raw:
+                patches.append(raw)
+                continue
+            patch_name = "%s_patch_%03d" % (self.name, patchnum)
+            patch_path = os.path.join(self.patch_path, patch_name)
+            patchnum += 1
+            command = ['rm -f %s' % patch_path,
+                       'curl -L -o %s %s' % (patch_path, raw)]
+            if not RUNNER.run_commands(command):
+                raise BuildFailure(raw)
+            patches.append(patch_path)
+        return patches
+
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
@@ -1400,26 +1367,19 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        patch = self.prereqs.get_config("patch_versions", self.name)
-        if patch is None:
-            patch = self.patch
+        patches = self.resolve_patches()
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print('Using existing sources at %s for %s' \
                 % (self.src_path, self.name))
-            if self.update:
-                defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
-                # only do this if the source was checked out by this script
-                if self.src_path == defpath:
-                    self.retriever.update(self.src_path, commit_sha=commit_sha,
-                                          patch=patch, branch=branch)
-            elif self.prereqs.build_deps and patch is not None:
-                # Apply patch to existing source.
-                print("Applying patch %s" % (patch))
-                commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
-                            'false; else true; fi;' % (patch)]
-                if not RUNNER.run_commands(commands, subdir=self.src_path):
-                    raise BuildFailure(patch)
+            if self.prereqs.build_deps:
+                for patch in patches:
+                    # Apply patch to existing source.
+                    print("Applying patch %s" % (patch))
+                    commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
+                                'false; else true; fi;' % (patch)]
+                    if not RUNNER.run_commands(commands, subdir=self.src_path):
+                        raise BuildFailure(patch)
             return
 
         if not self.retriever:
@@ -1433,8 +1393,8 @@ class _Component():
 
         print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
-        self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch,
-                           branch=branch)
+        self.retriever.get(self.src_path, commit_sha=commit_sha,
+                           patches=patches, branch=branch)
 
         self.prereqs.update_src_path(self.name, self.src_path)
 
@@ -1474,11 +1434,6 @@ class _Component():
             pass
         if old_crc == '':
             return True
-        # only do CRC check if the sources have been updated
-        if self.update:
-            print('Checking %s sources for changes' % self.name)
-            if old_crc != self.calculate_crc():
-                return True
         return False
 
     def has_missing_system_deps(self, env):

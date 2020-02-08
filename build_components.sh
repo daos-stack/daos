@@ -32,8 +32,7 @@ fi
 
 : ${BUILD_OPTIONS:=""}
 
-scons ${BUILD_OPTIONS} $option --config=force --update-prereq=all \
-  --build-deps=yes $*
+scons ${BUILD_OPTIONS} $option --config=force --build-deps=yes $*
 
 if [ -n "$WORKSPACE" ]; then
 if [ -z "$JOB_LOC" ]; then
