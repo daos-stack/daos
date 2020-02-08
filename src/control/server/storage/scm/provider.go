@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -550,7 +550,7 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	fsType, err := p.sys.Getfs(req.Dcpm.Device)
 	if err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
-			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+			return nil, FaultFormatMissingDevice(req.Dcpm.Device)
 		}
 		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
 	}
