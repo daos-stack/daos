@@ -7,6 +7,11 @@ import time
 import errno
 from SCons.Script import BUILD_TARGETS
 
+try:
+    input = raw_input
+except NameError:
+    pass
+
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 import daos_build
 
