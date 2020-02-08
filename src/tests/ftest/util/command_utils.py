@@ -34,6 +34,7 @@ from env_modules import load_mpi
 class CommandFailure(Exception):
     """Base exception for this module."""
 
+
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
@@ -70,15 +71,31 @@ class BasicParameter(object):
         else:
             self.value = test.params.get(name, path, self._default)
 
-    def update(self, value, name=None):
+    def update(self, value, name=None, append=False):
         """Update the value of the parameter.
 
         Args:
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
+            append (bool, optional): append/extend/update the current list/dict
+                with the provided value.  Defaults to False - override the
+                current value.
         """
-        self.value = value
+        if append and isinstance(self.value, list):
+            if isinstance(value, list):
+                # Add the new list of value to the existing list
+                self.value.extend(value)
+            else:
+                # Add the new value to the existing list
+                self.value.append(value)
+        elif append and isinstance(self.value, dict):
+            # Update the dictionary with the new key/value pairs
+            self.value.update(value)
+        else:
+            # Override the current value with the new value
+            self.value = value
+
         if name is not None:
             self.log.debug("Updated param %s => %s", name, self.value)
 
@@ -105,19 +122,22 @@ class FormattedParameter(BasicParameter):
             str: if defined, the parameter, otherwise an empty string
 
         """
+        parameter = ""
         if isinstance(self._default, bool) and self.value:
-            return self._str_format
+            parameter = self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
             if isinstance(self.value, dict):
-                return " ".join([self._str_format.format("{} \"{}\"".format(
-                    key, self.value[key])) for key in self.value])
+                parameter = " ".join([
+                    self._str_format.format(
+                        "{} \"{}\"".format(key, self.value[key]))
+                    for key in self.value])
             elif isinstance(self.value, (list, tuple)):
-                return " ".join(
+                parameter = " ".join(
                     [self._str_format.format(value) for value in self.value])
             else:
-                return self._str_format.format(self.value)
-        else:
-            return ""
+                parameter = self._str_format.format(self.value)
+
+        return parameter
 
 
 class ObjectWithParameters(object):
@@ -196,6 +216,16 @@ class CommandWithParameters(ObjectWithParameters):
         self._command = command
         self._path = path
         self._pre_command = None
+
+    @property
+    def command(self):
+        """Get the command without its parameters."""
+        return self._command
+
+    @property
+    def command_path(self):
+        """Get the path used for the command."""
+        return self._path
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -467,7 +497,7 @@ class EnvironmentVariables(dict):
 class JobManager(ExecutableCommand):
     """A class for commands with parameters that manage other commands."""
 
-    def __init__(self, namespace, command, job, path="", subprocess=False):
+    def __init__(self, namespace, command, job, path="", sub_process=False):
         """Create a JobManager object.
 
         Args:
@@ -476,10 +506,10 @@ class JobManager(ExecutableCommand):
             job (ExecutableCommand): command object to manage.
             path (str, optional): path to location of command binary file.
                 Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
+            sub_process (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(JobManager, self).__init__(namespace, command, path, subprocess)
+        super(JobManager, self).__init__(namespace, command, path, sub_process)
         self.job = job
 
     def __str__(self):
@@ -495,17 +525,17 @@ class JobManager(ExecutableCommand):
 
         return " ".join(commands)
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(subprocess)
+        return self.job.check_subprocess_status(sub_process)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the job manager command with common inputs.
@@ -535,6 +565,14 @@ class Orterun(JobManager):
         super(Orterun, self).__init__(
             "/run/orterun", "orterun", job, path, subprocess)
 
+        # Default mca values to avoid queue pair errors
+        mca_default = {
+            "btl_openib_warn_default_gid_prefix": "0",
+            "btl": "tcp,self",
+            "oob": "tcp",
+            "pml": "ob1",
+        }
+
         self.hostfile = FormattedParameter("--hostfile {}", None)
         self.processes = FormattedParameter("--np {}", 1)
         self.display_map = FormattedParameter("--display-map", False)
@@ -543,7 +581,7 @@ class Orterun(JobManager):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = FormattedParameter("--mca {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
         self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
 
     def setup_command(self, env, hostfile, processes):

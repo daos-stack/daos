@@ -45,8 +45,8 @@ from distutils.spawn import find_executable
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
 from command_utils import DaosCommand, Orterun, CommandWithParameters
-from general_utils import pcmd, get_file_path
-from dmg_utils import storage_format
+from general_utils import pcmd, stop_processes
+from dmg_utils import DmgCommand
 from write_host_file import write_host_file
 from env_modules import load_mpi
 
@@ -380,6 +380,10 @@ class ServerManager(ExecutableCommand):
         self.enable_recovery = BasicParameter(None, True)  # Orterun param
         self.export = BasicParameter(None)                 # Orterun param
 
+        # Dmg command to access this group of servers which will be configured
+        # to access the doas_servers when they are started
+        self.dmg = DmgCommand(self.runner.job.command_path)
+
     @property
     def hosts(self):
         """Hosts attribute getter."""
@@ -435,181 +439,268 @@ class ServerManager(ExecutableCommand):
         self.log.info("Start CMD>>> %s", str(self.runner))
         return self.runner.run()
 
-    def start(self, yamlfile):
-        """Start the server through the runner."""
-        storage_prep_flag = ""
-        self.runner.job.set_config(yamlfile)
-        self.server_clean()
-        # Prepare SCM storage in servers
-        if self.runner.job.yaml_params.is_scm():
-            storage_prep_flag = "dcpm"
-            self.log.info("Performing SCM storage prepare in <format> mode")
-        else:
-            storage_prep_flag = "ram"
+    def prepare(self, config_file, storage=True):
+        """Prepare to start daos_server.
 
-        # Prepare nvme storage in servers
+        Args:
+            config_file (str): daos_server configuration yaml file
+            storage (bool, optional): whether or not to prepare dspm/nvme
+                storage. Defaults to True.
+        """
+        self.log.info("Preparing to start daos_server on %s", self._hosts)
+
+        # Create the daos_server configuration yaml file
+        self.runner.job.set_config(config_file)
+
+        # Prepare dmg for running storage format on all server hosts
+        self.dmg.hostlist.update(",".join(self._hosts), "dmg.hostlist")
+        self.dmg.insecure.update(self.insecure.value, "dmg.insecure")
+
+        # Kill any doas servers running on the hosts
+        self.kill()
+
+        # Clean up any files that exist on the hosts
+        self.clean_files()
+
+        # Make sure log file has been created for ownership change
         if self.runner.job.yaml_params.is_nvme():
-            if storage_prep_flag == "dcpm":
-                storage_prep_flag = "dcpm_nvme"
-            elif storage_prep_flag == "ram":
-                storage_prep_flag = "ram_nvme"
-            else:
-                storage_prep_flag = "nvme"
-            self.log.info("Performing NVMe storage prepare in <format> mode")
-            # Make sure log file has been created for ownership change
-            lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
-            if lfile is not None:
-                self.log.info("Creating log file")
-                cmd_touch_log = "touch {}".format(lfile)
-                pcmd(self._hosts, cmd_touch_log, False)
-        if storage_prep_flag != "ram":
-            storage_prepare(self._hosts, getpass.getuser(), storage_prep_flag)
-            self.runner.mca.value = {"plm_rsh_args": "-l root"}
+            for server_params in self.runner.job.yaml_params.server_params:
+                log_file = server_params.log_file.value
+                if log_file is not None:
+                    self.log.info("Creating log file: %s", log_file)
+                    pcmd(self._hosts, "touch {}".format(log_file), False)
 
+        if storage:
+            # Prepare server storage
+            if self.runner.job.yaml_params.is_nvme() or \
+               self.runner.job.yaml_params.is_scm():
+                self.log.info("Preparing storage in <format> mode")
+                self.prepare_storage("root")
+                if hasattr(self.runner, "mca"):
+                    self.runner.mca.update(
+                        {"plm_rsh_args": "-l root"}, "orterun.mca", True)
+
+    def kill(self):
+        """Forcably kill any daos server processes running on hosts."""
+        stop_processes(self._hosts, "'(daos_server|daos_io_server)'", True)
+
+    def clean_files(self, verbose=True):
+        """Clean up the daos server files.
+
+        Args:
+            verbose (bool, optional): display clean commands. Defaults to True.
+        """
+        clean_cmds = []
+        for server_params in self.runner.job.yaml_params.server_params:
+            scm_mount = server_params.scm_mount.value
+            self.log.info("Cleaning up the %s directory.", str(scm_mount))
+
+            # Remove the superblocks
+            cmd = "sudo rm -fr {}/*".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
+
+            # Dismount the scm mount point
+            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
+            if cmd not in clean_cmds:
+                clean_cmds.append(cmd)
+
+            if self.runner.job.yaml_params.is_scm():
+                scm_list = server_params.scm_list.value
+                if isinstance(scm_list, list):
+                    self.log.info(
+                        "Cleaning up the following device(s): %s.",
+                        ", ".join(scm_list))
+                    # Umount and wipefs the dcpm device
+                    cmd_list = [
+                        "for dev in {}".format(" ".join(scm_list)),
+                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                        "if [ ! -z $mount ]",
+                        "then while sudo umount $mount",
+                        "do continue",
+                        "done",
+                        "fi",
+                        "sudo wipefs -a $dev",
+                        "done"
+                    ]
+                    cmd = "; ".join(cmd_list)
+                    if cmd not in clean_cmds:
+                        clean_cmds.append(cmd)
+
+        pcmd(self._hosts, "; ".join(clean_cmds), verbose)
+
+    def prepare_storage(self, user, using_scm=None, using_nvme=None):
+        """Prepare server's storage using the DAOS server's yaml settings file.
+
+        Args:
+            user (str): username for file permissions
+            using_scm (bool, optional): override option to prepare scm storage.
+                Defaults to None, which uses the configuration file to determine
+                if scm storage should be formatted.
+            using_nvme (bool, optional): override option to prepare nvme
+                storage. Defaults to None, which uses the configuration file to
+                determine if nvme storage should be formatted.
+
+        Raises:
+            ServerFailed: if server failed to prepare storage
+
+        """
+        command = [
+            os.path.join(self.daosbinpath, "daos_server"),
+            "storage",
+            "prepare",
+            "-u", "\"{}\"".format(user),
+            "-f"
+        ]
+
+        # Use the configuration file settings if no overrides specified
+        if using_scm is None:
+            using_scm = self.runner.job.yaml_params.is_scm()
+        if using_nvme is None:
+            using_nvme = self.runner.job.yaml_params.is_nvme()
+
+        # Configure the rest of the command
+        if using_scm and not using_nvme:
+            command.append("-s")
+        elif not using_scm and using_nvme:
+            command.append("-n")
+        if using_nvme:
+            command.append("--hugepages=4096")
+
+        result = pcmd(self._hosts, " ".join(command), timeout=120)
+        if len(result) > 1 or 0 not in result:
+            device_type = "nvme"
+            if using_scm and using_nvme:
+                device_type = "scm & nvme"
+            elif using_scm:
+                device_type = "scm"
+            raise ServerFailed("Error preparing {} storage".format(device_type))
+
+    def detect_format_ready(self):
+        """Detect when all the daos_servers are ready for storage format."""
+        self.log.info("Waiting for servers to be ready for format")
+        # self.manager.job.update_pattern("format", len(self._hosts))
+        self.runner.job.mode = "format"
         try:
-            self.run()
-        except CommandFailure as details:
-            self.log.info("<SERVER> Exception occurred: %s", str(details))
-            # Kill the subprocess, anything that might have started
+            self.runner.run()
+        except CommandFailure as error:
             self.kill()
             raise ServerFailed(
-                "Failed to start server in {} mode.".format(
-                    self.runner.job.mode))
+                "Failed to start servers before format: {}".format(error))
 
-        if self.runner.job.yaml_params.is_nvme() or \
-           self.runner.job.yaml_params.is_scm():
-            # Setup the hostlist to pass to dmg command
-            servers_with_ports = [
-                "{}:{}".format(host, self.runner.job.yaml_params.port)
-                for host in self._hosts]
+    def detect_io_server_start(self):
+        """Detect when all the daos_io_servers have started."""
+        self.log.info("Waiting for the daos_io_servers to start")
+        # self.manager.job.update_pattern("normal", len(self._hosts))
+        self.runner.job.mode = "normal"
+        if not self.runner.job.check_subprocess_status(self.runner.process):
+            self.kill()
+            raise ServerFailed("Failed to start servers after format")
 
-            # Format storage and wait for server to change ownership
-            self.log.info("Formatting hosts: <%s>", self._hosts)
-            storage_format(self.daosbinpath, ",".join(servers_with_ports))
-            self.runner.job.mode = "normal"
-            try:
-                self.runner.job.check_subprocess_status(self.runner.process)
-            except CommandFailure as error:
-                self.log.info("Failed to start after format: %s", str(error))
+        # Update the dmg command host list to work with pool create/destroy
+        self.dmg.hostlist.update(
+            ",".join(self.runner.job.yaml_params.access_points.value),
+            "dmg.hostlist")
+
+    def reset_storage(self):
+        """Reset the server nvme storage.
+
+        Raises:
+            ServerFailed: if server failed to reset storage
+
+        """
+        command = [
+            os.path.join(self.daosbinpath, "daos_server"),
+            "storage",
+            "prepare",
+            "-n",
+            "--reset",
+            "-f"
+        ]
+        result = pcmd(self._hosts, " ".join(command), timeout=60)
+        if len(result) > 1 or 0 not in result:
+            raise ServerFailed("Error resetting NVMe storage")
+
+    def set_scm_mount_ownership(self, user=None):
+        """Set the ownership to the specified user for each scm mount.
+
+        Args:
+            user (str, optional): user name. Defaults to None - current user.
+        """
+        user = getpass.getuser() if user is None else user
+
+        cmd_list = set()
+        for server_params in self.runner.job.yaml_params.server_params:
+            scm_mount = server_params.scm_mount.value
+
+            # Support single or multiple scm_mount points
+            if not isinstance(scm_mount, list):
+                scm_mount = [scm_mount]
+
+            self.log.info("Changing ownership to %s for: %s", user, scm_mount)
+            cmd_list.add(
+                "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+
+        if cmd_list:
+            pcmd(self._hosts, "; ".join(cmd_list), False)
+
+    def start(self, config_file):
+        """Start the server through the runner.
+
+        Args:
+            config_file (str): daos_server configuration yaml file
+        """
+        # Prepare the servers
+        self.prepare(config_file)
+
+        # Start the servers and wait for them to be ready for storage format
+        self.detect_format_ready()
+
+        # Format storage and wait for server to change ownership
+        self.log.info("Formatting hosts: <%s>", self._hosts)
+        self.dmg.storage_format()
+
+        # Wait for all the doas_io_servers to start
+        self.detect_io_server_start()
 
         return True
 
     def stop(self):
         """Stop the server through the runner."""
-        self.log.info("Stopping servers")
-        if self.runner.job.yaml_params.is_nvme():
-            self.kill()
-            storage_reset(self._hosts)
-            # Make sure the mount directory belongs to non-root user
-            self.log.info("Changing ownership of mount to non-root user")
-            cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
-            pcmd(self._hosts, cmd, False)
-        else:
-            try:
-                self.runner.stop()
-            except CommandFailure as error:
-                raise ServerFailed("Failed to stop servers:{}".format(error))
+        self.log.info("Stopping server orterun command")
 
-    def server_clean(self):
-        """Prepare the hosts before starting daos server."""
-        # Kill any doas servers running on the hosts
+        # Maintain a running list of errors detected trying to stop
+        messages = []
+
+        # Stop the subprocess running the orterun command
+        try:
+            self.runner.stop()
+        except CommandFailure as error:
+            messages.append(
+                "Error stopping the orterun subprocess: {}".format(error))
+
+        # Kill any leftover processes that may not have been stopped correctly
         self.kill()
-        # Clean up any files that exist on the hosts
-        self.clean_files()
 
-    def kill(self):
-        """Forcably kill any daos server processes running on hosts.
-
-        Sometimes stop doesn't get everything.  Really whack everything
-        with this.
-
-        """
-        kill_cmds = [
-            "sudo pkill '(daos_server|daos_io_server)' --signal INT",
-            "sleep 5",
-            "pkill '(daos_server|daos_io_server)' --signal KILL",
-        ]
-        self.log.info("Killing any server processes")
-        pcmd(self._hosts, "; ".join(kill_cmds), False, None, None)
-
-    def clean_files(self):
-        """Clean the tmpfs on the servers."""
-        scm_mount = self.runner.job.yaml_params.server_params[-1].scm_mount
-        scm_list = self.runner.job.yaml_params.server_params[-1].scm_list.value
-        clean_cmds = [
-            "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
-        ]
         if self.runner.job.yaml_params.is_nvme():
-            clean_cmds.append("sudo rm -rf {0};  \
-                               sudo umount {0}".format(scm_mount))
-        # scm_mount can be /mnt/daos0 or /mnt/daos1 for two daos_server
-        # instances. Presently, not supported in DAOS. The for loop needs
-        # to be updated in future to handle it. Single instance pmem
-        # device should work now.
-        if self.runner.job.yaml_params.is_scm():
-            for value in scm_list:
-                clean_cmds.append("sudo umount {}; \
-                                   sudo wipefs -a {}"
-                                  .format(scm_mount, value))
-        self.log.info("Cleanup of %s directory.", str(scm_mount))
-        pcmd(self._hosts, "; ".join(clean_cmds), False)
+            # Reset the storage
+            try:
+                self.reset_storage()
+            except ServerFailed as error:
+                messages.append(str(error))
 
+            # Make sure the mount directory belongs to non-root user
+            self.set_scm_mount_ownership()
 
-def storage_prepare(hosts, user, device_type):
-    """Prepare storage on servers using the DAOS server's yaml settings file.
-
-    Args:
-        hosts (str): a string of comma-separated host names
-        user (str): username for file permissions
-        device_type (str): storage type - scm or nvme
-
-    Raises:
-        ServerFailed: if server failed to prepare storage
-
-    """
-    # Get the daos_server from the install path. Useful for testing
-    # with daos built binaries.
-    dev_param = ""
-    device_args = ""
-    daos_srv_bin = get_file_path("bin/daos_server")
-    if device_type == "dcpm":
-        dev_param = "-s"
-    elif device_type == "dcpm_nvme":
-        device_args = " --hugepages=4096"
-    elif device_type == "ram_nvme" or device_type == "nvme":
-        dev_param = "-n"
-        device_args = " --hugepages=4096"
-    else:
-        raise ServerFailed("Invalid device type")
-    cmd = ("{} storage prepare {} -u \"{}\" {} -f"
-           .format(daos_srv_bin[0], dev_param, user, device_args))
-    result = pcmd(hosts, cmd, timeout=120)
-    if len(result) > 1 or 0 not in result:
-        raise ServerFailed("Error preparing {} storage".format(device_type))
-
-
-def storage_reset(hosts):
-    """Reset the Storage on servers using the DAOS server's yaml settings file.
-
-    NOTE: Don't enhance this method to reset SCM. SCM will not be in a useful
-    state for running next tests.
-
-    Args:
-        hosts (str): a string of comma-separated host names
-
-    Raises:
-        ServerFailed: if server failed to reset storage
-
-    """
-    daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
-    result = pcmd(hosts, cmd)
-    if len(result) > 1 or 0 not in result:
-        raise ServerFailed("Error resetting NVMe storage")
+        # Report any errors after all stop actions have been attempted
+        if messages:
+            raise ServerFailed(
+                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
 
 def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                clean=True):
+    # pylint: disable=unused-argument
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:

@@ -44,7 +44,7 @@ from configuration_utils import Configuration
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
-from dmg_utils import DmgCommand
+from general_utils import stop_processes
 
 
 # pylint: disable=invalid-name
@@ -145,8 +145,8 @@ class TestWithoutServers(Test):
         if self.prefix != "/usr":
             self.tmp = os.path.join(self.prefix, 'tmp')
         else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
-                                 os.path.expanduser('~/daos_test'))
+            self.tmp = os.getenv(
+                'DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
         if not os.path.exists(self.tmp):
             os.makedirs(self.tmp)
 
@@ -291,6 +291,10 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         errors.extend(self.stop_servers())
 
+        # Kill any left over job manager processes - fail the test if any
+        # left over processes had to be terminated.
+        errors.extend(self.kill_job_managers())
+
         # Complete tear down actions from the inherited class
         try:
             super(TestWithServers, self).tearDown()
@@ -412,6 +416,31 @@ class TestWithServers(TestWithoutServers):
                         "Error stopping servers: {}".format(error))
         return error_list
 
+    def kill_job_managers(self):
+        """Kill the job manager command for each server manager.
+
+        In addition, report any job manager command that was killed as a falure
+        criteria for this test.
+
+        Returns:
+            list: a list of killed job manager commands
+
+        """
+        self.log.info("Killing any leftover job manager processes")
+        error_list = []
+        for manager in self.server_managers:
+            # Kill the job manager command on the hosts on which it was launched
+            pattern = "'({})'".format(manager.runner.command)
+            result = stop_processes(manager.hosts, pattern)
+
+            # Report any killed job manager command.  stop_processes yields a
+            # return code of 1 if it killed a command.
+            if 1 in result:
+                error_list.append(
+                    "Killed a leftover {} process on {}".format(
+                        manager.manager.command, result[1]))
+        return error_list
+
     def start_servers(self, server_groups=None):
         """Start the servers and clients.
 
@@ -427,25 +456,62 @@ class TestWithServers(TestWithoutServers):
             for group, hosts in server_groups.items():
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                self.server_managers.append(ServerManager(
-                    self.bin,
-                    os.path.join(self.ompi_prefix, "bin")))
-                self.server_managers[-1].get_params(self)
-                self.server_managers[-1].runner.job.yaml_params.name = group
-                self.server_managers[-1].hosts = (
-                    hosts, self.workdir, self.hostfile_servers_slots)
-                if self.prefix != "/usr":
-                    if self.server_managers[-1].runner.export.value is None:
-                        self.server_managers[-1].runner.export.value = []
-                    self.server_managers[-1].runner.export.value.extend(
-                        ["PATH"])
-                load_mpi("orterun")
-                try:
-                    yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
-                    self.server_managers[-1].start(yamlfile)
-                except ServerFailed as error:
-                    self.multi_log("  {}".format(error))
-                    self.fail("Error starting server: {}".format(error))
+                self.add_server_manager(group, hosts)
+
+            # Start all the server managers
+            self.start_server_managers()
+
+    def add_server_manager(self, group=None, hosts=None):
+        """Add a ServerManager object to the internal list.
+
+        In addition to creating a ServerManager object, the following steps are
+        also executed:
+            - Any parameters defiined in the test yaml file are applied to the
+              command launching the server and any of its configuration params
+            - The specified (or default) server group name is assigned
+            - The specified (or default) list of server hosts are assigned
+            - The PATH environment variable is added to the launch command (if
+              required)
+
+        Args:
+            group (str, optional): server group name. Defaults to None.
+            hosts (list, optional): hosts to run the server. Defaults to None.
+        """
+        # Assign a default group and list of hosts if not provided
+        if group is None:
+            group = self.server_group
+        if hosts is None:
+            hosts = self.hostlist_servers
+
+        self.server_managers.append(
+            ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin")))
+        self.server_managers[-1].get_params(self)
+        self.server_managers[-1].runner.job.yaml_params.name = group
+        self.server_managers[-1].hosts = (
+            hosts, self.workdir, self.hostfile_servers_slots)
+        if self.prefix != "/usr":
+            self.server_managers[-1].runner.export.update(
+                ["PATH"], "orterun.export", True)
+
+    def start_server_managers(self):
+        """Start each of the defined ServerManagers.
+
+        Actions taken:
+            - A unique daos_server config file name is assigned
+            - The daos_server command is executed
+
+        """
+        for index, server_manager in enumerate(self.server_managers):
+            # Define a unique configuration filename for each server manager
+            yamlfile = os.path.join(
+                self.tmp, "daos_server_test_{}.yaml".format(index))
+
+            # Start the server manager
+            try:
+                server_manager.start(yamlfile)
+            except ServerFailed as error:
+                self.multi_log("  {}".format(error))
+                self.fail("Error starting server: {}".format(error))
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -502,24 +568,20 @@ class TestWithServers(TestWithoutServers):
             self.log_dir, "{}_client_daos.log".format(self.test_id))
 
     def get_dmg_command(self, index=0):
-        """Create a DmgCommand object, set the access point's host:port to -l
-        parameter, set False to -i (in default), and return the object.
+        """Get a DmgCommand object configured to communicate with the servers.
 
         This method is intended to be used by tests that wants to use dmg to
         create and destroy pool. Pass in the object to TestPool constructor.
 
-        Access point should be passed in to -l regardless of the number of
-        servers.
+        The DmgCommand object will only be properly configured after the servers
+        have started successfully.
 
         Args:
             index (int, optional): Server index. Defaults to 0.
 
         Returns:
-            DmgCommand: New DmgCommand object.
+            DmgCommand: a DmgCommand object configured to communicate with the
+                servers already started by the specified ServerManager index.
+
         """
-        dmg = DmgCommand(self.bin)
-        dmg.hostlist.value = self.server_managers[index].runner.job.\
-            yaml_params.access_points.value
-        dmg.insecure.value = \
-            self.server_managers[index].insecure.value
-        return dmg
+        return self.server_managers[index].dmg

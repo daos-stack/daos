@@ -108,9 +108,34 @@ class DmgCommand(DaosCommand):
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
 
+    def _get_result(self):
+        """Get the result from the currently configured command."""
+        try:
+            result = self.run()
+
+        except CommandFailure as details:
+            print("<dmg> command failed: {}".format(details))
+            result = None
+
+        return result
+
+    def storage_format(self):
+        """Run the dmg storage format command and return the output.
+
+        Returns:
+            CmdResult:  object that contains exit status, stdout information.
+
+        """
+        # Setup the storage format sub-command
+        self.request.value = "storage"
+        self.action.value = "format"
+        self.get_action_command()
+
+        return self._get_result()
+
 
 def storage_scan(path, hosts, insecure=True):
-    """ Execute scan command through dmg tool to servers provided.
+    """Execute scan command through dmg tool to servers provided.
 
     Args:
         path (str): path to tool's binary
@@ -138,7 +163,7 @@ def storage_scan(path, hosts, insecure=True):
 
 
 def storage_format(path, hosts, insecure=True):
-    """ Execute format command through dmg tool to servers provided.
+    """Execute format command through dmg tool to servers provided.
 
     Args:
         path (str): path to tool's binary
@@ -276,6 +301,7 @@ def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
     Returns:
         CmdResult: Object that contains exit status, stdout, and other
             information.
+
     """
     # Create and setup the command
     dmg = DmgCommand(path)
@@ -303,7 +329,7 @@ def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
 
 
 def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
-    """ Execute pool destroy command through dmg tool to servers provided.
+    """Execute pool destroy command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
@@ -318,6 +344,7 @@ def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
     Returns:
         CmdResult: Object that contains exit status, stdout, and other
             information.
+
     """
     # Create and setup the command
     dmg = DmgCommand(path)
@@ -355,6 +382,7 @@ def get_pool_uuid_service_replicas_from_stdout(stdout_str):
     Returns:
         Tuple (str, str): Tuple that contains two items; Pool UUID and Service
             replicas if found. If not found, the tuple contains None.
+
     """
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to

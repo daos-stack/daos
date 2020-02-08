@@ -26,13 +26,16 @@ from __future__ import print_function
 import os
 
 from apricot import TestWithServers
-from server_utils import ServerManager, ServerFailed
+from server_utils import ServerFailed
 
 
 class DaosServerConfigTest(TestWithServers):
-    """Test Class Description:
-    Simple test to verify that the daos_server starts/stops properly given
-    positive and negative values to its configuration file.
+    """Daos server configuration file test.
+
+    Test Class Description:
+        Simple test to verify that the daos_server starts/stops properly given
+        positive and negative values to its configuration file.
+
     :avocado: recursive
     """
 
@@ -43,19 +46,15 @@ class DaosServerConfigTest(TestWithServers):
         self.setup_start_servers = False
 
     def test_daos_server_config_basic(self):
-        """
-        JIRA ID: DAOS-1525
-        Test Description: Test daos_server start/stops properly.
-        on the system.
-        :avocado: tags=all,tiny,control,pr,server_start,basic
+        """JIRA ID: DAOS-1525.
+
+        Test Description:
+            Test daos_server start/stops properly on the system.
+
+        :avocado: tags=all,pr,tiny,control,server_start,basic
         """
         # Setup the servers
-        self.server_managers.append(ServerManager(
-            self.bin,
-            os.path.join(self.ompi_prefix, "bin")))
-        self.server_managers[-1].get_params(self)
-        self.server_managers[-1].hosts = (
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
+        self.add_server_manager()
 
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/server_config_val/*/")

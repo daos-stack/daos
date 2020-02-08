@@ -7,8 +7,6 @@ hosts:
         - boro-D
         - boro-E
 timeout: 300
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 pool:
