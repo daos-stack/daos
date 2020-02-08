@@ -24,9 +24,7 @@
 from __future__ import print_function
 
 import os
-import getpass
 
-from dmg_utils import storage_format
 from general_utils import check_file_exists
 from apricot import TestWithServers
 
@@ -57,8 +55,8 @@ class SuperBlockVersioning(TestWithServers):
         for line in fp.readlines():
             if "version" in line:
                 ver = True
-                self.log.info("Found version in superblock file: {}".format(
-                    line.split()[1]))
+                self.log.info(
+                    "Found version in superblock file: %s", line.split()[1])
 
         if not ver:
             self.fail("Was not able to find version in {} file".format(fname))
