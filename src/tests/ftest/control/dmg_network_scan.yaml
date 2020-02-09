@@ -3,7 +3,9 @@
 hosts:
   test_servers:
     - server-A
-timeout: 300
+timeout: 100
+server_manager:
+  recreate: true
 server_config:
   name: daos_server
   port: 10001
