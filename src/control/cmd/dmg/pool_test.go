@@ -73,7 +73,7 @@ func TestDmg_Pool_GetSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		bytes, err := getSize(tt.in)
+		bytes, err := getBaseTwo(tt.in)
 		if tt.errMsg != "" {
 			ExpectError(t, err, tt.errMsg, "")
 			continue
@@ -154,7 +154,7 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 
 func TestDmg_Pool_Commands(t *testing.T) {
 	testSizeStr := "512GB"
-	testSizeNvme, testSizeScm, err := getBaseTenSize(testSizeStr)
+	testSizeNvme, testSizeScm, err := getBaseSizes(testSizeStr)
 	if err != nil {
 		t.Fatal(err)
 	}

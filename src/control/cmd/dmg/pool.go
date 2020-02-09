@@ -65,8 +65,8 @@ type PoolCreateCmd struct {
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
-	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
+	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool (1 MB to be interpreted as 2^20 bytes)"`
+	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool (1 MB to be interpreted as 10^6 bytes)"`
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
@@ -133,8 +133,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	return err
 }
 
-// getSize retrieves number of bytes from human readable string representation
-func getSize(sizeStr string) (bytesize.ByteSize, error) {
+// getBaseTwo retrieves number of bytes from human readable string representation
+func getBaseTwo(sizeStr string) (bytesize.ByteSize, error) {
 	if sizeStr == "" {
 		return bytesize.New(0.00), nil
 	}
@@ -153,24 +153,19 @@ func getSize(sizeStr string) (bytesize.ByteSize, error) {
 	return bytesize.Parse(sizeStr)
 }
 
-// getBaseTenSize parses string as base10, return true if adjustment was made
-func getBaseTenSize(sizeStr string) (baseTen, baseTwo bytesize.ByteSize, err error) {
+// getBaseSizes returns base10 and base2 representations of the input string.
+func getBaseSizes(sizeStr string) (baseTen, baseTwo bytesize.ByteSize, err error) {
 	if sizeStr == "" {
 		return
 	}
 	// validate input
-	baseTwo, err = getSize(sizeStr)
+	baseTwo, err = getBaseTwo(sizeStr)
 	if err != nil {
 		return
 	}
 
-	var reg *regexp.Regexp
-	reg, err = regexp.Compile("[A-Z]+")
-	if err != nil {
-		return
-	}
+	reg := regexp.MustCompile("[A-Za-z]+")
 
-	sizeStr = strings.ToUpper(sizeStr)
 	// store numeric part of sizeStr
 	num, err := strconv.Atoi(reg.ReplaceAllString(sizeStr, ""))
 	if err != nil {
@@ -182,7 +177,6 @@ func getBaseTenSize(sizeStr string) (baseTen, baseTwo bytesize.ByteSize, err err
 	for ch, pow := range powMap {
 		if strings.Contains(sizeStr, ch) {
 			baseTen = bytesize.New(float64(num) * math.Pow(10, pow))
-			fmt.Printf("%s, %d, %.2f, %s\n", ch, num, pow, baseTen)
 			return
 		}
 	}
@@ -195,7 +189,7 @@ func getBaseTenSize(sizeStr string) (baseTen, baseTwo bytesize.ByteSize, err err
 func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
 
-	scmBytes, err = getSize(scmSize)
+	scmBytes, err = getBaseTwo(scmSize)
 	if err != nil {
 		err = errors.WithMessagef(
 			err, "illegal scm size: %s", scmSize)
@@ -209,7 +203,7 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 
 	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
 	var baseTenNvmeBytes bytesize.ByteSize
-	baseTenNvmeBytes, nvmeBytes, err = getBaseTenSize(nvmeSize)
+	baseTenNvmeBytes, nvmeBytes, err = getBaseSizes(nvmeSize)
 	if err != nil {
 		err = errors.WithMessagef(
 			err, "illegal nvme size: %s", nvmeSize)
