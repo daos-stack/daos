@@ -535,7 +535,8 @@ func TestStorageFormat(t *testing.T) {
 							Pciaddr: "<nil>",
 							State: &ResponseState{
 								Status: ResponseStatus_CTL_ERR_NVME,
-								Error:  msgBdevScmNotReady,
+								Error:  FaultBdevFormatSkipped(0).Error(),
+								Info:   FaultBdevFormatSkipped(0).Resolution,
 							},
 						},
 					},
@@ -598,7 +599,8 @@ func TestStorageFormat(t *testing.T) {
 							Pciaddr: "<nil>",
 							State: &ResponseState{
 								Status: ResponseStatus_CTL_ERR_NVME,
-								Error:  msgBdevScmNotReady,
+								Error:  FaultBdevFormatSkipped(0).Error(),
+								Info:   FaultBdevFormatSkipped(0).Resolution,
 							},
 						},
 					},
@@ -665,6 +667,9 @@ func TestStorageFormat(t *testing.T) {
 				}
 			}
 
+			// TODO: multi-io tests
+			// defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
+			// use "withServer" syntax
 			config := newMockStorageConfig(tc.mountRet, tc.unmountRet, tc.mkdirRet,
 				tc.removeRet, tc.sMount, tc.sClass, tc.sDevs, tc.sSize,
 				tc.bClass, tc.bDevs, tc.superblockExists, tc.isRoot)
@@ -680,6 +685,7 @@ func TestStorageFormat(t *testing.T) {
 				GetfsStr:      getFsRetStr,
 			}
 			cs := mockControlService(t, log, config, tc.bmbc, nil, msc)
+			common.AssertEqual(t, 1, len(cs.harness.Instances()), "")
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {

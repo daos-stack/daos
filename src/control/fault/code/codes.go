@@ -77,6 +77,8 @@ const (
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerScmUnmanaged
+	ServerBdevNotFound
+	ServerBdevFormatSkipped
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
