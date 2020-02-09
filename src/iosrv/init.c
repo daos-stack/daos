@@ -601,7 +601,7 @@ server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
 	dss_module_cleanup_all();
-	D_INFO("stop: dss_module_cleanup_all() done\n");
+	D_INFO("stop:: dss_module_cleanup_all() done\n");
 	drpc_fini();
 	D_INFO("stop: drpc_fini() done\n");
 	server_init_state_fini();
