@@ -280,7 +280,7 @@ static int srv_init(void)
 
 int main(int argc, char *argv[])
 {
-	int i, rc;
+	int i, rc = 0;
 
 	dbg("---%s--->", __func__);
 

@@ -331,6 +331,11 @@ do_init:
 			       "for verbs provider, ignore it.\n");
 			crt_gdata.cg_share_na = false;
 		}
+
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2) {
+			setenv("FI_PSM2_NAME_SERVER", "1", true);
+			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
+		}
 		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
@@ -526,8 +531,7 @@ crt_finalize(void)
 		crt_gdata.cg_inited = 0;
 		gdata_init_flag = 0;
 
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
-			crt_na_ofi_config_fini();
+		crt_na_ofi_config_fini();
 	} else {
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
@@ -568,6 +572,19 @@ static inline na_bool_t is_integer_str(char *str)
 	}
 
 	return NA_TRUE;
+}
+
+static inline int
+crt_get_port_psm2(int *port)
+{
+	int		rc = 0;
+	uint16_t	pid;
+
+	pid = getpid();
+	*port = (pid << 8);
+	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
+
+	return rc;
 }
 
 int crt_na_ofi_config_init(void)
@@ -659,12 +676,20 @@ int crt_na_ofi_config_init(void)
 	port_str = getenv("OFI_PORT");
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
-			D_DEBUG(DB_ALL, "ignore invalid OFI_PORT %s.",
+			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.",
 				port_str);
 		} else {
 			port = atoi(port_str);
-			D_DEBUG(DB_ALL, "OFI_PORT %d, use it as service "
-				"port.\n", port);
+			if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
+				port = (uint16_t) port << 8;
+			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service "
+					"port.\n", port);
+		}
+	} else if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2) {
+		rc = crt_get_port_psm2(&port);
+		if (rc != 0) {
+			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
 	}
 	crt_na_ofi_conf.noc_port = port;

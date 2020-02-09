@@ -1,6 +1,6 @@
 %global carthome %{_exec_prefix}/lib/%{name}
 
-%global mercury_version 2.0.0a1-0.1.git.c2c2628%{?dist}
+%global mercury_version 2.0.0a1-0.2.git.c2c2628%{?dist}
 
 Name:          cart
 Version:       4.5.1

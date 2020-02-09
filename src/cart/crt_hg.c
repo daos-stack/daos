@@ -454,7 +454,10 @@ crt_get_info_string(char **string)
 	} else {
 		/* OFI_PORT is only for context 0 to use */
 		port = crt_na_ofi_conf.noc_port;
-		crt_na_ofi_conf.noc_port = -1;
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_PSM2)
+			crt_na_ofi_conf.noc_port++;
+		else
+			crt_na_ofi_conf.noc_port = -1;
 
 		D_ASPRINTF(*string, "%s://%s/%s:%d", plugin_str,
 			crt_na_ofi_conf.noc_domain,
@@ -576,7 +579,11 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		}
 	}
 
-	D_DEBUG(DB_NET, "in crt_hg_init, listen address: %s.\n", *addr);
+	if (server)
+		D_DEBUG(DB_NET, "listening address: %s.\n", *addr);
+	else
+		D_DEBUG(DB_NET, "passive address: %s.\n", *addr);
+
 	crt_gdata.cg_hg = hg_gdata;
 
 out:
