@@ -5,3 +5,5 @@ hosts:
     - server-A
   test_clients:
     - client-B
+server_manager:
+  recreate: true
