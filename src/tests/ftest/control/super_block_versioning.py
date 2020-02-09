@@ -44,7 +44,8 @@ class SuperBlockVersioning(TestWithServers):
         """
         # Check that the superblock file exists under the scm_mount dir.
         params = self.server_managers[-1].runner.job.yaml_params
-        fname = os.path.join(params.server_params[-1].scm_mount, "superblock")
+        fname = os.path.join(
+            params.server_params[-1].scm_mount.value, "superblock")
         check_result = check_file_exists(self.hostlist_servers, fname)
         if not check_result[0]:
             self.fail("%s: %s not found", check_result[1], fname)
