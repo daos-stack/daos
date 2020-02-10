@@ -198,7 +198,7 @@ static int
 test_setup_cont_create(void **state, daos_prop_t *co_prop)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		uuid_generate(arg->co_uuid);
