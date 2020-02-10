@@ -225,7 +225,7 @@ static int
 test_setup_cont_open(void **state)
 {
 	test_arg_t *arg = *state;
-	int rc;
+	int rc = 0;
 
 	if (arg->myrank == 0) {
 		print_message("setup: opening container\n");
