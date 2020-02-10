@@ -872,6 +872,8 @@ ik_btr_drain(void **state)
 		if (empty)
 			break;
 	}
+
+	D_FREE(arr);
 }
 
 static int
