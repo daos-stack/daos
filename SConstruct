@@ -8,7 +8,7 @@ import errno
 from SCons.Script import BUILD_TARGETS
 
 try:
-    input = raw_input
+    input = raw_input # pylint: disable=redefined-builtin
 except NameError:
     pass
 
