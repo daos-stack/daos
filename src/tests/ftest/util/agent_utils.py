@@ -157,7 +157,7 @@ def run_agent(test, server_list, client_list=None):
 
     # Create the DAOS Agent configuration yaml file to pass
     # with daos_agent -o <FILE_NAME>
-    agent_yaml = os.path.join(test.tmp, "daos_agent.yml")
+    agent_yaml = os.path.join(test.tmp, "daos_agent.yaml")
     agent_config = DaosAgentConfig()
     agent_config.get_params(test)
     agent_config.hostlist.value = client_list
