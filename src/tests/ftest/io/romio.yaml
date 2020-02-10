@@ -6,6 +6,8 @@ hosts:
 timeout: 240
 # below mentioned path should be replaced by path of
 # romio test suite directory in CI nodes when available.
+server_manager:
+    recreate: true
 server_config:
     name: daos_server
 romio:

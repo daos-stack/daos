@@ -14,6 +14,8 @@ hosts:
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
 timeout: 600
+server_manager:
+  recreate: true
 server_config:
   name: daos_server
 daos_tests:

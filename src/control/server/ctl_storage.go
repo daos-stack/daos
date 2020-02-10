@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ const (
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
 		"and can be discovered, you may need to run `sudo daos_server " +
 		"storage prepare --nvme-only` to setup SPDK to access SSDs"
-	msgBdevNoDevs      = "no controllers specified"
 	msgBdevScmNotReady = "nvme format not performed because scm not ready"
 )
 
