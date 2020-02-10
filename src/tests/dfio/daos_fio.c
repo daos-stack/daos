@@ -24,7 +24,7 @@
 /*
  * Implementation of DAOS File System Fio Plugin
  */
-// #include <string.h>
+#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,10 +39,10 @@
 #include <fio.h>
 #include <optgroup.h>
 
-#include <gurt/common.h>
-#include <gurt/hash.h>
 #include <daos.h>
 #include <daos_fs.h>
+#include <gurt/common.h>
+#include <gurt/hash.h>
 
 #define ERR(MSG)							\
 do {									\
