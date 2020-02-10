@@ -219,13 +219,6 @@ pipeline {
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
