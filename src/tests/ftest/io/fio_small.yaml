@@ -20,6 +20,7 @@ pool:
   scm_size: 1600000000
   nvme_size: 20000000000
   svcn: 1
+  control_method: dmg
 fio:
   names:
     - global

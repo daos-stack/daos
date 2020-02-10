@@ -1042,36 +1042,119 @@ test_is_csum_enabled(void **state)
 }
 
 static void
-test_sv_still_works(void **state)
+simple_sv(void **state)
 {
-	struct daos_csummer	*csummer = NULL;
-	struct dcs_iod_csums	*csums = NULL;
+	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
-	enum DAOS_CSUM_TYPE	 type;
+	struct dcs_iod_csums	*actual;
 	daos_iod_t		 iod = {0};
 	int			 rc;
 
-	dts_sgl_init_with_strings(&sgl, 1, "ABCDEFG");
+	fake_get_size_result = 4;
+	daos_csummer_init(&csummer, &fake_algo, 16);
+	fake_algo.cf_get_size = fake_get_size;
 
-	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
-		rc = daos_csummer_init(&csummer,
-				       daos_csum_type2algo(type), 128);
-		assert_int_equal(0, rc);
+	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
 
-		iod.iod_nr = 1;
-		iod.iod_recxs = NULL;
-		iod.iod_size = daos_sgl_buf_size(&sgl);
-		iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_nr = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_size = 1; /* [todo-ryon]: this should be bigger than 1 */
+	iod.iod_type = DAOS_IOD_SINGLE;
 
-		rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &csums);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &actual);
 
-		assert_int_equal(0, rc);
+	assert_int_equal(0, rc);
 
-		daos_csummer_free_ic(csummer, &csums);
-		daos_csummer_destroy(&csummer);
-	}
+	assert_int_equal(fake_get_size_result, actual->ic_data->cs_buf_len);
+	assert_int_equal(1, actual->ic_data->cs_nr);
+	assert_int_equal(fake_get_size_result, actual->ic_data->cs_len);
+
+	assert_int_equal(1, *ci_idx2csum(actual->ic_data, 0));
+
+	daos_csummer_free_ic(csummer, &actual);
+	daos_sgl_fini(&sgl, true);
+	daos_csummer_destroy(&csummer);
+}
+
+static void
+test_compare_sv_checksums(void **state)
+{
+	struct daos_csummer	*csummer;
+	struct dcs_iod_csums	*one;
+	struct dcs_iod_csums	*two;
+	d_sg_list_t		 sgl;
+	daos_iod_t		 iod = {0};
+	int			 rc = 0;
+
+	fake_get_size_result = 4;
+
+	daos_csummer_init(&csummer, &fake_algo, 4);
+	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
+
+	fake_update_bytes_seen = 0;
+
+	iod.iod_nr = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_size = daos_sgl_buf_size(&sgl);
+	iod.iod_type = DAOS_IOD_SINGLE;
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &one);
+	assert_int_equal(0, rc);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &two);
+	assert_int_equal(0, rc);
+
+	assert_true(daos_csummer_compare_csum_info(csummer, one->ic_data,
+						   two->ic_data));
 
 	daos_sgl_fini(&sgl, true);
+	daos_csummer_free_ic(csummer, &one);
+	daos_csummer_free_ic(csummer, &two);
+	daos_csummer_destroy(&csummer);
+}
+
+static void
+test_verify_sv_data(void **state)
+{
+	struct daos_csummer	*csummer;
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_size_t		 sgl_buf_half;
+	int			 rc;
+	struct dcs_iod_csums	*iod_csums = NULL;
+
+	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024*1024);
+	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
+
+
+	iod.iod_size = daos_sgl_buf_size(&sgl);
+	iod.iod_nr = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_type = DAOS_IOD_SINGLE;
+
+	/** Checksum not set in iod_csums but csummer is set so should error */
+	rc = daos_csummer_verify(csummer, &iod, &sgl, iod_csums);
+	assert_int_equal(-DER_INVAL, rc);
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, 1, &iod_csums);
+	assert_int_equal(0, rc);
+
+	rc = daos_csummer_verify(csummer, &iod, &sgl, iod_csums);
+	assert_int_equal(0, rc);
+
+	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /** Corrupt the data */
+	rc = daos_csummer_verify(csummer, &iod, &sgl, iod_csums);
+	assert_int_equal(-DER_CSUM, rc);
+
+	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /** Un-corrupt the data */
+	/** Corrupt data elsewhere*/
+	sgl_buf_half = daos_sgl_buf_size(&sgl) / 2;
+	((char *)sgl.sg_iovs[0].iov_buf)[sgl_buf_half + 1]++;
+	rc = daos_csummer_verify(csummer, &iod, &sgl, iod_csums);
+	assert_int_equal(-DER_CSUM, rc);
+
+	/** Clean up */
+	daos_csummer_free_ic(csummer, &iod_csums);
+	daos_csummer_destroy(&csummer);
 }
 
 
@@ -1093,10 +1176,10 @@ static const struct CMUnitTest tests[] = {
 		test_update_reset, test_setup, test_teardown},
 	{"CSUM03: Test update with multiple buffer",
 		test_update_with_multiple_buffers, test_setup, test_teardown},
-	{"CSUM05: Create checksum from a single iov, recx, and chunk",
+	{"CSUM04: Create checksum from a single iov, recx, and chunk",
 		test_daos_checksummer_with_single_iov_single_chunk,
 		test_setup, test_teardown},
-	{"CSUM05.1: Create checksum from unaligned recx",
+	{"CSUM05: Create checksum from unaligned recx",
 		test_daos_checksummer_with_unaligned_recx,
 		test_setup, test_teardown},
 	{"CSUM06: Create checksum from a multiple iov, single recx, and chunk",
@@ -1136,8 +1219,12 @@ static const struct CMUnitTest tests[] = {
 		test_align_boundaries, test_setup, test_teardown},
 	{"CSUM22: Align range to a single chunk",
 		test_align_to_chunk, test_setup, test_teardown},
-	{"CSUM23: SV still works",
-		test_sv_still_works, test_setup, test_teardown},
+	{"CSUM23: Single value",
+		simple_sv, test_setup, test_teardown},
+	{"CSUM24: Compare single values checksums",
+		test_compare_sv_checksums, test_setup, test_teardown},
+	{"CSUM25: Verify single value data",
+		test_verify_sv_data, test_setup, test_teardown},
 };
 
 int

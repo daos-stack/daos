@@ -312,12 +312,12 @@ dss_topo_init()
 		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
 		if (corenode == NULL)
 			continue;
-		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
-					    numa_obj->allowed_cpuset) != 0) {
+		if (hwloc_bitmap_isincluded(corenode->cpuset,
+					    numa_obj->cpuset) != 0) {
 			if (num_cores_visited++ >= dss_core_offset) {
 				hwloc_bitmap_set(core_allocation_bitmap, k);
 				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->allowed_cpuset);
+						      corenode->cpuset);
 			}
 			dss_num_cores_numa_node++;
 		}
