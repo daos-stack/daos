@@ -36,7 +36,6 @@ class BadConnectTest(TestWithServers):
     parameters.  This can't be done with daosctl, need to use the python API.
     :avocado: recursive
     """
-    @skipForTicket("DAOS-3819")
     def test_connect(self):
         """
         Pass bad parameters to pool connect
@@ -63,8 +62,6 @@ class BadConnectTest(TestWithServers):
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
         connectuuid = uuidlist[0]
-        if connectuuid == 'NULLPTR':
-            self.cancel("skipping null pointer test until DAOS-1781 is fixed")
         expected_for_param.append(uuidlist[1])
 
         # if any parameter is FAIL then the test should FAIL, in this test
@@ -105,7 +102,7 @@ class BadConnectTest(TestWithServers):
             self.pool.pool.uuid[4] = 244
 
         try:
-            self.pool.connect(connectmode)
+            self.pool.connect(1 << connectmode)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -123,6 +120,8 @@ class BadConnectTest(TestWithServers):
                 self.pool.pool.svc.rl_ranks = psvc.rl_ranks
                 self.pool.pool.svc.rl_nr = psvc.rl_nr
                 self.pool.pool.group = pgroup
+                if self.pool.pool.uuid is None:
+                    self.pool.pool.uuid = (ctypes.c_ubyte * 16)()
                 ctypes.memmove(self.pool.pool.uuid, puuid, 16)
                 print("pool uuid after restore {}".format(
                     self.pool.pool.get_uuid_str()))

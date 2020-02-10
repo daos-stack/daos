@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import avocado
 from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
 from ior_test_base import IorTestBase
+
 
 class NvmeIoVerification(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -71,7 +72,8 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            self.pool = TestPool(self.context, self.log)
+            self.pool = TestPool(
+                self.context, dmg_command=self.get_dmg_command())
             self.pool.get_params(self)
 
             # update pool sizes

@@ -29,13 +29,19 @@ from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse
 from command_utils import Srun
+from general_utils import get_random_string
 import slurm_utils
 from agent_utils import run_agent
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 import socket
+import threading
 from avocado.utils import process
+from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosSnapshot, DaosApiError
+
+H_LOCK = threading.Lock()
 
 
 class SoakTestError(Exception):
@@ -69,6 +75,10 @@ class Soak(TestWithServers):
         self.pool = None
         self.container = None
         self.test_iteration = None
+        self.h_list = None
+        self.harasser_joblist = None
+        self.harasser_results = None
+        self.harasser_timeout = None
 
     def job_done(self, args):
         """Call this function when a job is done.
@@ -125,6 +135,186 @@ class Soak(TestWithServers):
                 "<<FAILED: Soak remote logfiles not copied "
                 "from clients>>: {}".format(self.hostlist_clients))
 
+    def is_harasser(self, harasser):
+        """Check if harasser is defined in yaml.
+
+        Args:
+            harasser (list): list of harassers to launch
+
+        Returns: bool
+
+        """
+        return self.h_list and harasser in self.h_list
+
+    def launch_harassers(self, harassers, pools):
+        """Launch any harasser tests if defined in yaml.
+
+        Args:
+            harasser (list): list of harassers to launch
+            pools (TestPool): pool obj
+
+        """
+        job = None
+        # Launch harasser after one complete pass
+        for harasser in harassers:
+            if harasser == "rebuild":
+                method = self.launch_rebuild
+                ranks = self.params.get(
+                    "ranks_to_kill", "/run/" + harasser + "/*")
+                param_list = (ranks, pools)
+                name = "REBUILD"
+            if harasser in "snapshot":
+                method = self.launch_snapshot
+                param_list = ()
+                name = "SNAPSHOT"
+            else:
+                raise SoakTestError(
+                    "<<FAILED: Harasser {} is not supported. ".format(
+                        harasser))
+            job = threading.Thread(
+                target=method, args=param_list, name=name)
+            self.harasser_joblist.append(job)
+
+        # start all harassers
+        for job in self.harasser_joblist:
+            job.start()
+
+    def harasser_completion(self, timeout):
+        """Complete harasser jobs.
+
+        Args:
+            timeout (int): timeout in secs
+
+        Returns:
+            bool: status
+
+        """
+        status = True
+        for job in self.harasser_joblist:
+            job.join(timeout)
+        for job in self.harasser_joblist:
+            if job.is_alive():
+                self.log.error(
+                    "<< HARASSER is alive %s FAILED to join>> ", job.name)
+                status &= False
+        # Check if the completed job passed
+        for harasser, status in self.harasser_results.items():
+            if not status:
+                self.log.error(
+                    "<< HARASSER %s FAILED>> ", harasser)
+                status &= False
+        self.harasser_joblist = []
+        return status
+
+    def launch_rebuild(self, ranks, pools):
+        """Launch the rebuild process.
+
+        Args:
+            ranks (list): Server ranks to kill
+            pools (list): list of TestPool obj
+
+        """
+        self.log.info("<<Launch Rebuild>> at %s", time.ctime())
+        status = True
+        for pool in pools:
+            # Kill the server
+            try:
+                pool.start_rebuild(ranks, self.d_log)
+            except (RuntimeError, TestFail, DaosApiError) as error:
+                self.log.error("Rebuild failed to start", exc_info=error)
+                status &= False
+                break
+            # Wait for rebuild to start
+            try:
+                pool.wait_for_rebuild(True)
+            except (RuntimeError, TestFail, DaosApiError) as error:
+                self.log.error(
+                    "Rebuild failed waiting to start", exc_info=error)
+                status &= False
+                break
+
+            # Wait for rebuild to complete
+            try:
+                pool.wait_for_rebuild(False)
+            except (RuntimeError, TestFail, DaosApiError) as error:
+                self.log.error(
+                    "Rebuild failed waiting to finish", exc_info=error)
+                status &= False
+                break
+
+        with H_LOCK:
+            self.harasser_results["REBUILD"] = status
+
+    def launch_snapshot(self):
+        """Create a basic snapshot of the reserved pool."""
+        self.log.info("<<Launch Snapshot>> at %s", time.ctime())
+        status = True
+        # Create container
+        container = TestContainer(self.pool[0])
+        container.namespace = "/run/container_reserved"
+        container.get_params(self)
+        container.create()
+        container.open()
+
+        obj_cls = self.params.get(
+            "object_class", '/run/container_reserved/*')
+
+        # write data to object
+        data_pattern = get_random_string(500)
+        datasize = len(data_pattern) + 1
+        dkey = "dkey"
+        akey = "akey"
+        tx_handle = container.container.get_new_tx()
+        obj = container.container.write_an_obj(
+            data_pattern, datasize, dkey, akey, obj_cls=obj_cls, txn=tx_handle)
+        container.container.commit_tx(tx_handle)
+        obj.close()
+        # Take a snapshot of the container
+        snapshot = DaosSnapshot(self.context)
+        try:
+            snapshot.create(container.container.coh, tx_handle)
+        except (RuntimeError, TestFail, DaosApiError) as error:
+            self.log.error("Snapshot failed", exc_info=error)
+            status &= False
+        if status:
+            self.log.info("Snapshot Created")
+            # write more data to object
+            data_pattern2 = get_random_string(500)
+            datasize2 = len(data_pattern2) + 1
+            dkey = "dkey"
+            akey = "akey"
+            obj2 = container.container.write_an_obj(
+                data_pattern2, datasize2, dkey, akey, obj_cls=obj_cls)
+            obj2.close()
+            self.log.info("Wrote additional data to container")
+            # open the snapshot and read the data
+            obj.open()
+            snap_handle = snapshot.open(container.container.coh)
+            try:
+                data_pattern3 = container.container.read_an_obj(
+                    datasize, dkey, akey, obj, txn=snap_handle.value)
+            except (RuntimeError, TestFail, DaosApiError) as error:
+                self.log.error(
+                    "Error when retrieving the snapshot data %s", error)
+                status &= False
+            if status:
+                # Compare the snapshot to the original written data.
+                if data_pattern3.value != data_pattern:
+                    self.log.error("Snapshot data miscompere")
+                    status &= False
+        # Destroy the snapshot
+        try:
+            snapshot.destroy(container.container.coh)
+        except (RuntimeError, TestFail, DaosApiError) as error:
+            self.log.error("Failed to destroy snapshot %s", error)
+            status &= False
+        # cleanup
+        container.close()
+        container.destroy()
+
+        with H_LOCK:
+            self.harasser_results["SNAPSHOT"] = status
+
     def create_ior_cmdline(self, job_spec, pool, ppn):
         """Create an IOR cmdline to run in slurm batch.
 
@@ -147,6 +337,9 @@ class Soak(TestWithServers):
         tsize_list = self.params.get("transfer_size", ior_params + "*")
         bsize_list = self.params.get("block_size", ior_params + "*")
         oclass_list = self.params.get("daos_oclass", ior_params + "*")
+        # check if capable of doing rebuild; if yes then daos_oclass = RP_*GX
+        if self.is_harasser("rebuild"):
+            oclass_list = self.params.get("daos_oclass", "/run/rebuild/*")
         # update IOR cmdline for each additional IOR obj
         for api in api_list:
             for b_size in bsize_list:
@@ -193,7 +386,6 @@ class Soak(TestWithServers):
         """
         # TO-DO: use daos tool when available
         # This method assumes that doas agent is running on test node
-
         cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
             pool.uuid, ":".join(
                 [str(item) for item in pool.svc_ranks]))
@@ -425,7 +617,7 @@ class Soak(TestWithServers):
             "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
 
         # If there is nothing to do; exit
-        if len(job_id_list) > 0:
+        if job_id_list:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
                 # self.log.info(
@@ -440,7 +632,7 @@ class Soak(TestWithServers):
                 else:
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
-            if len(job_id_list) > 0:
+            if job_id_list:
                 self.log.info(
                     "<<Cancel jobs in queue with id's %s >>", job_id_list)
                 for job in job_id_list:
@@ -498,11 +690,21 @@ class Soak(TestWithServers):
         # unexpected failures will clear the squeue in tearDown
         self.failed_job_id_list = job_id_list
 
+        # launch harassers if defined and enabled
+        if self.h_list and self.loop > 1:
+            self.log.info("<<Harassers are enabled>>")
+            self.launch_harassers(self.h_list, pools)
+            if not self.harasser_completion(self.harasser_timeout):
+                raise SoakTestError("<<FAILED: Harassers failed ")
+            # rebuild can only run once for now
+            if self.is_harasser("rebuild"):
+                self.h_list.remove("rebuild")
+
         # Wait for jobs to finish and cancel/kill jobs if necessary
         self.failed_job_id_list = self.job_completion(job_id_list)
 
         # Test fails on first error but could use continue on error here
-        if len(self.failed_job_id_list) > 0:
+        if self.failed_job_id_list:
             raise SoakTestError(
                 "<<FAILED: The following jobs failed {} >>".format(
                     " ,".join(
@@ -517,18 +719,27 @@ class Soak(TestWithServers):
         """
         self.soak_results = {}
         self.pool = []
+        self.harasser_joblist = []
+        self.harasser_results = {}
         self.test_timeout = self.params.get("test_timeout", test_param)
         self.job_timeout = self.params.get("job_timeout", test_param)
+        self.harasser_timeout = self.params.get("harasser_timeout", test_param)
         self.test_name = self.params.get("name", test_param)
         self.nodesperjob = self.params.get("nodesperjob", test_param)
         self.test_iteration = self.params.get("iteration", test_param)
         self.task_list = self.params.get("taskspernode", test_param + "*")
-
+        self.h_list = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         pool_list = self.params.get("poollist", test_param + "*")
         rank = self.params.get("rank", "/run/container_reserved/*")
-        obj_class = self.params.get(
-            "object_class", "/run/container_reserved/*")
+
+        if self.is_harasser("rebuild"):
+            obj_class = "_".join(["OC", str(
+                self.params.get("daos_oclass", "/run/rebuild/*")[0])])
+        else:
+            obj_class = self.params.get(
+                "object_class", "/run/container_reserved/*")
+
         slurm_reservation = self.params.get(
             "reservation", "/run/srun_params/*")
 
@@ -569,14 +780,12 @@ class Soak(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Soak directory on testnode not removed {}>>".format(
                     error))
-
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
         while time.time() < end_time:
             # Start new pass
             start_loop_time = time.time()
             self.log.info("<<Soak1 PASS %s: time until done %s>>", self.loop, (
                 end_time - time.time()))
-
             # Create all specified pools
             self.add_pools(pool_list)
             self.log.info(
@@ -606,7 +815,8 @@ class Soak(TestWithServers):
         # TO-DO: use IOR
         self.assertTrue(
             self.container.read_objects(),
-            "Data verification error on reserved pool after SOAK completed")
+            "Data verification error on reserved pool"
+            "after SOAK completed")
 
     def setUp(self):
         """Define test setup to be done."""
@@ -649,7 +859,7 @@ class Soak(TestWithServers):
             self.exclude_slurm_nodes.append(test_node[0])
             self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        if len(self.hostlist_clients) < 1:
+        if not self.hostlist_clients:
             self.fail("There are no nodes that are client only;"
                       "check if the partition also contains server nodes")
         self.node_list = self.hostlist_clients + test_node
@@ -662,7 +872,7 @@ class Soak(TestWithServers):
         self.log.info("<<tearDown Started>> at %s", time.ctime())
         # clear out any jobs in squeue;
         errors_detected = False
-        if len(self.failed_job_id_list) > 0:
+        if self.failed_job_id_list:
             self.log.info(
                 "<<Cancel jobs in queue with ids %s >>",
                 self.failed_job_id_list)
