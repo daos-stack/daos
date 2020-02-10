@@ -29,8 +29,14 @@ SLES_12_REPOS += https://download.opensuse.org/repositories/science:/HPC:/SLE12S
 GIT_SHORT       := $(shell git rev-parse --short HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
 CART_SHA1       := $(shell sed -ne 's/CART *= *\(.*\)/\1/p' ../../utils/build.config)
+ON_TAG          := $(shell if git diff-index --name-only HEAD^ | grep -q TAG; then \
+	                       echo "true"; else echo "false"; fi)
 
-BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)" --define "%cart_sha1 $(CART_SHA1)"
+ifeq ($(ON_TAG),false)
+BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+endif
+
+BUILD_DEFINES     += --define "%cart_sha1 $(CART_SHA1)"
 RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
 
 dist: $(SOURCES)
