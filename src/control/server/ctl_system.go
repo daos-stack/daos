@@ -261,7 +261,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 		if err := convert.Types(prepResults, &resp.Results); err != nil {
 			return nil, err
 		}
-		if prepResults.HasErrors() {
+		if !req.Force && prepResults.HasErrors() {
 			return resp, errors.New("PrepShutdown HasErrors")
 		}
 	}
