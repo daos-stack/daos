@@ -58,7 +58,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 {
 	test_arg_t		*arg = *state;
 	struct test_pool	*outpool;
-	int			 rc;
+	int			 rc = 0;
 
 	outpool = opool ? opool : &arg->pool;
 
