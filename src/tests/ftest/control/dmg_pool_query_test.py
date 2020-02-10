@@ -85,7 +85,7 @@ class DmgPoolQueryTest(IorTestBase):
         :avocado: tags=all,tiny,pr,hw,dmg,pool_query,basic,poolqueryinputs
         """
         # Get test UUID
-        uuids = self.params.get("uuids", '/run/pool_uuids/uuids/*')
+        uuids = self.params.get("uuids", '/run/pool_uuids/*')
         errors_list = []
         for uuid in uuids:
             self.log.info("Using test UUID: %s", uuid[0])

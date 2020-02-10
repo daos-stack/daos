@@ -432,15 +432,15 @@ def get_pool_query_info(stdout_str):
     # Parse mem info
     s_space, n_space = re.findall(
         r"Free: (.+), min:(.+), max:(.+), mean:(.+)", stdout_str)
-    pool_info["s_free"] = s_space[0][0]
-    pool_info["s_free_min"] = s_space[0][1]
-    pool_info["s_free_max"] = s_space[0][2]
-    pool_info["s_free_mean"] = s_space[0][3]
+    pool_info["s_free"] = s_space[0]
+    pool_info["s_free_min"] = s_space[1]
+    pool_info["s_free_max"] = s_space[2]
+    pool_info["s_free_mean"] = s_space[3]
 
-    pool_info["n_free"] = n_space[0][0]
-    pool_info["n_free_min"] = n_space[0][1]
-    pool_info["n_free_max"] = n_space[0][2]
-    pool_info["n_free_mean"] = n_space[0][3]
+    pool_info["n_free"] = n_space[0]
+    pool_info["n_free_min"] = n_space[1]
+    pool_info["n_free_max"] = n_space[2]
+    pool_info["n_free_mean"] = n_space[3]
 
     # Parse rebuild info
     r_info = re.findall(r"Rebuild (.+), (.+) objs, (.+) recs", stdout_str)
