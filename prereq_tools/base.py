@@ -1354,7 +1354,8 @@ class _Component():
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             command = ['rm -f %s' % patch_path,
-                       'curl -L -o %s %s' % (patch_path, raw)]
+                       'curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
+                       % (patch_path, raw)]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
             patches.append(patch_path)
