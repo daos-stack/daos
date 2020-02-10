@@ -623,10 +623,17 @@ add_region:
 static void
 rw_completion(void *cb_arg, int err)
 {
+	struct bio_xs_context	*xs_ctxt;
+	struct spdk_blob	*blob;
 	struct bio_desc		*biod = cb_arg;
 	struct media_error_msg	*mem = NULL;
 
-	D_ASSERT(biod->bd_inflights > 0);
+	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	blob = biod->bd_ctxt->bic_blob;
+
+	D_ASSERTF(biod->bd_inflights > 0, "xs:%p, blob:%p, update:%d\n",
+		  xs_ctxt, blob, biod->bd_update);
 	biod->bd_inflights--;
 
 	if (biod->bd_result == 0 && err != 0) {
@@ -683,8 +690,8 @@ dma_rw(struct bio_desc *biod, bool prep)
 	D_ASSERT(channel != NULL);
 	biod->bd_ctxt->bic_inflight_dmas++;
 
-	D_DEBUG(DB_IO, "DMA start, blob:%p, update:%d, rmw:%d\n",
-		blob, biod->bd_update, rmw_read);
+	D_DEBUG(DB_IO, "DMA start, xs:%p, blob:%p, update:%d, rmw:%d\n",
+		xs_ctxt, blob, biod->bd_update, rmw_read);
 
 	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
 		rg = &rsrvd_dma->brd_regions[i];
@@ -760,8 +767,8 @@ dma_rw(struct bio_desc *biod, bool prep)
 	}
 
 	biod->bd_ctxt->bic_inflight_dmas--;
-	D_DEBUG(DB_IO, "DMA done, blob:%p, update:%d, rmw:%d\n",
-		blob, biod->bd_update, rmw_read);
+	D_DEBUG(DB_IO, "DMA done, xs:%p, blob:%p, update:%d, rmw:%d\n",
+		xs_ctxt, blob, biod->bd_update, rmw_read);
 }
 
 void
