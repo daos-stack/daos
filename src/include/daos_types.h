@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,24 +59,6 @@ typedef uint64_t	daos_off_t;
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
-
-/** buffer to store an array of checksums */
-typedef struct {
-	/** buffer to store the checksums */
-	uint8_t		*cs_csum;
-	/** number of checksums stored in buffer */
-	uint32_t	 cs_nr;
-	/** type of checksum */
-	uint16_t	 cs_type;
-	/** length of each checksum in bytes*/
-	uint16_t	 cs_len;
-	/** length of entire buffer (cs_csum). buf_len can be larger than
-	 *  nr * len, but never smaller
-	 */
-	uint32_t	 cs_buf_len;
-	/** bytes of data each checksum verifies (if value type is array) */
-	uint32_t	 cs_chunksize;
-} daos_csum_buf_t;
 
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,

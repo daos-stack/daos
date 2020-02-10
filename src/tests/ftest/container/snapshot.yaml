@@ -8,6 +8,8 @@ timeout: 600
 faults:
     no_faults:
       fault_list: []
+server_manager:
+   recreate: true
 server_config:
    name: daos_server
 poolparams:

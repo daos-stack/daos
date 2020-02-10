@@ -19,16 +19,16 @@
 ## Hosts can be specified with or without port, default port below
 ## assumed if not specified.
 #
-## default: hostname of this node at port 10000 for local testing
-#access_points: ['hostname1:10001']
+## default: hostname of this node
+#access_points: ['hostname1']
 #
 #
-## Force default port
+## Default port
 #
-## Force different port number to bind daos_server to, this will also
-## be used when connecting to access points if no port is specified.
+## Port number to bind daos_server to, this will also
+## be used when connecting to access points unless a port is specified.
 #
-## default: 10000
+## default: 10001
 #port: 10001
 #
 ## Transport Credentials Specifying certificates to secure communications
@@ -163,19 +163,10 @@
 #control_log_file: /tmp/daos_control.log
 #
 #
-## Username used to lookup user uid/gid to drop privileges to if started
-## as root. After control plane start-up and configuration, before starting
-## data plane, process ownership will be dropped to those of supplied user.
+## Enable daos_admin (privileged helper) logging.
 #
-#user_name: daosuser
-#
-#
-## Group name used to lookup group gid to drop privileges to when user_name
-## is root. If user is a member of group, this group gid is set for the running
-## process. If group look up fails or user is not member, use uid return from
-## user lookup.
-#
-#group_name: daosgroup
+## default: disabled (errors only to control plane log)
+#helper_log_file: /tmp/daos_admin.log
 #
 #
 ## When per-server definitions exist, auto-allocation of resources is not
@@ -310,7 +301,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: qib1
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #

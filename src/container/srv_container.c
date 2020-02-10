@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,10 +131,14 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 		return -DER_INVAL;
 	}
 
-	if (num_allowed_failures <= num_failed)
+	if (num_allowed_failures >= num_failed)
 		return 0;
-	else
+	else {
+		D_ERROR("Domain contains %d failed "
+			"components, allows at most %d", num_failed,
+			num_allowed_failures);
 		return -DER_INVAL;
+	}
 }
 
 static int
@@ -364,7 +368,22 @@ cont_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				daos_prop_entry_dup_ptr(entry_def, entry,
+							daos_acl_get_size(acl));
+				if (entry_def->dpe_val_ptr == NULL)
+					return -DER_NOMEM;
+			}
+			break;
+		case DAOS_PROP_CO_OWNER:
+		case DAOS_PROP_CO_OWNER_GROUP:
+			D_FREE(entry_def->dpe_str);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_ACL_MAX_PRINCIPAL_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
@@ -475,8 +494,32 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
+		case DAOS_PROP_CO_OWNER:
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner,
+					   &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_owner_group,
+					   &value);
+			if (rc)
+				return rc;
+			break;
 		case DAOS_PROP_CO_ACL:
-			/* TODO: Implement container ACL */
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_acl *acl = entry->dpe_val_ptr;
+
+				d_iov_set(&value, acl, daos_acl_get_size(acl));
+				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_acl,
+						   &value);
+				if (rc)
+					return rc;
+			}
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
@@ -1257,9 +1300,58 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_acl,
+				   &value);
+		if (rc != 0)
+			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
-		prop->dpp_entries[idx].dpe_val_ptr = NULL;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+		       value.iov_buf_len);
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER_GROUP) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner_group,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner group length %zu (> %d).\n",
+				value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
 	}
 
 out:
@@ -1347,7 +1439,22 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				}
 				break;
 			case DAOS_PROP_CO_ACL:
-				/* no container ACL now */
+				if (daos_prop_entry_cmp_acl(entry, iv_entry)
+				    != 0)
+					rc = -DER_IO;
+				break;
+			case DAOS_PROP_CO_OWNER:
+			case DAOS_PROP_CO_OWNER_GROUP:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_ACL_MAX_PRINCIPAL_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN)
+				    != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
 				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
@@ -1358,6 +1465,60 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		daos_prop_free(iv_prop);
 	}
 
+	return rc;
+}
+
+int
+ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		 struct cont *cont, struct container_hdl *hdl,
+		 crt_rpc_t *rpc)
+{
+	struct cont_prop_set_in		*in  = crt_req_get(rpc);
+	daos_prop_t			*prop_in = in->cpsi_prop;
+	daos_prop_t			*prop_old = NULL;
+	daos_prop_t			*prop_iv = NULL;
+	int				rc = 0;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cpsi_op.ci_uuid), rpc,
+		DP_UUID(in->cpsi_op.ci_hdl));
+
+	if (!daos_prop_valid(prop_in, false, true))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	/*
+	 * Can't modify the container props without RW perms to the container.
+	 * TODO DAOS-2063: Update check when set-prop and set-acl capas added.
+	 */
+	if (!(hdl->ch_capas & DAOS_COO_RW))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	/* Read all props for prop IV update */
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read prop for cont, rc=%d\n",
+			DP_UUID(cont->c_uuid), rc);
+		D_GOTO(out, rc);
+	}
+	D_ASSERT(prop_old != NULL);
+	prop_iv = daos_prop_merge(prop_old, prop_in);
+	if (prop_iv == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = cont_prop_write(tx, &cont->c_prop, prop_in);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Update prop IV with merged prop */
+	rc = cont_iv_prop_update(pool_hdl->sph_pool->sp_iv_ns,
+				 in->cpsi_op.ci_hdl, cont->c_uuid, prop_iv);
+	if (rc)
+		D_ERROR(DF_UUID": failed to update prop IV for cont, "
+			"%d.\n", DP_UUID(cont->c_uuid), rc);
+
+out:
+	daos_prop_free(prop_old);
+	daos_prop_free(prop_iv);
 	return rc;
 }
 
@@ -1681,6 +1842,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return ds_cont_snap_create(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_SNAP_DESTROY:
 		return ds_cont_snap_destroy(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_PROP_SET:
+		return ds_cont_prop_set(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}

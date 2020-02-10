@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"strconv"
@@ -43,6 +44,17 @@ const (
 	msgSizeZeroScm  = "non-zero scm size is required"
 	maxNumSvcReps   = 13
 )
+
+// to convert base2->base10
+var mibsInMB float64 = math.Pow(1000, 2) / math.Pow(1024, 2)
+
+// toBase10 converts base 2 ByteSize type to the base 10 equivalent.
+// i.e. if "10G" was specified then the output bytes would be the base 10
+// equivalent of this specified size as opposed to base 2.
+// SSD/NVMe size is conventionally specified as base 10.
+func toBase10(in bytesize.ByteSize) bytesize.ByteSize {
+	return bytesize.New(float64(in) * float64(mibsInMB))
+}
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
@@ -174,9 +186,12 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 		return
 	}
 
+	// NVMe/SSD storage specified in MB (base 10), not Mib (base 2)
+	baseTenNvmeBytes := toBase10(nvmeBytes)
+
 	ratio := 1.00
 	if nvmeBytes > 0 {
-		ratio = float64(scmBytes) / float64(nvmeBytes)
+		ratio = float64(scmBytes) / float64(baseTenNvmeBytes)
 	}
 
 	if ratio < 0.01 {
@@ -185,13 +200,13 @@ func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 				"will suffer!\n")
 	}
 	log.Infof(
-		"Creating DAOS pool with %s SCM and %s NvMe storage "+
+		"Creating DAOS pool with %s SCM and %s NVMe storage "+
 			"(%.3f ratio)\n",
 		scmBytes.Format("%.0f", "", false),
-		nvmeBytes.Format("%.0f", "", false),
+		nvmeBytes.Format("%.0f", "", false), // print what was specified
 		ratio)
 
-	return scmBytes, nvmeBytes, nil
+	return scmBytes, baseTenNvmeBytes, nil
 }
 
 // formatNameGroup converts system names to principal and if both user and group

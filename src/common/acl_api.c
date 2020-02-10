@@ -807,27 +807,13 @@ validate_acl_with_special_perms(struct daos_acl *acl, uint64_t valid_perms)
 int
 daos_acl_pool_validate(struct daos_acl *acl)
 {
-	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
-					DAOS_ACL_PERM_WRITE |
-					DAOS_ACL_PERM_CREATE_CONT |
-					DAOS_ACL_PERM_DEL_CONT;
-
-	return validate_acl_with_special_perms(acl, valid_perms);
+	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_POOL_ALL);
 }
 
 int
 daos_acl_cont_validate(struct daos_acl *acl)
 {
-	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
-					DAOS_ACL_PERM_WRITE |
-					DAOS_ACL_PERM_DEL_CONT |
-					DAOS_ACL_PERM_GET_PROP |
-					DAOS_ACL_PERM_SET_PROP |
-					DAOS_ACL_PERM_GET_ACL |
-					DAOS_ACL_PERM_SET_ACL |
-					DAOS_ACL_PERM_SET_OWNER;
-
-	return validate_acl_with_special_perms(acl, valid_perms);
+	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_CONT_ALL);
 }
 
 static bool
@@ -1058,6 +1044,27 @@ get_perm_string(uint64_t perm)
 	case DAOS_ACL_PERM_WRITE:
 		return "Write";
 
+	case DAOS_ACL_PERM_CREATE_CONT:
+		return "Create Container";
+
+	case DAOS_ACL_PERM_DEL_CONT:
+		return "Delete Container";
+
+	case DAOS_ACL_PERM_GET_PROP:
+		return "Get Prop";
+
+	case DAOS_ACL_PERM_SET_PROP:
+		return "Set Prop";
+
+	case DAOS_ACL_PERM_GET_ACL:
+		return "Get ACL";
+
+	case DAOS_ACL_PERM_SET_ACL:
+		return "Set ACL";
+
+	case DAOS_ACL_PERM_SET_OWNER:
+		return "Set Owner";
+
 	default:
 		break;
 	}
@@ -1185,22 +1192,9 @@ access_matches_flags(struct daos_ace *ace)
 bool
 daos_ace_is_valid(struct daos_ace *ace)
 {
-	uint8_t		valid_types =	DAOS_ACL_ACCESS_ALLOW |
-					DAOS_ACL_ACCESS_AUDIT |
-					DAOS_ACL_ACCESS_ALARM;
-	uint16_t	valid_flags =	DAOS_ACL_FLAG_GROUP |
-					DAOS_ACL_FLAG_POOL_INHERIT |
-					DAOS_ACL_FLAG_ACCESS_FAIL |
-					DAOS_ACL_FLAG_ACCESS_SUCCESS;
-	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
-					DAOS_ACL_PERM_WRITE |
-					DAOS_ACL_PERM_CREATE_CONT |
-					DAOS_ACL_PERM_DEL_CONT |
-					DAOS_ACL_PERM_GET_PROP |
-					DAOS_ACL_PERM_SET_PROP |
-					DAOS_ACL_PERM_GET_ACL |
-					DAOS_ACL_PERM_SET_ACL |
-					DAOS_ACL_PERM_SET_OWNER;
+	uint8_t		valid_types = DAOS_ACL_ACCESS_ALL;
+	uint16_t	valid_flags = DAOS_ACL_FLAG_ALL;
+	uint64_t	valid_perms = DAOS_ACL_PERM_ALL;
 	bool		name_exists;
 	bool		flag_exists;
 
@@ -1209,6 +1203,10 @@ daos_ace_is_valid(struct daos_ace *ace)
 
 	/* Check for invalid bits in bit fields */
 	if (ace->dae_access_types & ~valid_types)
+		return false;
+
+	/* No access type defined */
+	if (ace->dae_access_types == 0)
 		return false;
 
 	if (ace->dae_access_flags & ~valid_flags)

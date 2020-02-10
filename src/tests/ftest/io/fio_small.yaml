@@ -11,7 +11,7 @@ server_config:
   name: daos_server
   servers:
     bdev_class: nvme
-    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 pool:
@@ -20,6 +20,7 @@ pool:
   scm_size: 1600000000
   nvme_size: 20000000000
   svcn: 1
+  control_method: dmg
 fio:
   names:
     - global

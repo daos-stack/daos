@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@
 #include <errno.h>
 #include "suite/daos_test.h"
 
-#define UPDATE_CSUM_SIZE	32
 #define DKEY_SIZE		64
 #define AKEY_SIZE		64
 #define	VAL_BUF_SIZE		64
@@ -135,8 +134,6 @@ struct a_ioreq {
 	daos_recx_t		rex;
 	daos_epoch_range_t	erange;
 	d_sg_list_t		sgl;
-	daos_csum_buf_t		csum;
-	char			csum_buf[UPDATE_CSUM_SIZE];
 	char			*dkey_buf;
 	char			*akey_buf;
 	/* daosbench specific (aio-retrieval) */
@@ -230,17 +227,10 @@ ioreq_init_basic(struct a_ioreq *ioreq, daos_iod_type_t iod_type)
 
 	ioreq->iod.iod_type = iod_type;
 	ioreq->rex.rx_nr = 1;
-
-	ioreq->csum.cs_csum = (uint8_t *) &ioreq->csum_buf;
-	ioreq->csum.cs_buf_len = UPDATE_CSUM_SIZE;
-	ioreq->csum.cs_len = UPDATE_CSUM_SIZE;
-
 	ioreq->erange.epr_hi = DAOS_EPOCH_MAX;
 
 	ioreq->iod.iod_nr = 1;
 	ioreq->iod.iod_recxs = &ioreq->rex;
-	ioreq->iod.iod_csums = &ioreq->csum;
-	ioreq->iod.iod_eprs = &ioreq->erange;
 
 	ioreq->sgl.sg_nr = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;
