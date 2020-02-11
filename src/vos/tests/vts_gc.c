@@ -262,7 +262,7 @@ gc_obj_run(struct gc_test_args *args)
 
 	rc = gc_obj_prepare(args, args->gc_ctx.tsc_coh, oids);
 	if (rc)
-		return rc;
+		goto out;
 
 	gc_print_stat();
 
@@ -276,6 +276,8 @@ gc_obj_run(struct gc_test_args *args)
 	}
 
 	rc = gc_wait_check(args, false);
+out:
+	D_FREE(oids);
 	return rc;
 }
 
