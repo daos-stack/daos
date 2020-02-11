@@ -140,7 +140,7 @@ The checksum feature attempts to provide end-to-end data integrity. On an update
 
 Checksums are configured at the container level and when a client opens a container, the checksum properties will be queried automatically, and, if enabled, both the server and client will init and hold a reference to a [daos_csummer](src/common/README.md) in ds_cont_hdl and dc_cont respectively.
 
-For Array Value Types, the DAOS server might need to calculate new checksums for requested extents. After extents are fetched by the server object layer, the checksums srv_csum 
+For Array Value Types, the DAOS server might need to calculate new checksums for requested extents. After extents are fetched by the server object layer, the checksums srv_csum
 
 #### Object Update
 On an object update (`dc_obj_update`) the client will calculate checksums
@@ -152,7 +152,7 @@ structures that represent the checksums (`dcs_iod_csums`). The checksums will be
 On handling an object fetch (`ds_obj_rw_handler`), the server will allocate memory for the checksums and iod checksum structures. Then during the `vos_fetch_begin` stage, the checksums will be fetched from [VOS](src/vos/README.md). For Array Value Types, the extents fetched will need to be compared to the requested extent and new checksum might need to be calculated. `ds_csum_add2iod` will look at the fetched bio_sglist and the iod request to determine if the stored checksums for the request are sufficient or if new ones need to be calculated. The function `ds_csum_calc_needed` holds the logic to determine this.
 ##### `ds_csum_calc_needed` Logic
 As long as a request includes only chunks for which a checksum is derived, then the server needs only to return the correct checksums with the extent. The following diagrams include examples for which the server needs to only return the correct checksums. In the top example, the request matches the previously written extent exactly. In the bottom example, the server must return the chunks 4-7 and 8-11 from the extent at epoch 2 with its two checksums, and chunk 12-15 from the extent at epoch 1 with its checksum.
-    
+
 ![](../../doc/graph/data_integrity/aligned_request_1.png)
 ![](../../doc/graph/data_integrity/aligned_request_2.png)
 
