@@ -211,7 +211,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(0).
 				WithTargetCount(20).
-				WithHelperStreamCount(0).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(1).
 				WithScmMountPoint("/mnt/daos/1").
 				WithScmClass("ram").
@@ -227,7 +227,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(1).
 				WithTargetCount(20).
-				WithHelperStreamCount(1).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(22).
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
