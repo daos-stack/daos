@@ -98,6 +98,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
+     !env.BRANCH_NAME.startsWith("releases/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
@@ -243,9 +244,6 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/centos7/
                                           mkdir -p artifacts/centos7/
-                                          if git show -s --format=%B | grep "^Skip-build: true"; then
-                                              exit 0
-                                          fi
                                           make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
@@ -256,11 +254,9 @@ pipeline {
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
                                           createrepo artifacts/centos7/
+                                          rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm > centos7-rpm-version
                                           cat $mockroot/result/{root,build}.log'''
-                               script {
-                                   daos_packages_version = sh(script: 'rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm',
-                                      returnStdout: true)
-                               }
+                            stash name: 'CentOS-rpm-version', includes: 'centos7-rpm-version'
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -400,6 +396,7 @@ pipeline {
                                                  build/src/common/tests/acl_util_tests,
                                                  build/src/common/tests/acl_principal_tests,
                                                  build/src/common/tests/acl_real_tests,
+                                                 build/src/common/tests/prop_tests,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
@@ -1041,6 +1038,10 @@ pipeline {
                         label 'ci_vm9'
                     }
                     steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
@@ -1125,6 +1126,10 @@ pipeline {
                         label 'ci_nvme9'
                     }
                     steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
                         // First snapshot provision the VM at beginning of list
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,

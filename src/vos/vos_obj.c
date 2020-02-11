@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 {
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
-	daos_csum_buf_t		 csum;
+	struct dcs_csum_info	 csum;
 	d_iov_t			 riov;
 	int			 rc;
 
@@ -64,7 +64,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_ver	= pm_ver;
 	rbund.rb_csum	= &csum;
-	memset(&csum, 0, sizeof(csum));
+	ci_set_null(&csum);
 
 	if (!akeys) {
 		rbund.rb_iov = dkey;
@@ -306,7 +306,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
 {
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
-	daos_csum_buf_t		 csum;
+	struct dcs_csum_info	 csum;
 
 	tree_rec_bundle2iov(rbund, &riov);
 
@@ -314,7 +314,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
 	rbund->rb_csum	= &csum;
 
 	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
-	dcb_set_null(rbund->rb_csum);
+	ci_set_null(rbund->rb_csum);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 }
@@ -798,7 +798,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	rbund.rb_csum	= &it_entry->ie_csum;
 
 	memset(&it_entry->ie_biov, 0, sizeof(it_entry->ie_biov));
-	dcb_set_null(rbund.rb_csum);
+	ci_set_null(rbund.rb_csum);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 	if (rc)

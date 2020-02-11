@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ from mpio_utils import MpioUtils
 from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 import write_host_file
+
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -83,8 +84,8 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log,
-                             dmg_command=self.get_dmg_command())
+        self.pool = TestPool(
+            self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool

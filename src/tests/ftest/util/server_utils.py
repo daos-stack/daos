@@ -148,7 +148,7 @@ class DaosServer(DaosCommand):
             self.group = FormattedParameter("-g {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
-            self.recreate = FormattedParameter("--recreate-superblocks", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", False)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -325,6 +325,13 @@ class DaosServerConfig(ObjectWithParameters):
                 if value is not None and value is not False:
                     yaml_data["servers"][index][name] = value
 
+        # Don't set scm_size when scm_class is "dcpm"
+        for index in range(len(self.server_params)):
+            srv_cfg = yaml_data["servers"][index]
+            scm_class = srv_cfg.get("scm_class", "ram")
+            if scm_class == "dcpm" and "scm_size" in srv_cfg:
+                del srv_cfg["scm_size"]
+
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
         try:
@@ -366,7 +373,7 @@ class ServerManager(ExecutableCommand):
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.recreate = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, False)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -412,7 +419,8 @@ class ServerManager(ExecutableCommand):
                 if name == "sudo":
                     setattr(self.runner.job, name, getattr(self, name).value)
                 elif name == "srv_timeout":
-                    setattr(self.runner.job, name, getattr(self, name).value)
+                    setattr(
+                        self.runner.job, "timeout", getattr(self, name).value)
                 else:
                     getattr(
                         self.runner.job, name).value = getattr(self, name).value

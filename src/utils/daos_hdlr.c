@@ -999,6 +999,232 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
+static int
+print_acl(FILE *outstream, daos_prop_t *acl_prop, bool verbose)
+{
+	int			rc = 0;
+	struct daos_prop_entry	*entry;
+	struct daos_acl		*acl = NULL;
+	char			**acl_str = NULL;
+	size_t			nr_acl_str;
+	char			verbose_str[DAOS_ACL_MAX_ACE_STR_LEN * 2];
+	size_t			i;
+
+	/*
+	 * Validate the ACL before we start printing anything out.
+	 */
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
+	if (entry != NULL && entry->dpe_val_ptr != NULL) {
+		acl = entry->dpe_val_ptr;
+		rc = daos_acl_to_strs(acl, &acl_str, &nr_acl_str);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Invalid ACL cannot be displayed\n");
+			return rc;
+		}
+	}
+
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
+	if (entry != NULL && entry->dpe_str != NULL)
+		fprintf(outstream, "# Owner: %s\n", entry->dpe_str);
+
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry != NULL && entry->dpe_str != NULL)
+		fprintf(outstream, "# Owner-Group: %s\n", entry->dpe_str);
+
+	fprintf(outstream, "# Entries:\n");
+
+	if (acl == NULL || acl->dal_len == 0) {
+		fprintf(outstream, "#   None\n");
+		return 0;
+	}
+
+	for (i = 0; i < nr_acl_str; i++) {
+		if (verbose) {
+			rc = daos_ace_str_get_verbose(acl_str[i], verbose_str,
+						      sizeof(verbose_str));
+			/*
+			 * If the ACE is invalid, we'll still print it out -
+			 * we just can't parse it to any helpful verbose string.
+			 */
+			if (rc != -DER_INVAL)
+				fprintf(outstream, "# %s\n", verbose_str);
+		}
+		fprintf(outstream, "%s\n", acl_str[i]);
+	}
+
+	return 0;
+}
+
+int
+cont_get_acl_hdlr(struct cmd_args_s *ap)
+{
+	int		rc;
+	daos_prop_t	*prop = NULL;
+	struct stat	sb;
+	FILE		*outstream = stdout;
+
+	if (ap->outfile) {
+		if (!ap->force && (stat(ap->outfile, &sb) == 0)) {
+			fprintf(stderr,
+				"Unable to create output file: File already "
+				"exists\n");
+			return -DER_EXIST;
+		}
+
+		outstream = fopen(ap->outfile, "w");
+		if (outstream == NULL) {
+			fprintf(stderr, "Unable to create output file: %s\n",
+				strerror(errno));
+			return daos_errno2der(errno);
+		}
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to get ACL for container: %d\n", rc);
+	} else {
+		rc = print_acl(outstream, prop, ap->verbose);
+		if (ap->outfile)
+			fprintf(stdout, "Wrote ACL to output file: %s\n",
+				ap->outfile);
+	}
+
+	if (ap->outfile)
+		fclose(outstream);
+	daos_prop_free(prop);
+	return rc;
+}
+
+/*
+ * Returns a substring of the line with leading and trailing whitespace trimmed.
+ * Doesn't allocate any new memory - trimmed string is just a pointer.
+ */
+static char *
+trim_acl_file_line(char *line)
+{
+	char *end;
+
+	while (isspace(*line))
+		line++;
+	if (line[0] == '\0')
+		return line;
+
+	end = line + strnlen(line, DAOS_ACL_MAX_ACE_STR_LEN) - 1;
+	while (isspace(*end))
+		end--;
+	end[1] = '\0';
+
+	return line;
+}
+
+static int
+parse_acl_file(const char *path, struct daos_acl **acl)
+{
+	int		rc = 0;
+	FILE		*instream;
+	char		*line = NULL;
+	size_t		line_len = 0;
+	char		*trimmed;
+	struct daos_ace	*ace;
+	struct daos_acl	*tmp_acl;
+
+	instream = fopen(path, "r");
+	if (instream == NULL) {
+		fprintf(stderr, "Unable to read ACL input file '%s': %s\n",
+			path, strerror(errno));
+		return daos_errno2der(errno);
+	}
+
+	tmp_acl = daos_acl_create(NULL, 0);
+	if (tmp_acl == NULL) {
+		fprintf(stderr, "Unable to allocate memory for ACL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	while (getline(&line, &line_len, instream) != -1) {
+		trimmed = trim_acl_file_line(line);
+
+		/* ignore blank lines and comments */
+		if (trimmed[0] == '\0' || trimmed[0] == '#') {
+			D_FREE(line);
+			continue;
+		}
+
+		rc = daos_ace_from_str(trimmed, &ace);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Error parsing ACE '%s' from file: %s (%d)\n",
+				trimmed, d_errstr(rc), rc);
+			D_GOTO(parse_err, rc);
+		}
+
+		rc = daos_acl_add_ace(&tmp_acl, ace);
+		daos_ace_free(ace);
+		if (rc != 0) {
+			fprintf(stderr, "Error parsing ACL file: %s (%d)\n",
+				d_errstr(rc), rc);
+			D_GOTO(parse_err, rc);
+		}
+
+		D_FREE(line);
+	}
+
+	if (daos_acl_validate(tmp_acl) != 0) {
+		fprintf(stderr, "Content of ACL file is invalid\n");
+		D_GOTO(parse_err, rc = -DER_INVAL);
+	}
+
+	*acl = tmp_acl;
+	D_GOTO(out, rc = 0);
+
+parse_err:
+	D_FREE(line);
+	daos_acl_free(tmp_acl);
+out:
+	fclose(instream);
+	return rc;
+}
+
+int
+cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
+{
+	int		rc;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*prop_out;
+
+	if (!ap->aclfile) {
+		fprintf(stderr,
+			"Parameter --acl-file is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = parse_acl_file(ap->aclfile, &acl);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to overwrite ACL for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"overwrite appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
+
+
 int
 obj_query_hdlr(struct cmd_args_s *ap)
 {
