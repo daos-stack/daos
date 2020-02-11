@@ -94,6 +94,8 @@ struct cmd_args_s {
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
+	char			*user;		/* --user name */
+	char			*group;		/* --group name */
 	bool			verbose;	/* --verbose mode */
 };
 
