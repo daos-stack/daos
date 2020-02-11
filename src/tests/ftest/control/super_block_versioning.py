@@ -25,7 +25,7 @@ from __future__ import print_function
 
 import os
 
-from general_utils import check_file_exists
+from general_utils import check_file_exists, pcmd
 from apricot import TestWithServers
 
 
@@ -37,7 +37,7 @@ class SuperBlockVersioning(TestWithServers):
 
     def test_super_block_version_basic(self):
         """
-        JIRA ID: DAOS-2895
+        JIRA ID: DAOS-3648
         Test Description: Basic test to verify that superblock file is
         versioned.
         :avocado: tags=all,tiny,pr,ds_versioning,basic
@@ -50,14 +50,10 @@ class SuperBlockVersioning(TestWithServers):
         if not check_result[0]:
             self.fail("%s: %s not found", check_result[1], fname)
 
-        # Make sure that 'version' is in the file.
-        ver = False
-        fp = open(fname, 'r')
-        for line in fp.readlines():
-            if "version" in line:
-                ver = True
-                self.log.info(
-                    "Found version in superblock file: %s", line.split()[1])
+        # Make sure that 'version' is in the file, run task to check
+        cmd = "cat {} | grep -F \"version\"".format(fname)
+        result = pcmd(self.hostlist_servers, cmd, timeout=20)
 
-        if not ver:
+        # Determine if the command completed successfully across all the hosts
+        if len(result) > 1 or 1 not in result:
             self.fail("Was not able to find version in {} file".format(fname))
