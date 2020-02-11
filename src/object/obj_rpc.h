@@ -123,11 +123,13 @@ enum obj_rpc_flags {
 	ORF_RESEND		= (1 << 1),
 	/** Commit DTX synchronously. */
 	ORF_DTX_SYNC		= (1 << 2),
+	/** Reports prior fetch CSUM mismatch */
+	ORF_CSUM_REPORT		= (1 << 3),
 	/**
 	 * Erasure coding flag, to avoid server recheck from oca,
 	 * now only used for single value EC handling.
 	 */
-	ORF_EC			= (1 << 3),
+	ORF_EC			= (1 << 4),
 };
 
 struct obj_iod_array {

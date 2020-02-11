@@ -1277,6 +1277,23 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+
+/* Call internal method to increment CSUM media error. */
+static void
+obj_log_csum_err(void)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
+
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_log_csum_err(bxc, info->dmi_tgt_id);
+}
+
 void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
@@ -1318,6 +1335,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	if (obj_rpc_is_fetch(rpc)) {
+		if (orw->orw_flags & ORF_CSUM_REPORT) {
+			obj_log_csum_err();
+			D_GOTO(out, rc = -DER_CSUM);
+		}
+
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
 				  NULL, NULL, NULL);
 		if (rc != 0) {
