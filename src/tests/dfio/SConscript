@@ -1,4 +1,4 @@
-"""Build dfio plugin"""
+"""Build daos fio engine"""
 import os
 import daos_build
 
@@ -14,16 +14,15 @@ def scons():
     if not os.path.exists(os.path.join(env.subst("$FIO_SRC"), "fio.h")):
         return
 
-    #build fio_engine libs
-    denv.AppendUnique(CPPPATH = ["$FIO_SRC"])
+    denv.AppendUnique(CPPPATH=["$FIO_SRC"])
     denv.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -O0")
     denv.AppendUnique(LIBPATH=[Dir("../../client/dfs")])
 
-    # daos fio engine    
-    daos_fio = daos_build.library(denv,'daos_fio', ['daos_fio.c'], LIBS=libs)
+    # daos fio engine
+    daos_fio = daos_build.library(denv, 'daos_fio', ['daos_fio.c'], LIBS=libs)
     denv.Install('$PREFIX/share/daos/fio_engine', daos_fio)
 
-    daos_fio_async = daos_build.library(denv,'daos_fio_async',
+    daos_fio_async = daos_build.library(denv, 'daos_fio_async',
                                         ['daos_fio_async.c'], LIBS=libs)
     denv.Install('$PREFIX/share/daos/fio_engine', daos_fio_async)
 
