@@ -25,7 +25,6 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
 
@@ -115,8 +114,7 @@ class BadCreateTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
         # Manually set TestPool members before calling create
         self.pool.mode.value = mode

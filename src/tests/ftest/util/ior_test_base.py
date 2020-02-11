@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ from ior_utils import IorCommand
 from command_utils import CommandFailure
 from job_manager_utils import Mpich
 from mpio_utils import MpioUtils
-from test_utils_pool import TestPool
 from dfuse_utils import Dfuse
 from daos_utils import create_container
 from general_utils import get_test_file
@@ -78,15 +77,6 @@ class IorTestBase(TestWithServers):
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
-
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        # Get the pool params
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
@@ -177,7 +167,7 @@ class IorTestBase(TestWithServers):
         """Update ior_cmd with pool."""
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self.add_pool(connect=False)
         # Update IOR params with the pool
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
 

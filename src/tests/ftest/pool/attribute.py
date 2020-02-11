@@ -31,7 +31,6 @@ from apricot import TestWithServers
 
 from general_utils import DaosTestError
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
 
 # pylint: disable=global-variable-not-assigned, global-statement
 
@@ -40,17 +39,30 @@ GLOB_RC = -99000000
 
 
 def cb_func(event):
-    """Callback Function for asynchronous mode."""
+    """Call back function for asynchronous mode."""
     global GLOB_SIGNAL
     global GLOB_RC
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
 
 
+def create_data_set():
+    """To create the large attribute dictionary.
+
+    Returns:
+        dict: a large attribute dictionary
+
+    """
+    large_data_set = {}
+    allchar = string.ascii_letters + string.digits
+    for i in range(1024):
+        large_data_set[str(i)] = "".join(
+            random.choice(allchar) for x in range(random.randint(1, 100)))
+    return large_data_set
+
+
 def verify_list_attr(indata, size, buff):
-    """
-    verify the length of the Attribute names
-    """
+    """Verify the length of the attribute names."""
     # length of all the attribute names
     aggregate_len = sum(len(attr_name) for attr_name in indata.keys()) + 1
     # there is a space between each name, so account for that
@@ -69,9 +81,7 @@ def verify_list_attr(indata, size, buff):
 
 
 def verify_get_attr(indata, outdata):
-    """
-    verify the Attributes value after get_attr
-    """
+    """Verify the Attributes value after get_attr."""
     for attr, value in indata.iteritems():
         if value != outdata[attr]:
             raise DaosTestError("FAIL: Value does not match after get attr,"
@@ -80,41 +90,23 @@ def verify_get_attr(indata, outdata):
 
 
 class PoolAttributeTest(TestWithServers):
-    """
-    Test class Description: Tests DAOS pool attribute get/set/list.
+    """Pool attribute test cases.
+
+    Test class Description:
+        Tests DAOS pool attribute get/set/list.
+
     :avocado: recursive
     """
 
-    def setUp(self):
-        super(PoolAttributeTest, self).setUp()
-
-        self.large_data_set = {}
-
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
-
-    def create_data_set(self):
-        """
-        To create the large attribute dictionary
-        """
-        allchar = string.ascii_letters + string.digits
-        for i in range(1024):
-            self.large_data_set[str(i)] = (
-                "".join(random.choice(allchar)
-                        for x in range(random.randint(1, 100))))
-
     def test_pool_large_attributes(self):
-        """
-        Test ID: DAOS-1359
+        """Test ID: DAOS-1359.
 
         Test description: Test large randomly created pool attribute.
 
-        :avocado: tags=regression,pool,pool_attr,attribute,large_poolattribute
+        :avocado: tags=all,pool,full_regression,tiny,large_poolattribute
         """
-        self.create_data_set()
-        attr_dict = self.large_data_set
+        self.add_pool()
+        attr_dict = create_data_set()
 
         try:
             self.pool.pool.set_attr(data=attr_dict)
@@ -131,13 +123,13 @@ class PoolAttributeTest(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
 
     def test_pool_attributes(self):
-        """
-        Test ID: DAOS-1359
+        """Test ID: DAOS-1359.
 
         Test description: Test basic pool attribute tests (sync).
 
         :avocado: tags=all,pool,pr,tiny,sync_poolattribute
         """
+        self.add_pool()
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
@@ -174,8 +166,7 @@ class PoolAttributeTest(TestWithServers):
                 self.fail("Test was expected to pass but it failed.\n")
 
     def test_pool_attribute_asyn(self):
-        """
-        Test ID: DAOS-1359
+        """Test ID: DAOS-1359.
 
         Test description: Test basic pool attribute tests (async).
 
@@ -184,6 +175,7 @@ class PoolAttributeTest(TestWithServers):
         global GLOB_SIGNAL
         global GLOB_RC
 
+        self.add_pool()
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         # workaround until async functions are fixed

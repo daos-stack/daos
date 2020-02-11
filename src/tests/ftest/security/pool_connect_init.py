@@ -26,8 +26,7 @@ import os
 import traceback
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
+
 
 class PoolSecurityTest(TestWithServers):
     """
@@ -37,8 +36,8 @@ class PoolSecurityTest(TestWithServers):
     """
 
     def test_poolconnect(self):
-        """
-        Test basic pool security in pool creation and connect.
+        """Test basic pool security in pool creation and connect.
+
         DAOS-2930: DAOS security: initial tests pool creation with default
                    ACL and connect.
         Tests DAOS pools creation, and connect with:
@@ -54,8 +53,7 @@ class PoolSecurityTest(TestWithServers):
         user_uid = os.geteuid()
         user_gid = os.getegid()
 
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
         uid, gid, expected = self.params.get("ids", "/run/pool/tests/*")
 

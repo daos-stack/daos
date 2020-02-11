@@ -23,7 +23,6 @@
 """
 from apricot import TestWithServers
 from command_utils import ObjectWithParameters, BasicParameter
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
@@ -67,8 +66,7 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""

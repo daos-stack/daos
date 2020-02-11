@@ -45,7 +45,7 @@ class TestPool(TestDaosApiBase):
     USE_API = "API"
     USE_DMG = "dmg"
 
-    def __init__(self, context, log=None, cb_handler=None, dmg=None):
+    def __init__(self, context, log=None, cb_handler=None, dmg_command=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -56,9 +56,10 @@ class TestPool(TestDaosApiBase):
             log (logging): logging object used to report the pool status
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            dmg (DaosCommand, optional): DaosCommand object, already configured
-                to comunicate with the daos servers, used to create and destroy
-                pools if so configured (see control_method). Defaults to None.
+            dmg_command (DaosCommand, optional): DaosCommand object, already
+                configured to comunicate with the daos servers, used to create
+                and destroy pools if so configured (see control_method).
+                Defaults to None.
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
@@ -81,7 +82,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-        self.dmg = dmg
+        self.dmg = dmg_command
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)

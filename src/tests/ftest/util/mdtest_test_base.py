@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils import CommandFailure
@@ -73,15 +72,6 @@ class MdtestBase(TestWithServers):
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
-
-    def _create_pool(self):
-        """Create a pool and execute Mdtest."""
-        # Get the pool params
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
 
     def _create_cont(self):
         """Create a TestContainer object to be used to create container."""
@@ -137,7 +127,7 @@ class MdtestBase(TestWithServers):
         """Runner method for Mdtest."""
         # Create a pool if one does not already exist
         if self.pool is None:
-            self._create_pool()
+            self.add_pool(connect=False)
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 

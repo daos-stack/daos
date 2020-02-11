@@ -26,7 +26,6 @@ import traceback
 
 from apricot import TestWithServers
 from pydaos.raw import DaosServer
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
 RESULT_PASS = "PASS"
@@ -52,9 +51,8 @@ class PoolSvc(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
-        self.pool.svcn.update(createsvc[0])
+        self.add_pool(create=False)
+        self.pool.svcn.update(createsvc[0], "pool.svc")
         try:
             self.pool.create()
             if expected_result == RESULT_FAIL:

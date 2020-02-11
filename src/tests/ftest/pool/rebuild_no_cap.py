@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from apricot import TestWithServers, skipForTicket
-from test_utils_pool import TestPool
 
 
 class RebuildNoCap(TestWithServers):
@@ -48,13 +47,11 @@ class RebuildNoCap(TestWithServers):
         :avocado: tags=all,medium,pr,pool,rebuild,nocap
         """
         # Get the test params
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
-        self.pool.create()
+        self.add_pool(connect=False)
 
         # Display pool size before write
         self.pool.display_pool_daos_space("before write")

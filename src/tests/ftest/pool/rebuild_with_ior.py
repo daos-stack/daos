@@ -26,21 +26,24 @@ from __future__ import print_function
 from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
-#pylint: disable=R0903
+
 class RebuildWithIOR(IorTestBase):
-    """
-    This class contains tests for pool rebuild that feature I/O going on
-    during the rebuild using IOR.
+    # pylint: disable=too-few-public-methods,too-many-ancestors
+    """Rebuild with IOR test cases.
+
+    Test Class Description:
+        This class contains tests for pool rebuild that feature I/O going on
+        during the rebuild using IOR.
+
     :avocado: recursive
     """
 
     @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
-        """
-        Jira ID: DAOS-951
+        """Jira ID: DAOS-951.
 
-        Test Description: Trigger a rebuild while I/O is ongoing.
-                          I/O performed using IOR.
+        Test Description:
+            Trigger a rebuild while I/O is ongoing I/O performed using IOR.
 
         Use Cases:
           -- single pool, single client performing continous read/write/verify
@@ -48,7 +51,6 @@ class RebuildWithIOR(IorTestBase):
 
         :avocado: tags=all,pr,small,pool,rebuild,rebuildwithior
         """
-
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
@@ -60,7 +62,7 @@ class RebuildWithIOR(IorTestBase):
         file2 = "daos:testFile2"
 
         # create pool
-        self.create_pool()
+        self.add_pool()
 
         # make sure pool looks good before we start
         checks = {

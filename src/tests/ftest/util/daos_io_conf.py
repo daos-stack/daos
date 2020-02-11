@@ -28,13 +28,14 @@ from avocado.utils import process
 from apricot import TestWithServers
 from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
 from command_utils import BasicParameter
-from test_utils import TestPool
+
 
 class IoConfGen(ExecutableCommand):
-    """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
+    """Define an object for the daos_gen_io_conf and daos_run_io_conf commands.
 
     :avocado: recursive
     """
+
     def __init__(self, path="", env=None):
         """Create a ExecutableCommand object.
 
@@ -86,9 +87,9 @@ class IoConfGen(ExecutableCommand):
             self.log.error(msg)
             raise CommandFailure(msg)
 
+
 def gen_unaligned_io_conf(record_size, filename="testfile"):
-    """
-    Generate the data-set file based on record size.
+    """Generate the data-set file based on record size.
 
     Args:
         record_size(Number): Record Size to fill the data.
@@ -106,12 +107,8 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
         "update --tx 1 --recx \"[{}, {}]123\""
         .format(rand_ofs_start, rand_ofs_end),
-        "fetch  --tx 1 -v --recx \"[0, {}]045 [{}, {}]123 [{}, {}]045\""
-        .format(rand_ofs_start,
-                rand_ofs_start,
-                rand_ofs_end,
-                rand_ofs_end,
-                record_size),
+        "fetch  --tx 1 -v --recx \"[0, {0}]045 [{0}, {1}]123 [{1}, {2}]045\""
+        .format(rand_ofs_start, rand_ofs_end, record_size),
         "pool --query")
 
     try:
@@ -121,42 +118,34 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
     except Exception as error:
         raise error
 
+
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
     :avocado: recursive
     """
 
-    def setup_test_pool(self):
-        """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-
     def execute_io_conf_run_test(self):
-        """
-        Execute the rebuild test steps.
-        """
-        self.setup_test_pool()
+        """Execute the rebuild test steps."""
+        self.add_pool(create=False)
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
         io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
         io_conf.get_params(self)
         io_conf.run()
-        #Run test file using daos_run_io_conf
+        # Run test file using daos_run_io_conf
         io_conf.run_conf()
 
     def unaligned_io(self):
-        """
-        Execute the unaligned IO test steps.
-        """
+        """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
-        #Setup the pool
-        self.setup_test_pool()
+        # Setup the pool
+        self.add_pool(create=False)
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
         io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
         io_conf.get_params(self)
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
-            #create unaligned test data set
+            # Create unaligned test data set
             gen_unaligned_io_conf(record_size)
-            #Run test file using daos_run_io_conf
+            # Run test file using daos_run_io_conf
             io_conf.run_conf()

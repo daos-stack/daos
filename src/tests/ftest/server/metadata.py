@@ -30,7 +30,7 @@ import avocado
 
 try:
     # python 3.x
-    import queue as queue
+    import queue
 except ImportError:
     # python 2.7
     import Queue as queue
@@ -40,7 +40,6 @@ from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import CommandFailure
 from job_manager_utils import OpenMPI
-from test_utils_pool import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
 
@@ -81,16 +80,6 @@ class ObjectMetadata(TestWithServers):
         super(ObjectMetadata, self).__init__(*args, **kwargs)
         self.out_queue = None
 
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super(ObjectMetadata, self).setUp()
-
-        # Create a pool
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.pool.create()
-
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
 
@@ -126,6 +115,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,metadata,pr,small,metadatafill
         """
+        # Create a pool
+        self.add_pool(connect=False)
         self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
@@ -159,6 +150,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=metadata,metadata_free_space,nvme,small
         """
+        # Create a pool
+        self.add_pool(connect=False)
         self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
@@ -189,6 +182,9 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=metadata,metadata_ior,nvme,small
         """
+        # Create a pool
+        self.add_pool(connect=False)
+
         files_per_thread = 400
         total_ior_threads = 5
         self.out_queue = queue.Queue()

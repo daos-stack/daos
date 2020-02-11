@@ -10,7 +10,7 @@ I/O, advanced data protection with self-healing, end-to-end data
 integrity, fine-grained data control, and elastic storage, to optimize
 performance and cost.
 
-This administration guide version is associated with DAOS v0.7.
+This administration guide version is associated with DAOS v0.9.
 
 ## Additional Documentation
 
@@ -21,6 +21,5 @@ Refer to the following documentation for architecture and description:
 |DAOS Internals       |https://github.com/daos-stack/daos/blob/master/src/README.md
 |DAOS Storage Model   |<https://github.com/daos-stack/daos/blob/master/doc/storage_model.md>
 |Community Roadmap    |https://wiki.hpdd.intel.com/display/DC/Roadmap
-                           
 
 [^1]: <https://grpc.io/>

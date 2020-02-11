@@ -25,7 +25,6 @@ import traceback
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from test_utils_pool import TestPool
 
 
 class BadQueryTest(TestWithServers):
@@ -70,10 +69,7 @@ class BadQueryTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool()
 
         # trash the pool handle value
         if not handle == 'VALID':

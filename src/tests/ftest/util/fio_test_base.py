@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from fio_utils import FioCommand
 from command_utils import CommandFailure, EnvironmentVariables
 from dfuse_utils import Dfuse
@@ -72,16 +71,6 @@ class FioBase(TestWithServers):
             # Stop the servers and agents
             super(FioBase, self).tearDown()
 
-    def _create_pool(self):
-        """Create a pool and execute Fio."""
-        # Get the pool params
-        # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
     def _create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
@@ -128,7 +117,7 @@ class FioBase(TestWithServers):
         """Runner method for Fio."""
         # Create a pool if one does not already exist
         if self.pool is None:
-            self._create_pool()
+            self.add_pool(connect=False)
 
         # start dfuse if api is POSIX
         if self.fio_cmd.api.value == "POSIX":

@@ -27,7 +27,6 @@ import traceback
 from apricot import TestWithServers
 import check_for_pool
 from pydaos.raw import DaosPool, DaosContainer, DaosApiError
-from test_utils_pool import TestPool
 
 
 class GlobalHandle(TestWithServers):
@@ -76,15 +75,11 @@ class GlobalHandle(TestWithServers):
         """
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool()
 
         try:
             # create a container just to make sure handle is good
-            self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
+            self.add_container(self.pool)
 
             # create a global handle
             iov_len, buf_len, buf = self.pool.pool.local2global()

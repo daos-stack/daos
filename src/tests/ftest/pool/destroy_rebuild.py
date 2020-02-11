@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from apricot import TestWithServers, skipForTicket
-from test_utils_pool import TestPool
 
 
 class DestroyRebuild(TestWithServers):
@@ -48,8 +47,7 @@ class DestroyRebuild(TestWithServers):
         :avocado: tags=all,pr,medium,pool,destroypoolrebuild
         """
         # Get the test parameters
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
 

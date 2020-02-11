@@ -22,8 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 
 class SimpleCreateDeleteTest(TestWithServers):
@@ -46,9 +44,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
 
         # Check that the pool was created
         self.assertTrue(
@@ -59,9 +55,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         self.pool.connect()
 
         # Create a container
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-        self.container.create()
+        self.add_container(self.pool)
 
         # TO Be Done:the cont info needs update (see C version daos_cont_info_t)
         # Open and query the container.Verify the UUID & No of Snapshot.

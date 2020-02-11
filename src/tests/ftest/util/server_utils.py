@@ -697,7 +697,7 @@ class DaosServerCommand(YamlCommand):
 
 
 class DaosServerManager(SubprocessManager):
-    """Manages the daos_server execution on one or more hosts using orterun."""
+    """Manages the daos_server execution on one or more hosts."""
 
     def __init__(self, server_command, manager="OpenMPI"):
         """Initialize a DaosServerManager object.
@@ -739,8 +739,8 @@ class DaosServerManager(SubprocessManager):
                 storage. Defaults to True.
         """
         self.log.info(
-            "--- PREPARING SERVERS ON %s ---",
-            ", ".join([host.upper() for host in self._hosts]))
+            "<SERVER> Preparing to start daos_server on %s with %s",
+            self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
         self.manager.job.create_yaml_file()
@@ -758,10 +758,14 @@ class DaosServerManager(SubprocessManager):
 
         # Make sure log file has been created for ownership change
         if self.manager.job.using_nvme:
-            log_file = self.manager.job.get_config_value("log_file")
-            if log_file is not None:
-                self.log.info("Creating log file: %s", log_file)
-                pcmd(self._hosts, "touch {}".format(log_file), False)
+            cmd_list = []
+            for server_params in self.manager.job.yaml.server_params:
+                log_file = server_params.log_file.value
+                if log_file is not None:
+                    self.log.info("Creating log file: %s", log_file)
+                    cmd_list.append("touch {}".format(log_file))
+            if cmd_list:
+                pcmd(self._hosts, "; ".join(cmd_list), False)
 
         if storage:
             # Prepare server storage
@@ -771,83 +775,6 @@ class DaosServerManager(SubprocessManager):
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update(
                         {"plm_rsh_args": "-l root"}, "orterun.mca", True)
-
-    def start(self):
-        """Start the server through the runner."""
-        # Prepare the servers
-        self.prepare()
-
-        # Start the servers and wait for each host to require a SCM format
-        self.log.info(
-            "--- STARTING SERVERS ON %s ---",
-            ", ".join([host.upper() for host in self._hosts]))
-
-        # Start the servers and wait for them to be ready for storage format
-        self.detect_format_ready()
-
-        # Format storage and wait for server to change ownership
-        self.log.info("Formatting hosts: <%s>", self._hosts)
-        self.dmg.storage_format()
-
-        # Wait for all the doas_io_servers to start
-        self.detect_io_server_start()
-
-        return True
-
-    def detect_format_ready(self):
-        """Detect when all the daos_servers are ready for storage format."""
-        self.log.info("Waiting for servers to be ready for format")
-        self.manager.job.update_pattern("format", len(self._hosts))
-        try:
-            self.manager.run()
-        except CommandFailure as error:
-            self.kill()
-            raise ServerFailed(
-                "Failed to start servers before format: {}".format(error))
-
-    def detect_io_server_start(self):
-        """Detect when all the daos_io_servers have started."""
-        self.log.info("Waiting for the daos_io_servers to start")
-        self.manager.job.update_pattern("normal", len(self._hosts))
-        if not self.manager.job.check_subprocess_status(self.manager.process):
-            self.kill()
-            raise ServerFailed("Failed to start servers after format")
-
-        # Update the dmg command host list to work with pool create/destroy
-        self.dmg.hostlist.update(
-            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
-
-    def stop(self):
-        """Stop the server through the runner."""
-        self.log.info("Stopping server orterun command")
-
-        # Maintain a running list of errors detected trying to stop
-        messages = []
-
-        # Stop the subprocess running the orterun command
-        try:
-            super(DaosServerManager, self).stop()
-        except CommandFailure as error:
-            messages.append(
-                "Error stopping the orterun subprocess: {}".format(error))
-
-        # Kill any leftover processes that may not have been stopped correctly
-        self.kill()
-
-        if self.manager.job.using_nvme:
-            # Reset the storage
-            try:
-                self.reset_storage()
-            except ServerFailed as error:
-                messages.append(str(error))
-
-            # Make sure the mount directory belongs to non-root user
-            self.set_scm_mount_ownership()
-
-        # Report any errors after all stop actions have been attempted
-        if messages:
-            raise ServerFailed(
-                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
     def clean_files(self, verbose=True):
         """Clean up the daos server files.
@@ -872,20 +799,39 @@ class DaosServerManager(SubprocessManager):
 
             if self.manager.job.using_dcpm:
                 scm_list = server_params.get_value("scm_list")
-                if isinstance(server_params.scm_list.value, list):
-                    for device in scm_list:
-                        self.log.info("Cleaning up the %s device.", str(device))
-                        cmd = "sudo wipefs -a {}".format(device)
-                        if cmd not in clean_cmds:
-                            clean_cmds.append(cmd)
+                if isinstance(scm_list, list):
+                    self.log.info(
+                        "Cleaning up the following device(s): %s.",
+                        ", ".join(scm_list))
+                    # Umount and wipefs the dcpm device
+                    cmd_list = [
+                        "for dev in {}".format(" ".join(scm_list)),
+                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                        "if [ ! -z $mount ]",
+                        "then while sudo umount $mount",
+                        "do continue",
+                        "done",
+                        "fi",
+                        "sudo wipefs -a $dev",
+                        "done"
+                    ]
+                    cmd = "; ".join(cmd_list)
+                    if cmd not in clean_cmds:
+                        clean_cmds.append(cmd)
 
         pcmd(self._hosts, "; ".join(clean_cmds), verbose)
 
-    def prepare_storage(self, user):
+    def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
 
         Args:
             user (str): username
+            using_dcpm (bool, optional): override option to prepare scm storage.
+                Defaults to None, which uses the configuration file to determine
+                if scm storage should be formatted.
+            using_nvme (bool, optional): override option to prepare nvme
+                storage. Defaults to None, which uses the configuration file to
+                determine if nvme storage should be formatted.
 
         Raises:
             ServerFailed: if there was an error preparing the storage
@@ -899,23 +845,52 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        if self.manager.job.using_dcpm and not self.manager.job.using_nvme:
+        # Use the configuration file settings if no overrides specified
+        if using_dcpm is None:
+            using_dcpm = self.manager.job.using_dcpm
+        if using_nvme is None:
+            using_nvme = self.manager.job.using_nvme
+
+        if using_dcpm and not using_nvme:
             cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif not self.manager.job.using_dcpm and self.manager.job.using_nvme:
+        elif not using_dcpm and using_nvme:
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
-        if self.manager.job.using_nvme:
+        if using_nvme:
             cmd.sub_command_class.sub_command_class.hugepages.value = 4096
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
         if len(result) > 1 or 0 not in result:
             dev_type = "nvme"
-            if self.manager.job.using_dcpm and self.manager.job.using_nvme:
+            if using_dcpm and using_nvme:
                 dev_type = "dcpm & nvme"
-            elif self.manager.job.using_dcpm:
+            elif using_dcpm:
                 dev_type = "dcpm"
             raise ServerFailed("Error preparing {} storage".format(dev_type))
+
+    def detect_format_ready(self):
+        """Detect when all the daos_servers are ready for storage format."""
+        self.log.info("<SERVER> Waiting for servers to be ready for format")
+        self.manager.job.update_pattern("format", len(self._hosts))
+        try:
+            self.manager.run()
+        except CommandFailure as error:
+            self.kill()
+            raise ServerFailed(
+                "Failed to start servers before format: {}".format(error))
+
+    def detect_io_server_start(self):
+        """Detect when all the daos_io_servers have started."""
+        self.log.info("<SERVER> Waiting for the daos_io_servers to start")
+        self.manager.job.update_pattern("normal", len(self._hosts))
+        if not self.manager.job.check_subprocess_status(self.manager.process):
+            self.kill()
+            raise ServerFailed("Failed to start servers after format")
+
+        # Update the dmg command host list to work with pool create/destroy
+        self.dmg.hostlist.update(
+            ",".join(self.get_config_value("access_points")), "dmg.hostlist")
 
     def reset_storage(self):
         """Reset the server storage.
@@ -938,20 +913,78 @@ class DaosServerManager(SubprocessManager):
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
 
-    def set_scm_mount_ownership(self, user=None):
+    def set_scm_mount_ownership(self, user=None, verbose=False):
         """Set the ownership to the specified user for each scm mount.
 
         Args:
             user (str, optional): user name. Defaults to None - current user.
+            verbose (bool, optional): display commands. Defaults to False.
         """
         user = getpass.getuser() if user is None else user
-        scm_mount = self.manager.job.get_config_value("scm_mount")
 
-        # Support single or multiple scm_mount points
-        if not isinstance(scm_mount, list):
-            scm_mount = [scm_mount]
+        cmd_list = set()
+        for server_params in self.manager.job.yaml.server_params:
+            scm_mount = server_params.scm_mount.value
 
+            # Support single or multiple scm_mount points
+            if not isinstance(scm_mount, list):
+                scm_mount = [scm_mount]
+
+            self.log.info("Changing ownership to %s for: %s", user, scm_mount)
+            cmd_list.add(
+                "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+
+        if cmd_list:
+            pcmd(self._hosts, "; ".join(cmd_list), verbose)
+
+    def start(self):
+        """Start the server through the job manager."""
+        # Prepare the servers
+        self.prepare()
+
+        # Start the servers and wait for them to be ready for storage format
+        self.detect_format_ready()
+
+        # Format storage and wait for server to change ownership
         self.log.info(
-            "Changing ownership to %s for: %s", user, ", ".join(scm_mount))
-        cmd = "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount))
-        pcmd(self._hosts, cmd, False)
+            "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist.value)
+        self.dmg.storage_format()
+
+        # Wait for all the doas_io_servers to start
+        self.detect_io_server_start()
+
+        return True
+
+    def stop(self):
+        """Stop the server through the runner."""
+        self.log.info(
+            "<SERVER> Stopping server %s command", self.manager.command)
+
+        # Maintain a running list of errors detected trying to stop
+        messages = []
+
+        # Stop the subprocess running the job manager command
+        try:
+            super(DaosServerManager, self).stop()
+        except CommandFailure as error:
+            messages.append(
+                "Error stopping the {} subprocess: {}".format(
+                    self.manager.command, error))
+
+        # Kill any leftover processes that may not have been stopped correctly
+        self.kill()
+
+        if self.manager.job.using_nvme:
+            # Reset the storage
+            try:
+                self.reset_storage()
+            except ServerFailed as error:
+                messages.append(str(error))
+
+            # Make sure the mount directory belongs to non-root user
+            self.set_scm_mount_ownership()
+
+        # Report any errors after all stop actions have been attempted
+        if messages:
+            raise ServerFailed(
+                "Failed to stop servers:\n  {}".format("\n  ".join(messages)))

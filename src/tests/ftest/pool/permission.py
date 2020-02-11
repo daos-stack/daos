@@ -24,7 +24,6 @@
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
-from test_utils_pool import TestPool
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
@@ -72,10 +71,8 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.test_log.debug("Pool initialisation successful")
-        self.pool.get_params(self)
-        self.pool.mode.value = createmode
+        self.add_pool(create=False)
+        self.pool.mode.update(createmode, "pool.mode")
         self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
@@ -118,10 +115,8 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.test_log.debug("Pool initialisation successful")
-        self.pool.get_params(self)
-        self.pool.mode.value = createmode
+        self.add_pool(create=False)
+        self.pool.mode.update(createmode, "pool.mode")
         self.test_log.debug("Pool Creation successful")
 
         try:

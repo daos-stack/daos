@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,11 +26,11 @@ from __future__ import print_function
 import avocado
 
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
 from ior_test_base import IorTestBase
 
+
 class NvmeIoVerification(IorTestBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -71,8 +71,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            self.pool = TestPool(self.context, self.log)
-            self.pool.get_params(self)
+            self.add_pool(create=False)
 
             # update pool sizes
             self.pool.scm_size.update(ior_param[0])

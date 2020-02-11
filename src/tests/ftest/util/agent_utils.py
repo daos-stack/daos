@@ -152,7 +152,7 @@ class DaosAgentCommand(YamlCommand):
 
 
 class DaosAgentManager(SubprocessManager):
-    """Manages the daos_agent execution on one or more hosts using orterun."""
+    """Manages the daos_agent execution on one or more hosts."""
 
     def __init__(self, agent_command, manager="OpenMPI"):
         """Create a DaosAgentManager object.
@@ -185,24 +185,32 @@ class DaosAgentManager(SubprocessManager):
         # daos_agent processes that will be started by the command
         self.manager.job.pattern_count = len(self._hosts)
 
+    def start(self):
+        """Start the agent through the job manager."""
+        self.log.info(
+            "<AGENT> Starting daos_agent on %s with %s",
+            self._hosts, self.manager.command)
+        super(DaosAgentManager, self).start()
+
     def stop(self):
-        """Stop the agent through the runner.
+        """Stop the agent through the job manager.
 
         Raises:
             CommandFailure: if there was an errror stopping the agents.
 
         """
-        self.log.info("Stopping agent orterun command")
+        self.log.info("<AGENT> Stopping agent %s command", self.manager.command)
 
         # Maintain a running list of errors detected trying to stop
         messages = []
 
-        # Stop the subprocess running the orterun command
+        # Stop the subprocess running the manager command
         try:
             super(DaosAgentManager, self).stop()
         except CommandFailure as error:
             messages.append(
-                "Error stopping the orterun subprocess: {}".format(error))
+                "Error stopping the {} subprocess: {}".format(
+                    self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
         self.kill()

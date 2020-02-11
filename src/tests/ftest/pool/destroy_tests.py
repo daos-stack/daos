@@ -28,8 +28,6 @@ from server_utils import ServerFailed
 from apricot import TestWithServers, skipForTicket
 from avocado.core.exceptions import TestFail
 from test_utils_base import CallbackHandler
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from pydaos.raw import DaosApiError
 import ctypes
 
@@ -73,8 +71,7 @@ class DestroyTests(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         self.pool.name.value = group_name
         self.pool.create()
         self.log.info("Pool UUID is %s", self.pool.uuid)
@@ -297,8 +294,7 @@ class DestroyTests(TestWithServers):
         self.start_servers(group_hosts)
 
         self.log.info("Create a pool in server group %s", group_names[0])
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s", self.pool.uuid)
@@ -403,9 +399,7 @@ class DestroyTests(TestWithServers):
             self.pool.connect(), "Pool connect failed before destroy")
 
         # Create a container
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-        self.container.create()
+        self.add_container(self.pool)
         self.log.info(
             "Writing 4096 bytes to the container %s", self.container.uuid)
         self.container.write_objects(obj_class="OC_S1")
@@ -460,8 +454,7 @@ class DestroyTests(TestWithServers):
         }
         self.start_servers(group_hosts)
 
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s on server_group %s",
@@ -496,8 +489,7 @@ class DestroyTests(TestWithServers):
 
         # Destroy pool with callback while stopping other server
         # Create new pool on server_group_a
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         self.pool.name.value = group_names[0]
         self.pool.create()
         self.log.info("Pool UUID is %s on server_group %s",

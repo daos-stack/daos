@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 
 
 class InfoTests(TestWithServers):
@@ -47,8 +46,7 @@ class InfoTests(TestWithServers):
         :avocado: tags=all,tiny,pr,pool,smoke,infotest
         """
         # Get the test params
-        self.pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
 

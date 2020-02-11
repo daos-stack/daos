@@ -25,8 +25,6 @@ from __future__ import print_function
 
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 import ctypes
 import uuid
 
@@ -50,12 +48,12 @@ class EvictTests(TestWithServers):
             TestPool (object)
 
         """
-        pool = TestPool(self.context, dmg=self.server_managers[0].dmg)
-        pool.get_params(self)
+        # Create a pool
+        pool = self.get_pool(create=False)
         if targets is not None:
             pool.target_list.value = targets
-        # create pool
         pool.create()
+
         # Commented out due to DAOS-3836. Remove the pylint disable at the top
         # of this method when the following lines are uncommented.
         # # Check that the pool was created
@@ -176,10 +174,11 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
+
         :avocado: tags=all,pool,pr,full_regression,small,poolevict
         """
-        pool = []
-        container = []
+        self.pool = []
+        self.container = []
         non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
@@ -188,33 +187,33 @@ class EvictTests(TestWithServers):
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
         non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
-            pool.append(self.connected_pool(pool_servers[count], target_list))
+            self.pool.append(
+                self.connected_pool(pool_servers[count], target_list))
             # Commented out due to DAOS-3836.
             if non_pool_servers[count]:
                 self.log.info(
                     "Skipping calling self.pool.check_files(%s) due to "
                     "DAOS-3836", non_pool_servers)
             #    self.assertFalse(
-            #        pool[count].check_files(non_pool_servers[count]),
+            #        self.pool[count].check_files(non_pool_servers[count]),
             #        "Pool # {} data detected on non pool servers {} ".format(
             #            count+1, non_pool_servers[count]))
 
             self.log.info("Pool # %s is connected with handle %s",
-                          count+1, pool[count].pool.handle.value)
+                          count+1, self.pool[count].pool.handle.value)
 
-            container.append(TestContainer(pool[count]))
-            container[count].get_params(self)
-            container[count].create()
-            container[count].write_objects(target_list[-1])
+            self.container.append(self.add_container(self.pool[count]))
+            self.container[count].write_objects(target_list[-1])
 
+        # Evict the last pool in the list
+        self.log.info(
+            "Attempting to evict clients from pool with UUID: %s",
+            self.pool[-1].uuid)
         try:
-            self.log.info(
-                "Attempting to evict clients from pool with UUID: %s",
-                pool[-1].uuid)
-            # Evict the last pool in the list
-            pool[-1].pool.evict()
+            self.pool[-1].pool.evict()
         except DaosApiError as result:
             self.fail(
                 "Detected exception while evicting a client {}".format(
@@ -223,20 +222,20 @@ class EvictTests(TestWithServers):
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.
             # # Check that all pool files still exist
-            # if pool[count].check_files(pool_servers[count]):
+            # if self.pool[count].check_files(pool_servers[count]):
             #    self.log.info(
             #        "Pool # %s with UUID %s still exists",
-            #        count+1, pool[count].uuid)
+            #        count+1, self.pool[count].uuid)
             # else:
             #    self.fail(
             #        "Pool # {} with UUID {} does not exists".format(
-            #            count+1, pool[count].uuid))
+            #            count+1, self.pool[count].uuid))
 
             # Verify connection to pools with pool_query; pool that was evicted
             # should fail the pool query because the handle was removed
             try:
                 # Call daos api directly to avoid connecting to pool
-                pool_info = pool[count].pool.pool_query()
+                pool_info = self.pool[count].pool.pool_query()
             except DaosApiError as error:
                 # expected error for evicted pool
                 if count == len(tlist) - 1 and "-1002" in str(error):
@@ -253,15 +252,15 @@ class EvictTests(TestWithServers):
                 pool_info = None
             # Check that UUID of valid pools still exists
             if pool_info:
-                if c_uuid_to_str(pool_info.pi_uuid) == pool[count].uuid:
+                if c_uuid_to_str(pool_info.pi_uuid) == self.pool[count].uuid:
                     self.log.info(
                         "Pool # %s UUID matches pool_info.pi_uuid %s",
-                        count+1, pool[count].uuid)
+                        count+1, self.pool[count].uuid)
                 else:
                     self.fail(
                         "Pool # {} UUID does not matches pool_info.pi_uuid:  "
                         "{} != {}".format(
-                            count+1, pool[count].uuid, c_uuid_to_str(
+                            count+1, self.pool[count].uuid, c_uuid_to_str(
                                 pool_info.pi_uuid)))
 
     def test_evict_bad_server_name(self):

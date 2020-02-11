@@ -41,6 +41,8 @@ from server_utils import (DaosServerYamlParameters, DaosServerCommand,
                           DaosServerManager, DaosServerTransportCredentials)
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 # pylint: disable=invalid-name
@@ -632,3 +634,73 @@ class TestWithServers(TestWithoutServers):
         self.control_log = "{}_daos_control.log".format(self.test_id)
         self.helper_log = "{}_daos_admin.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
+
+    def get_pool(self, namespace=None, create=True, connect=True, index=0):
+        """Get a test pool object.
+
+        This method defines the common test pool creation sequence.
+
+        Args:
+            namespace (str, optional): [description]. Defaults to None.
+            create ((bool, optional): [description]. Defaults to True.
+            connect (bool, optional): [description]. Defaults to True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+
+        Returns:
+            TestPool: the created test pool object.
+
+        """
+        pool = TestPool(
+            self.context, dmg_command=self.server_managers[index].dmg)
+        if namespace is not None:
+            pool.namespace = namespace
+        pool.get_params(self)
+        if create:
+            pool.create()
+        if create and connect:
+            pool.connect()
+        return pool
+
+    def add_pool(self, namespace=None, create=True, connect=True, index=0):
+        """Add a pool to the test case.
+
+        This method defines the common test pool creation sequence.
+
+        Args:
+            namespace (str, optional): [description]. Defaults to None.
+            create ((bool, optional): [description]. Defaults to True.
+            connect (bool, optional): [description]. Defaults to True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+        """
+        self.pool = self.get_pool(namespace, create, connect, index)
+
+    def get_container(self, pool, namespace=None, create=True):
+        """Get a test container object.
+
+        Args:
+            pool (TestPool): pool in which to create the container.
+            namespace ([type], optional): [description]. Defaults to None.
+            create (bool, optional): [description]. Defaults to True.
+
+        Returns:
+            TestContainer: the created test container object.
+
+        """
+        container = TestContainer(pool)
+        if namespace is not None:
+            container.namespace = namespace
+        container.get_params(self)
+        if create:
+            container.create()
+        return container
+
+    def add_container(self, pool, namespace=None, create=True):
+        """Add a container to the test case.
+
+        This method defines the common test container creation sequence.
+
+        Args:
+            pool (TestPool): pool in which to create the container.
+            namespace ([type], optional): [description]. Defaults to None.
+        """
+        self.container = self.get_container(pool, namespace, create)

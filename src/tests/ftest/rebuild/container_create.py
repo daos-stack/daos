@@ -26,8 +26,6 @@ from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
 from job_manager_utils import Mpich
 from ior_utils import IorCommand
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):
@@ -57,9 +55,7 @@ class ContainerCreate(TestWithServers):
             self.log.info(
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, count, qty, pool2.uuid)
-            self.container.append(TestContainer(pool2))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.container.append(self.get_container(pool2))
             self.container[-1].write_objects()
 
         if count < qty:
@@ -149,8 +145,7 @@ class ContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(TestPool(self.context, self.log))
-            self.pool[-1].get_params(self)
+            self.pool.append(self.get_pool(create=False))
 
         if use_ior:
             # Get ior params
@@ -218,9 +213,7 @@ class ContainerCreate(TestWithServers):
                     loop_id, self.pool[0].uuid, mpirun.job.daos_cont.value)
                 self.run_ior(loop_id, mpirun)
             else:
-                self.container.append(TestContainer(self.pool[0]))
-                self.container[-1].get_params(self)
-                self.container[-1].create()
+                self.container.append(self.get_container(self.pool[0]))
                 self.log.info(
                     "%s: Writing to pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)

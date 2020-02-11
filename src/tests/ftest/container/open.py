@@ -27,8 +27,6 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
 
 RESULT_PASS = "PASS"
@@ -37,7 +35,8 @@ RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
 
 class OpenContainerTest(TestWithServers):
-    """
+    """Contianer open test cases.
+
     Test Class Description:
         Tests container's open function. Create 2 pool-container pairs
         and test the following.
@@ -55,7 +54,7 @@ class OpenContainerTest(TestWithServers):
     """
 
     def test_container_open(self):
-        """Jira ID: DAOS-3223
+        """Jira ID: DAOS-3223.
 
         Test Description:
             Test container's open function as described above
@@ -125,16 +124,10 @@ class OpenContainerTest(TestWithServers):
         # Create the pool and connect. Then create the container from the pool
         # Add the pool and the container created into a list
         container_uuids = []
-        #for i in range(2):
         i = 0
         while i < 2:
-            self.pool.append(TestPool(self.context, self.log))
-            self.pool[-1].get_params(self)
-            self.pool[-1].create()
-            self.pool[-1].connect()
-            self.container.append(TestContainer(self.pool[-1]))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.pool.append(self.get_pool())
+            self.container.append(self.get_container(self.pool[-1]))
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
             i += 1
 
