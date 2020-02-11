@@ -789,8 +789,23 @@ class PreReqComponent():
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
         self.exclude = env.subst("$EXCLUDE").split(",")
-# pylint: enable=too-many-branches
 
+    def has_source(self, env, *comps, **kw):
+        """Check if source exists for a component"""
+        new_env = env.Clone()
+        #first require the binary of the component.
+        self.require(new_env, *comps, **kw)
+
+        for comp in comps:
+            try:
+                self.get_src_path(comp)
+            except MissingPath as _error:
+                print("%s source not found" % comp)
+                return False
+
+        return True
+
+# pylint: enable=too-many-branches
     def _setup_intelc(self):
         """Setup environment to use intel compilers"""
         env = self.__env.Clone(tools=['intelc'])
