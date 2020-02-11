@@ -164,7 +164,7 @@ class DaosServerConfig(ObjectWithParameters):
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
-            default_port = os.environ.get("OFI_PORT", 31416)
+            default_port = int(os.environ.get("OFI_PORT", 31416))
 
             # Parameters
             #   targets:                count of VOS targets
