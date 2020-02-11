@@ -19,7 +19,6 @@ def scons():
         return
 
     denv.AppendUnique(CPPPATH=["$FIO_SRC"])
-    denv.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -O0")
     denv.AppendUnique(LIBPATH=[Dir("../../client/dfs")])
 
     # daos fio engine

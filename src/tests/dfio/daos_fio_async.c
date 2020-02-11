@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+#include <config-host.h>
 #include <fio.h>
 #include <optgroup.h>
 
