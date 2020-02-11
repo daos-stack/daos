@@ -38,6 +38,7 @@ enum cont_op {
 	CONT_DESTROY_SNAP,
 	CONT_ROLLBACK,
 	CONT_GET_ACL,
+	CONT_OVERWRITE_ACL,
 };
 
 enum pool_op {
@@ -92,6 +93,7 @@ struct cmd_args_s {
 
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
+	char			*aclfile;	/* --acl-file path */
 	bool			verbose;	/* --verbose mode */
 };
 
@@ -194,6 +196,7 @@ int cont_create_snap_hdlr(struct cmd_args_s *ap);
 int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
+int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:

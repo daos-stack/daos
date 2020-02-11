@@ -456,7 +456,7 @@ func TestServer_ConfigDuplicateValues(t *testing.T) {
 				WithServers(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
-			common.CmpErr(t, tc.expErr, gotErr)
+			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

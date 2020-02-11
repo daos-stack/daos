@@ -801,7 +801,7 @@ dss_start_xs_id(int xs_id)
 			return -DER_INVAL;
 		}
 
-		hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
+		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
 		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
 		free(cpuset);
 	} else {
@@ -824,7 +824,7 @@ dss_start_xs_id(int xs_id)
 		}
 	}
 
-	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
+	rc = dss_start_one_xstream(obj->cpuset, xs_id);
 	if (rc)
 		return rc;
 

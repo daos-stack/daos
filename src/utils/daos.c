@@ -82,6 +82,8 @@ cont_op_parse(const char *str)
 		return CONT_ROLLBACK;
 	else if (strcmp(str, "get-acl") == 0)
 		return CONT_GET_ACL;
+	else if (strcmp(str, "overwrite-acl") == 0)
+		return CONT_OVERWRITE_ACL;
 	return -1;
 }
 
@@ -465,6 +467,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"properties",	required_argument,	NULL,	DAOS_PROPERTIES_OPTION},
 		{"outfile",	required_argument,	NULL,	'O'},
 		{"verbose",	no_argument,		NULL,	'V'},
+		{"acl-file",	required_argument,	NULL,	'A'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -639,6 +642,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'V':
 			ap->verbose = true;
 			break;
+		case 'A':
+			D_STRNDUP(ap->aclfile, optarg, strlen(optarg));
+			if (ap->aclfile == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
 			/* alloc max */
@@ -718,6 +726,8 @@ out_free:
 	}
 	if (ap->outfile != NULL)
 		D_FREE(ap->outfile);
+	if (ap->aclfile != NULL)
+		D_FREE(ap->aclfile);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -891,6 +901,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_GET_ACL:
 		rc = cont_get_acl_hdlr(ap);
 		break;
+	case CONT_OVERWRITE_ACL:
+		rc = cont_overwrite_acl_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -1055,6 +1068,8 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-objects     list all objects in container\n"
 "	  list-obj\n"
 "	  query            query a container\n"
+"	  get-acl          get a container's ACL\n"
+"	  overwrite-acl    replace a container's ACL\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1122,7 +1137,11 @@ help_hdlr(struct cmd_args_s *ap)
 "container options (snapshot and rollback-related):\n"
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-"	--eprange=B-E      container epoch range (destroy-snap)\n");
+"	--eprange=B-E      container epoch range (destroy-snap)\n"
+"container options (ACL-related):\n"
+"	--acl-file=PATH    input file containing ACL (overwrite-acl)\n"
+"	--verbose          verbose mode (get-acl)\n"
+"	--outfile=PATH     write ACL to file (get-acl)\n");
 
 	fprintf(stream, "\n"
 "object (obj) commands:\n"
