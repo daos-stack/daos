@@ -466,27 +466,110 @@ co_op_retry(void **state)
 }
 
 static void
+co_acl_get(test_arg_t *arg, struct daos_acl *exp_acl,
+	   const char *exp_owner, const char *exp_owner_grp)
+{
+	int			rc;
+	daos_prop_t		*acl_prop = NULL;
+	struct daos_prop_entry	*entry;
+	struct daos_acl		*actual_acl;
+
+	print_message("Getting the container ACL\n");
+	rc = daos_cont_get_acl(arg->coh, &acl_prop, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_non_null(acl_prop);
+	assert_int_equal(acl_prop->dpp_nr, 3);
+
+	print_message("Checking ACL\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		print_message("ACL prop wasn't returned.\n");
+		assert_false(true); /* fail the test */
+	}
+	actual_acl = entry->dpe_val_ptr;
+	assert_int_equal(actual_acl->dal_ver, exp_acl->dal_ver);
+	assert_int_equal(actual_acl->dal_len, exp_acl->dal_len);
+	assert_memory_equal(actual_acl->dal_ace, exp_acl->dal_ace,
+			    exp_acl->dal_len);
+
+	print_message("Checking owner\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner prop verification failed.\n");
+		assert_false(true); /* fail the test */
+	}
+
+	print_message("Checking owner-group\n");
+	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
+	if (entry == NULL || entry->dpe_str == NULL ||
+	    strncmp(entry->dpe_str, exp_owner_grp,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+		print_message("Owner-group prop verification failed.\n");
+		assert_false(true); /* fail the test */
+	}
+
+	daos_prop_free(acl_prop);
+}
+
+static void
+add_ace_with_perms(struct daos_acl **acl, enum daos_acl_principal_type type,
+		   const char *name, uint64_t perms)
+{
+	struct daos_ace *ace;
+	int		rc;
+
+	ace = daos_ace_create(type, name);
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = perms;
+
+	rc = daos_acl_add_ace(acl, ace);
+	assert_int_equal(rc, 0);
+
+	daos_ace_free(ace);
+}
+
+static void
 co_acl(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_prop_t		*prop_in;
-	daos_prop_t		*prop_out = NULL;
-	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
 	const char		*exp_owner = "fictionaluser@";
 	const char		*exp_owner_grp = "admins@";
-	struct daos_acl		*exp_acl, *actual_acl;
+	struct daos_acl		*exp_acl;
+	struct daos_ace		*ace;
+	uid_t			uid;
+	char			*user;
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			DEFAULT_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
-	/* Empty ACL is a weird case, but valid */
+	print_message("Case 1: initial non-default ACL/ownership\n");
+	/*
+	 * Want to set up with a non-default ACL and owner/group.
+	 * This ACL gives the effective user permissions to interact
+	 * with the ACL. This is the bare minimum required to run the tests.
+	 */
+	uid = geteuid();
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_int_equal(rc, 0);
+	assert_non_null(user);
+
 	exp_acl = daos_acl_create(NULL, 0);
 	assert_non_null(exp_acl);
+
+	add_ace_with_perms(&exp_acl, DAOS_ACL_USER, user,
+			   DAOS_ACL_PERM_GET_ACL | DAOS_ACL_PERM_SET_ACL);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_EVERYONE, NULL,
+			   DAOS_ACL_PERM_READ);
 	assert_int_equal(daos_acl_cont_validate(exp_acl), 0);
 
 	/*
@@ -516,40 +599,35 @@ co_acl(void **state)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	print_message("Getting the container ACL\n");
-	rc = daos_cont_get_acl(arg->coh, &prop_out, NULL);
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 2: overwrite ACL\n");
+	/*
+	 * Modify the existing ACL - don't want to clobber the user entry
+	 * though.
+	 */
+	rc = daos_acl_remove_ace(&exp_acl, DAOS_ACL_EVERYONE, NULL);
 	assert_int_equal(rc, 0);
 
-	assert_non_null(prop_out);
-	assert_int_equal(prop_out->dpp_nr, 3);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_OWNER, NULL,
+			   DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_SET_PROP |
+			   DAOS_ACL_PERM_DEL_CONT);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_GROUP, "testgroup@",
+			   DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_READ |
+			   DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_DEL_CONT);
+	add_ace_with_perms(&exp_acl, DAOS_ACL_GROUP, "testgroup2@",
+			   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
 
-	print_message("Checking ACL\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		print_message("ACL prop wasn't returned.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
-	actual_acl = entry->dpe_val_ptr;
-	assert_int_equal(actual_acl->dal_ver, exp_acl->dal_ver);
-	assert_int_equal(actual_acl->dal_len, exp_acl->dal_len);
+	rc = daos_acl_get_ace_for_principal(exp_acl, DAOS_ACL_USER, user, &ace);
+	assert_int_equal(rc, 0);
+	ace->dae_allow_perms |= DAOS_ACL_PERM_SET_OWNER;
 
-	print_message("Checking owner\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER);
-	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, exp_owner,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
+	assert_int_equal(daos_acl_cont_validate(exp_acl), 0);
 
-	print_message("Checking owner-group\n");
-	entry = daos_prop_entry_get(prop_out, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, exp_owner_grp,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner-group prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
+	rc = daos_cont_overwrite_acl(arg->coh, exp_acl, NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
@@ -557,8 +635,8 @@ co_acl(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop_in);
-	daos_prop_free(prop_out);
 	daos_acl_free(exp_acl);
+	D_FREE(user);
 	test_teardown((void **)&arg);
 }
 
@@ -673,7 +751,7 @@ static const struct CMUnitTest co_tests[] = {
 	  co_properties, NULL, test_case_teardown},
 	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
 	  co_op_retry, NULL, test_case_teardown},
-	{ "CONT8: get container ACL",
+	{ "CONT8: get/set container ACL",
 	  co_acl, NULL, test_case_teardown},
 	{ "CONT9: container set prop",
 	  co_set_prop, NULL, test_case_teardown},

@@ -33,6 +33,8 @@
 extern "C" {
 #endif
 
+#include <daos_security.h>
+
 /**
  * DAOS_COO_RO opens the container for reading only. This flag conflicts with
  * DAOS_COO_RW.
@@ -298,6 +300,26 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
+
+/**
+ * Overwrites the container ACL with a new one.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	acl	New ACL to write
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
+			daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.
