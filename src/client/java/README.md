@@ -65,6 +65,13 @@ Besides DAOS setup and environment variables, one more environment for JVM signa
     
     export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
 
+When run with Hadoop yarn, you need to add below configuration to core-site.xml.
+  
+  <property>
+    <name>fs.AbstractFileSystem.daos.impl</name>
+    <value>com.intel.daos.hadoop.fs.DaosAbsFsImpl</value>
+  </property>
+  
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and
