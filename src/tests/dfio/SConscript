@@ -1,4 +1,5 @@
 """Build daos fio engine"""
+from __future__ import print_function
 import os
 import daos_build
 
@@ -12,9 +13,9 @@ def scons():
     denv = env.Clone()
 
     if prereqs.has_source(env, 'fio'):
-        print "Building DAOS FIO Engine with src: %s" % env.subst("$FIO_SRC")
+        print("Building DAOS FIO Engine with source dir", env.subst("$FIO_SRC"))
     else:
-        print "Skipping DAOS FIO Engine build"
+        print("Skipping DAOS FIO Engine build")
         return
 
     denv.AppendUnique(CPPPATH=["$FIO_SRC"])
