@@ -67,10 +67,12 @@ Besides DAOS setup and environment variables, one more environment for JVM signa
 
 When run with Hadoop yarn, you need to add below configuration to core-site.xml.
   
+  ```xml
   <property>
     <name>fs.AbstractFileSystem.daos.impl</name>
     <value>com.intel.daos.hadoop.fs.DaosAbsFsImpl</value>
   </property>
+  ```
   
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
