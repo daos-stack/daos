@@ -865,7 +865,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	/** Open SB object */
 	super_oid.lo = RESERVED_LO;
 	super_oid.hi = SB_HI;
-	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
+	daos_obj_generate_id(&super_oid, 0, OC_SX, 0);
 
 	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO,
 			   oh, NULL);
@@ -1170,7 +1170,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	dfs->root.parent_oid.lo = RESERVED_LO;
 	dfs->root.parent_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
+	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_SX, 0);
 	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object\n");
@@ -1400,7 +1400,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	/** Open SB object */
 	super_oid.lo = RESERVED_LO;
 	super_oid.hi = SB_HI;
-	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
+	daos_obj_generate_id(&super_oid, 0, OC_SX, 0);
 
 	rc = daos_obj_open(coh, super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
