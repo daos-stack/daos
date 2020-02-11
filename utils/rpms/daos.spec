@@ -7,7 +7,7 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.9.0
+Version:       1.1.0
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -337,6 +337,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Feb 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
+- Version bump up to 1.1.0
+
 * Thu Feb 06 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.0-1
 - Version bump up to 0.9.0
 
