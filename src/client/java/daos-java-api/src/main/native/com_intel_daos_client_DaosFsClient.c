@@ -32,6 +32,8 @@
 #include <daos_fs.h>
 #include <daos_jni_common.h>
 #include <fcntl.h>
+#include <pwd.h>
+#include <grp.h>
 
 static jclass daos_io_exception_class;
 
@@ -1221,6 +1223,32 @@ static void cpyfield(JNIEnv *env, char *buffer, int *value,
 	memcpy(buffer, value, valueLen);
 }
 
+static void set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
+{
+	struct passwd *uentry = getpwuid(stat->st_uid);
+	struct group *gentry = getgrgid(stat->st_gid);
+	int inc = 4;
+	int len = 0;
+
+	if (uentry != NULL) {
+		len = strlen(uentry->pw_name);
+		cpyfield(env, buffer, &len, 4, 4);
+		memcpy(buffer+4, uentry->pw_name, len);
+		inc += len;
+	} else {
+		len = 0;
+		cpyfield(env, buffer, &len, 4, 4);
+	}
+	if (gentry != NULL) {
+		len = strlen(gentry->gr_name);
+		cpyfield(env, buffer+inc, &len, 4, 4);
+		memcpy(buffer+inc+4, gentry->gr_name, len);
+	} else {
+		len = 0;
+		cpyfield(env, buffer+inc, &len, 4, 4);
+	}
+}
+
 /**
  * JNI method to get stat attributes into buffer denoted by \a bufferAddress
  *  from a file denoted by \a objId.
@@ -1271,6 +1299,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 		cpyfield(env, buffer+76, &stat.st_ctim,
 				sizeof(stat.st_ctim), 16);
 		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
+		set_user_group_name(env, buffer+93, &stat);
 	}
 }
 

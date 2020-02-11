@@ -164,9 +164,17 @@ public class DaosFileSystem extends FileSystem {
       throw new IllegalArgumentException("authority should be in format ip:port. No colon in ip or port");
     }
 
-    super.initialize(name, conf);
+    try {
+      if (Integer.valueOf(ipPort[1]) < Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT)) {
+        throw new IllegalArgumentException("container key " + ipPort[1] + " should be no less than " +
+                Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
+      }
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("container key should be a integer. " + ipPort[1]);
+    }
 
     conf = DaosConfig.getInstance().parseConfig(ipPort[0], ipPort[1], conf);
+    super.initialize(name, conf);
 
     try {
       this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
@@ -231,6 +239,11 @@ public class DaosFileSystem extends FileSystem {
     }
   }
 
+  @Override
+  public int getDefaultPort() {
+    return Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
+  }
+
   private void checkSizeMin(int size, int min, String msg) {
     if (size < min) {
       throw new IllegalArgumentException(msg + min + ", size is " + size);
@@ -256,6 +269,17 @@ public class DaosFileSystem extends FileSystem {
   @Override
   public URI getUri() {
     return uri;
+  }
+
+  /**
+   * This method make sure schema and authority are prepended to path.
+   * @param p
+   * @return path with schema and authority
+   * @throws IOException
+   */
+  @Override
+  public Path resolvePath(final Path p) throws IOException {
+    return p.makeQualified(getUri(), this.getWorkingDirectory());
   }
 
   @Override
@@ -401,6 +425,12 @@ public class DaosFileSystem extends FileSystem {
     return true;
   }
 
+  /**
+   * get DAOS file status with detailed info, like modification time, access time, names.
+   * @param f
+   * @return file status with times and username and groupname
+   * @throws IOException
+   */
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     if (LOG.isDebugEnabled()) {
@@ -426,8 +456,16 @@ public class DaosFileSystem extends FileSystem {
     }
 
     StatAttributes attributes = file.getStatAttributes();
-    return new FileStatus(attributes.getLength(), !attributes.isFile(), 1,
-            attributes.isFile() ? blockSize : 0, DaosUtils.toMilliSeconds(attributes.getModifyTime()), path);
+    return new FileStatus(attributes.getLength(),
+            !attributes.isFile(),
+            1,
+            attributes.isFile() ? blockSize : 0,
+            DaosUtils.toMilliSeconds(attributes.getModifyTime()),
+            DaosUtils.toMilliSeconds(attributes.getAccessTime()),
+            null,
+            attributes.getUsername(),
+            attributes.getGroupname(),
+            path);
   }
 
   @Override

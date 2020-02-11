@@ -60,6 +60,11 @@ final build status is success. Then go to target/site folder to find documentati
 
     mvn site
 
+## Run
+Besides DAOS setup and environment variables, one more environment for JVM signal chaining should be set as below.
+    
+    export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
+
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and

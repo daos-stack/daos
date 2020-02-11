@@ -1,7 +1,7 @@
 <configuration>
   <property>
     <name>fs.defaultFS</name>
-    <value>daos://default:0</value>
+    <value>daos://default:1</value>
     <description>Unique DAOS server URI which follows standard URI format, schema://ip:port.
       For now, ip and port are not actually used by DAOS to connect to DAOS server since DAOS uses shared file
       to connect to server. Instead ip and port here are used for representing pool uuid and container uuid on
@@ -13,17 +13,17 @@
       pkey means value of "pkey.fs.daos.pool.uuid".
 
       Port:
-      0 means value of "fs.daos.container.uuid".
+      1 means value of "fs.daos.container.uuid".
       ckey (positive integer) means value of "cckey.fs.daos.container.uuid". (additional c due to  ckey is integer)
 
       Other configuration (fs.daos.*) values will be read first from pkeycckey.fs.daos.* and fall back to default
       fs.daos.*.
 
       For example,
-      daos://default:0 uses default values of "fs.daos.pool.uuid" and "fs.daos.container.uuid". And read other
+      daos://default:1 uses default values of "fs.daos.pool.uuid" and "fs.daos.container.uuid". And read other
       default configurations.
-      daos://pool1:1 uses values of "pool1.fs.daos.pool.uuid" and "c1.fs.daos.container.uuid". And try to read
-      other configurations from pool1c1.fs.daos.* first and fall back to defaults.
+      daos://pool1:2 uses values of "pool1.fs.daos.pool.uuid" and "c2.fs.daos.container.uuid". And try to read
+      other configurations from pool1c2.fs.daos.* first and fall back to defaults.
     </description>
   </property>
   <property>

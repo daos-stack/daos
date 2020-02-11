@@ -34,7 +34,8 @@ public final class Constants {
 
   public static final String DAOS_CONFIG_POOL_KEY_DEFAULT = "default";
 
-  public static final String DAOS_CONFIG_CONTAINER_KEY_DEFAULT = "0";
+  // cannot be zero which is deemed as empty value in hadoop
+  public static final String DAOS_CONFIG_CONTAINER_KEY_DEFAULT = "1";
 
   public static final String DAOS_CONFIG_CONTAINER_KEY_PREFIX = "c";
 

@@ -190,7 +190,7 @@ public class DaosFileSystemTest {
     Configuration cfg = new Configuration(false);
     cfg.addResource("daos-site.xml");
     String s = cfg.get("fs.defaultFS");
-    Assert.assertEquals("daos://default:0", s);
+    Assert.assertEquals("daos://default:1", s);
     Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
   }
 
@@ -204,7 +204,7 @@ public class DaosFileSystemTest {
     }
     cfg.addResource(tempFile.toURI().toURL(), false);
     String s = cfg.get("fs.defaultFS");
-    Assert.assertEquals("daos://default:0", s);
+    Assert.assertEquals("daos://default:1", s);
     Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
   }
 
@@ -212,7 +212,7 @@ public class DaosFileSystemTest {
   public void testLoadingConfigFromCoreSite() throws Exception {
     Configuration cfg = new Configuration(true);
     String s = cfg.get("fs.defaultFS");
-    Assert.assertEquals("daos://id:1", s);
+    Assert.assertEquals("daos://id:2", s);
     Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
   }
 }
