@@ -5,13 +5,16 @@ import daos_build
 def scons():
     """Execute build"""
 
-    Import('env')
+    Import('env', 'prereqs')
 
     libs = ['daos_common', 'daos', 'dfs', 'gurt', 'uuid', 'dl']
 
     denv = env.Clone()
 
-    if not os.path.exists(os.path.join(env.subst("$FIO_SRC"), "fio.h")):
+    if prereqs.has_source(env, 'fio'):
+        print "Building DAOS FIO Engine with src: %s" % env.subst("$FIO_SRC")
+    else:
+        print "Skipping DAOS FIO Engine build"
         return
 
     denv.AppendUnique(CPPPATH=["$FIO_SRC"])

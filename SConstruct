@@ -336,6 +336,7 @@ def scons():
     preload_prereqs(prereqs)
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+    prereqs.has_source(env, 'fio')
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')
