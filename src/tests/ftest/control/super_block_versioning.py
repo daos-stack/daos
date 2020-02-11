@@ -55,5 +55,5 @@ class SuperBlockVersioning(TestWithServers):
         result = pcmd(self.hostlist_servers, cmd, timeout=20)
 
         # Determine if the command completed successfully across all the hosts
-        if len(result) > 1 or 1 not in result:
+        if len(result) > 1 or 0 not in result:
             self.fail("Was not able to find version in {} file".format(fname))
