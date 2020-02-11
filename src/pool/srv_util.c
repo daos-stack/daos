@@ -447,7 +447,7 @@ int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 	*failed_tgts_cnt = 0;
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL || pool->sp_map == NULL)
-		return 0;
+		D_GOTO(output, rc = 0);
 
 	/* Check if we need excluded the failure targets, NB:
 	 * since the ranks in the pool map are ranks of primary
