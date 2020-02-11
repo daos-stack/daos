@@ -1096,6 +1096,135 @@ cont_get_acl_hdlr(struct cmd_args_s *ap)
 	return rc;
 }
 
+/*
+ * Returns a substring of the line with leading and trailing whitespace trimmed.
+ * Doesn't allocate any new memory - trimmed string is just a pointer.
+ */
+static char *
+trim_acl_file_line(char *line)
+{
+	char *end;
+
+	while (isspace(*line))
+		line++;
+	if (line[0] == '\0')
+		return line;
+
+	end = line + strnlen(line, DAOS_ACL_MAX_ACE_STR_LEN) - 1;
+	while (isspace(*end))
+		end--;
+	end[1] = '\0';
+
+	return line;
+}
+
+static int
+parse_acl_file(const char *path, struct daos_acl **acl)
+{
+	int		rc = 0;
+	FILE		*instream;
+	char		*line = NULL;
+	size_t		line_len = 0;
+	char		*trimmed;
+	struct daos_ace	*ace;
+	struct daos_acl	*tmp_acl;
+
+	instream = fopen(path, "r");
+	if (instream == NULL) {
+		fprintf(stderr, "Unable to read ACL input file '%s': %s\n",
+			path, strerror(errno));
+		return daos_errno2der(errno);
+	}
+
+	tmp_acl = daos_acl_create(NULL, 0);
+	if (tmp_acl == NULL) {
+		fprintf(stderr, "Unable to allocate memory for ACL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	while (getline(&line, &line_len, instream) != -1) {
+		trimmed = trim_acl_file_line(line);
+
+		/* ignore blank lines and comments */
+		if (trimmed[0] == '\0' || trimmed[0] == '#') {
+			D_FREE(line);
+			continue;
+		}
+
+		rc = daos_ace_from_str(trimmed, &ace);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Error parsing ACE '%s' from file: %s (%d)\n",
+				trimmed, d_errstr(rc), rc);
+			D_GOTO(parse_err, rc);
+		}
+
+		rc = daos_acl_add_ace(&tmp_acl, ace);
+		daos_ace_free(ace);
+		if (rc != 0) {
+			fprintf(stderr, "Error parsing ACL file: %s (%d)\n",
+				d_errstr(rc), rc);
+			D_GOTO(parse_err, rc);
+		}
+
+		D_FREE(line);
+	}
+
+	if (daos_acl_validate(tmp_acl) != 0) {
+		fprintf(stderr, "Content of ACL file is invalid\n");
+		D_GOTO(parse_err, rc = -DER_INVAL);
+	}
+
+	*acl = tmp_acl;
+	D_GOTO(out, rc = 0);
+
+parse_err:
+	D_FREE(line);
+	daos_acl_free(tmp_acl);
+out:
+	fclose(instream);
+	return rc;
+}
+
+int
+cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
+{
+	int		rc;
+	struct daos_acl	*acl = NULL;
+	daos_prop_t	*prop_out;
+
+	if (!ap->aclfile) {
+		fprintf(stderr,
+			"Parameter --acl-file is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = parse_acl_file(ap->aclfile, &acl);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to overwrite ACL for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"overwrite appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
+
+
 int
 obj_query_hdlr(struct cmd_args_s *ap)
 {

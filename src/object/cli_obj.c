@@ -81,8 +81,10 @@ struct obj_auxi_args {
 					 to_leader:1,
 					 spec_shard:1,
 					 req_reasbed:1,
-					 csum_retry:1;
-	/* request flags, now only with ORF_RESEND */
+					 csum_retry:1,
+					 csum_report:1,
+					 no_retry:1;
+	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
@@ -2193,7 +2195,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->to_leader = 0;
 	obj_auxi->io_retry = 0;
-	obj_auxi->csum_retry = 0;
 	switch (obj_auxi->opc) {
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		arg = data;
@@ -2272,16 +2273,24 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
 
-		if (!obj_auxi->spec_shard ||
+		if ((!obj_auxi->spec_shard && !obj_auxi->no_retry) ||
 		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
 
 		if (task->dt_result == -DER_CSUM) {
-			if (!obj_auxi->spec_shard &&
-			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
-				obj_auxi->csum_retry = 1;
-			else
+			if (!obj_auxi->spec_shard && !obj_auxi->no_retry &&
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+				if (!obj_auxi->csum_retry &&
+				    !obj_auxi->csum_report) {
+					obj_auxi->csum_report = 1;
+				} else if (obj_auxi->csum_report) {
+					obj_auxi->csum_report = 0;
+					obj_auxi->csum_retry = 1;
+				}
+			} else {
+				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
+			}
 		}
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
@@ -2391,12 +2400,12 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
 {
 	struct daos_oclass_attr	*oca;
-	unsigned int next_shard, retry_size, shard_cnt, shard_idx;
-	int rc = 0;
+	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
+	int			 rc = 0;
 
 	/* CSUM retry for EC object is not supported yet */
 	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
-		obj_auxi->spec_shard = 1;
+		obj_auxi->no_retry = 1;
 		rc = -DER_CSUM;
 		goto out;
 	}
@@ -2412,11 +2421,12 @@ obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 
 	/* all replicas have csum error for this fetch request */
 	if (next_shard == obj_auxi->initial_shard) {
-		obj_auxi->spec_shard = 1;
+		obj_auxi->no_retry = 1;
 		rc = -DER_CSUM;
 		goto out;
 	}
 	setbit(bitmap, next_shard - shard_idx);
+	obj_auxi->flags &= ~ORF_CSUM_REPORT;
 out:
 	return rc;
 }
@@ -2427,9 +2437,16 @@ static inline void
 obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		      uint64_t dkey_hash, unsigned int map_ver)
 {
-	obj_auxi->initial_shard = obj_dkey2shard(obj, dkey_hash, map_ver,
-						 DAOS_OBJ_RPC_FETCH,
-						 obj_auxi->to_leader);
+	int rc = obj_dkey2shard(obj, dkey_hash, map_ver, DAOS_OBJ_RPC_FETCH,
+				obj_auxi->to_leader);
+
+	/* rc < 0 means no available targets. Fetch with error out with
+	 * -DER_NONEXIST. Hence, it's okay to leave initial shard as initialized
+	 * (set to shard 0).
+	 */
+
+	if (rc >=  0)
+		obj_auxi->initial_shard = rc;
 }
 
 static int
@@ -2484,9 +2501,12 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	 * based current obj->auxi.req_tgt.ort_shart_tgts[0].st_shard.
 	 * (increment shard mod rdg-size, set appropriate bit).
 	 */
-	if (obj_auxi->csum_retry) {
+	if (obj_auxi->csum_report) {
+		obj_auxi->flags |= ORF_CSUM_REPORT;
+		D_ASSERT(!obj_auxi->csum_retry);
+	} else if (obj_auxi->csum_retry) {
 		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
-				   &csum_bitmap);
+					&csum_bitmap);
 		if (rc)
 			goto out_task;
 		tgt_bitmap = &csum_bitmap;
