@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,21 @@ const (
 	StorageAlreadyFormatted
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
+	StorageTargetAlreadyMounted
 
 	// SCM fault codes
 	ScmUnknown Code = iota + 200
-	ScmFormatBadParam
+	ScmFormatInvalidSize
+	ScmFormatInvalidDeviceCount
+	ScmFormatMissingMountpoint
+	ScmFormatMissingDevice
+	ScmFormatMissingParam
+	ScmFormatConflictingParam
+	ScmDiscoveryFailed
 
 	// Bdev fault codes
 	BdevUnknown Code = iota + 300
-	BdevFormatBadParam
+	BdevFormatUnknownClass
 	BdevFormatFailure
 	BdevFormatBadPciAddress
 
@@ -55,6 +62,32 @@ const (
 	SystemMemberExists
 	SystemMemberMissing
 	SystemMemberChanged
+
+	// client fault codes
+	ClientUnknown Code = iota + 500
+	ClientConfigBadControlPort
+	ClientConfigBadAccessPoints
+
+	// server fault codes
+	ServerUnknown Code = iota + 600
+	ServerBadConfig
+	ServerNoConfigPath
+	ServerConfigBadControlPort
+	ServerConfigBadAccessPoints
+	ServerConfigBadProvider
+	ServerConfigNoServers
+	ServerScmUnmanaged
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
+
+	// spdk library bindings codes
+	SpdkUnknown Code = iota + 700
+	SpdkCtrlrNoHealth
+	SpdkBindingRetNull
+	SpdkBindingFailed
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

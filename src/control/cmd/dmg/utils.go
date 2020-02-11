@@ -27,44 +27,15 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
-
-// splitPort separates port from compressed host string
-func splitPort(addrPattern string, defaultPort int) (string, string, error) {
-	var port string
-	hp := strings.Split(addrPattern, ":")
-
-	switch len(hp) {
-	case 1:
-		// no port specified, use default
-		port = strconv.Itoa(defaultPort)
-	case 2:
-		port = hp[1]
-		if port == "" {
-			return "", "", errors.Errorf("invalid port %q", port)
-		}
-		if _, err := strconv.Atoi(port); err != nil {
-			return "", "", errors.WithMessagef(err, "cannot parse %q",
-				addrPattern)
-		}
-	default:
-		return "", "", errors.Errorf("cannot parse %q", addrPattern)
-	}
-
-	if hp[0] == "" {
-		return "", "", errors.Errorf("invalid host %q", hp[0])
-	}
-
-	return hp[0], port, nil
-}
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
 // of ports to HostSets.
@@ -79,7 +50,7 @@ func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostG
 	}
 
 	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
-		hostSet, port, err = splitPort(ptn, defaultPort)
+		hostSet, port, err = common.SplitPort(ptn, defaultPort)
 		if err != nil {
 			return
 		}

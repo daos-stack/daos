@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -890,6 +890,12 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ACL:
 			bits |= DAOS_CO_QUERY_PROP_ACL;
 			break;
+		case DAOS_PROP_CO_OWNER:
+			bits |= DAOS_CO_QUERY_PROP_OWNER;
+			break;
+		case DAOS_PROP_CO_OWNER_GROUP:
+			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -964,6 +970,124 @@ err_cont:
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to query container: "DF_RC"\n", DP_RC(rc));
+	return rc;
+}
+
+struct cont_set_prop_args {
+	struct dc_pool		*cqa_pool;
+	struct dc_cont		*cqa_cont;
+	crt_rpc_t		*rpc;
+	daos_handle_t		hdl;
+};
+
+static int
+cont_set_prop_complete(tse_task_t *task, void *data)
+{
+	struct cont_set_prop_args	*arg = (struct cont_set_prop_args *)
+						data;
+	struct cont_prop_set_out	*out = crt_reply_get(arg->rpc);
+	struct dc_pool			*pool = arg->cqa_pool;
+	struct dc_cont			*cont = arg->cqa_cont;
+	int				 rc   = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cpso_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0) {
+		D_ERROR("RPC error while setting prop on container: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = out->cpso_op.co_rc;
+
+	if (rc != 0) {
+		D_DEBUG(DF_DSMC, DF_CONT": failed to set prop on container: "
+			"%d\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_CONT": Set prop: using hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+	return rc;
+}
+
+int
+dc_cont_set_prop(tse_task_t *task)
+{
+	daos_cont_set_prop_t		*args;
+	struct cont_prop_set_in		*in;
+	struct dc_pool			*pool;
+	struct dc_cont			*cont;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct cont_set_prop_args	 arg;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	cont = dc_hdl2cont(args->coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_CONT": setting props: hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	ep.ep_grp  = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_cont, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->cpsi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cpsi_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->cpsi_op.ci_hdl, cont->dc_cont_hdl);
+	in->cpsi_prop = args->prop;
+
+	arg.cqa_pool = pool;
+	arg.cqa_cont = cont;
+	arg.rpc	     = rpc;
+	arg.hdl	     = args->coh;
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_set_prop_complete, &arg,
+				       sizeof(arg));
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_cont:
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to set prop on container: "DF_RC"\n",
+		DP_RC(rc));
 	return rc;
 }
 
@@ -1173,6 +1297,8 @@ struct dc_cont_glob {
 	uuid_t		dcg_uuid;
 	uuid_t		dcg_cont_hdl;
 	uint64_t	dcg_capas;
+	uint16_t	dcg_csum_type;
+	uint32_t	dcg_csum_chunksize;
 };
 
 static inline daos_size_t
@@ -1234,6 +1360,9 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
+	cont_glob->dcg_csum_type = daos_csummer_get_type(cont->dc_csummer);
+	cont_glob->dcg_csum_chunksize =
+		daos_csummer_get_chunksize(cont->dc_csummer);
 
 	dc_pool_put(pool);
 out_cont:
@@ -1265,6 +1394,19 @@ dc_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 
 out:
 	return rc;
+}
+
+static void
+csum_cont_g2l(const struct dc_cont_glob *cont_glob, struct dc_cont *cont)
+{
+	struct csum_ft *csum_algo;
+
+	csum_algo = daos_csum_type2algo(cont_glob->dcg_csum_type);
+	if (csum_algo != NULL)
+		daos_csummer_init(&cont->dc_csummer, csum_algo,
+				  cont_glob->dcg_csum_chunksize);
+	else
+		cont->dc_csummer = NULL;
 }
 
 static int
@@ -1311,6 +1453,8 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
+	csum_cont_g2l(cont_glob, cont);
 
 	dc_cont_hdl_link(cont);
 	dc_cont2hdl(cont, coh);

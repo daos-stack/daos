@@ -55,7 +55,16 @@ typedef struct {
 	daos_size_t		da_chunk_size;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
+	daos_prop_t		*da_props;
 } dfs_attr_t;
+
+/** IO descriptor of ranges in a file to access */
+typedef struct {
+	/** Number of entries in dfs_rgs */
+	daos_size_t		iod_nr;
+	/** Array of ranges; each range defines a starting index and length. */
+	daos_range_t	       *iod_rgs;
+} dfs_iod_t;
 
 /**
  * Create a DFS container with the the POSIX property layout set.
@@ -308,9 +317,6 @@ dfs_release(dfs_obj_t *obj);
  * \param[in]	off	Offset into the file to read from.
  * \param[out]	read_size
  *			How much data is actually read.
- *			TODO - support short reads when iom is supported.
- *			For now this returns whatever was requested and short
- *			read is not supported.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -319,6 +325,24 @@ dfs_release(dfs_obj_t *obj);
 int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
+
+/**
+ * Same as dfs_read with the ability to have a segmented file layout to read.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor for list-io.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[out]	read_size
+ *			How much data is actually read.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -335,6 +359,22 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
+
+/**
+ * Write data to the file object.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev);
 
 /**
  * Query size of file data.
@@ -423,11 +463,13 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
+ * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	  daos_oclass_id_t cid);
 
 /**
  * Remove an object from parent directory. If object is a directory and is

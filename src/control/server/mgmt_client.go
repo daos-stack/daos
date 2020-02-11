@@ -163,36 +163,19 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req *mgmtpb.PrepShutdownReq) (resp *mgmtpb.DaosResp, stopErr error) {
-	stopErr = msc.withConnection(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+// PrepShutdown calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function propose ranks for shutdown by sending requests over dRPC
+// to each rank.
+func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, psErr error) {
+	psErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
-			prefix := fmt.Sprintf("prep shutdown(%s, %+v)", destAddr, *req)
-			msc.log.Debugf(prefix + " begin")
-			defer msc.log.Debugf(prefix + " end")
+			msc.log.Debugf("prep shutdown(%s, %+v)", destAddr, req)
 
-			for {
-				var err error
+			resp, err = pbClient.PrepShutdownRanks(ctx, &req)
 
-				select {
-				case <-ctx.Done():
-					return errors.Wrap(ctx.Err(), prefix)
-				default:
-				}
-
-				resp, err = pbClient.PrepShutdown(ctx, req)
-				if msc.retryOnErr(err, ctx, prefix) {
-					continue
-				}
-				if resp == nil {
-					return errors.New("unexpected nil response status")
-				}
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
-					continue
-				}
-
-				return nil
-			}
+			return
 		})
 
 	return
@@ -200,13 +183,13 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 
 // Stop calls function remotely over gRPC on server listening at destAddr.
 //
-// Shipped function issues KillRank requests using MgmtSvcClient over dRPC to
-// terminates given rank.
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
+// Shipped function terminates ranks directly from the harness at the listening
+// address without requesting over dRPC.
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
-			prefix := fmt.Sprintf("stop(%s, %+v)", destAddr, *req)
+			prefix := fmt.Sprintf("stop(%s, %+v)", destAddr, req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
@@ -219,7 +202,10 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				default:
 				}
 
-				resp, err = pbClient.KillRank(ctx, req)
+				// returns on time out or when all instances are stopped
+				// error returned if any instance is still running so that
+				// we retry until all are terminated on host
+				resp, err = pbClient.StopRanks(ctx, &req)
 				if msc.retryOnErr(err, ctx, prefix) {
 					continue
 				}
@@ -227,9 +213,6 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 					return errors.New("unexpected nil response status")
 				}
 				// TODO: Stop retrying upon certain errors.
-				if msc.retryOnStatus(resp.Status, ctx, prefix) {
-					continue
-				}
 
 				return nil
 			}
@@ -240,19 +223,47 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 
 // Start calls function remotely over gRPC on server listening at destAddr.
 //
-// Shipped function issues StartRanks requests using MgmtSvcClient to
-// restart the designated ranks as configured in persistent superblock.
-func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req *mgmtpb.StartRanksReq) (resp *mgmtpb.StartRanksResp, restartErr error) {
-	restartErr = msc.withConnection(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+// Shipped function issues StartRanks requests over dRPC to start each
+// rank managed by the harness listening at the destination address.
+//
+// StartRanks will return results for any instances started by the harness.
+func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, startErr error) {
+	startErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
-			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, *req)
+			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
-			_, err := pbClient.StartRanks(ctx, req)
+			ctx, _ = context.WithTimeout(ctx, retryDelay)
 
-			return err
+			// returns on time out or when all instances are running
+			// don't retry
+			resp, err = pbClient.StartRanks(ctx, &req)
+
+			return
+		})
+
+	return
+}
+
+// Status calls function remotely over gRPC on server listening at destAddr.
+//
+// Shipped function issues PingRank dRPC requests to query each rank to verify
+// activity.
+//
+// PingRanks should return ping results for any instances managed by the harness.
+func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, statusErr error) {
+	statusErr = msc.withConnection(ctx, destAddr,
+		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
+
+			prefix := fmt.Sprintf("status(%s, %+v)", destAddr, req)
+			msc.log.Debugf(prefix + " begin")
+			defer msc.log.Debugf(prefix + " end")
+
+			resp, err = pbClient.PingRanks(ctx, &req)
+
+			return
 		})
 
 	return

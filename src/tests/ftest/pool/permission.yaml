@@ -13,7 +13,10 @@ hosts:
 timeout: 300
 server_config:
     name: daos_server
-
+pool:
+    control_method: dmg
+    scm_size: 1000000000
+    name: daos_server
 createtests:
     createmode: !mux
         mode_RO:
@@ -24,10 +27,6 @@ createtests:
             mode: 292
         mode_ALL:
             mode: 511
-    createset:
-        setname: daos_server
-    createsize:
-        size: 1000000000
     permissions: !mux
         perm_RO:
             perm: 0

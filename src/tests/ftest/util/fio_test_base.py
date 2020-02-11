@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,9 +28,10 @@ import subprocess
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from test_utils_pool import TestPool
-from fio_utils import Fio
+from fio_utils import FioCommand
 from command_utils import CommandFailure
 from dfuse_utils import Dfuse
+
 
 class FioBase(TestWithServers):
     """Base fio class.
@@ -43,25 +44,23 @@ class FioBase(TestWithServers):
         super(FioBase, self).__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
+        self.manager = None
         self.dfuse = None
-        self.container = None
 
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
         self.update_log_file_names()
+
         # Start the servers and agents
         super(FioBase, self).setUp()
-        self.params_all = [item for item in self.params.iteritems()]
-        self.namespace = list(
-            set([item[0] for item in self.params_all
-                 if item[0].startswith('/run/fio')]))
-        self.namespace.insert(
-            0, self.namespace.pop(self.namespace.index('/run/fio/global')))
+
         # removing runner node from hostlist_client, only need one client node.
         self.hostlist_clients = self.hostlist_clients[:-1]
+
         # Get the parameters for Fio
-        self.fio_cmd = Fio(self.namespace, self)
+        self.fio_cmd = FioCommand()
+        self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
 
@@ -77,7 +76,7 @@ class FioBase(TestWithServers):
         """Create a pool and execute Fio."""
         # Get the pool params
         # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
@@ -88,8 +87,8 @@ class FioBase(TestWithServers):
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
         # Get Container params
-        #self.container = TestContainer(self.pool)
-        #self.container.get_params(self)
+        # self.container = TestContainer(self.pool)
+        # self.container.get_params(self)
 
         # create container
         # self.container.create()
@@ -131,7 +130,6 @@ class FioBase(TestWithServers):
 
     def execute_fio(self):
         """Runner method for Fio."""
-
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
@@ -143,6 +141,10 @@ class FioBase(TestWithServers):
             # self.pool.connect()
             # self.create_cont()
             self._start_dfuse()
-            self.fio_cmd.directory.update(self.dfuse.mount_dir.value)
+            self.fio_cmd.update(
+                "global", "directory", self.dfuse.mount_dir.value,
+                "fio --name=global --directory")
+
         # Run Fio
-        self.fio_cmd.run(self.hostlist_clients)
+        self.fio_cmd.hosts = self.hostlist_clients
+        self.fio_cmd.run()

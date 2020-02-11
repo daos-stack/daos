@@ -13,19 +13,18 @@ hosts:
  test_clients:
    - boro-H
 timeout: 4000
+server_manager:
+    recreate: true
 server_config:
  name: daos_server
  servers:
    bdev_class: nvme
-   bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-   targets: 1
+   bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
- createmode:
-  mode: 511
- createset:
-  setname: daos_server
- createsvc:
-  svcn: 1
+ mode: 511
+ name: daos_server
+ svcn: 1
+ control_method: dmg
 ior:
  client_processes:
    np: 16

@@ -212,6 +212,7 @@ struct shard_rw_args {
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
+	struct dcs_iod_csums	*iod_csums;
 };
 
 struct shard_punch_args {
@@ -335,7 +336,8 @@ obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || daos_crt_network_error(err);
+	       err == -DER_EVICTED || err == -DER_CSUM ||
+	       daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);

@@ -87,7 +87,6 @@ class ChecksumContainerValidation(TestWithServers):
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
-        transaction = []
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
                 indata = ("{0}".format(str(akey)[0])
@@ -97,11 +96,7 @@ class ChecksumContainerValidation(TestWithServers):
                 c_value = ctypes.create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
-                new_transaction = self.container.get_new_tx()
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
-                                         new_transaction)
-                self.container.commit_tx(new_transaction)
-                transaction.append(new_transaction)
+                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
                 record_index = record_index + 1
                 if record_index == len(self.record_length):
                     record_index = 0
