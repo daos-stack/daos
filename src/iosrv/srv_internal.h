@@ -87,10 +87,12 @@ extern hwloc_bitmap_t	core_allocation_bitmap;
 extern hwloc_obj_t	numa_obj;
 /** number of cores in the given NUMA node */
 extern int		dss_num_cores_numa_node;
-/** Number of offload XS per target (1 or 2)*/
+/** Number of offload XS */
 extern unsigned int	dss_tgt_offload_xs_nr;
 /** number of system XS */
 extern unsigned int	dss_sys_xs_nr;
+/** Flag of helper XS as a pool */
+extern bool		dss_helper_pool;
 
 /* module.c */
 int dss_module_init(void);
@@ -124,25 +126,19 @@ void ds_iv_fini(void);
 
 /** To schedule ULT on caller's self XS */
 #define DSS_XS_SELF		(-1)
-/** Number of XS for each VOS target (main XS and its offload XS) */
-#define DSS_XS_NR_PER_TGT	(dss_tgt_offload_xs_nr + 1)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
-	(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr)
-/** Number of cart contexts for each VOS target */
-#define DSS_CTX_NR_PER_TGT	(dss_tgt_offload_xs_nr == 0 ? 1 : 2)
+	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
 /** Total number of cart contexts created */
 #define DSS_CTX_NR_TOTAL					\
-	(dss_tgt_nr * DSS_CTX_NR_PER_TGT + dss_sys_xs_nr)
+	(DAOS_TGT0_OFFSET + dss_tgt_nr +			\
+	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
+	  dss_tgt_offload_xs_nr))
 /** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id)					\
-	(((tgt_id) * DSS_XS_NR_PER_TGT) + dss_sys_xs_nr)
-/**
- * The offset of the XS in the target's XS set -
- * 0 is the main XS, and 1 is the first offload XS and so on.
- */
-#define DSS_XS_OFFSET_IN_TGT(xs_id)				\
-	(((xs_id) - dss_sys_xs_nr) % DSS_XS_NR_PER_TGT)
+#define DSS_MAIN_XS_ID(tgt_id)						\
+	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :			\
+			   ((tgt_id) * ((dss_tgt_offload_xs_nr /	\
+			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
 /**
  * get the VOS target ID of xstream.
@@ -158,10 +154,17 @@ dss_xs2tgt(int xs_id)
 		  "invalid xs_id %d, dss_tgt_nr %d, "
 		  "dss_tgt_offload_xs_nr %d.\n",
 		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
+	if (dss_helper_pool) {
+		if (xs_id < dss_sys_xs_nr ||
+		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
+			return -1;
+		return xs_id - dss_sys_xs_nr;
+	}
+
 	if (xs_id < dss_sys_xs_nr)
 		return -1;
-
-	return (xs_id - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	return (xs_id - dss_sys_xs_nr) /
+	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
 }
 
 #endif /* __DAOS_SRV_INTERNAL__ */

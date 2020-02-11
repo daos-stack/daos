@@ -29,8 +29,8 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
-
-#include "obj_internal.h"
+#include "obj_rpc.h"
+#include "rpc_csum.h"
 
 /** proc functions defined in other files */
 int
