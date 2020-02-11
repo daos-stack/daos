@@ -28,6 +28,7 @@ import subprocess
 from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 from fio_utils import FioCommand
 from command_utils import CommandFailure
 from dfuse_utils import Dfuse
@@ -63,6 +64,8 @@ class FioBase(TestWithServers):
         self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
+        self.co_prop = self.params.get("container_properties",
+                                       "/run/container/*")
 
     def tearDown(self):
         """Tear down each test case."""
@@ -84,29 +87,12 @@ class FioBase(TestWithServers):
 
     def _create_cont(self):
         """Create a TestContainer object to be used to create container."""
-        # TO-DO: Enable container using TestContainer object,
-        # once DAOS-3355 is resolved.
+        # Enable container using TestContainer object,
         # Get Container params
-        # self.container = TestContainer(self.pool)
-        # self.container.get_params(self)
-
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
         # create container
-        # self.container.create()
-        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-            self.pool.uuid, ":".join(
-                [str(item) for item in self.pool.svc_ranks]))
-        try:
-            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                         shell=True)
-            (output, err) = container.communicate()
-            self.log.info("Container created with UUID %s", output.split()[3])
-
-        except subprocess.CalledProcessError as err:
-            self.fail("Container create failed:{}".format(err))
-
-        return output.split()[3]
+        self.container.create(con_in=self.co_prop)
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -116,7 +102,7 @@ class FioBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont())
+        self.dfuse.set_dfuse_cont_param(self.container)
 
         try:
             # start dfuse
