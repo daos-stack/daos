@@ -1046,7 +1046,7 @@ dc_cont_set_prop(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": setting props: hdl="DF_UUID"\n",
-		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
@@ -1092,8 +1092,8 @@ err:
 }
 
 struct cont_update_acl_args {
-	struct dc_pool		*cqa_pool;
-	struct dc_cont		*cqa_cont;
+	struct dc_pool		*cua_pool;
+	struct dc_cont		*cua_cont;
 	crt_rpc_t		*rpc;
 	daos_handle_t		hdl;
 };
@@ -1104,8 +1104,8 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 	struct cont_update_acl_args	*arg = (struct cont_update_acl_args *)
 						data;
 	struct cont_acl_update_out	*out = crt_reply_get(arg->rpc);
-	struct dc_pool			*pool = arg->cqa_pool;
-	struct dc_cont			*cont = arg->cqa_cont;
+	struct dc_pool			*pool = arg->cua_pool;
+	struct dc_cont			*cont = arg->cua_cont;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1164,7 +1164,7 @@ dc_cont_update_acl(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": updating ACL: hdl="DF_UUID"\n",
-		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
@@ -1183,8 +1183,8 @@ dc_cont_update_acl(tse_task_t *task)
 	uuid_copy(in->caui_op.ci_hdl, cont->dc_cont_hdl);
 	in->caui_acl = args->acl;
 
-	arg.cqa_pool = pool;
-	arg.cqa_cont = cont;
+	arg.cua_pool = pool;
+	arg.cua_cont = cont;
 	arg.rpc	     = rpc;
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
