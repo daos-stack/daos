@@ -390,7 +390,6 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 		}
 	}
 
-	c.log.Debugf("DDD %v\n", resp.Mrets)
 	if err := stream.Send(resp); err != nil {
 		return errors.WithMessagef(err, "sending response (%+v)", resp)
 	}
