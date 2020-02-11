@@ -1,6 +1,6 @@
 """Build daos fio engine"""
 from __future__ import print_function
-import os
+
 import daos_build
 
 def scons():
