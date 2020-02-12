@@ -25,8 +25,10 @@ from __future__ import print_function
 
 import os
 
-import agent_utils
-
+from command_daos_utils import CommonConfig
+from agent_utils import (DaosAgentYamlParameters, DaosAgentCommand,
+                         DaosAgentManager, DaosAgentTransportCredentials,
+                         include_local_host)
 from apricot import TestWithServers
 from server_utils import ServerManager, ServerFailed
 
@@ -50,33 +52,27 @@ class DaosAgentConfigTest(TestWithServers):
         on the system.
         :avocado: tags=all,tiny,control,pr,agent_start,basic
         """
+        # Setup the agents
+        transport = DaosAgentTransportCredentials()
 
-
-        # Setup the servers
-        self.server_managers.append(ServerManager(
-            self.bin,
-            os.path.join(self.ompi_prefix, "bin")))
-        self.server_managers[-1].get_params(self)
-        self.server_managers[-1].hosts = (
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
+        # Use the unique agent group name to create a unique yaml file
+        config_file = self.get_config_file(self.server_group, "agent")
 
         # Get the input to verify
-        c_val = self.params.get("config_val", "/run/server_config_val/*/")
+        c_val = self.params.get("config_val", "/run/agent_config_val/*/")
 
-        # Identify the attribute and modify its value to test value
-        yml_params = self.server_managers[-1].runner.job.yaml_params
-        if c_val[3] == "gen":
-            getattr(yml_params, c_val[0]).value = c_val[1]
-        elif c_val[3] == "server":
-            getattr(yml_params.server_params[-1], c_val[0]).value = c_val[1]
+        # Setup the access points with the server hosts
+        common_cfg = CommonConfig(self.server_group, transport)
+        self.add_agent_manager(config_file, common_cfg)
+        self.configure_manager(
+            "agent",
+            self.agent_managers[-1],
+            self.hostlist_clients,
+            self.hostfile_clients_slots,
+            self.hostlist_servers)
 
         self.log.info("Starting server changing %s with %s", c_val[0], c_val[1])
-        yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
-        try:
-            self.server_managers[-1].start(yamlfile)
-            exception = None
-        except ServerFailed as err:
-            exception = err
+        self.start_agent_managers()
 
         # Verify
         if c_val[2] == "FAIL" and exception is None:
