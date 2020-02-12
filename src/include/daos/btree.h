@@ -499,7 +499,7 @@ int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
-int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
+int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
 		   d_iov_t *key, d_iov_t *val);
 int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 		   d_iov_t *key, void *args);

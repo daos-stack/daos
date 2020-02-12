@@ -927,7 +927,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, key, &riov);
 		if (rc) {
 			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -977,13 +977,22 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	int			 rc;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov, NULL,
 			  val_iov);
 	if (rc != 0) {
 		D_ASSERT(rc == -DER_NONEXIST);
+
+		/* For non-rebuild case, if the key does not exist,
+		 * don't create it.
+		 */
+		if (!(flags & VOS_OF_REPLAY_PC))
+			return 0;
+
+		/* For rebuild case, bypass DTX. */
+		D_ASSERT(vos_dth_get() == NULL);
+
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
-				   key_iov, val_iov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, key_iov, val_iov);
 		if (rc) {
 			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
 				DP_RC(rc));

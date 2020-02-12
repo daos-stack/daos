@@ -1985,7 +1985,7 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
  *			-ve	error code
  */
 int
-dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
+dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc,
 	      d_iov_t *key, d_iov_t *val)
 {
 	struct btr_context *tcx;
@@ -1998,7 +1998,9 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_upsert(tcx, opc, intent, key, val);
+
+	/* For rebuild-punch, the intent will be ignored by lower layer. */
+	rc = btr_upsert(tcx, opc, DAOS_INTENT_UPDATE, key, val);
 
 	return btr_tx_end(tcx, rc);
 }

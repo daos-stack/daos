@@ -495,8 +495,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 
 		d_iov_set(&riov, &dcrb, sizeof(dcrb));
 		d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
-		rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-				   &kiov, &riov);
+		rc = dbtree_upsert(tree, BTR_PROBE_EQ, &kiov, &riov);
 	}
 
 out:

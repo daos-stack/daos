@@ -534,7 +534,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	d_iov_set(&riov, dce, sizeof(*dce));
 	rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   &kiov, &riov);
 	if (rc != 0 || epoch != 0)
 		goto out;
 
@@ -697,8 +697,7 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
-	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, &riov);
 	if (rc == 0) {
 		dth->dth_ent = dae;
 		dth->dth_actived = 1;
@@ -1596,8 +1595,7 @@ insert:
 			d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 			d_iov_set(&riov, dae, sizeof(*dae));
 			rc = dbtree_upsert(cont->vc_dtx_active_hdl,
-					   BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-					   &kiov, &riov);
+					   BTR_PROBE_EQ, &kiov, &riov);
 			if (rc != 0) {
 				if (dae->dae_records != NULL)
 					D_FREE(dae->dae_records);
@@ -1663,7 +1661,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
 		d_iov_set(&riov, dce, sizeof(*dce));
 		rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-				   DAOS_INTENT_UPDATE, &kiov, &riov);
+				   &kiov, &riov);
 		if (rc != 0)
 			goto out;
 
@@ -1704,9 +1702,11 @@ vos_dtx_cleanup_dth(struct dtx_handle *dth)
 	d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 	rc = dbtree_delete(vos_hdl2cont(dth->dth_coh)->vc_dtx_active_hdl,
 			   BTR_PROBE_EQ, &kiov, NULL);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR(DF_UOID" failed to remove DTX entry "DF_DTI": %d\n",
 			DP_UOID(dth->dth_oid), DP_DTI(&dth->dth_xid), rc);
-	else
+	} else {
+		dth->dth_ent = NULL;
 		dth->dth_actived = 0;
+	}
 }

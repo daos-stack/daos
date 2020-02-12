@@ -240,8 +240,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_set(&val_iov, NULL, 0);
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
-	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			   &key_iov, &val_iov);
+	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &val_iov);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;

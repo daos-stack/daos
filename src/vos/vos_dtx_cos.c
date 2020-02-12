@@ -436,8 +436,7 @@ add:
 	rbund.flags = flags;
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 
-	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ, &kiov, &riov);
 
 	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
 		"intent %s, %s ilog entry: rc = "DF_RC"\n",
