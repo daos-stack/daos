@@ -205,7 +205,7 @@ class EvictTests(TestWithServers):
             self.log.info("Pool # %s is connected with handle %s",
                           count+1, self.pool[count].pool.handle.value)
 
-            self.container.append(self.add_container(self.pool[count]))
+            self.container.append(self.get_container(self.pool[count]))
             self.container[count].write_objects(target_list[-1])
 
         # Evict the last pool in the list
