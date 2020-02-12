@@ -864,7 +864,6 @@ pipeline {
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
                                            NODE=${NODELIST%%,*}
-                                           GTS_RELEASE=0.4.0
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
