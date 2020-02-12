@@ -447,7 +447,8 @@ class ServerManager(ExecutableCommand):
             storage (bool, optional): whether or not to prepare dspm/nvme
                 storage. Defaults to True.
         """
-        self.log.info("Preparing to start daos_server on %s", self._hosts)
+        self.log.info(
+            "<SERVER> Preparing to start daos_server on %s", self._hosts)
 
         # Create the daos_server configuration yaml file
         self.runner.job.set_config(config_file)
@@ -578,8 +579,9 @@ class ServerManager(ExecutableCommand):
 
     def detect_format_ready(self):
         """Detect when all the daos_servers are ready for storage format."""
-        self.log.info("Waiting for servers to be ready for format")
-        # self.manager.job.update_pattern("format", len(self._hosts))
+        self.log.info(
+            "<SERVER> Waiting for servers to be ready for format on %s",
+            self._hosts)
         self.runner.job.mode = "format"
         try:
             self.runner.run()
@@ -590,7 +592,9 @@ class ServerManager(ExecutableCommand):
 
     def detect_io_server_start(self):
         """Detect when all the daos_io_servers have started."""
-        self.log.info("Waiting for the daos_io_servers to start")
+        self.log.info(
+            "<SERVER> Waiting for the daos_io_servers to start on %s",
+            self._hosts)
         # self.manager.job.update_pattern("normal", len(self._hosts))
         self.runner.job.mode = "normal"
         if not self.runner.job.check_subprocess_status(self.runner.process):
@@ -602,6 +606,9 @@ class ServerManager(ExecutableCommand):
             ",".join(self.runner.job.yaml_params.access_points.value),
             "dmg.hostlist")
 
+        self.log.info(
+            "<SERVER> daos_server started successfully on %s", self._hosts)
+
     def reset_storage(self):
         """Reset the server nvme storage.
 
@@ -609,6 +616,7 @@ class ServerManager(ExecutableCommand):
             ServerFailed: if server failed to reset storage
 
         """
+        self.log.info("Resetting NVMe storage")
         command = [
             os.path.join(self.daosbinpath, "daos_server"),
             "storage",
@@ -657,7 +665,7 @@ class ServerManager(ExecutableCommand):
         self.detect_format_ready()
 
         # Format storage and wait for server to change ownership
-        self.log.info("Formatting hosts: <%s>", self._hosts)
+        self.log.info("<SERVER> Formatting storage on <%s>", self._hosts)
         self.dmg.storage_format()
 
         # Wait for all the doas_io_servers to start
@@ -667,12 +675,13 @@ class ServerManager(ExecutableCommand):
 
     def stop(self):
         """Stop the server through the runner."""
-        self.log.info("Stopping server orterun command")
+        self.log.info("<SERVER> Stopping servers on %s", self._hosts)
 
         # Maintain a running list of errors detected trying to stop
         messages = []
 
         # Stop the subprocess running the orterun command
+        self.log.info("Stopping the orterun command")
         try:
             self.runner.stop()
         except CommandFailure as error:
