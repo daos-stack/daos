@@ -66,9 +66,20 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     src = [mod_src]
     if libs is not None:
         src.extend(libs)
+    # generate a unique build id per binary for use by RPM
+    # https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID
+    def gen_build_id():
+        from os import urandom
+        from binascii import b2a_hex
+        return '0x' + b2a_hex(urandom(20)).decode()
+    def go_ldflags():
+        return ' '.join(['-ldflags',
+                         '"-X main.daosVersion=%s' % DAOS_VERSION,
+                         '-B %s"' % gen_build_id(),
+                         '-v'])
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
-                           'go install -ldflags "-X main.daosVersion=%s" %s' % (DAOS_VERSION, install_src)))
+                           'go install %s %s' % (go_ldflags(), install_src)))
     denv.InstallAs(install_bin, bin_path)
 #pylint: enable=too-many-arguments
 
