@@ -735,11 +735,11 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 }
 
 static int
-nvme_bio_error(bool unmap, bool update, int tgt_id)
+nvme_bio_error(int media_err_type, int tgt_id)
 {
 	int rc;
 
-	rc = notify_bio_error(unmap, update, tgt_id);
+	rc = notify_bio_error(media_err_type, tgt_id);
 
 	return rc;
 }
