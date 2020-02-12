@@ -311,30 +311,43 @@ bio_media_error(void *msg_arg)
 
 	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
 
-	if (mem->mem_unmap) {
+	switch (mem->mem_err_type) {
+	case MET_UNMAP:
 		/* Update unmap error counter */
 		dev_state->bds_bio_unmap_errs++;
 		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
-	} else {
-		/* Update read/write I/O error counters */
-		if (mem->mem_update)
-			dev_state->bds_bio_write_errs++;
-		else
-			dev_state->bds_bio_read_errs++;
-		D_ERROR("%s error logged from xs_id:%d\n",
-			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
+		break;
+	case MET_WRITE:
+		/* Update write I/O error counter */
+		dev_state->bds_bio_write_errs++;
+		D_ERROR("Write error logged from xs_id:%d\n", mem->mem_tgt_id);
+		break;
+	case MET_READ:
+		/* Update read I/O error counter */
+		dev_state->bds_bio_read_errs++;
+		D_ERROR("Read error logged from xs_id:%d\n", mem->mem_tgt_id);
+		break;
+	case MET_CSUM:
+		/* Update CSUM error counter */
+		dev_state->bds_checksum_errs++;
+		D_ERROR("CSUM error logged from xs_id:%d\n", mem->mem_tgt_id);
+		break;
 	}
 
-	/* TODO Implement checksum error counter */
-	dev_state->bds_checksum_errs = 0;
 
 	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
 		goto out;
-	/* Notify admin through Control Plane of BIO error callback */
-	rc = ract_ops->ioerr_reaction(mem->mem_unmap, mem->mem_update,
-				      mem->mem_tgt_id);
-	if (rc < 0)
-		D_ERROR("Blobstore I/O error notification error. %d\n", rc);
+	/*
+	 * Notify admin through Control Plane of BIO error callback.
+	 * TODO: CSUM errors not currently supporte by Control Plane.
+	 */
+	if (mem->mem_err_type != MET_CSUM) {
+		rc = ract_ops->ioerr_reaction(mem->mem_err_type,
+					      mem->mem_tgt_id);
+		if (rc < 0)
+			D_ERROR("Blobstore I/O error notification error. %d\n",
+				rc);
+	}
 
 out:
 	D_FREE(mem);
