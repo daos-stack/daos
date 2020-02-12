@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'DAOS_VERSION', 'prereqs', 'API_VERSION')
+    Import('env', 'API_VERSION', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
