@@ -1,0 +1,51 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - server-B
+server_manager:
+    srv_timeout: 30
+    recreate: true
+timeout: 120
+server_config:
+  name: daos_server
+
+# The 'config_val' list is composed of the following values:
+# - name of the config attribute, used to look for the attribute object
+# - test value that will be inserted into the agent config for the attribute
+# - PASS or FAIL value, specifying how the agent is expected to function
+# - value specifying if the attribute is part of the general config values or
+#     the agent config values
+agent_config_val: !mux
+  name_special_chars:
+    config_val:
+      - "name"
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "FAIL"
+  name_alphanumeric:
+    config_val:
+      - "name"
+      - "ABCD1234abcd"
+      - "PASS"
+  name_numeric:
+    config_val:
+      - "name"
+      - "12345678"
+      - "PASS"
+  name_combo:
+    config_val:
+      - "name"
+      - "AB-C&__dal1234"
+      - "PASS"
+  name_list:
+    config_val:
+      - "name"
+      - "amjustin, 12345, abcdef"
+      - "FAIL"
+  access_point_noport:
+    config_val:
+      - "access_points"
+      - "[localhost]"
+      - "PASS"
