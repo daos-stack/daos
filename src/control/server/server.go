@@ -33,6 +33,7 @@ import (
 	"os/user"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -59,6 +60,8 @@ const (
 
 	iommuPath = "/sys/class/iommu"
 )
+
+var ioserverShutdownTimeout = 10 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -267,10 +270,16 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	go func() {
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
-			log.Errorf("error during dRPC cleanup: %s", err)
+
+		defer shutdown() // Kill I/O servers if running after graceful shutdown.
+
+		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
+		defer cancel()
+
+		// Attampt graceful shutdown of I/O servers.
+		if err := harness.SignalInstances(stopCtx, log, sig); err != nil {
+			log.Error(errors.Wrap(err, "graceful shutdown").Error())
 		}
-		shutdown()
 	}()
 
 	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {

@@ -48,7 +48,7 @@ import (
 type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
-	Stop(bool) error
+	Signal(os.Signal) error
 	GetConfig() *ioserver.Config
 }
 
@@ -223,10 +223,12 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
-func (srv *IOServerInstance) Stop(force bool) error {
-	return srv.runner.Stop(force)
+// Signal sends signal to IOServerInstance runner.
+func (srv *IOServerInstance) Signal(signal os.Signal) error {
+	return srv.runner.Signal(signal)
 }
 
+// IsStarted indicates whether IOServerInstance is in a running state.
 func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
@@ -330,6 +332,27 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 	}
 
 	return nil
+}
+
+// GetRank returns a valid instance rank or error.
+func (srv *IOServerInstance) GetRank() (*ioserver.Rank, error) {
+	var err error
+	sb := srv.getSuperblock()
+
+	switch {
+	case sb == nil:
+		err = errors.New("nil superblock")
+	case sb.Rank == nil:
+		err = errors.New("nil rank in superblock")
+	case *sb.Rank == ioserver.NilRank:
+		err = errors.New("NilRank in superblock")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return sb.Rank, nil
 }
 
 // StartManagementService starts the DAOS management service replica associated
@@ -460,6 +483,7 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
+// BioErrorNotify logs a blob I/O error.
 func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",

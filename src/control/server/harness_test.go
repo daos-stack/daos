@@ -31,9 +31,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -352,6 +355,122 @@ func TestHarnessIOServerStart(t *testing.T) {
 					lastCall.Method != expCall.Method {
 					t.Fatalf("expected final dRPC call for instance %d to be %s, got %s",
 						srv.Index(), expCall, lastCall)
+				}
+			}
+		})
+	}
+}
+
+func TestHarness_SignalInstances(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ioserverCount     int
+		signal            os.Signal
+		ranks             []uint32
+		harnessNotStarted bool
+		signalErr         error
+		ctxTimeout        time.Duration
+		expErr            error
+		expSignalsSent    map[uint32]os.Signal
+		missingSB         bool
+	}{
+		"nil signal": {
+			expErr: errors.New("nil signal"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			signal:    syscall.SIGKILL,
+			expErr:    errors.New("nil superblock"),
+		},
+		"harness not started": {
+			harnessNotStarted: true,
+			signal:            syscall.SIGKILL,
+			expSignalsSent:    map[uint32]os.Signal{},
+		},
+		"rank not in list": {
+			ranks:          []uint32{2, 3},
+			signal:         syscall.SIGKILL,
+			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
+		},
+		"signal send error": {
+			signal:    syscall.SIGKILL,
+			signalErr: errors.New("sending signal failed"),
+			expErr:    errors.New("scan error(s):\n  sending signal failed\n  sending signal failed\n"),
+		},
+		"context timeout": {
+			signal:     syscall.SIGKILL,
+			ctxTimeout: 1 * time.Nanosecond,
+			expErr:     errors.New("context deadline exceeded"),
+		},
+		"normal stop single-io": {
+			ioserverCount:  1,
+			signal:         syscall.SIGINT,
+			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT},
+		},
+		"normal stop multi-io": {
+			signal:         syscall.SIGTERM,
+			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGTERM, 1: syscall.SIGTERM},
+		},
+		"force stop multi-io": {
+			signal:         syscall.SIGKILL,
+			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var signalsSent sync.Map
+			if tc.ioserverCount == 0 {
+				tc.ioserverCount = maxIoServers
+			}
+			if tc.ranks == nil {
+				tc.ranks = []uint32{}
+			}
+			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
+			if !tc.harnessNotStarted {
+				svc.harness.setStarted()
+			}
+			for i, srv := range svc.harness.Instances() {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+
+				trc := &ioserver.TestRunnerConfig{}
+				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
+				trc.SignalErr = tc.signalErr
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+			}
+
+			if tc.ctxTimeout == 0 {
+				tc.ctxTimeout = 5 * time.Millisecond
+			}
+			ctx, shutdown := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			defer shutdown()
+			common.CmpErr(t, tc.expErr, svc.harness.SignalInstances(ctx, log, tc.signal, tc.ranks...))
+
+			if tc.expErr != nil {
+				return
+			}
+
+			var numSignalsSent int
+			signalsSent.Range(func(_, _ interface{}) bool {
+				numSignalsSent++
+				return true
+			})
+			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
+
+			for expKey, expValue := range tc.expSignalsSent {
+				value, found := signalsSent.Load(expKey)
+				if !found {
+					t.Fatalf("rank %d was not sent %s signal", expKey, expValue)
+				}
+				if diff := cmp.Diff(expValue, value); diff != "" {
+					t.Fatalf("unexpected signals sent (-want, +got):\n%s\n", diff)
 				}
 			}
 		})

@@ -22,12 +22,17 @@
 //
 package ioserver
 
-import "context"
+import (
+	"context"
+	"os"
+)
 
 type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
+		SignalCb   func(uint32, os.Signal)
+		SignalErr  error
 		ErrChanCb  func() error
 		ErrChanErr error
 	}
@@ -70,7 +75,12 @@ func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
 	return tr.runnerCfg.StartErr
 }
 
-func (tr *TestRunner) Stop(bool) error { return nil }
+func (tr *TestRunner) Signal(sig os.Signal) error {
+	if tr.runnerCfg.SignalCb != nil {
+		tr.runnerCfg.SignalCb(tr.serverCfg.Index, sig)
+	}
+	return tr.runnerCfg.SignalErr
+}
 
 func (tr *TestRunner) IsRunning() bool { return true }
 

@@ -27,6 +27,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"unicode"
+
+	"github.com/pkg/errors"
 )
 
 // Includes returns true if string target in slice.
@@ -106,4 +108,18 @@ func Pluralise(s string, n int) string {
 func ParseInts(in string) (ints []uint32, err error) {
 	str := fmt.Sprintf("[%s]", in)
 	return ints, json.Unmarshal([]byte(str), &ints)
+}
+
+// ConcatErrors builds single error from error slice.
+func ConcatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
 }
