@@ -81,6 +81,7 @@ struct obj_auxi_args {
 					 to_leader:1,
 					 spec_shard:1,
 					 req_reasbed:1,
+					 is_ec_obj:1,
 					 csum_retry:1,
 					 csum_report:1,
 					 no_retry:1;
@@ -666,6 +667,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (!daos_oclass_is_ec(oid, &oca))
 		return 0;
 
+	obj_auxi->is_ec_obj = 1;
 	rc = obj_reasb_req_init(obj_auxi, args->iods, args->nr, oca);
 	if (rc) {
 		D_ERROR(DF_OID" obj_reasb_req_init failed %d.\n",
@@ -2490,31 +2492,13 @@ out:
 	return rc;
 }
 
-/* Sets initial shard so retry will know when all replicas have been tried.
- */
-static inline void
-obj_set_initial_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
-		      uint64_t dkey_hash, unsigned int map_ver)
-{
-	int rc = obj_dkey2shard(obj, dkey_hash, map_ver, DAOS_OBJ_RPC_FETCH,
-				obj_auxi->to_leader);
-
-	/* rc < 0 means no available targets. Fetch with error out with
-	 * -DER_NONEXIST. Hence, it's okay to leave initial shard as initialized
-	 * (set to shard 0).
-	 */
-
-	if (rc >=  0)
-		obj_auxi->initial_shard = rc;
-}
-
 static int
 do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 		uint32_t flags, uint32_t shard)
 {
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
-	uint8_t                 *tgt_bitmap = NULL;
+	uint8_t                 *tgt_bitmap = NIL_BITMAP;
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
@@ -2563,6 +2547,11 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	if (obj_auxi->csum_report) {
 		obj_auxi->flags |= ORF_CSUM_REPORT;
 		D_ASSERT(!obj_auxi->csum_retry);
+		/* the spec_shard case will not cause csum_report, so just
+		 * reuse it to make sure the csum_report send to correct tgt.
+		 */
+		shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
+		obj_auxi->spec_shard = 1;
 	} else if (obj_auxi->csum_retry) {
 		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
 					&csum_bitmap);
@@ -2570,8 +2559,8 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			goto out_task;
 		tgt_bitmap = &csum_bitmap;
 	} else {
-		obj_set_initial_shard(obj, obj_auxi, dkey_hash, map_ver);
-		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
+		if (obj_auxi->is_ec_obj)
+			tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
 			      dkey_hash, tgt_bitmap, map_ver,
@@ -2579,8 +2568,14 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			      &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
+	if (obj_auxi->csum_report)
+		obj_auxi->spec_shard = 0;
 
 	if (!obj_auxi->io_retry) {
+		if (!obj_auxi->is_ec_obj)
+			obj_auxi->initial_shard =
+				obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
+
 		rc = csum_obj_fetch(obj, args, obj_auxi);
 		if (rc != 0) {
 			D_ERROR("csum_obj_fetch error: %d", rc);
