@@ -71,7 +71,7 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     def gen_build_id():
         from os import urandom
         from binascii import b2a_hex
-        return str('0x%s' % b2a_hex(urandom(20)))
+        return '0x' + b2a_hex(urandom(20)).decode()
     def go_ldflags():
         return ' '.join(['-ldflags',
                          '"-X main.daosVersion=%s' % DAOS_VERSION,
