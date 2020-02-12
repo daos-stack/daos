@@ -39,6 +39,7 @@ def get_version():
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
+API_VERSION = "0.9.0"
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -109,6 +110,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
@@ -345,7 +347,7 @@ def scons():
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
+    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm', 'API_VERSION')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
