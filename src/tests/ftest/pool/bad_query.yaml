@@ -32,11 +32,3 @@ querytests:
           info:
              - NULL
              - PASS
-   connectmode:
-     mode: 2
-   createmode:
-     mode: 511
-   createset:
-     setname: daos_server
-   createsize:
-     size: 1073741824
