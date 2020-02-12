@@ -27,6 +27,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"unicode"
+
+	"github.com/pkg/errors"
 )
 
 // Includes returns true if string target in slice.
@@ -100,6 +102,20 @@ func Pluralise(s string, n int) string {
 		return s
 	}
 	return s + "s"
+}
+
+// ConcatErrors builds single error from error slice.
+func ConcatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
 }
 
 // ParseInts converts string of uint32s to uint32 array.

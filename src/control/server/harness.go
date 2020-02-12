@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,19 +38,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// IOServerHarness is responsible for managing IOServer instances
+// IOServerHarness is responsible for managing IOServer instances.
 type IOServerHarness struct {
 	sync.RWMutex
 	log            logging.Logger
 	instances      []*IOServerInstance
 	started        uint32
-	restartable    uint32
+	startable      uint32
 	restart        chan struct{}
 	errChan        chan error
 	rankReqTimeout time.Duration
 }
 
-// NewHarness returns an initialized *IOServerHarness
+// NewIOServerHarness returns an initialized *IOServerHarness.
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:            log,
@@ -60,6 +61,7 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	}
 }
 
+// Instances safely returns harness' IOServerInstances.
 func (h *IOServerHarness) Instances() []*IOServerInstance {
 	h.RLock()
 	defer h.RUnlock()
@@ -231,6 +233,124 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 	return nil
 }
 
+// StopInstances will signal harness-managed instances.
+//
+// Iterate over instances and call Stop(sig) on each, return when all instances
+// exit or err context is done. Error map returned for stop attempt failures so
+// can continue to return results and update state.
+func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, rankList ...*ioserver.Rank) (map[*ioserver.Rank]error, error) {
+	if !h.IsStarted() {
+		return nil, nil
+	}
+	if signal == nil {
+		return nil, errors.New("nil signal")
+	}
+
+	instances := h.Instances()
+	type rankRes struct {
+		rank *ioserver.Rank
+		ps   *os.ProcessState
+		err  error
+	}
+	resChan := make(chan rankRes, len(instances))
+	stopping := 0
+	for _, instance := range instances {
+		rank, err := instance.GetRank()
+		if err != nil {
+			return nil, err
+		}
+
+		if !checkRankList(*rank, rankList) {
+			h.log.Debugf("rank %s not in requested list, skipping...", rank)
+			continue // filtered out, no result expected
+		}
+
+		if !instance.IsStarted() {
+			continue
+		}
+
+		go func(i *IOServerInstance) {
+			h.log.Debugf("%s rank %s", signal, rank)
+
+			ps, err := i.Stop(signal) // blocks until process.Wait() returns
+			resChan <- rankRes{rank: rank, ps: ps, err: err}
+		}(instance)
+		stopping++
+	}
+
+	stopErrors := make(map[*ioserver.Rank]error)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-resChan:
+			stopping--
+			if result.err != nil {
+				stopErrors[result.rank] = result.err
+			} else {
+				h.log.Debugf("process state on exit: %s", result.ps)
+			}
+			if stopping == 0 {
+				return stopErrors, nil
+			}
+		}
+	}
+}
+
+func (h *IOServerHarness) getInstanceStartedResults(rankList []*ioserver.Rank, desiredState system.MemberState, action string, stopErrs map[*ioserver.Rank]error) (system.MemberResults, error) {
+	results := make(system.MemberResults, 0, maxIOServers)
+	for _, i := range h.Instances() {
+		rank, err := i.GetRank()
+		if err != nil {
+			return nil, err
+		}
+
+		if !checkRankList(*rank, rankList) {
+			continue // filtered out, no result expected
+		}
+
+		state := system.MemberStateStarted
+		if !i.IsStarted() {
+			state = system.MemberStateStopped
+		}
+
+		var extraErrMsg string
+		if stopErrs != nil {
+			if stopErr, exists := stopErrs[rank]; exists {
+				if stopErr == nil {
+					return nil, errors.New("expected non-nil error in error map")
+				}
+				extraErrMsg = fmt.Sprintf(" (%s)", stopErr.Error())
+			}
+		}
+		if state != desiredState {
+			err = errors.Errorf("want %s, got %s%s", desiredState, state, extraErrMsg)
+		}
+
+		results = append(results, system.NewMemberResult(rank.Uint32(), action, err, state))
+	}
+
+	return results, nil
+}
+
+// StopInstances attempts to stop instances managed by harness and returns
+// members.
+func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...*ioserver.Rank) (system.MemberResults, error) {
+	h.log.Debug("stopping harness managed instances")
+	stopErrs, err := h.stopInstances(ctx, signal, rankList...)
+	if err != nil && err != context.DeadlineExceeded {
+		// unexpected error, fail without collecting rank results
+		return nil, err
+	}
+
+	results, err := h.getInstanceStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // waitInstancesReady awaits ready signal from I/O server before starting
 // management service on MS replicas immediately so other instances can join.
 // I/O server modules are then loaded.
@@ -275,22 +395,20 @@ func (h *IOServerHarness) monitor(ctx context.Context) error {
 	h.log.Debug("monitoring instances")
 	for {
 		select {
-		case <-ctx.Done(): // received when harness is exiting
+		case <-ctx.Done(): // harness exit
 			return ctx.Err()
-		case err := <-h.errChan: // received when instance exits
+		case err := <-h.errChan: // instance exit
 			// TODO: Restart failed instances on unexpected exit.
 			msg := fmt.Sprintf("instance exited: %v", err)
 			if len(h.StartedRanks()) == 0 {
 				msg += ", all instances stopped!"
-				h.setRestartable()
+				h.setStartable()
 			}
 			h.log.Info(msg)
-		case <-h.restart: // trigger harness to restart instances
+		case <-h.restart: // harness to restart instances
 			return nil
 		}
 	}
-
-	return nil
 }
 
 // Start starts all configured instances, waits for them to be ready and then
@@ -309,6 +427,14 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
 
+	defer func() {
+		if cfg != nil {
+			if err := drpcCleanup(cfg.SocketDir); err != nil {
+				h.log.Errorf("error during dRPC cleanup: %s", err)
+			}
+		}
+	}()
+
 	for {
 		if cfg != nil {
 			// Single daos_server dRPC server to handle all iosrv requests
@@ -326,19 +452,18 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 			return err
 		}
 	}
-
-	return nil
 }
 
-// RestartInstances will signal the harness to restart configured instances.
-func (h *IOServerHarness) RestartInstances() error {
+// Reload will signal the harness to start configured instances once
+// stopped.
+func (h *IOServerHarness) Reload() error {
 	h.RLock()
 	defer h.RUnlock()
 
 	if !h.IsStarted() {
 		return errors.New("can't start instances: harness not started")
 	}
-	if !h.IsRestartable() {
+	if !h.IsStartable() {
 		return errors.New("can't start instances: already running")
 	}
 	if len(h.StartedRanks()) > 0 {
@@ -392,6 +517,7 @@ func (h *IOServerHarness) setStopped() {
 	atomic.StoreUint32(&h.started, 0)
 }
 
+// IsStarted indicates whether the IOServerHarness is in a running state.
 func (h *IOServerHarness) IsStarted() bool {
 	return atomic.LoadUint32(&h.started) == 1
 }
@@ -412,10 +538,11 @@ func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
 	return ranks
 }
 
-func (h *IOServerHarness) setRestartable() {
-	atomic.StoreUint32(&h.restartable, 1)
+func (h *IOServerHarness) setStartable() {
+	atomic.StoreUint32(&h.startable, 1)
 }
 
-func (h *IOServerHarness) IsRestartable() bool {
-	return atomic.LoadUint32(&h.restartable) == 1
+// IsStartable indicates whether the IOServerHarness is ready to be started.
+func (h *IOServerHarness) IsStartable() bool {
+	return atomic.LoadUint32(&h.startable) == 1
 }
