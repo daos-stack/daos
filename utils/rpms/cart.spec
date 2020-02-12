@@ -1,10 +1,10 @@
 %global carthome %{_exec_prefix}/lib/%{name}
 
-%global mercury_version 2.0.0a1-0.2.git.c2c2628%{?dist}
+%global mercury_version 2.0.0a1-0.3.git.c2c2628%{?dist}
 
 Name:          cart
 Version:       4.5.1
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -143,6 +143,11 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Tue Feb 11 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.1-2
+- Libcart version 4.5.1-2
+- mercury_version 2.0.0a1-0.3.git.c2c2628 - unrolled nameserver patch due to
+  verbs instability
+
 * Mon Jan 27 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.1-1
 - Libcart version 4.5.1-1
 - New D_LOG_TRUNCATE environment variable added
