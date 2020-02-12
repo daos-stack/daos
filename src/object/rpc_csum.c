@@ -27,6 +27,7 @@
 
 #include <daos/rpc.h>
 #include "obj_rpc.h"
+#include "rpc_csum.h"
 
 #define ENCODING(proc) (proc_op == CRT_PROC_ENCODE)
 #define DECODING(proc) (proc_op == CRT_PROC_DECODE)
@@ -39,10 +40,13 @@
 		} while (0)
 
 static int
-crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
+proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
 {
-	crt_proc_op_t	proc_op;
-	int		rc;
+	crt_proc_op_t		proc_op;
+	int			rc;
+
+	if (csum == NULL)
+		return 0;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
@@ -88,6 +92,51 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info *csum)
 }
 
 int
+crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
+{
+	crt_proc_op_t		proc_op;
+	bool			csum_enabled;
+	int			rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0 || p_csum == NULL)
+		return -DER_HG;
+
+	if (ENCODING(proc_op)) {
+		csum_enabled = *p_csum != NULL;
+		PROC(bool, &csum_enabled);
+		if (csum_enabled) {
+			rc = proc_struct_dcs_csum_info(proc, *p_csum);
+			if (rc != 0)
+				return -DER_HG;
+		}
+
+		return 0;
+	}
+
+	if (DECODING(proc_op)) {
+		PROC(bool, &csum_enabled);
+		if (!csum_enabled)
+			return 0;
+		D_ALLOC_PTR(*p_csum);
+		if (*p_csum == NULL)
+			return -DER_NOMEM;
+		rc = proc_struct_dcs_csum_info(proc, *p_csum);
+		if (rc != 0) {
+			D_FREE(*p_csum);
+			return rc;
+		}
+	}
+
+	if (FREEING(proc_op)) {
+		rc = proc_struct_dcs_csum_info(proc, *p_csum);
+		D_FREE(*p_csum);
+	}
+
+	return rc;
+}
+
+int
 crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
 {
 	crt_proc_op_t		 proc_op;
@@ -97,24 +146,42 @@ crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
+	if (rc != 0)
+		return rc;
+
 	if (ENCODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC(struct_dcs_csum_info, &iod_csum->ic_data[i]);
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0)
+				return rc;
+		}
 	}
 
 	if (DECODING(proc)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
 		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC(struct_dcs_csum_info, &iod_csum->ic_data[i]);
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0) {
+				D_FREE(iod_csum->ic_data);
+				return rc;
+			}
+		}
 	}
 
-	if (FREEING(proc) && iod_csum != NULL) {
-		for (i = 0; i < iod_csum->ic_nr; i++)
-			PROC(struct_dcs_csum_info, &iod_csum->ic_data[i]);
+	if (FREEING(proc)) {
+		for (i = 0; i < iod_csum->ic_nr; i++) {
+			rc = proc_struct_dcs_csum_info(proc,
+				&iod_csum->ic_data[i]);
+			if (rc != 0)
+				break;
+		}
 		D_FREE(iod_csum->ic_data);
 	}
 
-	return 0;
+	return rc;
 }

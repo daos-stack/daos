@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ class FioBase(TestWithServers):
         """Create a pool and execute Fio."""
         # Get the pool params
         # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool

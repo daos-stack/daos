@@ -39,6 +39,7 @@
 #include <hwloc.h>
 #include <abt.h>
 #include <cart/iv.h>
+#include <daos/checksum.h>
 
 /** number of target (XS set) per server */
 extern unsigned int	dss_tgt_nr;
@@ -551,6 +552,7 @@ struct dss_enum_arg {
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
+	struct daos_csummer    *csummer;
 	int			eprs_cap;
 	int			eprs_len;
 	int			last_type;	/* hack for tweaking kds_len */
@@ -562,6 +564,7 @@ struct dss_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
+			d_iov_t			csum_iov;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */
@@ -629,6 +632,13 @@ enum dss_init_state {
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
+enum dss_media_error_type {
+	MET_WRITE = 0,	/* write error */
+	MET_READ,	/* read error */
+	MET_UNMAP,	/* unmap error */
+	MET_CSUM	/* checksum error */
+};
+
 void dss_init_state_set(enum dss_init_state state);
 
 /* default credits */
@@ -639,6 +649,6 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-int notify_bio_error(bool unmap, bool update, int tgt_id);
+int notify_bio_error(int media_err_type, int tgt_id);
 
 #endif /* __DSS_API_H__ */

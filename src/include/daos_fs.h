@@ -463,11 +463,13 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
+ * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	  daos_oclass_id_t cid);
 
 /**
  * Remove an object from parent directory. If object is a directory and is
