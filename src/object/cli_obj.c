@@ -2294,7 +2294,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			/** checksums sent and not retrying,
 			 * can destroy now
 			 */
-			obj_rw_csum_destroy(obj, dc_task_get_args(task));
+			obj_rw_csum_destroy(obj, obj_auxi);
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);

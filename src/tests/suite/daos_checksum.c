@@ -28,6 +28,36 @@
 #include <gurt/types.h>
 #include <daos_prop.h>
 
+/** by default for replica object test */
+static daos_oclass_id_t dts_csum_oc = OC_SX;
+
+/** enable EC obj csum test or replica obj csum test */
+static inline int
+csum_ec_enable(void **state)
+{
+	dts_csum_oc = OC_EC_2P2G1;
+	return 0;
+}
+
+static inline int
+csum_replia_enable(void **state)
+{
+	dts_csum_oc = OC_SX;
+	return 0;
+}
+
+static inline bool
+csum_ec_enabled()
+{
+	return dts_csum_oc == OC_EC_2P2G1;
+}
+
+static inline uint32_t
+csum_ec_grp_size()
+{
+	return 4;
+}
+
 /** fault injection helpers */
 static void
 set_fi(uint64_t flag)
@@ -242,14 +272,18 @@ static void
 checksum_disabled(void **state)
 {
 	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
 
 	/**
 	 * Setup
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *)*state);
 	setup_simple_data(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_OFF, false, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_OFF, false, 0, oc);
 
 	/**
 	 * Act
@@ -278,7 +312,11 @@ static void
 io_with_server_side_verify(void **state)
 {
 	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
 
 	/**
 	 * Setup
@@ -302,14 +340,14 @@ io_with_server_side_verify(void **state)
 	 *
 	 */
 	/** 1. Server verify disabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
 	/** 2. Server verify enabled, no corruption */
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
@@ -317,7 +355,7 @@ io_with_server_side_verify(void **state)
 
 	/** 3. Server verify disabled, corruption occurs, update should work */
 	set_update_csum_fi();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
@@ -326,7 +364,7 @@ io_with_server_side_verify(void **state)
 
 	/** 4. Server verify enabled, corruption occurs, update should fail */
 	set_update_csum_fi();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
@@ -335,13 +373,13 @@ io_with_server_side_verify(void **state)
 
 	/**5. Data corruption. Update should fail due CRC mismatch */
 	set_client_data_corrupt_fi();
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_cont_obj(&ctx);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 0, oc);
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
 			     &ctx.update_iod, &ctx.update_sgl, NULL);
 	assert_int_equal(rc, -DER_CSUM);
@@ -353,12 +391,13 @@ io_with_server_side_verify(void **state)
 static void
 test_server_data_corruption(void **state)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t		*arg = *state;
 	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -387,15 +426,16 @@ test_server_data_corruption(void **state)
 static void
 test_fetch_array(void **state)
 {
-	int			rc;
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
+	int			rc;
 
 	/**
 	 * Setup
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *) *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024*8, oc);
 
 	/**
 	 * Act
@@ -584,6 +624,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 			    struct partial_unaligned_fetch_testcase_args *args)
 {
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
 	uint32_t		rec_size = args->rec_size;
 	int			recx_count = 0;
 	size_t			max_data_size = 0;
@@ -631,7 +672,7 @@ array_update_fetch_testcase(char *file, int line, test_arg_t *test_arg,
 
 	setup_from_test_args(&ctx, test_arg);
 	setup_cont_obj(&ctx, args->csum_prop_type, args->server_verify,
-		       args->chunksize, OC_SX);
+		       args->chunksize, oc);
 
 	for (i = 0; i < recx_count; i++) {
 		ctx.recx[0].rx_nr = args->recx_cfgs[i].nr;
@@ -750,11 +791,12 @@ static void
 single_value(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc;
 
 	setup_from_test_args(&ctx, *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, oc);
 	setup_obj_data_for_sv(&ctx);
 
 	/** Base case ... no fault injection */
@@ -801,7 +843,7 @@ single_value(void **state)
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, oc);
 
 	/**
 	 * fault injection on update
@@ -832,6 +874,7 @@ static void
 mix_test(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc;
 	daos_key_t		 dkey;
 	daos_iod_t		 iods[2] = {0};
@@ -847,7 +890,7 @@ mix_test(void **state)
 
 	setup_from_test_args(&ctx, *state);
 
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, oc);
 
 	iov_alloc_str(&dkey, "dkey");
 
@@ -917,7 +960,7 @@ mix_test(void **state)
 
 	/** Reset the container with server side verification enabled */
 	cleanup_cont_obj(&ctx);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, true, 4, oc);
 
 	/**
 	 * fault injection on update
@@ -955,10 +998,11 @@ static void
 key_csum_fetch_update(void **state, int update_fi_flag, int fetch_fi_flag)
 {
 	struct csum_test_ctx	ctx;
+	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/**
@@ -1026,6 +1070,7 @@ static void
 test_enumerate_a_key(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc;
 	uint32_t		i;
 	daos_anchor_t		anchor = {0};
@@ -1034,7 +1079,7 @@ test_enumerate_a_key(void **state)
 	uint32_t		nr = KDS_NR;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/** insert multiple keys to enumerate */
@@ -1076,6 +1121,7 @@ static void
 test_enumerate_d_key(void **state)
 {
 	struct csum_test_ctx	ctx = {0};
+	daos_oclass_id_t	oc = dts_csum_oc;
 	int			rc = 0;
 	uint32_t		i;
 	daos_anchor_t		anchor = {0};
@@ -1085,7 +1131,7 @@ test_enumerate_d_key(void **state)
 	uint32_t		key_count = 0;
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, OC_SX);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC16, false, 1024, oc);
 	setup_simple_data(&ctx);
 
 	/** insert multiple keys to enumerate */
@@ -1140,7 +1186,9 @@ setup(void **state)
 			  NULL);
 }
 
-#define CSUM_TEST(dsc, test) { dsc, test, async_disable, \
+#define CSUM_TEST(dsc, test) { dsc, test, csum_replia_enable, \
+				test_case_teardown }
+#define EC_CSUM_TEST(dsc, test) { dsc, test, csum_ec_enable, \
 				test_case_teardown }
 
 static const struct CMUnitTest csum_tests[] = {
@@ -1158,7 +1206,11 @@ static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM07: Update/Fetch A Key", test_update_fetch_a_key),
 	CSUM_TEST("DAOS_CSUM08: Update/Fetch D Key", test_update_fetch_d_key),
 	CSUM_TEST("DAOS_CSUM09: Enumerate A Keys", test_enumerate_a_key),
-	CSUM_TEST("DAOS_CSUM10: Enumerate D Keys", test_enumerate_d_key)
+	CSUM_TEST("DAOS_CSUM10: Enumerate D Keys", test_enumerate_d_key),
+
+	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
+	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
+		     io_with_server_side_verify),
 };
 
 int
