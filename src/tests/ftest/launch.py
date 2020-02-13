@@ -1,4 +1,5 @@
 #!/usr/bin/python2
+# pylint: disable=too-many-lines
 """
   (C) Copyright 2018-2019 Intel Corporation.
 
@@ -63,12 +64,23 @@ except ImportError:
 
 TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
-SERVER_KEYS = (
-    "test_servers",
-    )
-CLIENT_KEYS = (
-    "test_clients",
-    )
+YAML_KEYS = {
+    "test_servers": "test_servers",
+    "test_clients": "test_clients",
+    "bdev_list": "nvme",
+}
+YAML_KEY_ORDER = ("test_servers", "test_clients", "bdev_list")
+
+
+def display(args, message):
+    """Display the message if verbosity is set.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+        message (str): message to display if verbosity is set
+    """
+    if args.verbose:
+        print(message)
 
 
 def get_build_environment():
@@ -235,17 +247,18 @@ def time_command(cmd):
     return return_code
 
 
-def spawn_commands(host_list, command, timeout=120):
+def get_remote_output(host_list, command, timeout=120):
     """Run the command on each specified host in parallel.
 
     Args:
         host_list (list): list of hosts
         command (str): command to run on each host
-        timeout (int): number of seconds to wait for all jobs to complete
+        timeout (int, optional): number of seconds to wait for all jobs to
+            complete. Defaults to 120 seconds.
 
     Returns:
-        bool: True if the command completed successfully (rc=0) on each
-            specified host; False otherwise
+        Task: a Task object containing the result of the running the command on
+            the specified hosts
 
     """
     # Create a ClusterShell Task to run the command in parallel on the hosts
@@ -256,7 +269,21 @@ def spawn_commands(host_list, command, timeout=120):
     task.set_info("ssh_options", "-oForwardAgent=yes")
     print("Running on {}: {}".format(nodes, command))
     task.run(command=command, nodes=nodes, timeout=timeout)
+    return task
 
+
+def check_remote_output(task, command):
+    """Check if a remote command completed successfully on all hosts.
+
+    Args:
+        task (Task): a Task object containing the command result
+        command (str): command run by the task
+
+    Returns:
+        bool: True if the command completed successfully (rc=0) on each
+            specified host; False otherwise
+
+    """
     # Create a dictionary of hosts for each unique return code
     results = {code: hosts for code, hosts in task.iter_retcodes()}
 
@@ -287,6 +314,27 @@ def spawn_commands(host_list, command, timeout=120):
     return status
 
 
+def spawn_commands(host_list, command, timeout=120):
+    """Run the command on each specified host in parallel.
+
+    Args:
+        host_list (list): list of hosts
+        command (str): command to run on each host
+        timeout (int, optional): number of seconds to wait for all jobs to
+            complete. Defaults to 120 seconds.
+
+    Returns:
+        bool: True if the command completed successfully (rc=0) on each
+            specified host; False otherwise
+
+    """
+    # Create a dictionary of hosts for each unique return code
+    task = get_remote_output(host_list, command, timeout)
+
+    # Determine if the command completed successfully across all the hosts
+    return check_remote_output(task, command)
+
+
 def find_values(obj, keys, key=None, val_type=list):
     """Find dictionary values of a certain type specified with certain keys.
 
@@ -299,6 +347,42 @@ def find_values(obj, keys, key=None, val_type=list):
         dict: a dictionary of each matching key and its value
 
     """
+    def add_matches(found):
+        """Add found matches to the match dictionary entry of the same key.
+
+        If a match does not already exist for this key add all the found values.
+        When a match already exists for a key, append the existing match with
+        any new found values.
+
+        For example:
+            Match       Found           Updated Match
+            ---------   ------------    -------------
+            None        [A, B]          [A, B]
+            [A, B]      [C]             [A, B, C]
+            [A, B, C]   [A, B, C, D]    [A, B, C, D]
+
+        Args:
+            found (list): list of matches found
+        """
+        for found_key in found:
+            if found_key not in matches:
+                # Simply add the new value found for this key
+                matches[found_key] = found[found_key]
+
+            else:
+                is_list = isinstance(matches[found_key], list)
+                if not is_list:
+                    matches[found_key] = [matches[found_key]]
+                if isinstance(found[found_key], list):
+                    for found_item in found[found_key]:
+                        if found_key not in matches:
+                            matches[found_key].append(found_item)
+                elif found_key not in matches:
+                    matches[found_key].append(found[found_key])
+
+                if not is_list and len(matches[found_key]) == 1:
+                    matches[found_key] = matches[found_key][0]
+
     matches = {}
     if isinstance(obj, val_type) and isinstance(key, str) and key in keys:
         # Match found
@@ -306,11 +390,12 @@ def find_values(obj, keys, key=None, val_type=list):
     elif isinstance(obj, dict):
         # Recursively look for matches in each dictionary entry
         for obj_key, obj_val in obj.items():
-            matches.update(find_values(obj_val, keys, obj_key, val_type))
+            add_matches(find_values(obj_val, keys, obj_key, val_type))
     elif isinstance(obj, list):
         # Recursively look for matches in each list entry
         for item in obj:
-            matches.update(find_values(item, keys, None, val_type))
+            add_matches(find_values(item, keys, None, val_type))
+
     return matches
 
 
@@ -371,13 +456,105 @@ def get_test_files(test_list, args, tmp_dir):
     return test_files
 
 
-def replace_yaml_file(yaml_file, args, tmp_dir):
-    """Replace the server/client yaml file placeholders.
+def get_nvme_replacement(args):
+    """Determine the value to use for the '--nvme' command line argument.
 
-    Replace any server or client yaml file placeholder names with the host
-    names provided by the command line arguments in a copy of the original
-    test yaml file.  If no replacements are specified return the original
-    test yaml file.
+    Parse the lspci output for any NMVe devices, e.g.
+        $ lspci | grep 'Non-Volatile memory controller:'
+        5e:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
+        5f:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
+        81:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+        da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    Optionally filter the above output even further with a specified search
+    string (e.g. '--nvme=auto:Optane'):
+        $ lspci | grep 'Non-Volatile memory controller:' | grep 'Optane'
+        81:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+        da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        str: a comma-separated list of nvme device pci addresses available on
+            all of the specified test servers
+
+    """
+    # A list of server host is required to able to auto-detect NVMe devices
+    if not args.test_servers:
+        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
+        exit(1)
+
+    # Get a list of NVMe devices from each specified server host
+    host_list = args.test_servers.split(",")
+    command_list = [
+        "/usr/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+    if ":" in args.nvme:
+        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+    command = " | ".join(command_list)
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands to detect NVMe PCI addresses.")
+        exit(1)
+
+    # Verify each server host has the same NVMe PCI addresses
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous NVMe PCI addresses.")
+        exit(1)
+
+    # Get the list of NVMe PCI addresses found in the output
+    devices = find_pci_address(output_data[0][0])
+    print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
+    return ",".join(devices)
+
+
+def find_pci_address(value):
+    """Find PCI addresses in the specified string.
+
+    Args:
+        value (str): string to search for PCI addresses
+
+    Returns:
+        list: a list of all the PCI addresses found in the string
+
+    """
+    pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+    return re.findall(pattern, str(value))
+
+
+def replace_yaml_file(yaml_file, args, tmp_dir):
+    """Create a temporary test yaml file with any requested values replaced.
+
+    Optionally replace the following test yaml file values if specified by the
+    user via the command line arguments:
+
+        test_servers:   Use the list sepecified by the --test_servers (-ts)
+                        argument to replace any host name placeholders listed
+                        under "test_servers:"
+
+        test_clients    Use the list sepecified by the --test_clients (-tc)
+                        argument (or any remaining names in the --test_servers
+                        list argument, if --test_clients is not specified) to
+                        replace any host name placeholders listed under
+                        "test_clients:".
+
+        bdev_list       Use the list specified by the --nvme (-n) argument to
+                        replace the string specified by the "bdev_list:" yaml
+                        parameter.  If multiple "bdev_list:" entries exist in
+                        the yaml file, evenly divide the list when making the
+                        replacements.
+
+    Any replacements are made in a copy of the original test yaml file.  If no
+    replacements are specified return the original test yaml file.
 
     Args:
         yaml_file (str): test yaml file
@@ -390,45 +567,91 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             w/o replacements
 
     """
-    if args.test_servers:
-        # Determine which placeholder names need to be replaced in this yaml by
-        # getting the lists of hosts specified in the yaml file
-        unique_hosts = {"servers": set(), "clients": set()}
-        for key, placeholders in find_yaml_hosts(yaml_file).items():
-            if key in SERVER_KEYS:
-                unique_hosts["servers"].update(placeholders)
-            elif key in CLIENT_KEYS:
-                # If no specific clients are specified use a specified server
-                key = "clients" if args.test_clients else "servers"
-                unique_hosts[key].update(placeholders)
+    replacements = {}
 
-        # Map the placeholder names to values provided by the user
-        mapping_pairings = [("servers", args.test_servers.split(","))]
-        if args.test_clients:
-            mapping_pairings.append(("clients", args.test_clients.split(",")))
-        mapping = {
-            tmp: node_list[index] if index < len(node_list) else None
-            for key, node_list in mapping_pairings
-            for index, tmp in enumerate(sorted(unique_hosts[key]))}
+    if args.test_servers or args.nvme:
+        # Find the test yaml keys and values that match the replacable fields
+        yaml_data = get_yaml_data(yaml_file)
+        yaml_keys = list(YAML_KEYS.keys())
+        yaml_find = find_values(yaml_data, yaml_keys)
 
+        # Generate a list
+        new_values = {
+            key: getattr(args, value).split(",") if getattr(args, value) else []
+            for key, value in YAML_KEYS.items()}
+
+        # Assign replacement values for the test yaml entries to be replaced
+        display(args, "Detecting replacements for {} in {}".format(
+            yaml_keys, yaml_file))
+        display(args, "  Found values: {}".format(yaml_find))
+        display(args, "  New values:   {}".format(new_values))
+
+        for key in YAML_KEY_ORDER:
+            # If the user did not provide a specific list of replacement
+            # test_clients values, use the remaining test_servers values to
+            # replace test_clients placeholder values
+            if key == "test_clients" and not new_values[key]:
+                new_values[key] = new_values["test_servers"]
+
+            # Replace test yaml keys that were:
+            #   - found in the test yaml
+            #   - have a user-specified replacement
+            if key in yaml_find and new_values[key]:
+                if key.startswith("test_"):
+                    # The entire server/client test yaml list entry is replaced
+                    # by a new test yaml list entry, e.g.
+                    #   '- serverA' --> '- wolf-1'
+                    value_format = "- {}"
+                    values_to_replace = [
+                        value_format.format(item) for item in yaml_find[key]]
+
+                else:
+                    # Individual bdev_list NVMe PCI addresses in the test yaml
+                    # file are replaced with the new NVMe PCI addresses in the
+                    # order they are found, e.g.
+                    #   0000:81:00.0 --> 0000:12:00.0
+                    value_format = "\"{}\""
+                    values_to_replace = [
+                        value_format.format(item)
+                        for item in find_pci_address(yaml_find[key])]
+
+                # Add the next user-specified value as a replacement for the key
+                for value in values_to_replace:
+                    if value in replacements:
+                        continue
+                    try:
+                        replacements[value] = value_format.format(
+                            new_values[key].pop(0))
+                    except IndexError:
+                        replacements[value] = None
+                    display(
+                        args,
+                        "  - Replacement: {} -> {}".format(
+                            value, replacements[value]))
+
+    if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
         with open(yaml_file) as yaml_buffer:
-            file_str = yaml_buffer.read()
+            yaml_data = yaml_buffer.read()
 
         # Apply the placeholder replacements
         missing_replacements = []
-        for placeholder, host in mapping.items():
-            if host:
+        display(args, "Modifying contents: {}".format(yaml_file))
+        for key in sorted(replacements):
+            value = replacements[key]
+            if value:
                 # Replace the host entries with their mapped values
-                file_str = re.sub(
-                    "- {}".format(placeholder), "- {}".format(host), file_str)
+                display(args, "  - Replacing: {} --> {}".format(key, value))
+                yaml_data = re.sub(key, value, yaml_data)
             elif args.discard:
                 # Discard any host entries without a replacement value
-                file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
+                display(args, "  - Removing:  {}".format(key))
+                yaml_data = re.sub(r"\s*[,]?{}".format(key), "", yaml_data)
             else:
                 # Keep track of any placeholders without a replacement value
-                missing_replacements.append(placeholder)
+                display(args, "  - Missing:   {}".format(key))
+                missing_replacements.append(key)
 
         if missing_replacements:
             # Report an error for all of the placeholders w/o a replacement
@@ -439,11 +662,18 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
+        orig_yaml_file = yaml_file
         yaml_name = get_test_category(yaml_file)
         yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
-        print("Creating {}".format(yaml_file))
+        print("Creating copy: {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
-            yaml_buffer.write(file_str)
+            yaml_buffer.write(yaml_data)
+
+        # Optionally display the file
+        if args.verbose:
+            print(
+                get_output(
+                    "diff -y {} {}; exit 0".format(orig_yaml_file, yaml_file)))
 
     # Return the untouched or modified yaml file
     return yaml_file
@@ -597,7 +827,10 @@ def find_yaml_hosts(test_yaml):
         dict: a dictionary of each host key and its host values
 
     """
-    return find_values(get_yaml_data(test_yaml), SERVER_KEYS + CLIENT_KEYS)
+    return find_values(
+        None,
+        get_yaml_data(test_yaml),
+        [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
 
 def get_hosts_from_yaml(test_yaml, args):
@@ -620,7 +853,7 @@ def get_hosts_from_yaml(test_yaml, args):
     found_client_key = False
     for key, value in find_yaml_hosts(test_yaml).items():
         host_set.update(value)
-        if key in CLIENT_KEYS:
+        if key in YAML_KEYS["test_clients"]:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
@@ -853,6 +1086,19 @@ def main():
         action="store_true",
         help="list the python scripts that match the specified tags")
     parser.add_argument(
+        "-m", "--modify",
+        action="store_true",
+        help="modify the test yaml files but do not run the tests")
+    parser.add_argument(
+        "-n", "--nvme",
+        action="store",
+        help="comma-separated list of NVMe device PCI addresses to use as "
+             "replacement values for the bdev_list in each test's yaml file.  "
+             "Using the 'auto[:<filter>]' keyword will auto-detect the NVMe "
+             "PCI address list on each of the '--test_servers' hosts - the "
+             "optonal '<filter>' can be used to limit auto-detected addresses, "
+             "e.g. 'auto:Optane' for Intel Optane NVMe devices.")
+    parser.add_argument(
         "-r", "--rename",
         action="store_true",
         help="rename the avocado test logs directory to include the test name")
@@ -877,11 +1123,19 @@ def main():
              "server placeholders in each test's yaml file.  If the "
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="verbose output")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
     # Setup the user environment
     set_test_environment()
+
+    # Auto-detect nvme test yaml replacement values if requested
+    if args.nvme and args.nvme.startswith("auto"):
+        args.nvme = get_nvme_replacement(args)
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
@@ -901,6 +1155,8 @@ def main():
 
     # Create a dictionary of test and their yaml files
     test_files = get_test_files(test_list, args, tmp_dir)
+    if args.modify:
+        exit(0)
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)
