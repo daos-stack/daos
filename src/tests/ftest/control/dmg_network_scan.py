@@ -135,7 +135,10 @@ class DmgNetworkScanTest(TestWithServers):
             dmg_iface = dev[0].split()[1]
             dmg_numa = int(dev[1].split()[1])
             dmg_prov = dev[2].split()[1].split("+")[1]
-            tr = {"ib0": "hfi1_0", "ib1": "hfi1_1"}
+            tr = {
+                "ib0": "hfi1_0", "ib1": "hfi1_1",
+                "eth0": "i40iw1", "eth1": "i40iw0"
+            }
             for sys_numa, sys_ifaces in self.get_numa_info().items():
                 if sys_numa == 0:
                     sys_ifaces.append("lo")
