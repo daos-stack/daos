@@ -1177,7 +1177,7 @@ dc_obj_layout_refresh(daos_handle_t oh)
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
-	     struct obj_auxi_args *obj_auxi)
+	     struct obj_auxi_args *obj_auxi, bool pmap_stale)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1185,19 +1185,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	int		  rc;
 	bool		  keep_result = false;
 
-	/* For the case of retry with leader, if it is for modification,
-	 * since we always send modification RPC to the leader, then no
-	 * need to refresh the pool map. Because if the client used old
-	 * pool map and sent the modification RPC to non-leader replica,
-	 * then the replied errno will be -DER_STALE (assume that there
-	 * will be at least one replica will have the latest pool map).
-	 *
-	 * For read-only RPC (fetch/list/query), retry with leader case
-	 * only can happen when the server to which we just sent the RPC
-	 * is not the leader. To guarantee the next retry can find the
-	 * right leader, we need to refresh the pool map before retry.
-	 */
-	if (!obj_auxi->to_leader || !obj_is_modification_opc(obj_auxi->opc)) {
+	if (pmap_stale) {
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -2239,11 +2227,17 @@ obj_comp_cb(tse_task_t *task, void *data)
 		daos_gettime_coarse(&obj->cob_time_fetch_leader[idx]);
 	}
 
-	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req) {
-		D_DEBUG(DB_IO, "map_ver stale (req %d, reply %d).\n",
-			obj_auxi->map_ver_req, obj_auxi->map_ver_reply);
+	/* Check if the pool map needs to refresh */
+	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req ||
+	    daos_crt_network_error(task->dt_result) ||
+	    task->dt_result == -DER_STALE || task->dt_result == -DER_TIMEDOUT ||
+	    task->dt_result == -DER_EVICTED) {
+		D_DEBUG(DB_IO, "map_ver stale (req %d, reply %d). result %d\n",
+			obj_auxi->map_ver_req, obj_auxi->map_ver_reply,
+			task->dt_result);
 		pm_stale = true;
 	}
+
 	if (obj_retry_error(task->dt_result)) {
 		/* If the RPC sponsor set the @spec_shard, then means it wants
 		 * to fetch data from the specified shard. If such shard isn't
@@ -2276,7 +2270,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	}
 
 	if (pm_stale || obj_auxi->io_retry)
-		obj_retry_cb(task, obj, obj_auxi);
+		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
 	if (!obj_auxi->io_retry) {
 		if (obj_auxi->opc == DAOS_OBJ_RPC_SYNC &&
