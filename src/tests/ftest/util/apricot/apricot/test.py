@@ -486,7 +486,7 @@ class TestWithServers(TestWithoutServers):
         self.server_managers.append(
             ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin")))
         self.server_managers[-1].get_params(self)
-        self.server_managers[-1].runner.job.yaml_params.name = group
+        self.server_managers[-1].runner.job.yaml_params.name.value = group
         self.server_managers[-1].hosts = (
             hosts, self.workdir, self.hostfile_servers_slots)
         if self.prefix != "/usr":
