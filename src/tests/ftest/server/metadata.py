@@ -153,7 +153,6 @@ class ObjectMetadata(TestWithServers):
 
         self.fail("Test was expected to fail but it passed.\n")
 
-    @skipForTicket("DAOS-1965")
     @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
