@@ -266,7 +266,7 @@ def spawn_commands(host_list, command, timeout=120):
     # Display the command output
     for code in sorted(results):
         output_data = list(task.iter_buffers(results[code]))
-        if len(output_data) == 0:
+        if not output_data:
             err_nodes = NodeSet.fromlist(results[code])
             print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
         else:
@@ -303,8 +303,8 @@ def find_values(obj, keys, key=None, val_type=list):
         matches[key] = obj
     elif isinstance(obj, dict):
         # Recursively look for matches in each dictionary entry
-        for key, val in obj.items():
-            matches.update(find_values(val, keys, key, val_type))
+        for obj_key, obj_val in obj.items():
+            matches.update(find_values(obj_val, keys, obj_key, val_type))
     elif isinstance(obj, list):
         # Recursively look for matches in each list entry
         for item in obj:
@@ -499,6 +499,7 @@ def run_tests(test_files, tag_filter, args):
             # along with the test results
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
+                archive_config_files(avocado_logs_dir)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -699,6 +700,45 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands))
 
 
+def archive_config_files(avocado_logs_dir):
+    """Copy all of the configuration files to the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+    """
+    # Run the command locally as the config files are written to a shared dir
+    this_host = socket.gethostname().split(".")[0]
+    host_list = [this_host]
+
+    # Get the source directory for the config files
+    base_dir = get_build_environment()["PREFIX"]
+    config_file_dir = get_temporary_directory(base_dir)
+
+    # Get the destination directory for the config file
+    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_configs")
+    print(
+        "Archiving config files from {} in {}".format(host_list, daos_logs_dir))
+    get_output("mkdir {}".format(daos_logs_dir))
+
+    # Archive any yaml configuration files.  Currently these are always written
+    # to a shared directory for all of hosts.
+    commands = [
+        "set -eu",
+        "rc=0",
+        "copied=()",
+        "for file in $(ls {}/daos_*.yaml)".format(config_file_dir),
+        "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, daos_logs_dir),
+        "then copied+=($file)",
+        "else ((rc++))",
+        "fi",
+        "done",
+        "echo Copied ${copied[@]:-no files}",
+        "exit $rc",
+    ]
+    spawn_commands(host_list, "; ".join(commands))
+
+
 def rename_logs(avocado_logs_dir, test_file):
     """Append the test name to its avocado job-results directory name.
 
@@ -845,7 +885,7 @@ def main():
     tag_filter, test_list = get_test_list(args.tags)
 
     # Verify at least one test was requested
-    if len(test_list) == 0:
+    if not test_list:
         print("ERROR: No tests or tags found via {}".format(args.tags))
         exit(1)
 

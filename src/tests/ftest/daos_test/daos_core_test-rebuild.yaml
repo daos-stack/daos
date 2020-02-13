@@ -26,11 +26,23 @@ daos_tests:
       test_name: rebuild tests 0-10
       args: -s3 -u subtests="0-10"
       test_timeout: 1500
-    test_r_12-18:
+    test_r_12-15:
       daos_test: r
-      test_name: rebuild tests 12-18
-      args: -s3 -u subtests="12-18"
+      test_name: rebuild tests 12-15
+      args: -s3 -u subtests="12-15"
       test_timeout: 1500
+    test_r_16:
+      daos_test: r
+      test_name: rebuild tests 16
+      args: -s3 -u subtests="16"
+    test_r_17:
+      daos_test: r
+      test_name: rebuild tests 17
+      args: -s3 -u subtests="17"
+    test_r_18:
+      daos_test: r
+      test_name: rebuild tests 18
+      args: -s3 -u subtests="18"
     test_r_19:
       daos_test: r
       test_name: rebuild tests 19

@@ -717,7 +717,7 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 static int
 rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 {
-	struct dss_enum_arg	   arg;
+	struct dss_enum_arg	   arg = { 0 };
 	struct rdb_raft_unpack_arg unpack_arg;
 	d_sg_list_t		   sgl;
 
