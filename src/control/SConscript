@@ -71,13 +71,14 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     def gen_build_id():
         from os import urandom
         from binascii import b2a_hex
-        ret = '0x' + b2a_hex(urandom(20))
-        if isinstance(ret, str):
-            # Python 2 is a str already
-            return ret
+        buildid = b2a_hex(urandom(20))
+        if isinstance(buildid, str):
+            # Python 2 is a str already, using decode() here transforms it
+            # into a 'unicode' type
+            return '0x' + buildid
         else:
             # Python 3 is a bytes, decode() it to a str
-            return ret.decode()
+            return '0x' + buildid.decode()
     def go_ldflags():
         return ' '.join(['-ldflags',
                          '"-X main.daosVersion=%s' % DAOS_VERSION,
