@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -783,7 +783,7 @@ static int run_self_test(struct st_size_params all_params[],
 	int			  ret;
 	int			  cleanup_ret;
 
-	struct st_master_endpt	 *ms_endpts;
+	struct st_master_endpt	 *ms_endpts = NULL;
 	uint32_t		  num_ms_endpts = 0;
 
 	struct st_latency	**latencies = NULL;
@@ -993,6 +993,8 @@ cleanup_nothread:
 		D_FREE(latencies_sg_list);
 	if (latencies_iov != NULL)
 		D_FREE(latencies_iov);
+	if (ms_endpts != NULL)
+		D_FREE(ms_endpts);
 	if (latencies != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 			if (latencies[m_idx] != NULL)

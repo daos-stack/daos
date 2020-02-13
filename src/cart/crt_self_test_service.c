@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -269,6 +269,8 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 				      perms, &new_entry->bulk_hdl);
 		if (ret != 0) {
 			D_ERROR("crt_bulk_create failed; ret=%d\n", ret);
+			D_FREE(new_entry->buf);
+			D_FREE(new_entry);
 			return ret;
 		}
 		D_ASSERT(new_entry->bulk_hdl != CRT_BULK_NULL);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -344,6 +344,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 		sync->ivs_event = CRT_IV_SYNC_EVENT_UPDATE;
 	} else {
 		print_usage("Unknown sync option specified");
+		D_FREE(sync);
 		return -1;
 	}
 

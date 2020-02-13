@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -296,6 +296,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			if (rc != 0) {
 				D_ERROR("crt_proc_d_rank_t failed,rc: %d.\n",
 					rc);
+				d_rank_list_free(rank_list);
 				D_GOTO(out, rc = -DER_HG);
 			}
 		}
