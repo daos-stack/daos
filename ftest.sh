@@ -351,7 +351,8 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
 fi
 
 # now run it!
-if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} -n auto:Optane ${TEST_TAG_ARR[*]}; then
+./launch.py -c -a -r -i -s -ts ${TEST_NODES} -n auto:Optane ${TEST_TAG_ARR[*]}
+if [ $? -ne 0 ]; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
