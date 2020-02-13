@@ -19,9 +19,13 @@ evicttests:
    connectsetnames: !mux
      goodname:
           setname:
-             - scott_server
+             - daos_server
              - PASS
      badname:
+          setname:
+             - badname_server
+             - FAIL
+     nullname:
           setname:
              - NULL
              - PASS
