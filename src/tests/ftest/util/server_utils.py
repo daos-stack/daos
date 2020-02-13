@@ -310,7 +310,7 @@ class DaosServerYamlParameters(YamlParameters):
             # Parameters
             #   targets:                count of VOS targets
             #   first_core:             starting index for targets
-            #   nr_xs_helpers:          offload helpers per target
+            #   nr_xs_helpers:          offload helpers per server
             #   fabric_iface:           map to OFI_INTERFACE=eth0
             #   fabric_iface_port:      map to OFI_PORT=31416
             #   log_mask:               map to D_LOG_MASK env
@@ -324,7 +324,7 @@ class DaosServerYamlParameters(YamlParameters):
             #           - IO_STAT_PERIOD=10
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
-            self.nr_xs_helpers = BasicParameter(None, 2)
+            self.nr_xs_helpers = BasicParameter(None, 16)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.log_mask = BasicParameter(None, "DEBUG")
