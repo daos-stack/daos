@@ -379,6 +379,8 @@ def scons():
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
                 ['scons_local/env_modules.py'])
+    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                ['ftest.sh'])
 
     # install the configuration files
     SConscript('utils/config/SConscript')
@@ -391,6 +393,9 @@ def scons():
 
     Default(build_prefix)
     Depends('install', build_prefix)
+
+    # an "rpms" target
+    env.Command('rpms', '', 'make -C utils/rpms rpms')
 
     try:
         #if using SCons 2.4+, provide a more complete help
