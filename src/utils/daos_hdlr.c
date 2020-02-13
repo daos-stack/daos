@@ -876,12 +876,14 @@ get_first_empty_prop_entry(struct cmd_args_s *ap,
 	}
 
 	if (ap->props == NULL) {
-		/* Note that we don't control the memory this way, the prop is
-		 * freed by the external caller */
+		/*
+		 * Note that we don't control the memory this way, the prop is
+		 * freed by the external caller
+		 */
 		ap->props = daos_prop_alloc(nr);
 		if (ap->props == NULL) {
 			fprintf(stderr,
-				"failed to allocate memory while processing"
+				"failed to allocate memory while processing "
 				"access control parameters\n");
 			return -DER_NOMEM;
 		}
@@ -960,7 +962,8 @@ update_props_for_access_control(struct cmd_args_s *ap)
 		}
 
 		entry->dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-		D_STRNDUP(entry->dpe_str, ap->group, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		D_STRNDUP(entry->dpe_str, ap->group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 		if (entry->dpe_str == NULL) {
 			fprintf(stderr,
 				"failed to allocate memory for group name.\n");
