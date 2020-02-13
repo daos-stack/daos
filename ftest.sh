@@ -136,7 +136,12 @@ CLUSH_ARGS=($CLUSH_ARGS)
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
-ulimit -c unlimited
+# allow core files to be generated
+if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
+    sudo echo \"\*  soft  core  unlimited\" >> /etc/security/limits.conf
+fi
+sudo bash -c \"set -ex; echo \\\"/tmp/core.%e.%h.%p\\\" > /proc/sys/kernel/core_pattern\"
+rm -f /tmp/core.*
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
@@ -231,7 +236,6 @@ args+=" $*"
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
-ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
@@ -363,6 +367,9 @@ else
     rc=0
 fi
 
+clush ${CLUSH_ARGS[@]} -B -v -l \"${REMOTE_ACCT:-jenkins}\" -R ssh \
+    -w \"${TEST_NODES}\" --rcopy \$(clush -N -w \"${TEST_NODES}\" ls /tmp/core.\*) --dest .
+
 # get stacktraces for the core files
 if ls core.*; then
     # this really should be a debuginfo-install command but our systems lag
@@ -373,8 +380,32 @@ if ls core.*; then
     if ! rpm -q \$python_debuginfo_rpm; then
         sudo yum --enablerepo=\*debug\* -y install \$python_debuginfo_rpm
     fi
-    sudo yum -y install gdb
-    for file in core.*; do
+    debug_pkgs=\"glibc:glibc-debuginfo-common daos systemd ndctl
+                libpmem:pmdk-debuginfo mercury cart libfabric argobots\"
+    declare -a install_pkgs
+    for pkg in \$debug_pkgs; do
+        if [[ \$pkg = *:* ]]; then
+            debug_pkg=\${pkg#*:}
+            pkg=\${pkg%:*}
+        else
+            debug_pkg=\"\$pkg-debuginfo\"
+        fi
+        if ver=\"\$(rpm -q --qf %{evr} \$pkg)\"; then
+            debug_pkg+=\"-\$ver\"
+            install_pkgs+=( \$debug_pkg )
+        fi
+    done
+    sudo yum --enablerepo=\*debug\* -y install gdb \${install_pkgs[@]}
+    for file in \$(ls core.daos_io_server.*[0-9]); do
+        exe_name=\$(file \$file | sed -e \"s/.*execfn: '\([^']*\)',.*/\1/\")
+        gdb -ex \"set pagination off\"                 \
+            -ex \"thread apply all bt full\"           \
+            -ex \"detach\"                             \
+            -ex \"quit\"                               \
+            \$exe_name \$file > \$file.stacktrace
+            rm -f \$file
+    done
+    for file in \$(ls core.*[0-9]); do
         gdb -ex \"set pagination off\"                 \
             -ex \"thread apply all bt full\"           \
             -ex \"detach\"                             \
