@@ -108,11 +108,6 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-failsafe-plugin</artifactId>
-          <version>${surefire.version}</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-gpg-plugin</artifactId>
           <version>1.6</version>
         </plugin>
@@ -210,33 +205,38 @@
           <artifactId>maven-checkstyle-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${surefire.version}</version>
+          <configuration>
+            <forkCount>0</forkCount>
+            <systemPropertyVariables>
+              <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
+              </java.library.path>
+            </systemPropertyVariables>
+            <argLine>
+              -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
+            </argLine>
+            <runOrder>alphabetical</runOrder>
+          </configuration>
+          <executions>
+            <execution>
+              <id>integration-test</id>
+              <goals>
+                <goal>integration-test</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>verify</id>
+              <goals>
+                <goal>verify</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
       </plugins>
     </pluginManagement>
-
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <forkCount>0</forkCount>
-          <systemPropertyVariables>
-            <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
-            </java.library.path>
-          </systemPropertyVariables>
-          <argLine>
-            -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
-          </argLine>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>integration-test</goal>
-              <goal>verify</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
   </build>
 
   <dependencyManagement>

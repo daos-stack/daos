@@ -121,8 +121,4 @@ public class DaosUtilsTest {
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());
   }
-
-  public static void main(String[] args) throws Exception{
-    DaosFsClient.closeAndFinalize();
-  }
 }

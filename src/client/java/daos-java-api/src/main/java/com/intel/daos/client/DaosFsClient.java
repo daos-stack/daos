@@ -111,6 +111,8 @@ public final class DaosFsClient {
 
   public static final String ROOT_CONT_UUID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
+  private static final Runnable finalizer;
+
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
 
   // make it non-daemon so that all DAOS file object can be released
@@ -125,13 +127,14 @@ public final class DaosFsClient {
 
   static {
     loadLib();
-    ShutdownHookManager.addHook(() -> {
+    finalizer = () -> {
       try {
         closeAndFinalize();
       } catch (IOException e) {
         log.error("failed to finalize DAOS", e);
       }
-    });
+    };
+    ShutdownHookManager.addHook(finalizer);
   }
 
   private static void loadLib() {
@@ -542,7 +545,7 @@ public final class DaosFsClient {
     }
   }
 
-  static void closeAll() throws IOException {
+  static synchronized void closeAll() throws IOException {
     if (pcFsMap.isEmpty()) {
       return;
     }
@@ -551,9 +554,10 @@ public final class DaosFsClient {
     }
   }
 
-  static void closeAndFinalize() throws IOException {
+  static synchronized void closeAndFinalize() throws IOException {
     closeAll();
     daosFinalize();
+    ShutdownHookManager.removeHook(finalizer);
   }
 
   // ------------------native methods------------------
@@ -1016,7 +1020,7 @@ public final class DaosFsClient {
    * @throws IOException
    * {@link DaosIOException}
    */
-  static native void daosFinalize() throws IOException;
+  static synchronized native void daosFinalize() throws IOException;
 
   //------------------native methods end------------------
 
