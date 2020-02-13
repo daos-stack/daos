@@ -279,6 +279,7 @@ struct rebuild_iv {
 	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
+	uint32_t	riv_seconds;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;

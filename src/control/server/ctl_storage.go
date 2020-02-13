@@ -33,13 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-const (
-	msgBdevNotFound = "controller at pci addr not found, check device exists " +
-		"and can be discovered, you may need to run `sudo daos_server " +
-		"storage prepare --nvme-only` to setup SPDK to access SSDs"
-	msgBdevScmNotReady = "nvme format not performed because scm not ready"
-)
-
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
@@ -103,7 +96,7 @@ func (c *StorageControlService) Setup() error {
 		// fail if config specified nvme devices are inaccessible
 		missing, ok := c.canAccessBdevs(sr)
 		if !ok {
-			return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
+			return FaultBdevNotFound(missing)
 		}
 	}
 

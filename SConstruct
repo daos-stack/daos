@@ -39,6 +39,7 @@ def get_version():
         return version_file.read().rstrip()
 
 DAOS_VERSION = get_version()
+API_VERSION = "0.9.0"
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -53,7 +54,7 @@ def update_rpm_version(version, tag):
                       "spec file has currently ({})".format(version,
                                                             current_version))
                 return False
-            elif version > current_version:
+            if version > current_version:
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
@@ -109,6 +110,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.Append(CCFLAGS=['-D_FORTIFY_SOURCE=2'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
@@ -129,7 +131,8 @@ def preload_prereqs(prereqs):
         reqs.extend(['spdk', 'isal'])
     prereqs.load_definitions(prebuild=reqs)
 
-def scons():
+def scons(): # pylint: disable=too-many-locals
+    """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
             import pygit2
@@ -169,7 +172,7 @@ def scons():
                   "using a previous pre-release such as a release candidate.\n")
             question = "Are you sure you want to continue? (y/N): "
             answer = None
-            while answer != "y" and answer != "n" and answer != "":
+            while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
                 exit(1)
@@ -255,9 +258,11 @@ def scons():
         # pylint: enable=no-member
 
         # set up authentication callback
-        class MyCallbacks(pygit2.RemoteCallbacks):
+        class MyCallbacks(pygit2.RemoteCallbacks): # pylint: disable=too-few-public-methods
             """ Callbacks for pygit2 """
-            def credentials(self, url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            @staticmethod
+            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+                """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
@@ -277,6 +282,7 @@ def scons():
                                     "by remote end.  SSH_AUTH_SOCK not found "
                                     "in your environment.  Are you running an "
                                     "ssh-agent?")
+                return None
 
         # and push it
         print("Pushing the changes to GitHub...")
@@ -314,14 +320,13 @@ def scons():
 
         exit(0)
 
-    """Execute build"""
     try:
         sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
         from prereq_tools import PreReqComponent
-        print ('Using scons_local build')
+        print('Using scons_local build')
     except ImportError:
-        print ('scons_local submodule is needed in order to do DAOS build')
-        print ('Use git submodule update --init')
+        print('scons_local submodule is needed in order to do DAOS build')
+        print('Use git submodule update --init')
         sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
@@ -345,7 +350,7 @@ def scons():
 
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
+    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm', 'API_VERSION')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
