@@ -222,20 +222,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 	version = pool_map_get_version(map);
 	for (i = 0; i < tgts->pti_number; i++) {
 		struct pool_target	*target = NULL;
-		struct pool_domain	*dom = NULL;
 
 		rc = pool_map_find_target(map, tgts->pti_ids[i].pti_id,
 					  &target);
 		if (rc <= 0) {
 			D_DEBUG(DF_DSMS, "not find target %u in map %p\n",
 				tgts->pti_ids[i].pti_id, map);
-			continue;
-		}
-
-		dom = pool_map_find_node_by_rank(map, target->ta_comp.co_rank);
-		if (dom == NULL) {
-			D_DEBUG(DF_DSMS, "not find rank %u in map %p\n",
-				target->ta_comp.co_rank, map);
 			continue;
 		}
 
@@ -256,13 +248,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
-				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
-			}
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
 			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
@@ -284,7 +269,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			target->ta_comp.co_fseq = 1;
 			version++;
-			dom->do_comp.co_status = PO_COMP_ST_UPIN;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
@@ -295,12 +279,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
-						PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-			}
 		}
 	}
 

@@ -1670,26 +1670,6 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 	return 1;
 }
 
-/**
- * Check if all targets under one node matching the status.
- * \params [IN] dom	node domain to be checked.
- * \param [IN] status	status to be checked.
- *
- * \return		true if matches, otherwise false.
- */
-bool
-pool_map_node_status_match(struct pool_domain *dom, unsigned int status)
-{
-	int i;
-
-	for (i = 0; i < dom->do_target_nr; i++) {
-		if (!(dom->do_targets[i].ta_comp.co_status & status))
-			return false;
-	}
-
-	return true;
-}
-
 static void
 fseq_sort_op_swap(void *array, int a, int b)
 {
