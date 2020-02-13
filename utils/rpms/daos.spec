@@ -6,7 +6,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       12%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -85,10 +85,6 @@ BuildRequires: libpsm_infinipath1
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
-Requires: fuse3 >= 3.4.2
-# because our repo has a deprecated fuse-3.x RPM, make sure we don't
-# get it when fuse3 Requires: /etc/fuse.conf
-Requires: fuse < 3, fuse3-libs >= 3.4.2
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -129,6 +125,10 @@ Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
+Requires: fuse3 >= 3.4.2
+# because our repo has a deprecated fuse-3.x RPM, make sure we don't
+# get it when fuse3 Requires: /etc/fuse.conf
+Requires: fuse < 3, fuse3-libs >= 3.4.2
 %systemd_requires
 
 %description client
@@ -247,7 +247,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %config(noreplace) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_admins) %{_bindir}/daos_admin
+%attr(4755,root,daos_admins) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_admins in order to invoke daos_admin
 %attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
@@ -345,6 +345,10 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Apr 27 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-13
+- Update permissions of daos_admin to 4755
+- Move fuse dependencies to the client subpackage
+
 * Thu Apr 16 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-12
 - Use distro fuse
 
