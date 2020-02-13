@@ -34,40 +34,64 @@ import (
 
 type (
 	MockSysConfig struct {
-		IsMountedBool bool
-		IsMountedErr  error
-		MountErr      error
-		UnmountErr    error
-		MkfsErr       error
-		GetfsStr      string
-		GetfsErr      error
+		IsMountedBool  bool
+		IsMountedErr   error
+		MountErr       error
+		UnmountErr     error
+		MkfsErr        error
+		GetfsStr       string
+		GetfsErr       error
+		SourceToTarget map[string]string
 	}
 
 	MockSysProvider struct {
 		cfg       MockSysConfig
-		isMounted atm.Bool
+		isMounted map[string]*atm.Bool
 	}
 )
 
 func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
+	err := msp.cfg.IsMountedErr
 	// hack... don't fail the format tests which also want
 	// to make sure that the device isn't already formatted.
-	if os.IsNotExist(msp.cfg.IsMountedErr) && strings.HasPrefix(target, "/dev") {
-		return msp.isMounted.Load(), nil
+	if os.IsNotExist(err) && strings.HasPrefix(target, "/dev") {
+		err = nil
 	}
-	return msp.isMounted.Load(), msp.cfg.IsMountedErr
+
+	// lookup target of a given source device (target actually a source
+	// device in this case)
+	mount, exists := msp.cfg.SourceToTarget[target]
+	if exists {
+		target = mount
+	}
+
+	isMounted, exists := msp.isMounted[target]
+	if !exists {
+		return msp.cfg.IsMountedBool, err
+	}
+	return isMounted.Load(), err
 }
 
-func (msp *MockSysProvider) Mount(_, _, _ string, _ uintptr, _ string) error {
+func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
-		msp.isMounted.SetTrue()
+		if _, exists := msp.isMounted[target]; !exists {
+			nb := atm.NewBool(true)
+			msp.isMounted[target] = &nb
+		} else {
+			msp.isMounted[target].SetTrue()
+		}
 	}
 	return msp.cfg.MountErr
 }
 
-func (msp *MockSysProvider) Unmount(_ string, _ int) error {
+func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
-		msp.isMounted.SetFalse()
+		if _, exists := msp.isMounted[target]; !exists {
+			nb := atm.NewBool(false)
+			msp.isMounted[target] = &nb
+		} else {
+			msp.isMounted[target].SetFalse()
+		}
 	}
 	return msp.cfg.UnmountErr
 }
@@ -86,7 +110,7 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	}
 	return &MockSysProvider{
 		cfg:       *cfg,
-		isMounted: atm.NewBool(cfg.IsMountedBool),
+		isMounted: make(map[string]*atm.Bool),
 	}
 }
 
