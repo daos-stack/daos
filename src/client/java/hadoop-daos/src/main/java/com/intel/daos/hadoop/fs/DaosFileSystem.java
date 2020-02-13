@@ -377,7 +377,6 @@ public class DaosFileSystem extends FileSystem {
     }
 
     DaosFile file = daos.getFile(f.toUri().getPath());
-
     final List<FileStatus> result = Lists.newArrayList();
     try {
       if (file.isDirectory()) {
@@ -420,7 +419,6 @@ public class DaosFileSystem extends FileSystem {
       LOG.debug("DaosFileSystem mkdirs: Making directory = {} ", f.toUri().getPath());
     }
     String key = f.toUri().getPath();
-
     daos.mkdir(key, com.intel.daos.client.Constants.FILE_DEFAULT_FILE_MODE, true);
     return true;
   }
@@ -454,7 +452,6 @@ public class DaosFileSystem extends FileSystem {
     if (!file.exists()) {
       throw new FileNotFoundException(file + "doesn't exist");
     }
-
     StatAttributes attributes = file.getStatAttributes();
     return new FileStatus(attributes.getLength(),
             !attributes.isFile(),

@@ -6,6 +6,32 @@ import org.junit.Test;
 public class DaosUtilsTest {
 
   @Test
+  public void normalizeLongPath() throws Exception {
+    String path = "job_1581472776049_0003-1581473346405-" +
+            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
+            "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
+//    String path = "job%";
+    DaosUtils.normalize(path);
+
+    path = "job_1581472776049_0003-1581473346405-root-autogen%2D7.1%2DSNAPSHOT" +
+            "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
+            "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
+            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen412345";
+    DaosUtils.normalize(path);
+
+    path = "job_1581472776049_0003-1581473346405-root-autogen%2D7.1%2DSNAPSHOT" +
+            "%2Djar%2Dwith%2Ddependencies.jar-1581473454525-16-1-SUCCEEDED-" +
+            "default-1581473439146.jhist_tmpjob_1581472776049_0003-1581473346405-" +
+            "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependen4123456";
+    try {
+      DaosUtils.normalize(path);
+    } catch (IllegalArgumentException e) {
+      return;
+    }
+    throw new Exception("normalize should fail since length exceeds 255");
+  }
+
+  @Test
   public void testReplaceForwardSlash(){
     String path = "\\abc\\de\\f\\";
     Assert.assertEquals("/abc/de/f", DaosUtils.normalize(path));
@@ -43,13 +69,13 @@ public class DaosUtilsTest {
     Assert.assertEquals("/a0Ab1B_-/123456.7890/XYZ/_-", DaosUtils.normalize(path));
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testValidIllegalCharacterWhiteSpace(){
     String path = "/abc /def";
     DaosUtils.normalize(path);
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testValidIllegalCharacterQuestionMark(){
     String path = "abc?";
     DaosUtils.normalize(path);
@@ -95,11 +121,8 @@ public class DaosUtilsTest {
     String id = DaosUtils.randomUUID();
     Assert.assertEquals(16, id.length());
   }
+
+  public static void main(String[] args) throws Exception{
+    DaosFsClient.closeAndFinalize();
+  }
 }
-
-
-
-
-
-
-

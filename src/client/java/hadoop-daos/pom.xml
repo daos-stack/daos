@@ -16,6 +16,8 @@
 
   <properties>
     <hadoop.version>2.7.6</hadoop.version>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
   </properties>
 
   <dependencies>
@@ -78,27 +80,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <forkCount>0</forkCount>
-        </configuration>
-        <executions>
-          <execution>
-            <id>integration-test</id>
-            <goals>
-              <goal>integration-test</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>verify</id>
-            <goals>
-              <goal>verify</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
   </build>

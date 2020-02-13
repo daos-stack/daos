@@ -31,6 +31,7 @@ public class DaosFileIT {
   public void testMkdir()throws Exception{
     DaosFile daosFile = client.getFile("/root/");
     daosFile.mkdir();
+    Assert.assertTrue(daosFile.exists());
   }
 
   @Test
@@ -224,6 +225,16 @@ public class DaosFileIT {
     DaosFile file = client.getFile("/dir11");
     file.mkdir();
     Assert.assertTrue(file.isDirectory());
+    DaosFile rootFile = client.getFile("/");
+    rootFile.exists();
+    String[] children = rootFile.listChildren();
+    boolean found = false;
+    for(String child : children) {
+      if (file.getName().equals(child)) {
+        found = true;
+      }
+    }
+    Assert.assertTrue(found);
   }
 
   @Test(expected = IOException.class)

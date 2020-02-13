@@ -127,7 +127,7 @@ public final class DaosFsClient {
     loadLib();
     ShutdownHookManager.addHook(() -> {
       try {
-        daosFinalize();
+        closeAndFinalize();
       } catch (IOException e) {
         log.error("failed to finalize DAOS", e);
       }
@@ -540,6 +540,20 @@ public final class DaosFsClient {
         dfsRelease(objId);
       }
     }
+  }
+
+  static void closeAll() throws IOException {
+    if (pcFsMap.isEmpty()) {
+      return;
+    }
+    for (Map.Entry<String, DaosFsClient> entry : pcFsMap.entrySet()) {
+      entry.getValue().disconnect();
+    }
+  }
+
+  static void closeAndFinalize() throws IOException {
+    closeAll();
+    daosFinalize();
   }
 
   // ------------------native methods------------------

@@ -26,13 +26,14 @@
     <junit.jupiter.version>5.4.0</junit.jupiter.version>
     <slf4j.version>1.7.25</slf4j.version>
     <log4j.version>2.11.1</log4j.version>
-    <forkCount>2</forkCount>
     <checkstyle.failOnViolation>true</checkstyle.failOnViolation>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <surefire.version>2.22.0</surefire.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <dependency.locations.enabled>false</dependency.locations.enabled>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
   </properties>
 
   <repositories>
@@ -211,6 +212,31 @@
         </plugin>
       </plugins>
     </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <forkCount>0</forkCount>
+          <systemPropertyVariables>
+            <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
+            </java.library.path>
+          </systemPropertyVariables>
+          <argLine>
+            -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
+          </argLine>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 
   <dependencyManagement>
