@@ -334,7 +334,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Tue Feb 11 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
+* Fri Feb 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
 - Version bump up to 1.1.0
 
 * Wed Feb 12 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-2
