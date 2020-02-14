@@ -8,8 +8,6 @@ hosts:
     - server-F
   test_clients:
     - client-G
-server_manager:
-  recreate: true
 server_config:
   name: daos_server
 timeout: 400

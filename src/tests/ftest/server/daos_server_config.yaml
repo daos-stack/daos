@@ -5,7 +5,6 @@ hosts:
     - server-A
 server_manager:
     srv_timeout: 30
-    recreate: true
 timeout: 120
 server_config:
   name: daos_server
