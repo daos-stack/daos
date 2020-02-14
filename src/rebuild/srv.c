@@ -691,6 +691,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
+	rgt->rgt_status.rs_version = ver;
 	d_list_add(&rgt->rgt_list, &rebuild_gst.rg_global_tracker_list);
 	*p_rgt = rgt;
 out:
@@ -1109,19 +1110,20 @@ rebuild_task_ult(void *arg)
 			rc = 0;
 		}
 
-		if (rgt) {
-			rgt->rgt_abort = 1;
-			rgt->rgt_status.rs_done = 1;
-			rgt->rgt_status.rs_errno = rc;
-		}
-
 		D_PRINT("Rebuild [failed] (pool "DF_UUID" ver=%u status=%d)\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
 
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, rc);
 
-		D_GOTO(done, rc);
+		if (rgt) {
+			rgt->rgt_abort = 1;
+			rgt->rgt_status.rs_done = 1;
+			rgt->rgt_status.rs_errno = rc;
+			D_GOTO(done, rc);
+		} else {
+			D_GOTO(out_put, rc);
+		}
 	}
 
 	/* Wait until rebuild finished */
@@ -1181,29 +1183,21 @@ iv_stop:
 	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
 	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
 	iv.riv_size		= rgt->rgt_status.rs_size;
+	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 
 	rc = rebuild_iv_update(pool->sp_iv_ns,
 			       &iv, CRT_IV_SHORTCUT_NONE,
 			       CRT_IV_SYNC_LAZY);
+	if (rc)
+		D_ERROR("rebuild_iv final update fails"DF_UUID": rc %d\n",
+			DP_UUID(task->dst_pool_uuid), rc);
 
-	if (rgt) {
-		int rc1;
-
-		/* Update the rebuild status, so query can get the rebuild
-		 * status.
-		 */
-		rgt->rgt_status.rs_version = rgt->rgt_rebuild_ver;
-		rgt->rgt_status.rs_seconds =
-		(d_timeus_secdiff(0) - rgt->rgt_time_start) / 1e6;
-		rc1 = rebuild_status_completed_update(task->dst_pool_uuid,
-						     &rgt->rgt_status);
-		if (rc1 != 0) {
-			D_ERROR("rebuild_status_completed_update, "DF_UUID" "
-				"failed, rc %d.\n",
-				DP_UUID(task->dst_pool_uuid), rc1);
-		}
-	}
-
+	/* Update the rebuild status, so query can get the rebuild status. */
+	rc = rebuild_status_completed_update(task->dst_pool_uuid,
+					     &rgt->rgt_status);
+	if (rc != 0)
+		D_ERROR("rebuild_status_completed_update, "DF_UUID" "
+			"failed, rc %d.\n", DP_UUID(task->dst_pool_uuid), rc);
 out_put:
 	ds_pool_put(pool);
 	if (rgt)

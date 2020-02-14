@@ -229,7 +229,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	ctx->iod.iod_recxs->rx_idx = setup->request_idx;
 	ctx->iod.iod_recxs->rx_nr = setup->request_len;
 
-	daos_csummer_alloc_iods_csums(ctx->csummer, &ctx->iod, 1,
+	daos_csummer_alloc_iods_csums(ctx->csummer, &ctx->iod, 1, false,
 				      &ctx->iod_csum);
 }
 

@@ -38,6 +38,9 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_connect, NULL, ev, &task);
 	if (rc)
 		return rc;

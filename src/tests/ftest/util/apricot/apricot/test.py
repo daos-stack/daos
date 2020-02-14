@@ -146,8 +146,8 @@ class TestWithoutServers(Test):
         if self.prefix != "/usr":
             self.tmp = os.path.join(self.prefix, 'tmp')
         else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
-                                 os.path.expanduser('~/daos_test'))
+            self.tmp = os.getenv(
+                'DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
         if not os.path.exists(self.tmp):
             os.makedirs(self.tmp)
 
@@ -203,7 +203,10 @@ class TestWithServers(TestWithoutServers):
         self.agent_sessions = None
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.agent_log = None
         self.server_log = None
+        self.control_log = None
+        self.helper_log = None
         self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
@@ -441,8 +444,9 @@ class TestWithServers(TestWithoutServers):
                     self.server_managers[-1].runner.export.value.extend(
                         ["PATH"])
                 load_mpi("orterun")
+                yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+
                 try:
-                    yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
                     self.server_managers[-1].start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
@@ -487,24 +491,29 @@ class TestWithServers(TestWithoutServers):
             return host_list, None
 
     def update_log_file_names(self, test_name=None):
-        """Get separate logs for both servers and clients.
+        """Define agent, server, and client log files that include the test id.
 
         Args:
             test_name (str, optional): name of test variant
         """
-        # Determine the path and name of the daos server log using the
-        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
         if test_name:
+            # Overwrite the test id with the specified test name
             self.test_id = test_name
 
-        self.server_log = os.path.join(
-            self.log_dir, "{}_server_daos.log".format(self.test_id))
-        self.client_log = os.path.join(
-            self.log_dir, "{}_client_daos.log".format(self.test_id))
+        # Update the log file names.  The path is defined throught the
+        # DAOS_TEST_LOG_DIR environment variable.
+        self.agent_log = "{}_daos_agent.log".format(self.test_id)
+        self.server_log = "{}_daos_server.log".format(self.test_id)
+        self.control_log = "{}_daos_control.log".format(self.test_id)
+        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.client_log = "{}_daos_client.log".format(self.test_id)
 
     def get_dmg_command(self, index=0):
-        """Create a DmgCommand object, set the access point's host:port to -l
-        parameter, set False to -i (in default), and return the object.
+        """Get a DmgCommand setup to interact with server manager index.
+
+        Return a DmgCommand object configured with:
+            - the "-l" parameter assigned to the server's access point list
+            - the "-i" parameter assigned to the server's interactive mode
 
         This method is intended to be used by tests that wants to use dmg to
         create and destroy pool. Pass in the object to TestPool constructor.
@@ -517,6 +526,7 @@ class TestWithServers(TestWithoutServers):
 
         Returns:
             DmgCommand: New DmgCommand object.
+
         """
         dmg = DmgCommand(self.bin)
         dmg.hostlist.value = self.server_managers[index].runner.job.\
