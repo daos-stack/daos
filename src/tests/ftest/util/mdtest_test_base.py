@@ -133,9 +133,8 @@ class MdtestBase(TestWithServers):
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            # self.pool.connect()
-            # self.create_cont()
+            self.pool.connect()
+            self._create_cont()
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
