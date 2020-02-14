@@ -549,6 +549,7 @@ co_acl(void **state)
 	const char		*exp_owner = "fictionaluser@";
 	const char		*exp_owner_grp = "admins@";
 	struct daos_acl		*exp_acl;
+	struct daos_acl		*update_acl;
 	struct daos_ace		*ace;
 	uid_t			uid;
 	char			*user;
@@ -635,6 +636,30 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
+	print_message("Case 3: update ACL\n");
+
+	/* Add one new entry and update an entry already in our ACL */
+	update_acl = daos_acl_create(NULL, 0);
+	add_ace_with_perms(&update_acl, DAOS_ACL_USER, "friendlyuser@",
+			   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+	add_ace_with_perms(&update_acl, DAOS_ACL_GROUP, "testgroup2@",
+			   DAOS_ACL_PERM_READ);
+
+	assert_int_equal(daos_acl_cont_validate(update_acl), 0);
+
+	/* Update expected ACL to include changes */
+	ace = daos_acl_get_next_ace(update_acl, NULL);
+	while (ace != NULL) {
+		assert_int_equal(daos_acl_add_ace(&exp_acl, ace), 0);
+		ace = daos_acl_get_next_ace(update_acl, ace);
+	}
+
+	rc = daos_cont_update_acl(arg->coh, update_acl, NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	/* Clean up */
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
@@ -642,6 +667,7 @@ co_acl(void **state)
 
 	daos_prop_free(prop_in);
 	daos_acl_free(exp_acl);
+	daos_acl_free(update_acl);
 	D_FREE(user);
 	test_teardown((void **)&arg);
 }

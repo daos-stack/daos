@@ -117,11 +117,8 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
 			if tt.inPath == "uncommentedDefault" {
@@ -133,7 +130,7 @@ func TestServer_ConfigMarshalUnmarshal(t *testing.T) {
 				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
-			err = configA.Load()
+			err := configA.Load()
 			if err == nil {
 				err = configA.Validate(log)
 			}
@@ -211,7 +208,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(0).
 				WithTargetCount(20).
-				WithHelperStreamCount(0).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(1).
 				WithScmMountPoint("/mnt/daos/1").
 				WithScmClass("ram").
@@ -227,7 +224,7 @@ func TestServer_ConstructedConfig(t *testing.T) {
 			ioserver.NewConfig().
 				WithRank(1).
 				WithTargetCount(20).
-				WithHelperStreamCount(1).
+				WithHelperStreamCount(20).
 				WithServiceThreadCore(22).
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
@@ -266,6 +263,13 @@ func TestServer_ConfigValidation(t *testing.T) {
 		"example config": {
 			noopExtra,
 			nil,
+		},
+		"nil server entry": {
+			func(c *Configuration) *Configuration {
+				var nilIOServerConfig *ioserver.Config
+				return c.WithServers(nilIOServerConfig)
+			},
+			errors.New("validation"),
 		},
 		"single access point": {
 			func(c *Configuration) *Configuration {
@@ -309,11 +313,8 @@ func TestServer_ConfigValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
@@ -337,11 +338,8 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 		"path doesnt exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			defer os.RemoveAll(testDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
 			if tt.inPath == "uncommentedDefault" {
@@ -380,6 +378,30 @@ func TestServer_ConfigRelativeWorkingPath(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServer_WithServersInheritsMainConfig(t *testing.T) {
+	testFabric := "test-fabric"
+	testModules := "a,b,c"
+	testSystemName := "test-system"
+	testSocketDir := "test-sockets"
+
+	wantCfg := ioserver.NewConfig().
+		WithFabricProvider(testFabric).
+		WithModules(testModules).
+		WithSocketDir(testSocketDir).
+		WithSystemName(testSystemName)
+
+	config := NewConfiguration().
+		WithFabricProvider(testFabric).
+		WithModules(testModules).
+		WithSocketDir(testSocketDir).
+		WithSystemName(testSystemName).
+		WithServers(ioserver.NewConfig())
+
+	if diff := cmp.Diff(wantCfg, config.Servers[0]); diff != "" {
+		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
 
