@@ -1118,7 +1118,10 @@ pipeline {
                         allOf {
                             expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                             expression {
-                              ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-small').contains('true')
                             }
                         }
                     }
@@ -1217,7 +1220,10 @@ pipeline {
                         allOf {
                             expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                             expression {
-                              ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-medium').contains('true')
                             }
                         }
                     }
@@ -1316,7 +1322,10 @@ pipeline {
                         allOf {
                             expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                             expression {
-                              ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-large').contains('true')
                             }
                         }
                     }
