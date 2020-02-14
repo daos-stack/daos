@@ -137,11 +137,12 @@ DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 # allow core files to be generated
-if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
-    sudo echo \"\*  soft  core  unlimited\" >> /etc/security/limits.conf
+sudo bash -c \"set -ex
+if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
+    echo \\\"*  soft  core  unlimited\\\" >> /etc/security/limits.conf
 fi
-sudo bash -c \"set -ex; echo \\\"/tmp/core.%e.%h.%p\\\" > /proc/sys/kernel/core_pattern\"
-rm -f /tmp/core.*
+echo \\\"/var/tmp/core.%e.%h.%p\\\" > /proc/sys/kernel/core_pattern\"
+rm -f /var/tmp/core.*
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
@@ -366,9 +367,11 @@ if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
 else
     rc=0
 fi
-
-clush ${CLUSH_ARGS[@]} -B -v -l \"${REMOTE_ACCT:-jenkins}\" -R ssh \
-    -w \"${TEST_NODES}\" --rcopy \$(clush -N -w \"${TEST_NODES}\" ls /tmp/core.\*) --dest .
+copy_files=\$(clush -N -w \"${TEST_NODES}\" ls /var/tmp/core.\*)
+if [ -n \"\$copy_files\" ]; then
+    clush ${CLUSH_ARGS[@]} -B -v -l \"${REMOTE_ACCT:-jenkins}\" -R ssh \
+        -w \"${TEST_NODES}\" --rcopy \$copy_files --dest .
+fi
 
 # get stacktraces for the core files
 if ls core.*; then
