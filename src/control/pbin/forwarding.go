@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,11 @@ package pbin
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"strconv"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -69,16 +68,6 @@ func NewForwarder(log logging.Logger, pbinName string) *Forwarder {
 		pbinName: pbinName,
 	}
 
-	if val, set := os.LookupEnv(DisableReqFwdEnvVar); set {
-		disabled, err := strconv.ParseBool(val)
-		if err != nil {
-			log.Errorf("%s was set to non-boolean value (%q); not disabling",
-				DisableReqFwdEnvVar, val)
-			return fwd
-		}
-		fwd.Disabled = disabled
-	}
-
 	return fwd
 }
 
@@ -111,7 +100,7 @@ func (f *Forwarder) SendReq(method string, fwdReq interface{}, fwdRes interface{
 	ctx := context.TODO()
 	res, err := ExecReq(ctx, f.log, pbinPath, req)
 	if err != nil {
-		if IsFailedRequest(err) {
+		if fault.IsFault(err) {
 			return err
 		}
 		return errors.Wrap(err, "privileged binary execution failed")
