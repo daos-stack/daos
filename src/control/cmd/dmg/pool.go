@@ -77,9 +77,12 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		return errors.Wrap(err, "pool SCM size")
 	}
 
-	nvmeBytes, err := humanize.ParseBytes(c.NVMeSize)
-	if err != nil {
-		return errors.Wrap(err, "pool NVMe size")
+	var nvmeBytes uint64
+	if c.NVMeSize != "" {
+		nvmeBytes, err = humanize.ParseBytes(c.NVMeSize)
+		if err != nil {
+			return errors.Wrap(err, "pool NVMe size")
+		}
 	}
 
 	var acl *client.AccessControlList
