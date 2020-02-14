@@ -1583,7 +1583,7 @@ multi_pools_rebuild_concurrently(void **state)
 #define CONT_PER_POOL		2
 #define OBJ_PER_CONT		8
 	test_arg_t		*arg = *state;
-	test_arg_t		*args[POOL_NUM * CONT_PER_POOL];
+	test_arg_t		*args[POOL_NUM * CONT_PER_POOL] = { 0 };
 	daos_obj_id_t		oids[OBJ_PER_CONT];
 	struct test_pool	*pool;
 	int			i;
@@ -1599,7 +1599,8 @@ multi_pools_rebuild_concurrently(void **state)
 		rc = rebuild_pool_create(&args[i], arg, SETUP_CONT_CONNECT,
 					 pool);
 		if (rc)
-			return;
+			goto out;
+
 		if (i % CONT_PER_POOL == 0)
 			assert_int_equal(args[i]->pool.slave, 0);
 		else
@@ -1616,10 +1617,12 @@ multi_pools_rebuild_concurrently(void **state)
 
 	rebuild_pools_ranks(args, POOL_NUM * CONT_PER_POOL, ranks_to_kill, 1);
 
-	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--) {
+	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
 		rebuild_io_validate(args[i], oids, OBJ_PER_CONT, true);
+
+out:
+	for (i = POOL_NUM * CONT_PER_POOL - 1; i >= 0; i--)
 		rebuild_pool_destroy(args[i]);
-	}
 }
 
 int
