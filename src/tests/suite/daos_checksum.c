@@ -1143,7 +1143,7 @@ setup(void **state)
 #define CSUM_TEST(dsc, test) { dsc, test, async_disable, \
 				test_case_teardown }
 
-static const struct CMUnitTest tests[] = {
+static const struct CMUnitTest csum_tests[] = {
 	CSUM_TEST("DAOS_CSUM00: csum disabled", checksum_disabled),
 	CSUM_TEST("DAOS_CSUM01: simple update with server side verify",
 		  io_with_server_side_verify),
@@ -1162,15 +1162,22 @@ static const struct CMUnitTest tests[] = {
 };
 
 int
-run_daos_checksum_test(int rank, int size)
+run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
-			tests, setup, test_teardown);
+	if (rank == 0) {
+		if (sub_tests_size == 0) {
+			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
+				csum_tests, setup, test_teardown);
+		} else {
+			rc = run_daos_sub_tests(csum_tests,
+				ARRAY_SIZE(csum_tests), DEFAULT_POOL_SIZE,
+				sub_tests, sub_tests_size, setup,
+				test_teardown);
+		}
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
-
 }
