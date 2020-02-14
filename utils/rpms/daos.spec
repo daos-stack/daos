@@ -270,6 +270,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
+%{_libdir}/%{name}/API_VERSION
 %if (0%{?suse_version} >= 1500)
 /lib64/libdfs.so
 %endif
