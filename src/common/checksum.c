@@ -563,6 +563,18 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 }
 
 int
+daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
+		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
+		       size_t idx)
+{
+	daos_recx_t recx = { 0 };
+
+	recx.rx_idx = idx;
+	recx.rx_nr = nr;
+	return calc_csum(obj, sgl, rec_len, &recx, 1, csums);
+}
+
+int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		  daos_iod_t *iods, uint32_t nr,
 		  struct dcs_iod_csums **p_iods_csums)
