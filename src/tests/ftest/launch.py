@@ -150,6 +150,7 @@ def set_test_environment(args):
                 # before ib1
                 if speed not in available_interfaces:
                     available_interfaces[speed] = device
+        print("Available interfaces: {}".format(available_interfaces))
         try:
             # Select the fastest active interface available by sorting the speed
             interface = available_interfaces[sorted(available_interfaces)[-1]]
@@ -158,9 +159,7 @@ def set_test_environment(args):
                 "Error obtaining a default interface from: {}".format(
                     os.listdir(net_path)))
             exit(1)
-    print(
-        "Using {} as the default interface from {}".format(
-            interface, available_interfaces))
+    print("Using {} as the default interface".format(interface))
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
