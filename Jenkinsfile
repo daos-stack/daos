@@ -98,7 +98,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     !env.BRANCH_NAME.startsWith("releases/") &&
+     !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
@@ -850,7 +850,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: 'openmpi3 hwloc-devel argobots ' +
+                                       inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
                                                   "cart-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel'
@@ -887,7 +887,7 @@ pipeline {
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
+                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {

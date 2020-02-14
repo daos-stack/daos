@@ -27,7 +27,7 @@ import os
 import getpass
 
 from dmg_utils import storage_format
-from server_utils import ServerManager, ServerFailed, storage_prepare
+from server_utils import ServerManager, ServerFailed
 from command_utils import CommandFailure
 from apricot import TestWithServers
 
@@ -60,6 +60,7 @@ class DaosAdminPrivTest(TestWithServers):
             self.fail("Incorrect daos_admin permissions: {}".format(file_perms))
 
         # Setup server as non-root
+        self.log.info("Preparing to run daos_server as non-root user")
         server = ServerManager(self.bin, os.path.join(self.ompi_prefix, "bin"))
         server.get_params(self)
         server.hosts = (
@@ -80,20 +81,21 @@ class DaosAdminPrivTest(TestWithServers):
         # Prep server for format, run command under non-root user
         self.log.info("Performing SCM storage prepare")
         try:
-            storage_prepare(self.hostlist_servers, user, "dcpm")
+            server.storage_prepare(user, "dcpm")
         except ServerFailed as err:
             self.fail("Failed preparing SCM as non-root user: {}".format(err))
 
         # Prep server for format, run command under non-root user
         self.log.info("Performing NVMe storage prepare")
         try:
-            storage_prepare(self.hostlist_servers, user, "nvme")
+            server.storage_prepare(user, "nvme")
         except ServerFailed as err:
             self.fail("Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:
-            self.log.info("Starting server as non-root")
+            self.log.info("Starting server as non-root user")
+            server.runner.job.mode = "format"
             server.run()
         except CommandFailure as err:
             # Kill the subprocess, anything that might have started
