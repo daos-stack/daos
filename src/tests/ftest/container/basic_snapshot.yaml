@@ -7,8 +7,6 @@ hosts:
     - server-B
 server_config:
     name: daos_server
-server_manager:
-    recreate: true
 pool:
     mode: 511
     name: daos_server

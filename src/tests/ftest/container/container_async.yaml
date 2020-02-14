@@ -11,5 +11,3 @@ pool:
   name: daos_server
   scm_size: 1073741
   mode: 146
-server_manager:
-  recreate: true
