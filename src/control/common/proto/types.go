@@ -233,7 +233,7 @@ type NvmeControllerResults []*ctlpb.NvmeControllerResult
 
 func (ncr NvmeControllerResults) HasErrors() bool {
 	for _, res := range ncr {
-		if res.State.Error != "" {
+		if res.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
 			return true
 		}
 	}
@@ -264,7 +264,7 @@ type ScmMountResults []*ctlpb.ScmMountResult
 
 func (smr ScmMountResults) HasErrors() bool {
 	for _, res := range smr {
-		if res.State.Error != "" {
+		if res.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
 			return true
 		}
 	}
