@@ -30,8 +30,8 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/dustin/go-humanize"
 	uuid "github.com/google/uuid"
-	bytesize "github.com/inhies/go-bytesize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
@@ -171,10 +171,10 @@ func (srv *IOServerInstance) logScmStorage() error {
 	}
 
 	frSize := uint64(stBuf.Frsize)
-	totalBytes := float64(frSize * stBuf.Blocks)
-	availBytes := float64(frSize * stBuf.Bavail)
+	totalBytes := frSize * stBuf.Blocks
+	availBytes := frSize * stBuf.Bavail
 	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		bytesize.New(totalBytes), bytesize.New(availBytes))
+		humanize.IBytes(totalBytes), humanize.IBytes(availBytes))
 	return nil
 }
 

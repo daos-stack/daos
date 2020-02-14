@@ -29,7 +29,7 @@ import (
 	"sort"
 	"time"
 
-	bytesize "github.com/inhies/go-bytesize"
+	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -41,7 +41,6 @@ func convertTypes(in interface{}, out interface{}) error {
 	if err != nil {
 		return err
 	}
-
 	return json.Unmarshal(data, out)
 }
 
@@ -94,21 +93,19 @@ func (pb *NvmeController) AsProto() *ctlpb.NvmeController {
 	return (*ctlpb.NvmeController)(pb)
 }
 
-// NvmeControllers is an alias for protobuf NvmeController message slice
-// representing a number of NVMe SSD controllers installed on a storage node.
-type NvmeControllers []*ctlpb.NvmeController
-
-func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
-	return convertTypes(native, pb)
+func (nc *NvmeController) Capacity() (tb uint64) {
+	for _, n := range nc.Namespaces {
+		tb += n.Size
+	}
+	return
 }
 
-func (pb NvmeControllers) ToNative() (storage.NvmeControllers, error) {
-	native := make(storage.NvmeControllers, 0, len(pb))
-	return native, convertTypes(pb, native)
-}
-
-func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	stat := c.GetHealthstats()
+// HealthDetail provides custom string representation for Controller including
+// health statistics.
+//
+// Append to buffer referenced by input parameter.
+func (nc *NvmeController) HealthDetail(buf *bytes.Buffer) {
+	stat := (*ctlpb.NvmeController)(nc).GetHealthstats()
 
 	if stat == nil {
 		fmt.Fprintf(buf, "\t\tHealth Stats Unavailable\n")
@@ -166,16 +163,26 @@ func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
 	}
 }
 
-// ctrlrDetail provides custom string representation for Controller type
-// defined outside this package.
-func ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	tCap := bytesize.New(0)
-	for _, n := range c.Namespaces {
-		tCap += bytesize.GB * bytesize.New(float64(n.Size))
-	}
-
+// CtrlrDetail provides custom string representation for Controller.
+//
+// Append to buffer referenced by input parameter.
+func (nc *NvmeController) CtrlrDetail(buf *bytes.Buffer) {
 	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
-		c.Pciaddr, c.Model, c.Fwrev, c.Socketid, tCap)
+		nc.Pciaddr, nc.Model, nc.Fwrev, nc.Socketid,
+		humanize.Bytes(nc.Capacity()))
+}
+
+// NvmeControllers is an alias for protobuf NvmeController message slice
+// representing a number of NVMe SSD controllers installed on a storage node.
+type NvmeControllers []*ctlpb.NvmeController
+
+func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
+	return convertTypes(native, pb)
+}
+
+func (pb NvmeControllers) ToNative() (storage.NvmeControllers, error) {
+	native := make(storage.NvmeControllers, 0, len(pb))
+	return native, convertTypes(pb, native)
 }
 
 func (ncs NvmeControllers) String() string {
@@ -188,8 +195,8 @@ func (ncs NvmeControllers) String() string {
 
 	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
-	for _, ctrlr := range ncs {
-		ctrlrDetail(buf, ctrlr)
+	for _, c := range ncs {
+		(*NvmeController)(c).CtrlrDetail(buf)
 	}
 
 	return buf.String()
@@ -206,25 +213,25 @@ func (ncs NvmeControllers) StringHealthStats() string {
 		return buf.String()
 	}
 
-	for _, ctrlr := range ncs {
-		ctrlrDetail(buf, ctrlr)
-		healthDetail(buf, ctrlr)
+	for _, c := range ncs {
+		(*NvmeController)(c).CtrlrDetail(buf)
+		(*NvmeController)(c).HealthDetail(buf)
 	}
 
 	return buf.String()
 }
 
+func (ncs NvmeControllers) Capacity() (tb uint64) {
+	for _, c := range ncs {
+		tb += (*NvmeController)(c).Capacity()
+	}
+	return
+}
+
 // Summary reports accumulated storage space and the number of controllers.
 func (ncs NvmeControllers) Summary() string {
-	tCap := bytesize.New(0)
-	for _, c := range ncs {
-		for _, n := range c.Namespaces {
-			tCap += bytesize.GB * bytesize.New(float64(n.Size))
-		}
-	}
-
-	return fmt.Sprintf("%s (%d %s)",
-		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(ncs.Capacity()),
+		len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
