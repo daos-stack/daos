@@ -56,7 +56,7 @@ class SuperBlockVersioning(TestWithServers):
             try:
                 superblock_data = yaml.safe_load(open_file.read())
             except yaml.YAMLError as error:
-                self.log.info("Error reading %s: %s".format(fname, error))
+                self.log.info("Error reading %s: %s", fname, error)
                 self.fail("Was not able to open {} file".format(fname))
 
         # Make sure that 'version' is in the file, run task to check
