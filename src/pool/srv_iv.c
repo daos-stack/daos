@@ -350,7 +350,7 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	memset(&key, 0, sizeof(key));
 	key.class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  false /* retry */);
+			  true /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
@@ -459,6 +459,8 @@ ds_pool_map_refresh_ult(void *arg)
 unlock:
 	ABT_mutex_unlock(pool->sp_iv_refresh_lock);
 out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE_PTR(iv_arg);

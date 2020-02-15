@@ -673,6 +673,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	rc = alloc_init(class, id, db_uuid, &svc);
 	if (rc != 0)
 		goto err;
+	svc->s_ref++;
 
 	if (create) {
 		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas);
@@ -692,7 +693,6 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 			goto err_db;
 	}
 
-	svc->s_ref = 1;
 	*svcp = svc;
 	return 0;
 
@@ -702,6 +702,7 @@ err_creation:
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
+	svc->s_ref--;
 	fini_free(svc);
 err:
 	return rc;

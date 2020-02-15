@@ -495,6 +495,8 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 		csum->cs_len		= irec->ir_cs_size;
 		csum->cs_buf_len	= irec->ir_cs_size;
 		csum->cs_type		= irec->ir_cs_type;
+		csum->cs_nr		= 1; /** sv only has 1 csum */
+		csum->cs_chunksize	= CSUM_NO_CHUNK;
 		if (csum->cs_csum)
 			memcpy(csum->cs_csum,
 			       vos_irec2csum(irec), csum->cs_len);

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ from mdtest_utils import MdtestCommand
 from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
 import write_host_file
+
 
 class MdtestBase(TestWithServers):
     """Base mdtest class.
@@ -82,7 +83,7 @@ class MdtestBase(TestWithServers):
     def _create_pool(self):
         """Create a pool and execute Mdtest."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool

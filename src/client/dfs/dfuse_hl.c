@@ -595,7 +595,7 @@ dfuse_mkdir(const char *path, mode_t mode)
 		D_GOTO(out, rc = -ENOTDIR);
 	}
 
-	rc = dfs_mkdir(dfs, parent, name, mode);
+	rc = dfs_mkdir(dfs, parent, name, mode, 0);
 	if (rc)
 		D_GOTO(out, rc = -rc);
 
