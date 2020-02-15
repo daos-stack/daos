@@ -222,6 +222,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rs.rs_toberb_obj_nr	=
 				src_iv->riv_toberb_obj_count;
 			rs.rs_size	= src_iv->riv_size;
+			rs.rs_seconds   = src_iv->riv_seconds;
 
 			rc = rebuild_status_completed_update(
 					src_iv->riv_pool_uuid, &rs);

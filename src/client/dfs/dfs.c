@@ -1493,7 +1493,8 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size)
 }
 
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	  daos_oclass_id_t cid)
 {
 	dfs_obj_t		new_dir;
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -1519,7 +1520,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
-	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), 0,
+	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), cid,
 			&new_dir);
 	if (rc)
 		D_GOTO(out, rc);

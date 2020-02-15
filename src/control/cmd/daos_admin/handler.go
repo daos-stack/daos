@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -35,7 +36,11 @@ import (
 )
 
 func sendFailure(err error, res *pbin.Response, dest io.Writer) error {
-	res.Error = &pbin.RequestFailure{Message: err.Error()}
+	f, ok := errors.Cause(err).(*fault.Fault)
+	if !ok {
+		f = pbin.PrivilegedHelperRequestFailed(err.Error())
+	}
+	res.Error = f
 	data, err := json.Marshal(res)
 	if err != nil {
 		return err
@@ -84,6 +89,8 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *
 	var res pbin.Response
 
 	switch req.Method {
+	case "Ping":
+		return sendSuccess(struct{}{}, &res, resDest)
 	case "ScmMount", "ScmUnmount":
 		var mReq scm.MountRequest
 		if err := json.Unmarshal(req.Payload, &mReq); err != nil {

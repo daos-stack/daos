@@ -212,6 +212,7 @@ struct shard_rw_args {
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
+	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
 };
 

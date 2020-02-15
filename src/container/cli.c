@@ -1046,7 +1046,7 @@ dc_cont_set_prop(tse_task_t *task)
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": setting props: hdl="DF_UUID"\n",
-		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
@@ -1087,6 +1087,124 @@ err_cont:
 err:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to set prop on container: "DF_RC"\n",
+		DP_RC(rc));
+	return rc;
+}
+
+struct cont_update_acl_args {
+	struct dc_pool		*cua_pool;
+	struct dc_cont		*cua_cont;
+	crt_rpc_t		*rpc;
+	daos_handle_t		hdl;
+};
+
+static int
+cont_update_acl_complete(tse_task_t *task, void *data)
+{
+	struct cont_update_acl_args	*arg = (struct cont_update_acl_args *)
+						data;
+	struct cont_acl_update_out	*out = crt_reply_get(arg->rpc);
+	struct dc_pool			*pool = arg->cua_pool;
+	struct dc_cont			*cont = arg->cua_cont;
+	int				 rc   = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cauo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0) {
+		D_ERROR("RPC error while updating ACL on container: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = out->cauo_op.co_rc;
+
+	if (rc != 0) {
+		D_DEBUG(DF_DSMC, DF_CONT": failed to update ACL on container: "
+			"%d\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_CONT": Update ACL: using hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+	return rc;
+}
+
+int
+dc_cont_update_acl(tse_task_t *task)
+{
+	daos_cont_update_acl_t		*args;
+	struct cont_acl_update_in	*in;
+	struct dc_pool			*pool;
+	struct dc_cont			*cont;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct cont_update_acl_args	 arg;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	cont = dc_hdl2cont(args->coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_CONT": updating ACL: hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	ep.ep_grp  = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_cont, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->caui_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->caui_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->caui_op.ci_hdl, cont->dc_cont_hdl);
+	in->caui_acl = args->acl;
+
+	arg.cua_pool = pool;
+	arg.cua_cont = cont;
+	arg.rpc	     = rpc;
+	arg.hdl	     = args->coh;
+	crt_req_addref(rpc);
+
+	rc = tse_task_register_comp_cb(task, cont_update_acl_complete, &arg,
+				       sizeof(arg));
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_cont:
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+err:
+	tse_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to update ACL on container: "DF_RC"\n",
 		DP_RC(rc));
 	return rc;
 }
