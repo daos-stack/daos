@@ -387,7 +387,7 @@ enabled=0
 EOF
     debug_pkgs=\"python glibc:glibc-debuginfo-common daos systemd ndctl
                 libpmem:pmdk-debuginfo mercury cart libfabric argobots\"
-    declare -a install_pkgs
+    install_pkgs=( gdb )
     for pkg in \$debug_pkgs; do
         if [[ \$pkg = *:* ]]; then
             debug_pkg=\${pkg#*:}
@@ -400,7 +400,7 @@ EOF
             install_pkgs+=( \$debug_pkg )
         fi
     done
-    sudo yum --enablerepo=\*debug\* -y install gdb \${install_pkgs[@]}
+    sudo yum --enablerepo=\*debug\* -y install \${install_pkgs[@]}
     for file in \$(ls core.daos_io_server.*[0-9]); do
         exe_name=\$(file \$file | sed -e \"s/.*execfn: '\([^']*\)',.*/\1/\")
         gdb -ex \"set pagination off\"                 \
