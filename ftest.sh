@@ -380,7 +380,7 @@ if ls core.*; then
 sudo bash -c \"cat <<\\\"EOF\\\" > /etc/yum.repos.d/CentOS-Debuginfo.repo
 [base-debuginfo]
 name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/\$basearch/
+baseurl=http://debuginfo.centos.org/7/\\\$basearch/
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
