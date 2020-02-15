@@ -377,7 +377,7 @@ fi
 if ls core.*; then
     # this really should be a debuginfo-install command but our systems lag
     # current releases
-sudo bash -c \"cat <<EOF > /etc/yum.repos.d/CentOS-Debuginfo.repo
+sudo bash -c \"cat <<\\\"EOF\\\" > /etc/yum.repos.d/CentOS-Debuginfo.repo
 [base-debuginfo]
 name=CentOS-7 - Debuginfo
 baseurl=http://debuginfo.centos.org/7/\$basearch/
