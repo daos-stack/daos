@@ -377,14 +377,14 @@ fi
 if ls core.*; then
     # this really should be a debuginfo-install command but our systems lag
     # current releases
-cat <<EOF > /etc/yum.repos.d/CentOS-Debuginfo.repo
+sudo bash -c \"cat <<EOF > /etc/yum.repos.d/CentOS-Debuginfo.repo
 [base-debuginfo]
 name=CentOS-7 - Debuginfo
 baseurl=http://debuginfo.centos.org/7/\$basearch/
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
 enabled=0
-EOF
+EOF\"
     debug_pkgs=\"python glibc:glibc-debuginfo-common daos systemd ndctl
                 libpmem:pmdk-debuginfo mercury cart libfabric argobots\"
     install_pkgs=( gdb )
