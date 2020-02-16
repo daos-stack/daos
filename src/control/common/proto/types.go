@@ -24,7 +24,6 @@ package proto
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -32,27 +31,20 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func convertTypes(in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, out)
-}
-
 type NvmeDeviceHealth ctlpb.NvmeController_Health
 
 func (pb *NvmeDeviceHealth) FromNative(native *storage.NvmeDeviceHealth) error {
-	return convertTypes(native, pb)
+	return convert.Types(native, pb)
 }
 
 func (pb *NvmeDeviceHealth) ToNative() (*storage.NvmeDeviceHealth, error) {
 	native := new(storage.NvmeDeviceHealth)
-	return native, convertTypes(pb, native)
+	return native, convert.Types(pb, native)
 }
 
 func (pb *NvmeDeviceHealth) AsProto() *ctlpb.NvmeController_Health {
@@ -62,12 +54,12 @@ func (pb *NvmeDeviceHealth) AsProto() *ctlpb.NvmeController_Health {
 type NvmeNamespace ctlpb.NvmeController_Namespace
 
 func (pb *NvmeNamespace) FromNative(native *storage.NvmeNamespace) error {
-	return convertTypes(native, pb)
+	return convert.Types(native, pb)
 }
 
 func (pb *NvmeNamespace) ToNative() (*storage.NvmeNamespace, error) {
 	native := new(storage.NvmeNamespace)
-	return native, convertTypes(pb, native)
+	return native, convert.Types(pb, native)
 }
 
 func (pb *NvmeNamespace) AsProto() *ctlpb.NvmeController_Namespace {
@@ -81,12 +73,12 @@ type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 type NvmeController ctlpb.NvmeController
 
 func (pb *NvmeController) FromNative(native *storage.NvmeController) error {
-	return convertTypes(native, pb)
+	return convert.Types(native, pb)
 }
 
 func (pb *NvmeController) ToNative() (*storage.NvmeController, error) {
 	native := new(storage.NvmeController)
-	return native, convertTypes(pb, native)
+	return native, convert.Types(pb, native)
 }
 
 func (pb *NvmeController) AsProto() *ctlpb.NvmeController {
@@ -177,12 +169,12 @@ func (nc *NvmeController) CtrlrDetail(buf *bytes.Buffer) {
 type NvmeControllers []*ctlpb.NvmeController
 
 func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
-	return convertTypes(native, pb)
+	return convert.Types(native, pb)
 }
 
-func (pb NvmeControllers) ToNative() (storage.NvmeControllers, error) {
-	native := make(storage.NvmeControllers, 0, len(pb))
-	return native, convertTypes(pb, native)
+func (pb *NvmeControllers) ToNative() (storage.NvmeControllers, error) {
+	native := make(storage.NvmeControllers, 0, len(*pb))
+	return native, convert.Types(pb, &native)
 }
 
 func (ncs NvmeControllers) String() string {
@@ -247,15 +239,67 @@ func (ncr NvmeControllerResults) HasErrors() bool {
 	return false
 }
 
-// ScmNamespaces is an alias for protobuf PmemDevice message slice representing
-// a number of PMEM device files created on SCM namespaces on a storage node.
-type ScmNamespaces []*ctlpb.PmemDevice
+type ScmModule ctlpb.ScmModule
 
-func (pds ScmNamespaces) String() string {
+func (pb *ScmModule) FromNative(native *storage.ScmModule) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmModule) ToNative() (*storage.ScmModule, error) {
+	native := new(storage.ScmModule)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *ScmModule) AsProto() *ctlpb.ScmModule {
+	return (*ctlpb.ScmModule)(pb)
+}
+
+// ScmModules is an alias for protobuf ScmModule message slice representing
+// a number of SCM modules installed on a storage node.
+type ScmModules []*ctlpb.ScmModule
+
+func (pb *ScmModules) FromNative(native storage.ScmModules) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmModules) ToNative() (storage.ScmModules, error) {
+	native := make(storage.ScmModules, 0, len(*pb))
+	return native, convert.Types(pb, &native)
+}
+
+type ScmNamespace ctlpb.ScmNamespace
+
+func (pb *ScmNamespace) FromNative(native *storage.ScmNamespace) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmNamespace) ToNative() (*storage.ScmNamespace, error) {
+	native := new(storage.ScmNamespace)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *ScmNamespace) AsProto() *ctlpb.ScmNamespace {
+	return (*ctlpb.ScmNamespace)(pb)
+}
+
+// ScmNamespaces is an alias for protobuf ScmNamespace message slice representing
+// a number of SCM modules installed on a storage node.
+type ScmNamespaces []*ctlpb.ScmNamespace
+
+func (pb *ScmNamespaces) FromNative(native storage.ScmNamespaces) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmNamespaces) ToNative() (storage.ScmNamespaces, error) {
+	native := make(storage.ScmNamespaces, 0, len(*pb))
+	return native, convert.Types(pb, &native)
+}
+
+func (sns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
-	for _, pd := range pds {
-		fmt.Fprintf(&buf, "\t%s\n", pd)
+	for _, sn := range sns {
+		fmt.Fprintf(&buf, "\t%s\n", sn)
 	}
 
 	return buf.String()
@@ -277,10 +321,6 @@ func (smr ScmMountResults) HasErrors() bool {
 	}
 	return false
 }
-
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
-type ScmModules []*ctlpb.ScmModule
 
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.

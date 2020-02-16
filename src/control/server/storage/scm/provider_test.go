@@ -38,10 +38,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestProviderScan(t *testing.T) {
-	defaultModule := MockModule(nil)
-	defaultNamespace := storage.ScmNamespace{}
+var (
+	mm               = MockModule(nil)
+	defaultModule    = &mm
+	defaultNamespace = &storage.ScmNamespace{}
+)
 
+func TestProviderScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rescan          bool
 		discoverErr     error
@@ -143,8 +146,6 @@ func TestProviderScan(t *testing.T) {
 }
 
 func TestProviderPrepare(t *testing.T) {
-	defaultNamespace := storage.ScmNamespace{}
-
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		reset            bool
@@ -226,7 +227,7 @@ func TestProviderPrepare(t *testing.T) {
 			}
 			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{MockModule(nil)},
+				DiscoverRes:     storage.ScmModules{defaultModule},
 				GetNamespaceRes: tc.getNamespaceRes,
 				GetNamespaceErr: tc.getNamespaceErr,
 				GetStateErr:     tc.getStateErr,
@@ -291,7 +292,7 @@ func TestProviderGetState(t *testing.T) {
 
 			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{MockModule(nil)},
+				DiscoverRes:     storage.ScmModules{defaultModule},
 				GetNamespaceErr: tc.getNamespaceErr,
 				StartingState:   tc.startState,
 				NextState:       tc.expEndState,
@@ -449,7 +450,7 @@ func TestProviderCheckFormat(t *testing.T) {
 
 			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{MockModule(nil)},
+				DiscoverRes:     storage.ScmModules{defaultModule},
 				GetNamespaceErr: tc.getNamespaceErr,
 			}
 			msc := &MockSysConfig{
@@ -773,7 +774,7 @@ func TestProviderFormat(t *testing.T) {
 
 			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{MockModule(nil)},
+				DiscoverRes:     storage.ScmModules{defaultModule},
 				GetNamespaceErr: tc.getNamespaceErr,
 			}
 			msc := &MockSysConfig{
