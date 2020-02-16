@@ -160,7 +160,7 @@ func (sms ScmModules) Summary() string {
 func (sn *ScmNamespace) String() string {
 	// capacity given in IEC standard units.
 	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", sn.BlockDevice, sn.NumaNode,
-		humanize.IBytes(sn.Size))
+		humanize.Bytes(sn.Size))
 }
 
 func (sns ScmNamespaces) String() string {
@@ -191,6 +191,6 @@ func (sns ScmNamespaces) Capacity() (tb uint64) {
 //
 // Capacity given in IEC standard units.
 func (sns ScmNamespaces) Summary() string {
-	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(sns.Capacity()), len(sns),
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(sns.Capacity()), len(sns),
 		common.Pluralise("namespace", len(sns)))
 }

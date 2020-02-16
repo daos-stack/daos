@@ -92,7 +92,7 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	for _, ns := range nss {
 		row := txtfmt.TableRow{deviceTitle: ns.BlockDevice}
 		row[socketTitle] = fmt.Sprint(ns.NumaNode)
-		row[capacityTitle] = humanize.IBytes(ns.Size)
+		row[capacityTitle] = humanize.Bytes(ns.Size)
 
 		table = append(table, row)
 	}
