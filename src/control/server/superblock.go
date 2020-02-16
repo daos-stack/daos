@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ func (srv *IOServerInstance) logScmStorage() error {
 	totalBytes := frSize * stBuf.Blocks
 	availBytes := frSize * stBuf.Bavail
 	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
-		humanize.IBytes(totalBytes), humanize.IBytes(availBytes))
+		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
 	return nil
 }
 

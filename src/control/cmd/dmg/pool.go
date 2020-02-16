@@ -216,10 +216,10 @@ func (c *PoolQueryCmd) Execute(args []string) error {
 	fmt.Fprintf(&bld, "- Target(VOS) count:%d\n", resp.ActiveTargets)
 	if resp.Scm != nil {
 		bld.WriteString("- SCM:\n")
-		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.IBytes(resp.Scm.Total))
+		fmt.Fprintf(&bld, "  Total size: %s\n", humanize.Bytes(resp.Scm.Total))
 		fmt.Fprintf(&bld, "  Free: %s, min:%s, max:%s, mean:%s\n",
-			humanize.IBytes(resp.Scm.Free), humanize.IBytes(resp.Scm.Min),
-			humanize.IBytes(resp.Scm.Max), humanize.IBytes(resp.Scm.Mean))
+			humanize.Bytes(resp.Scm.Free), humanize.Bytes(resp.Scm.Min),
+			humanize.Bytes(resp.Scm.Max), humanize.Bytes(resp.Scm.Mean))
 	}
 	if resp.Nvme != nil {
 		bld.WriteString("- NVMe:\n")
