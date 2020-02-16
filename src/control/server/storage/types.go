@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-20w20 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ type (
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
-	ScmModules []ScmModule
+	ScmModules []*ScmModule
 
 	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
@@ -76,7 +76,7 @@ type (
 	}
 
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
-	ScmNamespaces []ScmNamespace
+	ScmNamespaces []*ScmNamespace
 
 	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
 	NvmeDeviceHealth struct {
@@ -98,8 +98,8 @@ type (
 
 	// NvmeNamespace represents an individual NVMe namespace on a device.
 	NvmeNamespace struct {
-		ID   int32
-		Size int32
+		ID   uint32
+		Size uint64
 	}
 
 	// NvmeController represents a NVMe device controller which includes health
@@ -135,7 +135,7 @@ func (sms ScmModules) String() string {
 	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
 
 	for _, sm := range sms {
-		fmt.Fprintf(&buf, "\t\t%s\n", &sm)
+		fmt.Fprintf(&buf, "\t\t%s\n", sm)
 	}
 
 	return buf.String()
@@ -173,7 +173,7 @@ func (sns ScmNamespaces) String() string {
 	sort.Slice(sns, func(i, j int) bool { return sns[i].BlockDevice < sns[j].BlockDevice })
 
 	for _, sn := range sns {
-		fmt.Fprintf(&buf, "\t\t%s\n", &sn)
+		fmt.Fprintf(&buf, "\t\t%s\n", sn)
 	}
 
 	return buf.String()
