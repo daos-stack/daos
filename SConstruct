@@ -54,7 +54,7 @@ def update_rpm_version(version, tag):
                       "spec file has currently ({})".format(version,
                                                             current_version))
                 return False
-            elif version > current_version:
+            if version > current_version:
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
@@ -131,7 +131,8 @@ def preload_prereqs(prereqs):
         reqs.extend(['spdk', 'isal'])
     prereqs.load_definitions(prebuild=reqs)
 
-def scons():
+def scons(): # pylint: disable=too-many-locals
+    """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
             import pygit2
@@ -171,7 +172,7 @@ def scons():
                   "using a previous pre-release such as a release candidate.\n")
             question = "Are you sure you want to continue? (y/N): "
             answer = None
-            while answer != "y" and answer != "n" and answer != "":
+            while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
                 exit(1)
@@ -227,7 +228,9 @@ def scons():
                   "to clean it up manually.")
             exit(1)
 
-        print("Updating the VERSION and TAG files...")
+        print("Updating the API_VERSION, VERSION and TAG files...")
+        with open("API_VERSION", "w") as version_file:
+            version_file.write(API_VERSION + '\n')
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -247,6 +250,7 @@ def scons():
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
+        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -257,9 +261,11 @@ def scons():
         # pylint: enable=no-member
 
         # set up authentication callback
-        class MyCallbacks(pygit2.RemoteCallbacks):
+        class MyCallbacks(pygit2.RemoteCallbacks): # pylint: disable=too-few-public-methods
             """ Callbacks for pygit2 """
-            def credentials(self, url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            @staticmethod
+            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+                """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
@@ -279,6 +285,7 @@ def scons():
                                     "by remote end.  SSH_AUTH_SOCK not found "
                                     "in your environment.  Are you running an "
                                     "ssh-agent?")
+                return None
 
         # and push it
         print("Pushing the changes to GitHub...")
@@ -316,14 +323,13 @@ def scons():
 
         exit(0)
 
-    """Execute build"""
     try:
         sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
         from prereq_tools import PreReqComponent
-        print ('Using scons_local build')
+        print('Using scons_local build')
     except ImportError:
-        print ('scons_local submodule is needed in order to do DAOS build')
-        print ('Use git submodule update --init')
+        print('scons_local submodule is needed in order to do DAOS build')
+        print('Use git submodule update --init')
         sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
@@ -367,6 +373,7 @@ def scons():
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
+    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',

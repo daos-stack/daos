@@ -39,6 +39,7 @@ enum cont_op {
 	CONT_ROLLBACK,
 	CONT_GET_ACL,
 	CONT_OVERWRITE_ACL,
+	CONT_UPDATE_ACL,
 };
 
 enum pool_op {
@@ -95,6 +96,7 @@ struct cmd_args_s {
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
 	bool			verbose;	/* --verbose mode */
+	char			*entry;		/* --entry for ACL */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
@@ -197,6 +199,7 @@ int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
+int cont_update_acl_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
