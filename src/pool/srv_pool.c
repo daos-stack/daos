@@ -1715,6 +1715,7 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tci_uuid, svc->ps_uuid);
 	uuid_copy(in->tci_hdl, pool_hdl);
 	in->tci_capas = capas;
+	in->tci_cred = creds;
 	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
 	in->tci_master_rank = rank;

@@ -46,9 +46,6 @@ RDB_STRING_KEY(ds_pool_prop_, nhandles);
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 
-/** Security credential handle KVS */
-RDB_STRING_KEY(ds_pool_sec_, handles);
-
 /** user attributed KVS */
 RDB_STRING_KEY(ds_pool_attr_, user);
 

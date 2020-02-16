@@ -77,6 +77,7 @@ fini(void)
 {
 	ds_pool_rsvc_class_unregister();
 	ds_pool_iv_fini();
+	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
 	ds_pool_prop_default_fini();
 	return 0;
