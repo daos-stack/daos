@@ -63,10 +63,88 @@ func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
 	ch <- ClientResult{mc.getAddress(), resp, nil}
 }
 
+func (c *connList) setPrepareErr(cNvmePrepare NvmePrepareResults, cScmPrepare ScmPrepareResults,
+	address string, err error) {
+
+	cNvmePrepare[address] = &NvmePrepareResult{Err: err}
+	cScmPrepare[address] = &ScmPrepareResult{Err: err}
+}
+
+func (c *connList) getNvmePrepareResult(resp *ctlpb.PrepareNvmeResp) (nvmeResult *NvmePrepareResult) {
+	nvmeResult = &NvmePrepareResult{}
+
+	nState := resp.GetState()
+	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+		msg := nState.GetError()
+		if msg == "" {
+			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
+		}
+		nvmeResult.Err = errors.Errorf(msg)
+		return
+	}
+
+	return
+}
+
+func (c *connList) getScmPrepareResult(resp *ctlpb.PrepareScmResp) (scmResult *ScmPrepareResult) {
+	var err error
+	scmResult = &ScmPrepareResult{}
+
+	sState := resp.GetState()
+	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+		msg := sState.GetError()
+		if msg == "" {
+			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
+		}
+		scmResult.Err = errors.Errorf(msg)
+		return
+	}
+
+	namespaces := resp.GetNamespaces()
+	scmResult.Namespaces, err = (*proto.ScmNamespaces)(&namespaces).ToNative()
+	if err != nil {
+		scmResult.Err = errors.Wrap(err, "scm namespaces")
+		return
+	}
+
+	return
+}
+
 // StoragePrepare returns details of nonvolatile storage devices attached to each
 // remote server. Data received over channel from requests running in parallel.
-func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) ResultMap {
-	return c.makeRequests(req, storagePrepareRequest)
+func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) *StoragePrepareResp {
+	cResults := c.makeRequests(req, storagePrepareRequest)
+	cNvmePrepare := make(NvmePrepareResults) // mapping of server address to NVMe SSDs
+	cScmPrepare := make(ScmPrepareResults)   // mapping of server address to SCM modules/namespaces
+	servers := make([]string, 0, len(cResults))
+
+	for addr, res := range cResults {
+		if res.Err != nil { // likely to be comms err
+			c.setPrepareErr(cNvmePrepare, cScmPrepare, addr, res.Err)
+			continue
+		}
+
+		resp, ok := res.Value.(*ctlpb.StoragePrepareResp)
+		if !ok {
+			c.setPrepareErr(cNvmePrepare, cScmPrepare, addr,
+				fmt.Errorf(msgBadType, &ctlpb.StoragePrepareResp{}, res.Value))
+			continue
+		}
+
+		if resp.GetNvme() == nil || resp.GetScm() == nil {
+			c.setPrepareErr(cNvmePrepare, cScmPrepare, addr,
+				fmt.Errorf("malformed response, missing submessage %+v", resp))
+			continue
+		}
+
+		cNvmePrepare[addr] = c.getNvmePrepareResult(resp.Nvme)
+		cScmPrepare[addr] = c.getScmPrepareResult(resp.Scm)
+		servers = append(servers, addr)
+	}
+
+	sort.Strings(servers)
+
+	return &StoragePrepareResp{Servers: servers, Nvme: cNvmePrepare, Scm: cScmPrepare}
 }
 
 // storageScanRequest returns all discovered SCM and NVMe storage devices
@@ -165,8 +243,8 @@ func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
 			continue
 		}
 
-		cNvmeScan[addr] = c.getNvmeResult(resp.Nvme)
-		cScmScan[addr] = c.getScmResult(resp.Scm)
+		cNvmeScan[addr] = c.getNvmeScanResult(resp.Nvme)
+		cScmScan[addr] = c.getScmScanResult(resp.Scm)
 		servers = append(servers, addr)
 	}
 

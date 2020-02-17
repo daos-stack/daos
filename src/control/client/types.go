@@ -297,6 +297,34 @@ func (rm ResultStateMap) String() string {
 	return buf.String()
 }
 
+// ScmPrepareResult represents the result of preparing SCM.
+type ScmPrepareResult struct {
+	Namespaces storage.ScmNamespaces
+	Err        error
+}
+
+// ScmPrepareMap maps ScmModulePrepareResult structs to the addresses
+// of remote servers identified by an address string.
+type ScmPrepareResults map[string]*ScmPrepareResult
+
+type NvmePrepareResult struct {
+	Err error
+}
+
+// NvmePrepareResults maps NvmePrepareResult structs to the addresses
+// of remote servers identified by an address string.
+type NvmePrepareResults map[string]*NvmePrepareResult
+
+// StoragePrepareReq encapsulated subsystem prepare parameters.
+type StoragePrepareReq struct{}
+
+// StoragePrepareResp encapsulated subsystem results.
+type StoragePrepareResp struct {
+	Servers []string
+	Nvme    NvmePrepareResults
+	Scm     ScmPrepareResults
+}
+
 // ScmScanResult represents the result of scanning for SCM
 // modules installed on a storage node and SCM namespaces.
 type ScmScanResult struct {

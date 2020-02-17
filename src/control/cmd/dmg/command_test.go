@@ -99,9 +99,9 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMap {
+func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) *client.StoragePrepareResp {
 	tc.appendInvocation("StoragePrepare")
-	return nil
+	return &client.StoragePrepareResp{}
 }
 
 func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {

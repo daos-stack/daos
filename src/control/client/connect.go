@@ -77,7 +77,7 @@ type Connect interface {
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	StorageScan(*StorageScanReq) *StorageScanResp
 	StorageFormat(reformat bool) StorageFormatResults
-	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	StoragePrepare(*ctlpb.StoragePrepareReq) *StoragePrepareResp
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 	SystemQuery(SystemQueryReq) (*SystemQueryResp, error)

@@ -83,8 +83,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		sReq = &ctlpb.PrepareScmReq{Reset_: cmd.Reset}
 	}
 
-	cmd.log.Infof("NVMe & SCM preparation:\n%s",
-		cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
+	out, err := prepareCmdDisplay(cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{
+		Nvme: nReq, Scm: sReq}))
+	if err != nil {
+		return err
+	}
+	cmd.log.Info(out)
 
 	return nil
 }
@@ -280,6 +284,61 @@ func groupFormatResults(results client.StorageFormatResults, summary bool) (grou
 		fmt.Fprintf(buf, "%s\n", nvmeFormatTable(result.Nvme))
 
 		if err = mixedGroups.AddHost(buf.String(), host); err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// prepareCmdDisplay returns tabulated output of grouped host prepare results.
+func prepareCmdDisplay(results *client.StoragePrepareResp) (string, error) {
+	out := &bytes.Buffer{}
+
+	groups, err := groupPrepareResults(results)
+	if err != nil {
+		return "", err
+	}
+
+	if len(groups) > 0 {
+		fmt.Fprintf(out, "\n%s\n", groups)
+	}
+
+	return formatHostGroups(out, groups), nil
+}
+
+// groupPrepareResults collects identical output keyed on hostset from
+// prepare results and returns grouped output.
+func groupPrepareResults(resp *client.StoragePrepareResp) (groups hostlist.HostGroups, err error) {
+	var host string
+	buf := &bytes.Buffer{}
+	groups = make(hostlist.HostGroups)
+
+	for _, srv := range resp.Servers {
+		buf.Reset()
+
+		host, _, err = common.SplitPort(srv, 0) // disregard port when grouping output
+		if err != nil {
+			return
+		}
+
+		sres := resp.Scm[srv]
+		switch {
+		case sres.Err != nil:
+			fmt.Fprintf(buf, "SCM Error: %s\n", sres.Err)
+		case len(sres.Namespaces) > 0:
+			fmt.Fprintf(buf, "%s\n", scmNsScanTable(sres.Namespaces))
+		default:
+			fmt.Fprintf(buf, "SCM ???\n")
+		}
+
+		if resp.Nvme[srv].Err != nil {
+			fmt.Fprintf(buf, "NVMe Error: %s\n", resp.Nvme[srv].Err)
+		} else {
+			fmt.Fprintf(buf, "NVMe prepare OK\n")
+		}
+
+		if err = groups.AddHost(buf.String(), host); err != nil {
 			return
 		}
 	}
