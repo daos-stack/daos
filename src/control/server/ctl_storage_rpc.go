@@ -55,39 +55,6 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func scmModulesToPB(mms []storage.ScmModule) (pbMms proto.ScmModules) {
-	for _, c := range mms {
-		pbMms = append(
-			pbMms,
-			&ctlpb.ScmModule{
-				Loc: &ctlpb.ScmModule_Location{
-					Channel:    c.ChannelID,
-					Channelpos: c.ChannelPosition,
-					Memctrlr:   c.ControllerID,
-					Socket:     c.SocketID,
-				},
-				Physicalid: c.PhysicalID,
-				Capacity:   c.Capacity,
-			})
-	}
-	return
-}
-
-func scmNamespacesToPB(nss []storage.ScmNamespace) (pbNss proto.ScmNamespaces) {
-	for _, ns := range nss {
-		pbNss = append(pbNss,
-			&ctlpb.PmemDevice{
-				Uuid:     ns.UUID,
-				Blockdev: ns.BlockDevice,
-				Dev:      ns.Name,
-				Numanode: ns.NumaNode,
-				Size:     ns.Size,
-			})
-	}
-
-	return
-}
-
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
 	resp = &ctlpb.PrepareNvmeResp{}
 	msg := "Storage Prepare NVMe"
@@ -129,8 +96,12 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 		info = scm.MsgScmRebootRequired
 	}
 
+	pbResp.Namespaces = make(proto.ScmNamespaces, 0, len(resp.Namespaces))
+	if err := (*proto.ScmNamespaces)(&pbResp.Namespaces).FromNative(resp.Namespaces); err != nil {
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
 	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
-	pbResp.Pmems = scmNamespacesToPB(resp.Namespaces)
 
 	return
 }
@@ -188,9 +159,19 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
 		if len(ssr.Namespaces) > 0 {
-			resp.Scm.Pmems = scmNamespacesToPB(ssr.Namespaces)
+			resp.Scm.Namespaces = make(proto.ScmNamespaces, 0, len(ssr.Namespaces))
+			err := (*proto.ScmNamespaces)(&resp.Scm.Namespaces).FromNative(ssr.Namespaces)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		} else {
-			resp.Scm.Modules = scmModulesToPB(ssr.Modules)
+			resp.Scm.Modules = make(proto.ScmModules, 0, len(ssr.Modules))
+			err := (*proto.ScmModules)(&resp.Scm.Modules).FromNative(ssr.Modules)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		}
 	}
 
