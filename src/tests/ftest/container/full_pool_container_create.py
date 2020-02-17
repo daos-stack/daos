@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,12 +20,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
-import random
-import string
-
 from apricot import TestWithServers, skipForTicket
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
+from general_utils import get_random_string
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -48,34 +45,19 @@ class FullPoolContainerCreate(TestWithServers):
         # probably should be -1007, revisit later
         err2 = "-1009"
 
-        # create pool
-        self.pool = DaosPool(self.context)
-        mode = self.params.get("mode", '/conttests/createmode/')
-        self.d_log.debug("mode is {0}".format(mode))
-        uid = os.geteuid()
-        gid = os.getegid()
-        # 16 mb pool, minimum size currently possible
-        size = 16777216
-
-        self.d_log.debug("creating pool")
-        self.pool.create(mode, uid, gid, size, self.server_group, None)
-        self.d_log.debug("created pool")
-
-        # connect to the pool
-        self.d_log.debug("connecting to pool")
-        self.pool.connect(1 << 1)
-        self.d_log.debug("connected to pool")
+        # create pool and connect
+        self.prepare_pool()
 
         # query the pool
         self.d_log.debug("querying pool info")
-        dummy_pool_info = self.pool.pool_query()
+        self.pool.get_info()
         self.d_log.debug("queried pool info")
 
         # create a container
         try:
             self.d_log.debug("creating container")
             self.cont = DaosContainer(self.context)
-            self.cont.create(self.pool.handle)
+            self.cont.create(self.pool.pool.handle)
             self.d_log.debug("created container")
         except DaosApiError as excep:
             self.d_log.error("caught exception creating container: "
@@ -95,10 +77,8 @@ class FullPoolContainerCreate(TestWithServers):
                                  "container".format(write_count, obj_sz))
                 my_str = "a" * obj_sz
                 my_str_sz = obj_sz
-                dkey = (
-                    ''.join(random.choice(string.lowercase) for i in range(5)))
-                akey = (
-                    ''.join(random.choice(string.lowercase) for i in range(5)))
+                dkey = (get_random_string(5))
+                akey = (get_random_string(5))
                 try:
                     dummy_oid = self.cont.write_an_obj(
                         my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")
@@ -123,7 +103,7 @@ class FullPoolContainerCreate(TestWithServers):
         try:
             self.d_log.debug("creating 2nd container")
             self.cont2 = DaosContainer(self.context)
-            self.cont2.create(self.pool.handle)
+            self.cont2.create(self.pool.pool.handle)
             self.d_log.debug("created 2nd container")
 
             self.d_log.debug("opening container 2")

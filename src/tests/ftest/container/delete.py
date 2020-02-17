@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,34 +21,19 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
 import time
 import traceback
 import uuid
 
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError, DaosContainer
 
-from pydaos.raw import DaosPool, DaosApiError, DaosContainer
 
 class DeleteContainerTest(TestWithServers):
     """
     Tests DAOS container delete and close.
     :avocado: recursive
     """
-
-    def setUp(self):
-        super(DeleteContainerTest, self).setUp()
-
-        # parameters used in pool create
-        self.createmode = self.params.get("mode",
-                                          '/run/createtests/createmode/')
-        self.createuid = os.geteuid()
-        self.creategid = os.getegid()
-        self.createsetid = self.params.get("setname",
-                                           '/run/createtests/createset/')
-        self.createsize = self.params.get("size",
-                                          '/run/createtests/createsize/')
 
     def test_container_delete(self):
         """
@@ -89,32 +74,28 @@ class DeleteContainerTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(self.createmode, self.createuid, self.creategid,
-                             self.createsize, self.createsetid, None)
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.prepare_pool()
 
-            # need a connection to create container
-            self.pool.connect(1 << 1)
+        try:
             self.container = DaosContainer(self.context)
 
             # create should always work (testing destroy)
             if not cont_uuid == 'INVALID':
                 cont_uuid = uuid.UUID(uuidlist[0])
-                self.container.create(self.pool.handle, cont_uuid)
+                self.container.create(self.pool.pool.handle, cont_uuid)
             else:
-                self.container.create(self.pool.handle)
+                self.container.create(self.pool.pool.handle)
 
             # Opens the container if required
             if opened:
-                self.container.open(self.pool.handle)
+                self.container.open(self.pool.pool.handle)
 
             # wait a few seconds and then attempts to destroy container
             time.sleep(5)
             if poh == 'VALID':
-                poh = self.pool.handle
+                poh = self.pool.pool.handle
 
             # if container is INVALID, overwrite with non existing UUID
             if cont_uuid == 'INVALID':
