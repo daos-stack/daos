@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,10 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
@@ -57,11 +57,10 @@ func createACLFile(t *testing.T, path string, acl *client.AccessControlList) {
 }
 
 func TestPoolCommands(t *testing.T) {
-	testSizeStr := "512GB"
-	testSize, err := humanize.ParseBytes(testSizeStr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testScmSizeStr := "512GiB"
+	testScmSize := 549755813888
+	testNvmeSizeStr := "512GB"
+	testNvmeSize := 512000000000
 	eUsr, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -115,11 +114,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with minimal arguments",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
 					Usr:        eUsr.Username + "@",
@@ -131,12 +130,30 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"Create pool with all arguments",
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
-				testSizeStr, testSizeStr, testACLFile),
+				testScmSizeStr, testNvmeSizeStr, testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
-					NvmeBytes:  uint64(testSize),
+					ScmBytes:   uint64(testScmSize),
+					NvmeBytes:  uint64(testNvmeSize),
+					NumSvcReps: 3,
+					Sys:        "fnord",
+					Usr:        "foo@",
+					Grp:        "bar@",
+					ACL:        testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with raw byte count size args",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord --acl-file %s",
+				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
+					NvmeBytes:  uint64(testNvmeSize),
 					NumSvcReps: 3,
 					Sys:        "fnord",
 					Usr:        "foo@",
@@ -148,11 +165,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with user and group domains",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Usr:        "foo@home",
@@ -163,11 +180,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with user but no group",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Usr:        "foo@",
@@ -177,11 +194,11 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with group but no user",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolCreate-%+v", &client.PoolCreateReq{
-					ScmBytes:   uint64(testSize),
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					Sys:        "daos_server",
 					Grp:        "foo@",
@@ -191,13 +208,13 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with invalid ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testScmSizeStr),
 			"ConnectClients",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Create pool with empty ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
+			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testScmSizeStr, testEmptyFile),
 			"ConnectClients",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
