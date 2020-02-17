@@ -1145,7 +1145,7 @@ pipeline {
                                                   functional_rpms
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 2,
+                                       node_count: 3,
                                        power_only: true,
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
@@ -1247,7 +1247,7 @@ pipeline {
                                                   functional_rpms
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 4,
+                                       node_count: 5,
                                        power_only: true,
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
