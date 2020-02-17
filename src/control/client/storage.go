@@ -166,7 +166,7 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
-func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScanResult) {
+func (c *connList) getNvmeScanResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScanResult) {
 	nvmeResult = &NvmeScanResult{}
 
 	nState := resp.GetState()
@@ -183,7 +183,7 @@ func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScan
 	return
 }
 
-func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) (scmResult *ScmScanResult) {
+func (c *connList) getScmScanResult(resp *ctlpb.ScanScmResp) (scmResult *ScmScanResult) {
 	var err error
 	scmResult = &ScmScanResult{}
 
