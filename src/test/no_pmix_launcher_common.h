@@ -166,14 +166,12 @@ int handler_set_group_info(crt_rpc_t *rpc)
 	return 0;
 }
 
-static int g_do_shutdown;
-
 int handler_shutdown(crt_rpc_t *rpc)
 {
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	g_do_shutdown = true;
+	tc_progress_stop();
 	return 0;
 }
 #endif

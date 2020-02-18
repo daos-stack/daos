@@ -51,6 +51,8 @@
 #include "tests_common.h"
 #include "no_pmix_launcher_common.h"
 
+static int
+g_do_shutdown;
 
 static void *
 progress_function(void *data)

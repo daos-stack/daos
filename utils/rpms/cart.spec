@@ -3,8 +3,8 @@
 %global mercury_version 2.0.0a1-0.3.git.c2c2628%{?dist}
 
 Name:          cart
-Version:       4.5.1
-Release:       2%{?relval}%{?dist}
+Version:       4.6.0
+Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -143,6 +143,11 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Thu Feb 13 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.6.0-1
+- Libcart version 4.6.0-1
+- crt_swim_init()/crt_swim_fini() APIs added
+- CRT_FLAG_BIT_AUTO_SWIM_DISABLE flag added to crt_init()
+
 * Tue Feb 11 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.5.1-2
 - Libcart version 4.5.1-2
 - mercury_version 2.0.0a1-0.3.git.c2c2628 - unrolled nameserver patch due to

@@ -1,3 +1,19 @@
+cart (4.6.0-1) unstable; urgency=medium
+ [ Alexander Oganezov ]
+ * 4.6.0-1 version of CaRT
+ * crt_swim_init()/crt_swim_fini() APIs added
+ * CRT_FLAG_BIT_AUTO_SWIM_DISABLE flag added to crt_init()
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 13 Feb 2020 16:53:01 +0000
+
+cart (4.5.1-2) unstable; urgency=medium
+ [ Alexander Oganezov ]
+ * 4.5.1-2 version of CaRT
+ * mercury_version 2.0.0a1-0.3.git.c2c2628 - unrolled nameserver patch due to
+   verbs instability
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 11 Feb 2020 16:53:01 +0000
+
 cart (4.5.1-1) unstable; urgency=medium
  [ Alexander Oganezov ]
  * 4.5.1-1 version of CaRT

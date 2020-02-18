@@ -402,7 +402,14 @@ enum crt_init_flag_bits {
 	 * When set enables the server mode which listens
 	 * for incoming requests. Clients should not set this flag
 	 */
-	CRT_FLAG_BIT_SERVER	= 1U << 0,
+	CRT_FLAG_BIT_SERVER		= 1U << 0,
+
+	/**
+	 * When set, disables automatic SWIM start-up at init time.
+	 * Instead SWIM needs to be enabled via \ref crt_swim_init()
+	 * call.
+	 */
+	CRT_FLAG_BIT_AUTO_SWIM_DISABLE	= 1U << 1,
 };
 
 /**

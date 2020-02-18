@@ -54,27 +54,11 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include <gurt/common.h>
 #include <cart/api.h>
-
+#include "tests_common.h"
 
 #define NUM_CTX 8
 #define NUM_RANKS 99
-
-static int g_do_shutdown;
-
-static void *
-progress_function(void *data)
-{
-	crt_context_t *p_ctx = (crt_context_t *)data;
-
-	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	crt_context_destroy(*p_ctx, 1);
-
-	return NULL;
-}
 
 int main(int argc, char **argv)
 {
@@ -88,11 +72,14 @@ int main(int argc, char **argv)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init(0, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
 	}
+
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 20, true, true);
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
@@ -106,7 +93,6 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-
 	for (i = 0; i < NUM_CTX; i++) {
 		rc = crt_context_create(&crt_ctx[i]);
 		if (rc != 0) {
@@ -115,7 +101,7 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				progress_function, &crt_ctx[i]);
+				tc_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 	}
 
@@ -137,7 +123,7 @@ int main(int argc, char **argv)
 
 	D_FREE(my_uri);
 	sleep(1);
-	g_do_shutdown = 1;
+	tc_progress_stop();
 
 	for (i = 0; i < NUM_CTX; i++)
 		pthread_join(progress_thread[i], NULL);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,6 @@
 #include <sys/stat.h>
 #include "tests_common.h"
 
-static int	g_do_shutdown;
 static d_rank_t my_rank;
 
 static int
@@ -71,7 +70,7 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	g_do_shutdown = 1;
+	tc_progress_stop();
 
 	/* CORPC is not sent to those ranks */
 	if (my_rank == 3 || my_rank == 0) {
@@ -98,7 +97,7 @@ CRT_RPC_DEFINE(basic_corpc, CRT_ISEQ_BASIC_CORPC, CRT_OSEQ_BASIC_CORPC)
 static void
 corpc_response_hdlr(const struct crt_cb_info *info)
 {
-	g_do_shutdown = 1;
+	tc_progress_stop();
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {
@@ -117,28 +116,6 @@ static struct crt_proto_format my_proto_fmt_basic_corpc = {
 	.cpf_prf = &my_proto_rpc_fmt_basic_corpc[0],
 	.cpf_base = TEST_CORPC_PREFWD_BASE,
 };
-
-void crt_swim_disable_all(void);
-
-static void *
-progress_function(void *data)
-{
-	int i;
-	crt_context_t *p_ctx = (crt_context_t *)data;
-
-	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	crt_swim_disable_all();
-
-	/* Progress contexts for a while after shutdown to send response */
-	for (i = 0; i < 1000; i++)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	crt_context_destroy(*p_ctx, 1);
-
-	return NULL;
-}
 
 int main(void)
 {
@@ -166,7 +143,8 @@ int main(void)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
+			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_proto_register(&my_proto_fmt_basic_corpc);
@@ -176,7 +154,7 @@ int main(void)
 	assert(rc == 0);
 
 	rc = pthread_create(&progress_thread, 0,
-			progress_function, &g_main_ctx);
+			tc_progress_fn, &g_main_ctx);
 	if (rc != 0) {
 		D_ERROR("pthread_create() failed; rc=%d\n", rc);
 		assert(0);
@@ -227,6 +205,12 @@ int main(void)
 		assert(0);
 	}
 
+	rc = crt_swim_init(0);
+	if (rc != 0) {
+		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
@@ -243,16 +227,13 @@ int main(void)
 		assert(rc == 0);
 	}
 
+	sleep(10);
 	/* rank=3 is not sent shutdown sequence */
 	if (my_rank == 3)
-		g_do_shutdown = 1;
-
-	while (!g_do_shutdown)
-		sleep(1);
-
-	DBG_PRINT("All tests done\n");
+		tc_progress_stop();
 
 	pthread_join(progress_thread, NULL);
+	DBG_PRINT("All tests done\n");
 
 	rc = crt_finalize();
 	assert(rc == 0);

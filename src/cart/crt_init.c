@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -223,6 +223,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
+
 	/* d_log_init is reference counted */
 	rc = d_log_init();
 	if (rc != 0) {
@@ -273,8 +274,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		srandom(seed);
 
 		crt_gdata.cg_server = server;
+		crt_gdata.cg_auto_swim_disable =
+			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
 
 		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
+		D_DEBUG(DB_ALL, "Swim auto disable set to %d\n",
+				crt_gdata.cg_auto_swim_disable);
 
 		path = getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
@@ -378,7 +383,7 @@ do_init:
 
 		crt_gdata.cg_inited = 1;
 
-		if (crt_is_service()) {
+		if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0) {
 			rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
 			if (rc) {
 				D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
@@ -494,7 +499,7 @@ crt_finalize(void)
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
 
-		if (crt_is_service())
+		if (crt_is_service() && crt_gdata.cg_swim_inited)
 			crt_swim_fini();
 
 		rc = crt_grp_fini();

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,6 @@
 
 #include "tests_common.h"
 
-static int g_do_shutdown;
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
@@ -134,7 +133,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	g_do_shutdown = true;
+	tc_progress_stop();
 	return 0;
 }
 static int
@@ -182,26 +181,6 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_prf = &my_proto_rpc_fmt[0],
 	.cpf_base = MY_BASE,
 };
-
-
-static void *
-progress_function(void *data)
-{
-	int i;
-	crt_context_t *p_ctx = (crt_context_t *)data;
-
-	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	/* Progress contexts for a while after shutdown to send response */
-	for (i = 0; i < 1000; i++)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	crt_context_destroy(*p_ctx, 1);
-
-	return NULL;
-}
-
 
 struct corpc_wait_info {
 	sem_t	sem;
@@ -328,7 +307,8 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
+			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -354,7 +334,7 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				progress_function, &crt_ctx[i]);
+				tc_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 	}
 
@@ -452,6 +432,12 @@ int main(int argc, char **argv)
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
+	rc = crt_swim_init(0);
+	if (rc != 0) {
+		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {
 		D_ERROR("sem_init() failed; rc=%d\n", rc);
@@ -541,7 +527,7 @@ int main(int argc, char **argv)
 	d_rank_list_free(s_list);
 	d_rank_list_free(p_list);
 
-	g_do_shutdown = 1;
+	tc_progress_stop();
 	sem_destroy(&sem);
 
 	DBG_PRINT("All tesst succeeded\n");

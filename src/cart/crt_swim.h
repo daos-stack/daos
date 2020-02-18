@@ -1,4 +1,4 @@
-/* Copyright (C) 2019 Intel Corporation
+/* Copyright (C) 2019-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,8 +64,6 @@ struct crt_swim_membs {
 	int				 csm_crt_ctx_idx;
 };
 
-int  crt_swim_init(int crt_ctx_idx);
-void crt_swim_fini(void);
 
 int  crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);

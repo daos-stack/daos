@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,8 +89,12 @@ struct crt_gdata {
 
 	/* refcount to protect crt_init/crt_finalize */
 	volatile unsigned int	cg_refcount;
-	volatile unsigned int	cg_inited:1,
-				cg_grp_inited:1; /* group initialized */
+
+	/* flags to keep track of states */
+	volatile unsigned int	cg_inited		: 1,
+				cg_grp_inited		: 1,
+				cg_swim_inited		: 1,
+				cg_auto_swim_disable	: 1;
 
 	ATOMIC uint32_t		cg_xid; /* transfer id for rpcs */
 

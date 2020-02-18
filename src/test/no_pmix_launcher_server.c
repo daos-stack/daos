@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2019 Intel Corporation
+/* Copyright (C) 2018-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,19 +51,6 @@
 #include "tests_common.h"
 #include "no_pmix_launcher_common.h"
 
-static void *
-progress_function(void *data)
-{
-	crt_context_t *p_ctx = (crt_context_t *)data;
-
-	while (g_do_shutdown == 0)
-		crt_progress(*p_ctx, 1000, NULL, NULL);
-
-	crt_context_destroy(*p_ctx, 1);
-
-	return NULL;
-}
-
 int main(int argc, char **argv)
 {
 	crt_group_t		*grp;
@@ -87,7 +74,8 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER);
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
+				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -113,7 +101,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = pthread_create(&progress_thread[0], 0,
-			    progress_function, &crt_ctx[0]);
+			    tc_progress_fn, &crt_ctx[0]);
 	if (rc != 0) {
 		D_ERROR("pthread_create() failed; rc=%d\n", rc);
 		assert(0);
@@ -139,6 +127,12 @@ int main(int argc, char **argv)
 		  my_uri, grp_cfg_file);
 	D_FREE(my_uri);
 
+	rc = crt_swim_init(0);
+	if (rc != 0) {
+		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
 		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
@@ -161,7 +155,7 @@ int main(int argc, char **argv)
 
 	for (i = 1; i < NUM_SERVER_CTX; i++) {
 		rc = pthread_create(&progress_thread[i], 0,
-				    progress_function, &crt_ctx[i]);
+				    tc_progress_fn, &crt_ctx[i]);
 		if (rc != 0) {
 			D_ERROR("pthread_create() failed; rc=%d\n", rc);
 			assert(0);
