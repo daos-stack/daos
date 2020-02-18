@@ -50,7 +50,18 @@ At creation time, a list of container properties can be specified:
     used by I/O middleware and application to handle interoperability.
 
 -   DAOS_PROP_CO_CSUM defines whether checksums are enabled or
-    disabled and the checksum type used.
+    disabled and the checksum type used. Available values are:
+    - DAOS_PROP_CO_CSUM_OFF (Default)
+    - DAOS_PROP_CO_CSUM_CRC16
+    - DAOS_PROP_CO_CSUM_CRC32
+    - DAOS_PROP_CO_CSUM_CRC64
+    
+-   DAOS_PROP_CO_CSUM_CHUNK_SIZE defines the chunk size used for 
+    creating checksums of array types. (default is 32K)
+    
+-   DAOS_PROP_CO_CSUM_SERVER_VERIFY is used to enable/disable the server
+    verifying data with checksums on an object update. (default is
+    disabled)
 
 -   DAOS_PROP_CO_REDUN_FAC is the redundancy factor that drives the
     minimal data protection required for objects stored in the
