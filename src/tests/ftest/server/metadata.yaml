@@ -10,6 +10,7 @@ hosts:
 timeout: 1800
 server_config:
    name: daos_server
+   log_mask: ERR
 pool:
   createmode:
     mode: 511
