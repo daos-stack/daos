@@ -83,6 +83,11 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.2.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-clean-plugin</artifactId>
           <version>3.0.0</version>
         </plugin>
@@ -307,6 +312,7 @@
   <modules>
     <module>daos-java-api</module>
     <module>hadoop-daos</module>
+    <module>distribution</module>
   </modules>
 
   <profiles>
