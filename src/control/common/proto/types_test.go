@@ -23,7 +23,6 @@
 package proto
 
 import (
-	"fmt"
 	"testing"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -129,7 +128,6 @@ func TestProto_ConvertScmModules(t *testing.T) {
 
 func TestProto_ConvertScmNamespace(t *testing.T) {
 	pb := MockScmNamespace()
-	fmt.Printf("%#v\n", pb)
 	native, err := (*ScmNamespace)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
