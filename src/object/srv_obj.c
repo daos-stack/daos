@@ -1456,7 +1456,7 @@ again:
 	exec_arg.flags	  = flags;
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, &exec_arg);
-out:
+
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
@@ -1475,7 +1475,7 @@ out:
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}
-
+out:
 	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
@@ -2075,7 +2075,7 @@ again:
 	exec_arg.flags = flags;
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, &exec_arg);
-out:
+
 	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 		rc = -DER_IO;
 
@@ -2093,7 +2093,7 @@ out:
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
 	}
-
+out:
 	if (!(opi->opi_flags & ORF_RESEND) &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;

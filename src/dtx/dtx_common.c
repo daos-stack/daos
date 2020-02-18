@@ -525,15 +525,16 @@ int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	       int result)
 {
-	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_handle		*dth;
 	struct dtx_conflict_entry	*dces = NULL;
 	int				*ptr = NULL;
 	int				 dces_cnt = 0;
 	int				 flags = 0;
 	int				 rc = 0;
 
-	if (dlh == NULL)
-		return result;
+	D_ASSERT(dlh != NULL);
+	dth = &dlh->dlh_handle;
+	D_ASSERT(dth != NULL);
 
 	if (dlh->dlh_sub_cnt == 0) {
 		if (daos_is_zero_dti(&dth->dth_xid))
