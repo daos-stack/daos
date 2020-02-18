@@ -173,9 +173,13 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientResp := cc.StorageScan(&StorageScanReq{})
+	gotResp := cc.StorageScan(&StorageScanReq{})
 
-	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers), clientResp, "")
+	expResp := MockScanResp(&MockCtrlrs, &MockScmModules, &MockScmNamespaces, MockServers)
+
+	if diff := cmp.Diff(expResp, gotResp); diff != "" {
+		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestStorageFormat(t *testing.T) {
