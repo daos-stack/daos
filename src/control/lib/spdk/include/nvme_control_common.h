@@ -26,8 +26,6 @@
 
 #include <stdbool.h>
 
-#define NVMECONTROL_GBYTE_BYTES 1000000000
-
 /**
  * \brief NVMECONTROL return codes
  */
@@ -68,8 +66,8 @@ struct ctrlr_t {
  * \brief NVMe namespace details
  */
 struct ns_t {
-	int		id;
-	int		size;
+	uint32_t	id;
+	uint64_t	size;
 	struct ns_t    *next;
 };
 

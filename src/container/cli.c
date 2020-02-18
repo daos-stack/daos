@@ -93,6 +93,7 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 struct cont_args {
 	struct dc_pool		*pool;
 	crt_rpc_t		*rpc;
+	daos_prop_t		*prop;
 };
 
 static int
@@ -128,6 +129,97 @@ cont_create_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
+	daos_prop_free(arg->prop);
+	return rc;
+}
+
+static bool
+daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
+{
+	return (prop != NULL) &&
+	       (daos_prop_entry_get(prop, entry_type) != NULL);
+}
+
+/*
+ * If no owner/group prop was supplied, translates euid/egid to user and group
+ * names, and adds them as owners to a new copy of the daos_prop_t passed in.
+ * The newly allocated prop is expected to be freed by the cont create callback.
+ */
+static int
+dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
+{
+	char	       *owner = NULL;
+	char	       *owner_grp = NULL;
+	daos_prop_t    *final_prop = NULL;
+	uint32_t	idx = 0;
+	uint32_t	entries;
+	int		rc = 0;
+	uid_t		uid = geteuid();
+	gid_t		gid = getegid();
+
+	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
+
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
+		rc = daos_acl_uid_to_principal(uid, &owner);
+		if (rc != 0) {
+			D_ERROR("Invalid uid\n");
+			D_GOTO(err_out, rc);
+		}
+
+		entries++;
+	}
+
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER_GROUP)) {
+		rc = daos_acl_gid_to_principal(gid, &owner_grp);
+		if (rc != 0) {
+			D_ERROR("Invalid gid\n");
+			D_GOTO(err_out, rc);
+		}
+
+		entries++;
+	}
+
+	/* We always free this prop in the callback - so need to make a copy */
+	final_prop = daos_prop_alloc(entries);
+	if (final_prop == NULL) {
+		D_ERROR("failed to allocate props");
+		D_GOTO(err_out, -DER_NOMEM);
+	}
+
+	if (prop_in != NULL && prop_in->dpp_nr > 0) {
+		rc = daos_prop_copy(final_prop, prop_in);
+		if (rc)
+			D_GOTO(err_out, rc);
+		idx = prop_in->dpp_nr;
+	}
+
+	if (prop_in == NULL || entries > prop_in->dpp_nr) {
+		if (owner != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_CO_OWNER;
+			final_prop->dpp_entries[idx].dpe_str = owner;
+			owner = NULL; /* prop is responsible for it now */
+			idx++;
+		}
+
+		if (owner_grp != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_CO_OWNER_GROUP;
+			final_prop->dpp_entries[idx].dpe_str = owner_grp;
+			owner_grp = NULL; /* prop is responsible for it now */
+			idx++;
+		}
+
+	}
+
+	*prop_out = final_prop;
+
+	return rc;
+
+err_out:
+	daos_prop_free(final_prop);
+	D_FREE(owner);
+	D_FREE(owner_grp);
 	return rc;
 }
 
@@ -141,6 +233,7 @@ dc_cont_create(tse_task_t *task)
 	crt_rpc_t	       *rpc;
 	struct cont_args	arg;
 	int			rc;
+	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
 	if (uuid_is_null(args->uuid))
@@ -153,6 +246,10 @@ dc_cont_create(tse_task_t *task)
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
+	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
@@ -163,16 +260,17 @@ dc_cont_create(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_pool, rc);
+		D_GOTO(err_prop, rc);
 	}
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_op.ci_uuid, args->uuid);
-	in->cci_prop = args->prop;
+	in->cci_prop = rpc_prop;
 
 	arg.pool = pool;
 	arg.rpc = rpc;
+	arg.prop = rpc_prop;
 	crt_req_addref(rpc);
 
 	rc = tse_task_register_comp_cb(task, cont_create_complete, &arg,
@@ -185,6 +283,8 @@ dc_cont_create(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
+err_prop:
+	daos_prop_free(rpc_prop);
 err_pool:
 	dc_pool_put(pool);
 err_task:
