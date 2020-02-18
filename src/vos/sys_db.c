@@ -188,7 +188,7 @@ db_upsert(struct sys_db *db, char *table, d_iov_t *key, d_iov_t *val)
 
 	db_io_init(&io, table, key, val);
 	rc = vos_obj_update(vdb->db_coh, vdb->db_obj, SYS_DB_EPC, 0,
-			    &io.io_key, 1, &io.io_iod, &io.io_sgl);
+			    &io.io_key, 1, &io.io_iod, NULL, &io.io_sgl);
 	return rc;
 }
 
