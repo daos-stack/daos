@@ -25,12 +25,9 @@ import ctypes
 import time
 import avocado
 import random
-import agent_utils
-import server_utils
-import write_host_file
 
 from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
-from apricot import skipForTicket, TestWithServers
+from apricot import TestWithServers
 
 
 class ObjectDataValidation(TestWithServers):

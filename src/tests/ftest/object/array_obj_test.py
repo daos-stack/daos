@@ -27,7 +27,6 @@ import time
 import traceback
 import logging
 
-from avocado import main
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 

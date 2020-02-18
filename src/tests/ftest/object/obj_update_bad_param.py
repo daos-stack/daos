@@ -23,10 +23,8 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import logging
-from avocado import main
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError

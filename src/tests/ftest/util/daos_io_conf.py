@@ -28,7 +28,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
 from command_utils import BasicParameter
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 
 class IoConfGen(ExecutableCommand):

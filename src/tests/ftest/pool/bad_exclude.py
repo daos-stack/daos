@@ -26,9 +26,6 @@ from __future__ import print_function
 import traceback
 import ctypes
 
-import agent_utils
-import server_utils
-import write_host_file
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, RankList
 
