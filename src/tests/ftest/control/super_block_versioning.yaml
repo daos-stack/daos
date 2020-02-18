@@ -3,5 +3,3 @@
 hosts:
   test_servers:
     - server-A
-server_manager:
-  recreate: true

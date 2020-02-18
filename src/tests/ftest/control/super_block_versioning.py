@@ -24,9 +24,8 @@
 from __future__ import print_function
 
 import os
-import yaml
 
-from general_utils import check_file_exists
+from general_utils import check_file_exists, pcmd
 from apricot import TestWithServers
 
 
@@ -51,14 +50,10 @@ class SuperBlockVersioning(TestWithServers):
         if not check_result[0]:
             self.fail("%s: %s not found", check_result[1], fname)
 
-        superblock_data = {}
-        with open(fname, "r") as open_file:
-            try:
-                superblock_data = yaml.safe_load(open_file.read())
-            except yaml.YAMLError as error:
-                self.log.info("Error reading %s: %s", fname, error)
-                self.fail("Was not able to open {} file".format(fname))
-
         # Make sure that 'version' is in the file, run task to check
-        if "version" not in superblock_data:
+        cmd = "cat {} | grep -F \"version\"".format(fname)
+        result = pcmd(self.hostlist_servers, cmd, timeout=20)
+
+        # Determine if the command completed successfully across all the hosts
+        if len(result) > 1 or 0 not in result:
             self.fail("Was not able to find version in {} file".format(fname))
