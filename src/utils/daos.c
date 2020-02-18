@@ -471,6 +471,8 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"verbose",	no_argument,		NULL,	'V'},
 		{"acl-file",	required_argument,	NULL,	'A'},
 		{"entry",	required_argument,	NULL,	'E'},
+		{"user",	required_argument,	NULL,	'u'},
+		{"group",	required_argument,	NULL,	'g'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -653,6 +655,16 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'E':
 			D_STRNDUP(ap->entry, optarg, strlen(optarg));
 			if (ap->entry == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'u':
+			D_STRNDUP(ap->user, optarg, strlen(optarg));
+			if (ap->user == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'g':
+			D_STRNDUP(ap->group, optarg, strlen(optarg));
+			if (ap->group == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case DAOS_PROPERTIES_OPTION:
@@ -1138,6 +1150,13 @@ help_hdlr(struct cmd_args_s *ap)
 "			   cksum_size can be any size\n"
 "			   srv_cksum values can be on, off\n"
 "			   rf supported values are [0-4]\n"
+"	--acl-file=PATH    input file containing ACL\n"
+"	--user=ID          user who will own the container.\n"
+"			   format: username@[domain]\n"
+"			   default is the effective user\n"
+"	--group=ID         group who will own the container.\n"
+"			   format: groupname@[domain]\n"
+"			   default is the effective group\n"
 "container options (destroy):\n"
 "	--force            destroy container regardless of state\n"
 "container options (query, and all commands except create):\n"
