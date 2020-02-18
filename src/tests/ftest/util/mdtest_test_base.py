@@ -63,8 +63,6 @@ class MdtestBase(TestWithServers):
         self.mdtest_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
-        self.co_prop = self.params.get("container_properties",
-                                       "/run/container/*")
 
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
@@ -96,27 +94,15 @@ class MdtestBase(TestWithServers):
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
         # Get Container params
-        # Not enabling Test Container for FIO due to
-        # intermittant failures daos_dfuse creation. (DAOS-4172)
-        # self.container = TestContainer(self.pool)
-        # self.container.get_params(self)
+        #self.container = TestContainer(self.pool)
+        #self.container.get_params(self)
 
         # create container
         # self.container.create()
         env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
         # command to create container of posix type
-        if self.co_prop is None:
-            cmd = env + ("daos cont create --pool={} --svc={} "
-                         "--type=POSIX".format(
-                            self.pool.uuid, ":".join(
-                                [str(item) for item in self.pool.svc_ranks])))
-        else:
-            cmd = env + ("daos cont create --pool={} --svc={} --type={} "
-                         "--properties=cksum:{},cksum_size:{}".format(
-                            self.mdtest_cmd.dfs_pool_uuid.value,
-                            self.mdtest_cmd.dfs_svcl.value,
-                            self.co_prop[0], self.co_prop[3],
-                            self.co_prop[4]))
+        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
+            self.mdtest_cmd.dfs_pool_uuid.value, self.mdtest_cmd.dfs_svcl.value)
         try:
             container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                          shell=True)
@@ -147,6 +133,7 @@ class MdtestBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
+
     def execute_mdtest(self):
         """Runner method for Mdtest."""
 
@@ -165,7 +152,7 @@ class MdtestBase(TestWithServers):
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
-        # Run Mdtest
+       # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
 
