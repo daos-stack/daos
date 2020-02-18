@@ -37,9 +37,9 @@
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
-#  cert: .daos/daos_agent.crt
-#  # Key portion of Server Certificate
-#  key: .daos/daos_agent.key
+#  cert: .daos/agent.crt
+#  # Key portion of Agent Certificate
+#  key: .daos/agent.key
 #  # Name of server accodring to its certificate
 #  server_name: server
 
