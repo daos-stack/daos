@@ -28,7 +28,8 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter
-from pydaos.raw import (DaosApiError, DaosContainer, c_uuid_to_str)
+from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
+                        c_uuid_to_str)
 from general_utils import get_random_string, DaosTestError
 
 
@@ -269,6 +270,9 @@ class TestContainer(TestDaosApiBase):
         self.dkey_size = BasicParameter(None)
         self.data_size = BasicParameter(None)
         self.data_array_size = BasicParameter(0, 0)
+        # Provider access to get input params values
+        # for enabling different container properties
+        self.input_params = DaosInputParams()
 
         self.container = None
         self.uuid = None
@@ -288,7 +292,7 @@ class TestContainer(TestDaosApiBase):
         return super(TestContainer, self).__str__()
 
     @fail_on(DaosApiError)
-    def create(self, uuid=None):
+    def create(self, uuid=None, con_in=None):
         """Create a container.
 
         Args:
@@ -302,6 +306,14 @@ class TestContainer(TestDaosApiBase):
         kwargs = {"poh": self.pool.pool.handle}
         if uuid is not None:
             kwargs["con_uuid"] = uuid
+        # Refer daos_api for setting input params for DaosContainer.
+        if con_in is not None:
+            self.input_params.type = con_in[0]
+            self.input_params.enable_chksum = con_in[1]
+            self.input_params.srv_verify = con_in[2]
+            self.input_params.chksum_type = con_in[3]
+            self.input_params.chunk_size = con_in[4]
+            kwargs["con_prop"] = self.input_params
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)
