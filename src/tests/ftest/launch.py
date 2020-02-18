@@ -654,7 +654,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands))
+    spawn_commands(host_list, "; ".join(commands), 900)
 
 
 def archive_config_files(avocado_logs_dir):
