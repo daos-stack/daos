@@ -113,6 +113,7 @@ struct ds_pool_child {
  * This is only being exposed until the access control attributes are
  * proper encapsulated in the security module.
  */
+
 struct pool_prop_ugm {
 	uint32_t	pp_uid;
 	uint32_t	pp_gid;
@@ -166,6 +167,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 		      daos_pool_info_t *pool_info);
 
+int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
+		       daos_prop_t **prop_out);
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -186,6 +189,11 @@ int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
 void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+
+int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		       uint32_t map_ver);
+int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
+int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
