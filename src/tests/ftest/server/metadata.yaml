@@ -9,8 +9,9 @@ hosts:
     - client-C
 timeout: 1800
 server_config:
-   name: daos_server
-   log_mask: ERR
+  name: daos_server
+  servers:
+    log_mask: ERR
 pool:
   createmode:
     mode: 511
