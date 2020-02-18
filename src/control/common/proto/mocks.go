@@ -66,7 +66,7 @@ func MockNvmeController(varIdx ...int32) *ctlpb.NvmeController {
 	return pb.AsProto()
 }
 
-// NewMockNvmeController generates specific protobuf controller message
+// NewMockNvmeController generates specific protobuf controller message.
 func NewMockNvmeController(
 	pciAddr string, fwRev string, model string, serial string,
 	nss []*ctlpb.NvmeController_Namespace, hs *ctlpb.NvmeController_Health) *ctlpb.NvmeController {
@@ -81,35 +81,34 @@ func NewMockNvmeController(
 	}
 }
 
-// MockScmModule is a mock protobuf Module message used in tests for
-// multiple packages.
-func MockScmModule() *ctlpb.ScmModule {
-	return &ctlpb.ScmModule{
-		Physicalid: uint32(12345),
-		Capacity:   12345,
-		Loc: &ctlpb.ScmModule_Location{
-			Channel:    uint32(1),
-			Channelpos: uint32(2),
-			Memctrlr:   uint32(3),
-			Socket:     uint32(4),
-		},
+// MockScmModule generates specific protobuf SCM module message used in tests
+// for multiple packages.
+func MockScmModule(varIdx ...int32) *ctlpb.ScmModule {
+	native := storage.MockScmModule(varIdx...)
+	pb := new(ScmModule)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
 	}
+
+	return pb.AsProto()
+}
+
+// MockScmNamespace generates specific protobuf SCM namespace message used in tests
+// for multiple packages.
+func MockScmNamespace(varIdx ...int32) *ctlpb.ScmNamespace {
+	native := storage.MockScmNamespace(varIdx...)
+	pb := new(ScmNamespace)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
 }
 
 // MockScmMount is a mock protobuf Mount message used in tests for
 // multiple packages.
 func MockScmMount() *ctlpb.ScmMount {
 	return &ctlpb.ScmMount{Mntpoint: "/mnt/daos"}
-}
-
-// MockPmemDevice is a mock protobuf PmemDevice used in tests for multiple
-// packages.
-func MockPmemDevice() *ctlpb.PmemDevice {
-	return &ctlpb.PmemDevice{
-		Uuid:     "abcd-1234-efgh-5678",
-		Blockdev: "pmem1",
-		Dev:      "namespace-1",
-		Numanode: 1,
-		Size:     3183575302144,
-	}
 }
