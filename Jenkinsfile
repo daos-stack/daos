@@ -46,7 +46,7 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def daos_packages_version = ""
 def el7_component_repos = ""
-def component_repos = ""
+def component_repos = "pmdk@PR-12"
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl spdk-tools " +
