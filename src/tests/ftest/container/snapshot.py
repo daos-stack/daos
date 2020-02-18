@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,13 +22,11 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-import os
 import traceback
 import random
 from apricot import TestWithServers
 from general_utils import get_random_string
-from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
-                        DaosApiError, c_uuid_to_str)
+from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError, c_uuid_to_str
 
 
 class Snapshot(TestWithServers):
@@ -56,33 +54,16 @@ class Snapshot(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super(Snapshot, self).setUp()
-        # get parameters from yaml file, set default
-        createmode = self.params.get("mode",
-                                     '/run/poolparams/createmode/', 511)
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname",
-                                      '/run/poolparams/createset/')
-        createsize = self.params.get("size", '/run/poolparams/createsize/')
         self.log.info("==In setUp, self.context= %s", self.context)
 
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.add_pool()
+
         try:
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            # need a connection to the pool with rw permission
-            #    DAOS_PC_RO = int(1 << 0)
-            #    DAOS_PC_RW = int(1 << 1)
-            #    DAOS_PC_EX = int(1 << 2)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
         except DaosApiError as error:
             self.log.info(

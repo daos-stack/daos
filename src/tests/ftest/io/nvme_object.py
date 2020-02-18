@@ -50,7 +50,7 @@ def container_write(container, record, array_size=None):
 
 
 def container_read(container, array_size=None):
-    """Read and verify the written data in the container.
+    """Read and verify the written data.
 
     Args:
         container: instance of TestContainer
@@ -142,8 +142,9 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
 
 
 class NvmeObject(TestWithServers):
-    """Test class for NVMe storage by creating/Updating/Fetching
-       large number of objects simultaneously.
+    """Test class for NVMe storage.
+
+     Creates/Updates/Fetches large number of objects simultaneously.
 
     Test Class Description:
         Test the general functional operations of objects on nvme storage
@@ -177,7 +178,7 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,medium,nvme_object
+        :avocado: tags=all,pr,hw,medium,nvme_object_single_pool,nvme_object
         """
         # perform multiple object writes to a single pool
         test_runner(self, self.pool_size[0], self.record_size[:-1], 0,
@@ -196,8 +197,8 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools
-        :avocado: tags=medium,nvme_object
+        :avocado: tags=all,full_regression,hw,medium,nvme_object_multiple_pools
+        :avocado: tags=nvme_object
         """
         # thread to perform simulatneous object writes to multiple pools
         threads = []

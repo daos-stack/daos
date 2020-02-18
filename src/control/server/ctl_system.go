@@ -89,7 +89,8 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 
 		for _, result := range hResults {
 			if result.State == system.MemberStateUnresponsive ||
-				result.State == system.MemberStateStopped {
+				result.State == system.MemberStateStopped ||
+				result.State == system.MemberStateErrored {
 
 				badRanks[result.Rank] = result.State
 			}

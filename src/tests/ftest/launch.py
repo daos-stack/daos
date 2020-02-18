@@ -158,9 +158,9 @@ def set_test_environment(args):
                 "Error obtaining a default interface from: {}".format(
                     os.listdir(net_path)))
             exit(1)
-        print(
-            "Using {} as the default interface from {}".format(
-                interface, available_interfaces))
+    print(
+        "Using {} as the default interface from {}".format(
+            interface, available_interfaces))
 
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
@@ -629,9 +629,9 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     host_list = get_hosts_from_yaml(test_yaml, args)
 
     # Create a subdirectory in the avocado logs directory for this test
-    doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-    print("Archiving host logs from {} in {}".format(host_list, doas_logs_dir))
-    get_output("mkdir {}".format(doas_logs_dir))
+    daos_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
+    print("Archiving host logs from {} in {}".format(host_list, daos_logs_dir))
+    get_output("mkdir {}".format(daos_logs_dir))
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -643,7 +643,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "copied=()",
         "for file in $(ls {}/*.log)".format(logs_dir),
         "do if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
-            this_host, doas_logs_dir),
+            this_host, daos_logs_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",

@@ -1,13 +1,10 @@
-# Needed because of the GO binaries
-%undefine _missing_build_ids_terminate_build
-
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 # Unlimited maximum version
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.9.0
+Version:       1.1.0
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -273,6 +270,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
+%{_libdir}/%{name}/API_VERSION
 %if (0%{?suse_version} >= 1500)
 /lib64/libdfs.so
 %endif
@@ -336,6 +334,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Fri Feb 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
+- Version bump up to 1.1.0
+
+* Wed Feb 12 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-2
+- Remove undefine _missing_build_ids_terminate_build
+
 * Thu Feb 06 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.0-1
 - Version bump up to 0.9.0
 

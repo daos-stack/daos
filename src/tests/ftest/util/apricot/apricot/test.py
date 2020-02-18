@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -629,6 +629,8 @@ class TestWithServers(TestWithoutServers):
             # Overwrite the test id with the specified test name
             self.test_id = test_name
 
+        # Update the log file names.  The path is defined throught the
+        # DAOS_TEST_LOG_DIR environment variable.
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
         self.control_log = "{}_daos_control.log".format(self.test_id)

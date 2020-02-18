@@ -327,6 +327,7 @@ class DaosServerYamlParameters(YamlParameters):
             self.nr_xs_helpers = BasicParameter(None, 16)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
+            self.pinned_numa_node = BasicParameter(None)
             self.log_mask = BasicParameter(None, "DEBUG")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
             self.env_vars = BasicParameter(
@@ -382,7 +383,7 @@ class DaosServerYamlParameters(YamlParameters):
             #       AIO /tmp/aiofile AIO1 4096
             self.scm_mount = BasicParameter(None, "/mnt/daos")
             self.scm_class = BasicParameter(None, "ram")
-            self.scm_size = BasicParameter(None, 12)
+            self.scm_size = BasicParameter(None, 16)
             self.scm_list = BasicParameter(None)
             self.bdev_class = BasicParameter(None)
             self.bdev_list = BasicParameter(None)

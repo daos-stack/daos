@@ -46,34 +46,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// MockScmModule returns a mock SCM module of type storage.ScmModule.
-func MockScmModule() storage.ScmModule {
-	m := proto.MockScmModule()
-
-	return storage.ScmModule{
-		PhysicalID:      uint32(m.Physicalid),
-		ChannelID:       uint32(m.Loc.Channel),
-		ChannelPosition: uint32(m.Loc.Channelpos),
-		ControllerID:    uint32(m.Loc.Memctrlr),
-		SocketID:        uint32(m.Loc.Socket),
-		Capacity:        m.Capacity,
-	}
-}
-
-// MockScmNamespace returns a mock SCM namespace (PMEM device file),
-// which would normally be parsed from the output of ndctl cmdline tool.
-func MockScmNamespace() storage.ScmNamespace {
-	m := proto.MockPmemDevice()
-
-	return storage.ScmNamespace{
-		UUID:        m.Uuid,
-		BlockDevice: m.Blockdev,
-		Name:        m.Dev,
-		NumaNode:    m.Numanode,
-		Size:        m.Size,
-	}
-}
-
 // mockStorageFormatServer provides mocking for server side streaming,
 // implement send method and record sent format responses.
 type mockStorageFormatServer struct {
@@ -120,8 +92,8 @@ func TestStorageScan(t *testing.T) {
 				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{MockScmNamespace()},
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -129,8 +101,8 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: proto.ScmNamespaces{proto.MockPmemDevice()},
-					State: new(ResponseState),
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ResponseState),
 				},
 			},
 		},
@@ -139,7 +111,7 @@ func TestStorageScan(t *testing.T) {
 				ScanRes: storage.NvmeControllers{storage.MockNvmeController()},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{MockScmModule()},
+				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -157,8 +129,8 @@ func TestStorageScan(t *testing.T) {
 				InitErr: errors.New("spdk init failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{MockScmNamespace()},
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -168,8 +140,8 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: proto.ScmNamespaces{proto.MockPmemDevice()},
-					State: new(ResponseState),
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ResponseState),
 				},
 			},
 		},
@@ -178,8 +150,8 @@ func TestStorageScan(t *testing.T) {
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:     storage.ScmModules{MockScmModule()},
-				GetNamespaceRes: storage.ScmNamespaces{MockScmNamespace()},
+				DiscoverRes:     storage.ScmModules{storage.MockScmModule()},
+				GetNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
@@ -189,8 +161,8 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: proto.ScmNamespaces{proto.MockPmemDevice()},
-					State: new(ResponseState),
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ResponseState),
 				},
 			},
 		},
@@ -286,7 +258,7 @@ func TestStoragePrepare(t *testing.T) {
 	}{
 		"success": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{MockScmModule()},
+				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			req: StoragePrepareReq{
 				Nvme: &PrepareNvmeReq{},
@@ -299,7 +271,7 @@ func TestStoragePrepare(t *testing.T) {
 		},
 		"scm only": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{MockScmModule()},
+				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			req: StoragePrepareReq{
 				Nvme: nil,
@@ -322,8 +294,8 @@ func TestStoragePrepare(t *testing.T) {
 		},
 		"success with pmem devices": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:      storage.ScmModules{MockScmModule()},
-				PrepNamespaceRes: storage.ScmNamespaces{MockScmNamespace()},
+				DiscoverRes:      storage.ScmModules{storage.MockScmModule()},
+				PrepNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			req: StoragePrepareReq{
 				Nvme: &PrepareNvmeReq{},
@@ -332,14 +304,14 @@ func TestStoragePrepare(t *testing.T) {
 			expResp: &StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
-					State: new(ResponseState),
-					Pmems: []*PmemDevice{proto.MockPmemDevice()},
+					State:      new(ResponseState),
+					Namespaces: []*ScmNamespace{proto.MockScmNamespace()},
 				},
 			},
 		},
 		"fail scm prep": {
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{MockScmModule()},
+				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 				PrepErr:     errors.New("scm prep error"),
 			},
 			req: StoragePrepareReq{
@@ -361,7 +333,7 @@ func TestStoragePrepare(t *testing.T) {
 				PrepareErr: errors.New("nvme prep error"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{MockScmModule()},
+				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			req: StoragePrepareReq{
 				Nvme: &PrepareNvmeReq{},

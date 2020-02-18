@@ -225,11 +225,10 @@ struct rebuild_global {
 extern struct rebuild_global rebuild_gst;
 
 struct rebuild_task {
-	d_list_t	dst_list;
-	uuid_t		dst_pool_uuid;
+	d_list_t			dst_list;
+	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
-	d_rank_list_t	*dst_svc_list;
-	uint32_t	dst_map_ver;
+	uint32_t			dst_map_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status

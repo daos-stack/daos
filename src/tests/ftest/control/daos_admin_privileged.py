@@ -73,12 +73,18 @@ class DaosAdminPrivTest(TestWithServers):
         user = getpass.getuser()
 
         # Prep server for format, run command under non-root user
-        self.log.info("Performing SCM/NVMe storage prepare")
+        self.log.info("Performing SCM storage prepare")
         try:
-            self.server_managers[0].prepare_storage(user)
+            self.server_managers[0].prepare_storage(user, True, False)
         except ServerFailed as error:
-            self.fail(
-                "Failed preparing server as user {}: {}".format(user, error))
+            self.fail("Failed preparing SCM as user {}: {}".format(user, error))
+
+        # Prep server for format, run command under non-root user
+        self.log.info("Performing NVMe storage prepare")
+        try:
+            self.server_managers[0].prepare_storage(user, False, True)
+        except ServerFailed as err:
+            self.fail("Failed preparing NVMe as user {}: {}".format(user, err))
 
         # Start server
         self.log.info("Starting server as non-root")
@@ -97,7 +103,7 @@ class DaosAdminPrivTest(TestWithServers):
 
         # Verify format success when all the doas_io_servers start
         try:
-            self.server_managers[0].self.detect_io_server_start()
+            self.server_managers[0].detect_io_server_start()
         except ServerFailed as error:
             self.fail(
                 "Failed starting server after format as non-root user: "

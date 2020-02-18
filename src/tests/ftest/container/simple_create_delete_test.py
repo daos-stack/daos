@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -44,15 +44,12 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.add_pool(connect=False)
+        self.add_pool()
 
         # Check that the pool was created
         self.assertTrue(
             self.pool.check_files(self.hostlist_servers),
-            "Pool data not was created")
-
-        # Connect to the pool
-        self.pool.connect()
+            "Pool data was not created")
 
         # Create a container
         self.add_container(self.pool)

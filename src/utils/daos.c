@@ -84,6 +84,8 @@ cont_op_parse(const char *str)
 		return CONT_GET_ACL;
 	else if (strcmp(str, "overwrite-acl") == 0)
 		return CONT_OVERWRITE_ACL;
+	else if (strcmp(str, "update-acl") == 0)
+		return CONT_UPDATE_ACL;
 	return -1;
 }
 
@@ -468,6 +470,9 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"outfile",	required_argument,	NULL,	'O'},
 		{"verbose",	no_argument,		NULL,	'V'},
 		{"acl-file",	required_argument,	NULL,	'A'},
+		{"entry",	required_argument,	NULL,	'E'},
+		{"user",	required_argument,	NULL,	'u'},
+		{"group",	required_argument,	NULL,	'g'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -647,6 +652,21 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (ap->aclfile == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'E':
+			D_STRNDUP(ap->entry, optarg, strlen(optarg));
+			if (ap->entry == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'u':
+			D_STRNDUP(ap->user, optarg, strlen(optarg));
+			if (ap->user == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'g':
+			D_STRNDUP(ap->group, optarg, strlen(optarg));
+			if (ap->group == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
 			/* alloc max */
@@ -728,6 +748,8 @@ out_free:
 		D_FREE(ap->outfile);
 	if (ap->aclfile != NULL)
 		D_FREE(ap->aclfile);
+	if (ap->entry != NULL)
+		D_FREE(ap->entry);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -904,6 +926,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_OVERWRITE_ACL:
 		rc = cont_overwrite_acl_hdlr(ap);
 		break;
+	case CONT_UPDATE_ACL:
+		rc = cont_update_acl_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -1070,6 +1095,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	  query            query a container\n"
 "	  get-acl          get a container's ACL\n"
 "	  overwrite-acl    replace a container's ACL\n"
+"	  update-acl       add/modify entries in a container's ACL\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1124,6 +1150,13 @@ help_hdlr(struct cmd_args_s *ap)
 "			   cksum_size can be any size\n"
 "			   srv_cksum values can be on, off\n"
 "			   rf supported values are [0-4]\n"
+"	--acl-file=PATH    input file containing ACL\n"
+"	--user=ID          user who will own the container.\n"
+"			   format: username@[domain]\n"
+"			   default is the effective user\n"
+"	--group=ID         group who will own the container.\n"
+"			   format: groupname@[domain]\n"
+"			   default is the effective group\n"
 "container options (destroy):\n"
 "	--force            destroy container regardless of state\n"
 "container options (query, and all commands except create):\n"
@@ -1139,7 +1172,9 @@ help_hdlr(struct cmd_args_s *ap)
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
 "	--eprange=B-E      container epoch range (destroy-snap)\n"
 "container options (ACL-related):\n"
-"	--acl-file=PATH    input file containing ACL (overwrite-acl)\n"
+"	--acl-file=PATH    input file containing ACL (overwrite-acl, "
+"			   update-acl)\n"
+"	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
 "	--verbose          verbose mode (get-acl)\n"
 "	--outfile=PATH     write ACL to file (get-acl)\n");
 

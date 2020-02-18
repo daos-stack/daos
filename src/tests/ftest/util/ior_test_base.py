@@ -33,7 +33,6 @@ from command_utils import CommandFailure
 from job_manager_utils import Mpich
 from mpio_utils import MpioUtils
 from dfuse_utils import Dfuse
-from daos_utils import create_container
 from general_utils import get_test_file
 
 
@@ -49,6 +48,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.dfuse = None
+        self.co_prop = None
         self.lock = None
 
     def setUp(self):
@@ -62,6 +62,8 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.co_prop = self.params.get("container_properties",
+                                       "/run/container/*")
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.ior_cmd.api.value == "POSIX":
@@ -80,32 +82,12 @@ class IorTestBase(TestWithServers):
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
-        # TO-DO: Enable container using TestContainer object,
-        # once DAOS-3355 is resolved.
+        # Enable container using TestContainer object,
         # Get Container params
-        # self.container = TestContainer(self.pool)
-        # self.container.get_params(self)
+        self.add_container(self.pool, create=False)
 
         # create container
-        # self.container.create()
-
-        # Create a POSIX-type container
-        result = create_container(
-            self.bin,
-            self.ior_cmd.daos_pool.value,
-            self.ior_cmd.daos_svcl.value,
-            "POSIX",
-            self.server_managers[0].get_interface_envs())
-
-        if result is None:
-            self.fail("Container create failed")
-
-        cont_uuid = result.stdout.split()[3]
-        self.log.debug("daos cont create stdout:\n  %s", result.stdout)
-        self.log.debug("daos cont create stdot_text:\n  %s", result.stdout_text)
-        self.log.info("Container created with UUID %s", cont_uuid)
-
-        return cont_uuid
+        self.container.create(con_in=self.co_prop)
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -117,7 +99,7 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.create_cont())
+        self.dfuse.set_dfuse_cont_param(self.container)
 
         try:
             # start dfuse
@@ -148,8 +130,6 @@ class IorTestBase(TestWithServers):
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             # Uncomment below two lines once DAOS-3355 is resolved
-            # self.pool.connect()
-            # self.create_cont()
             if self.ior_cmd.transfer_size.value == "256B":
                 return "Skipping the case for transfer_size=256B"
             self.start_dfuse()
@@ -168,8 +148,16 @@ class IorTestBase(TestWithServers):
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)
-        # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+
+        # Always create a container
+        # Don't pass uuid and pool handle to IOR.
+        # It will not enable checksum feature
+        self.pool.connect()
+        self.create_cont()
+
+        # Update IOR params with the pool and container params
+        self.ior_cmd.set_daos_params(self.server_group, self.pool,
+                                     self.container.uuid)
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
