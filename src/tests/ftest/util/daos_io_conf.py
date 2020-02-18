@@ -30,6 +30,7 @@ from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
 from command_utils import BasicParameter
 from test_utils import TestPool
 
+
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
 
@@ -129,7 +130,7 @@ class IoConfTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
     def execute_io_conf_run_test(self):
