@@ -201,12 +201,15 @@ dss_ult_wakeup(struct dss_sleep_ult *dsu)
 {
 	ABT_thread thread;
 
-	ABT_thread_self(&thread);
-	/* Only others can force the ULT to exit */
-	D_ASSERT(thread != dsu->dsu_thread);
-	d_list_del_init(&dsu->dsu_list);
-	dsu->dsu_expire_time = 0;
-	ABT_thread_resume(dsu->dsu_thread);
+	/* Wakeup the thread if it was put in the sleep list */
+	if (!d_list_empty(&dsu->dsu_list)) {
+		ABT_thread_self(&thread);
+		/* Only others can force the ULT to exit */
+		D_ASSERT(thread != dsu->dsu_thread);
+		d_list_del_init(&dsu->dsu_list);
+		dsu->dsu_expire_time = 0;
+		ABT_thread_resume(dsu->dsu_thread);
+	}
 }
 
 /* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
@@ -217,6 +220,7 @@ dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
 	ABT_thread		thread;
 	uint64_t		now = 0;
 
+	D_ASSERT(dsu != NULL);
 	ABT_thread_self(&thread);
 	D_ASSERT(thread == dsu->dsu_thread);
 
