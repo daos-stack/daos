@@ -661,7 +661,12 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 4: delete entry from ACL\n");
+	print_message("Case 4: delete entry from ACL with bad handle\n");
+	rc = daos_cont_delete_acl(DAOS_HDL_INVAL, type_to_remove,
+				  name_to_remove, NULL);
+	assert_int_equal(rc, -DER_NO_HDL);
+
+	print_message("Case 5: delete entry from ACL\n");
 
 	/* Update expected ACL to remove the entry */
 	assert_int_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
@@ -673,7 +678,7 @@ co_acl(void **state)
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
-	print_message("Case 5: delete entry no longer in ACL\n");
+	print_message("Case 6: delete entry no longer in ACL\n");
 
 	/* try deleting same entry again - should be gone */
 	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
