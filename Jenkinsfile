@@ -1081,13 +1081,13 @@ pipeline {
                                       arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                          mv $(echo $arts | tr '\n' ' ') "Functional/"
                                       fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            archiveArtifacts artifacts: 'Functional/**'
                             junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1183,13 +1183,13 @@ pipeline {
                                       arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                          mv $(echo $arts | tr '\n' ' ') "Functional/"
                                       fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            archiveArtifacts artifacts: 'Functional/**'
                             junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1285,13 +1285,13 @@ pipeline {
                                       arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                          mv $(echo $arts | tr '\n' ' ') "Functional/"
                                       fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            archiveArtifacts artifacts: 'Functional/**'
                             junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
@@ -1387,13 +1387,13 @@ pipeline {
                                       arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
-                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                          mv $(echo $arts | tr '\n' ' ') "Functional/"
                                       fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            archiveArtifacts artifacts: 'Functional/**'
                             junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
