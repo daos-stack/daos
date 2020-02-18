@@ -44,12 +44,8 @@ from configuration_utils import Configuration
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
-<<<<<<< HEAD
 from general_utils import stop_processes
-=======
-from dmg_utils import DmgCommand
 from test_utils_pool import TestPool
->>>>>>> master
 
 
 # pylint: disable=invalid-name
@@ -597,8 +593,11 @@ class TestWithServers(TestWithoutServers):
         return self.server_managers[index].dmg
 
     def prepare_pool(self):
-        """Create a pool, read the pool parameters from the yaml, create, and
-        connect.
+        """Prepare the self.pool attribute for pool testing.
+
+        Assign a TestPool object to the self.pool class attribute.  Create  the
+        pool using the pool parameters from the test's yaml file.  Finally
+        connect to the pool.
 
         This sequence is common for a lot of the container tests.
         """
