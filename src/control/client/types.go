@@ -29,6 +29,8 @@ import (
 	"sort"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -315,8 +317,69 @@ type NvmePrepareResult struct {
 // of remote servers identified by an address string.
 type NvmePrepareResults map[string]*NvmePrepareResult
 
-// StoragePrepareReq encapsulated subsystem prepare parameters.
-type StoragePrepareReq struct{}
+// NvmePrepareReq NVMe specific request parameters.
+type NvmePrepareReq struct {
+	PCIWhiteList string
+	NrHugepages  int32
+	TargetUser   string
+	NvmeReset    bool
+}
+
+type NvmePrepareReqPB ctlpb.PrepareNvmeReq
+
+func (pb *NvmePrepareReqPB) FromNative(native *NvmePrepareReq) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *NvmePrepareReqPB) ToNative() (*NvmePrepareReq, error) {
+	native := new(NvmePrepareReq)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *NvmePrepareReqPB) AsProto() *ctlpb.PrepareNvmeReq {
+	return (*ctlpb.PrepareNvmeReq)(pb)
+}
+
+// ScmPrepareReq SCM specific request parameters.
+type ScmPrepareReq struct {
+	ScmReset bool
+}
+
+type ScmPrepareReqPB ctlpb.PrepareScmReq
+
+func (pb *ScmPrepareReqPB) FromNative(native *ScmPrepareReq) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *ScmPrepareReqPB) ToNative() (*ScmPrepareReq, error) {
+	native := new(ScmPrepareReq)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *ScmPrepareReqPB) AsProto() *ctlpb.PrepareScmReq {
+	return (*ctlpb.PrepareScmReq)(pb)
+}
+
+// StoragePrepareReq encapsulated subsystem request params.
+type StoragePrepareReq struct {
+	Nvme *NvmePrepareReq
+	Scm  *ScmPrepareReq
+}
+
+type StoragePrepareReqPB ctlpb.StoragePrepareReq
+
+func (pb *StoragePrepareReqPB) FromNative(native *StoragePrepareReq) error {
+	return convert.Types(native, pb)
+}
+
+func (pb *StoragePrepareReqPB) ToNative() (*StoragePrepareReq, error) {
+	native := new(StoragePrepareReq)
+	return native, convert.Types(pb, native)
+}
+
+func (pb *StoragePrepareReqPB) AsProto() *ctlpb.StoragePrepareReq {
+	return (*ctlpb.StoragePrepareReq)(pb)
+}
 
 // StoragePrepareResp encapsulated subsystem results.
 type StoragePrepareResp struct {
@@ -325,23 +388,20 @@ type StoragePrepareResp struct {
 	Scm     ScmPrepareResults
 }
 
+type StorageError struct {
+	Msg string
+}
+
+func (nse *StorageError) Error() string {
+	return nse.Msg
+}
+
 // ScmScanResult represents the result of scanning for SCM
 // modules installed on a storage node and SCM namespaces.
 type ScmScanResult struct {
 	Modules    storage.ScmModules
 	Namespaces storage.ScmNamespaces
-	Err        error
-}
-
-func (result *ScmScanResult) String() string {
-	switch {
-	case result.Err != nil:
-		return fmt.Sprintf("SCM Error: %s", result.Err)
-	case len(result.Namespaces) > 0:
-		return fmt.Sprintf("SCM Namespaces:\n%s", result.Namespaces)
-	default:
-		return fmt.Sprintf("SCM Modules:\n%s", result.Modules)
-	}
+	Err        *StorageError
 }
 
 func (result *ScmScanResult) Summary() (out string) {
@@ -360,18 +420,11 @@ func (result *ScmScanResult) Summary() (out string) {
 // of remote servers identified by an address string.
 type ScmScanResults map[string]*ScmScanResult
 
-// NvmeScanResult represents the result of scanning for SCM
-// modules installed on a storage node.
+// NvmeScanResult represents the result of scanning for NVMe
+// SSDs installed on a storage node.
 type NvmeScanResult struct {
 	Ctrlrs proto.NvmeControllers
-	Err    error
-}
-
-func (result *NvmeScanResult) String() string {
-	if result.Err != nil {
-		return fmt.Sprintf("NVMe Error: %s", result.Err)
-	}
-	return result.Ctrlrs.String()
+	Err    *StorageError
 }
 
 func (result *NvmeScanResult) StringHealthStats() string {

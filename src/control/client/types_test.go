@@ -24,11 +24,13 @@
 package client
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -323,5 +325,49 @@ func TestPoolDiscoveriesFromPB(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
+	}
+}
+
+func TestClient_StoragePrepareReq_Convert(t *testing.T) {
+	inNativeNvme := mockNvmePrepareReq()
+	pbNvme := new(NvmePrepareReqPB)
+
+	if err := pbNvme.FromNative(inNativeNvme); err != nil {
+		panic(err)
+	}
+
+	inNativeScm := &ScmPrepareReq{ScmReset: true}
+	pbScm := new(ScmPrepareReqPB)
+
+	if err := pbScm.FromNative(inNativeScm); err != nil {
+		panic(err)
+	}
+
+	inPBReq := &ctlpb.StoragePrepareReq{
+		Nvme: pbNvme.AsProto(),
+		Scm:  pbScm.AsProto(),
+	}
+
+	outNativeReq, err := (*StoragePrepareReqPB)(inPBReq).ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("%+v\n", outNativeReq.Scm)
+	if diff := cmp.Diff(inNativeNvme, outNativeReq.Nvme); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+
+	if diff := cmp.Diff(inNativeScm, outNativeReq.Scm); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+
+	outPBReq := new(StoragePrepareReqPB)
+	if err := outPBReq.FromNative(outNativeReq); err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(inPBReq, outPBReq.AsProto()); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

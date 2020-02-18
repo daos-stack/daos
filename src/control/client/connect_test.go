@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,19 +53,6 @@ func connectSetupServers(
 	_ = connect.ConnectClients(servers)
 
 	return connect
-}
-
-func connectSetup(
-	log logging.Logger,
-	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
-	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
-	mountResults ScmMountResults, scanRet error, formatRet error,
-	killRet error, connectRet error, ACLRet *mockACLResult,
-	listPoolsRet *mockListPoolsResult) Connect {
-
-	return connectSetupServers(MockServers, log, state, ctrlrs,
-		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
-		formatRet, killRet, connectRet, ACLRet, listPoolsRet)
 }
 
 func defaultClientSetup(log logging.Logger) Connect {
@@ -167,18 +154,164 @@ func TestGetClearConns(t *testing.T) {
 	checkResults(t, MockServers, results, nil)
 }
 
+func TestStoragePrepare(t *testing.T) {
+	namespacesPB := ScmNamespaces{MockScmNamespace()}
+	namespacesNative, err := namespacesPB.ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mockErr := &StorageError{"example error"}
+
+	for name, tc := range map[string]struct {
+		mc      *mockConnectConfig
+		req     StoragePrepareReq
+		expResp *StoragePrepareResp
+		expErr  error
+	}{
+		"prepare fails": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				ctlClientCfg: mockMgmtCtlClientConfig{
+					scmNamespaces: namespacesPB,
+					prepareRet:    mockErr,
+				},
+			},
+			expResp: &StoragePrepareResp{
+				Servers: MockServers,
+				Nvme: NvmePrepareResults{
+					"1.2.3.4:10000": &NvmePrepareResult{
+						Err: mockErr,
+					},
+					"1.2.3.5:10001": &NvmePrepareResult{
+						Err: mockErr,
+					},
+				},
+				Scm: ScmPrepareResults{
+					"1.2.3.4:10000": &ScmPrepareResult{
+						Err: mockErr,
+					},
+					"1.2.3.5:10001": &ScmPrepareResult{
+						Err: mockErr,
+					},
+				},
+			},
+		},
+		"prepare succeeds": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				ctlClientCfg: mockMgmtCtlClientConfig{
+					scmNamespaces: namespacesPB,
+				},
+			},
+			req: StoragePrepareReq{
+				Nvme: mockNvmePrepareReq(),
+				Scm:  &ScmPrepareReq{},
+			},
+			expResp: &StoragePrepareResp{
+				Servers: MockServers,
+				Nvme: NvmePrepareResults{
+					"1.2.3.4:10000": &NvmePrepareResult{},
+					"1.2.3.5:10001": &NvmePrepareResult{},
+				},
+				Scm: ScmPrepareResults{
+
+					"1.2.3.4:10000": &ScmPrepareResult{
+						Namespaces: namespacesNative,
+					},
+					"1.2.3.5:10001": &ScmPrepareResult{
+						Namespaces: namespacesNative,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			cc := newMockConnectCfg(log, tc.mc)
+			gotResp, gotErr := cc.StoragePrepare(tc.req)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestStorageScan(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+	ctrlrsPB := NvmeControllers{MockNvmeController()}
+	modulesPB := ScmModules{MockScmModule()}
+	namespacesPB := ScmNamespaces{MockScmNamespace()}
+	mockErr := &StorageError{"example error"}
 
-	cc := defaultClientSetup(log)
+	for name, tc := range map[string]struct {
+		mc      *mockConnectConfig
+		expResp *StorageScanResp
+		expErr  error
+	}{
+		"scan fails": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				ctlClientCfg: mockMgmtCtlClientConfig{
+					nvmeControllers: ctrlrsPB,
+					scmModules:      modulesPB,
+					scmNamespaces:   namespacesPB,
+					scanRet:         mockErr,
+				},
+			},
+			expResp: &StorageScanResp{
+				Servers: MockServers,
+				Nvme: NvmeScanResults{
+					"1.2.3.4:10000": &NvmeScanResult{
+						Err: mockErr,
+					},
+					"1.2.3.5:10001": &NvmeScanResult{
+						Err: mockErr,
+					},
+				},
+				Scm: ScmScanResults{
+					"1.2.3.4:10000": &ScmScanResult{
+						Err: mockErr,
+					},
+					"1.2.3.5:10001": &ScmScanResult{
+						Err: mockErr,
+					},
+				},
+			},
+		},
+		"scan succeeds": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				ctlClientCfg: mockMgmtCtlClientConfig{
+					nvmeControllers: ctrlrsPB,
+					scmModules:      modulesPB,
+					scmNamespaces:   namespacesPB,
+				},
+			},
+			expResp: MockScanResp(&ctrlrsPB, &modulesPB,
+				&namespacesPB, MockServers),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
 
-	gotResp := cc.StorageScan(&StorageScanReq{})
+			cc := newMockConnectCfg(log, tc.mc)
+			gotResp, gotErr := cc.StorageScan(StorageScanReq{})
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 
-	expResp := MockScanResp(&MockCtrlrs, &MockScmModules, &MockScmNamespaces, MockServers)
-
-	if diff := cmp.Diff(expResp, gotResp); diff != "" {
-		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -196,7 +329,7 @@ func TestStorageFormat(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cc := connectSetup(
+			cc := connectSetupServers(MockServers,
 				log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, tt.formatRet, nil, nil, MockACL, nil)

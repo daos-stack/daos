@@ -241,3 +241,12 @@ func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
 
 	return path, cleanup
 }
+
+// GetIndex picks suitable index from variable input.
+func GetIndex(varIdx ...int32) int32 {
+	if len(varIdx) == 0 {
+		varIdx = append(varIdx, 1)
+	}
+
+	return varIdx[0]
+}

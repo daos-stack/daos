@@ -33,7 +33,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -99,14 +98,14 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) *client.StoragePrepareResp {
-	tc.appendInvocation("StoragePrepare")
-	return &client.StoragePrepareResp{}
+func (tc *testConn) StoragePrepare(req client.StoragePrepareReq) (*client.StoragePrepareResp, error) {
+	tc.appendInvocation("StoragePrepare-%+v")
+	return &client.StoragePrepareResp{}, nil
 }
 
-func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
+func (tc *testConn) StorageScan(req client.StorageScanReq) (*client.StorageScanResp, error) {
 	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
-	return &client.StorageScanResp{}
+	return &client.StorageScanResp{}, nil
 }
 
 func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {

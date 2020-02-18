@@ -25,7 +25,6 @@ package proto
 import (
 	"bytes"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -175,23 +174,6 @@ func (pb *NvmeControllers) FromNative(native storage.NvmeControllers) error {
 func (pb *NvmeControllers) ToNative() (storage.NvmeControllers, error) {
 	native := make(storage.NvmeControllers, 0, len(*pb))
 	return native, convert.Types(pb, &native)
-}
-
-func (ncs NvmeControllers) String() string {
-	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
-
-	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\t\tnone\n")
-		return buf.String()
-	}
-
-	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
-
-	for _, c := range ncs {
-		(*NvmeController)(c).CtrlrDetail(buf)
-	}
-
-	return buf.String()
 }
 
 // StringHealthStats returns full string representation including NVMe health

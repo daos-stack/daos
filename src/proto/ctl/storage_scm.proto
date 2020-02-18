@@ -74,7 +74,7 @@ message ScmMountResult {
 }
 
 message PrepareScmReq {
-	bool reset = 1;			// Reset SCM devices to memory mode
+	bool scmreset = 1;			// Reset SCM devices to memory mode
 }
 
 message PrepareScmResp {

@@ -64,7 +64,7 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 		HugePageCount: int(req.GetNrhugepages()),
 		TargetUser:    req.GetTargetuser(),
 		PCIWhitelist:  req.GetPciwhitelist(),
-		ResetOnly:     req.GetReset_(),
+		ResetOnly:     req.GetNvmereset(),
 	})
 
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
+	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Scmreset})
 	if err != nil {
 		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
 		return
@@ -113,7 +113,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq) (
 	*ctlpb.StoragePrepareResp, error) {
 
-	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
+	c.log.Debug("received StoragePrepare RPC")
 
 	resp := &ctlpb.StoragePrepareResp{}
 
@@ -123,6 +123,8 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 	if req.Scm != nil {
 		resp.Scm = c.doScmPrepare(req.Scm)
 	}
+
+	c.log.Debugf("responding to StoragePrepare RPC: respScm: %#v, respNvme: %#v", resp.Scm, resp.Nvme)
 
 	return resp, nil
 }

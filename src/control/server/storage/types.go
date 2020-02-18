@@ -23,9 +23,7 @@
 package storage
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 
 	"github.com/dustin/go-humanize"
 
@@ -118,29 +116,6 @@ type (
 	NvmeControllers []*NvmeController
 )
 
-func (sm *ScmModule) String() string {
-	// capacity given in IEC standard units.
-	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.PhysicalID, humanize.IBytes(sm.Capacity),
-		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
-}
-
-func (sms ScmModules) String() string {
-	var buf bytes.Buffer
-
-	if len(sms) == 0 {
-		return "\t\tnone\n"
-	}
-
-	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
-
-	for _, sm := range sms {
-		fmt.Fprintf(&buf, "\t\t%s\n", sm)
-	}
-
-	return buf.String()
-}
-
 // Capacity reports total storage capacity (bytes) across all modules.
 func (sms ScmModules) Capacity() (tb uint64) {
 	for _, sm := range sms {
@@ -155,28 +130,6 @@ func (sms ScmModules) Capacity() (tb uint64) {
 func (sms ScmModules) Summary() string {
 	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(sms.Capacity()), len(sms),
 		common.Pluralise("module", len(sms)))
-}
-
-func (sn *ScmNamespace) String() string {
-	// capacity given in IEC standard units.
-	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", sn.BlockDevice, sn.NumaNode,
-		humanize.Bytes(sn.Size))
-}
-
-func (sns ScmNamespaces) String() string {
-	var buf bytes.Buffer
-
-	if len(sns) == 0 {
-		return "\t\tnone\n"
-	}
-
-	sort.Slice(sns, func(i, j int) bool { return sns[i].BlockDevice < sns[j].BlockDevice })
-
-	for _, sn := range sns {
-		fmt.Fprintf(&buf, "\t\t%s\n", sn)
-	}
-
-	return buf.String()
 }
 
 // Capacity reports total storage capacity (bytes) across all namespaces.

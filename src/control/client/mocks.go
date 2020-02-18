@@ -24,6 +24,7 @@
 package client
 
 import (
+	"fmt"
 	"io"
 	"sort"
 
@@ -32,6 +33,7 @@ import (
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -108,6 +110,7 @@ type mockMgmtCtlClientConfig struct {
 	scmModuleResults      ScmModuleResults
 	scmNamespaces         ScmNamespaces
 	scmMountResults       ScmMountResults
+	prepareRet            error
 	scanRet               error
 	formatRet             error
 }
@@ -116,22 +119,34 @@ type mockMgmtCtlClient struct {
 	cfg mockMgmtCtlClientConfig
 }
 
+func mockNvmePrepareReq(varIdx ...int32) *NvmePrepareReq {
+	idx := common.GetIndex(varIdx...)
+	reset := false
+	if idx == 0 {
+		reset = true
+	}
+
+	return &NvmePrepareReq{
+		PCIWhiteList: fmt.Sprintf("0000:8%d:00.0", idx),
+		NrHugepages:  int32(idx),
+		TargetUser:   fmt.Sprintf("user%d", idx),
+		NvmeReset:    reset,
+	}
+}
+
 func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
-	// return successful prepare results, state member messages
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StoragePrepareResp{
 		Nvme: &ctlpb.PrepareNvmeResp{
 			State: &MockSuccessState,
 		},
 		Scm: &ctlpb.PrepareScmResp{
-			State: &MockSuccessState,
+			State:      &MockSuccessState,
+			Namespaces: m.cfg.scmNamespaces,
 		},
-	}, m.cfg.scanRet
+	}, m.cfg.prepareRet
 }
 
 func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq, o ...grpc.CallOption) (*ctlpb.StorageScanResp, error) {
-	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StorageScanResp{
 		Nvme: &ctlpb.ScanNvmeResp{
 			State:  &MockSuccessState,

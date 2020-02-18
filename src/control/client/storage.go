@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,15 +110,14 @@ func (c *connList) getScmPrepareResult(resp *ctlpb.PrepareScmResp) (scmResult *S
 	return
 }
 
-// StoragePrepare returns details of nonvolatile storage devices attached to each
-// remote server. Data received over channel from requests running in parallel.
-func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) *StoragePrepareResp {
-	cResults := c.makeRequests(req, storagePrepareRequest)
+func (c *connList) storagePrepare(cResults ResultMap) *StoragePrepareResp {
 	cNvmePrepare := make(NvmePrepareResults) // mapping of server address to NVMe SSDs
 	cScmPrepare := make(ScmPrepareResults)   // mapping of server address to SCM modules/namespaces
 	servers := make([]string, 0, len(cResults))
 
 	for addr, res := range cResults {
+		servers = append(servers, addr)
+
 		if res.Err != nil { // likely to be comms err
 			c.setPrepareErr(cNvmePrepare, cScmPrepare, addr, res.Err)
 			continue
@@ -139,12 +138,22 @@ func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) *StoragePrepareR
 
 		cNvmePrepare[addr] = c.getNvmePrepareResult(resp.Nvme)
 		cScmPrepare[addr] = c.getScmPrepareResult(resp.Scm)
-		servers = append(servers, addr)
 	}
 
 	sort.Strings(servers)
 
 	return &StoragePrepareResp{Servers: servers, Nvme: cNvmePrepare, Scm: cScmPrepare}
+}
+
+// StoragePrepare returns details of nonvolatile storage devices attached to each
+// remote server. Data received over channel from requests running in parallel.
+func (c *connList) StoragePrepare(req StoragePrepareReq) (*StoragePrepareResp, error) {
+	pbReq := new(StoragePrepareReqPB)
+	if err := pbReq.FromNative(&req); err != nil {
+		return nil, errors.Wrap(err, "convert storage prepare request to protobuf")
+	}
+
+	return c.storagePrepare(c.makeRequests(pbReq.AsProto(), storagePrepareRequest)), nil
 }
 
 // storageScanRequest returns all discovered SCM and NVMe storage devices
@@ -162,8 +171,8 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults,
 	address string, err error) {
 
-	cNvmeScan[address] = &NvmeScanResult{Err: err}
-	cScmScan[address] = &ScmScanResult{Err: err}
+	cNvmeScan[address] = &NvmeScanResult{Err: &StorageError{err.Error()}}
+	cScmScan[address] = &ScmScanResult{Err: &StorageError{err.Error()}}
 }
 
 func (c *connList) getNvmeScanResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScanResult) {
@@ -175,7 +184,7 @@ func (c *connList) getNvmeScanResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *Nvme
 		if msg == "" {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
 		}
-		nvmeResult.Err = errors.Errorf(msg)
+		nvmeResult.Err = &StorageError{msg}
 		return
 	}
 
@@ -193,38 +202,35 @@ func (c *connList) getScmScanResult(resp *ctlpb.ScanScmResp) (scmResult *ScmScan
 		if msg == "" {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
-		scmResult.Err = errors.Errorf(msg)
+		scmResult.Err = &StorageError{msg}
 		return
 	}
 
 	modules := resp.GetModules()
 	scmResult.Modules, err = (*proto.ScmModules)(&modules).ToNative()
 	if err != nil {
-		scmResult.Err = errors.Wrap(err, "scm modules")
+		scmResult.Err = &StorageError{fmt.Sprintf("scm modules: %s", err.Error())}
 		return
 	}
 
 	namespaces := resp.GetNamespaces()
 	scmResult.Namespaces, err = (*proto.ScmNamespaces)(&namespaces).ToNative()
 	if err != nil {
-		scmResult.Err = errors.Wrap(err, "scm namespaces")
+		scmResult.Err = &StorageError{fmt.Sprintf("scm namespaces: %s", err.Error())}
 		return
 	}
 
 	return
 }
 
-// StorageScan returns details of nonvolatile storage devices attached to each
-// remote server. Critical storage device health information is also returned
-// for all NVMe SSDs discovered. Data received over channel from requests
-// in parallel. If health param is true, stringer repr will include stats.
-func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
-	cResults := c.makeRequests(nil, storageScanRequest)
+func (c *connList) storageScan(cResults ResultMap) *StorageScanResp {
 	cNvmeScan := make(NvmeScanResults) // mapping of server address to NVMe SSDs
 	cScmScan := make(ScmScanResults)   // mapping of server address to SCM modules/namespaces
 	servers := make([]string, 0, len(cResults))
 
 	for addr, res := range cResults {
+		servers = append(servers, addr)
+
 		if res.Err != nil { // likely to be comms err
 			c.setScanErr(cNvmeScan, cScmScan, addr, res.Err)
 			continue
@@ -245,12 +251,19 @@ func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
 
 		cNvmeScan[addr] = c.getNvmeScanResult(resp.Nvme)
 		cScmScan[addr] = c.getScmScanResult(resp.Scm)
-		servers = append(servers, addr)
 	}
 
 	sort.Strings(servers)
 
 	return &StorageScanResp{Servers: servers, Nvme: cNvmeScan, Scm: cScmScan}
+}
+
+// StorageScan returns details of nonvolatile storage devices attached to each
+// remote server. Critical storage device health information is also returned
+// for all NVMe SSDs discovered. Data received over channel from requests
+// in parallel. If health param is true, stringer repr will include stats.
+func (c *connList) StorageScan(_ StorageScanReq) (*StorageScanResp, error) {
+	return c.storageScan(c.makeRequests(nil, storageScanRequest)), nil
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a

@@ -29,7 +29,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -58,8 +57,8 @@ type storagePrepareCmd struct {
 
 // Execute is run when storagePrepareCmd activates
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	var nReq *ctlpb.PrepareNvmeReq
-	var sReq *ctlpb.PrepareScmReq
+	var nReq *client.NvmePrepareReq
+	var sReq *client.ScmPrepareReq
 
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
@@ -67,11 +66,11 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepNvme {
-		nReq = &ctlpb.PrepareNvmeReq{
-			Pciwhitelist: cmd.PCIWhiteList,
-			Nrhugepages:  int32(cmd.NrHugepages),
-			Targetuser:   cmd.TargetUser,
-			Reset_:       cmd.Reset,
+		nReq = &client.NvmePrepareReq{
+			PCIWhiteList: cmd.PCIWhiteList,
+			NrHugepages:  int32(cmd.NrHugepages),
+			TargetUser:   cmd.TargetUser,
+			NvmeReset:    cmd.Reset,
 		}
 	}
 
@@ -80,11 +79,17 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return err
 		}
 
-		sReq = &ctlpb.PrepareScmReq{Reset_: cmd.Reset}
+		sReq = &client.ScmPrepareReq{ScmReset: cmd.Reset}
 	}
 
-	out, err := prepareCmdDisplay(cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{
-		Nvme: nReq, Scm: sReq}))
+	resp, err := cmd.conns.StoragePrepare(
+		client.StoragePrepareReq{Nvme: nReq, Scm: sReq})
+	if err != nil {
+		return err
+	}
+	cmd.log.Debugf("resp %+v", resp)
+
+	out, err := prepareCmdDisplay(resp)
 	if err != nil {
 		return err
 	}
@@ -104,7 +109,13 @@ type storageScanCmd struct {
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(args []string) error {
-	out, err := scanCmdDisplay(cmd.conns.StorageScan(nil), !cmd.Verbose)
+	resp, err := cmd.conns.StorageScan(client.StorageScanReq{})
+	if err != nil {
+		return err
+	}
+	cmd.log.Debugf("resp %+v", resp)
+
+	out, err := scanCmdDisplay(resp, !cmd.Verbose)
 	if err != nil {
 		return err
 	}
