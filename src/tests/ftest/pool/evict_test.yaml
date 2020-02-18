@@ -4,8 +4,6 @@ hosts:
     - server-B
     - server-C
     - server-D
-server_manager:
-   recreate: true
 server_config:
    name: daos_server
 timeout: 400
