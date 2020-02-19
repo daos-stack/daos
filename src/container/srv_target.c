@@ -1249,9 +1249,10 @@ err_register:
 	if (hdl->sch_cont->sc_open == 0)
 		dtx_batched_commit_deregister(hdl->sch_cont);
 err_cont:
-	cont_stop_dtx_reindex_ult(hdl->sch_cont);
-	if (hdl->sch_cont)
+	if (hdl->sch_cont) {
+		cont_stop_dtx_reindex_ult(hdl->sch_cont);
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
+	}
 
 	if (!daos_handle_is_inval(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",

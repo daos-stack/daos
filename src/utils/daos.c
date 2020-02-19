@@ -165,9 +165,14 @@ tobytes(const char *str)
 	daos_size_t	 size;
 	char		*end;
 
+	if (str == NULL) {
+		fprintf(stderr, "passed NULL string\n");
+		return 0;
+	}
+
 	size = strtoull(str, &end, 0);
 	/* Prevent negative numbers from turning into unsigned */
-	if (str != NULL && str[0] == '-') {
+	if (str[0] == '-') {
 		fprintf(stderr, "WARNING bytes < 0 (string %s)"
 				"converted to "DF_U64" : using 0 instead\n",
 				str, size);
