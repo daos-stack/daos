@@ -73,6 +73,20 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	)
 }
 
+func FaultBdevNotFound(bdevs []string) *fault.Fault {
+	plural := ""
+	if len(bdevs) > 1 {
+		plural = "s"
+	}
+
+	return serverFault(
+		code.ServerBdevNotFound,
+		fmt.Sprintf("NVMe SSD%s %v not found", plural, bdevs),
+		fmt.Sprintf("check SSD%s %v that are specified in server config "+
+			"exist and are accessible by SPDK", plural, bdevs),
+	)
+}
+
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverFault(
 		code.ServerConfigDuplicateFabric,

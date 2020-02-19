@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -534,8 +535,8 @@ func TestStorageFormat(t *testing.T) {
 						{
 							Pciaddr: "<nil>",
 							State: &ResponseState{
-								Status: ResponseStatus_CTL_ERR_NVME,
-								Error:  msgBdevScmNotReady,
+								Status: ResponseStatus_CTL_SUCCESS,
+								Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 							},
 						},
 					},
@@ -597,8 +598,8 @@ func TestStorageFormat(t *testing.T) {
 						{
 							Pciaddr: "<nil>",
 							State: &ResponseState{
-								Status: ResponseStatus_CTL_ERR_NVME,
-								Error:  msgBdevScmNotReady,
+								Status: ResponseStatus_CTL_SUCCESS,
+								Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 							},
 						},
 					},
