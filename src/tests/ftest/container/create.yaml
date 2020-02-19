@@ -6,10 +6,11 @@ hosts:
 timeout: 100
 server_config:
    name: daos_server
-poolparams:
+pool:
    mode: 511
-   setname: daos_server
-   size: 1073741824
+   name: daos_server
+   scm_size: 1073741824
+   control_method: dmg
 uuids: !mux
    perfect:
      uuid:
@@ -24,4 +25,3 @@ poolhandle: !mux
        handle: VALID
    badone:
        handle: 99999
-

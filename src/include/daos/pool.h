@@ -37,6 +37,26 @@
 #include <daos_types.h>
 #include <daos_pool.h>
 
+/** pool query request bits */
+#define DAOS_PO_QUERY_SPACE		(1ULL << 0)
+#define DAOS_PO_QUERY_REBUILD_STATUS	(1ULL << 1)
+
+#define DAOS_PO_QUERY_PROP_LABEL	(1ULL << 16)
+#define DAOS_PO_QUERY_PROP_SPACE_RB	(1ULL << 17)
+#define DAOS_PO_QUERY_PROP_SELF_HEAL	(1ULL << 18)
+#define DAOS_PO_QUERY_PROP_RECLAIM	(1ULL << 19)
+#define DAOS_PO_QUERY_PROP_ACL		(1ULL << 20)
+#define DAOS_PO_QUERY_PROP_OWNER	(1ULL << 21)
+#define DAOS_PO_QUERY_PROP_OWNER_GROUP	(1ULL << 22)
+#define DAOS_PO_QUERY_PROP_SVC_LIST	(1ULL << 23)
+
+#define DAOS_PO_QUERY_PROP_ALL						\
+	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |	\
+	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM |	\
+	 DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |		\
+	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST)
+
+
 int dc_pool_init(void);
 void dc_pool_fini(void);
 

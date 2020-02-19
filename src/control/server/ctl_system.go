@@ -89,7 +89,8 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 
 		for _, result := range hResults {
 			if result.State == system.MemberStateUnresponsive ||
-				result.State == system.MemberStateStopped {
+				result.State == system.MemberStateStopped ||
+				result.State == system.MemberStateErrored {
 
 				badRanks[result.Rank] = result.State
 			}
@@ -261,7 +262,7 @@ func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStop
 		if err := convert.Types(prepResults, &resp.Results); err != nil {
 			return nil, err
 		}
-		if prepResults.HasErrors() {
+		if !req.Force && prepResults.HasErrors() {
 			return resp, errors.New("PrepShutdown HasErrors")
 		}
 	}

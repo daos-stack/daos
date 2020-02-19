@@ -283,7 +283,8 @@ int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
-int run_daos_checksum_test(int rank, int size);
+int run_daos_checksum_test(int rank, int size, int *sub_tests,
+			   int sub_tests_size);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
@@ -315,6 +316,10 @@ int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
 		       int sub_tests_size, test_setup_cb_t setup_cb,
 		       test_teardown_cb_t teardown_cb);
+int
+run_daos_sub_tests_only(const struct CMUnitTest *tests, int tests_size,
+			daos_size_t pool_size, int *sub_tests,
+			int sub_tests_size, void *state);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
