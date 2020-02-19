@@ -700,25 +700,11 @@ test_rebuild_wait(test_arg_t **args, int args_cnt)
 }
 
 int
-run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
-		   daos_size_t pool_size, int *sub_tests,
-		   int sub_tests_size, test_setup_cb_t setup_cb,
-		   test_teardown_cb_t teardown_cb)
+run_daos_sub_tests_only(const struct CMUnitTest *tests, int tests_size,
+			daos_size_t pool_size, int *sub_tests,
+			int sub_tests_size, void *state)
 {
-	void *state = NULL;
 	int i;
-	int rc;
-
-	D_ASSERT(pool_size > 0);
-	rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size, NULL);
-	if (rc)
-		return rc;
-
-	if (setup_cb != NULL) {
-		rc = setup_cb(&state);
-		if (rc)
-			return rc;
-	}
 
 	for (i = 0; i < sub_tests_size; i++) {
 		int idx = sub_tests ? sub_tests[i] : i;
@@ -742,6 +728,31 @@ run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 			tests[idx].teardown_func(&state);
 	}
 
+	return 0;
+}
+
+int
+run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
+		   daos_size_t pool_size, int *sub_tests,
+		   int sub_tests_size, test_setup_cb_t setup_cb,
+		   test_teardown_cb_t teardown_cb)
+{
+	void *state = NULL;
+	int rc;
+
+	D_ASSERT(pool_size > 0);
+	rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size, NULL);
+	if (rc)
+		return rc;
+
+	if (setup_cb != NULL) {
+		rc = setup_cb(&state);
+		if (rc)
+			return rc;
+	}
+
+	run_daos_sub_tests_only(tests, tests_size, pool_size,
+				sub_tests, sub_tests_size, state);
 	if (teardown_cb != NULL) {
 		rc = teardown_cb(&state);
 		if (rc)
