@@ -222,7 +222,9 @@ def scons():
                   "to clean it up manually.")
             exit(1)
 
-        print("Updating the VERSION and TAG files...")
+        print("Updating the API_VERSION, VERSION and TAG files...")
+        with open("API_VERSION", "w") as version_file:
+            version_file.write(API_VERSION + '\n')
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -242,6 +244,7 @@ def scons():
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
+        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -362,6 +365,7 @@ def scons():
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")
+    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
     env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
