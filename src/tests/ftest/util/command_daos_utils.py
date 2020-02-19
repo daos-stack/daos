@@ -53,6 +53,7 @@ class LogParameter(FormattedParameter):
         """
         super(LogParameter, self).__init__(str_format, default)
         self._directory = directory
+        self._add_directory()
 
     def _add_directory(self):
         """Add the directory to the log file name assignment.
@@ -65,7 +66,6 @@ class LogParameter(FormattedParameter):
         if self.value is not None:
             name = os.path.basename(self.value)
             self.value = os.path.join(self._directory, name)
-            self.log.debug("  Added the directory: %s => %s", name, self.value)
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -77,6 +77,7 @@ class LogParameter(FormattedParameter):
         """
         super(LogParameter, self).get_yaml_value(name, test, path)
         self._add_directory()
+        self.log.debug("  Added the directory: %s => %s", name, self.value)
 
     def update(self, value, name=None, append=False):
         """Update the value of the parameter.
@@ -91,6 +92,7 @@ class LogParameter(FormattedParameter):
         """
         super(LogParameter, self).update(value, name, append)
         self._add_directory()
+        self.log.debug("  Added the directory: %s => %s", name, self.value)
 
 
 class YamlParameters(ObjectWithParameters):
