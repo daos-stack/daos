@@ -429,14 +429,17 @@ int crt_swim_init(int crt_ctx_idx)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	d_rank_list_t		*grp_membs;
 	d_rank_t		 self = grp_priv->gp_self;
 	int			 i, rc;
+
 
 	if (crt_gdata.cg_swim_inited) {
 		D_ERROR("Swim already initialized\n");
 		D_GOTO(out, rc = -DER_ALREADY);
 	}
 
+	grp_membs = grp_priv_get_membs(grp_priv);
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
 	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, grp_priv);
 	if (csm->csm_ctx == NULL) {
@@ -445,9 +448,16 @@ int crt_swim_init(int crt_ctx_idx)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	if (self != CRT_NO_RANK) {
+	if (self != CRT_NO_RANK && grp_membs != NULL) {
+		if (grp_membs->rl_nr != grp_priv->gp_size) {
+			D_ERROR("Mismatch in group size. Expected %d got %d\n",
+				grp_membs->rl_nr, grp_priv->gp_size);
+			D_GOTO(cleanup, rc = -DER_INVAL);
+		}
+
 		for (i = 0; i < grp_priv->gp_size; i++) {
-			rc = crt_swim_rank_add(grp_priv, i);
+			rc = crt_swim_rank_add(grp_priv,
+					grp_membs->rl_ranks[i]);
 			if (rc) {
 				D_ERROR("crt_swim_rank_add() failed=%d\n", rc);
 				D_GOTO(cleanup, rc);
@@ -469,9 +479,9 @@ int crt_swim_init(int crt_ctx_idx)
 	D_GOTO(out, rc);
 
 cleanup:
-	if (self != CRT_NO_RANK) {
+	if (self != CRT_NO_RANK && grp_membs != NULL) {
 		for (i = 0; i < grp_priv->gp_size; i++)
-			crt_swim_rank_del(grp_priv, i);
+			crt_swim_rank_del(grp_priv, grp_membs->rl_ranks[i]);
 	}
 	swim_fini(csm->csm_ctx);
 	csm->csm_ctx = NULL;

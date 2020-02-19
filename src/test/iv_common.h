@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -167,17 +167,25 @@ static struct crt_proto_format my_proto_fmt_iv = {
 	.cpf_prf = &my_proto_rpc_fmt_iv[0],
 	.cpf_base = TEST_IV_BASE,
 };
+
+struct rpc_response_t {
+	sem_t	sem;
+	int	rc;
+};
+
 void
 rpc_handle_reply(const struct crt_cb_info *info)
 {
-	int *done;
-	crt_rpc_t *rpc_req = NULL;
+	struct rpc_response_t	*resp = NULL;
+	crt_rpc_t		*rpc_req = NULL;
+
+	resp = (struct rpc_response_t *)info->cci_arg;
 
 	rpc_req = info->cci_rpc;
 	crt_req_addref(rpc_req);
 
-	done = info->cci_arg;
-	*done = 1;
+	resp->rc = info->cci_rc;
+	sem_post(&resp->sem);
 }
 
 int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
@@ -194,20 +202,23 @@ int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
 	return rc;
 }
 
+
 int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 {
-	int rc;
-	int done;
+	struct rpc_response_t	resp;
+	int			rc;
 
-	done = 0;
-	rc = crt_req_send(rpc_req, rpc_handle_reply, &done);
+	rc = sem_init(&resp.sem, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed\n");
+
+	rc = crt_req_send(rpc_req, rpc_handle_reply, &resp);
 	assert(rc == 0);
 
-	while (!done)
-		sched_yield();
+	tc_sem_timedwait(&resp.sem, 30, __LINE__);
 
+	D_ASSERTF(resp.rc == 0, "rpc send failed: %d\n", resp.rc);
 	*output = crt_reply_get(rpc_req);
-	return rc;
+	return resp.rc;
 }
 
 /** Prints a buffer as hex to a file without any newlines/spaces/etc */

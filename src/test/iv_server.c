@@ -65,6 +65,8 @@ static int g_verbose_mode;
 
 static int namespace_attached;
 
+static crt_group_t *grp;
+
 static void wait_for_namespace(void)
 {
 	while (!namespace_attached) {
@@ -118,6 +120,12 @@ iv_shutdown(crt_rpc_t *rpc)
 	DBG_ENTRY();
 
 	DBG_PRINT("Received shutdown request\n");
+
+	if (g_my_rank == 0) {
+		rc = crt_group_config_remove(grp);
+		assert(rc == 0);
+
+	}
 
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
@@ -1103,7 +1111,6 @@ int main(int argc, char **argv)
 	char		*arg_verbose = NULL;
 	char		*env_self_rank;
 	char		*grp_cfg_file;
-	crt_group_t	*grp;
 	d_rank_list_t	*rank_list;
 	d_rank_t	my_rank;
 	int		c;
@@ -1210,11 +1217,6 @@ int main(int argc, char **argv)
 
 	deinit_iv_storage();
 	deinit_iv();
-
-	if (g_my_rank == 0) {
-		rc = crt_group_config_remove(NULL);
-		assert(rc == 0);
-	}
 
 	rc = crt_finalize();
 	assert(rc == 0);
