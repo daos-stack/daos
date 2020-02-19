@@ -163,7 +163,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,small
+        :avocado: tags=metadata,metadata_free_space,nvme,small,full_regression
         """
         self.pool.pool.connect(2)
         for k in range(10):
