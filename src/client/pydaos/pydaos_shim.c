@@ -653,7 +653,7 @@ rewait:
 				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
 						&op->size, op->buf, evp);
 				if (rc2 != -DER_SUCCESS)
-					D_GOTO(out, 0);
+					D_GOTO(out, rc = rc2);
 			} else {
 				if (rc == DER_SUCCESS)
 					rc = evp->ev_error;
