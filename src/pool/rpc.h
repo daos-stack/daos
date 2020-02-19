@@ -167,7 +167,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 #define DAOS_ISEQ_POOL_CONNECT	/* input fields */		 \
 	((struct pool_op_in)	(pci_op)		CRT_VAR) \
 	((d_iov_t)		(pci_cred)		CRT_VAR) \
-	((uint64_t)		(pci_capas)		CRT_VAR) \
+	((uint64_t)		(pci_flags)		CRT_VAR) \
 	((uint64_t)		(pci_query_bits)	CRT_VAR) \
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR)
 
@@ -297,7 +297,8 @@ CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
 #define DAOS_ISEQ_POOL_TGT_CONNECT /* input fields */		 \
 	((uuid_t)		(tci_uuid)		CRT_VAR) \
 	((uuid_t)		(tci_hdl)		CRT_VAR) \
-	((uint64_t)		(tci_capas)		CRT_VAR) \
+	((uint64_t)		(tci_flags)		CRT_VAR) \
+	((uint64_t)		(tci_sec_capas)		CRT_VAR) \
 	((uint32_t)		(tci_map_version)	CRT_VAR) \
 	((uint32_t)		(tci_iv_ns_id)		CRT_VAR) \
 	((uint32_t)		(tci_master_rank)	CRT_VAR) \

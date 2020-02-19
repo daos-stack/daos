@@ -69,7 +69,8 @@ void ds_pool_put(struct ds_pool *pool);
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
-	uint64_t		sph_capas;
+	uint64_t		sph_flags;	/* user-provided flags */
+	uint64_t		sph_sec_capas;	/* access capabilities */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 };

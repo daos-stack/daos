@@ -77,7 +77,8 @@ extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /** value of key (handle uuid) in pool handle KVS (RDB_KVS_GENERIC) */
 struct pool_hdl {
-	uint64_t	ph_capas;
+	uint64_t	ph_flags;
+	uint64_t	ph_sec_capas;
 };
 
 extern daos_prop_t pool_prop_default;

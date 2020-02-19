@@ -548,8 +548,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if a container with this UUID already exists. */
@@ -688,8 +688,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		in->cdi_force);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if the container attribute KVS exists. */
@@ -829,8 +829,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Verify the pool handle capabilities. */
 	if ((in->coi_capas & DAOS_COO_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	    !(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* See if this container handle already exists. */
