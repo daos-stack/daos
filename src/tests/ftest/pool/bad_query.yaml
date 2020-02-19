@@ -1,10 +1,13 @@
 # Note that stuff that is commented out represents tests that presently
 # fail and will be uncommented as the daos code is fixed
 server_config:
-   name: scott_server
+   name: daos_server
 hosts:
   test_servers:
     - server-A
+timeout: 150
+server_manager:
+  recreate: true
 pool:
   control_method: dmg
   mode: 511
