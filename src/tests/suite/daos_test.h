@@ -476,8 +476,10 @@ test_rmdir(const char *path, bool force)
 			continue;   /* skips the dots */
 
 		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
-		if (fullpath == NULL)
-			D_GOTO(out, -DER_NOMEM);
+		if (fullpath == NULL) {
+			closedir(dir);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		switch (ent->d_type) {
 		case DT_DIR:
