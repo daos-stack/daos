@@ -45,6 +45,7 @@
 
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>

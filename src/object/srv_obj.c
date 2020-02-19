@@ -756,6 +756,7 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
+					   false,
 					   &orwo->orw_iod_csum.ca_arrays);
 
 	if (rc >= 0) {
@@ -800,6 +801,40 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	}
 
 	return rc;
+}
+
+int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
+{
+	uint32_t	i;
+	int		rc;
+
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
+				     orw->orw_dkey_csum);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_verify_key error for dkey: %d", rc);
+		return rc;
+	}
+
+	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+		daos_iod_t *iod = &orw->orw_iod_array.oia_iods[i];
+		struct dcs_iod_csums *csum = &orw->orw_iod_csums.ca_arrays[i];
+
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
+		rc = daos_csummer_verify_key(csummer,
+					     &iod->iod_name,
+					     &csum->ic_akey);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for akey: %d",
+				rc);
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 /** Filter and prepare for the sing value EC update/fetch */
@@ -877,6 +912,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		D_GOTO(out, rc = 0);
 	}
 
+	rc = csum_verify_keys(cont_hdl->sch_csummer, orw);
+	if (rc != 0) {
+		D_ERROR("csum_verify_keys error: %d", rc);
+		return rc;
+	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
 	D_DEBUG(DB_TRACE,
 		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_U64".\n",
@@ -1277,6 +1317,23 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+
+/* Call internal method to increment CSUM media error. */
+static void
+obj_log_csum_err(void)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
+
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_log_csum_err(bxc, info->dmi_tgt_id);
+}
+
 void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
@@ -1318,6 +1375,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	if (obj_rpc_is_fetch(rpc)) {
+		if (orw->orw_flags & ORF_CSUM_REPORT) {
+			obj_log_csum_err();
+			D_GOTO(out, rc = -DER_CSUM);
+		}
+
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
 				  NULL, NULL, NULL);
 		if (rc != 0) {
@@ -1456,6 +1518,9 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 
 	if (oeo->oeo_recxs.ca_arrays != NULL)
 		D_FREE(oeo->oeo_recxs.ca_arrays);
+
+	if (oeo->oeo_csum_iov.iov_buf != NULL)
+		D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
 static int
@@ -1469,6 +1534,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	int			rc;
 	bool			recursive = false;
 
+	enum_arg->csummer = ioc->ioc_coh->sch_csummer;
 	/* prepare enumeration parameters */
 	param.ip_hdl = ioc->ioc_vos_coh;
 	param.ip_oid = oei->oei_oid;
@@ -1684,7 +1750,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		enum_arg.sgl = &oeo->oeo_sgl;
 		enum_arg.sgl_idx = 0;
 
-		/* Prepare key desciptor buffer */
+		/* Prepare key descriptor buffer */
 		oeo->oeo_kds.ca_count = 0;
 		D_ALLOC(oeo->oeo_kds.ca_arrays,
 			oei->oei_nr * sizeof(daos_key_desc_t));
@@ -1722,6 +1788,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oeo->oeo_kds.ca_count = enum_arg.kds_len;
 		oeo->oeo_num = enum_arg.kds_len;
 		oeo->oeo_size = oeo->oeo_sgl.sg_iovs[0].iov_len;
+		oeo->oeo_csum_iov = enum_arg.csum_iov;
 	}
 
 	rc = obj_enum_reply_bulk(rpc);
@@ -2188,7 +2255,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
-			rc = daos_csummer_verify(csummer, iod, &sgl,
+			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
 						 &iods_csums[i]);
 
 		daos_sgl_fini(&sgl, false);

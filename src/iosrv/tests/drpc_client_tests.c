@@ -224,7 +224,7 @@ test_drpc_verify_notify_bio_error(void **state)
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
 
-	assert_int_equal(notify_bio_error(false, true, 0), 0);
+	assert_int_equal(notify_bio_error(MET_WRITE, 0), 0);
 	verify_notify_bio_error();
 
 	/* Now let's shut things down... */

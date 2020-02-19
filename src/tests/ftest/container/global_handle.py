@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,18 +24,16 @@
 from __future__ import print_function
 
 import ctypes
-import os
 import traceback
 from multiprocessing import sharedctypes
 
 from avocado import fail_on
 from apricot import TestWithServers
-
 import check_for_pool
-from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError, IOV
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
+
 
 class GlobalHandle(TestWithServers):
-
     """
     This class contains tests to verify the ability to share container
     handles amoung processes.
@@ -83,10 +81,9 @@ class GlobalHandle(TestWithServers):
                                          cont_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        dummy_cont_handle = container.global2local(self.context,
-                                                   cont_glob_handle.iov_len,
-                                                   cont_glob_handle.iov_buf_len,
-                                                   buf2)
+        dummy_cont_handle = container.global2local(
+            self.context, cont_glob_handle.iov_len,
+            cont_glob_handle.iov_buf_len, buf2)
         # just try one thing to make sure handle is good
         container.query()
 
@@ -98,39 +95,23 @@ class GlobalHandle(TestWithServers):
 
         :avocado: tags=all,container,tiny,pr,conthandle
         """
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.prepare_pool()
+
+        # create a pool global handle
+        iov_len, buf_len, buf = self.pool.pool.local2global()
+        buftype = ctypes.c_byte * buf_len
+        c_buf = buftype.from_buffer(buf)
+        sct_pool_handle = (
+            sharedctypes.RawValue(IOV,
+                                  ctypes.cast(c_buf, ctypes.c_void_p),
+                                  buf_len, iov_len))
 
         try:
-
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # parameters used in pool create that are in yaml
-            createmode = self.params.get("mode", '/run/testparams/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/testparams/createset/')
-            createsize = self.params.get("size", '/run/testparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
-            # create a pool global handle
-            iov_len, buf_len, buf = self.pool.local2global()
-            buftype = ctypes.c_byte * buf_len
-            c_buf = buftype.from_buffer(buf)
-            sct_pool_handle = (
-                sharedctypes.RawValue(IOV,
-                                      ctypes.cast(c_buf, ctypes.c_void_p),
-                                      buf_len, iov_len))
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
             self.container.open()
 
             # create a container global handle
@@ -142,7 +123,8 @@ class GlobalHandle(TestWithServers):
                                       ctypes.cast(c_buf, ctypes.c_void_p),
                                       buf_len, iov_len))
 
-            sct_pool_uuid = sharedctypes.RawArray(ctypes.c_byte, self.pool.uuid)
+            sct_pool_uuid = sharedctypes.RawArray(
+                ctypes.c_byte, self.pool.pool.uuid)
             # this should work in the future but need on-line server addition
             #arg_list = (
             #p = Process(target=check_handle, args=arg_list)
@@ -150,8 +132,8 @@ class GlobalHandle(TestWithServers):
             #p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            self.check_handle(sct_pool_handle, sct_pool_uuid,
-	                      sct_cont_handle, 0)
+            self.check_handle(
+                sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
 
         except DaosApiError as excep:
             print(excep)

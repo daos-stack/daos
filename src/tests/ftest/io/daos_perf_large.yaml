@@ -13,8 +13,6 @@ hosts:
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 2000
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 daos_perf_large:

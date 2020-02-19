@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -46,16 +47,10 @@ type (
 		Payload json.RawMessage
 	}
 
-	// RequestFailure represents a failed request. The error message
-	// (if available) is stored as a string in the Message field.
-	RequestFailure struct {
-		Message string
-	}
-
 	// Response represents a response received from the privileged binary. The
 	// payload field contains a JSON-encoded representation of the wrapped response.
 	Response struct {
-		Error   *RequestFailure
+		Error   *fault.Fault
 		Payload json.RawMessage
 	}
 
@@ -64,18 +59,6 @@ type (
 		prefix string
 	}
 )
-
-func IsFailedRequest(err error) bool {
-	_, ok := err.(*RequestFailure)
-	return ok
-}
-
-func (rf *RequestFailure) Error() string {
-	if rf == nil {
-		return "nil *RequestFailure"
-	}
-	return rf.Message
-}
 
 func (cl *cmdLogger) Write(data []byte) (int, error) {
 	if cl.logFn == nil {

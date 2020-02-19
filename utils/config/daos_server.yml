@@ -189,11 +189,10 @@
 #
 #  targets: 20
 #
-#  # Count of offload/helper xstreams per target. (allowed values: 0-2)
+#  # Count of offload/helper xstreams per server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 0
+#  nr_xs_helpers: 20
 #
 #  # Offset of the first core for service xstreams.
 #  # Immutable after reformat.
@@ -283,11 +282,10 @@
 #
 #  targets: 20
 #
-#  # Number of helper XStreams per VOS target. (allowed values: 0-2)
+#  # Number of helper XStreams per VOS server.
 #  # Immutable after reformat.
 #
-#  # default: 2
-#  nr_xs_helpers: 1
+#  nr_xs_helpers: 20
 #
 #  # Index of first core for service thread.
 #  # Immutable after reformat.
