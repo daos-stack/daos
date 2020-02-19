@@ -55,7 +55,7 @@ function setup_directories () {
 }
 
 function generate_ca_cert () {
-	echo "Generating Self-Signed Certificate Authority"
+	echo "Generating Private CA Root Certificate"
 	# Generate Private key and set permissions
 	openssl genrsa -out $PRIVATE/daosCA.key 4096
 	chmod 0400 $PRIVATE/daosCA.key
@@ -67,7 +67,7 @@ function generate_ca_cert () {
 	rm -f ./daosCA/index.txt ./daosCA/serial.txt
 	touch ./daosCA/index.txt
 	echo '01' > ./daosCA/serial.txt
-	echo "Self-Signed CA created in ./daosCA"
+	echo "Private CA Root Certificate created in ./daosCA"
 }
 
 function generate_agent_cert () {

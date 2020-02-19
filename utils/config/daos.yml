@@ -35,5 +35,3 @@
 #  cert: .daos/admin.crt
 #  # Key portion of Admin Certificate
 #  key: .daos/admin.key
-#  # Name of server according to its certificate
-#  server_name: server

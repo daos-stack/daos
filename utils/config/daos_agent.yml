@@ -40,8 +40,6 @@
 #  cert: .daos/agent.crt
 #  # Key portion of Agent Certificate
 #  key: .daos/agent.key
-#  # Name of server accodring to its certificate
-#  server_name: server
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent
