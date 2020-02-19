@@ -297,6 +297,29 @@ rebuild_one_punch(struct rebuild_tgt_pool_tracker *rpt,
 }
 
 static int
+rebuild_pool_open(struct rebuild_tgt_pool_tracker *rpt,
+		  struct rebuild_pool_tls *tls)
+{
+	struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
+	daos_handle_t	ph = DAOS_HDL_INVAL;
+	int		rc = 0;
+
+	if (!daos_handle_is_inval(tls->rebuild_pool_hdl))
+		D_GOTO(out_map, rc);
+
+	rc = dc_pool_local_open(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
+				0, NULL, map, rpt->rt_svc_list, &ph);
+	if (rc)
+		D_GOTO(out_map, rc);
+
+	tls->rebuild_pool_hdl = ph;
+
+out_map:
+	rebuild_pool_map_put(map);
+	return rc;
+}
+
+static int
 rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	     struct rebuild_one *rdone)
 {
@@ -311,23 +334,16 @@ rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 				      rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
-		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
-
-		rc = dc_pool_local_open(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
-					0, NULL, map, rpt->rt_svc_list, &ph);
-		rebuild_pool_map_put(map);
+		rc = rebuild_pool_open(rpt, tls);
 		if (rc)
-			D_GOTO(free, rc);
-
-		tls->rebuild_pool_hdl = ph;
+			D_GOTO(out, rc);
 	}
 
 	/* Open client dc handle */
 	rc = dc_cont_local_open(rdone->ro_cont_uuid, rpt->rt_coh_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
-		D_GOTO(free, rc);
+		D_GOTO(out, rc);
 
 	rc = dsc_obj_open(coh, rdone->ro_oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc)
@@ -366,7 +382,7 @@ obj_close:
 	dsc_obj_close(oh);
 cont_close:
 	dc_cont_local_close(tls->rebuild_pool_hdl, coh);
-free:
+out:
 	return rc;
 }
 
@@ -1061,16 +1077,9 @@ puller_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_ASSERT(tls != NULL);
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
-		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map = rebuild_pool_map_get(rpt->rt_pool);
-
-		rc = dc_pool_local_open(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
-					0, NULL, map, rpt->rt_svc_list, &ph);
-		rebuild_pool_map_put(map);
+		rc = rebuild_pool_open(rpt, tls);
 		if (rc)
 			return rc;
-
-		tls->rebuild_pool_hdl = ph;
 	}
 
 	rc = cont_iv_snapshots_fetch(rpt->rt_pool->sp_iv_ns, arg->cont_uuid,
