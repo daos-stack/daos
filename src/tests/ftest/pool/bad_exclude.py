@@ -85,29 +85,31 @@ class BadExcludeTest(TestWithServers):
         saved_uuid = None
         self.prepare_pool()
 
-        try:
-            # trash the the pool service rank list
-            if not svc == 'VALID':
-                self.cancel("skipping this test until DAOS-1931 is fixed")
-                saved_svc = RankList(
-                    self.pool.pool.svc.rl_ranks, self.pool.pool.svc.rl_nr)
-                self.pool.pool.svc = None
+        # trash the the pool service rank list
+        if not svc == 'VALID':
+            self.cancel("skipping this test until DAOS-1931 is fixed")
+            saved_svc = RankList(
+                self.pool.pool.svc.rl_ranks, self.pool.pool.svc.rl_nr)
+            self.pool.pool.svc = None
 
+        saved_grp = self.pool.pool.group
+        if connectset == 'NULLPTR':
             # trash the pool group value
-            if connectset == 'NULLPTR':
-                saved_grp = self.pool.pool.group
-                self.pool.pool.group = None
+            self.pool.pool.group = None
+        else:
+            self.pool.pool.set_group(connectset)
 
-            # trash the UUID value in various ways
-            if excludeuuid == 'NULLPTR':
-                self.cancel("skipping this test until DAOS-1932 is fixed")
-                ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
-                self.pool.pool.uuid = 0
-            if excludeuuid == 'CRAP':
-                self.cancel("skipping this test until DAOS-1932 is fixed")
-                ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
-                self.pool.pool.uuid[4] = 244
+        # trash the UUID value in various ways
+        if excludeuuid == 'NULLPTR':
+            self.cancel("skipping this test until DAOS-1932 is fixed")
+            ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
+            self.pool.pool.uuid = 0
+        if excludeuuid == 'CRAP':
+            self.cancel("skipping this test until DAOS-1932 is fixed")
+            ctypes.memmove(saved_uuid, self.pool.pool.uuid, 16)
+            self.pool.pool.uuid[4] = 244
 
+        try:
             self.pool.pool.exclude(targets)
 
             if expected_result == 'FAIL':

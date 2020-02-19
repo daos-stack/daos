@@ -48,9 +48,6 @@ class SimpleCreateDeleteTest(TestWithServers):
         # expected for each parameter then "and" them to determine the
         # expected result of the test
         expected_for_param = []
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
 
         uidlist = self.params.get("uid", '/run/tests/uids/*', os.geteuid())
         if uidlist[0] == 'valid':
@@ -79,10 +76,9 @@ class SimpleCreateDeleteTest(TestWithServers):
         try:
             self.pool = TestPool(
                 self.context, dmg_command=self.get_dmg_command())
-            self.pool.mode.update(mode)
+            self.pool.get_params(self)
             self.pool.uid = uid
             self.pool.gid = gid
-            self.pool.scm_size.update(1073741824)
             self.pool.name.update(setid)
             self.pool.create()
             if expected_result == 'FAIL':

@@ -35,10 +35,10 @@ class PunchTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
-        try:
-            super(PunchTest, self).setUp()
-            self.prepare_pool()
+        super(PunchTest, self).setUp()
+        self.prepare_pool()
 
+        try:
             # create a container
             self.container = DaosContainer(self.context)
             self.container.create(self.pool.pool.handle)
