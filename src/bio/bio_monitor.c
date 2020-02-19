@@ -151,11 +151,12 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
 	int					  sc, sct;
+	uint32_t				  cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
@@ -178,11 +179,12 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint32_t			 numd, numdl, numdu;
 	int				 rc;
 	int				 sc, sct;
+	uint32_t			 cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 		dev_health->bdh_inflights--;
@@ -246,11 +248,12 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint8_t					  crit_warn;
 	int					  rc;
 	int					  sc, sct;
+	uint32_t				  cdw0;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
-	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 		dev_health->bdh_inflights--;
