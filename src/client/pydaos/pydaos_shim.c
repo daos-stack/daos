@@ -23,7 +23,6 @@
 #ifdef __USE_PYTHON3__
 /* Those are gone from python3, replaced with new functions */
 #define PyInt_FromLong		PyLong_FromLong
-#define PyInt_AsLong		PyLong_AsLong
 #define PyString_FromString	PyUnicode_FromString
 #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
 #define PyString_AsString	PyBytes_AsString
@@ -502,6 +501,8 @@ kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 	else
 		rc = DER_SUCCESS;
 
+	Py_DECREF(val);
+
 	return rc;
 }
 
@@ -704,7 +705,8 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	int		 ret;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO", &oh.cookie, &daos_dict);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
+				&PyDict_Type, &daos_dict);
 
 	rc = daos_eq_create(&eq);
 	if (rc)
