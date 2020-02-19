@@ -33,7 +33,7 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"NVMe health query",
 			"storage query nvme-health",
-			"ConnectClients StorageScan-<nil>",
+			"ConnectClients StorageScan-{}",
 			nil,
 		},
 		{

@@ -45,7 +45,7 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Scan",
 			"storage scan",
-			"ConnectClients StorageScan-<nil>",
+			"ConnectClients StorageScan-{}",
 			nil,
 		},
 		{
@@ -63,13 +63,13 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Prepare with scm-only",
 			"storage prepare --force --scm-only",
-			"ConnectClients StoragePrepare",
+			"ConnectClients StoragePrepare-&{ScmReset:false}-<nil>",
 			nil,
 		},
 		{
 			"Prepare with nvme-only",
 			"storage prepare --force --nvme-only",
-			"ConnectClients StoragePrepare",
+			"ConnectClients StoragePrepare-<nil>-&{PCIWhiteList: NrHugepages:0 TargetUser: NvmeReset:false}",
 			nil,
 		},
 		{
@@ -81,13 +81,13 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Prepare with force and reset",
 			"storage prepare --force --reset",
-			"ConnectClients StoragePrepare",
+			"ConnectClients StoragePrepare-&{ScmReset:true}-&{PCIWhiteList: NrHugepages:0 TargetUser: NvmeReset:true}",
 			nil,
 		},
 		{
 			"Prepare with force",
 			"storage prepare --force",
-			"ConnectClients StoragePrepare",
+			"ConnectClients StoragePrepare-&{ScmReset:false}-&{PCIWhiteList: NrHugepages:0 TargetUser: NvmeReset:false}",
 			nil,
 		},
 		{

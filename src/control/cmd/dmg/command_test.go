@@ -99,7 +99,7 @@ func (tc *testConn) ClearConns() client.ResultMap {
 }
 
 func (tc *testConn) StoragePrepare(req client.StoragePrepareReq) (*client.StoragePrepareResp, error) {
-	tc.appendInvocation("StoragePrepare-%+v")
+	tc.appendInvocation(fmt.Sprintf("StoragePrepare-%+v-%+v", req.Scm, req.Nvme))
 	return &client.StoragePrepareResp{}, nil
 }
 
