@@ -715,14 +715,14 @@ crt_rpc_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *drf);
  * see DAOS.
  *
  * \param[in] ctx              The cart context.
- * \param[in] rpc              RPC received.
+ * \param[in] rpc_hdlr_arg     The argument of rpc_hdlr.
  * \param[in] rpc_hdlr         Real RPC handler.
- * \param[in] arg              The argument for the RPC handler.
+ * \param[in] arg              Extra argument for the callback.
  *
  * \return                     0 for success, negative value if failed.
  *
  */
-typedef int (*crt_rpc_task_t) (crt_context_t *ctx, crt_rpc_t *rpc,
+typedef int (*crt_rpc_task_t) (crt_context_t *ctx, void *rpc_hdlr_arg,
 			       void (*rpc_hdlr)(void *), void *arg);
 /**
  * Register RPC process callback for all RPCs this context received.

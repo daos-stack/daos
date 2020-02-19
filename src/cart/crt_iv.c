@@ -167,6 +167,9 @@ struct crt_ivns_internal {
 };
 
 static void
+handle_response_cb(const struct crt_cb_info *cb_info);
+
+static void
 ivns_destroy(struct crt_ivns_internal *ivns_internal)
 {
 	crt_iv_namespace_destroy_cb_t	 destroy_cb;
@@ -1219,7 +1222,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	input->ifi_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
 	input->ifi_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
 
-	rc = crt_req_send(rpc, handle_ivfetch_response, cb_info);
+	rc = crt_req_send(rpc, handle_response_cb, cb_info);
 
 	IV_DBG(iv_key, "crt_req_send() to %d rc=%d\n", dest_node, rc);
 exit:
@@ -2231,7 +2234,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 			iv_sync_cb->isc_iv_value = *iv_value;
 	}
 
-	rc = crt_req_send(corpc_req, handle_ivsync_response, iv_sync_cb);
+	rc = crt_req_send(corpc_req, handle_response_cb, iv_sync_cb);
 	if (rc != 0)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 
@@ -2550,7 +2553,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	d_iov_set(&input->ivu_sync_type, &cb_info->uci_sync_type, sizeof(crt_iv_sync_t));
 
 
-	rc = crt_req_send(rpc, handle_ivupdate_response, cb_info);
+	rc = crt_req_send(rpc, handle_response_cb, cb_info);
 	if (rc != 0)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 
@@ -2562,6 +2565,84 @@ exit:
 	}
 
 	return rc;
+}
+
+static void
+handle_response_internal(void *arg)
+{
+	const struct crt_cb_info *cb_info = arg;
+	crt_rpc_t		 *rpc = cb_info->cci_rpc;
+
+	switch (rpc->cr_opc) {
+	case CRT_OPC_IV_FETCH:
+		handle_ivfetch_response(cb_info);
+		break;
+	case CRT_OPC_IV_SYNC:
+		handle_ivsync_response(cb_info);
+		break;
+	case CRT_OPC_IV_UPDATE:
+		handle_ivupdate_response(cb_info);
+		break;
+	default:
+		D_ERROR("wrong opc 0x%x\n", rpc->cr_opc);
+	}
+}
+
+static void
+handle_response_cb_internal(void *arg)
+{
+	struct crt_cb_info	*cb_info = arg;
+	crt_rpc_t		*rpc = cb_info->cci_rpc;
+	struct crt_rpc_priv	*rpc_priv;
+
+	handle_response_internal(arg);
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	RPC_DECREF(rpc_priv);
+	D_FREE_PTR(cb_info);
+}
+
+static void
+handle_response_cb(const struct crt_cb_info *cb_info)
+{
+	crt_rpc_t		*rpc = cb_info->cci_rpc;
+	struct crt_rpc_priv	*rpc_priv;
+	struct crt_context	*crt_ctx;
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	D_ASSERT(rpc_priv != NULL);
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
+		int rc;
+		struct crt_cb_info *info;
+
+		D_ALLOC_PTR(info);
+		if (info == NULL) {
+			D_WARN("allocate fails, do cb directly\n");
+			goto callback;
+		}
+
+		RPC_ADDREF(rpc_priv);
+
+		info->cci_rpc = cb_info->cci_rpc;
+		info->cci_rc = cb_info->cci_rc;
+		info->cci_arg = cb_info->cci_arg;
+		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
+					 info,
+					 handle_response_cb_internal,
+					 crt_ctx->cc_rpc_cb_arg);
+		if (rc) {
+			D_WARN("rpc_cb failed %d, do cb directly\n", rc);
+			RPC_DECREF(rpc_priv);
+			D_FREE_PTR(info);
+			goto callback;
+		}
+		return;
+	}
+
+callback:
+	handle_response_internal((void *)cb_info);
 }
 
 /* bulk transfer update callback info */

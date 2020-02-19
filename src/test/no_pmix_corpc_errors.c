@@ -224,9 +224,11 @@ verify_corpc(crt_context_t ctx, crt_group_t *grp, int exp_rc)
 }
 
 static int
-rpc_callback(crt_context_t *ctx, crt_rpc_t *rpc,
+rpc_callback(crt_context_t *ctx, void *hdlr_arg,
 	void (*rpc_hdlr)(void *), void *arg)
 {
+	crt_rpc_t *rpc = hdlr_arg;
+
 	if (rpc->cr_opc != CORPC_TEST) {
 		rpc_hdlr(rpc);
 		return 0;
