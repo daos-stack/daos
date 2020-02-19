@@ -798,7 +798,6 @@ def find_yaml_hosts(test_yaml):
 
     """
     return find_values(
-        None,
         get_yaml_data(test_yaml),
         [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
