@@ -213,7 +213,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
-		dfs->dfs_attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+		dfuse_dfs_init(dfs, ie->ie_dfs);
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,

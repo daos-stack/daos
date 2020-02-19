@@ -326,10 +326,7 @@ main(int argc, char **argv)
 		dfs->dfs_ops = &dfuse_pool_ops;
 	}
 
-	/* TODO: Do not merge this PR until this line is applied to all dfs
-	 * allocation points
-	 */
-	D_MUTEX_INIT(&dfs->dfs_read_mutex, NULL);
+	dfuse_dfs_init(dfs, NULL);
 
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
@@ -363,6 +360,7 @@ out_dfs:
 							rc);
 				}
 			}
+			D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
 			DFUSE_TRA_DOWN(dfs);
 			D_FREE(dfs);
 		}
