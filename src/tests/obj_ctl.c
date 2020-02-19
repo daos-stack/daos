@@ -394,7 +394,8 @@ ctl_cmd_run(char opc, char *args)
 
 	if ((ctl_abits & CTL_ARG_VAL) && val != NULL) {
 		cred->tc_iod.iod_size = strlen(val) + 1;
-		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize - 1);
+		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize);
+		cred->tc_vbuf[ctl_ctx.tsc_cred_vsize - 1] = '\0';
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     strlen(cred->tc_vbuf) + 1);
 	} else {
