@@ -163,18 +163,18 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,small,full_regression
+        :avocado: tags=metadata,metadata_free_space,nvme,small,hw,full_regression
         """
         self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
-            self.d_log.debug("Container Create Iteration {}".format(k))
+            self.log.info("Container Create Iteration {} / 10".format(k))
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
                 container.create(self.pool.pool.handle)
                 container_array.append(container)
 
-            self.d_log.debug("Container Remove Iteration {} ".format(k))
+            self.log.info("Container Remove Iteration {} / 10".format(k))
             for cont in container_array:
                 cont.destroy()
 
