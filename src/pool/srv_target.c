@@ -775,7 +775,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	hdl->sph_capas = in->tci_capas;
 	hdl->sph_pool = pool;
 
-	rc = daos_iov_copy(&in->tci_cred, &hdl->sph_cred);
+	rc = daos_iov_copy(&hdl->sph_cred, &in->tci_cred);
 	if (rc != 0) {
 		ds_pool_put(pool);
 		D_GOTO(out, rc);
