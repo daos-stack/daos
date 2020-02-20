@@ -411,14 +411,14 @@ class DaosServerConfig(ObjectWithParameters):
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
 
-    def __init__(self, daosbinpath, runnerpath, timeout=300):
+    def __init__(self, daosbinpath, runnerpath, timeout=120):
         """Create a ServerManager object.
 
         Args:
             daosbinpath (str): Path to daos bin
             runnerpath (str): Path to Orterun binary.
             timeout (int, optional): Time for the server to start.
-                Defaults to 300.
+                Defaults to 120.
         """
         super(ServerManager, self).__init__("/run/server_manager/*", "", "")
 
@@ -649,8 +649,8 @@ class ServerManager(ExecutableCommand):
     def detect_format_ready(self):
         """Detect when all the daos_servers are ready for storage format."""
         self.log.info(
-            "<SERVER> Waiting for servers to be ready for format on %s",
-            self._hosts)
+            "<SERVER> Waiting for servers to be ready for format on %s in %ss",
+            self._hosts, self.runner.job.timeout)
         self.runner.job.mode = "format"
         try:
             self.runner.run()
@@ -662,8 +662,8 @@ class ServerManager(ExecutableCommand):
     def detect_io_server_start(self):
         """Detect when all the daos_io_servers have started."""
         self.log.info(
-            "<SERVER> Waiting for the daos_io_servers to start on %s",
-            self._hosts)
+            "<SERVER> Waiting for the daos_io_servers to start on %s in %ss",
+            self._hosts, self.runner.job.timeout)
         # self.manager.job.update_pattern("normal", len(self._hosts))
         self.runner.job.mode = "normal"
         if not self.runner.job.check_subprocess_status(self.runner.process):
