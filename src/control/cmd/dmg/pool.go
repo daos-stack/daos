@@ -37,15 +37,14 @@ import (
 )
 
 const (
-	msgSizeNoNumber = "size string doesn't specify a number"
-	msgSizeZeroScm  = "non-zero scm size is required"
-	maxNumSvcReps   = 13
+	maxNumSvcReps = 13
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
