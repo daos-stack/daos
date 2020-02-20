@@ -778,6 +778,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	rc = daos_iov_copy(&hdl->sph_cred, &in->tci_cred);
 	if (rc != 0) {
 		ds_pool_put(pool);
+		D_FREE(hdl);
 		D_GOTO(out, rc);
 	}
 
@@ -785,6 +786,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0) {
 		daos_iov_free(&hdl->sph_cred);
 		ds_pool_put(pool);
+		D_FREE(hdl);
 		D_GOTO(out, rc);
 	}
 
