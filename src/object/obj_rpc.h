@@ -102,8 +102,10 @@
 		ds_obj_tgt_punch_handler, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL)
-
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_MIGRATE,						\
+		0, &CQF_obj_migrate,					\
+		ds_obj_migrate_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -281,6 +283,23 @@ CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 	((uint64_t)		(oso_epoch)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
+
+#define DAOS_ISEQ_OBJ_MIGRATE	/* input fields */			\
+	((uuid_t)		(om_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_coh_uuid)		CRT_VAR)	\
+	((uint64_t)		(om_max_eph)		CRT_VAR)	\
+	((uint32_t)		(om_version)		CRT_VAR)	\
+	((uint32_t)		(om_tgt_idx)		CRT_VAR)	\
+	((daos_unit_oid_t)	(om_oids)		CRT_ARRAY)	\
+	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
+	((uint32_t)		(om_shards)		CRT_ARRAY)
+
+#define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
+	((int32_t)		(om_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
