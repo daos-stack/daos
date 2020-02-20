@@ -50,7 +50,18 @@ At creation time, a list of container properties can be specified:
     used by I/O middleware and application to handle interoperability.
 
 -   DAOS_PROP_CO_CSUM defines whether checksums are enabled or
-    disabled and the checksum type used.
+    disabled and the checksum type used. Available values are:
+    - DAOS_PROP_CO_CSUM_OFF (Default)
+    - DAOS_PROP_CO_CSUM_CRC16
+    - DAOS_PROP_CO_CSUM_CRC32
+    - DAOS_PROP_CO_CSUM_CRC64
+
+-   DAOS_PROP_CO_CSUM_CHUNK_SIZE defines the chunk size used for
+    creating checksums of array types. (default is 32K)
+
+-   DAOS_PROP_CO_CSUM_SERVER_VERIFY is used to enable/disable the server
+    verifying data with checksums on an object update. (default is
+    disabled)
 
 -   DAOS_PROP_CO_REDUN_FAC is the redundancy factor that drives the
     minimal data protection required for objects stored in the
@@ -190,11 +201,11 @@ Current state of work can be summarized as follow :
 
 -   DAOS integration with Lustre uses the Lustre foreign file/dir feature
     (from LU-11376 and associated patches)
- 
+
 -   each time a DAOS POSIX container is created, using `daos` utility and its
     '--path' UNS option, a Lustre foreign file/dir of 'daos' type is being
     created with a specific LOV/LMV EA content that will allow to store the
-    DAOS pool and containers UUIDs. 
+    DAOS pool and containers UUIDs.
 
 -   Lustre Client patch for LU-12682, adds DAOS specific support to the Lustre
     foreign file/dir feature. It allows for foreign file/dir of `daos` type
@@ -205,7 +216,7 @@ Current state of work can be summarized as follow :
     Lustre Client mount option, or also thru the new `llite.*.daos_prefix`
     Lustre dynamic tuneable. And both <pool-uuid> and <container-uuid> are
     extracted from foreign file/dir LOV/LMV EA.
- 
+
 -   to allow for symlink resolution and transparent access to DAOS concerned
     container content, it is expected that a DFuse/DFS instance/mount, of
     DAOS Server root, exists on <absolute-prefix> presenting all served
@@ -243,9 +254,7 @@ To build the MPI-IO driver:
 -   make -j8; make install
 
 Switch the PATH and LD_LIBRARY_PATH to where you want to build your client apps or libs
-that use MPI to the installed MPICH. Note that the DAOS server will still
-need to be launched with OMPI's orterun. This is a unique situation where the
-server uses OMPI, and the clients will be launched with MPICH.
+that use MPI to the installed MPICH.
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc and mpich
 library installed above (see child pages).

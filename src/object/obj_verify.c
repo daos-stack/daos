@@ -64,7 +64,7 @@ again:
 	dova->list_iov.iov_buf = dova->list_buf;
 	dova->list_iov.iov_buf_len = dova->list_buf_len;
 
-	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL,
+	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL, NULL,
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor,
@@ -446,7 +446,7 @@ dc_obj_verify_move_cursor(struct dc_obj_verify_args *dova, daos_obj_id_t oid)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	uint32_t			 gen = cursor->gen + 1;
-	int				 rc;
+	int				 rc = 0;
 	int				 i;
 
 	dova->data_fetched = 0;

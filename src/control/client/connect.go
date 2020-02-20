@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -61,11 +62,12 @@ type Connect interface {
 	ClearConns() ResultMap
 	ConnectClients(Addresses) ResultMap
 	GetActiveConns(ResultMap) ResultMap
-	KillRank(rank uint32) ResultMap
 	NetworkListProviders() ResultMap
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolQuery(PoolQueryReq) (*PoolQueryResp, error)
+	PoolSetProp(PoolSetPropReq) (*PoolSetPropResp, error)
 	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
 	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
@@ -74,10 +76,15 @@ type Connect interface {
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	StorageScan(*StorageScanReq) *StorageScanResp
-	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StorageFormat(reformat bool) StorageFormatResults
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	SystemMemberQuery() (common.SystemMembers, error)
-	SystemStop() (common.SystemMemberResults, error)
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
+	SystemQuery(SystemQueryReq) (*SystemQueryResp, error)
+	SystemStop(SystemStopReq) (*SystemStopResp, error)
+	SystemStart(SystemStartReq) (*SystemStartResp, error)
+	LeaderQuery(LeaderQueryReq) (*LeaderQueryResp, error)
+	ListPools(ListPoolsReq) (*ListPoolsResp, error)
 }
 
 // connList is an implementation of Connect and stores controllers
@@ -144,7 +151,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 	controllers := c.controllers[:0]
 	for _, mc := range c.controllers {
 		address := mc.getAddress()
-		if common.Include(addresses, address) {
+		if common.Includes(addresses, address) {
 			continue // ignore duplicate
 		}
 
@@ -194,9 +201,11 @@ func (c *connList) makeRequests(req interface{},
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
+	conns := c.controllers
 
-	addrs := []string{}
-	for _, mc := range c.controllers {
+	addrs := make([]string, 0, len(conns))
+	sort.Slice(conns, func(i, j int) bool { return conns[i].getAddress() < conns[j].getAddress() })
+	for _, mc := range conns {
 		addrs = append(addrs, mc.getAddress())
 		go requestFn(mc, req, ch)
 	}

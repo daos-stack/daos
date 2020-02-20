@@ -43,16 +43,17 @@ DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
 DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
 /* debug bit groups */
-#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC)
+#define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 
 static void
 debug_fini_locked(void)
 {
 	int	rc;
 
-	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
-	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to deallocate daos debug bits: %d\n", rc);
+	/* Deregister daos specific error codes */
+	daos_errno_fini();
+
+	D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 
 	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
@@ -167,22 +168,26 @@ daos_debug_init(char *logfile)
 			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
-		D_PRINT_ERR("Failed to init DAOS debug log: %d\n", rc);
+		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed_unlock;
 	}
 
 	rc = D_LOG_REGISTER_FAC(DAOS_FOREACH_LOG_FAC);
 	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to register daos log facilities: %d\n", rc);
+		D_PRINT_ERR("Failed to register daos log facilities: "DF_RC"\n",
+			DP_RC(rc));
 
 	rc = D_LOG_REGISTER_DB(DAOS_FOREACH_DB);
 	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to register daos debug bits: %d\n", rc);
+		D_PRINT_ERR("Failed to register daos debug bits: "DF_RC"\n",
+			DP_RC(rc));
 
 	/* Register DAOS debug bit groups */
 	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default", D_LOG_SET_AS_DEFAULT);
 	if (rc < 0) {
-		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
+		D_PRINT_ERR("Error allocating daos debug group: "DF_RC"\n",
+			DP_RC(rc));
 		rc = -DER_UNINIT;
 		goto failed_unlock;
 	}
@@ -192,13 +197,24 @@ daos_debug_init(char *logfile)
 
 	rc = daos_fail_init();
 	if (rc) {
-		D_PRINT_ERR("Failed to init DAOS fail injection: %d\n", rc);
+		D_PRINT_ERR("Failed to init DAOS fail injection: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed_unlock;
 	}
 
 	io_bypass_init();
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);
+
+	/* Register daos specific error codes */
+	rc = daos_errno_init();
+	if (rc != 0) {
+		D_ERROR("DAOS error strings could not be registered: "DF_RC"\n",
+			DP_RC(rc));
+		/* Ignore the error as it only affects new daos error codes
+		 * log messages.
+		 */
+	}
 
 	return 0;
 
@@ -238,8 +254,19 @@ daos_key2str(daos_key_t *key)
 		strcpy(buf, "<NULL>");
 	} else {
 		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+		int i;
+		char *akey = key->iov_buf;
+		bool can_print = true;
 
-		if (isprint(*(char *)key->iov_buf)) {
+		for (i = 0 ; i < len ; i++) {
+			if (akey[i] == '\0')
+				break;
+			if (!isprint(akey[i])) {
+				can_print = false;
+				break;
+			}
+		}
+		if (can_print) {
 			strncpy(buf, key->iov_buf, len);
 			buf[len] = 0;
 		} else {

@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2019 Intel Corporation.
+ *  (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,7 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
 	daos_iod_t		*iods;
+	struct dcs_iod_csums	*iods_csums;
 	int			 i;
 	int			 rc = 0;
 
@@ -137,28 +138,27 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
-	iods = orw->orw_iods.ca_arrays;
+	iods = orw->orw_iod_array.oia_iods;
+	iods_csums = orwo->orw_iod_csum.ca_arrays;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
 		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_csum.ca_arrays->cs_csum[0]++;
+		orwo->orw_iod_csum.ca_arrays->ic_data->cs_csum[0]++;
 
-	/** Link the checksums returned from the server to the iods to make
-	 *  verifying the data the iod describes easier
-	 */
-	daos_iods_link_dcbs(
-		iods, orw->orw_nr,
-		orwo->orw_csum.ca_arrays,
-		orwo->orw_csum.ca_count);
+	for (i = 0; i < orw->orw_nr; i++) {
+		daos_iod_t		*iod = &iods[i];
+		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 
-	for (i = 0; i < orw->orw_nr && rc == 0; i++)
-		rc = daos_csummer_verify(csummer, &iods[i],
-					 &sgls[i]);
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
 
-	/** Remove the extra link to the checksum memory to prevent duplicate
-	 * freeing
-	 */
-	daos_iods_unlink_dcbs(iods, orw->orw_nr);
+		rc = daos_csummer_verify_iod(csummer, iod, &sgls[i], iod_csum);
+		if (rc != 0) {
+			D_ERROR("Verify failed: %d\n", rc);
+			break;
+		}
+	}
+
 	return rc;
 }
 
@@ -205,11 +205,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				rw_args->rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", rw_args->rpc, opc, DP_RC(rc));
 		else
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				rw_args->rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
+				rw_args->rpc, opc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
@@ -220,7 +220,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		uint64_t	*sizes;
 		int		 i, j;
 
-		iods = orw->orw_iods.ca_arrays;
+		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
 		if (orwo->orw_iod_sizes.ca_count != orw->orw_nr) {
@@ -415,8 +415,23 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dkey_hash = args->dkey_hash;
 	orw->orw_nr = nr;
 	orw->orw_dkey = *dkey;
-	orw->orw_iods.ca_count = nr;
-	orw->orw_iods.ca_arrays = api_args->iods;
+	if (args->dkey_csum != NULL)
+		orw->orw_dkey_csum = args->dkey_csum;
+	else
+		memset(&orw->orw_dkey_csum, 0, sizeof(orw->orw_dkey_csum));
+	orw->orw_iod_array.oia_iod_nr = nr;
+	orw->orw_iod_array.oia_iods = api_args->iods;
+	if (args->iod_csums != NULL) {
+		orw->orw_iod_csums.ca_arrays = args->iod_csums;
+		orw->orw_iod_csums.ca_count = api_args->nr;
+	} else {
+		orw->orw_iod_csums.ca_arrays = NULL;
+		orw->orw_iod_csums.ca_count = 0;
+	}
+	orw->orw_iod_array.oia_oiods = args->oiods;
+	orw->orw_iod_array.oia_oiod_nr = (args->oiods == NULL) ?
+					 0 : nr;
+	orw->orw_iod_array.oia_offs = args->offs;
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" %d %s rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI"\n", opc, DP_UOID(shard->do_id),
@@ -463,7 +478,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	} else {
 		rc = daos_rpc_send(req, task);
 		if (rc != 0) {
-			D_ERROR("update/fetch rpc failed rc %d\n", rc);
+			D_ERROR("update/fetch rpc failed rc "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out_args, rc);
 		}
 	}
@@ -575,7 +591,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("punch rpc failed rc %d\n", rc);
+		D_ERROR("punch rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
@@ -606,6 +622,75 @@ struct obj_enum_args {
 	unsigned int		*eaa_map_ver;
 };
 
+int csum_enum_verify_keys(const struct obj_enum_args *enum_args,
+			  const struct obj_key_enum_out *oeo)
+{
+	struct daos_csummer	*csummer;
+	uint8_t			*csum_ptr;
+	uint64_t		 i;
+	int			 rc = 0;
+	struct daos_sgl_idx	 sgl_idx = {0};
+	d_sg_list_t		 sgl = oeo->oeo_sgl;
+
+	if (enum_args->eaa_nr == NULL || *enum_args->eaa_nr == 0)
+		return 0; /** no keys to verify */
+
+	csummer = dc_cont_hdl2csummer(enum_args->eaa_obj->do_co_hdl);
+	if (!daos_csummer_initialized(csummer))
+		return 0; /** csums not enabled */
+
+	csum_ptr = oeo->oeo_csum_iov.iov_buf;
+	if (csum_ptr == NULL) {
+		D_ERROR("CSUM is enabled but key checksum not set.");
+		return -DER_CSUM;
+	}
+
+	for (i = 0; i < *enum_args->eaa_nr; i++) {
+		daos_key_desc_t		*kd = &enum_args->eaa_kds[i];
+		void			*key_buf;
+		d_iov_t			 key_iov;
+		struct dcs_csum_info	 csum_info;
+		d_iov_t			 iov = sgl.sg_iovs[sgl_idx.iov_idx];
+
+		if (kd->kd_csum_len != daos_csummer_get_csum_len(csummer)) {
+			D_ERROR("Key descriptor CSUM length doesn't match "
+				"configured CSUM type's length");
+			return -DER_CSUM;
+
+		}
+		if (kd->kd_csum_type != daos_csummer_get_type(csummer)) {
+			D_ERROR("Key descriptor CSUM type doesn't match "
+				"configured CSUM type");
+			return -DER_CSUM;
+		}
+
+		key_buf = iov.iov_buf + sgl_idx.iov_offset;
+
+		ci_set(&csum_info, csum_ptr, kd->kd_csum_len,
+		       kd->kd_csum_len, 1, CSUM_NO_CHUNK, kd->kd_csum_type);
+		d_iov_set(&key_iov, key_buf, kd->kd_key_len);
+
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_AKEY_FAIL) ||
+		    DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_DKEY_FAIL))
+			((uint8_t *)key_buf)[0] += 2;
+		rc = daos_csummer_verify_key(csummer, &key_iov, &csum_info);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error: %d", rc);
+			return rc;
+		}
+
+		csum_ptr += kd->kd_csum_len;
+		sgl_idx.iov_offset += kd->kd_key_len;
+
+		/** move to next iov if necessary */
+		if (sgl_idx.iov_offset >= iov.iov_len) {
+			sgl_idx.iov_idx++;
+			sgl_idx.iov_offset = 0;
+		}
+	}
+	return rc;
+}
+
 static int
 dc_enumerate_cb(tse_task_t *task, void *arg)
 {
@@ -635,11 +720,11 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
 		} else if (rc == -DER_INPROGRESS) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				enum_args->rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				enum_args->rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
+				enum_args->rpc, opc, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -686,6 +771,10 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 	if (enum_args->eaa_anchor)
 		enum_anchor_copy(enum_args->eaa_anchor,
 				 &oeo->oeo_anchor);
+	rc = csum_enum_verify_keys(enum_args, oeo);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 out:
 	if (enum_args->eaa_obj != NULL)
 		obj_shard_decref(enum_args->eaa_obj);
@@ -757,7 +846,13 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_akey = *obj_args->akey;
 	oei->oei_oid		= obj_shard->do_id;
 	oei->oei_map_ver	= args->la_auxi.map_ver;
-	oei->oei_epoch		= args->la_auxi.epoch;
+	if (obj_args->eprs != NULL && opc == DAOS_OBJ_RPC_ENUMERATE) {
+		oei->oei_epr = *obj_args->eprs;
+	} else {
+		oei->oei_epr.epr_lo = 0;
+		oei->oei_epr.epr_hi = args->la_auxi.epoch;
+	}
+
 	oei->oei_nr		= *obj_args->nr;
 	oei->oei_rec_type	= obj_args->type;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
@@ -822,7 +917,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("enumerate rpc failed rc %d\n", rc);
+		D_ERROR("enumerate rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_eaa, rc);
 	}
 
@@ -1031,7 +1126,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("query_key rpc failed rc %d\n", rc);
+		D_ERROR("query_key rpc failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 
@@ -1077,13 +1172,14 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 
 	if (rc == -DER_INPROGRESS) {
 		D_DEBUG(DB_TRACE,
-			"rpc %p OBJ_SYNC_RPC may need retry: rc = %d\n",
-			rpc, rc);
+			"rpc %p OBJ_SYNC_RPC may need retry: rc = "DF_RC"\n",
+			rpc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	if (rc != 0) {
-		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = %d\n", rpc, rc);
+		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = "DF_RC"\n", rpc,
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1156,7 +1252,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
-		D_ERROR("OBJ_SYNC_RPC failed: rc = %d\n", rc);
+		D_ERROR("OBJ_SYNC_RPC failed: rc = "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_req, rc);
 	}
 

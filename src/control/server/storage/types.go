@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-20w20 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,11 @@ package storage
 import (
 	"bytes"
 	"fmt"
+	"sort"
+
+	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
-	bytesize "github.com/inhies/go-bytesize"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -62,7 +64,7 @@ type (
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
-	ScmModules []ScmModule
+	ScmModules []*ScmModule
 
 	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
@@ -74,66 +76,121 @@ type (
 	}
 
 	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
-	ScmNamespaces []ScmNamespace
+	ScmNamespaces []*ScmNamespace
+
+	// NvmeDeviceHealth represents a set of health statistics for a NVMe device.
+	NvmeDeviceHealth struct {
+		Temp            uint32
+		TempWarnTime    uint32
+		TempCritTime    uint32
+		CtrlBusyTime    uint64
+		PowerCycles     uint64
+		PowerOnHours    uint64
+		UnsafeShutdowns uint64
+		MediaErrors     uint64
+		ErrorLogEntries uint64
+		TempWarn        bool
+		AvailSpareWarn  bool
+		ReliabilityWarn bool
+		ReadOnlyWarn    bool
+		VolatileWarn    bool
+	}
+
+	// NvmeNamespace represents an individual NVMe namespace on a device.
+	NvmeNamespace struct {
+		ID   uint32
+		Size uint64
+	}
+
+	// NvmeController represents a NVMe device controller which includes health
+	// and namespace information.
+	NvmeController struct {
+		Model       string
+		Serial      string
+		PciAddr     string
+		FwRev       string
+		SocketID    int32
+		HealthStats *NvmeDeviceHealth
+		Namespaces  []*NvmeNamespace
+	}
+
+	// NvmeControllers is a type alias for []*NvmeController which implements fmt.Stringer.
+	NvmeControllers []*NvmeController
 )
 
-func (m *ScmModule) String() string {
+func (sm *ScmModule) String() string {
+	// capacity given in IEC standard units.
 	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, bytesize.New(float64(m.Capacity)),
-		m.SocketID, m.ControllerID, m.ChannelID, m.ChannelPosition)
+		"chan:%d pos:%d)", sm.PhysicalID, humanize.IBytes(sm.Capacity),
+		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
 }
 
-func (ms ScmModules) String() string {
+func (sms ScmModules) String() string {
 	var buf bytes.Buffer
 
-	if len(ms) == 0 {
+	if len(sms) == 0 {
 		return "\t\tnone\n"
 	}
 
-	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t\t%s\n", &m)
+	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
+
+	for _, sm := range sms {
+		fmt.Fprintf(&buf, "\t\t%s\n", sm)
 	}
 
 	return buf.String()
 }
 
-// Summary reports accumulated storage space and the number of modules.
-func (ms ScmModules) Summary() string {
-	tCap := bytesize.New(0)
-	for _, m := range ms {
-		tCap += bytesize.New(float64(m.Capacity))
+// Capacity reports total storage capacity (bytes) across all modules.
+func (sms ScmModules) Capacity() (tb uint64) {
+	for _, sm := range sms {
+		tb += sm.Capacity
 	}
-
-	return fmt.Sprintf("%s total capacity over %d %s (unprepared)",
-		tCap, len(ms), common.Pluralise("module", len(ms)))
+	return
 }
 
-func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
-		bytesize.New(float64(n.Size)))
+// Summary reports total storage space and the number of modules.
+//
+// Capacity given in IEC standard units.
+func (sms ScmModules) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.IBytes(sms.Capacity()), len(sms),
+		common.Pluralise("module", len(sms)))
 }
 
-func (ns ScmNamespaces) String() string {
+func (sn *ScmNamespace) String() string {
+	// capacity given in IEC standard units.
+	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", sn.BlockDevice, sn.NumaNode,
+		humanize.Bytes(sn.Size))
+}
+
+func (sns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
-	if len(ns) == 0 {
+	if len(sns) == 0 {
 		return "\t\tnone\n"
 	}
 
-	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t\t%s\n", &n)
+	sort.Slice(sns, func(i, j int) bool { return sns[i].BlockDevice < sns[j].BlockDevice })
+
+	for _, sn := range sns {
+		fmt.Fprintf(&buf, "\t\t%s\n", sn)
 	}
 
 	return buf.String()
 }
 
-// Summary reports accumulated storage space and the number of namespaces.
-func (ns ScmNamespaces) Summary() string {
-	tCap := bytesize.New(0)
-	for _, n := range ns {
-		tCap += bytesize.New(float64(n.Size))
+// Capacity reports total storage capacity (bytes) across all namespaces.
+func (sns ScmNamespaces) Capacity() (tb uint64) {
+	for _, sn := range sns {
+		tb += sn.Size
 	}
+	return
+}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
-		tCap, len(ns), common.Pluralise("namespace", len(ns)))
+// Summary reports total storage space and the number of namespaces.
+//
+// Capacity given in IEC standard units.
+func (sns ScmNamespaces) Summary() string {
+	return fmt.Sprintf("%s (%d %s)", humanize.Bytes(sns.Capacity()), len(sns),
+		common.Pluralise("namespace", len(sns)))
 }

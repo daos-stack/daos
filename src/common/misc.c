@@ -249,6 +249,10 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			size_t buf_len_req,
 			uint8_t **buf, size_t *buf_len)
 {
+	if (idx->iov_idx >= sgl->sg_nr)
+		return true; /** no data in sgl to get bytes from */
+
+	D_ASSERT(idx->iov_offset < sgl->sg_iovs[idx->iov_idx].iov_len);
 	/** Point to current idx */
 	*buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
 
@@ -268,7 +272,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 		idx->iov_offset = 0;
 	}
 
-	return idx->iov_idx >= sgl->sg_nr;
+	return idx->iov_idx == sgl->sg_nr;
 }
 
 int
@@ -372,7 +376,8 @@ daos_rank_list_parse(const char *str, const char *sep)
 	D_ALLOC_ARRAY(buf, cap);
 	if (buf == NULL)
 		D_GOTO(out, ranks = NULL);
-	s = s_saved = strdup(str);
+	D_STRNDUP(s_saved, str, strlen(str));
+	s = s_saved;
 	if (s == NULL)
 		D_GOTO(out_buf, ranks = NULL);
 
@@ -410,26 +415,6 @@ out:
 	return ranks;
 }
 
-/* Find the first unset bit. */
-int
-daos_first_unset_bit(uint32_t *bits, unsigned int size)
-{
-	unsigned int idx = 0;
-	unsigned int off;
-
-	while (*bits == (uint32_t)(-1) && ++idx < size)
-		bits++;
-
-	if (idx == size)
-		return -1;
-
-	for (off = 0; off < 32; off++)
-		if (isclr(bits, off))
-			break;
-
-	return idx * 32 + off;
-}
-
 bool
 daos_file_is_dax(const char *pathname)
 {
@@ -460,7 +445,8 @@ daos_hhash_init(void)
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
 	} else {
-		D_ERROR("failed to create handle hash table: %d\n", rc);
+		D_ERROR("failed to create handle hash table: "DF_RC"\n",
+			DP_RC(rc));
 	}
 
 unlock:

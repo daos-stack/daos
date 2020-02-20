@@ -30,6 +30,8 @@ package mgmt;
 message ACLResp {
 	int32 status = 1; // DAOS error code
 	repeated string ACL = 2; // List of ACEs in short string format
+	string ownerUser = 3; // Name of user that owns the resource
+	string ownerGroup = 4; // Name of group that owns the resource
 }
 
 // Request to fetch an ACL

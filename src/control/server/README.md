@@ -8,8 +8,6 @@ Control plane server (`daos_server`) instances will open a gRPC channel to liste
 
 ## Running
 
-`daos_server` binary should be run as an MPI app using a distributed launcher such as `orterun`.
-
 For instructions on building and running DAOS see the [Quickstart guide](../../../doc/quickstart.md).
 
 <details>
@@ -303,7 +301,7 @@ wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 iosrv.go:104: debug: continuing 
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 external.go:54: debug: exec 'mount | grep ' /mnt/daos ''
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 iosrv.go:128: debug: format server /mnt/daos (createMS=false bootstrapMS=false)
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:54 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
-DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS, firstcore 0.
 ```
 
 </details>
@@ -333,7 +331,7 @@ EAL: PCI device 0000:da:00.0 on NUMA socket 1
 EAL:   probe driver: 8086:953 spdk_nvme
 wolf-72.wolf.hpdd.intel.com 2019/04/10 03:34:25 iosrv.go:93: debug: server 0 has already been formatted
 wolf-72.wolf.hpdd.intel.com 2019/04/10 03:34:26 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
-DAOS I/O server (v0.4.0) process 135671 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+DAOS I/O server (v0.4.0) process 135671 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS, firstcore 0.
 ```
 
 </p>
@@ -376,7 +374,7 @@ wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 external.go:54: debug: exec 'mou
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 mgmt.go:153: debug: StorageFormat: storage format successful on server 0
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 iosrv.go:128: debug: format server /mnt/daos (createMS=false bootstrapMS=false)
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:23 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
-DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
+DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS, firstcore 0.
 ```
 
 </p>

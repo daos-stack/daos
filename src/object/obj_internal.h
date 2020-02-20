@@ -29,6 +29,7 @@
 #define __DAOS_OBJ_INTENRAL_H__
 
 #include <abt.h>
+#include <stdint.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
@@ -41,6 +42,7 @@
 #include <daos_srv/dtx_srv.h>
 
 #include "obj_rpc.h"
+#include "obj_ec.h"
 
 /**
  * This environment is mostly for performance evaluation.
@@ -123,15 +125,27 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
-/** EC codec for object EC encoding/decoding */
-struct obj_ec_codec {
-	/** encode matrix, can be used to generate decode matrix */
-	unsigned char		*ec_en_matrix;
-	/**
-	 * GF (galois field) tables, pointer to array of input tables generated
-	 * from coding coefficients. Needed for both encoding and decoding.
+/**
+ * Reassembled obj request.
+ * User input iod/sgl possibly need to be reassembled at client before sending
+ * to server, for example:
+ * 1) merge adjacent recxs, or sort out-of-order recxs and generate new sgl to
+ *    match with it;
+ * 2) For EC obj, split iod/recxs to each target, generate new sgl to match with
+ *    it, create oiod/siod to specify each shard/tgt's IO req.
+ */
+struct obj_reasb_req {
+	daos_iod_t			*orr_iods;
+	d_sg_list_t			*orr_sgls;
+	struct obj_io_desc		*orr_oiods;
+	struct obj_ec_recx_array	*orr_recxs;
+	struct obj_ec_seg_sorter	*orr_sorters;
+	uint32_t			 orr_tgt_nr;
+	/* target bitmap, one bit for each target (from first data cell to last
+	 * parity cell.
 	 */
-	unsigned char		*ec_gftbls;
+	uint8_t				*tgt_bitmap;
+	struct obj_tgt_oiod		*tgt_oiods;
 };
 
 static inline void
@@ -196,6 +210,10 @@ struct shard_rw_args {
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
+	struct obj_io_desc	*oiods;
+	uint64_t		*offs;
+	struct dcs_csum_info	*dkey_csum;
+	struct dcs_iod_csums	*iod_csums;
 };
 
 struct shard_punch_args {
@@ -318,7 +336,9 @@ static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || daos_crt_network_error(err);
+	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
+	       err == -DER_EVICTED || err == -DER_CSUM ||
+	       daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);
@@ -331,7 +351,8 @@ struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont_child	*cont;
-	uint32_t		flags;
+	void			*args;
+	uint32_t		 flags;
 };
 
 int
@@ -348,7 +369,6 @@ void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
-ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 static inline uint64_t
@@ -366,9 +386,6 @@ int  obj_utils_init(void);
 void obj_utils_fini(void);
 
 /* obj_class.c */
-int obj_ec_codec_init(void);
-void obj_ec_codec_fini(void);
-struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, uint32_t p_idx);

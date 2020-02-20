@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	rc = daos_array_get_size(entry->fd_aoh, DAOS_TX_NONE, &array_size,
 				 NULL);
 	if (rc) {
-		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
+		D_ERROR("daos_array_get_size() failed "DF_RC"\n", DP_RC(rc));
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}
@@ -66,10 +66,11 @@ read_bulk(char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_read(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl, NULL,
+	rc = daos_array_read(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl,
 			     NULL);
 	if (rc) {
-		DFUSE_TRA_INFO(entry, "daos_array_read() failed %d", rc);
+		DFUSE_TRA_INFO(entry, "daos_array_read() failed "DF_RC"",
+				DP_RC(rc));
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}

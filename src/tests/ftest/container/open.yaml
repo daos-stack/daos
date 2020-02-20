@@ -1,15 +1,15 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-hosts: !mux
-    test_machines1:
-      test_machines:
-        - boro-A
+hosts:
+  test_servers:
+    - server-A
 server_config:
   name: daos_server
 pool:
   mode: 511
   name: daos_server
   scm_size: 1073741824
+  control_method: dmg
 container_uuid_states: !mux
   gooduuid:
     uuid:

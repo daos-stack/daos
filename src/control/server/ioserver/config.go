@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -97,7 +96,7 @@ func (fc *FabricConfig) Validate() error {
 func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
-		kv := strings.Split(pair, "=")
+		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			continue
 		}
@@ -111,7 +110,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 	mergedKeys := make(map[string]struct{})
 	for _, pair := range newVars {
-		kv := strings.Split(pair, "=")
+		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			continue
 		}
@@ -140,7 +139,6 @@ type Config struct {
 	ServiceThreadCore int           `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
 	SystemName        string        `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
 	SocketDir         string        `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
-	AttachInfoPath    string        `yaml:"-" cmdLongFlag:"--attach_info" cmdShortFlag:"-a"`
 	LogMask           string        `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string        `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
 	Storage           StorageConfig `yaml:",inline"`
@@ -166,10 +164,6 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
-	if c.HelperStreamCount > maxHelperStreamCount {
-		c.HelperStreamCount = maxHelperStreamCount
-	}
-
 	return nil
 }
 
@@ -187,19 +181,18 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		return nil, err
 	}
 
-	// Provide special handling for the ofi+verbs provider.
-	// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
-	// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
-	// specify the correct device for each.
-	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
-		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
-		if err != nil {
-			return nil, err
-		}
-		envVar := "OFI_DOMAIN=" + deviceAlias
-		tagEnv = append(tagEnv, envVar)
-	}
 	return mergeEnvVars(c.EnvVars, tagEnv), nil
+}
+
+// HasEnvVar returns true if the configuration contains
+// an environment variable with the given name.
+func (c *Config) HasEnvVar(name string) bool {
+	for _, keyPair := range c.EnvVars {
+		if strings.HasPrefix(keyPair, name+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 // WithEnvVars applies the supplied list of environment
@@ -287,12 +280,6 @@ func (c *Config) WithBdevFileSize(size int) *Config {
 // WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
 func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
 	c.Storage.Bdev.ConfigPath = cfgPath
-	return c
-}
-
-// WithAttachInfoPath sets the path to PMIx-less attachment info.
-func (c *Config) WithAttachInfoPath(aip string) *Config {
-	c.AttachInfoPath = aip
 	return c
 }
 

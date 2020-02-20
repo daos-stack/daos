@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,34 +25,34 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
-func TestHasPort(t *testing.T) {
-	tests := []struct {
-		addr        string
-		expectedHas bool
-	}{
-		{"localhost", false},
-		{"localhost:10000", true},
-		{"192.168.1.1", false},
-		{"192.168.1.1:10000", true},
-	}
+const (
+	mockUUID = "00000000-0000-0000-0000-000000000000"
+)
 
-	for _, test := range tests {
-		if has := hasPort(test.addr); has != test.expectedHas {
-			t.Errorf("hasPort(%q) = %v", test.addr, has)
-		}
+func makeBadBytes(count int) (badBytes []byte) {
+	badBytes = make([]byte, count)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
 	}
+	return
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
@@ -139,6 +139,195 @@ func TestCheckMgmtSvcReplica(t *testing.T) {
 	}
 }
 
+func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
+	return &mgmtpb.ListPoolsReq{
+		Sys: "daos",
+	}
+}
+
+func TestListPools_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+
+	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("no managed instances"), err)
+}
+
+func TestListPools_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestPoolListPools_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := makeBadBytes(12)
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestListPools_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ListPoolsResp{
+		Pools: []*mgmtpb.ListPoolsResp_Pool{
+			{Uuid: "12345678-1234-1234-1234-123456789abc"},
+			{Uuid: "87654321-4321-4321-4321-cba987654321"},
+		},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
+func newTestListContReq() *mgmtpb.ListContReq {
+	return &mgmtpb.ListContReq{
+		Uuid: "12345678-1234-1234-1234-123456789abc",
+	}
+}
+
+func TestListCont_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("no managed instances"), err)
+}
+
+func TestListCont_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestPoolListCont_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := makeBadBytes(12)
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestListCont_ZeroContSuccess(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ListContResp{}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
+func TestListCont_ManyContSuccess(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ListContResp{
+		Containers: []*mgmtpb.ListContResp_Cont{
+			{Uuid: "56781234-5678-5678-5678-123456789abc"},
+			{Uuid: "67812345-6781-6781-6781-123456789abc"},
+			{Uuid: "78123456-7812-7812-7812-123456789abc"},
+			{Uuid: "81234567-8123-8123-8123-123456789abc"},
+		},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
 func newTestGetACLReq() *mgmtpb.GetACLReq {
 	return &mgmtpb.GetACLReq{
 		Uuid: "testUUID",
@@ -183,10 +372,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 	// dRPC call returns junk in the message body
-	badBytes := make([]byte, 12)
-	for i := range badBytes {
-		badBytes[i] = byte(i)
-	}
+	badBytes := makeBadBytes(12)
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
@@ -270,10 +456,7 @@ func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 	// dRPC call returns junk in the message body
-	badBytes := make([]byte, 16)
-	for i := range badBytes {
-		badBytes[i] = byte(i)
-	}
+	badBytes := makeBadBytes(16)
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
@@ -348,10 +531,7 @@ func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 	// dRPC call returns junk in the message body
-	badBytes := make([]byte, 16)
-	for i := range badBytes {
-		badBytes[i] = byte(i)
-	}
+	badBytes := makeBadBytes(16)
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
@@ -394,6 +574,7 @@ func newTestDeleteACLReq() *mgmtpb.DeleteACLReq {
 		Principal: "u:user@",
 	}
 }
+
 func TestPoolDeleteACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -432,10 +613,7 @@ func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 	// dRPC call returns junk in the message body
-	badBytes := make([]byte, 16)
-	for i := range badBytes {
-		badBytes[i] = byte(i)
-	}
+	badBytes := makeBadBytes(16)
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
@@ -460,7 +638,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolDeleteACL(nil, newTestDeleteACLReq())
+	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -469,5 +647,1515 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
+func TestMgmtSvc_LeaderQuery(t *testing.T) {
+	missingSB := newTestMgmtSvc(nil)
+	missingSB.harness.instances[0]._superblock = nil
+	missingAPs := newTestMgmtSvc(nil)
+	missingAPs.harness.instances[0].msClient.cfg.AccessPoints = nil
+
+	for name, tc := range map[string]struct {
+		mgmtSvc *mgmtSvc
+		req     *mgmtpb.LeaderQueryReq
+		expResp *mgmtpb.LeaderQueryResp
+		expErr  error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req: &mgmtpb.LeaderQueryReq{
+				System: "quack",
+			},
+			expErr: errors.New("wrong system"),
+		},
+		"no i/o servers": {
+			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil),
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("no I/O servers"),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("no I/O superblock"),
+		},
+		"fail to get current leader address": {
+			mgmtSvc: missingAPs,
+			req:     &mgmtpb.LeaderQueryReq{},
+			expErr:  errors.New("current leader address"),
+		},
+		"successful query": {
+			req: &mgmtpb.LeaderQueryReq{},
+			expResp: &mgmtpb.LeaderQueryResp{
+				CurrentLeader: "localhost",
+				Replicas:      []string{"localhost"},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(log)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.LeaderQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PoolQuery(t *testing.T) {
+	missingSB := newTestMgmtSvc(nil)
+	missingSB.harness.instances[0]._superblock = nil
+
+	for name, tc := range map[string]struct {
+		mgmtSvc       *mgmtSvc
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolQueryReq
+		expResp       *mgmtpb.PoolQueryResp
+		expErr        error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req: &mgmtpb.PoolQueryReq{
+				Uuid: mockUUID,
+			},
+			expErr: errors.New("not an access point"),
+		},
+		"dRPC send fails": {
+			req: &mgmtpb.PoolQueryReq{
+				Uuid: mockUUID,
+			},
+			expErr: errors.New("send failure"),
+		},
+		"garbage req": {
+			req: &mgmtpb.PoolQueryReq{
+				Uuid: mockUUID,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				setupMockDrpcClientBytes(svc, badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"successful query": {
+			req: &mgmtpb.PoolQueryReq{
+				Uuid: mockUUID,
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				Uuid: mockUUID,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(log)
+			}
+			tc.mgmtSvc.log = log
+
+			if _, err := tc.mgmtSvc.harness.GetMSLeaderInstance(); err == nil {
+				if tc.setupMockDrpc == nil {
+					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+						setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					}
+				}
+				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PoolSetProp(t *testing.T) {
+	withName := func(r *mgmtpb.PoolSetPropReq, n string) *mgmtpb.PoolSetPropReq {
+		r.SetPropertyName(n)
+		return r
+	}
+	withNumber := func(r *mgmtpb.PoolSetPropReq, n uint32) *mgmtpb.PoolSetPropReq {
+		r.SetPropertyNumber(n)
+		return r
+	}
+	withStrVal := func(r *mgmtpb.PoolSetPropReq, v string) *mgmtpb.PoolSetPropReq {
+		r.SetValueString(v)
+		return r
+	}
+	withNumVal := func(r *mgmtpb.PoolSetPropReq, v uint64) *mgmtpb.PoolSetPropReq {
+		r.SetValueNumber(v)
+		return r
+	}
+	lastCall := func(svc *mgmtSvc) *drpc.Call {
+		mi, _ := svc.harness.GetMSLeaderInstance()
+		if mi == nil || mi._drpcClient == nil {
+			return nil
+		}
+		return mi._drpcClient.(*mockDrpcClient).SendMsgInputCall
+	}
+
+	for name, tc := range map[string]struct {
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolSetPropReq
+		expReq        *mgmtpb.PoolSetPropReq
+		drpcResp      *mgmtpb.PoolSetPropResp
+		expResp       *mgmtpb.PoolSetPropResp
+		expErr        error
+	}{
+		"garbage req": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				setupMockDrpcClientBytes(svc, badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"unhandled property": {
+			req:    withName(new(mgmtpb.PoolSetPropReq), "unknown"),
+			expErr: errors.New("unhandled pool property"),
+		},
+		"response property mismatch": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: 4242424242,
+				},
+			},
+			expErr: errors.New("Response number doesn't match"),
+		},
+		"response value mismatch": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySpaceReclaim,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: 4242424242,
+				},
+			},
+			expErr: errors.New("Response value doesn't match"),
+		},
+		"reclaim-unknown": {
+			req:    withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "unknown"),
+			expErr: errors.New("unhandled reclaim type"),
+		},
+		"reclaim-disabled": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "disabled"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimDisabled,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySpaceReclaim,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: drpc.PoolSpaceReclaimDisabled,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "reclaim",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "disabled",
+				},
+			},
+		},
+		"reclaim-lazy": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "lazy"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimLazy,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySpaceReclaim,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: drpc.PoolSpaceReclaimLazy,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "reclaim",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "lazy",
+				},
+			},
+		},
+		"reclaim-time": {
+			req: withStrVal(withName(new(mgmtpb.PoolSetPropReq), "reclaim"), "time"),
+			expReq: withNumVal(
+				withNumber(new(mgmtpb.PoolSetPropReq), drpc.PoolPropertySpaceReclaim),
+				drpc.PoolSpaceReclaimTime,
+			),
+			drpcResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Number{
+					Number: drpc.PoolPropertySpaceReclaim,
+				},
+				Value: &mgmtpb.PoolSetPropResp_Numval{
+					Numval: drpc.PoolSpaceReclaimTime,
+				},
+			},
+			expResp: &mgmtpb.PoolSetPropResp{
+				Property: &mgmtpb.PoolSetPropResp_Name{
+					Name: "reclaim",
+				},
+				Value: &mgmtpb.PoolSetPropResp_Strval{
+					Strval: "time",
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ms := newTestMgmtSvc(log)
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(svc, tc.drpcResp, tc.expErr)
+				}
+			}
+			tc.setupMockDrpc(ms, tc.expErr)
+
+			gotResp, gotErr := ms.PoolSetProp(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			// Also verify that the string values are properly resolved to C identifiers.
+			gotReq := new(mgmtpb.PoolSetPropReq)
+			if err := proto.Unmarshal(lastCall(ms).Body, gotReq); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expReq, gotReq); diff != "" {
+				t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_SmdListDevs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP   bool
+		numIO     int
+		req       *mgmtpb.SmdDevReq
+		junkResp  bool
+		drpcResps []proto.Message
+		expResp   *mgmtpb.SmdDevResp
+		expErr    error
+	}{
+		"dRPC send fails": {
+			req: &mgmtpb.SmdDevReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdDevResp{},
+			},
+			expErr: errors.New("send failure"),
+		},
+		"dRPC resp fails": {
+			req:      &mgmtpb.SmdDevReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
+		},
+		"successful query (single instance)": {
+			numIO: 1,
+			req:   &mgmtpb.SmdDevReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdDevResp{
+					Devices: []*mgmtpb.SmdDevResp_Device{
+						{
+							Uuid:   "test-uuid",
+							TgtIds: []int32{0, 1, 2},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdDevResp{
+				Devices: []*mgmtpb.SmdDevResp_Device{
+					{
+						Uuid:   "test-uuid",
+						TgtIds: []int32{0, 1, 2},
+					},
+				},
+			},
+		},
+		"successful query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.SmdDevReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdDevResp{
+					Devices: []*mgmtpb.SmdDevResp_Device{
+						{
+							Uuid:   "test-uuid",
+							TgtIds: []int32{0, 1, 2},
+						},
+					},
+				},
+				&mgmtpb.SmdDevResp{
+					Devices: []*mgmtpb.SmdDevResp_Device{
+						{
+							Uuid:   "test-uuid2",
+							TgtIds: []int32{3, 4, 5},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdDevResp{
+				Devices: []*mgmtpb.SmdDevResp_Device{
+					{
+						Uuid:   "test-uuid",
+						TgtIds: []int32{0, 1, 2},
+					},
+					{
+						Uuid:   "test-uuid2",
+						TgtIds: []int32{3, 4, 5},
+					},
+				},
+			},
+		},
+		"failed query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.SmdDevReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdDevResp{
+					Status: -1,
+				},
+				&mgmtpb.SmdDevResp{
+					Devices: []*mgmtpb.SmdDevResp_Device{
+						{
+							Uuid:   "test-uuid2",
+							TgtIds: []int32{3, 4, 5},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdDevResp{
+				Status: -1,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			if tc.numIO > 0 {
+				ioserverCount = tc.numIO
+			}
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.SmdListDevs(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_SmdListPools(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP   bool
+		numIO     int
+		req       *mgmtpb.SmdPoolReq
+		junkResp  bool
+		drpcResps []proto.Message
+		expResp   *mgmtpb.SmdPoolResp
+		expErr    error
+	}{
+		"dRPC send fails": {
+			req: &mgmtpb.SmdPoolReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdPoolResp{},
+			},
+			expErr: errors.New("send failure"),
+		},
+		"dRPC resp fails": {
+			req:      &mgmtpb.SmdPoolReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
+		},
+		"successful query (single instance)": {
+			numIO: 1,
+			req:   &mgmtpb.SmdPoolReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdPoolResp{
+					Pools: []*mgmtpb.SmdPoolResp_Pool{
+						{
+							Uuid:   "test-uuid",
+							TgtIds: []int32{0, 1, 2},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdPoolResp{
+				Pools: []*mgmtpb.SmdPoolResp_Pool{
+					{
+						Uuid:   "test-uuid",
+						TgtIds: []int32{0, 1, 2},
+					},
+				},
+			},
+		},
+		"successful query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.SmdPoolReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdPoolResp{
+					Pools: []*mgmtpb.SmdPoolResp_Pool{
+						{
+							Uuid:   "test-uuid",
+							TgtIds: []int32{0, 1, 2},
+						},
+					},
+				},
+				&mgmtpb.SmdPoolResp{
+					Pools: []*mgmtpb.SmdPoolResp_Pool{
+						{
+							Uuid:   "test-uuid2",
+							TgtIds: []int32{3, 4, 5},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdPoolResp{
+				Pools: []*mgmtpb.SmdPoolResp_Pool{
+					{
+						Uuid:   "test-uuid",
+						TgtIds: []int32{0, 1, 2},
+					},
+					{
+						Uuid:   "test-uuid2",
+						TgtIds: []int32{3, 4, 5},
+					},
+				},
+			},
+		},
+		"failed query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.SmdPoolReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.SmdPoolResp{
+					Status: -1,
+				},
+				&mgmtpb.SmdPoolResp{
+					Pools: []*mgmtpb.SmdPoolResp_Pool{
+						{
+							Uuid:   "test-uuid2",
+							TgtIds: []int32{3, 4, 5},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SmdPoolResp{
+				Status: -1,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			if tc.numIO > 0 {
+				ioserverCount = tc.numIO
+			}
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.SmdListPools(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_BioHealthQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP   bool
+		numIO     int
+		req       *mgmtpb.BioHealthReq
+		junkResp  bool
+		drpcResps []proto.Message
+		expResp   *mgmtpb.BioHealthResp
+		expErr    error
+	}{
+		"dRPC resp fails": {
+			req:      &mgmtpb.BioHealthReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
+		},
+		"successful query (single instance)": {
+			numIO: 1,
+			req:   &mgmtpb.BioHealthReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.BioHealthResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.BioHealthResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; first succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.BioHealthReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.BioHealthResp{
+					DevUuid: "test-uuid",
+				},
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.BioHealthResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; second succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.BioHealthReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+				&mgmtpb.BioHealthResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.BioHealthResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"failed query (dual instance; uuid)": {
+			numIO: 2,
+			req:   &mgmtpb.BioHealthReq{DevUuid: "fnord"},
+			drpcResps: []proto.Message{
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.BioHealthResp{
+				Status: -1,
+			},
+			expErr: errors.New("no rank matched"),
+		},
+		"failed query (dual instance; tgt)": {
+			numIO: 2,
+			req:   &mgmtpb.BioHealthReq{TgtId: "banana"},
+			drpcResps: []proto.Message{
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+				&mgmtpb.BioHealthResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.BioHealthResp{
+				Status: -1,
+			},
+			expErr: errors.New("no rank matched"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			if tc.numIO > 0 {
+				ioserverCount = tc.numIO
+			}
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.BioHealthQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_DevStateQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP   bool
+		numIO     int
+		req       *mgmtpb.DevStateReq
+		junkResp  bool
+		drpcResps []proto.Message
+		expResp   *mgmtpb.DevStateResp
+		expErr    error
+	}{
+		"dRPC resp fails": {
+			req:      &mgmtpb.DevStateReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
+		},
+		"successful query (single instance)": {
+			numIO: 1,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; first succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; second succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"failed query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{DevUuid: "fnord"},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				Status: -1,
+			},
+			expErr: errors.New("no rank matched"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			if tc.numIO > 0 {
+				ioserverCount = tc.numIO
+			}
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.DevStateQuery(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP   bool
+		numIO     int
+		req       *mgmtpb.DevStateReq
+		junkResp  bool
+		drpcResps []proto.Message
+		expResp   *mgmtpb.DevStateResp
+		expErr    error
+	}{
+		"dRPC resp fails": {
+			req:      &mgmtpb.DevStateReq{},
+			junkResp: true,
+			expErr:   errors.New("unmarshal"),
+		},
+		"successful query (single instance)": {
+			numIO: 1,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; first succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"successful query (dual instance; second succeeds)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+				&mgmtpb.DevStateResp{
+					DevUuid: "test-uuid",
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				DevUuid: "test-uuid",
+			},
+		},
+		"failed query (dual instance)": {
+			numIO: 2,
+			req:   &mgmtpb.DevStateReq{DevUuid: "fnord"},
+			drpcResps: []proto.Message{
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+				&mgmtpb.DevStateResp{
+					Status: -1,
+				},
+			},
+			expResp: &mgmtpb.DevStateResp{
+				Status: -1,
+			},
+			expErr: errors.New("no rank matched"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			if tc.numIO > 0 {
+				ioserverCount = tc.numIO
+			}
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				cfg := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.StorageSetFaulty(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_DrespToRankResult(t *testing.T) {
+	dRank := uint32(1)
+	dStateGood := system.MemberStateStarted
+	dStateBad := system.MemberStateErrored
+
+	for name, tc := range map[string]struct {
+		daosResp    *mgmtpb.DaosResp
+		inErr       error
+		targetState system.MemberState
+		junkRpc     bool
+		expResult   *mgmtpb.RanksResp_RankResult
+	}{
+		"rank success": {
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, Action: "test", State: uint32(dStateGood),
+			},
+		},
+		"rank failure": {
+			daosResp: &mgmtpb.DaosResp{Status: -1},
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
+			},
+		},
+		"drpc failure": {
+			inErr: errors.New("returned from CallDrpc"),
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
+			},
+		},
+		"unmarshal failure": {
+			junkRpc: true,
+			expResult: &mgmtpb.RanksResp_RankResult{
+				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.daosResp == nil {
+				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
+			}
+			if tc.targetState == system.MemberStateUnknown {
+				tc.targetState = dStateGood
+			}
+
+			// convert input DaosResp to drpcResponse to test
+			rb := makeBadBytes(42)
+			if !tc.junkRpc {
+				rb, _ = proto.Marshal(tc.daosResp)
+			}
+			resp := &drpc.Response{
+				Status: drpc.Status_SUCCESS, // this will already have been validated by CallDrpc
+				Body:   rb,
+			}
+
+			gotResult := drespToRankResult(dRank, "test", resp, tc.inErr, tc.targetState)
+			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"instances stopped": {
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "prep shutdown", State: 3},
+					{Rank: 2, Action: "prep shutdown", State: 3},
+				},
+			},
+		},
+		"dRPC resp fails": {
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": {
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "prep shutdown", State: 5, Errored: true},
+					{Rank: 2, Action: "prep shutdown", State: 5, Errored: true},
+				},
+			},
+		},
+		"successful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "prep shutdown", State: 2},
+					{Rank: 2, Action: "prep shutdown", State: 2},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.PrepShutdownRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_StopRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"dRPC resp fails": { // doesn't effect result, err logged
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": { // doesn't effect result, err logged
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": { // doesn't effect result, err logged
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
+				},
+			},
+		},
+		"instances started": { // unsuccessful result for kill
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "stop", State: 1, Errored: true},
+					{Rank: 2, Action: "stop", State: 1, Errored: true},
+				},
+			},
+		},
+		"instances stopped": { // successful result for kill
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "stop", State: 3},
+					{Rank: 2, Action: "stop", State: 3},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			gotResp, gotErr := svc.StopRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_PingRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupAP          bool
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		responseDelay    time.Duration
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB: true,
+			req:       &mgmtpb.RanksReq{},
+			expErr:    errors.New("instance 0 has no superblock"),
+		},
+		"instances stopped": {
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 3},
+					{Rank: 2, Action: "ping", State: 3},
+				},
+			},
+		},
+		"dRPC resp fails": {
+			req:     &mgmtpb.RanksReq{},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"dRPC resp junk": {
+			req:      &mgmtpb.RanksReq{},
+			junkResp: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"unsuccessful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 5, Errored: true},
+					{Rank: 2, Action: "ping", State: 5, Errored: true},
+				},
+			},
+		},
+		"successful call": {
+			req: &mgmtpb.RanksReq{},
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 1},
+					{Rank: 2, Action: "ping", State: 1},
+				},
+			},
+		},
+		"ping timeout": {
+			req:           &mgmtpb.RanksReq{},
+			responseDelay: 200 * time.Millisecond,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 6, Errored: true},
+					{Rank: 2, Action: "ping", State: 6, Errored: true},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+
+					if tc.responseDelay != time.Duration(0) {
+						cfg.setResponseDelay(tc.responseDelay)
+					}
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			if tc.req != nil && tc.req.Timeout == 0 {
+				tc.req.Timeout = float32(100 * time.Millisecond)
+			}
+
+			gotResp, gotErr := svc.PingRanks(context.TODO(), tc.req)
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			// RankResult.Msg generation is tested in
+			// TestMgmtSvc_DrespToRankResult unit tests
+			isMsgField := func(path cmp.Path) bool {
+				if path.Last().String() == ".Msg" {
+					return true
+				}
+				return false
+			}
+			opts := append(common.DefaultCmpOpts(),
+				cmp.FilterPath(isMsgField, cmp.Ignore()))
+
+			if diff := cmp.Diff(tc.expResp, gotResp, opts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_StartRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		missingSB        bool
+		instancesStopped bool
+		req              *mgmtpb.RanksReq
+		expResp          *mgmtpb.RanksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing superblock": {
+			missingSB:        true,
+			instancesStopped: true,
+			req:              &mgmtpb.RanksReq{},
+			expErr:           errors.New("instance 0 has no superblock"),
+		},
+		"instances started": {
+			req:    &mgmtpb.RanksReq{},
+			expErr: errors.New("can't start instances: already started"),
+		},
+		"instances stopped": { // unsuccessful result for kill
+			req:              &mgmtpb.RanksReq{},
+			instancesStopped: true,
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{
+						Rank: 1, Action: "start", State: 3,
+						Errored: true, Msg: "want Started, got Stopped",
+					},
+					{
+						Rank: 2, Action: "start", State: 3,
+						Errored: true, Msg: "want Started, got Stopped",
+					},
+				},
+			},
+		},
+		// TODO: test instance state changing to started after restart
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ioserverCount := maxIoServers
+			svc := newTestMgmtSvcMulti(log, ioserverCount, false)
+
+			svc.harness.setStarted()
+			svc.harness.setRestartable()
+
+			for i, srv := range svc.harness.instances {
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
+				if tc.instancesStopped { // real runner reports not started
+					srv.runner = ioserver.NewRunner(log,
+						ioserver.NewConfig())
+				}
+
+				srv._superblock.Rank = new(ioserver.Rank)
+				*srv._superblock.Rank = ioserver.Rank(i + 1)
+			}
+
+			gotResp, gotErr := svc.StartRanks(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_ConvertTimeout(t *testing.T) {
+	duration := 5 * time.Second
+	req := &mgmtpb.RanksReq{Timeout: float32(duration)}
+
+	if diff := cmp.Diff(duration.String(), time.Duration(req.Timeout).String()); diff != "" {
+		t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 	}
 }

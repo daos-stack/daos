@@ -90,14 +90,14 @@ setup(void)
 
 	d_getenv_bool("DAOS_START_POOL_SVC", &start);
 	if (start)
-		return ds_pool_svc_start_all();
+		return ds_pool_start_all();
 	return 0;
 }
 
 static int
 cleanup(void)
 {
-	return ds_pool_svc_stop_all();
+	return ds_pool_stop_all();
 }
 
 static struct crt_corpc_ops ds_pool_tgt_connect_co_ops = {
@@ -112,11 +112,6 @@ static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 
 static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.co_aggregate	= ds_pool_tgt_query_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-static struct crt_corpc_ops ds_pool_tgt_update_map_co_ops = {
-	.co_aggregate	= ds_pool_tgt_update_map_aggregator,
 	.co_pre_forward	= NULL,
 };
 

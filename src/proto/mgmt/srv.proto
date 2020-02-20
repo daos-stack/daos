@@ -50,6 +50,15 @@ message JoinResp {
 	State state = 3;	// Server state in the system map.
 }
 
+message LeaderQueryReq {
+	string system = 1;		// System name.
+}
+
+message LeaderQueryResp {
+	string currentLeader = 1;
+	repeated string replicas = 2;
+}
+
 message GetAttachInfoReq {
 	string sys = 1;		// System name. For daos_agent only.
 }
@@ -63,12 +72,17 @@ message GetAttachInfoResp {
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
 }
 
-message KillRankReq {
-	bool force = 1;		// Force service termination.
-	uint32 rank = 2;	// DAOS IO server unique identifier.
+message PrepShutdownReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
 }
 
-// KillRankResp is identical to DaosResp.
+// PrepShutdownResp is identical to DaosResp.
+
+message PingRankReq {
+	uint32 rank = 1;	// DAOS IO server unique identifier.
+}
+
+// PingRankResp is identical to DaosResp.
 
 message SetRankReq {
 	uint32 rank = 1;	// DAOS IO server unique identifier.

@@ -18,10 +18,13 @@ PROTOBUF_C__BEGIN_DECLS
 typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
+typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
+typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__Psr Mgmt__GetAttachInfoResp__Psr;
-typedef struct _Mgmt__KillRankReq Mgmt__KillRankReq;
+typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
+typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
@@ -108,6 +111,31 @@ struct  _Mgmt__JoinResp
     , 0, 0, MGMT__JOIN_RESP__STATE__IN }
 
 
+struct  _Mgmt__LeaderQueryReq
+{
+  ProtobufCMessage base;
+  /*
+   * System name.
+   */
+  char *system;
+};
+#define MGMT__LEADER_QUERY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__LeaderQueryResp
+{
+  ProtobufCMessage base;
+  char *currentleader;
+  size_t n_replicas;
+  char **replicas;
+};
+#define MGMT__LEADER_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
+
+
 struct  _Mgmt__GetAttachInfoReq
 {
   ProtobufCMessage base;
@@ -150,21 +178,30 @@ struct  _Mgmt__GetAttachInfoResp
     , 0, 0,NULL }
 
 
-struct  _Mgmt__KillRankReq
+struct  _Mgmt__PrepShutdownReq
 {
   ProtobufCMessage base;
-  /*
-   * Force service termination.
-   */
-  protobuf_c_boolean force;
   /*
    * DAOS IO server unique identifier.
    */
   uint32_t rank;
 };
-#define MGMT__KILL_RANK_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__kill_rank_req__descriptor) \
-    , 0, 0 }
+#define MGMT__PREP_SHUTDOWN_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__prep_shutdown_req__descriptor) \
+    , 0 }
+
+
+struct  _Mgmt__PingRankReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS IO server unique identifier.
+   */
+  uint32_t rank;
+};
+#define MGMT__PING_RANK_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__ping_rank_req__descriptor) \
+    , 0 }
 
 
 struct  _Mgmt__SetRankReq
@@ -184,7 +221,7 @@ struct  _Mgmt__CreateMsReq
 {
   ProtobufCMessage base;
   /*
-   * Bootstrap the DAOS system (original MS leader).
+   * Bootstrap the DAOS management service (MS).
    */
   protobuf_c_boolean bootstrap;
   /*
@@ -258,6 +295,44 @@ Mgmt__JoinResp *
 void   mgmt__join_resp__free_unpacked
                      (Mgmt__JoinResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__LeaderQueryReq methods */
+void   mgmt__leader_query_req__init
+                     (Mgmt__LeaderQueryReq         *message);
+size_t mgmt__leader_query_req__get_packed_size
+                     (const Mgmt__LeaderQueryReq   *message);
+size_t mgmt__leader_query_req__pack
+                     (const Mgmt__LeaderQueryReq   *message,
+                      uint8_t             *out);
+size_t mgmt__leader_query_req__pack_to_buffer
+                     (const Mgmt__LeaderQueryReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__LeaderQueryReq *
+       mgmt__leader_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__leader_query_req__free_unpacked
+                     (Mgmt__LeaderQueryReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__LeaderQueryResp methods */
+void   mgmt__leader_query_resp__init
+                     (Mgmt__LeaderQueryResp         *message);
+size_t mgmt__leader_query_resp__get_packed_size
+                     (const Mgmt__LeaderQueryResp   *message);
+size_t mgmt__leader_query_resp__pack
+                     (const Mgmt__LeaderQueryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__leader_query_resp__pack_to_buffer
+                     (const Mgmt__LeaderQueryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__LeaderQueryResp *
+       mgmt__leader_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__leader_query_resp__free_unpacked
+                     (Mgmt__LeaderQueryResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoReq methods */
 void   mgmt__get_attach_info_req__init
                      (Mgmt__GetAttachInfoReq         *message);
@@ -299,24 +374,43 @@ Mgmt__GetAttachInfoResp *
 void   mgmt__get_attach_info_resp__free_unpacked
                      (Mgmt__GetAttachInfoResp *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__KillRankReq methods */
-void   mgmt__kill_rank_req__init
-                     (Mgmt__KillRankReq         *message);
-size_t mgmt__kill_rank_req__get_packed_size
-                     (const Mgmt__KillRankReq   *message);
-size_t mgmt__kill_rank_req__pack
-                     (const Mgmt__KillRankReq   *message,
+/* Mgmt__PrepShutdownReq methods */
+void   mgmt__prep_shutdown_req__init
+                     (Mgmt__PrepShutdownReq         *message);
+size_t mgmt__prep_shutdown_req__get_packed_size
+                     (const Mgmt__PrepShutdownReq   *message);
+size_t mgmt__prep_shutdown_req__pack
+                     (const Mgmt__PrepShutdownReq   *message,
                       uint8_t             *out);
-size_t mgmt__kill_rank_req__pack_to_buffer
-                     (const Mgmt__KillRankReq   *message,
+size_t mgmt__prep_shutdown_req__pack_to_buffer
+                     (const Mgmt__PrepShutdownReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__KillRankReq *
-       mgmt__kill_rank_req__unpack
+Mgmt__PrepShutdownReq *
+       mgmt__prep_shutdown_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__kill_rank_req__free_unpacked
-                     (Mgmt__KillRankReq *message,
+void   mgmt__prep_shutdown_req__free_unpacked
+                     (Mgmt__PrepShutdownReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PingRankReq methods */
+void   mgmt__ping_rank_req__init
+                     (Mgmt__PingRankReq         *message);
+size_t mgmt__ping_rank_req__get_packed_size
+                     (const Mgmt__PingRankReq   *message);
+size_t mgmt__ping_rank_req__pack
+                     (const Mgmt__PingRankReq   *message,
+                      uint8_t             *out);
+size_t mgmt__ping_rank_req__pack_to_buffer
+                     (const Mgmt__PingRankReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PingRankReq *
+       mgmt__ping_rank_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__ping_rank_req__free_unpacked
+                     (Mgmt__PingRankReq *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__SetRankReq methods */
 void   mgmt__set_rank_req__init
@@ -367,6 +461,12 @@ typedef void (*Mgmt__JoinReq_Closure)
 typedef void (*Mgmt__JoinResp_Closure)
                  (const Mgmt__JoinResp *message,
                   void *closure_data);
+typedef void (*Mgmt__LeaderQueryReq_Closure)
+                 (const Mgmt__LeaderQueryReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__LeaderQueryResp_Closure)
+                 (const Mgmt__LeaderQueryResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoReq_Closure)
                  (const Mgmt__GetAttachInfoReq *message,
                   void *closure_data);
@@ -376,8 +476,11 @@ typedef void (*Mgmt__GetAttachInfoResp__Psr_Closure)
 typedef void (*Mgmt__GetAttachInfoResp_Closure)
                  (const Mgmt__GetAttachInfoResp *message,
                   void *closure_data);
-typedef void (*Mgmt__KillRankReq_Closure)
-                 (const Mgmt__KillRankReq *message,
+typedef void (*Mgmt__PrepShutdownReq_Closure)
+                 (const Mgmt__PrepShutdownReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PingRankReq_Closure)
+                 (const Mgmt__PingRankReq *message,
                   void *closure_data);
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
@@ -395,10 +498,13 @@ extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__kill_rank_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor;
 

@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv')
 
     libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'mpi', 'dfs', 'cmocka', 'pthread']

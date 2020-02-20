@@ -31,8 +31,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -40,14 +40,14 @@ import (
 
 // MockDiscovery returns a mock SCM module of type exported from ipmctl.
 func MockDiscovery() ipmctl.DeviceDiscovery {
-	m := MockModulePB()
+	m := proto.MockScmModule()
 
 	return ipmctl.DeviceDiscovery{
 		Physical_id:          uint16(m.Physicalid),
-		Channel_id:           uint16(m.Loc.Channel),
-		Channel_pos:          uint16(m.Loc.Channelpos),
-		Memory_controller_id: uint16(m.Loc.Memctrlr),
-		Socket_id:            uint16(m.Loc.Socket),
+		Channel_id:           uint16(m.Channelid),
+		Channel_pos:          uint16(m.Channelposition),
+		Memory_controller_id: uint16(m.Controllerid),
+		Socket_id:            uint16(m.Socketid),
 		Capacity:             m.Capacity,
 	}
 }
@@ -289,7 +289,7 @@ func TestParseNamespaces(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotNamespaces, gotErr := parseNamespaces(tc.in)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
 				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
 			}

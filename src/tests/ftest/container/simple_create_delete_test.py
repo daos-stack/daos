@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2017-2019 Intel Corporation.
+"""
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,67 +20,53 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import time
-import traceback
-from avocado import main
+"""
 from apricot import TestWithServers
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
-from pydaos.raw import DaosApiError, c_uuid_to_str
-from general_utils import get_pool, get_container
 
-
-# pylint: disable=broad-except
 class SimpleCreateDeleteTest(TestWithServers):
-    """
-    Tests DAOS container basics including create, destroy, open, query
-    and close.
+    # pylint: disable=too-few-public-methods
+    """Tests container basics including create, destroy, open, query and close.
 
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a SimpleCreateDeleteTest object."""
+        super(SimpleCreateDeleteTest, self).__init__(*args, **kwargs)
+        self.pool = None
+        self.container = None
+
     def test_container_basics(self):
-        """
-        Test basic container create/destroy/open/close/query.
+        """Test basic container create/destroy/open/close/query.
 
         :avocado: tags=all,container,pr,medium,basecont
         """
-        try:
-            # Parameters used in pool create
-            pool_mode = self.params.get("mode", '/run/pool/createmode/')
-            pool_name = self.params.get("setname", '/run/pool/createset/')
-            pool_size = self.params.get("size", '/run/pool/createsize/')
+        # Create a pool
+        self.log.info("Create a pool")
+        self.prepare_pool()
 
-            # Create pool and connect
-            self.pool = get_pool(
-                self.context, pool_mode, pool_size, pool_name, 1, self.d_log)
+        # Check that the pool was created
+        self.assertTrue(
+            self.pool.check_files(self.hostlist_servers),
+            "Pool data was not created")
 
-            # Create a container and open
-            self.container = get_container(self.context, self.pool, self.d_log)
+        # Create a container
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+        self.container.create()
 
-            # Query and compare the UUID returned from create with
-            # that returned by query
-            self.container.query()
+        # TO Be Done:the cont info needs update (see C version daos_cont_info_t)
+        # Open and query the container.Verify the UUID & No of Snapshot.
+        checks = {
+            "ci_uuid": self.container.uuid,
+            "ci_nsnapshots": 0}
 
-            if self.container.get_uuid_str() != c_uuid_to_str(
-                    self.container.info.ci_uuid):
-                self.fail("Container UUID did not match the one in info'n")
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info from query")
 
-            self.container.close()
-
-            # Wait and destroy
-            time.sleep(5)
-            self.container.destroy()
-
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Test was expected to pass but it failed.\n")
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely, error: %s" % excep)
-
-
-if __name__ == "__main__":
-    main()
+        # Close and destroy the container
+        self.container.close()
+        self.container.destroy()

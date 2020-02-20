@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,13 +97,14 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch,
-				0, &cred->tc_dkey, 1, &cred->tc_iod,
-				&cred->tc_sgl);
+			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
+					    &cred->tc_dkey, 1, &cred->tc_iod,
+					    NULL, &cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-				&cred->tc_dkey, 1, &cred->tc_iod,
-				&cred->tc_sgl);
+					   &cred->tc_dkey, 1,
+					   &cred->tc_iod,
+					   &cred->tc_sgl);
 	} else { /* zero-copy */
 		struct bio_sglist	*bsgl;
 		daos_handle_t		 ioh;
@@ -111,7 +112,7 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
-					      &ioh, NULL);
+					      NULL, &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
@@ -130,10 +131,10 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-			       bsgl->bs_iovs[0].bi_buf,
-			       bsgl->bs_iovs[0].bi_data_len);
+			       bio_iov2raw_buf(&bsgl->bs_iovs[0]),
+			       bio_iov2raw_len(&bsgl->bs_iovs[0]));
 		} else {
-			memcpy(bsgl->bs_iovs[0].bi_buf,
+			memcpy(bio_iov2req_buf(&bsgl->bs_iovs[0]),
 			       cred->tc_sgl.sg_iovs[0].iov_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
@@ -156,11 +157,11 @@ daos_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 	int	rc;
 
 	if (op_type == TS_DO_UPDATE) {
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl,
 				     cred->tc_evp);
 	} else {
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL,
 				    cred->tc_evp);
 	}
@@ -455,7 +456,8 @@ ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
+			D_ERROR("Failed to prepare d-key iterator: "DF_RC"\n",
+				DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -675,11 +677,11 @@ ts_rebuild_perf(double *start_time, double *end_time)
 		return rc;
 
 	if (ts_rebuild_only_iteration)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_REBUILD,
 				     0, NULL);
 	else if (ts_rebuild_no_update)
-		daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				     DAOS_REBUILD_NO_UPDATE,
 				     0, NULL);
 
@@ -693,7 +695,7 @@ ts_rebuild_perf(double *start_time, double *end_time)
 
 	rc = ts_add_server(RANK_ZERO);
 
-	daos_mgmt_set_params(NULL, -1, DSS_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_mgmt_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	return rc;
 }
@@ -1277,7 +1279,7 @@ main(int argc, char **argv)
 		}
 
 		if (rc != 0) {
-			fprintf(stderr, "Failed: %d\n", rc);
+			fprintf(stderr, "Failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 

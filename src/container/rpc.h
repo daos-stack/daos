@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,9 +76,6 @@
 	X(CONT_EPOCH_DISCARD,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
-	X(CONT_EPOCH_COMMIT,						\
-		0, &CQF_cont_epoch_op,					\
-		ds_cont_op_handler, NULL),				\
 	X(CONT_EPOCH_AGGREGATE,						\
 		0, &CQF_cont_epoch_op,					\
 		ds_cont_op_handler, NULL),				\
@@ -90,6 +87,12 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_SNAP_DESTROY,						\
 		0, &CQF_cont_snap_destroy,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_PROP_SET,						\
+		0, &CQF_cont_prop_set,					\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_ACL_UPDATE,						\
+		0, &CQF_cont_acl_update,				\
 		ds_cont_op_handler, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -203,8 +206,10 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 9)
 #define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 10)
 #define DAOS_CO_QUERY_PROP_ACL		(1ULL << 11)
+#define DAOS_CO_QUERY_PROP_OWNER	(1ULL << 12)
+#define DAOS_CO_QUERY_PROP_OWNER_GROUP	(1ULL << 13)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR	(12)
+#define DAOS_CO_QUERY_PROP_BITS_NR	(14)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
@@ -268,7 +273,8 @@ CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 	((daos_epoch_t)		(cei_epoch)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_EPOCH_OP	/* output fields */		 \
-	((struct cont_op_out)	(ceo_op)		CRT_VAR)
+	((struct cont_op_out)	(ceo_op)		CRT_VAR) \
+	((daos_epoch_t)		(ceo_epoch)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 
@@ -357,6 +363,25 @@ CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 
 CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
+
+#define DAOS_ISEQ_CONT_PROP_SET	/* input fields */		 \
+	((struct cont_op_in)	(cpsi_op)		CRT_VAR) \
+	((daos_prop_t)		(cpsi_prop)		CRT_PTR)
+
+#define DAOS_OSEQ_CONT_PROP_SET	/* output fields */		 \
+	((struct cont_op_out)	(cpso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_prop_set, DAOS_ISEQ_CONT_PROP_SET, DAOS_OSEQ_CONT_PROP_SET)
+
+#define DAOS_ISEQ_CONT_ACL_UPDATE	/* input fields */	 \
+	((struct cont_op_in)	(caui_op)		CRT_VAR) \
+	((struct daos_acl)	(caui_acl)		CRT_PTR)
+
+#define DAOS_OSEQ_CONT_ACL_UPDATE	/* output fields */	 \
+	((struct cont_op_out)	(cauo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_acl_update, DAOS_ISEQ_CONT_ACL_UPDATE,
+		DAOS_OSEQ_CONT_ACL_UPDATE)
 
 static inline int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

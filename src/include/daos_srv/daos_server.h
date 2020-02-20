@@ -39,6 +39,7 @@
 #include <hwloc.h>
 #include <abt.h>
 #include <cart/iv.h>
+#include <daos/checksum.h>
 
 /** number of target (XS set) per server */
 extern unsigned int	dss_tgt_nr;
@@ -54,6 +55,9 @@ extern const char      *dss_socket_dir;
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
+
+/** NVMe mem_size for SPDK memory allocation when using primary mode */
+extern int		dss_nvme_mem_size;
 
 /** IO server instance index */
 extern unsigned int	dss_instance_idx;
@@ -149,30 +153,13 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
-/**
- * Different type of ES pools, there are 4 pools for now
- *
- *  DSS_POOL_URGENT	The highest priority pool. ULTs in this pool will be
- *			scheduled firstly.
- *  DSS_POOL_PRIV	Private pool: I/O requests will be added to this pool.
- *  DSS_POOL_SHARE	Shared pool: Other requests and ULT created during
- *			processing rpc.
- *  DSS_POOL_REBUILD	rebuild pool: pools specially for rebuild tasks.
- */
-enum {
-	DSS_POOL_URGENT,
-	DSS_POOL_PRIV,
-	DSS_POOL_SHARE,
-	DSS_POOL_REBUILD,
-	DSS_POOL_CNT,
-};
-
 #define DSS_XS_NAME_LEN		64
 
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
 bool dss_xstream_exiting(struct dss_xstream *dxs);
+bool dss_xstream_is_busy(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -202,7 +189,7 @@ dss_get_module_info(void)
 }
 
 static inline struct dss_xstream *
-dss_get_xstream(void)
+dss_current_xstream(void)
 {
 	return dss_get_module_info()->dmi_xstream;
 }
@@ -313,8 +300,7 @@ struct dss_module {
 };
 
 /**
- * DSS_TGT_SELF can be passed to dss_ult_xs to indicate scheduling ULT on
- * caller's self XS.
+ * DSS_TGT_SELF indicates scheduling ULT on caller's self XS.
  */
 #define DSS_TGT_SELF	(-1)
 
@@ -340,8 +326,12 @@ enum dss_ult_type {
 	DSS_ULT_DRPC_LISTENER,
 	/** drpc handler ULT */
 	DSS_ULT_DRPC_HANDLER,
+	/** GC & batched commit ULTs */
+	DSS_ULT_GC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
+	/** I/O ULT */
+	DSS_ULT_IO,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -352,10 +342,10 @@ void dss_abt_pool_choose_cb_register(unsigned int mod_id,
 				     dss_abt_pool_choose_cb_t cb);
 int dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
 		   size_t stack_size, ABT_thread *ult);
-int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
-int dss_ult_create_execute(int (*func)(void *), void *arg,
-			   void (*user_cb)(void *), void *cb_args,
-			   int ult_type, int tgt_id, size_t stack_size);
+int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
+		    void *cb_args, int ult_type, int tgt_id, size_t stack_size);
+int dss_ult_create_all(void (*func)(void *), void *arg, int ult_type,
+		       bool main);
 
 struct dss_sleep_ult {
 	ABT_thread	dsu_thread;
@@ -442,13 +432,16 @@ struct dss_coll_args {
  */
 int
 dss_task_collective_reduce(struct dss_coll_ops *ops,
-			   struct dss_coll_args *coll_args, int flag);
+			   struct dss_coll_args *coll_args, int flag,
+			   int ult_type);
 int
 dss_thread_collective_reduce(struct dss_coll_ops *ops,
-			     struct dss_coll_args *coll_args, int flag);
+			     struct dss_coll_args *coll_args, int flag,
+			     int ult_type);
 
-int dss_task_collective(int (*func)(void *), void *arg, int flag);
-int dss_thread_collective(int (*func)(void *), void *arg, int flag);
+int dss_task_collective(int (*func)(void *), void *arg, int flag, int ult_type);
+int dss_thread_collective(int (*func)(void *), void *arg, int flag,
+			  int ult_type);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -461,10 +454,34 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+/** RPC counter types */
+enum dss_rpc_cntr_id {
+	DSS_RC_OBJ	= 0,
+	DSS_RC_CONT,
+	DSS_RC_POOL,
+	DSS_RC_MAX,
+};
+
+/** RPC counter */
+struct dss_rpc_cntr {
+	/**
+	 * starting wall-clock time, it can be used to calculate average
+	 * workload.
+	 */
+	uint64_t		rc_stime;
+	/** number of active RPCs */
+	uint64_t		rc_active;
+	/** total number of processed RPCs since \a rc_stime */
+	uint64_t		rc_total;
+	/** total number of failed RPCs since \a rc_stime */
+	uint64_t		rc_errors;
+};
+
+void dss_rpc_cntr_enter(enum dss_rpc_cntr_id id);
+void dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool failed);
+struct dss_rpc_cntr *dss_rpc_cntr_get(enum dss_rpc_cntr_id id);
+
 int dss_rpc_send(crt_rpc_t *rpc);
-int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
-		     crt_group_t **group);
-int dss_group_destroy(crt_group_t *group);
 void dss_sleep(int ms);
 int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
@@ -522,10 +539,11 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_key_t *dkey, unsigned int nr,
 		daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_iom_t *maps);
-int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
-		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
+int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr,
+		daos_key_t *dkey, daos_key_t *akey, daos_size_t *size,
+		uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
+		daos_anchor_t *anchor, daos_anchor_t *dkey_anchor,
+		daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
@@ -534,6 +552,7 @@ struct dss_enum_arg {
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
+	struct daos_csummer    *csummer;
 	int			eprs_cap;
 	int			eprs_len;
 	int			last_type;	/* hack for tweaking kds_len */
@@ -545,6 +564,7 @@ struct dss_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
+			d_iov_t			csum_iov;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */
@@ -587,6 +607,7 @@ struct dss_enum_unpack_io {
 	daos_iod_t		*ui_iods;
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
+	daos_epoch_t		*ui_rec_punch_ephs;
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
@@ -608,13 +629,17 @@ unsigned int dss_ctx_nr_get(void);
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
-	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
-void dss_init_state_set(enum dss_init_state state);
+enum dss_media_error_type {
+	MET_WRITE = 0,	/* write error */
+	MET_READ,	/* read error */
+	MET_UNMAP,	/* unmap error */
+	MET_CSUM	/* checksum error */
+};
 
-bool dss_pmixless(void);
+void dss_init_state_set(enum dss_init_state state);
 
 /* default credits */
 #define	DSS_GC_CREDS	256
@@ -624,6 +649,6 @@ bool dss_pmixless(void);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-bool dss_aggregation_disabled(void);
+int notify_bio_error(int media_err_type, int tgt_id);
 
 #endif /* __DSS_API_H__ */

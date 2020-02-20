@@ -26,15 +26,15 @@ package main
 import (
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/client"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // storageQueryCmd is the struct representing the query storage subcommand
 type storageQueryCmd struct {
-	NVMe nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
-	BS   bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd  smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	NVMe     nvmeHealthQueryCmd `command:"nvme-health" alias:"n" description:"Query raw NVMe SPDK device statistics."`
+	BS       bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
+	Smd      smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	DevState devStateQueryCmd   `command:"device-state" alias:"d" description:"Query the device state (ie NORMAL or FAULTY)."`
 }
 
 // nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
@@ -49,8 +49,7 @@ type nvmeHealthQueryCmd struct {
 // Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
 // storage scan including health query on all connected servers.
 func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
-	req := client.StorageScanReq{Summary: false}
-	cmd.log.Info(cmd.conns.StorageScan(&req).StringHealthStats())
+	cmd.log.Info(cmd.conns.StorageScan(nil).StringHealthStats())
 
 	return nil
 }
@@ -88,7 +87,7 @@ type smdQueryCmd struct {
 	logCmd
 	connectedCmd
 	Devices bool `short:"d" long:"devices" description:"List all devices/blobstores stored in per-server metadata table."`
-	Pools   bool `short:"p" long:"pools" descriptsion:"List all VOS pool targets stored in per-server metadata table."`
+	Pools   bool `short:"p" long:"pools" description:"List all VOS pool targets stored in per-server metadata table."`
 }
 
 // Execute is run when ListSmdDevCmd activates
@@ -109,6 +108,24 @@ func (s *smdQueryCmd) Execute(args []string) error {
 		req_pool := &mgmtpb.SmdPoolReq{}
 		s.log.Infof("SMD Pool List:\n%s\n", s.conns.SmdListPools(req_pool))
 	}
+
+	return nil
+}
+
+// devStateQueryCmd is the struct representing the "storage query device-state" subcommand
+type devStateQueryCmd struct {
+	logCmd
+	connectedCmd
+	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
+}
+
+// Execute is run when devStateQueryCmd activates
+// Query the SMD device state of the given device
+func (d *devStateQueryCmd) Execute(args []string) error {
+	// Devuuid is a required command parameter
+	req := &mgmtpb.DevStateReq{DevUuid: d.Devuuid}
+
+	d.log.Infof("Device State Info:\n%s\n", d.conns.DevStateQuery(req))
 
 	return nil
 }

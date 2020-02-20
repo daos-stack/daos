@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,14 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
+	/*
+	 * On read only: return the number of records that are short fetched
+	 * from the largest dkey(s). This helps for checking for short reads. If
+	 * this values is not zero, then a short read is possible and should be
+	 * checked with daos_array_get_size() compared with the indexes being
+	 * read.
+	 */
+	daos_size_t		arr_nr_short_read;
 } daos_array_iod_t;
 
 /**
@@ -290,8 +298,6 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			Buffer sizes do not have to match the indiviual range
  *			sizes as long as the total size does. User allocates the
  *			buffer(s) and sets the length of each buffer.
- * \param[in]	csums	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -306,9 +312,8 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_read(daos_handle_t oh, daos_handle_t th,
-		daos_array_iod_t *iod, d_sg_list_t *sgl,
-		daos_csum_buf_t *csums, daos_event_t *ev);
+daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Write data to an array object.
@@ -321,8 +326,6 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  *			sizes as long as the total size does.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
- * \param[in]	csums	Array of checksums for each buffer in the sgl.
- *			This is optional (pass NULL to ignore).
  *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
@@ -335,9 +338,8 @@ daos_array_read(daos_handle_t oh, daos_handle_t th,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_array_write(daos_handle_t oh, daos_handle_t th,
-		 daos_array_iod_t *iod, d_sg_list_t *sgl,
-		 daos_csum_buf_t *csums, daos_event_t *ev);
+daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		 d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
  * Query the number of records in the array object.

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,16 +93,6 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 };
 
-/**
- * per-node container (memory) object
- */
-struct ds_cont {
-	struct daos_llink	sc_list;
-	uuid_t			sc_uuid;
-	uuid_t			sp_uuid;
-	struct ds_iv_ns		*sc_iv_ns;
-};
-
 /* Container IV structure */
 struct cont_iv_snapshot {
 	int snap_cnt;
@@ -116,6 +106,8 @@ struct cont_iv_capa {
 /* flattened container properties */
 struct cont_iv_prop {
 	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		cip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char		cip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	cip_layout_type;
 	uint64_t	cip_layout_ver;
 	uint64_t	cip_csum;
@@ -126,6 +118,7 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+
 	struct daos_acl	cip_acl;
 };
 
@@ -160,6 +153,12 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
 void cont_svc_put_leader(struct cont_svc *svc);
+int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		     struct cont *cont, struct container_hdl *hdl,
+		     crt_rpc_t *rpc);
+int ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		       struct cont *cont, struct container_hdl *hdl,
+		       crt_rpc_t *rpc);
 
 /*
  * srv_epoch.c
@@ -174,9 +173,9 @@ int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			  struct cont *cont, struct container_hdl *hdl,
 			  crt_rpc_t *rpc);
-int ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			 struct cont *cont, struct container_hdl *hdl,
-			 crt_rpc_t *rpc, bool snapshot);
+int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			struct cont *cont, struct container_hdl *hdl,
+			crt_rpc_t *rpc);
 int ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			    struct cont *cont, struct container_hdl *hdl,
 			    crt_rpc_t *rpc);
@@ -216,14 +215,6 @@ void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
-
-int ds_cont_lookup_create(const uuid_t uuid, void *arg,
-			  struct ds_cont **cont_p);
-struct ds_cont *ds_cont_lookup(const uuid_t uuid);
-void ds_cont_put(struct ds_cont *cont);
-int ds_cont_cache_init(void);
-void ds_cont_cache_fini(void);
-void ds_cont_aggregate_ult(void *arg);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t capas);

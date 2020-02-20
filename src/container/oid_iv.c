@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <abt.h>
+#include <daos_errno.h>
 #include <cart/iv.h>
 #include <daos/common.h>
 #include <gurt/list.h>
@@ -159,7 +160,8 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 					   key->coh_uuid, num_oids,
 					   &avail->oid);
 		if (rc) {
-			D_ERROR("failed to fetch and update max_oid %d\n", rc);
+			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(err_lock, rc);
 		}
 		oids->oid = avail->oid;
@@ -341,7 +343,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
 			  CRT_IV_SYNC_BIDIRECTIONAL, false /* retry */);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
