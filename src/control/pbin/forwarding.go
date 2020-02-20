@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 
 	"github.com/pkg/errors"
 
@@ -51,6 +52,16 @@ func NewForwarder(log logging.Logger, pbinName string) *Forwarder {
 	fwd := &Forwarder{
 		log:      log,
 		pbinName: pbinName,
+	}
+
+	if val, set := os.LookupEnv(DisableReqFwdEnvVar); set {
+		disabled, err := strconv.ParseBool(val)
+		if err != nil {
+			log.Errorf("%s was set to non-boolean value (%q); not disabling",
+				DisableReqFwdEnvVar, val)
+			return fwd
+		}
+		fwd.Disabled = disabled
 	}
 
 	return fwd
