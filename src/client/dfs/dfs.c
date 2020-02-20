@@ -924,6 +924,8 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 
 	/** create the SB and exit */
 	if (create) {
+		uint64_t cond = 0;
+
 		iods[0].iod_size = sizeof(magic);
 		magic = DFS_SB_MAGIC;
 		iods[1].iod_size = sizeof(sb_ver);
@@ -941,7 +943,10 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		else
 			oclass = DFS_DEFAULT_OBJ_CLASS;
 
-		rc = daos_obj_update(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS,
+		if (dfs_cond_op)
+			cond = DAOS_COND_DKEY_INSERT;
+
+		rc = daos_obj_update(*oh, DAOS_TX_NONE, cond, &dkey, SB_AKEYS,
 				     iods, sgls, NULL);
 		if (rc) {
 			D_ERROR("Failed to update SB info (%d)\n", rc);
@@ -3002,6 +3007,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_iod_t		iod;
 	daos_recx_t		recx;
 	daos_key_t		dkey;
+	uint64_t		cond = 0;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3084,7 +3090,10 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
+	if (dfs_cond_op)
+		cond = DAOS_COND_DKEY_UPDATE;
+
+	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update mode (rc = %d)\n", rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3104,13 +3113,14 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	uid_t			euid;
 	daos_key_t		dkey;
 	daos_handle_t           oh;
-	int			rc;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iovs[3];
 	daos_iod_t		iod;
 	daos_recx_t		recx[3];
 	bool			set_size = false;
 	int			i = 0;
+	uint64_t		cond = 0;
+	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -3192,7 +3202,10 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
+	if (dfs_cond_op)
+		cond = DAOS_COND_DKEY_INSERT;
+
+	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
@@ -3611,6 +3624,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
+	uint64_t        cond = 0;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3645,25 +3659,33 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	/** if not default flag, check for xattr existence */
 	if (flags != 0) {
-		bool exists;
+		if (dfs_cond_op) {
+			if (flags == XATTR_CREATE)
+				cond |= DAOS_COND_AKEY_UPDATE;
+			if (flags == XATTR_REPLACE)
+				cond |= DAOS_COND_AKEY_INSERT;
+		} else {
+			bool exists;
 
-		iod.iod_size	= DAOS_REC_ANY;
-		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod,
-				    NULL, NULL, NULL);
-		if (rc) {
-			D_ERROR("Failed to get extended attribute %s\n", name);
-			D_GOTO(out, rc = daos_der2errno(rc));
+			iod.iod_size	= DAOS_REC_ANY;
+			rc = daos_obj_fetch(oh, th, 0, &dkey, 1, &iod,
+					    NULL, NULL, NULL);
+			if (rc) {
+				D_ERROR("Failed to get extended attribute %s\n",
+					name);
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+
+			if (iod.iod_size == 0)
+				exists = false;
+			else
+				exists = true;
+
+			if (flags == XATTR_CREATE && exists)
+				D_GOTO(out, rc = EEXIST);
+			if (flags == XATTR_REPLACE && !exists)
+				D_GOTO(out, rc = ENOENT);
 		}
-
-		if (iod.iod_size == 0)
-			exists = false;
-		else
-			exists = true;
-
-		if (flags == XATTR_CREATE && exists)
-			D_GOTO(out, rc = EEXIST);
-		if (flags == XATTR_REPLACE && !exists)
-			D_GOTO(out, rc = ENOENT);
 	}
 
 	/** set sgl for update */
@@ -3672,8 +3694,11 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
+	if (dfs_cond_op)
+		cond |= DAOS_COND_DKEY_INSERT;
+
 	iod.iod_size	= size;
-	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to add extended attribute %s\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -3767,6 +3792,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	th = DAOS_TX_NONE;
 	daos_key_t	dkey, akey;
 	daos_handle_t	oh;
+	uint64_t	cond = 0;
 	int		rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -3794,7 +3820,10 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** set akey as the xattr name */
 	d_iov_set(&akey, xname, strlen(xname));
 
-	rc = daos_obj_punch_akeys(oh, th, 0, &dkey, 1, &akey, NULL);
+	if (dfs_cond_op)
+		cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_PUNCH;
+
+	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
 		D_ERROR("Failed to punch extended attribute %s\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
