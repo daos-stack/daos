@@ -36,6 +36,10 @@ const (
 	// DaosAdminName is the name of the daos_admin privileged helper.
 	DaosAdminName = "daos_admin"
 
+	// DisableReqFwdEnvVar is the name of the environment variable which
+	// can be set to disable forwarding requests to the privileged binary.
+	DisableReqFwdEnvVar = "DAOS_DISABLE_REQ_FWD"
+
 	// DaosAdminLogFileEnvVar is the name of the environment variable which
 	// can be set to enable non-ERROR logging in the privileged binary.
 	DaosAdminLogFileEnvVar = "DAOS_ADMIN_LOG_FILE"
@@ -62,6 +66,10 @@ func CheckHelper(log logging.Logger, helperName string) error {
 	fwd := NewForwarder(log, helperName)
 	dummy := struct{}{}
 	pingRes := PingResp{}
+
+	if fwd.Disabled {
+		return nil
+	}
 
 	if err := fwd.SendReq("Ping", dummy, &pingRes); err != nil {
 		err = errors.Cause(err)
