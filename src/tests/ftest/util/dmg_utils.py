@@ -28,8 +28,9 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils import CommandWithSubCommand, CommandWithParameters
-from command_utils import FormattedParameter, CommandFailure
+from command_utils_base import \
+    CommandWithParameters, FormattedParameter, CommandFailure
+from command_utils import CommandWithSubCommand
 
 
 class DmgCommand(CommandWithSubCommand):

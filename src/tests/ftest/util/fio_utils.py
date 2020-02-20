@@ -24,7 +24,8 @@
 from general_utils import pcmd
 
 from command_utils import ExecutableCommand, CommandWithParameters
-from command_utils import CommandFailure, FormattedParameter, BasicParameter
+from command_utils_base import \
+    CommandFailure, FormattedParameter, BasicParameter
 
 
 class FioCommand(ExecutableCommand):

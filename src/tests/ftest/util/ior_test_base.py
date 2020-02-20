@@ -29,7 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import Mpich
 from mpio_utils import MpioUtils
 from dfuse_utils import Dfuse

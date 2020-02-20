@@ -25,8 +25,9 @@ import os
 
 from apricot import TestWithServers
 
-from command_utils import (EnvironmentVariables, ExecutableCommand,
-                           FormattedParameter, CommandFailure)
+from command_utils_base import \
+    EnvironmentVariables, FormattedParameter, CommandFailure
+from command_utils import ExecutableCommand
 from job_manager_utils import OpenMPI
 
 

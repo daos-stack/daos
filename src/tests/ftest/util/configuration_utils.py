@@ -26,7 +26,7 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils import ObjectWithParameters, BasicParameter
+from command_utils_base import ObjectWithParameters, BasicParameter
 from general_utils import run_task
 
 
@@ -127,7 +127,7 @@ class ConfigurationData(object):
             for code, hosts in data.items():
                 if code != 0:
                     output_data = list(task.iter_buffers(hosts))
-                    if len(output_data) == 0:
+                    if not output_data:
                         messages.append(
                             "{}: rc={}, command=\"{}\"".format(
                                 NodeSet.fromlist(hosts), code, command))
@@ -193,16 +193,17 @@ class ConfigurationData(object):
         """
         if requirememt in self._data:
             # Return the previously stored requested data
-            return self._data[requirememt]
+            data = self._data[requirememt]
         elif requirememt in self._data_key_map:
             # Obtain, store (for future requests), and return the data
             self._data[requirememt] = self._data_key_map[requirememt]()
-            return self._data[requirememt]
+            data = self._data[requirememt]
         else:
             # No known method for obtaining this data
             raise AttributeError(
                 "Unknown data requirememt for ConfigurationData object: "
                 "{}".format(requirememt))
+        return data
 
 
 class ConfigurationParameters(ObjectWithParameters):
@@ -403,11 +404,12 @@ class Configuration(object):
         if path.startswith(self.namespace):
             # Always include configuration definition paths in order to be able
             # to find the requirments for each configuration
-            return True
+            valid = True
         else:
             # Otherwise only include paths that are not configuration-specific
             # or are specific to the active configuration
-            return path.split("/")[-1] not in self._inactive_names
+            valid = path.split("/")[-1] not in self._inactive_names
+        return valid
 
     def _set_available_names(self, test):
         """Set the list of available configuration names.
@@ -528,7 +530,7 @@ class Configuration(object):
 
         # Determine which value to return for the key in the path
         multiple_matches = False
-        if len(matches) == 0:
+        if not matches:
             # No matching paths for the key - use the default
             value = default
         elif len(matches) == 1:
@@ -539,8 +541,7 @@ class Configuration(object):
             # Multiple matching paths with an active configuration
             # Search for a single configuration-specific path to use
             specific_paths = [
-                path for path in matches.keys()
-                if path.endswith(self.active_name)]
+                path for path in matches if path.endswith(self.active_name)]
             if len(specific_paths) == 1:
                 # A single configuration-specific matching path for the key
                 path = specific_paths[0]

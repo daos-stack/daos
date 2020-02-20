@@ -25,9 +25,10 @@ portions thereof marked with this legend must also reproduce the markings.
 import os
 import time
 from apricot import TestWithServers
-from agent_utils import (DaosAgentTransportCredentials, DaosAgentYamlParameters,
-                         DaosAgentCommand, DaosAgentManager)
-from command_daos_utils import CommonConfig
+from agent_utils_params import \
+    DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils import DaosAgentCommand, DaosAgentManager
+from command_utils_base import CommonConfig
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from dfuse_utils import Dfuse

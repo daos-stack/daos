@@ -23,8 +23,9 @@
 """
 from logging import getLogger
 
-from command_utils import CommandWithSubCommand, CommandWithParameters
-from command_utils import FormattedParameter, CommandFailure
+from command_utils_base import \
+    CommandWithParameters, FormattedParameter, CommandFailure
+from command_utils import CommandWithSubCommand
 
 
 class DaosCommand(CommandWithSubCommand):

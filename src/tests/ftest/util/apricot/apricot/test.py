@@ -32,13 +32,14 @@ from avocado import skip, TestFail, fail_on
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils import CommandFailure, EnvironmentVariables
-from command_daos_utils import CommonConfig
-from agent_utils import (DaosAgentYamlParameters, DaosAgentCommand,
-                         DaosAgentManager, DaosAgentTransportCredentials,
-                         include_local_host)
-from server_utils import (DaosServerYamlParameters, DaosServerCommand,
-                          DaosServerManager, DaosServerTransportCredentials)
+from command_utils_base import CommandFailure, EnvironmentVariables
+from command_utils import CommonConfig
+from agent_utils_params import \
+    DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils import DaosAgentCommand, DaosAgentManager, include_local_host
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils import DaosServerCommand, DaosServerManager
 from general_utils import get_partition_hosts, stop_processes
 from logger_utils import TestLogger
 from test_utils_pool import TestPool

@@ -24,8 +24,9 @@
 from __future__ import print_function
 import general_utils
 
-from command_utils import ExecutableCommand, EnvironmentVariables
-from command_utils import CommandFailure, FormattedParameter
+from command_utils_base import \
+    EnvironmentVariables, CommandFailure, FormattedParameter
+from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
 
 

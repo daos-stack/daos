@@ -27,7 +27,7 @@ from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils import CommandFailure
+from command_utils_base import CommandFailure
 from job_manager_utils import OpenMPI, Mpich
 from dfuse_utils import Dfuse
 from daos_utils import create_container

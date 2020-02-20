@@ -26,8 +26,9 @@ import random
 from avocado.utils import process
 
 from apricot import TestWithServers
-from command_utils import ExecutableCommand, CommandFailure, FormattedParameter
-from command_utils import BasicParameter
+from command_utils import ExecutableCommand
+from command_utils_base import \
+    BasicParameter, CommandFailure, FormattedParameter
 
 
 class IoConfGen(ExecutableCommand):

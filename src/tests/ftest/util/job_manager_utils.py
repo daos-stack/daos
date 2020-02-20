@@ -23,8 +23,8 @@
 """
 import os
 
-from command_utils import (ExecutableCommand, FormattedParameter,
-                           EnvironmentVariables)
+from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter, EnvironmentVariables
 from distutils.spawn import find_executable
 from env_modules import load_mpi
 from write_host_file import write_host_file

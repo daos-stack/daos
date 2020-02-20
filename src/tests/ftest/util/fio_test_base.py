@@ -25,7 +25,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
 from fio_utils import FioCommand
-from command_utils import CommandFailure, EnvironmentVariables
+from command_utils_base import CommandFailure, EnvironmentVariables
 from dfuse_utils import Dfuse
 from daos_utils import create_container
 

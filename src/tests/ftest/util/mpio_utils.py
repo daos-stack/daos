@@ -28,22 +28,22 @@ import subprocess
 import paramiko
 import socket
 from env_modules import load_mpi
-from command_utils import EnvironmentVariables
+from command_utils_base import EnvironmentVariables
 
 
 class MpioFailed(Exception):
-    """Raise if MPIO failed"""
+    """Raise if MPIO failed."""
+
 
 class MpioUtils():
-    """MpioUtils Class"""
+    """MpioUtils Class."""
 
     def __init__(self):
-
+        """Initialize a MpioUtils object."""
         self.mpichinstall = None
 
     def mpich_installed(self, hostlist):
-        """Check if mpich is installed"""
-
+        """Check if mpich is installed."""
         load_mpi('mpich')
 
         try:
@@ -60,13 +60,12 @@ class MpioUtils():
 
     @staticmethod
     def run_romio(hostlist, romio_test_repo):
-        """
-            Running ROMIO testsuite under mpich
-            Function Arguments:
-                hostlist --list of client hosts
-                romio_test_repo --built romio test directory
-        """
+        """Run ROMIO testsuite under mpich.
 
+        Args:
+            hostlist (list): list of client hosts
+            romio_test_repo (str): built romio test directory
+        """
         env = EnvironmentVariables()
         env["D_LOG_FILE"] = os.environ.get("D_LOG_FILE", "")
         env["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
@@ -93,16 +92,17 @@ class MpioUtils():
         except (IOError, OSError, paramiko.SSHException, socket.error) as excep:
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
-    # pylint: disable=R0913
+
     def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
                              test_name, client_processes):
-        """
-            Running LLNL, MPI4PY and HDF5 testsuites
-            Function Arguments:
-                hostfile          --client hostfile
-                pool_uuid         --Pool UUID
-                test_repo         --test repo location
-                test_name         --name of test to be tested
+        # pylint: disable=R0913
+        """Run LLNL, MPI4PY and HDF5 testsuites.
+
+        Args:
+            hostfile (str): client hostfile
+            pool_uuid (str): Pool UUID
+            test_repo (str): test repo location
+            test_name (str): name of test to be tested
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
@@ -125,7 +125,7 @@ class MpioUtils():
                         '1']
             cmd = " ".join(test_cmd)
         elif test_name == "mpi4py" and \
-             os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
+                os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
@@ -136,8 +136,8 @@ class MpioUtils():
                         os.path.join(test_repo, 'test_io_daos.py')]
             cmd = " ".join(test_cmd)
         elif test_name == "hdf5" and \
-             (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
-              os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
+                (os.path.isfile(os.path.join(test_repo, "testphdf5")) and
+                 os.path.isfile(os.path.join(test_repo, "t_shapesame"))):
             cmd = ''
             for test in ["testphdf5", "t_shapesame"]:
                 fqtp = os.path.join(test_repo, test)
@@ -171,5 +171,5 @@ class MpioUtils():
                                  + " code:{}".format(process.poll()))
 
         except (ValueError, OSError) as excep:
-            raise MpioFailed("<Test FAILED> \nException occurred: {}"\
-                                 .format(str(excep)))
+            raise MpioFailed(
+                "<Test FAILED> \nException occurred: {}".format(str(excep)))
