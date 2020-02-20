@@ -146,7 +146,8 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_checksum_test(rank, size);
+			nr_failed += run_daos_checksum_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'x':
 			daos_test_print(rank, "\n\n=================");

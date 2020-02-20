@@ -33,12 +33,14 @@
 #include <daos/rpc.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
+#include <daos_srv/pool.h>
 #include <daos_event.h>
 #include <daos_task.h>
 #include <pthread.h>
 #include <hwloc.h>
 #include <abt.h>
 #include <cart/iv.h>
+#include <daos/checksum.h>
 
 /** number of target (XS set) per server */
 extern unsigned int	dss_tgt_nr;
@@ -551,6 +553,7 @@ struct dss_enum_arg {
 	bool			chk_key2big;
 	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
+	struct daos_csummer    *csummer;
 	int			eprs_cap;
 	int			eprs_len;
 	int			last_type;	/* hack for tweaking kds_len */
@@ -562,6 +565,7 @@ struct dss_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
+			d_iov_t			csum_iov;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */
@@ -623,10 +627,50 @@ d_rank_t dss_self_rank(void);
 
 unsigned int dss_ctx_nr_get(void);
 
+/* Cache for container root */
+struct tree_cache_root {
+	struct btr_root	btr_root;
+	daos_handle_t	root_hdl;
+	unsigned int	count;
+};
+
+int
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
+		d_iov_t *val_iov);
+int
+obj_tree_destroy(daos_handle_t btr_hdl);
+
+/* Per xstream migrate status */
+struct ds_migrate_status {
+	uint64_t dm_rec_count;	/* migrated record size */
+	uint64_t dm_obj_count;	/* migrated object count */
+	uint64_t dm_total_size;	/* migrated total size */
+	int	 dm_status;	/* migrate status */
+	uint32_t dm_migrating:1; /* if it is migrating */
+};
+
+int
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+			struct ds_migrate_status *dms);
+int
+ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
+		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
+		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
+		  unsigned int *shards, int cnt);
+void
+ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
+
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
+};
+
+enum dss_media_error_type {
+	MET_WRITE = 0,	/* write error */
+	MET_READ,	/* read error */
+	MET_UNMAP,	/* unmap error */
+	MET_CSUM	/* checksum error */
 };
 
 void dss_init_state_set(enum dss_init_state state);
@@ -639,6 +683,6 @@ void dss_init_state_set(enum dss_init_state state);
  */
 void dss_gc_run(daos_handle_t poh, int credits);
 
-int notify_bio_error(bool unmap, bool update, int tgt_id);
+int notify_bio_error(int media_err_type, int tgt_id);
 
 #endif /* __DSS_API_H__ */

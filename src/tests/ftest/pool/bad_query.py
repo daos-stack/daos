@@ -39,7 +39,7 @@ class BadQueryTest(TestWithServers):
     """
 
     def test_query(self):
-        """Test ID: DAOS-???.
+        """Test ID: DAOS-3821.
 
         Test Description:
             Pass bad parameters to pool query
@@ -76,6 +76,7 @@ class BadQueryTest(TestWithServers):
 
         # trash the pool handle value
         if not handle == 'VALID':
+            handle_sav = self.pool.pool.handle
             self.pool.pool.handle = handle
 
         try:
@@ -83,9 +84,13 @@ class BadQueryTest(TestWithServers):
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
+            self.log.info("===Pool query positive testcase Passed.")
 
         except TestFail as excep:
             self.log.error(str(excep))
             self.log.error(traceback.format_exc())
             if expected_result in ['PASS']:
                 self.fail("Test was expected to pass but it failed.\n")
+            self.log.info("===Pool query negative testcase Passed.")
+            # restore the valid handle for pool cleanup
+            self.pool.pool.handle = handle_sav

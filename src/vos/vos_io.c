@@ -775,16 +775,16 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		bool size_fetch, daos_handle_t *ioh)
 {
 	struct vos_io_context *ioc;
 	int i, rc;
 
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
+		DP_UOID(oid), nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods, NULL,
+	rc = vos_ioc_create(coh, oid, true, epoch, nr, iods, NULL,
 			    size_fetch,
 			    &ioc);
 	if (rc != 0)
@@ -798,7 +798,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
-		for (i = 0; i < iod_nr; i++)
+		for (i = 0; i < nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
 		rc = dkey_fetch(ioc, dkey);

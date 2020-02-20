@@ -491,7 +491,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 		return DER_INVAL;
 
 	for (plt = &ring->ri_targets[0], i = 0;
-	     plt < &ring->ri_targets[rimap->rmp_target_nr]; i++) {
+	     plt <= &ring->ri_targets[rimap->rmp_target_nr - 1]; i++) {
 		for (j = 0; j < buf->rb_domain_nr; j++) {
 			struct ring_domain *rdom = &buf->rb_domains[j];
 			struct pool_target *target;

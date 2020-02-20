@@ -79,6 +79,10 @@ enum daos_pool_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_PO_OWNER_GROUP,
+	/**
+	 * The pool svc rank list.
+	 */
+	DAOS_PROP_PO_SVC_LIST,
 	DAOS_PROP_PO_MAX,
 };
 

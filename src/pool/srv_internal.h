@@ -56,6 +56,7 @@ struct pool_iv_map {
 	struct pool_buf	piv_pool_buf;
 };
 
+/* The structure to serialize the prop for IV */
 struct pool_iv_prop {
 	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
@@ -63,7 +64,15 @@ struct pool_iv_prop {
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
-	struct daos_acl	pip_acl;
+	struct daos_acl	*pip_acl;
+	d_rank_list_t   pip_svc_list;
+	uint32_t	pip_acl_offset;
+	uint32_t	pip_svc_list_offset;
+	char		pip_iv_buf[0];
+};
+
+struct pool_iv_key {
+	uint32_t	pik_entry_size; /* IV entry size */
 };
 
 struct pool_iv_entry {
@@ -141,10 +150,6 @@ extern struct bio_reaction_ops nvme_reaction_ops;
 uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
-int pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
-int pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
-int pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
-		       uint32_t map_ver);
 int pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv);
 void ds_pool_map_refresh_ult(void *arg);
 #endif /* __POOL_SRV_INTERNAL_H__ */
