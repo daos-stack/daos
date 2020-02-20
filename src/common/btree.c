@@ -597,7 +597,7 @@ static inline int
 btr_node_size(struct btr_context *tcx)
 {
 	return sizeof(struct btr_node) +
-		tcx->tc_tins.ti_root->tr_node_size * btr_rec_size(tcx);
+		(int)tcx->tc_tins.ti_root->tr_node_size * btr_rec_size(tcx);
 }
 
 static int
@@ -1212,7 +1212,7 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 		}
 	}
 
-	new_order = MIN(root->tr_node_size * 2 + 1, tcx->tc_order);
+	new_order = MIN((int)root->tr_node_size * 2 + 1, tcx->tc_order);
 
 	D_DEBUG(DB_TRACE, "Root node size increase from %d to %d\n",
 		root->tr_node_size, new_order);
