@@ -225,11 +225,10 @@ struct rebuild_global {
 extern struct rebuild_global rebuild_gst;
 
 struct rebuild_task {
-	d_list_t	dst_list;
-	uuid_t		dst_pool_uuid;
+	d_list_t			dst_list;
+	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
-	d_rank_list_t	*dst_svc_list;
-	uint32_t	dst_map_ver;
+	uint32_t			dst_map_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -279,6 +278,7 @@ struct rebuild_iv {
 	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
+	uint32_t	riv_seconds;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;

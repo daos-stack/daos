@@ -33,6 +33,9 @@ const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	PrivilegedHelperNotPrivileged
+	PrivilegedHelperNotAvailable
+	PrivilegedHelperRequestFailed
 
 	// generic storage fault codes
 	StorageUnknown Code = iota + 100
@@ -77,6 +80,8 @@ const (
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerScmUnmanaged
+	ServerBdevNotFound
+	ServerBdevFormatSkipped
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
