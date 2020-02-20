@@ -850,9 +850,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d/%d\n",
+	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_pool_map_ver, rsi->rsi_rebuild_ver);
+		rsi->rsi_rebuild_ver);
 
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
@@ -1020,44 +1020,3 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	return 0;
 }
-
-int
-rebuild_tgt_scan_pre_forward(crt_rpc_t *rpc, void *arg)
-{
-	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
-	struct ds_pool			*pool;
-	d_iov_t				iov = { 0 };
-	d_sg_list_t			sgl;
-	int				rc;
-
-	if (rpc->cr_co_bulk_hdl == NULL) {
-		D_ERROR("No pool map in scan rpc\n");
-		return -DER_INVAL;
-	}
-
-	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
-	if (pool == NULL) {
-		D_ERROR("Can not find pool.\n");
-		return -DER_NONEXIST;
-	}
-
-	/* update the pool map */
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = ds_pool_tgt_map_update(pool, iov.iov_buf, rsi->rsi_pool_map_ver);
-	if (rc != 0) {
-		D_ERROR("ds_pool_tgt_map_update failed for "DF_UUID", rc %d.\n",
-			DP_UUID(rsi->rsi_pool_uuid), rc);
-		D_GOTO(out, rc);
-	}
-
-out:
-	ds_pool_put(pool);
-	return rc;
-}
-

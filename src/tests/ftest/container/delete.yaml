@@ -4,17 +4,14 @@ hosts:
   test_servers:
     - server-A
 timeout: 50
-server_manager:
-  recreate: true
 server_config:
   name: daos_server
+pool:
+  mode: 511
+  scm_size: 10737418
+  name: daos_server
+  control_method: dmg
 createtests:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 10737418
   ContainerUUIDS: !mux
     gooduid:
       uuid:
