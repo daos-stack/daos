@@ -199,7 +199,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	return nr;
 }
-
+#ifdef NO
 static int
 lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 {
@@ -218,6 +218,7 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }
+#endif
 
 struct agg_tst_dataset {
 	daos_unit_oid_t			 td_oid;
@@ -341,6 +342,7 @@ generate_recx(daos_recx_t *recx_tot, daos_recx_t *recx)
 	recx->rx_nr = rand() % max_nr + 1;
 }
 
+#ifdef NO
 static void
 generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 {
@@ -360,10 +362,10 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 	}
 	D_FREE(buf_u);
 }
-
+#endif
 static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
-		int punch_nr, daos_epoch_t punch_epoch[])
+		int punch_nr, daos_epoch_t punch_epoch[], bool with_csums)
 {
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
@@ -422,7 +424,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, with_csums);
 	assert_int_equal(rc, 0);
 
 	verify_view(arg, oid, dkey, akey, ds);
@@ -434,6 +436,7 @@ get_ds_index(int oid_idx, int dkey_idx, int akey_idx, int nr)
 	return oid_idx * nr * nr + dkey_idx * nr + akey_idx;
 }
 
+#ifdef NO
 static void
 generate_or_verify(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 		   char *akey, struct agg_tst_dataset *ds_arr, int ds_idx,
@@ -481,11 +484,13 @@ multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 		}
 	}
 }
+#endif
 
 #define AT_SV_IOD_SIZE_SMALL	32			/* SCM record */
 #define AT_SV_IOD_SIZE_LARGE	(VOS_BLK_SZ + 500)	/* NVMe record */
 #define AT_OBJ_KEY_NR		3
 
+#ifdef NO
 static void
 aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
@@ -592,13 +597,13 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, false);
 	assert_int_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
 	D_FREE(ds_arr);
 }
-
+#endif
 /*
  * Discard on single akey->SV with specified epoch.
  */
@@ -623,10 +628,10 @@ discard_1(void **state)
 
 		VERBOSE_MSG("Discard epoch "DF_U64", iod_size:"DF_U64"\n",
 			    ds.td_agg_epr.epr_lo, ds.td_iod_size);
-		aggregate_basic(arg, &ds, 0, NULL);
+		aggregate_basic(arg, &ds, 0, NULL, false);
 	}
 }
-
+#ifdef NO
 /*
  * Discard on single akey-SV with epr [A, B].
  */
@@ -653,7 +658,7 @@ discard_2(void **state)
 		VERBOSE_MSG("Discard epr ["DF_U64", "DF_U64"], "
 			    "iod_size:"DF_U64"\n", ds.td_agg_epr.epr_lo,
 			    ds.td_agg_epr.epr_hi, ds.td_iod_size);
-		aggregate_basic(arg, &ds, 0, NULL);
+		aggregate_basic(arg, &ds, 0, NULL, false);
 	}
 }
 
@@ -682,7 +687,7 @@ discard_3(void **state)
 
 		VERBOSE_MSG("Discard epr [0, MAX], iod_size:"DF_U64"\n",
 			    ds.td_iod_size);
-		aggregate_basic(arg, &ds, 0, NULL);
+		aggregate_basic(arg, &ds, 0, NULL, false);
 	}
 
 	/* Object should have been deleted by discard */
@@ -720,7 +725,7 @@ discard_4(void **state)
 
 		VERBOSE_MSG("Discard punch records, iod_size:"DF_U64"\n",
 			    ds.td_iod_size);
-		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+		aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 	}
 }
 
@@ -751,7 +756,7 @@ discard_5(void **state)
 
 		VERBOSE_MSG("Discard with random punch & yield. "
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
-		aggregate_basic(arg, &ds, -1, NULL);
+		aggregate_basic(arg, &ds, -1, NULL, false);
 	}
 	daos_fail_loc_set(0);
 }
@@ -806,7 +811,7 @@ discard_7(void **state)
 	ds.td_discard = true;
 
 	VERBOSE_MSG("Discard epoch "DF_U64"\n", ds.td_agg_epr.epr_lo);
-	aggregate_basic(arg, &ds, 0, NULL);
+	aggregate_basic(arg, &ds, 0, NULL, false);
 }
 
 /*
@@ -839,7 +844,7 @@ discard_8(void **state)
 
 	VERBOSE_MSG("Discard epr ["DF_U64", "DF_U64"]\n",
 		    ds.td_agg_epr.epr_lo, ds.td_agg_epr.epr_hi);
-	aggregate_basic(arg, &ds, 0, NULL);
+	aggregate_basic(arg, &ds, 0, NULL, false);
 }
 
 /*
@@ -871,7 +876,7 @@ discard_9(void **state)
 	ds.td_discard = true;
 
 	VERBOSE_MSG("Discard epr [0, MAX]\n");
-	aggregate_basic(arg, &ds, 0, NULL);
+	aggregate_basic(arg, &ds, 0, NULL, false);
 
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
@@ -913,7 +918,7 @@ discard_10(void **state)
 	punch_epoch[2] = 7;
 
 	VERBOSE_MSG("Discard punch records\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -948,7 +953,7 @@ discard_11(void **state)
 	VERBOSE_MSG("Discard with random punch, random yield.\n");
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
-	aggregate_basic(arg, &ds, -1, NULL);
+	aggregate_basic(arg, &ds, -1, NULL, false);
 	daos_fail_loc_set(0);
 }
 
@@ -1014,9 +1019,9 @@ discard_13(void **state)
 	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
 	ds.td_discard = true;
 
-	aggregate_basic(arg, &ds, -1, NULL);
+	aggregate_basic(arg, &ds, -1, NULL, false);
 }
-
+#endif
 enum {
 	AGG_OBJ_TYPE,
 	AGG_DKEY_TYPE,
@@ -1030,6 +1035,7 @@ enum {
 	AGG_UPDATE,
 };
 
+#ifdef NO
 static void
 do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 	 daos_epoch_t epoch, char *dkey, char *akey)
@@ -1120,7 +1126,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, false);
 
 		assert_int_equal(rc, 0);
 
@@ -1207,7 +1213,6 @@ agg_punches_test(void **state, int record_type, bool discard)
 	}
 	daos_fail_loc_set(0);
 }
-
 static void
 discard_14(void **state)
 {
@@ -1246,7 +1251,7 @@ aggregate_1(void **state)
 		VERBOSE_MSG("Aggregate epr ["DF_U64", "DF_U64"], "
 			    "iod_size:"DF_U64"\n", ds.td_agg_epr.epr_lo,
 			    ds.td_agg_epr.epr_hi, ds.td_iod_size);
-		aggregate_basic(arg, &ds, 0, NULL);
+		aggregate_basic(arg, &ds, 0, NULL, false);
 	}
 
 }
@@ -1281,7 +1286,7 @@ aggregate_2(void **state)
 
 		VERBOSE_MSG("Aggregate punch records, iod_size:"DF_U64"\n",
 			    ds.td_iod_size);
-		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+		aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 	}
 }
 
@@ -1311,7 +1316,7 @@ aggregate_3(void **state)
 
 		VERBOSE_MSG("Aggregate with random punch & yield. "
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
-		aggregate_basic(arg, &ds, -1, NULL);
+		aggregate_basic(arg, &ds, -1, NULL, false);
 	}
 	daos_fail_loc_set(0);
 }
@@ -1372,7 +1377,7 @@ aggregate_5(void **state)
 		VERBOSE_MSG("Aggregate single record, punch_nr: %d\n",
 			    punch_nr);
 		aggregate_basic(arg, &ds, punch_nr,
-				punch_nr ? punch_epoch : NULL);
+				punch_nr ? punch_epoch : NULL, false);
 	}
 }
 
@@ -1409,7 +1414,7 @@ aggregate_6(void **state)
 	punch_epoch[0] = 1;
 
 	VERBOSE_MSG("Aggregate disjoint records\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -1450,7 +1455,7 @@ aggregate_7(void **state)
 	punch_epoch[1] = 4;
 
 	VERBOSE_MSG("Aggregate adjacent records\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -1491,7 +1496,7 @@ aggregate_8(void **state)
 	punch_epoch[1] = 4;
 
 	VERBOSE_MSG("Aggregate overlapped records\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -1528,7 +1533,7 @@ aggregate_9(void **state)
 	punch_epoch[1] = 3;
 
 	VERBOSE_MSG("Aggregate fully covered records\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -1587,7 +1592,7 @@ aggregate_10(void **state)
 	punch_epoch[2] = 5;
 
 	VERBOSE_MSG("Aggregate records spanning window end.\n");
-	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch, false);
 }
 
 /*
@@ -1621,9 +1626,10 @@ aggregate_11(void **state)
 	VERBOSE_MSG("Aggregate with random punch, random yield.\n");
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
-	aggregate_basic(arg, &ds, -1, NULL);
+	aggregate_basic(arg, &ds, -1, NULL, false);
 	daos_fail_loc_set(0);
 }
+#endif
 
 /*
  * Aggregate on single akey->EV, random punch, small flush threshold.
@@ -1643,7 +1649,7 @@ aggregate_12(void **state)
 		generate_recx(&recx_tot, &recx_arr[i]);
 
 	ds.td_type = DAOS_IOD_ARRAY;
-	ds.td_iod_size = 10;
+	ds.td_iod_size = 16;
 	ds.td_expected_recs = -1;
 	ds.td_recx_nr = 500;
 	ds.td_recx = &recx_arr[0];
@@ -1657,13 +1663,16 @@ aggregate_12(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
 	daos_fail_value_set(50);
-	aggregate_basic(arg, &ds, -1, NULL);
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_basic(arg, &ds, -1, NULL, true);
+	arg->ta_flags &= ~TF_USE_CSUMS;
 	daos_fail_loc_set(0);
 }
 
 /*
  * Aggregate EV on multiple objects, keys.
  */
+#ifdef NO
 static void
 aggregate_13(void **state)
 {
@@ -1687,7 +1696,6 @@ aggregate_13(void **state)
 
 	aggregate_multi(arg, &ds);
 }
-
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
@@ -1809,7 +1817,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -1841,7 +1849,7 @@ aggregate_16(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
 }
-
+#endif
 static int
 agg_tst_teardown(void **state)
 {
@@ -1852,6 +1860,7 @@ agg_tst_teardown(void **state)
 static const struct CMUnitTest discard_tests[] = {
 	{ "VOS451: Discard SV with specified epoch",
 	  discard_1, NULL, agg_tst_teardown },
+	/*
 	{ "VOS452: Discard SV with confined epr",
 	  discard_2, NULL, agg_tst_teardown },
 	{ "VOS453: Discard SV with epr [0, DAOS_EPOCH_MAX]",
@@ -1880,10 +1889,12 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
+	  */
 
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
+	/*
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -1906,8 +1917,10 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_10, NULL, agg_tst_teardown },
 	{ "VOS411: Aggregate EV with random punch, random yield",
 	  aggregate_11, NULL, agg_tst_teardown },
+	  */
 	{ "VOS412: Aggregate EV with random punch, small flush threshold",
 	  aggregate_12, NULL, agg_tst_teardown },
+	/*
 	{ "VOS413: Aggregate EV, multiple objects, keys",
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
@@ -1916,6 +1929,7 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS416: Aggregate many object/key punches array",
 	  aggregate_16, NULL, agg_tst_teardown },
+	*/
 };
 
 int

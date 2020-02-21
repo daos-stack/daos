@@ -25,6 +25,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <assert.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include <daos/checksum.h>
@@ -60,6 +61,7 @@ struct agg_phy_ent {
 	struct evt_rect		pe_rect;
 	/* Entry payload address */
 	bio_addr_t		pe_addr;
+	/* Original csums for entry */
 	struct dcs_csum_info	pe_csum_info;
 	/*
 	 * Extent start offset for the truncated physical entry. (Entry
@@ -598,6 +600,7 @@ merge_window_size(struct agg_merge_window *mw)
 	return evt_extent_width(&mw->mw_ext) * mw->mw_rsize;
 }
 
+/* Widen biov entry for read extents to range required to verify checksums. */
 static unsigned int
 widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
 	   struct evt_extent *ext, uint32_t rsize, uint32_t *wider)
@@ -606,9 +609,15 @@ widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
 	struct evt_extent	aligned_extent = { 0 };
 	unsigned int		added_segs = 0;
 
+	D_PRINT("widen\n");
 	ent.en_ext = phy_ent->pe_rect.rc_ex;
 	ent.en_sel_ext = *ext;
 	ent.en_csum = phy_ent->pe_csum_info;
+	D_PRINT("nr: %u, type: %u, len %u, cs: %u\n",
+		ent.en_csum.cs_nr,
+		ent.en_csum.cs_type,
+		ent.en_csum.cs_len,
+		ent.en_csum.cs_chunksize);
 	aligned_extent = evt_entry_align_to_csum_chunk(&ent, rsize);
 	bio_iov_set_extra(biov,
 			  (ent.en_sel_ext.ex_lo - aligned_extent.ex_lo) *
@@ -621,12 +630,6 @@ widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
 	return added_segs;
 }
 
-/* Used to indicate whether phy_ent can be deleted. */
-static inline bool
-csum_is_valid(struct dcs_csum_info *csum_info)
-{
-	return csum_info->cs_nr * csum_info->cs_len <= csum_info->cs_buf_len;
-}
 
 /* Extends bio_sglist to include extension to csum boumdaries (added to the end
  * of the list).
@@ -637,29 +640,49 @@ append_added_csum_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 	void		*buffer;
 	unsigned int	 i, add_idx = bsgl->bs_nr;
 
+	D_PRINT("bs_nr: %u, add_segs: %u\n", bsgl->bs_nr, added_segs);
+
 	D_REALLOC(buffer, bsgl->bs_iovs,
-		  (bsgl->bs_nr + added_segs) * sizeof(struct bio_iov *));
+		  (bsgl->bs_nr + added_segs) * sizeof(struct bio_iov));
 	if (buffer == NULL)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
 
 	for (i = 0; i < bsgl->bs_nr; i++) {
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
-			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
-					bsgl->bs_iovs[i].bi_addr.ba_off +
-					bsgl->bs_iovs[i].bi_prefix_len;
-			bsgl->bs_iovs[add_idx++].bi_data_len =
-					bsgl->bs_iovs[i].bi_prefix_len;
 			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
+			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
+					bsgl->bs_iovs[i].bi_addr.ba_off;
+				/*	+
+					bsgl->bs_iovs[i].bi_prefix_len;
+					*/
+			bsgl->bs_iovs[add_idx].bi_data_len =
+					bsgl->bs_iovs[i].bi_prefix_len;
+
+			bsgl->bs_iovs[add_idx].bi_addr.ba_type =
+				bsgl->bs_iovs[i].bi_addr.ba_type;
+
+			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
+			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
+			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
+
+
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
+			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
 			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
 					bsgl->bs_iovs[i].bi_addr.ba_off +
-					bsgl->bs_iovs[i].bi_data_len;
-			bsgl->bs_iovs[add_idx++].bi_data_len =
+					(bsgl->bs_iovs[i].bi_data_len -
+					 bsgl->bs_iovs[i].bi_suffix_len);
+			bsgl->bs_iovs[add_idx].bi_data_len =
 					bsgl->bs_iovs[i].bi_suffix_len;
-			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
+			bsgl->bs_iovs[add_idx].bi_addr.ba_type =
+				bsgl->bs_iovs[i].bi_addr.ba_type;
+			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
+			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
+			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
 		}
+		/*
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
 			bsgl->bs_iovs[i].bi_addr.ba_off +=
 						bsgl->bs_iovs[i].bi_prefix_len;
@@ -670,12 +693,28 @@ append_added_csum_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[i].bi_data_len -=
 						bsgl->bs_iovs[i].bi_suffix_len;
 		}
+		*/
 	}
 	bsgl->bs_nr += added_segs;
 	return 0;
 }
 
-static bool cont_has_csums = false;
+static void
+agg_show_biovs(struct bio_iov *biovs, unsigned int nr)
+{
+	int i;
+
+	for (i = 0; i < nr; i++)
+		D_PRINT("data_len: %lu, addr.ba_off: %lu, addr.ba_type %u, pre: %lu,suf: %lu\n",
+		       biovs[i].bi_data_len,
+		       biovs[i].bi_addr.ba_off,
+		       biovs[i].bi_addr.ba_type,
+		       biovs[i].bi_prefix_len,
+		       biovs[i].bi_suffix_len);
+
+}
+
+static bool cont_has_csums;
 
 struct csum_recalc {
 	struct evt_rect		*cr_orig_rect;
@@ -683,8 +722,21 @@ struct csum_recalc {
 	struct evt_extent	 cr_log_ext;
 };
 
+static inline void
+agg_add_csum_recalcs(struct csum_recalc **recalcs_p, struct evt_rect *pe_rect,
+		     struct dcs_csum_info *pe_csum_info, struct evt_extent *ext,
+		     unsigned int idx)
+{
+	struct csum_recalc	*recalcs = *recalcs_p;
+
+	recalcs[idx].cr_orig_rect	= pe_rect;
+	recalcs[idx].cr_orig_csum	= pe_csum_info;
+	recalcs[idx].cr_log_ext		= *ext;
+}
+
 struct csum_recalc_args {
 	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	d_sg_list_t		*cra_sgl;	/* write sgl */
 	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
 	struct csum_recalc	*cra_recalcs;   /* recalc info */
 	void			*cra_buf;	/* read buffer */
@@ -735,12 +787,10 @@ calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 		 unsigned int prefix_len, unsigned int rec_size)
 {
 
-	unsigned int	csum_cnt, remainder = prefix_len % rec_size;
-	unsigned int	rx_idx = recalc->cr_log_ext.ex_lo -
-						prefix_len / rec_size;
+	unsigned int csum_cnt, rx_idx = recalc->cr_log_ext.ex_lo -
+							prefix_len / rec_size;
 
-	D_ASSERT(remainder == 0);
-
+	assert(prefix_len % rec_size == 0);
 	csum_cnt = csum_chunk_count(recalc->cr_orig_csum->cs_chunksize, rx_idx,
 				    recalc->cr_log_ext.ex_hi, rec_size);
 	csum_info->cs_nr = csum_cnt;
@@ -754,6 +804,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 {
 	unsigned int i, j;
 
+	D_PRINT("Verifying csum\n");
 	if (new_csum->cs_nr == recalc->cr_orig_csum->cs_nr)
 		j = 0;
 	else {
@@ -767,21 +818,16 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		if (orig_offset == out_offset)
 			j = 0;
 		else {
-			unsigned int remainder = orig_offset / chunksize;
-
 			D_ASSERT(orig_offset < out_offset);
-			orig_offset += chunksize - remainder;
-			remainder = orig_offset % chunksize;
-			D_ASSERT(!remainder);
-
 			for (j = 0; orig_offset < out_offset; j++)
 				orig_offset += chunksize;
-
 			D_ASSERT(orig_offset == out_offset);
 		}
 	}
 
 	for (i = 0; i < new_csum->cs_nr; i++, j++)
+		D_PRINT("i = %u, j = %u\n", i, j);
+		D_ASSERT(new_csum->cs_csum != NULL);
 		if (new_csum->cs_csum[i] != recalc->cr_orig_csum->cs_csum[j])
 			return false;
 	return true;
@@ -800,6 +846,7 @@ csum_agg_recalc(void *recalc_args)
 	unsigned int		 buf_idx = 0;
 	unsigned int		 add_idx = 0;
 	unsigned int		 i, add_offset = 0;
+	int			 rc = 0;
 
 	/* need at most prefix + buf + suffix in sgl */
 	D_ALLOC_ARRAY(sgl.sg_iovs, 3);
@@ -811,27 +858,38 @@ csum_agg_recalc(void *recalc_args)
 			       csum_info.cs_chunksize);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
-		unsigned int	this_buf_nr, this_buf_idx, remainder;
+		unsigned int	this_buf_nr, this_buf_idx;
+
+		if (bsgl->bs_iovs[i].bi_prefix_len) {
+			bsgl->bs_iovs[i].bi_addr.ba_off +=
+						bsgl->bs_iovs[i].bi_prefix_len;
+			bsgl->bs_iovs[i].bi_data_len -=
+						bsgl->bs_iovs[i].bi_prefix_len;
+		}
+		if (bsgl->bs_iovs[i].bi_suffix_len) {
+			bsgl->bs_iovs[i].bi_data_len -=
+						bsgl->bs_iovs[i].bi_suffix_len;
+		}
 
 		this_buf_nr = bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob;
-		remainder = bsgl->bs_iovs[i].bi_data_len % ent_in->ei_inob;
-		D_ASSERT(!remainder);
-
 		add_offset = csum_agg_set_sgl(&sgl, bsgl, args->cra_buf,
 					      args->cra_buf_len,
 					      args->cra_seg_cnt,
 					      args->cra_seg_size, i, add_offset,
 					      &buf_idx, &add_idx);
+
 		D_ASSERT(recalcs->cr_log_ext.ex_hi - recalcs->cr_log_ext.ex_lo
-			 == bsgl->bs_iovs[i].bi_data_len * ent_in->ei_inob);
+			+ 1 == bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
 
 		this_buf_idx = calc_csum_params(&csum_info, &recalcs[i],
 						bsgl->bs_iovs[i].bi_prefix_len,
 						ent_in->ei_inob);
 
-		daos_csummer_calc_one(csummer, &sgl, &csum_info,
-				      ent_in->ei_inob, this_buf_nr,
-				      this_buf_idx);
+		rc = daos_csummer_calc_one(csummer, &sgl, &csum_info,
+					   ent_in->ei_inob, this_buf_nr,
+					   this_buf_idx);
+		if (rc)
+			goto out;
 
 		is_valid = csum_agg_verify(&recalcs[i], &csum_info,
 					   ent_in->ei_inob,
@@ -840,16 +898,28 @@ csum_agg_recalc(void *recalc_args)
 			args->cra_rc = -DER_CSUM;
 			goto out;
 		}
+
 	}
+
+	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
+				   ent_in->ei_inob,
+				   evt_extent_width(&ent_in->ei_rect.rc_ex),
+				   ent_in->ei_rect.rc_ex.ex_lo);
 out:
-	// set eventual, if xsteam offload
+	// set eventual, if xstteam offload
 	D_PRINT("Verification Failed in aggregation\n");
+	daos_csummer_destroy(&csummer);
+	args->cra_rc = rc;
+	if (rc)
+		for (i = 0; i < args->cra_seg_cnt; i++)
+			recalcs[i].cr_orig_csum->cs_not_valid = true;
 }
 
 static int
 csum_recalc_csums(struct agg_io_context *io, struct bio_sglist *bsgl,
-	    struct evt_entry_in	*ent_in, struct csum_recalc *recalcs,
-	    unsigned int recalc_seg_cnt, daos_size_t seg_size)
+		  d_sg_list_t *sgl, struct evt_entry_in	*ent_in,
+		  struct csum_recalc *recalcs,
+		  unsigned int recalc_seg_cnt, daos_size_t seg_size)
 {
 	struct csum_recalc_args	args = { 0 };
 	unsigned int		csum_cnt;
@@ -883,6 +953,7 @@ csum_recalc_csums(struct agg_io_context *io, struct bio_sglist *bsgl,
 	ent_in->ei_csum.cs_csum = io->ic_csum_buf;
 
 	args.cra_bsgl		= bsgl;
+	args.cra_sgl		= sgl;
 	args.cra_ent_in		= ent_in;
 	args.cra_recalcs	= recalcs;
 	args.cra_seg_size	= seg_size;
@@ -895,7 +966,7 @@ csum_recalc_csums(struct agg_io_context *io, struct bio_sglist *bsgl,
 out:
 	return rc;
 }
-static unsigned int chunksize = 1 << 14;
+
 static int
 fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		 struct agg_lgc_seg *lgc_seg, unsigned int *acts)
@@ -915,7 +986,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct evt_extent	 ext = { 0 };
 	daos_off_t		 phy_lo;
 	unsigned int		 i, seg_count, biov_idx = 0;
-	unsigned int		 buf_add = 0;
+	size_t			 buf_add = 0;
 	unsigned int		 added_csum_segs = 0;
 	int			 rc;
 
@@ -945,11 +1016,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 	}
 
-	/* If csums, Initialize csum struct in ent_in,
-	 * add array pointers to evt_csum_recalc,
-	 * same size as above.
-	 */
-	 if (cont_has_csums) {
+	if (cont_has_csums) {
 		D_ALLOC_ARRAY(csum_recalcs, seg_count);
 		if (csum_recalcs == NULL) {
 			rc = -DER_NOMEM;
@@ -958,8 +1025,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	iov.iov_buf_len = buf_max; /* for sanity check */
-	unsigned int remainder = chunksize % ent_in->ei_inob;
-	D_ASSERT(!remainder);
 	i = lgc_seg->ls_idx_start;
 	while (i <= lgc_seg->ls_idx_end) {
 		if (lgc_seg->ls_phy_ent != NULL) {
@@ -986,6 +1051,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		copy_size = evt_extent_width(&ext) * ent_in->ei_inob;
 
 		addr_src = phy_ent->pe_addr;
+		D_PRINT("addr_src.ba_type: %u\n", addr_src.ba_type);
 		addr_src.ba_off += (ext.ex_lo - phy_lo) * ent_in->ei_inob;
 
 		D_ASSERT(!bio_addr_is_hole(&addr_src));
@@ -993,37 +1059,41 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
+		//D_PRINT("setting\n");
 		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
+		//D_PRINT("set\n");
+
 		if (cont_has_csums) {
-			unsigned int wider = 0;
+			unsigned int wider = 0; /* length of per-ext csum add */
 			unsigned int add_cnt =
 				widen_biov(&bsgl.bs_iovs[biov_idx], phy_ent,
 					   &ext, ent_in->ei_inob, &wider);
 
+			/* add_cnt is the number of data segments to add. */
 			if (add_cnt) {
 				buf_add += wider;
 				iov.iov_buf_len += wider;
 				copy_size += wider;
 				added_csum_segs += add_cnt;
 			}
-			csum_recalcs[biov_idx].cr_orig_rect =
-						&phy_ent->pe_rect;
-			csum_recalcs[biov_idx].cr_orig_csum =
-						&phy_ent->pe_csum_info;
-			csum_recalcs[biov_idx].cr_log_ext = ext;
-		} /*else 
-			D_PRINT("phy_lo: %lu, ph_hi: %lu log_lo: %lu, log_hi: %lu\n",
-				phy_ent->pe_rect.rc_ex.ex_lo,
-				phy_ent->pe_rect.rc_ex.ex_hi,
-				ext.ex_lo,
-				ext.ex_hi);
-				*/
+			agg_add_csum_recalcs(&csum_recalcs, &phy_ent->pe_rect,
+					     &phy_ent->pe_csum_info, &ext,
+					     biov_idx);
+		}
 
 		biov_idx++;
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 		iov.iov_buf_len -= copy_size;
 	}
+
+	agg_show_biovs(bsgl.bs_iovs, bsgl.bs_nr);
 	D_ASSERT(seg_size == buf_max - iov.iov_buf_len);
+
+	/* Moved read buf allocation to after loop, to allow inclusion
+	 * of additional data needed for verification of prior checksums.
+	 */
+	D_PRINT("buf_max: %lu, buf_add: %lu, ic_buf_len: %u\n",
+		buf_max, buf_add, io->ic_buf_len);
 	if (io->ic_buf_len < buf_max + buf_add) {
 		void *buffer;
 
@@ -1039,27 +1109,40 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	if (added_csum_segs) {
 		rc = append_added_csum_segs(&bsgl,added_csum_segs);
-		if (rc)
+		if (rc) {
+			D_ERROR("Extend bsgl error: "DF_RC"\n", DP_RC(rc));
 			goto out;
+		}
+		D_PRINT("csum segs added\n");
+		agg_show_biovs(bsgl.bs_iovs, bsgl.bs_nr);
 	}
+
 
 	iov.iov_buf = io->ic_buf;
 	iov.iov_len = 0;
 	iov.iov_buf_len = io->ic_buf_len;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
+	D_PRINT("reading - buf_len: %lu\n", iov.iov_buf_len);
 	rc = bio_readv(bio_ctxt, &bsgl, &sgl);
+	D_PRINT("read\n");
 	if (rc) {
 		D_ERROR("Readv for "DF_RECT" error: "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 		goto out;
 	}
 	D_ASSERT(iov.iov_len == seg_size + buf_add);
+
 	if (cont_has_csums) {
-		rc = csum_recalc_csums(io, &bsgl, ent_in, csum_recalcs,
+		D_PRINT("Recalc\n");
+		rc = csum_recalc_csums(io, &bsgl, &sgl, ent_in, csum_recalcs,
 				       seg_count, seg_size);
-		// goto out;
+		if (rc) {
+			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 	}
+
 	/* moved reserve to after read, in case there's a csum mismatch
 	 * on the verification of the read data
 	 */
@@ -1069,7 +1152,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			DP_RC(rc));
 		goto out;
 	}
-
 
 	addr_dst = ent_in->ei_addr;
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
@@ -1082,11 +1164,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (rc)
 		D_ERROR("Write "DF_RECT" error: "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
-
 out:
 	bio_sgl_fini(&bsgl);
-	// if csum, free csum_recalcs array;
-	D_FREE(csum_recalcs);
+	if (cont_has_csums)
+		D_FREE(csum_recalcs);
 	return rc;
 }
 
@@ -1195,7 +1276,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 	/* Remove old physical entries from EV tree */
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
-		if (csum_is_valid(&phy_ent->pe_csum_info)) {
+		if (!phy_ent->pe_csum_info.cs_not_valid) {
 			rect = phy_ent->pe_rect;
 
 			D_ASSERT(phy_ent->pe_ref == 0);
@@ -1930,7 +2011,7 @@ merge_window_init(struct agg_merge_window *mw)
 }
 
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, bool with_csums)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	vos_iter_param_t	 iter_param = { 0 };
@@ -1938,6 +2019,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	struct vos_iter_anchors	 anchors = { 0 };
 	int			 rc;
 
+	cont_has_csums = with_csums;
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",

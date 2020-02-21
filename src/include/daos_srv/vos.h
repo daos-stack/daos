@@ -421,7 +421,7 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, bool with_csums);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
