@@ -364,35 +364,6 @@ func (result *NvmeScanResult) Summary() (out string) {
 // of remote servers identified by an address string.
 type NvmeScanResults map[string]*NvmeScanResult
 
-func scmModulesFromPB(pbMms proto.ScmModules) (mms []storage.ScmModule) {
-	for _, c := range pbMms {
-		mms = append(mms,
-			storage.ScmModule{
-				ChannelID:       c.Loc.Channel,
-				ChannelPosition: c.Loc.Channelpos,
-				ControllerID:    c.Loc.Memctrlr,
-				SocketID:        c.Loc.Socket,
-				PhysicalID:      c.Physicalid,
-				Capacity:        c.Capacity,
-			})
-	}
-	return
-}
-
-func scmNamespacesFromPB(pbNss proto.ScmNamespaces) (nss []storage.ScmNamespace) {
-	for _, ns := range pbNss {
-		nss = append(nss,
-			storage.ScmNamespace{
-				UUID:        ns.Uuid,
-				BlockDevice: ns.Blockdev,
-				Name:        ns.Dev,
-				NumaNode:    ns.Numanode,
-				Size:        ns.Size,
-			})
-	}
-	return
-}
-
 // StorageScanReq encapsulated subsystem scan parameters.
 type StorageScanReq struct{}
 

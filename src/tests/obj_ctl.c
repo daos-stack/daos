@@ -234,7 +234,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	daos_key_desc_t	 kds[KDS_NR] = {0};
 	daos_anchor_t	 anchor;
 	int		 i;
-	int		 rc;
+	int		 rc = 0;
 	int		 total = 0;
 
 	memset(&anchor, 0, sizeof(anchor));

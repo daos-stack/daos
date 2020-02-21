@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,10 +109,10 @@ func (f *Fault) Error() string {
 // resolve to the same fault code, then they are considered equivalent.
 func (f *Fault) Equals(raw error) bool {
 	other, ok := errors.Cause(raw).(*Fault)
-	if !ok {
+	if !ok || other == nil {
 		return false
 	}
-	return f.Code == other.Code && f.Description == other.Description
+	return f.Code == other.Code
 }
 
 // ShowResolutionFor attempts to return the resolution string for the
@@ -123,7 +123,7 @@ func ShowResolutionFor(raw error) string {
 	fmtStr := "%s: code = %d resolution = %q"
 
 	f, ok := errors.Cause(raw).(*Fault)
-	if !ok {
+	if !ok || f == nil {
 		return fmt.Sprintf(fmtStr, UnknownDomainStr, code.Unknown, ResolutionUnknown)
 	}
 	if f.Resolution == ResolutionEmpty {
@@ -136,8 +136,14 @@ func ShowResolutionFor(raw error) string {
 // defined.
 func HasResolution(raw error) bool {
 	f, ok := errors.Cause(raw).(*Fault)
-	if !ok || f.Resolution == ResolutionEmpty {
+	if !ok || f == nil || f.Resolution == ResolutionEmpty {
 		return false
 	}
 	return true
+}
+
+// IsFault indicates whether or not the error is a Fault
+func IsFault(raw error) bool {
+	_, ok := errors.Cause(raw).(*Fault)
+	return ok
 }
