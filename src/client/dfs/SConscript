@@ -7,49 +7,66 @@ def scons():
 
     denv = env.Clone()
 
-    """If Lustre installed use its headers instead of our local defines"""
+    """If Lustre installed use its headers to build a Lustre-aware libduns """
     try:
+        import re
+    
+        gotdistro = False
+        gotpkg = False
+        gotversion = False
         with open('/etc/os-release') as f:
             for line in f:
-                if 'ID' in line:
+                if re.search('^ID=', line):
                     line = line.strip()
                     _, distro = line.strip().split('=')
                     distro = distro.strip('"')
                     break
         if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
-
-            gotit = False
+    
+            gotdistro = True
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
                 headers = ts.dbMatch('name', 'lustre-client')
             if headers:
                 from pkg_resources import parse_version
-
+    
+                gotpkg = True
                 for header in headers:
                     if parse_version(header['version']) >= parse_version('2.12.57'):
-                        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
-                        gotit = True
-            if gotit == False:
-                print("Found no compatible lustre nor lustre-client package.")
+                        gotversion = True
         elif distro in ('debian', 'ubuntu'):
             import apt
             from pkg_resources import parse_version
-
+    
+            gotdistro = True
             cache = apt.Cache()
             cache.open()
-            instver = cache["lustre"].installed
-            if not instver:
-                instver = cache["lustre-client"].installed
-            if instver and parse_version(instver.version) >= parse_version('2.12.57'):
-                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            if "lustre" in cache:
+                if cache["lustre"].is_installed:
+                    gotpkg = True
+                    instver = cache["lustre"].installed
             else:
-                print("Found no compatible lustre nor lustre-client package.")
-        else:
+                if "lustre-client" in cache:
+                    if cache["lustre-client"].is_installed:
+                        gotpkg = True
+                        instver = cache["lustre-client"].installed
+            if gotpkg == True:
+                if parse_version(instver.version) >= parse_version('2.12.57'):
+                    gotversion = True
+        if gotdistro == False:
             print("Unable to identify distro.")
+        else:
+            if gotpkg == False:
+                print("Unable to find lustre nor lustre-client package.")
+            else:
+                if gotversion == False:
+                    print("Unable to find minimum version of lustre nor lustre-client package.")
+                else:
+                    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     except ImportError:
-        pass
+        raise
 
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
 
