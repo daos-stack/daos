@@ -821,6 +821,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 			D_ASSERT(orig_offset < out_offset);
 			for (j = 0; orig_offset < out_offset; j++)
 				orig_offset += chunksize;
+			D_PRINT("orig: %u, out: %u\n", orig_offset, out_offset);
 			D_ASSERT(orig_offset == out_offset);
 		}
 	}
@@ -828,8 +829,11 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	for (i = 0; i < new_csum->cs_nr; i++, j++)
 		D_PRINT("i = %u, j = %u\n", i, j);
 		D_ASSERT(new_csum->cs_csum != NULL);
-		if (new_csum->cs_csum[i] != recalc->cr_orig_csum->cs_csum[j])
+		if (new_csum->cs_csum[i] != recalc->cr_orig_csum->cs_csum[j]) {
+			//D_PRINT("new: %lu, orig: %lu\n", new_csum->cs_csum[i],
+			//	recalc->cr_orig_csum->cs_csum[i]);
 			return false;
+		}
 	return true;
 }
 
@@ -947,8 +951,9 @@ csum_recalc_csums(struct agg_io_context *io, struct bio_sglist *bsgl,
 			rc = -DER_NOMEM;
 			goto out;
 		}
-	} else
-		memset(io->ic_csum_buf, 0, ent_in->ei_csum.cs_buf_len);
+		io->ic_csum_buf = buffer;
+	}
+	memset(io->ic_csum_buf, 0, ent_in->ei_csum.cs_buf_len);
 
 	ent_in->ei_csum.cs_csum = io->ic_csum_buf;
 
