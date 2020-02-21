@@ -22,18 +22,21 @@ def scons():
     newenv = denv.Clone()
     try:
         import os
+        import re
+
         with open('/etc/os-release') as f:
             for line in f:
-                if 'ID' in line:
+                if re.search('^ID=', line):
                     line = line.strip()
                     id, distro = line.strip().split('=')
+                    distro = distro.strip('"')
                     break
-        if distro in ['"centos"', '"rhel"', '"fedora"']:
+        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'libcmocka')
             if not headers:
-                print "No package libcmocka found."
+                print "No package libcmocka installed."
             else:
                 from pkg_resources import parse_version
                 for h in headers:
@@ -43,15 +46,23 @@ def scons():
             import apt
             cache = apt.Cache()
             cache.open()
-            instver = cache["libcmocka"].installed
-            if instver:
-                if parse_version(instver.version) < parse_version('1.1.5'):
-                    newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
+            """ debian distros use a 0 suffix """
+            if "libcmocka0" in cache:
+                if cache["libcmocka0"].is_installed:
+                    instver = cache["libcmocka0"].installed
+                    if parse_version(instver.version) < parse_version('1.1.5'):
+                        newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
+                    else:
+                        print "libcmocka version without fixed skip()."
+                else:
+                    print "No package libcmocka installed."
             else:
                 print "No package libcmocka found."
         else:
             print "Unable to identify distro."
     except ImportError:
+        """ just continue to run with workaround !! """
+	print("ImportError: unable to determine if libcmocka has skip() fix.")
         pass
 
     test = daos_build.program(newenv, 'daos_test', Glob('*.c'), LIBS=libraries)
