@@ -32,8 +32,8 @@ from avocado import skip, TestFail, fail_on
 
 import fault_config_utils
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils_base import CommandFailure, EnvironmentVariables
-from command_utils import CommonConfig
+from command_utils_base import \
+    CommandFailure, EnvironmentVariables, CommonConfig
 from agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
 from agent_utils import DaosAgentCommand, DaosAgentManager, include_local_host

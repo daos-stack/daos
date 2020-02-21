@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from logging import getLogger
+from importlib import import_module
 import re
 import time
 import signal
@@ -32,11 +33,6 @@ from command_utils_base import \
     CommandFailure, BasicParameter, NamedParameter, ObjectWithParameters, \
     CommandWithParameters, YamlParameters
 from general_utils import check_file_exists, stop_processes
-
-# pylint: disable=unused-import
-# Supported JobManager classes for SubprocessManager.__init__()
-from job_manager_utils import OpenMPI, Mpich, Srun
-# pylint: enable=unused-import
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -490,10 +486,13 @@ class SubprocessManager(object):
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
-        if manager not in globals():
+        try:
+            manager_module = import_module("job_manager_utils")
+            manager_class = getattr(manager_module, manager)
+        except (ImportError, AttributeError) as error:
             raise CommandFailure(
-                "Invalid job manager class: {}".format(manager))
-        self.manager = globals()[manager](command, subprocess=True)
+                "Invalid '{}' job manager class: {}".format(manager, error))
+        self.manager = manager_class(command, subprocess=True)
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
