@@ -1441,7 +1441,8 @@ renew:
 			      orw->orw_epoch, orw->orw_dkey_hash,
 			      orw->orw_map_ver, DAOS_INTENT_UPDATE,
 			      orw->orw_shard_tgts.ca_arrays,
-			      orw->orw_shard_tgts.ca_count, &dlh);
+			      orw->orw_shard_tgts.ca_count,
+			      orw->orw_api_flags & VOS_COND_UPDATE_MASK, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2062,7 +2063,8 @@ renew:
 			      opi->opi_epoch, opi->opi_dkey_hash,
 			      opi->opi_map_ver, DAOS_INTENT_PUNCH,
 			      opi->opi_shard_tgts.ca_arrays,
-			      opi->opi_shard_tgts.ca_count, &dlh);
+			      opi->opi_shard_tgts.ca_count,
+			      opi->opi_api_flags & VOS_COND_PUNCH_MASK, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));

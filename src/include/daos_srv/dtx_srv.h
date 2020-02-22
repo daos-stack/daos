@@ -144,7 +144,7 @@ int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
-		 struct dtx_leader_handle *dlh);
+		 bool cond_check, struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	       int result);
