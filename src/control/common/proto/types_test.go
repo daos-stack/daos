@@ -25,9 +25,10 @@ package proto
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestProto_ConvertNvmeDeviceHealth(t *testing.T) {
