@@ -10,7 +10,7 @@ def scons():
     """If Lustre installed use its headers to build a Lustre-aware libduns """
     try:
         import re
-    
+
         gotdistro = False
         gotpkg = False
         gotversion = False
@@ -23,7 +23,7 @@ def scons():
                     break
         if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
-    
+
             gotdistro = True
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
@@ -31,7 +31,7 @@ def scons():
                 headers = ts.dbMatch('name', 'lustre-client')
             if headers:
                 from pkg_resources import parse_version
-    
+
                 gotpkg = True
                 for header in headers:
                     if parse_version(header['version']) >= parse_version('2.12.57'):
@@ -39,7 +39,7 @@ def scons():
         elif distro in ('debian', 'ubuntu'):
             import apt
             from pkg_resources import parse_version
-    
+
             gotdistro = True
             cache = apt.Cache()
             cache.open()
@@ -52,16 +52,16 @@ def scons():
                     if cache["lustre-client"].is_installed:
                         gotpkg = True
                         instver = cache["lustre-client"].installed
-            if gotpkg == True:
+            if gotpkg is True:
                 if parse_version(instver.version) >= parse_version('2.12.57'):
                     gotversion = True
-        if gotdistro == False:
+        if gotdistro is False:
             print("Unable to identify distro.")
         else:
-            if gotpkg == False:
+            if gotpkg is False:
                 print("Unable to find lustre nor lustre-client package.")
             else:
-                if gotversion == False:
+                if gotversion is False:
                     print("Unable to find minimum version of lustre nor lustre-client package.")
                 else:
                     denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
