@@ -91,6 +91,8 @@ const (
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
 	ServerIommuDisabled
+	ServerPoolScmTooSmall
+	ServerPoolNvmeTooSmall
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700
