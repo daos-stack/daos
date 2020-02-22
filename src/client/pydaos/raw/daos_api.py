@@ -1514,13 +1514,12 @@ class DaosContainer(object):
             else:
                 ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop),
                            None)
-                if ret != 0:
-                    self.uuid = (ctypes.c_ubyte * 1)(0)
-                    raise DaosApiError(
-                        "Container create returned non-zero. RC: {0}".format(
-                            ret))
-                else:
-                    self.attached = 1
+            if ret != 0:
+                self.uuid = (ctypes.c_ubyte * 1)(0)
+                raise DaosApiError(
+                    "Container create returned non-zero. RC: {0}".format(ret))
+            else:
+                self.attached = 1
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
