@@ -238,15 +238,13 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 					src_iv->riv_toberb_obj_count;
 				rs.rs_size	= src_iv->riv_size;
 				rs.rs_seconds   = src_iv->riv_seconds;
-
 				rc = rebuild_status_completed_update(
 						src_iv->riv_pool_uuid, &rs);
-				if (rc != 0) {
+				if (rc != 0)
 					D_ERROR("_status_completed_update, "
 						DF_UUID" failed, rc %d.\n",
 						DP_UUID(src_iv->riv_pool_uuid),
 						rc);
-				}
 			}
 free:
 			if (prop)
