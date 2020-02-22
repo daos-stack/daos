@@ -188,7 +188,9 @@ func TestPoolCommands(t *testing.T) {
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
-	os.Mkdir(testNoPermDir, 0444)
+	if err := os.Mkdir(testNoPermDir, 0444); err != nil {
+		t.Fatal(err)
+	}
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -295,6 +297,12 @@ func TestPoolCommands(t *testing.T) {
 					Force: true,
 				}),
 			}, " "),
+			nil,
+		},
+		{
+			"List pools",
+			"pool list",
+			"ConnectClients ListPools-{daos_server}",
 			nil,
 		},
 		{
