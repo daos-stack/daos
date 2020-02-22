@@ -102,10 +102,9 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 	uuid_copy(rebuild_pool_tls->rebuild_poh_uuid, poh_uuid);
 	uuid_copy(rebuild_pool_tls->rebuild_coh_uuid, coh_uuid);
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
-	rebuild_pool_tls->rebuild_pool_rec_count = 0;
+	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
-	rebuild_pool_tls->rebuild_pool_size = 0;
-
+	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
 	d_list_add(&rebuild_pool_tls->rebuild_pool_list,
 		   &tls->rebuild_pool_list);
@@ -120,6 +119,8 @@ rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 {
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver);
+	if (!daos_handle_is_inval(tls->rebuild_tree_hdl))
+		obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
 	D_FREE(tls);
 }
@@ -377,23 +378,16 @@ dss_rebuild_check_one(void *data)
 	D_ASSERTF(pool_tls != NULL, DF_UUID" ver %d\n",
 		   DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
-	D_DEBUG(DB_REBUILD, "%d rec_count "DF_U64" obj_count "DF_U64
-		" size "DF_U64" scanning %d status %d inflight %d\n",
-		idx, pool_tls->rebuild_pool_rec_count,
-		pool_tls->rebuild_pool_obj_count,
-		pool_tls->rebuild_pool_size,
-		pool_tls->rebuild_pool_scanning,
-		pool_tls->rebuild_pool_status,
-		rpt->rt_pullers[idx].rp_inflight);
+	D_DEBUG(DB_REBUILD, "%d scanning %d status %d\n", idx,
+		pool_tls->rebuild_pool_scanning, pool_tls->rebuild_pool_status);
+
 	ABT_mutex_lock(status->lock);
 	if (pool_tls->rebuild_pool_scanning)
 		status->scanning = 1;
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
-	status->rec_count += pool_tls->rebuild_pool_rec_count;
-	status->obj_count += pool_tls->rebuild_pool_obj_count;
-	status->size += pool_tls->rebuild_pool_size;
+	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
 	return 0;
@@ -403,11 +397,17 @@ static int
 rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		  struct rebuild_tgt_query_info *status)
 {
+	struct ds_migrate_status	dms = { 0 };
 	struct rebuild_tgt_query_arg	arg;
 	int				rc;
 
 	arg.rpt = rpt;
 	arg.status = status;
+
+	rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+				     &dms);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
@@ -418,31 +418,13 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		D_GOTO(out, rc);
 	}
 
-	if (!status->scanning && !rpt->rt_lead_puller_running &&
-	    rpt->rt_toberb_objs == status->obj_count) {
-		int i;
-
-		/* then check pulling status*/
-		for (i = 0; i < rpt->rt_puller_nxs; i++) {
-			struct rebuild_puller *puller;
-
-			puller = &rpt->rt_pullers[i];
-			ABT_mutex_lock(puller->rp_lock);
-			if (d_list_empty(&puller->rp_one_list) &&
-			    puller->rp_inflight == 0) {
-				ABT_mutex_unlock(puller->rp_lock);
-				continue;
-			}
-			ABT_mutex_unlock(puller->rp_lock);
-
-			D_DEBUG(DB_REBUILD,
-				"thread %d rebuilding is still busy.\n", i);
-			status->rebuilding = true;
-			break;
-		}
-	} else {
+	status->obj_count = dms.dm_obj_count;
+	status->rec_count = dms.dm_rec_count;
+	status->size = dms.dm_total_size;
+	if (status->scanning || dms.dm_migrating)
 		status->rebuilding = true;
-	}
+	else
+		status->rebuilding = false;
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
@@ -450,7 +432,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 		"size = "DF_U64"\n",
 		DP_UUID(rpt->rt_pool_uuid), status->scanning,
 		status->status, status->rebuilding ? "yes" : "no",
-		status->obj_count, rpt->rt_toberb_objs, status->rec_count,
+		status->obj_count, status->tobe_obj_count, status->rec_count,
 		status->size);
 out:
 	return rc;
@@ -902,23 +884,6 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 	if (rpt->rt_pool != NULL)
 		ds_pool_put(rpt->rt_pool);
 
-	if (rpt->rt_pullers) {
-		int i;
-
-		for (i = 0; i < rpt->rt_puller_nxs; i++) {
-			struct rebuild_puller *puller;
-
-			puller = &rpt->rt_pullers[i];
-
-			D_ASSERT(puller->rp_ult == NULL);
-			if (puller->rp_fini_cond)
-				ABT_cond_free(&puller->rp_fini_cond);
-			if (puller->rp_lock)
-				ABT_mutex_free(&puller->rp_lock);
-		}
-		D_FREE(rpt->rt_pullers);
-	}
-
 	if (rpt->rt_svc_list)
 		d_rank_list_free(rpt->rt_svc_list);
 
@@ -1331,8 +1296,9 @@ ds_rebuild_leader_stop_all()
 	 * term, then each target will only need update its leader information
 	 * and report the rebuild status to the new leader.
 	 * If the new leader never comes, then those rebuild process can still
-	 * finish, but those tracking ULT (rebuild_tgt_status_check) will keep
-	 * sending the status report to the stale leader, until it is aborted.
+	 * finish, but those tracking ULT (rebuild_tgt_status_check_ult) will
+	 * keep sending the status report to the stale leader, until it is
+	 * aborted.
 	 */
 	D_DEBUG(DB_REBUILD, "abort rebuild %p\n", &rebuild_gst);
 	rebuild_gst.rg_abort = 1;
@@ -1470,7 +1436,7 @@ rebuild_fini_one(void *arg)
 	}
 
 	rebuild_pool_tls_destroy(pool_tls);
-
+	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	ds_cont_local_close(rpt->rt_coh_uuid);
@@ -1502,7 +1468,6 @@ int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 {
 	struct rebuild_pool_tls	*pool_tls;
-	int			 i;
 	int			 rc;
 
 	D_DEBUG(DB_REBUILD, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
@@ -1514,7 +1479,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
 	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check, which will make sure when
+	 * rebuild_tgt_status_check_ult, which will make sure when
 	 * rt_refcount reaches to 1, either all rebuild is done or
 	 * all ult/task has been aborted by rt_abort, i.e. no new
 	 * ULT/task will be created after this check. So it is safe
@@ -1523,37 +1488,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	if (rpt->rt_refcount > 1)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
-
-	/* Check each puller */
-	for (i = 0; i < rpt->rt_puller_nxs; i++) {
-		struct rebuild_puller	*puller;
-		struct rebuild_one	*rdone;
-		struct rebuild_one	*tmp;
-
-		puller = &rpt->rt_pullers[i];
-
-		ABT_mutex_lock(puller->rp_lock);
-		if (puller->rp_ult_running)
-			ABT_cond_wait(puller->rp_fini_cond, puller->rp_lock);
-		ABT_mutex_unlock(puller->rp_lock);
-
-		if (puller->rp_ult) {
-			ABT_thread_free(&puller->rp_ult);
-			puller->rp_ult = NULL;
-		}
-
-		/* since the dkey thread has been stopped, so we do not
-		 * need lock here
-		 */
-		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
-					   ro_list) {
-			d_list_del_init(&rdone->ro_list);
-			D_WARN(DF_UUID" left rebuild rdone key="DF_KEY"\n",
-			       DP_UUID(rpt->rt_pool_uuid),
-			       DP_KEY(&rdone->ro_dkey));
-			rebuild_one_destroy(rdone);
-		}
-	}
 
 	/* destroy the rebuild pool tls on XS 0 */
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid,
@@ -1565,8 +1499,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0, DSS_ULT_REBUILD);
 
 	rpt_put(rpt);
-	/* No one should access rpt after we stop puller and call
-	 * rebuild_fini_one.
+	/* No one should access rpt after rebuild_fini_one.
 	 */
 	D_ASSERT(rpt->rt_refcount == 0);
 
@@ -1575,9 +1508,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	return rc;
 }
 
-#define RBLD_CHECK_INTV		2	/* seconds interval to check puller */
+#define RBLD_CHECK_INTV		2	/* seconds interval to check*/
 void
-rebuild_tgt_status_check(void *arg)
+rebuild_tgt_status_check_ult(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 
@@ -1611,7 +1544,6 @@ rebuild_tgt_status_check(void *arg)
 		memset(&iv, 0, sizeof(iv));
 		uuid_copy(iv.riv_pool_uuid, rpt->rt_pool_uuid);
 
-		D_ASSERT(rpt->rt_toberb_objs >= rpt->rt_reported_toberb_objs);
 		/* rebuild_tgt_query above possibly lost some counter
 		 * when target being excluded.
 		 */
@@ -1621,13 +1553,15 @@ rebuild_tgt_status_check(void *arg)
 			status.rec_count = rpt->rt_reported_rec_cnt;
 		if (status.size < rpt->rt_reported_size)
 			status.size = rpt->rt_reported_size;
+		if (status.tobe_obj_count < rpt->rt_reported_toberb_objs)
+			status.tobe_obj_count = rpt->rt_reported_toberb_objs;
 		if (rpt->rt_re_report) {
-			iv.riv_toberb_obj_count = rpt->rt_toberb_objs;
+			iv.riv_toberb_obj_count = status.tobe_obj_count;
 			iv.riv_obj_count = status.obj_count;
 			iv.riv_rec_count = status.rec_count;
 			iv.riv_size = status.size;
 		} else {
-			iv.riv_toberb_obj_count = rpt->rt_toberb_objs -
+			iv.riv_toberb_obj_count = status.tobe_obj_count -
 						  rpt->rt_reported_toberb_objs;
 			iv.riv_obj_count = status.obj_count -
 					   rpt->rt_reported_obj_cnt;
@@ -1750,11 +1684,10 @@ rebuild_prepare_one(void *data)
 
 static int
 rpt_create(struct ds_pool *pool, uint32_t pm_ver, uint64_t leader_term,
-	   struct rebuild_tgt_pool_tracker **p_rpt)
+	   uint32_t tgts_num, struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 	d_rank_t	rank;
-	int		i;
 	int		rc;
 
 	D_ALLOC_PTR(rpt);
@@ -1770,35 +1703,14 @@ rpt_create(struct ds_pool *pool, uint32_t pm_ver, uint64_t leader_term,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
 
-	/* Initialize per-thread counters */
-	rpt->rt_puller_nxs = dss_tgt_nr;
-	D_ALLOC_ARRAY(rpt->rt_pullers, rpt->rt_puller_nxs);
-	if (!rpt->rt_pullers)
-		D_GOTO(free, rc = -DER_NOMEM);
-
-	for (i = 0; i < rpt->rt_puller_nxs; i++) {
-		struct rebuild_puller *puller;
-
-		puller = &rpt->rt_pullers[i];
-		D_INIT_LIST_HEAD(&puller->rp_one_list);
-		rc = ABT_mutex_create(&puller->rp_lock);
-		if (rc != ABT_SUCCESS)
-			D_GOTO(free, rc = dss_abterr2der(rc));
-
-		rc = ABT_cond_create(&puller->rp_fini_cond);
-		if (rc != ABT_SUCCESS)
-			D_GOTO(free, rc = dss_abterr2der(rc));
-	}
-
 	uuid_copy(rpt->rt_pool_uuid, pool->sp_uuid);
-	rpt->rt_lead_puller_running = 0;
-	rpt->rt_toberb_objs = 0;
 	rpt->rt_reported_toberb_objs = 0;
 	rpt->rt_reported_obj_cnt = 0;
 	rpt->rt_reported_rec_cnt = 0;
 	rpt->rt_reported_size = 0;
 	rpt->rt_rebuild_ver = pm_ver;
 	rpt->rt_leader_term = leader_term;
+	rpt->rt_tgts_num = tgts_num;
 	crt_group_rank(pool->sp_group, &rank);
 	rpt->rt_rank = rank;
 
@@ -1883,7 +1795,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	}
 
 	/* Create rpt for the target */
-	rc = rpt_create(pool, rsi->rsi_rebuild_ver, rsi->rsi_leader_term, &rpt);
+	rc = rpt_create(pool, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
+			rsi->rsi_tgts_num, &rpt);
 	if (rc)
 		D_GOTO(out, rc);
 

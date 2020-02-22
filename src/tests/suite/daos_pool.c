@@ -767,7 +767,7 @@ teardown_containers(void **state)
 	test_arg_t		*arg = *state;
 	struct test_list_cont	*lcarg = arg->pool_lc_args;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lcarg == NULL)
 		return 0;
