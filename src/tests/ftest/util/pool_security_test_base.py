@@ -116,10 +116,10 @@ class PoolSecurityTestBase(TestWithServers):
             line = line.split("\n")[0]
             if line == entry:
                 line = new_entry
-                self.log.info("==>replaceing \n{}  with\n{}".
-                    format(entry,new_entry))
+                self.log.info("==>replaceing \n %s  with\n %s",\
+                    entry, new_entry)
             new_permissions = new_permissions + line + "\n"
-        if entry == None:
+        if entry is None:
             new_permissions = new_permissions + new_entry + "\n"
         acl_file.close()
         acl_file = open(file_name, "w")
@@ -285,12 +285,9 @@ class PoolSecurityTestBase(TestWithServers):
         sec_group_rw = self.params.get("sg_read_write", "/run/pool_acl/*")
         user_uid = os.geteuid()
         user_gid = os.getegid()
-        current_user = pwd.getpwuid(user_uid)[0]
         current_group = grp.getgrgid(user_gid)[0]
         primary_grp_perm = self.params.get(\
             "pg_permission", "/run/pool_acl/primary_secondary_group_test/*")[0]
-        read, write = self.params.get(\
-            "pg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         sec_group = self.params.get(\
             "secondary_group_name", \
             "/run/pool_acl/primary_secondary_group_test/*")
@@ -340,13 +337,13 @@ class PoolSecurityTestBase(TestWithServers):
         #daos pool query --pool <uuid>
         self.log.info("  (7-6)Verify pool read by: daos pool query --pool")
         exp_read = sec_group_rw[0]
-        self.verify_pool_readwrite(svc, uuid, "read", expect = exp_read)
+        self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
 
         #Verify pool write operation
         #daos continer create --pool <uuid>
         self.log.info("  (7-7)Verify pool write by: daos continer create pool")
         exp_write = sec_group_rw[1]
-        self.verify_pool_readwrite(svc, uuid, "write", expect = exp_write)
+        self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
 
         for group in sec_group:
             add_del_user(self.hostlist_clients, "groupdel", group)
@@ -383,7 +380,6 @@ class PoolSecurityTestBase(TestWithServers):
         acl_file = os.path.join(self.tmp, get_acl_file)
         num_user = self.params.get("num_user", "/run/pool_acl/*")
         num_group = self.params.get("num_group", "/run/pool_acl/*")
-        prim_group_entry = current_user_acl[3]
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")

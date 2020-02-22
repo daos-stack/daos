@@ -24,15 +24,8 @@
 from __future__ import print_function
 
 import os
-from apricot import TestWithServers
-from daos_utils import DaosCommand
-from dmg_utils import DmgCommand
-import dmg_utils
-import random
 import pwd
 import grp
-import re
-from general_utils import pcmd
 import pool_security_test_base as poolSec
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -41,6 +34,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
 
     def test_daos_pool_acl_enforcement(self):
         '''

@@ -11,7 +11,7 @@ hosts:
     - cert: ~/.daos/daos_agent.crt
     - key: ~/.daos/daos_agent.key
     - server_name: server
-timeout: 1200
+timeout: 600
 server_config:
   name: daos_server
   port: 10001

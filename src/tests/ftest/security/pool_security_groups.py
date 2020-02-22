@@ -33,6 +33,8 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
     :avocado: recursive
     """
+    # pylint: disable=too-many-ancestors
+
     def test_daos_pool_acl_groups(self):
         '''
         Epic:
@@ -55,19 +57,11 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         '''
         user_uid = os.geteuid()
         user_gid = os.getegid()
-        current_user = pwd.getpwuid(user_uid)[0]
         current_group = grp.getgrgid(user_gid)[0]
         primary_grp_perm = self.params.get(\
             "pg_permission", "/run/pool_acl/primary_secondary_group_test/*")[0]
         read, write = self.params.get(\
             "pg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
-        sec_group = self.params.get(\
-            "secondary_group_name",
-            "/run/pool_acl/primary_secondary_group_test/*")
-        sec_group_perm = self.params.get(\
-            "sg_permission", "/run/pool_acl/primary_secondary_group_test/*")
-        sec_group_rw = self.params.get(\
-            "sg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         acl_entries = ["", "", "",\
             poolSec.acl_entry("group", current_group, primary_grp_perm), ""]
         if primary_grp_perm.lower() == "none":
@@ -75,7 +69,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         if primary_grp_perm not in poolSec.PERMISSIONS:
             self.fail("##primary_grp_perm %s is invalid, valid permissions are:"
                       "'none', 'r', w', 'rw'", primary_grp_perm)
-        test_permission = primary_grp_perm
 
         self.log.info("==Starting self.pool_acl_verification")
         self.log.info(" =acl_entries = %s", acl_entries)
