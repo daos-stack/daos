@@ -23,7 +23,6 @@
 '''
 
 import os
-import pwd
 import grp
 import pool_security_test_base as poolSec
 from pool_security_test_base import PoolSecurityTestBase
@@ -55,7 +54,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             different test sceanrios.
         :avocado: tags=all,full_regression,security,pool_acl,sec_acl_groups
         '''
-        user_uid = os.geteuid()
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
         primary_grp_perm = self.params.get(\

@@ -29,7 +29,6 @@ from daos_utils import DaosCommand
 from dmg_utils import DmgCommand
 import dmg_utils
 import random
-import pwd
 import grp
 import re
 from general_utils import pcmd
@@ -283,7 +282,6 @@ class PoolSecurityTestBase(TestWithServers):
         sec_group = self.params.get("secondary_group_name", "/run/pool_acl/*")
         sec_group_perm = self.params.get("sg_permission", "/run/pool_acl/*")
         sec_group_rw = self.params.get("sg_read_write", "/run/pool_acl/*")
-        user_uid = os.geteuid()
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
         primary_grp_perm = self.params.get(\
