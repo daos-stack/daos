@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,10 @@
 
 /** number of target (XS set) per server */
 extern unsigned int	dss_tgt_nr;
+
+/** minimum storage allocations per target */
+#define DSS_TGT_NVME_MIN_SZ	(1ULL << 30)	/* 1GiB */
+#define DSS_TGT_SCM_MIN_SZ	(1ULL << 24)	/* 16MiB */
 
 /** Storage path (hack) */
 extern const char      *dss_storage_path;

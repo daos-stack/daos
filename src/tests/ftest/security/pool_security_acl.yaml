@@ -22,7 +22,7 @@ dmg:
   request: pool
   action: create
   create:
-    scm_size: 16000000
+    scm_size: 16777216
 pool_acl:
   user_prefix: daos_ci
   num_user: 5
