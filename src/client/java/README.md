@@ -3,8 +3,8 @@ This module is DAOS DFS Java API and DAOS DFS implementation of Hadoop FileSyste
 daos-java-api and hadoop-daos.
 
 ### daos-java-api
-It wraps most of common APIs from daos_fs.h, as well as some pool creation related APIs from daos_mgmt.h and some pool
-and container connection related APIs from daos_api.h. There are two main classes, DaosFsClient and DaosFile.
+It wraps most of common APIs from daos_fs.h, as well as some pool and container connection related APIs from 
+daos_api.h. There are two main classes, DaosFsClient and DaosFile.
 
 * DaosFsClient
 There will be single instance of DaosFsClient per pool and container. All DAOS DFS calls and init/finalize, are from
