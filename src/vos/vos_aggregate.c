@@ -609,15 +609,9 @@ widen_biov(struct bio_iov *biov, struct agg_phy_ent *phy_ent,
 	struct evt_extent	aligned_extent = { 0 };
 	unsigned int		added_segs = 0;
 
-	D_PRINT("widen\n");
 	ent.en_ext = phy_ent->pe_rect.rc_ex;
 	ent.en_sel_ext = *ext;
 	ent.en_csum = phy_ent->pe_csum_info;
-	D_PRINT("nr: %u, type: %u, len %u, cs: %u\n",
-		ent.en_csum.cs_nr,
-		ent.en_csum.cs_type,
-		ent.en_csum.cs_len,
-		ent.en_csum.cs_chunksize);
 	aligned_extent = evt_entry_align_to_csum_chunk(&ent, rsize);
 	bio_iov_set_extra(biov,
 			  (ent.en_sel_ext.ex_lo - aligned_extent.ex_lo) *
@@ -653,9 +647,6 @@ append_added_csum_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
 			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
 					bsgl->bs_iovs[i].bi_addr.ba_off;
-				/*	+
-					bsgl->bs_iovs[i].bi_prefix_len;
-					*/
 			bsgl->bs_iovs[add_idx].bi_data_len =
 					bsgl->bs_iovs[i].bi_prefix_len;
 
@@ -664,6 +655,7 @@ append_added_csum_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
+			bsgl->bs_iovs[add_idx].bi_buf = NULL;
 			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
 
 
@@ -672,28 +664,30 @@ append_added_csum_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
 			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
 					bsgl->bs_iovs[i].bi_addr.ba_off +
-					(bsgl->bs_iovs[i].bi_data_len -
-					 bsgl->bs_iovs[i].bi_suffix_len);
+					bsgl->bs_iovs[i].bi_data_len -
+					bsgl->bs_iovs[i].bi_suffix_len;
 			bsgl->bs_iovs[add_idx].bi_data_len =
 					bsgl->bs_iovs[i].bi_suffix_len;
 			bsgl->bs_iovs[add_idx].bi_addr.ba_type =
 				bsgl->bs_iovs[i].bi_addr.ba_type;
 			bsgl->bs_iovs[add_idx].bi_prefix_len = 0;
 			bsgl->bs_iovs[add_idx].bi_suffix_len = 0;
+			bsgl->bs_iovs[add_idx].bi_buf = NULL;
 			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
 		}
-		/*
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
 			bsgl->bs_iovs[i].bi_addr.ba_off +=
 						bsgl->bs_iovs[i].bi_prefix_len;
 			bsgl->bs_iovs[i].bi_data_len -=
 						bsgl->bs_iovs[i].bi_prefix_len;
+			bsgl->bs_iovs[i].bi_prefix_len = 0;
 		}
+
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
 			bsgl->bs_iovs[i].bi_data_len -=
 						bsgl->bs_iovs[i].bi_suffix_len;
+			bsgl->bs_iovs[i].bi_suffix_len = 0;
 		}
-		*/
 	}
 	bsgl->bs_nr += added_segs;
 	return 0;
@@ -705,7 +699,7 @@ agg_show_biovs(struct bio_iov *biovs, unsigned int nr)
 	int i;
 
 	for (i = 0; i < nr; i++)
-		D_PRINT("data_len: %lu, addr.ba_off: %lu, addr.ba_type %u, pre: %lu,suf: %lu\n",
+		D_PRINT("data_len: %lu, addr.ba_off: %lu, addr.ba_type %u, pre: %lu, suf: %lu\n",
 		       biovs[i].bi_data_len,
 		       biovs[i].bi_addr.ba_off,
 		       biovs[i].bi_addr.ba_type,
@@ -720,18 +714,22 @@ struct csum_recalc {
 	struct evt_rect		*cr_orig_rect;
 	struct dcs_csum_info	*cr_orig_csum;
 	struct evt_extent	 cr_log_ext;
+	unsigned int		 cr_prefix_len;
+	unsigned int		 cr_suffix_len;
 };
 
 static inline void
 agg_add_csum_recalcs(struct csum_recalc **recalcs_p, struct evt_rect *pe_rect,
 		     struct dcs_csum_info *pe_csum_info, struct evt_extent *ext,
-		     unsigned int idx)
+		     struct bio_sglist *bsgl, unsigned int idx)
 {
 	struct csum_recalc	*recalcs = *recalcs_p;
 
 	recalcs[idx].cr_orig_rect	= pe_rect;
 	recalcs[idx].cr_orig_csum	= pe_csum_info;
 	recalcs[idx].cr_log_ext		= *ext;
+	recalcs[idx].cr_prefix_len	= bsgl->bs_iovs[idx].bi_prefix_len;
+	recalcs[idx].cr_suffix_len	= bsgl->bs_iovs[idx].bi_suffix_len;
 }
 
 struct csum_recalc_args {
@@ -750,20 +748,26 @@ struct csum_recalc_args {
 
 /* construct sgl to send to csummer for verify of read data */
 static unsigned int
-csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl, uint8_t *buf,
+csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl,
+		 struct csum_recalc *recalcs, uint8_t *buf,
 		 unsigned int buf_len, int add_start, daos_size_t seg_size,
 		 unsigned int idx, unsigned int add_offset,
 		 unsigned int *buf_idx, unsigned int *add_idx)
 {
 	unsigned int sgl_idx = 0;
 
-	if (bsgl->bs_iovs[idx].bi_prefix_len) {
-		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx];
+	sgl->sg_nr = 1;
+	if (recalcs[idx].cr_prefix_len) {
+		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx+seg_size];
+		D_ASSERT(recalcs[idx].cr_prefix_len ==
+			 bsgl->bs_iovs[add_start + add_offset].bi_data_len);
 		sgl->sg_iovs[sgl_idx].iov_buf_len =
 			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
 		sgl->sg_iovs[sgl_idx++].iov_len =
 			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		*add_idx += bsgl->bs_iovs[add_start + add_offset++].bi_data_len;
+		*add_idx += bsgl->bs_iovs[add_start + add_offset].bi_data_len;
+		add_offset++;
+		sgl->sg_nr++;
 	}
 
 	sgl->sg_iovs[sgl_idx].iov_buf = &buf[*buf_idx];
@@ -771,69 +775,95 @@ csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl, uint8_t *buf,
 	sgl->sg_iovs[sgl_idx++].iov_len = bsgl->bs_iovs[idx].bi_data_len;
 	*buf_idx += bsgl->bs_iovs[idx].bi_data_len;
 
-	if (bsgl->bs_iovs[idx].bi_suffix_len) {
-		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx];
+	if (recalcs[idx].cr_suffix_len) {
+		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx + seg_size];
+		D_ASSERT(recalcs[idx].cr_suffix_len ==
+			 bsgl->bs_iovs[add_start + add_offset].bi_data_len);
 		sgl->sg_iovs[sgl_idx].iov_buf_len =
 			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
 		sgl->sg_iovs[sgl_idx].iov_len =
 			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		*add_idx += bsgl->bs_iovs[add_start + add_offset++].bi_data_len;
+		*add_idx += bsgl->bs_iovs[add_start + add_offset].bi_data_len;
+		add_offset++;
+		sgl->sg_nr++;
+	}
+	int i;
+	unsigned long current, prior = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		current = (unsigned long)  sgl->sg_iovs[i].iov_buf;
+		D_PRINT("i: %d, len: %lu, address: %lu\n", i,
+			 sgl->sg_iovs[i].iov_len,
+			 current > prior ? current - prior : prior - current);
+		prior = (unsigned long) sgl->sg_iovs[i].iov_buf;
 	}
 	return add_offset;
+
 }
 
 static unsigned int
 calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
-		 unsigned int prefix_len, unsigned int rec_size)
+		 unsigned int prefix_len, unsigned int suffix_len,
+		 unsigned int rec_size)
 {
 
-	unsigned int csum_cnt, rx_idx = recalc->cr_log_ext.ex_lo -
+	unsigned int csum_cnt, low_idx = recalc->cr_log_ext.ex_lo -
 							prefix_len / rec_size;
+	unsigned int high_idx = recalc->cr_log_ext.ex_hi +
+							suffix_len / rec_size;
 
 	assert(prefix_len % rec_size == 0);
-	csum_cnt = csum_chunk_count(recalc->cr_orig_csum->cs_chunksize, rx_idx,
-				    recalc->cr_log_ext.ex_hi, rec_size);
+	csum_cnt = csum_chunk_count(recalc->cr_orig_csum->cs_chunksize, low_idx,
+				    high_idx, rec_size);
 	csum_info->cs_nr = csum_cnt;
-	D_ASSERT(csum_cnt * csum_info->cs_len <= csum_info->cs_buf_len);
-	return rx_idx;
+	D_ASSERT(csum_cnt * csum_info->cs_len  <= csum_info->cs_buf_len);
+	return low_idx;
 }
 
 static bool
 csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
-	unsigned int i, j;
+	unsigned int j = 0;
+	bool match;
 
-	D_PRINT("Verifying csum\n");
-	if (new_csum->cs_nr == recalc->cr_orig_csum->cs_nr)
-		j = 0;
-	else {
+	if (new_csum->cs_nr != recalc->cr_orig_csum->cs_nr) {
 		unsigned int chunksize = new_csum->cs_chunksize;
 		unsigned int orig_offset = recalc->cr_orig_rect->rc_ex.ex_lo *
 						rec_size;
 		unsigned int out_offset = recalc->cr_log_ext.ex_lo * rec_size -
-						prefix_len;
+								prefix_len;
 
 		D_ASSERT(new_csum->cs_nr < recalc->cr_orig_csum->cs_nr);
-		if (orig_offset == out_offset)
-			j = 0;
-		else {
+		if (orig_offset != out_offset) {
+			unsigned int add_start = chunksize -
+							orig_offset % chunksize;
+
+			unsigned int offset = orig_offset + add_start;
+			if (add_start)
+				j++;
+			D_PRINT("BEFORE: offset: %u, orig_offset: %u, out_offset: %u\n",
+				offset, orig_offset, out_offset);
 			D_ASSERT(orig_offset < out_offset);
-			for (j = 0; orig_offset < out_offset; j++)
-				orig_offset += chunksize;
-			D_PRINT("orig: %u, out: %u\n", orig_offset, out_offset);
-			D_ASSERT(orig_offset == out_offset);
+			while (offset < out_offset) {
+				offset += chunksize;
+				j++;
+			}
+			D_PRINT("offset: %u, out: %u, j: %u\n", offset,
+				out_offset, j);
+			D_ASSERT(offset == out_offset);
 		}
 	}
 
-	for (i = 0; i < new_csum->cs_nr; i++, j++)
-		D_PRINT("i = %u, j = %u\n", i, j);
-		D_ASSERT(new_csum->cs_csum != NULL);
-		if (new_csum->cs_csum[i] != recalc->cr_orig_csum->cs_csum[j]) {
-			//D_PRINT("new: %lu, orig: %lu\n", new_csum->cs_csum[i],
-			//	recalc->cr_orig_csum->cs_csum[i]);
-			return false;
-		}
+	D_PRINT("new_nr: %u, orig_nr: %u\n", new_csum->cs_nr,
+			recalc->cr_orig_csum->cs_nr);
+	match = memcmp(new_csum->cs_csum,
+			&recalc->cr_orig_csum->cs_csum[j * new_csum->cs_len],
+			new_csum->cs_nr * new_csum->cs_len) == 0;
+	if (!match) {
+		D_PRINT("cs_nr: %u\n", new_csum->cs_nr);
+		return false;
+	}
+	D_PRINT("matched\n");
 	return true;
 }
 
@@ -864,31 +894,33 @@ csum_agg_recalc(void *recalc_args)
 		bool		is_valid = false;
 		unsigned int	this_buf_nr, this_buf_idx;
 
-		if (bsgl->bs_iovs[i].bi_prefix_len) {
-			bsgl->bs_iovs[i].bi_addr.ba_off +=
-						bsgl->bs_iovs[i].bi_prefix_len;
-			bsgl->bs_iovs[i].bi_data_len -=
-						bsgl->bs_iovs[i].bi_prefix_len;
-		}
-		if (bsgl->bs_iovs[i].bi_suffix_len) {
-			bsgl->bs_iovs[i].bi_data_len -=
-						bsgl->bs_iovs[i].bi_suffix_len;
-		}
 
-		this_buf_nr = bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob;
-		add_offset = csum_agg_set_sgl(&sgl, bsgl, args->cra_buf,
-					      args->cra_buf_len,
+		this_buf_nr = (bsgl->bs_iovs[i].bi_data_len +
+			       recalcs[i].cr_prefix_len +
+			       recalcs[i].cr_suffix_len) / ent_in->ei_inob;
+		add_offset = csum_agg_set_sgl(&sgl, bsgl, recalcs,
+					      args->cra_buf, args->cra_buf_len,
 					      args->cra_seg_cnt,
 					      args->cra_seg_size, i, add_offset,
 					      &buf_idx, &add_idx);
 
-		D_ASSERT(recalcs->cr_log_ext.ex_hi - recalcs->cr_log_ext.ex_lo
-			+ 1 == bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
+		D_PRINT("low: %lu, high: %lu\n", recalcs[i].cr_log_ext.ex_lo,
+			 recalcs[i].cr_log_ext.ex_hi);
+
+		D_PRINT("orig low: %lu, orig high: %lu\n",
+			recalcs[i].cr_orig_rect->rc_ex.ex_lo,
+			recalcs[i].cr_orig_rect->rc_ex.ex_hi);
+
+		D_ASSERT(recalcs[i].cr_log_ext.ex_hi -
+			 recalcs[i].cr_log_ext.ex_lo + 1 ==
+			 bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
 
 		this_buf_idx = calc_csum_params(&csum_info, &recalcs[i],
-						bsgl->bs_iovs[i].bi_prefix_len,
+						recalcs[i].cr_prefix_len,
+						recalcs[i].cr_suffix_len,
 						ent_in->ei_inob);
 
+		D_PRINT("idx: %u, nr: %u\n", this_buf_idx, this_buf_nr);
 		rc = daos_csummer_calc_one(csummer, &sgl, &csum_info,
 					   ent_in->ei_inob, this_buf_nr,
 					   this_buf_idx);
@@ -897,10 +929,11 @@ csum_agg_recalc(void *recalc_args)
 
 		is_valid = csum_agg_verify(&recalcs[i], &csum_info,
 					   ent_in->ei_inob,
-					   bsgl->bs_iovs[i].bi_prefix_len);
+					   recalcs[i].cr_prefix_len);
 		if (!is_valid) {
-			args->cra_rc = -DER_CSUM;
-			goto out;
+			D_PRINT("not valid\n");
+			//rc = -DER_CSUM;
+			//goto out;
 		}
 
 	}
@@ -911,12 +944,14 @@ csum_agg_recalc(void *recalc_args)
 				   ent_in->ei_rect.rc_ex.ex_lo);
 out:
 	// set eventual, if xstteam offload
-	D_PRINT("Verification Failed in aggregation\n");
 	daos_csummer_destroy(&csummer);
+	D_FREE(sgl.sg_iovs);
 	args->cra_rc = rc;
-	if (rc)
+	if (rc) {
+		D_PRINT("Verification Failed in aggregation\n");
 		for (i = 0; i < args->cra_seg_cnt; i++)
 			recalcs[i].cr_orig_csum->cs_not_valid = true;
+	}
 }
 
 static int
@@ -1000,6 +1035,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	if (bio_addr_is_hole(&ent_in->ei_addr))
 		return 0;
+	D_PRINT("================================= START =============================\n");
 
 	seg_size = evt_rect_width(&ent_in->ei_rect) * mw->mw_rsize;
 	D_ASSERTF(seg_size > 0, "seg_size:"DF_U64"\n", seg_size);
@@ -1056,7 +1092,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		copy_size = evt_extent_width(&ext) * ent_in->ei_inob;
 
 		addr_src = phy_ent->pe_addr;
-		D_PRINT("addr_src.ba_type: %u\n", addr_src.ba_type);
 		addr_src.ba_off += (ext.ex_lo - phy_lo) * ent_in->ei_inob;
 
 		D_ASSERT(!bio_addr_is_hole(&addr_src));
@@ -1083,7 +1118,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			}
 			agg_add_csum_recalcs(&csum_recalcs, &phy_ent->pe_rect,
 					     &phy_ent->pe_csum_info, &ext,
-					     biov_idx);
+					     &bsgl, biov_idx);
 		}
 
 		biov_idx++;
@@ -1097,8 +1132,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	/* Moved read buf allocation to after loop, to allow inclusion
 	 * of additional data needed for verification of prior checksums.
 	 */
-	D_PRINT("buf_max: %lu, buf_add: %lu, ic_buf_len: %u\n",
-		buf_max, buf_add, io->ic_buf_len);
+	//D_PRINT("buf_max: %lu, buf_add: %lu, ic_buf_len: %u\n",
+		//buf_max, buf_add, io->ic_buf_len);
 	if (io->ic_buf_len < buf_max + buf_add) {
 		void *buffer;
 
@@ -1107,7 +1142,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			rc = -DER_NOMEM;
 			goto out;
 		}
-
 		io->ic_buf = buffer;
 		io->ic_buf_len = buf_max + buf_add;
 	}
@@ -1118,7 +1152,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			D_ERROR("Extend bsgl error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
-		D_PRINT("csum segs added\n");
 		agg_show_biovs(bsgl.bs_iovs, bsgl.bs_nr);
 	}
 
@@ -1128,9 +1161,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	iov.iov_buf_len = io->ic_buf_len;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
-	D_PRINT("reading - buf_len: %lu\n", iov.iov_buf_len);
+	//D_PRINT("reading - buf_len: %lu\n", iov.iov_buf_len);
 	rc = bio_readv(bio_ctxt, &bsgl, &sgl);
-	D_PRINT("read\n");
 	if (rc) {
 		D_ERROR("Readv for "DF_RECT" error: "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
@@ -1139,7 +1171,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(iov.iov_len == seg_size + buf_add);
 
 	if (cont_has_csums) {
-		D_PRINT("Recalc\n");
 		rc = csum_recalc_csums(io, &bsgl, &sgl, ent_in, csum_recalcs,
 				       seg_count, seg_size);
 		if (rc) {
