@@ -46,6 +46,7 @@ var daosVersion string
 const (
 	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
+	defaultConfigPath    = "../etc/daos_agent.yml"
 )
 
 type cliOptions struct {
@@ -126,6 +127,11 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	// populate default agent config file path
+	if opts.ConfigPath == "" {
+		opts.ConfigPath = defaultConfigPath
+	}
 
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
