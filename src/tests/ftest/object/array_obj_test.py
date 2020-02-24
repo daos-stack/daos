@@ -63,17 +63,17 @@ class ArrayObjTest(TestWithServers):
 
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.plog.info("Pool %s created.", pool.get_uuid_str())
+            self.pool = DaosPool(self.context)
+            self.pool.create(createmode, createuid, creategid,
+                             createsize, createsetid, None)
+            self.plog.info("Pool %s created.", self.pool.get_uuid_str())
 
             # need a connection to create container
-            pool.connect(1 << 1)
+            self.pool.connect(1 << 1)
 
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -96,13 +96,13 @@ class ArrayObjTest(TestWithServers):
             akey = "this is the akey"
 
             self.plog.info("writing array to dkey >%s< akey >%s<.", dkey, akey)
-            oid, epoch = container.write_an_array_value(thedata, dkey, akey,
-                                                        obj_cls=3)
+            oid = container.write_an_array_value(thedata, dkey, akey,
+                                                 obj_cls=3)
 
             # read the data back and make sure its correct
             length = len(thedata[0])
             thedata2 = container.read_an_array(len(thedata), length+1,
-                                               dkey, akey, oid, epoch)
+                                               dkey, akey, oid)
             if thedata[0][0:length-1] != thedata2[0][0:length-1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[0])
@@ -121,9 +121,6 @@ class ArrayObjTest(TestWithServers):
             time.sleep(5)
             container.destroy()
 
-            # cleanup the pool
-            pool.disconnect()
-            pool.destroy(1)
             self.plog.info("Test Complete")
 
         except DaosApiError as excep:

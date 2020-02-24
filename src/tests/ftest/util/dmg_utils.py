@@ -108,6 +108,7 @@ class DmgCommand(DaosCommand):
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
 
+
 def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
@@ -150,7 +151,6 @@ def storage_format(path, hosts, insecure=True):
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -173,7 +173,7 @@ def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
     Args:
         path (str): path to tool's binary
         hosts (list): list of servers to run prepare on.
-        user (str, optional): User with priviledges. Defaults to False.
+        user (str, optional): User with privileges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         nvme (bool, optional): Perform prep on nvme. Defaults to False.
         scm (bool, optional): Perform prep on scm. Defaults to False.
@@ -215,7 +215,7 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
         hosts (list): list of servers to run prepare on.
         nvme (bool): if true, nvme flag will be appended to command.
         scm (bool): if true, scm flag will be appended to command.
-        user (str, optional): User with priviledges. Defaults to False.
+        user (str, optional): User with privileges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         insecure (bool): toggle insecure mode
 
@@ -246,20 +246,22 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
     return result
 
 
-def pool_create(path, host_port, scm_size, insecure=True, group=None,
+def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
                 user=None, acl_file=None, nvme_size=None, ranks=None,
                 nsvc=None, sys=None):
+    # pylint: disable=too-many-arguments
     """Execute pool create command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        host_port (list of str): List of Host:Port where daos_server runs.
-            Use 10001 for the default port number. This number is defined in
+        host_port (str, optional): Comma separated list of Host:Port where
+            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
+            the default port number. This number is defined in
             daos_avocado_test.yaml
         scm_size (str): SCM size value passed into the command.
         insecure (bool, optional): Insecure mode. Defaults to True.
-        group (str, otional): Group with priviledges. Defaults to None.
-        user (str, optional): User with priviledges. Defaults to None.
+        group (str, otional): Group with privileges. Defaults to None.
+        user (str, optional): User with privileges. Defaults to None.
         acl_file (str, optional): Access Control List file path for DAOS pool.
             Defaults to None.
         nvme_size (str, optional): NVMe size. Defaults to None.
@@ -300,13 +302,14 @@ def pool_create(path, host_port, scm_size, insecure=True, group=None,
     return result
 
 
-def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
+def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
     """ Execute pool destroy command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        host_port (list of str): List of Host:Port where daos_server runs.
-            Use 10001 for the default port number. This number is defined in
+        host_port (str, optional): Comma separated list of Host:Port where
+            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
+            the default port number. This number is defined in
             daos_avocado_test.yaml
         pool_uuid (str): Pool UUID to destroy.
         insecure (bool, optional): Insecure mode. Defaults to True.
@@ -335,8 +338,8 @@ def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
     return result
 
 
-def get_pool_uuid_from_stdout(stdout_str):
-    """Get Pool UUID from stdout.
+def get_pool_uuid_service_replicas_from_stdout(stdout_str):
+    """Get Pool UUID and Service replicas from stdout.
 
     stdout_str is something like:
     Active connections: [wolf-3:10001]
@@ -350,12 +353,16 @@ def get_pool_uuid_from_stdout(stdout_str):
         stdout_str (str): Output of pool create command.
 
     Returns:
-        str: Pool UUID if found. Otherwise None.
+        Tuple (str, str): Tuple that contains two items; Pool UUID and Service
+            replicas if found. If not found, the tuple contains None.
     """
     # Find the following with regex. One or more of whitespace after "UUID:"
     # followed by one of more of number, alphabets, or -. Use parenthesis to
     # get the returned value.
-    matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
-    if len(matches) > 0:
-        return matches[0]
-    return None
+    uuid = None
+    svc = None
+    match = re.search(r" UUID: (.+), Service replicas: (.+)", stdout_str)
+    if match:
+        uuid = match.group(1)
+        svc = match.group(2)
+    return uuid, svc

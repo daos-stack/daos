@@ -1,19 +1,17 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_machines1:
-    test_machines:
-      - boro-A
+  test_servers:
+    - server-A
 timeout: 50
 server_config:
   name: daos_server
+pool:
+  mode: 511
+  scm_size: 10737418
+  name: daos_server
+  control_method: dmg
 createtests:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 10737418
   ContainerUUIDS: !mux
     gooduid:
       uuid:

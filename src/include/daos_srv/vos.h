@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,17 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Refresh the DTX resync generation.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return		Zero on success.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_update_resync_gen(daos_handle_t coh);
+
+/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -45,9 +56,8 @@
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
- * \param punch		[IN]	For punch DTX or not.
- * \param check		[IN]	Check whether the DTX need restart because
- *				of sync epoch or not.
+ * \param gen		[IN]	The DTX generation.
+ * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
  * \return		-DER_INPROGRESS	retry with newer epoch.
@@ -55,7 +65,8 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		uint32_t flags);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -174,28 +185,22 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
- * \param force [IN]	Force abort even if some replica(s) have not
- *			'prepared' related DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count, bool force);
+	      int count);
 
 /**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param max	[IN]	The max count of DTXs to be aggregated.
- * \param age	[IN]	Not aggregate the DTX which age is newer than that.
  *
- * \return	Positive value if no more DTXs can be aggregated.
- * \return	Zero if the requested (@max) DTXs have been aggregated.
- * \return	Negative value if error.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
+vos_dtx_aggregate(daos_handle_t coh);
 
 /**
  * Query the container's DTXs information.
@@ -217,6 +222,20 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
  */
 int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
+
+/**
+ * Establish the indexed committed DTX table in DRAM.
+ *
+ * \param coh	[IN]		Container open handle.
+ * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
+ *				contains committed DTX entries to be handled.
+ *
+ * \return	Zero on success, need further re-index.
+ *		Positive, re-index is completed.
+ *		Negative value if error.
+ */
+int
+vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
 
 /**
  * Initialize the environment for a VOS instance
@@ -460,7 +479,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
 	      d_sg_list_t *sgls);
 
-
 /**
  * Update records for the specfied object.
  * If input buffer is not provided in \a sgl, then this function returns
@@ -476,6 +494,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods [IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
  * \param sgls	[IN/OUT]
  *			Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
@@ -488,7 +509,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, d_sg_list_t *sgls);
+	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+	       d_sg_list_t *sgls);
 
 /**
  * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
@@ -582,8 +604,11 @@ vos_fetch_end(daos_handle_t ioh, int err);
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a iods (kvl::kv_epr).
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of I/O descriptors in \a iods.
+ * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods_csums [IN]
+ *			Array of iod_csums (1 for each iod). Will be NULL
+ *			if csums are disabled.
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
  *
@@ -591,8 +616,9 @@ vos_fetch_end(daos_handle_t ioh, int err);
  */
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-		 daos_handle_t *ioh, struct dtx_handle *dth);
+		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		 struct dcs_iod_csums *iods_csums, daos_handle_t *ioh,
+		 struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -621,6 +647,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
  */
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
+
+struct dcs_csum_info *
+vos_ioh2ci(daos_handle_t ioh);
+
+uint32_t
+vos_ioh2ci_nr(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
@@ -802,7 +834,8 @@ vos_iter_empty(daos_handle_t ih);
  * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
- * \param[in]		cb		iteration callback
+ * \param[in]		pre_cb		pre subtree iteration callback
+ * \param[in]		post_cb		post subtree iteration callback
  * \param[in]		arg		callback argument
  *
  * \retval		0	iteration complete
@@ -811,7 +844,8 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
+	    struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+	    vos_iter_cb_t post_cb, void *arg);
 
 /**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an

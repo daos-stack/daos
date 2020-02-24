@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
@@ -68,6 +71,11 @@ func TestMergeEnvVars(t *testing.T) {
 			mergeVars: []string{"C=D"},
 			wantVars:  []string{"A=B", "C=D"},
 		},
+		"complex value": {
+			baseVars:  []string{"SIMPLE=OK"},
+			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
+			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
+		},
 		"append no base": {
 			baseVars:  []string{},
 			mergeVars: []string{"C=D"},
@@ -81,8 +89,48 @@ func TestMergeEnvVars(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(gotVars, tc.wantVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConfigHasEnvVar(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startVars []string
+		addVar    string
+		addVal    string
+		expVars   []string
+	}{
+		"empty": {
+			addVar:  "FOO",
+			addVal:  "BAR",
+			expVars: []string{"FOO=BAR"},
+		},
+		"similar prefix": {
+			startVars: []string{"FOO_BAR=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO_BAR=BAZ", "FOO=BAR"},
+		},
+		"same prefix": {
+			startVars: []string{"FOO=BAZ"},
+			addVar:    "FOO",
+			addVal:    "BAR",
+			expVars:   []string{"FOO=BAZ"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithEnvVars(tc.startVars...)
+
+			if !cfg.HasEnvVar(tc.addVar) {
+				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
+			}
+
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
 		})
 	}
@@ -139,12 +187,93 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(constructed, fromDisk, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
 
-func TestConfigValidation(t *testing.T) {
+func TestIOServer_SCMConfigValidation(t *testing.T) {
+	baseValidConfig := func() *Config {
+		return NewConfig().
+			WithFabricProvider("test"). // valid enough to pass "not-blank" test
+			WithFabricInterface("test")
+	}
+
+	for name, tc := range map[string]struct {
+		cfg    *Config
+		expErr error
+	}{
+		"missing scm_mount": {
+			cfg:    baseValidConfig(),
+			expErr: errors.New("scm_mount"),
+		},
+		"missing scm_class": {
+			cfg: baseValidConfig().
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_class"),
+		},
+		"ramdisk valid": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+		},
+		"ramdisk missing scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk scm_size: 0": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(0).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+		"ramdisk with scm_list": {
+			cfg: baseValidConfig().
+				WithScmClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm valid": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmMountPoint("test"),
+		},
+		"dcpm scm_list too long": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo", "bar").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm scm_list empty": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_list"),
+		},
+		"dcpm with scm_size": {
+			cfg: baseValidConfig().
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("test"),
+			expErr: errors.New("scm_size"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
+	}
+}
+
+func TestIOServer_ConfigValidation(t *testing.T) {
 	bad := NewConfig()
 
 	if err := bad.Validate(); err == nil {
@@ -155,6 +284,7 @@ func TestConfigValidation(t *testing.T) {
 	good := NewConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
 		WithScmClass("ram").
+		WithScmRamdiskSize(1).
 		WithScmMountPoint("/foo/bar")
 
 	if err := good.Validate(); err != nil {
@@ -170,7 +300,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		modules        = "foo,bar,baz"
 		systemName     = "test-system"
 		socketDir      = "/var/run/foo"
-		attachInfo     = "/tmp/attach"
 		logMask        = "LOG_MASK_VALUE"
 		logFile        = "/path/to/log"
 		cfgPath        = "/path/to/nvme.conf"
@@ -193,7 +322,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithPinnedNumaNode(&pinnedNumaNode).
 		WithModules(modules).
 		WithSocketDir(socketDir).
-		WithAttachInfoPath(attachInfo).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithShmID(shmId).
@@ -209,7 +337,6 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-m", modules,
 		"-f", strconv.Itoa(serviceCore),
 		"-g", systemName,
-		"-a", attachInfo,
 		"-d", socketDir,
 		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
@@ -228,7 +355,7 @@ func TestConfigToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotArgs, wantArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -236,7 +363,7 @@ func TestConfigToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(gotEnv, wantEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }

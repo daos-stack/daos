@@ -34,53 +34,180 @@
 #include "auth.pb-c.h"
 #include "srv_internal.h"
 
-static int
-sanity_check_validation_response(Drpc__Response *response)
-{
-	int rc = DER_SUCCESS;
+/**
+ * The default ACLs for pool and container both include ACEs for owner and the
+ * assigned group. All others are denied by default.
+ */
+#define NUM_DEFAULT_ACES	(2)
 
-	Auth__Token *pb_auth = auth__token__unpack(NULL,
-						   response->body.len,
-						   response->body.data);
-	if (pb_auth == NULL) {
-		D_ERROR("Response body was not an AuthToken\n");
+static struct daos_ace *
+alloc_ace_with_access(enum daos_acl_principal_type type, uint64_t permissions)
+{
+	struct daos_ace *ace;
+
+	ace = daos_ace_create(type, NULL);
+	if (ace == NULL) {
+		D_ERROR("Failed to allocate default ACE type %d", type);
+		return NULL;
+	}
+
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = permissions;
+
+	return ace;
+}
+
+static struct daos_acl *
+alloc_default_daos_acl_with_perms(uint64_t owner_perms,
+				  uint64_t owner_grp_perms)
+{
+	int		i;
+	struct daos_ace	*default_aces[NUM_DEFAULT_ACES];
+	struct daos_acl	*default_acl;
+
+	default_aces[0] = alloc_ace_with_access(DAOS_ACL_OWNER, owner_perms);
+	default_aces[1] = alloc_ace_with_access(DAOS_ACL_OWNER_GROUP,
+						owner_grp_perms);
+
+	default_acl = daos_acl_create(default_aces, NUM_DEFAULT_ACES);
+
+	for (i = 0; i < NUM_DEFAULT_ACES; i++) {
+		daos_ace_free(default_aces[i]);
+	}
+
+	return default_acl;
+}
+
+struct daos_acl *
+ds_sec_alloc_default_daos_cont_acl(void)
+{
+	struct daos_acl	*acl;
+	uint64_t	owner_perms;
+	uint64_t	grp_perms;
+
+	/* container owner has full control */
+	owner_perms = DAOS_ACL_PERM_CONT_ALL;
+	/* owner-group has basic read/write access but not admin access */
+	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE |
+		    DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_SET_PROP;
+
+	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
+	if (acl == NULL)
+		D_ERROR("Failed to allocate default ACL for cont properties");
+
+	return acl;
+}
+
+struct daos_acl *
+ds_sec_alloc_default_daos_pool_acl(void)
+{
+	struct daos_acl	*acl;
+	uint64_t	owner_perms;
+	uint64_t	grp_perms;
+
+	/* pool owner and grp have full read/write access */
+	owner_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
+	if (acl == NULL)
+		D_ERROR("Failed to allocate default ACL for pool properties");
+
+	return acl;
+}
+
+static Auth__Token *
+auth_token_dup(Auth__Token *orig)
+{
+	Auth__Token	*copy;
+	uint8_t		*packed;
+	size_t		len;
+
+	/*
+	 * The most straightforward way to copy a protobuf struct is to pack
+	 * and unpack it.
+	 */
+	len = auth__token__get_packed_size(orig);
+	D_ALLOC(packed, len);
+	if (packed == NULL)
+		return NULL;
+
+	auth__token__pack(orig, packed);
+	copy = auth__token__unpack(NULL, len, packed);
+	D_FREE(packed);
+	return copy;
+}
+
+static int
+get_token_from_validation_response(Drpc__Response *response,
+				   Auth__Token **token)
+{
+	Auth__ValidateCredResp	*resp;
+	int			rc = 0;
+
+	resp = auth__validate_cred_resp__unpack(NULL, response->body.len,
+						response->body.data);
+	if (resp == NULL) {
+		D_ERROR("Response body was not a ValidateCredResp\n");
 		return -DER_PROTO;
 	}
 
-	if (pb_auth->data.data == NULL) {
-		D_ERROR("AuthToken did not include data\n");
-		rc = -DER_PROTO;
+	if (resp->status != 0) {
+		D_ERROR("Response reported failed status: %d\n", resp->status);
+		D_GOTO(out, rc = resp->status);
 	}
 
-	auth__token__free_unpacked(pb_auth, NULL);
+	if (resp->token == NULL || resp->token->data.data == NULL) {
+		D_ERROR("Response missing a valid auth token\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	*token = auth_token_dup(resp->token);
+	if (*token == NULL) {
+		D_ERROR("Couldn't copy the Auth Token\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+out:
+	auth__validate_cred_resp__free_unpacked(resp, NULL);
 	return rc;
 }
 
 static Drpc__Call *
 new_validation_request(struct drpc *ctx, d_iov_t *creds)
 {
-	uint8_t		*body;
-	Drpc__Call	*request;
+	uint8_t			*body;
+	size_t			len;
+	Drpc__Call		*request;
+	Auth__ValidateCredReq	req = AUTH__VALIDATE_CRED_REQ__INIT;
+	Auth__Credential	*cred;
 
 	request = drpc_call_create(ctx,
 			DRPC_MODULE_SEC,
 			DRPC_METHOD_SEC_VALIDATE_CREDS);
-	if (request == NULL) {
-		D_ERROR("Could not allocate dRPC call\n");
+	if (request == NULL)
 		return NULL;
-	}
 
-	D_ALLOC(body, creds->iov_len);
-	if (body == NULL) {
-		D_ERROR("Could not allocate dRPC call body\n");
+	cred = auth__credential__unpack(NULL, creds->iov_buf_len,
+					creds->iov_buf);
+	if (cred == NULL) {
 		drpc_call_free(request);
 		return NULL;
 	}
+	req.cred = cred;
 
-	memcpy(body, creds->iov_buf, creds->iov_len);
-	request->body.len = creds->iov_len;
+	len = auth__validate_cred_req__get_packed_size(&req);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_call_free(request);
+		auth__credential__free_unpacked(cred, NULL);
+		return NULL;
+	}
+	auth__validate_cred_req__pack(&req, body);
+	request->body.len = len;
 	request->body.data = body;
 
+	auth__credential__free_unpacked(cred, NULL);
 	return request;
 }
 
@@ -112,9 +239,6 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 static int
 process_validation_response(Drpc__Response *response, Auth__Token **token)
 {
-	int		rc = DER_SUCCESS;
-	Auth__Token	*auth;
-
 	if (response == NULL) {
 		D_ERROR("Response was NULL\n");
 		return -DER_NOREPLY;
@@ -125,20 +249,7 @@ process_validation_response(Drpc__Response *response, Auth__Token **token)
 		return -DER_MISC;
 	}
 
-	rc = sanity_check_validation_response(response);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	auth = auth__token__unpack(NULL, response->body.len,
-				   response->body.data);
-	if (auth == NULL) {
-		D_ERROR("Failed to unpack response body\n");
-		return -DER_PROTO;
-	}
-	*token = auth;
-
-	return rc;
+	return get_token_from_validation_response(response, token);
 }
 
 int
@@ -357,7 +468,8 @@ ds_sec_check_pool_access(struct daos_acl *acl, struct pool_owner *ownership,
 
 	rc = ds_sec_validate_credentials(cred, &token);
 	if (rc != 0) {
-		D_ERROR("Failed to validate credentials, rc=%d\n", rc);
+		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,11 +31,13 @@
 
 #include <Python.h>
 
+#include <daos_errno.h>
 #include <gurt/debug.h>
 #include <gurt/list.h>
 
 #include <daos_types.h>
 #include <daos.h>
+#include <daos_prop.h>
 #include <daos_obj_class.h>
 #include <gurt/common.h>
 #include <daos_kv.h>
@@ -134,8 +136,8 @@ static PyObject *
 cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 {
 	PyObject	*return_list;
-	daos_handle_t	 poh;
 	daos_handle_t	 coh;
+	daos_handle_t	 poh = {0};
 	d_rank_list_t	*svcl = NULL;
 	int		 rc;
 
@@ -299,6 +301,34 @@ do {				\
 	DEFINE_OC_INTERNAL(RP_4G);          /** OC_RP_4G1, OC_RP_4G2, ... */
 }
 
+static void
+cont_prop_define(PyObject *module)
+{
+#define DEFINE_CONT(value) \
+	PyModule_AddIntConstant(module, "DAOS_PROP_" #value, DAOS_PROP_##value)
+	DEFINE_CONT(CO_MIN);
+	DEFINE_CONT(CO_LABEL);
+	DEFINE_CONT(CO_LAYOUT_VER);
+	DEFINE_CONT(CO_LAYOUT_TYPE);
+	DEFINE_CONT(CO_LAYOUT_VER);
+	DEFINE_CONT(CO_CSUM);
+	DEFINE_CONT(CO_CSUM_CHUNK_SIZE);
+	DEFINE_CONT(CO_CSUM_SERVER_VERIFY);
+	DEFINE_CONT(CO_REDUN_FAC);
+	DEFINE_CONT(CO_REDUN_LVL);
+	DEFINE_CONT(CO_SNAPSHOT_MAX);
+	DEFINE_CONT(CO_ACL);
+	DEFINE_CONT(CO_COMPRESS);
+	DEFINE_CONT(CO_ENCRYPT);
+	DEFINE_CONT(CO_OWNER);
+	DEFINE_CONT(CO_OWNER_GROUP);
+	DEFINE_CONT(CO_MAX);
+	DEFINE_CONT(CO_LAYOUT_UNKOWN);
+	DEFINE_CONT(CO_LAYOUT_POSIX);
+	DEFINE_CONT(CO_LAYOUT_HDF5);
+}
+
+
 /**
  * Anchor management
  * The anchor is a 128-byte structure which isn't straightforward to serialize
@@ -460,8 +490,11 @@ kv_get_comp(struct kv_op *op, PyObject *daos_dict)
 		Py_INCREF(Py_None);
 		val = Py_None;
 	} else {
-		val = PyString_FromStringAndSize(op->buf, op->size);
+		val = PyBytes_FromStringAndSize(op->buf, op->size);
 	}
+
+	if (val == NULL)
+		return -DER_IO;
 
 	rc = PyDict_SetItem(daos_dict, op->key_obj, val);
 	if (rc < 0)
@@ -534,7 +567,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			if (evp->ev_error == DER_SUCCESS) {
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
-					break;
+					D_GOTO(err, 0);
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				/**
 				 * op->size = VAL_SZ;
@@ -561,8 +594,8 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 		}
 		if (!op->key)
 			D_GOTO(err, 0);
-		rc = daos_kv_get(oh, DAOS_TX_NONE, op->key, &op->size, op->buf,
-				 evp);
+		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
+				 op->buf, evp);
 		if (rc)
 			break;
 	}
@@ -578,6 +611,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 				op = container_of(evp, struct kv_op, ev);
 				rc2 = kv_get_comp(op, daos_dict);
 				if (rc == DER_SUCCESS && rc2 != DER_SUCCESS)
+					D_GOTO(err, 0);
 					rc = rc2;
 				continue;
 			} else if (evp->ev_error == -DER_REC2BIG) {
@@ -618,6 +652,8 @@ out:
 	return PyInt_FromLong(rc);
 
 err:
+	D_FREE(kv_array);
+
 	return NULL;
 }
 
@@ -687,12 +723,13 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			size = pysize;
 #endif
 		} else {
-			buf = PyString_AsString(value);
-			if (buf == NULL)
+			Py_ssize_t pysize = 0;
+
+			rc = PyBytes_AsStringAndSize(value, &buf, &pysize);
+			if (buf == NULL || rc != 0)
 				D_GOTO(err, 0);
 
-			/** don't store final '\0' */
-			size = strlen(buf);
+			size = pysize;
 		}
 
 #ifdef __USE_PYTHON3__
@@ -708,10 +745,10 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 
 		/** insert or delete kv pair */
 		if (size == 0)
-			rc = daos_kv_remove(oh, DAOS_TX_NONE, key_str, evp);
+			rc = daos_kv_remove(oh, DAOS_TX_NONE, 0, key_str, evp);
 		else
-			rc = daos_kv_put(oh, DAOS_TX_NONE, key_str, size, buf,
-					 evp);
+			rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_str, size,
+					 buf, evp);
 		if (rc)
 			break;
 	}
@@ -989,6 +1026,9 @@ initpydaos_shim_27(void)
 
 	/** export object class */
 	oc_define(module);
+
+	/** export container properties */
+	cont_prop_define(module);
 
 #if PY_MAJOR_VERSION >= 3
 	return module;

@@ -43,8 +43,8 @@
  * warning in sanity(...) with some newer compilers
  */
 static char *mount_dir = "/tmp";
-static uint64_t max_read_size;
-static uint64_t max_iov_read_size;
+static uint64_t max_read_size = 4096;
+static uint64_t max_iov_read_size = 4096;
 
 #define BUF_SIZE 4096
 
@@ -378,7 +378,7 @@ skip_mmap:
 	CU_ASSERT_EQUAL(status, DFUSE_IO_DIS_STREAM);
 
 	if (fp != NULL) {
-		char buf[16];
+		char buf[9] = {0};
 
 		items = fread(buf, 1, 8, fp);
 		printf("Read %zd items, expected 8\n", items);

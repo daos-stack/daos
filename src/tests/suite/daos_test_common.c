@@ -478,13 +478,23 @@ test_teardown(void **state)
 	}
 
 	if (!uuid_is_null(arg->pool.pool_uuid) && !arg->pool.slave) {
+		if (arg->myrank != 0) {
+			if (!daos_handle_is_inval(arg->pool.poh))
+				rc = daos_pool_disconnect(arg->pool.poh, NULL);
+		}
+		if (arg->multi_rank)
+			MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
-			pool_destroy_safe(arg, NULL);
+			rc = pool_destroy_safe(arg, NULL);
 
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (rc)
+		if (rc) {
+			print_message("failed to destroy pool "DF_UUIDF
+				      " rc: %d\n",
+				      DP_UUID(arg->pool.pool_uuid), rc);
 			return rc;
+		}
 	}
 
 	if (!daos_handle_is_inval(arg->eq)) {
@@ -547,8 +557,10 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 				tgts_per_node;
 		if (arg->srv_nnodes - disable_nodes < required_nodes) {
 			if (arg->myrank == 0)
-				print_message("No enough targets, skipping "
+				print_message("Not enough targets(need %d),"
+					      " skipping "
 					      "(%d/%d)\n",
+					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
 			runable = false;
@@ -688,9 +700,8 @@ test_rebuild_wait(test_arg_t **args, int args_cnt)
 }
 
 int
-run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
-		   int tests_size, int *sub_tests, int sub_tests_size,
-		   test_setup_cb_t setup_cb, test_setup_cb_t teardown_cb)
+run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
+			int tests_size, int *sub_tests, int sub_tests_size)
 {
 	int i;
 	int rc = 0;
@@ -707,7 +718,48 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 
 		for (i = 0; i < sub_tests_size; i++) {
 			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
-				print_message("No test %d\n", sub_tests[i]);
+				print_message("No subtest %d\n", sub_tests[i]);
+				continue;
+			}
+			subtests[i] = tests[sub_tests[i] - 1];
+			subtestsnb++;
+		}
+
+		/* run the sub-tests */
+		if (subtestsnb > 0)
+			rc = _cmocka_run_group_tests(test_name, subtests,
+						     subtestsnb, NULL, NULL);
+		D_FREE(subtests);
+	} else {
+		/* run the full suite */
+		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
+					     NULL, NULL);
+	}
+
+	return rc;
+}
+
+int
+run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
+		   int tests_size, int *sub_tests, int sub_tests_size,
+		   test_setup_cb_t setup_cb, test_teardown_cb_t teardown_cb)
+{
+	int i;
+	int rc = 0;
+
+	if (sub_tests != NULL) {
+		struct CMUnitTest *subtests;
+		int subtestsnb = 0;
+
+		D_ALLOC_ARRAY(subtests, sub_tests_size);
+		if (subtests == NULL) {
+			print_message("failed allocating subtests array\n");
+			return -DER_NOMEM;
+		}
+
+		for (i = 0; i < sub_tests_size; i++) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
 			subtests[i] = tests[sub_tests[i] - 1];

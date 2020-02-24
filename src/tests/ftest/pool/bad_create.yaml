@@ -1,11 +1,13 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 server_config:
    name: daos_server
 timeout: 50
+pool:
+   control_method: dmg
 createtests:
    modes: !mux
       goodmode:

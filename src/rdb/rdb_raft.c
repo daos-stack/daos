@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 	if (dnode == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	rc = crt_group_rank(NULL, &self);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	dnode->dn_rank = rank;
 	node = raft_add_node(db->d_raft, dnode, rank, (rank == self));
 	if (node == NULL) {
@@ -287,7 +287,8 @@ rdb_raft_load_replicas(struct rdb *db, uint64_t index)
 	rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
 			   &rdb_lc_replicas, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to read replicas: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to read replicas: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err_replicas;
 	}
 	return 0;
@@ -347,7 +348,7 @@ rdb_raft_load_snapshot(struct rdb *db)
 	rdb_raft_unload_replicas(db);
 	rc = rdb_raft_load_replicas(db, db->d_lc_record.dlr_base);
 	/* TODO: If rc != 0, shut down this replica. */
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	/* Add the corresponding nodes to raft. */
 	for (i = 0; i < db->d_replicas->rl_nr; i++) {
@@ -359,7 +360,7 @@ rdb_raft_load_snapshot(struct rdb *db)
 	}
 
 	rc = raft_end_load_snapshot(db->d_raft);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return 0;
 }
@@ -590,7 +591,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 
 	/* Allocate the data buffers. */
 	rc = crt_bulk_get_len(in->isi_kds, &kds->iov_buf_len);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	kds->iov_len = kds->iov_buf_len;
 	D_ALLOC(kds->iov_buf, kds->iov_buf_len);
 	if (kds->iov_buf == NULL) {
@@ -598,7 +599,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 		goto out;
 	}
 	rc = crt_bulk_get_len(in->isi_data, &data->iov_buf_len);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	data->iov_len = data->iov_buf_len;
 	D_ALLOC(data->iov_buf, data->iov_buf_len);
 	if (data->iov_buf == NULL) {
@@ -678,11 +679,15 @@ out:
 	return rc;
 }
 
+struct rdb_raft_unpack_arg {
+	daos_epoch_t eph;
+	daos_handle_t slc;
+};
+
 static int
 rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 {
-	daos_handle_t  *slc = arg;
-
+	struct rdb_raft_unpack_arg *unpack_arg = arg;
 #if 0
 	int i;
 
@@ -704,17 +709,17 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 		D_ASSERT(io->ui_sgls[i].sg_iovs[0].iov_len > 0);
 	}
 #endif
-
-	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
-			      &io->ui_dkey, io->ui_iods_top + 1, io->ui_iods,
-			      io->ui_sgls);
+	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
+			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
+			      io->ui_iods, NULL, io->ui_sgls);
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
+rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 {
-	struct dss_enum_arg	arg;
-	d_sg_list_t		sgl;
+	struct dss_enum_arg	   arg = { 0 };
+	struct rdb_raft_unpack_arg unpack_arg;
+	d_sg_list_t		   sgl;
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
@@ -729,9 +734,12 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 	sgl.sg_iovs = data;
 	arg.sgl = &sgl;
 
+	unpack_arg.eph = index;
+	unpack_arg.slc = slc;
+
 	/* Unpack from the object level. */
 	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
-			       &slc);
+			       &unpack_arg);
 }
 
 static int
@@ -810,7 +818,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 			return rc;
 		rc = vos_cont_open(db->d_pool, slc_record->dlr_uuid, slc);
 		/* Not good, but we've just created it ourself... */
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}
 
 	/* We have an SLC matching this chunk. */
@@ -831,7 +839,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 
 	/* Save this chunk but do not update the SLC record yet. */
 	rc = rdb_raft_unpack_chunk(*slc, &in->isi_local.rl_kds_iov,
-				   &in->isi_local.rl_data_iov);
+				   &in->isi_local.rl_data_iov, msg->last_idx);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
 			DP_DB(db), in->isi_msg.last_idx, in->isi_seq, rc);
@@ -1370,7 +1378,7 @@ rdb_raft_trigger_compaction(struct rdb *db)
 		D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
 			index);
 		rc = raft_begin_snapshot(db->d_raft, index);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		/*
 		 * VOS snaps every new index implicitly.
 		 *
@@ -2066,12 +2074,13 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
 	/* Record the configuration in the LC at index 1. */
 	rc = vos_cont_open(pool, record.dlr_uuid, &lc);
 	/* This really should not be happening.. */
-	D_ASSERTF(rc == 0, "Open VOS container: %d\n", rc);
+	D_ASSERTF(rc == 0, "Open VOS container: "DF_RC"\n", DP_RC(rc));
 
 	/* No initial configuration if rank list empty */
 	rc = rdb_lc_store_replicas(lc, 1 /* base */, replicas);
 	if (rc != 0)
-		D_ERROR("failed to create list of replicas: %d\n", rc);
+		D_ERROR("failed to create list of replicas: "DF_RC"\n",
+			DP_RC(rc));
 	rc_close = vos_cont_close(lc);
 	return (rc != 0) ? rc : rc_close;
 }
@@ -2162,7 +2171,8 @@ rdb_raft_load_lc(struct rdb *db)
 		db->d_slc = DAOS_HDL_INVAL;
 		goto lc;
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up SLC: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to look up SLC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err;
 	}
 	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
@@ -2181,7 +2191,8 @@ lc:
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_lc, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up LC: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB": failed to look up LC: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		goto err_slc;
 	}
 	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, &db->d_lc);
@@ -2264,10 +2275,10 @@ rdb_raft_get_request_timeout(void)
 static uint64_t
 rdb_raft_get_compact_thres(void)
 {
-	unsigned int i = 0;
+	unsigned int i = 256;
 
 	d_getenv_int("RDB_COMPACT_THRESHOLD", &i);
-	return i == 0 ? UINT64_MAX : i;
+	return i;
 }
 
 int
@@ -2338,7 +2349,7 @@ rdb_raft_start(struct rdb *db)
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
 	if (rc == 0) {
 		rc = raft_set_current_term(db->d_raft, term);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	} else if (rc != -DER_NONEXIST) {
 		goto err_raft;
 	}
@@ -2346,7 +2357,7 @@ rdb_raft_start(struct rdb *db)
 	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
 	if (rc == 0) {
 		rc = raft_vote_for_nodeid(db->d_raft, vote);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	} else if (rc != -DER_NONEXIST) {
 		goto err_raft;
 	}
@@ -2392,18 +2403,18 @@ rdb_raft_start(struct rdb *db)
 err_callbackd:
 	db->d_stop = true;
 	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_callbackd);
 err_timerd:
 	db->d_stop = true;
 	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_timerd);
 err_recvd:
 	db->d_stop = true;
 	ABT_cond_broadcast(db->d_replies_cv);
 	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
 err_lc:
 	rdb_raft_unload_lc(db);
@@ -2457,16 +2468,16 @@ rdb_raft_stop(struct rdb *db)
 
 	/* Join and free all daemons. */
 	rc = ABT_thread_join(db->d_compactd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_compactd);
 	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_callbackd);
 	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_timerd);
 	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&db->d_recvd);
 
 	rdb_raft_unload_lc(db);
@@ -2493,7 +2504,7 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	rdb_raft_save_state(db, &state);
 	raft_become_follower(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
 /* Wait for index to be applied in term. For leaders only. */
@@ -2534,7 +2545,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
@@ -2579,7 +2590,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
@@ -2623,7 +2634,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	db = rdb_lookup(in->isi_op.ri_uuid);
 	if (db == NULL) {
@@ -2692,7 +2703,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	 * rank of this reply. This CaRT API is based on request hdr.
 	 */
 	rc = crt_req_dst_rank_get(rpc, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {
@@ -2747,7 +2758,7 @@ rdb_raft_free_bulk_and_buffer(crt_bulk_t bulk)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 	rc = crt_bulk_access(bulk, &sgl);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	D_ASSERTF(sgl.sg_nr_out == 1, "%d\n", sgl.sg_nr_out);
 	D_ASSERT(iov.iov_buf != NULL);
 

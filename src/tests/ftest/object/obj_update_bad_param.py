@@ -82,14 +82,14 @@ class ObjUpdateBadParam(TestWithServers):
             thedatasize = len(thedata) + 1
             dkey = "this is the dkey"
             akey = "this is the akey"
-            obj, dummy_tx = container.write_an_obj(thedata, thedatasize,
-                                                   dkey, akey, None, None, 2)
+            obj = container.write_an_obj(thedata, thedatasize,
+                                         dkey, akey, None, None, 2)
 
             saved_oh = obj.obj_handle
             obj.obj_handle = 99999
 
-            obj, dummy_tx = container.write_an_obj(thedata, thedatasize,
-                                                   dkey, akey, obj, None, 2)
+            obj = container.write_an_obj(thedata, thedatasize,
+                                         dkey, akey, obj, None, 2)
 
             container.oh = saved_oh
             container.close()

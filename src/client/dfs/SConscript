@@ -18,18 +18,25 @@ def scons():
                     break
         if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
-            from pkg_resources import parse_version
 
+            gotit = False
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
                 headers = ts.dbMatch('name', 'lustre-client')
-            if headers and parse_version(headers['version']) >= parse_version('2.12.57'):
-                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
-            else:
-                print("Found no package lustre nor lustre-client.")
+            if headers:
+                from pkg_resources import parse_version
+
+                for header in headers:
+                    if parse_version(header['version']) >= parse_version('2.12.57'):
+                        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+                        gotit = True
+            if gotit == False:
+                print("Found no compatible lustre nor lustre-client package.")
         elif distro in ('debian', 'ubuntu'):
             import apt
+            from pkg_resources import parse_version
+
             cache = apt.Cache()
             cache.open()
             instver = cache["lustre"].installed
@@ -38,7 +45,7 @@ def scons():
             if instver and parse_version(instver.version) >= parse_version('2.12.57'):
                 denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                print("Found no package lustre nor lustre-client.")
+                print("Found no compatible lustre nor lustre-client package.")
         else:
             print("Unable to identify distro.")
     except ImportError:

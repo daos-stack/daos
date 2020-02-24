@@ -38,8 +38,7 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(umm, coh, tx_id, UMOFF_NULL,
-					intent, DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(umm, coh, tx_id, intent, DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
 
@@ -82,7 +81,10 @@ static int
 vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
 	     void *args)
 {
-	vos_dtx_deregister_record(umm, tx_id, ilog_off, DTX_RT_ILOG);
+	daos_handle_t	coh;
+
+	coh.cookie = (unsigned long)args;
+	vos_dtx_deregister_record(umm, coh, tx_id, ilog_off);
 	return 0;
 }
 
@@ -96,7 +98,7 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 	cbs->dc_log_add_cb = vos_ilog_add;
 	cbs->dc_log_add_args = NULL;
 	cbs->dc_log_del_cb = vos_ilog_del;
-	cbs->dc_log_del_args = NULL;
+	cbs->dc_log_del_args = (void *)(unsigned long)coh.cookie;
 }
 
 static void
@@ -313,6 +315,30 @@ update:
 	 */
 
 	return rc;
+}
+
+int
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
+		   const daos_epoch_range_t *epr,
+		   bool discard, daos_epoch_t punched,
+		   struct vos_ilog_info *info)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm = vos_cont2umm(cont);
+	struct ilog_desc_cbs	 cbs;
+	int			 rc;
+
+	vos_ilog_desc_cbs_init(&cbs, coh);
+	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
+
+	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punched,
+			    &info->ii_entries);
+
+	if (rc != 0)
+		return rc;
+
+	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi,
+			      punched, NULL, info);
 }
 
 void

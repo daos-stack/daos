@@ -36,7 +36,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_FUSE_REPLY_ERR(req, ENOENT);
+		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOENT);
 		return;
 	}
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -44,6 +44,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	D_ALLOC_PTR(oh);
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
+
+	DFUSE_TRA_UP(oh, ie, "open handle");
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
@@ -59,13 +61,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	fi_out.fh = (uint64_t)oh;
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	DFUSE_REPLY_OPEN(req, &fi_out);
+	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
 err:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	D_FREE(oh);
-	DFUSE_FUSE_REPLY_ERR(req, rc);
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
 void
@@ -79,7 +81,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
-		DFUSE_REPLY_ZERO(req);
+		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(oh);

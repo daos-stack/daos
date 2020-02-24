@@ -25,6 +25,8 @@
 
 package drpc
 
+import "github.com/golang/protobuf/proto"
+
 // #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
 import "C"
@@ -48,8 +50,10 @@ const (
 )
 
 const (
-	// MethodKillRank is a ModuleMgmt method
-	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
+	// MethodPrepShutdown is a ModuleMgmt method
+	MethodPrepShutdown = C.DRPC_METHOD_MGMT_PREP_SHUTDOWN
+	// MethodPingRank is a ModuleMgmt method
+	MethodPingRank = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodSetRank is a ModuleMgmt method
 	MethodSetRank = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodCreateMS is a ModuleMgmt method
@@ -80,14 +84,38 @@ const (
 	MethodPoolOverwriteACL = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
 	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
+	// MethodPoolDeleteACL is a ModuleMgmt method
+	MethodPoolDeleteACL = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
+	// MethodDevStateQuery is a ModuleMgmt method
+	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
+	// MethodSetFaultyState is a ModuleMgmt method
+	MethodSetFaultyState = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
+	// MethodListContainers is a ModuleMgmt method
+	MethodListContainers = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
+	// MethodPoolQuery defines a method for querying a pool
+	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
+	// MethodPoolSetProp defines a method for setting a pool property
+	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 )
 
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+	// MethodBIOError is a ModuleSrv method
+	MethodBIOError = C.DRPC_METHOD_SRV_BIO_ERR
 )
 
 const (
 	// MethodValidateCredentials is a ModuleSecurity method
 	MethodValidateCredentials = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
+
+// Marshal is a utility function that can be used by dRPC method handlers to
+// marshal their method-specific response to be passed back to the ModuleService.
+func Marshal(message proto.Message) ([]byte, error) {
+	msgBytes, err := proto.Marshal(message)
+	if err != nil {
+		return nil, MarshalingFailure()
+	}
+	return msgBytes, nil
+}

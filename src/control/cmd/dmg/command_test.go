@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -107,14 +109,9 @@ func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanR
 	return &client.StorageScanResp{}
 }
 
-func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
-	return nil, nil
-}
-
-func (tc *testConn) KillRank(rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
-	return nil
+	return client.StorageFormatResults{}
 }
 
 func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
@@ -127,19 +124,34 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
-func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+func (tc *testConn) PoolQuery(req client.PoolQueryReq) (*client.PoolQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolQuery-%+v", req))
+	return nil, nil
+}
+
+func (tc *testConn) PoolSetProp(req client.PoolSetPropReq) (*client.PoolSetPropResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolSetProp-%+v", req))
+	return &client.PoolSetPropResp{}, nil
+}
+
+func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
 }
 
-func (tc *testConn) PoolOverwriteACL(req *client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
 	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
 }
 
-func (tc *testConn) PoolUpdateACL(req *client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
+func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
 	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
+	return &client.PoolDeleteACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
@@ -157,14 +169,39 @@ func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
-	tc.appendInvocation("SystemMemberQuery")
-	return make(common.SystemMembers, 0), nil
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
-	tc.appendInvocation("SystemStop")
-	return make(common.SystemMemberResults, 0), nil
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
+	return nil
+}
+
+func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemQuery-%v", req))
+	return &client.SystemQueryResp{}, nil
+}
+
+func (tc *testConn) SystemStop(req client.SystemStopReq) (*client.SystemStopResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemStop-%v", req))
+	return &client.SystemStopResp{}, nil
+}
+
+func (tc *testConn) SystemStart(req client.SystemStartReq) (*client.SystemStartResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemStart-%v", req))
+	return &client.SystemStartResp{}, nil
+}
+
+func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("LeaderQuery-%s", req.System))
+	return &client.LeaderQueryResp{}, nil
+}
+
+func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, error) {
+	tc.appendInvocation(fmt.Sprintf("ListPools-%s", req))
+	return &client.ListPoolsResp{}, nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
@@ -190,6 +227,38 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
+func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, func()) {
+	t.Helper()
+
+	defaultConfig := client.NewConfiguration()
+	if err := defaultConfig.SetPath(path); err != nil {
+		t.Fatal(err)
+	}
+
+	// create default config file
+	if err := os.MkdirAll(filepath.Dir(defaultConfig.Path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(defaultConfig.Path)
+	if err != nil {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+		t.Fatal(err)
+	}
+	cleanup := func() {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+	}
+
+	return f, cleanup
+}
+
+func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, conn client.Connect) error {
+	t.Helper()
+
+	var opts cliOptions
+	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
+	return parseOpts(args, &opts, conn, log)
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -199,13 +268,19 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			var opts cliOptions
+			f, cleanup := createTestConfig(t, log, "")
+			f.Close()
+			defer cleanup()
+
 			conn := newTestConn(t)
-			args := append([]string{"--insecure"}, strings.Split(st.cmd, " ")...)
-			err := parseOpts(args, &opts, conn, log)
+			err := runCmd(t, st.cmd, log, conn)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
+				}
+
+				if err == nil {
+					t.Fatalf("expected err '%v', got nil", st.expectedErr)
 				}
 
 				testExpectedError(t, st.expectedErr, err)

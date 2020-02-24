@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
-	daos_csum_buf_t		 csum;
+	struct dcs_csum_info	 csum;
 	daos_epoch_range_t	 epr = query->qt_epr;
 	daos_epoch_t		 punch = query->qt_punch;
 	int			 rc = 0;
@@ -115,7 +115,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 
 	do {
 		d_iov_set(rbund.rb_iov, NULL, 0);
-		dcb_set_null(rbund.rb_csum);
+		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
 		if (rc != 0)
@@ -213,7 +213,7 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 {
 	daos_handle_t		*toh;
 	struct btr_root		*to_open;
-	daos_csum_buf_t		 csum = {0};
+	struct dcs_csum_info	 csum = {0};
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 riov;
 	enum vos_tree_class	 tclass;

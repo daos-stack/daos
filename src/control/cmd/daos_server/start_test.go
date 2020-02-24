@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,12 +55,12 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
-		WithNvmeShmID(-1). // don't generate a ShmID in testing
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithScmClass("ram").
+				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
 				WithFabricInterface("foo0"),
 		)
@@ -75,6 +75,7 @@ func genDefaultExpected() *server.Configuration {
 			ioserver.NewConfig().
 				WithHostname(hostname).
 				WithScmClass("ram").
+				WithScmRamdiskSize(1).
 				WithScmMountPoint("/mnt/daos").
 				WithFabricInterface("foo0"),
 		)
@@ -182,13 +183,6 @@ func TestStartOptions(t *testing.T) {
 				return cfg
 			},
 		},
-		"XS Helpers (bad)": {
-			argList: []string{"-x", "42"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].WithHelperStreamCount(2)
-				return cfg
-			},
-		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
@@ -227,18 +221,6 @@ func TestStartOptions(t *testing.T) {
 			argList: []string{"--group=foo"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
 				return cfg.WithSystemName("foo")
-			},
-		},
-		"Attach Info (short)": {
-			argList: []string{"-a", "/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
-			},
-		},
-		"Attach Info (long)": {
-			argList: []string{"--attach_info=/foo/bar"},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithAttachInfo("/foo/bar")
 			},
 		},
 		"SocketDir (short)": {

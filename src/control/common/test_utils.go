@@ -26,10 +26,13 @@ package common
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -84,31 +87,41 @@ func AssertStringsEqual(
 }
 
 // ExpectError asserts error contains expected message
-func ExpectError(
-	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
+func ExpectError(t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
 	t.Helper()
 
 	if actualErr == nil {
-		t.Fatalf("Expected a non-nil error: %v", desc)
-	} else if actualErr.Error() != expectedMessage {
-		t.Fatalf(
-			"Wrong error message. Expected: %s, Actual: %s (%v)",
-			expectedMessage, actualErr.Error(), desc)
+		if expectedMessage != "" {
+			t.Fatalf("expected a non-nil error: %v", desc)
+		}
+	} else if diff := cmp.Diff(expectedMessage, actualErr.Error()); diff != "" {
+		t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
 	}
+}
+
+// CmpErrBool compares two errors and returns a boolean value indicating equality
+// or at least close similarity between their messages.
+func CmpErrBool(want, got error) bool {
+	if want == got {
+		return true
+	}
+
+	if want == nil || got == nil {
+		return false
+	}
+	if !strings.Contains(got.Error(), want.Error()) {
+		return false
+	}
+
+	return true
 }
 
 // CmpErr compares two errors for equality or at least close similarity in their messages.
 func CmpErr(t *testing.T, want, got error) {
 	t.Helper()
 
-	if want == got {
-		return
-	}
-	if want == nil || got == nil {
-		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
-	}
-	if !strings.Contains(got.Error(), want.Error()) {
-		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
+	if !CmpErrBool(want, got) {
+		t.Fatalf("unexpected error\n(wanted: %v, got: %v)", want, got)
 	}
 }
 
@@ -172,6 +185,59 @@ func CreateTestDir(t *testing.T) (string, func()) {
 	}
 
 	return tmpDir, func() {
-		os.RemoveAll(tmpDir)
+		err := os.RemoveAll(tmpDir)
+		if err != nil {
+			t.Fatalf("Couldn't remove tmp dir: %v", err)
+		}
 	}
+}
+
+// CreateTestSocket creates a Unix Domain Socket that can listen for connections
+// on a given path. It returns the listener and a cleanup function.
+func CreateTestSocket(t *testing.T, sockPath string) (*net.UnixListener, func()) {
+	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
+	sock, err := net.ListenUnix("unixpacket", addr)
+	if err != nil {
+		t.Fatalf("Couldn't set up test socket: %v", err)
+	}
+
+	cleanup := func() {
+		sock.Close()
+		syscall.Unlink(sockPath)
+	}
+
+	err = os.Chmod(sockPath, 0777)
+	if err != nil {
+		cleanup()
+		t.Fatalf("Unable to set permissions on test socket: %v", err)
+	}
+
+	return sock, cleanup
+}
+
+// SetupTestListener sets up a Unix Domain Socket in a temp directory to listen
+// and receive one connection.
+// The server-side connection object is sent through the conn channel when a client
+// connects.
+// It returns the path to the socket, to allow the client to connect, and a
+// cleanup function.
+func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
+	tmpDir, tmpCleanup := CreateTestDir(t)
+
+	path := filepath.Join(tmpDir, "test.sock")
+	sock, socketCleanup := CreateTestSocket(t, path)
+	cleanup := func() {
+		socketCleanup()
+		tmpCleanup()
+	}
+
+	go func() {
+		newConn, err := sock.AcceptUnix()
+		if err != nil {
+			t.Fatalf("Failed to accept connection: %v", err)
+		}
+		conn <- newConn
+	}()
+
+	return path, cleanup
 }

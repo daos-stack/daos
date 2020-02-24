@@ -72,103 +72,6 @@ out:
 	return rc;
 }
 
-static int
-group_create_cb(crt_group_t *grp, void *priv, int status)
-{
-	ABT_eventual *eventual = priv;
-
-	if (status != 0) {
-		D_ERROR("failed to create group: %d\n", status);
-		grp = NULL;
-	}
-	ABT_eventual_set(*eventual, &grp, sizeof(grp));
-	return 0;
-}
-
-/**
- * Create a group synchronously with \a id and \a ranks. See
- * crt_group_create().
- *
- * \param[in]	id	group ID
- * \param[in]	ranks	list of ranks in new group
- * \param[out]	group	new group
- */
-int
-dss_group_create(crt_group_id_t id, d_rank_list_t *ranks, crt_group_t **group)
-{
-	ABT_eventual	eventual;
-	crt_group_t   **g;
-	int		rc;
-
-	rc = ABT_eventual_create(sizeof(*g), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	/*
-	 * Always wait for the eventual, as group_create_cb() will be called in
-	 * all cases, possibly by another ULT. "!populate_now" is not
-	 * implemented yet.
-	 */
-	crt_group_create(id, ranks, true /* populate_now */, group_create_cb,
-			 &eventual);
-
-	rc = ABT_eventual_wait(eventual, (void **)&g);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	if (*g == NULL)
-		D_GOTO(out_eventual, rc = -DER_IO);
-
-	*group = *g;
-	rc = 0;
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
-static int
-group_destroy_cb(void *args, int status)
-{
-	ABT_eventual *eventual = args;
-
-	ABT_eventual_set(*eventual, &status, sizeof(status));
-	return 0;
-}
-
-/**
- * Destroy \a group synchronously.
- *
- * \param[in]	group	group to destroy
- */
-int
-dss_group_destroy(crt_group_t *group)
-{
-	ABT_eventual	eventual;
-	int	       *status;
-	int		rc;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	/*
-	 * Always wait for the eventual, as group_destroy_cb() will be called
-	 * in all cases, possibly by another ULT.
-	 */
-	crt_group_destroy(group, group_destroy_cb, &eventual);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	rc = *status;
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
 /**
  * Argobots-sleep \a ms milliseconds. If you'd like to sleep more than a
  * second, then you'd likely need to write your own loop and check a cancel
@@ -204,7 +107,7 @@ dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

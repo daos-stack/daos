@@ -2,13 +2,13 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
+    - server-A
+    - server-B
+    - server-C
+    - server-D
   test_clients:
-    - boro-E
-    - boro-F
+    - client-E
+    - client-F
 timeout: 600
 server_config:
   name: daos_server
@@ -26,6 +26,7 @@ pool:
     scm_size: 30000000000
   createsvc:
     svcn: 1
+  control_method: dmg
 ior:
     client_processes:
         np_8:

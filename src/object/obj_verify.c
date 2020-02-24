@@ -64,7 +64,7 @@ again:
 	dova->list_iov.iov_buf = dova->list_buf;
 	dova->list_iov.iov_buf_len = dova->list_buf_len;
 
-	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL,
+	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL, NULL,
 					 &dova->size, &dova->num, dova->kds,
 					 &dova->list_sgl, &dova->anchor,
 					 &dova->dkey_anchor,
@@ -211,17 +211,20 @@ dc_obj_verify_parse_dkey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	dkey.iov_buf_len = dova->kds[idx].kd_key_len;
 	dkey.iov_len = dova->kds[idx].kd_key_len;
 
-	if (gen == cursor->gen)
-		return 1;
+	if (gen == cursor->gen) {
+		D_ASSERT(cursor->dkey.iov_buf != NULL);
+		if (!daos_key_match(&cursor->dkey, &dkey))
+			return 1;
+	}
 
 	if (cursor->dkey.iov_buf == NULL ||
 	    !daos_key_match(&cursor->dkey, &dkey)) {
 		daos_iov_free(&cursor->dkey);
 		daos_iov_copy(&cursor->dkey, &dkey);
+		cursor->gen++;
+		cursor->type = OBJ_ITER_DKEY;
 	}
 
-	cursor->gen++;
-	cursor->type = OBJ_ITER_DKEY;
 	return 0;
 }
 
@@ -244,8 +247,11 @@ dc_obj_verify_parse_akey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	if (gen == cursor->gen) {
 		if (cursor->type == OBJ_ITER_RECX ||
 		    cursor->type == OBJ_ITER_SINGLE ||
-		    cursor->type == OBJ_ITER_AKEY)
-			return 1;
+		    cursor->type == OBJ_ITER_AKEY) {
+			D_ASSERT(cursor->iod.iod_name.iov_buf != NULL);
+			if (!daos_key_match(&cursor->iod.iod_name, &akey))
+				return 1;
+		}
 	} else {
 		cursor->gen++;
 	}
@@ -254,9 +260,9 @@ dc_obj_verify_parse_akey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	    !daos_key_match(&cursor->iod.iod_name, &akey)) {
 		daos_iov_free(&cursor->iod.iod_name);
 		daos_iov_copy(&cursor->iod.iod_name, &akey);
+		cursor->type = OBJ_ITER_AKEY;
 	}
 
-	cursor->type = OBJ_ITER_AKEY;
 	return 0;
 }
 
@@ -440,7 +446,7 @@ dc_obj_verify_move_cursor(struct dc_obj_verify_args *dova, daos_obj_id_t oid)
 	struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 	daos_iod_t			*iod = &cursor->iod;
 	uint32_t			 gen = cursor->gen + 1;
-	int				 rc;
+	int				 rc = 0;
 	int				 i;
 
 	dova->data_fetched = 0;

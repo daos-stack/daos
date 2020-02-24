@@ -55,7 +55,16 @@ typedef struct {
 	daos_size_t		da_chunk_size;
 	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
+	daos_prop_t		*da_props;
 } dfs_attr_t;
+
+/** IO descriptor of ranges in a file to access */
+typedef struct {
+	/** Number of entries in dfs_rgs */
+	daos_size_t		iod_nr;
+	/** Array of ranges; each range defines a starting index and length. */
+	daos_range_t	       *iod_rgs;
+} dfs_iod_t;
 
 /**
  * Create a DFS container with the the POSIX property layout set.
@@ -103,6 +112,50 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  */
 int
 dfs_umount(dfs_t *dfs);
+
+/**
+ * Query attributes of a DFS mount.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	attr	Attributes on the DFS container.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_query(dfs_t *dfs, dfs_attr_t *attr);
+
+/**
+ * Convert a local dfs mount to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs	valid dfs mount to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store mount information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_local2global(dfs_t *dfs, d_iov_t *glob);
+
+/**
+ * Create a dfs mount from global representation data. This has to be closed
+ * with dfs_umount().
+ *
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	coh	Container open handle.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted
+ * \param[out]	dfs	Returned dfs mount
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
+		 dfs_t **dfs);
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
@@ -214,6 +267,38 @@ int
 dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj);
 
 /**
+ * Convert a local DFS object to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs     Pointer to the mounted file system.
+ * \param[in]	obj	DFS Object to serialize
+ * \param[out]	glob	pointer to iov of the buffer to store obj information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob);
+
+/**
+ * Create a dfs object from global representation data. This has to be closed
+ * with dfs_release().
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	flags	Access flags (O_RDONLY/O_RDWR/O_WRONLY). If 0, inherit
+ *			flags of serialized object handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle
+ *			to be extracted
+ * \param[out]	obj	Returned open object handle
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **obj);
+
+/**
  * Close/release open object.
  *
  * \param[in]	obj	Object to release.
@@ -232,9 +317,6 @@ dfs_release(dfs_obj_t *obj);
  * \param[in]	off	Offset into the file to read from.
  * \param[out]	read_size
  *			How much data is actually read.
- *			TODO - support short reads when iom is supported.
- *			For now this returns whatever was requested and short
- *			read is not supported.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -243,6 +325,24 @@ dfs_release(dfs_obj_t *obj);
 int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
+
+/**
+ * Same as dfs_read with the ability to have a segmented file layout to read.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor for list-io.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[out]	read_size
+ *			How much data is actually read.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	  daos_size_t *read_size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -259,6 +359,22 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
+
+/**
+ * Write data to the file object.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	iod	IO descriptor of file view.
+ * \param[in]	sgl	Scatter/Gather list for data buffer.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
+	   daos_event_t *ev);
 
 /**
  * Query size of file data.
@@ -347,11 +463,13 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Link name of new dir.
  * \param[in]	mode	mkdir mode.
+ * \param[in]	cid	DAOS object class id (pass 0 for default MAX_RW).
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
+	  daos_oclass_id_t cid);
 
 /**
  * Remove an object from parent directory. If object is a directory and is

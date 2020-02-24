@@ -33,28 +33,51 @@ message SystemMember {
 	string addr = 1;
 	string uuid = 2;
 	uint32 rank = 3;
+	uint32 state = 4;
+}
+
+// RankResult is a generic result for a system operation on a rank.
+// Identical to mgmt.proto RanksResp_RankResult.
+message RankResult {
+	uint32 rank = 1;
+	string action = 2;
+	bool errored = 3;
+	string msg = 4;
+	uint32 state = 5;
 }
 
 // SystemStopReq supplies system shutdown parameters.
-message SystemStopReq {}
+message SystemStopReq {
+	bool prep = 1; // indicates that the prep stage should be performed
+	bool kill = 2; // indicates that the kill stage should be performed
+	bool force = 3;
+	repeated uint32 ranks = 4; // system ranks to stop
+}
 
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
-	message Result {
-		string id = 1;
-		string action = 2;
-		bool errored = 3;
-		string msg = 4;
-	}
-	repeated Result results = 1;
+	repeated RankResult results = 1;
 }
 
-// SystemMemberQueryReq supplies system query parameters.
-message SystemMemberQueryReq {}
+// SystemStartReq supplies system restart parameters.
+message SystemStartReq {
+	repeated uint32 ranks = 1; // system ranks to start
+}
 
-// SystemMemberQueryResp returns active system members.
-message SystemMemberQueryResp {
+// SystemStartResp returns status of restart attempt and results
+// of attempts to start system members.
+message SystemStartResp {
+	repeated RankResult results = 1;
+}
+
+// SystemQueryReq supplies system query parameters.
+message SystemQueryReq {
+	int32 rank = 1; // negative indicates NilRank
+}
+
+// SystemQueryResp returns active system members.
+message SystemQueryResp {
 	repeated SystemMember members = 1;
 }
 

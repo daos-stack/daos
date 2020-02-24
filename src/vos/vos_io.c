@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,10 +42,15 @@ struct vos_io_context {
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
+	struct dcs_iod_csums	*iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
+	/** Checksums for bio_iovs in \ic_biod */
+	struct dcs_csum_info	*ic_biov_csums;
+	uint32_t		 ic_biov_csums_at;
+	uint32_t		 ic_biov_csums_nr;
 	/** current dkey info */
 	struct vos_ilog_info	 ic_dkey_info;
 	/** current akey info */
@@ -89,6 +94,14 @@ vos_ioc2ioh(struct vos_io_context *ioc)
 
 	ioh.cookie = (uint64_t)ioc;
 	return ioh;
+}
+
+static struct dcs_csum_info *
+vos_ioc2csum(struct vos_io_context *ioc)
+{
+	if (ioc->iod_csums != NULL)
+		return ioc->iod_csums[ioc->ic_sgl_at].ic_data;
+	return NULL;
 }
 
 static void
@@ -154,6 +167,9 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
+	if (ioc->ic_biov_csums != NULL)
+		D_FREE(ioc->ic_biov_csums);
+
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
 
@@ -167,7 +183,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, unsigned int iod_nr, daos_iod_t *iods,
-	       bool size_fetch, struct vos_io_context **ioc_pp)
+	       struct dcs_iod_csums *iod_csums, bool size_fetch,
+	       struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
 	struct vos_io_context *ioc = NULL;
@@ -196,6 +213,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_actv = NULL;
 	ioc->ic_actv_cnt = ioc->ic_actv_at = 0;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
+	ioc->iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
@@ -213,6 +231,12 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		rc = -DER_NOMEM;
 		goto error;
 	}
+
+	ioc->ic_biov_csums_nr = 1;
+	ioc->ic_biov_csums_at = 0;
+	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
+	if (ioc->ic_biov_csums == NULL)
+		return -DER_NOMEM;
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
@@ -281,18 +305,67 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	return 0;
 }
 
+static int
+bsgl_csums_resize(struct vos_io_context *ioc)
+{
+	struct dcs_csum_info *csums = ioc->ic_biov_csums;
+	uint32_t	 dcb_nr = ioc->ic_biov_csums_nr;
+
+	if (ioc->ic_size_fetch)
+		return 0;
+
+	if (ioc->ic_biov_csums_at == dcb_nr - 1) {
+		struct dcs_csum_info *new_infos;
+		uint32_t	 new_nr = dcb_nr * 2;
+
+		D_REALLOC_ARRAY(new_infos, csums, new_nr);
+		if (new_infos == NULL)
+			return -DER_NOMEM;
+
+		ioc->ic_biov_csums = new_infos;
+		ioc->ic_biov_csums_nr = new_nr;
+	}
+
+	return 0;
+}
+
+/** Save the checksum to a list that can be retrieved later */
+static int
+save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info)
+{
+	int rc;
+
+	rc = bsgl_csums_resize(ioc);
+	if (rc != 0)
+		return rc;
+
+	/**
+	 * it's expected that the csum the csum_info points to is in memory
+	 * that will persist until fetch is complete ... so memcpy isn't needed
+	 */
+	ioc->ic_biov_csums[ioc->ic_biov_csums_at] = *csum_info;
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+		/* poison the checksum */
+		ioc->ic_biov_csums[ioc->ic_biov_csums_at].cs_csum[0] += 2;
+
+	ioc->ic_biov_csums_at++;
+
+	return 0;
+}
+
 /** Fetch the single value within the specified epoch range of an key */
 static int
 akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
-		  daos_size_t *rsize, struct vos_io_context *ioc)
+		  daos_size_t *rsize, daos_size_t *gsize,
+		  struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 kiov; /* iov to carry key bundle */
-	d_iov_t			 riov; /* iov to carray record bundle */
+	d_iov_t			 riov; /* iov to carry record bundle */
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
-	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	struct dcs_csum_info	csum_info = {0};
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epr->epr_hi;
@@ -300,7 +373,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	tree_rec_bundle2iov(&rbund, &riov);
 	memset(&biov, 0, sizeof(biov));
 	rbund.rb_biov	= &biov;
-	rbund.rb_csum	= &iod->iod_csums[0];
+	rbund.rb_csum = &csum_info;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
 			  &riov);
@@ -318,17 +391,15 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		rbund.rb_rsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
 	}
-	/* Get the iod_csum pointer and manipulate the checksum value
-	 * for fault injection.
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-		rbund.rb_csum->cs_csum[0] += 2;
+	if (ci_is_valid(&csum_info))
+		save_csum(ioc, &csum_info);
 
 	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
 		goto out;
 
 	*rsize = rbund.rb_rsize;
+	*gsize = rbund.rb_gsize;
 out:
 	return rc;
 }
@@ -337,14 +408,33 @@ static inline void
 biov_set_hole(struct bio_iov *biov, ssize_t len)
 {
 	memset(biov, 0, sizeof(*biov));
-	biov->bi_data_len = len;
+	bio_iov_set_len(biov, len);
 	bio_addr_set_hole(&biov->bi_addr, 1);
+}
+
+/**
+ * Calculate the bio_iov and extent chunk alignment and set appropriate
+ * prefix & suffix on the biov so that whole chunks are fetched in case needed
+ * for checksum calculation and verification.
+ * Should only be called when the entity has a valid checksum.
+ */
+static void
+biov_align_lens(struct bio_iov *biov, struct evt_entry *ent, daos_size_t rsize)
+{
+	struct evt_extent aligned_extent;
+
+	aligned_extent = evt_entry_align_to_csum_chunk(ent, rsize);
+	bio_iov_set_extra(biov,
+			  (ent->en_sel_ext.ex_lo - aligned_extent.ex_lo) *
+			  rsize,
+			  (aligned_extent.ex_hi - ent->en_sel_ext.ex_hi) *
+			  rsize);
 }
 
 /** Fetch an extent from an akey */
 static int
 akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
-		daos_recx_t *recx, daos_csum_buf_t *csum, daos_size_t *rsize_p,
+		daos_recx_t *recx, daos_size_t *rsize_p,
 		struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
@@ -358,8 +448,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_size_t		 rsize;
 	daos_off_t		 index;
 	daos_off_t		 end;
+	bool			 csum_enabled = false;
 	int			 rc;
-	int			 csum_copied;
 
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
@@ -374,7 +464,6 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	holes = 0;
 	rsize = 0;
-	csum_copied = 0;
 	evt_ent_array_for_each(ent, &ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -410,37 +499,21 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
 
-		if (dcb_is_valid(csum) &&
-		    csum_copied * ent->en_csum.cs_len < csum->cs_buf_len &&
-		    csum->cs_chunksize > 0) {
-			uint8_t	    *csum_ptr;
-			daos_size_t  csum_nr;
+		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
 
-			D_ASSERT(lo >= recx->rx_idx);
-			/** Make sure the entity csum matches expected csum */
-			D_ASSERT(csum->cs_len == ent->en_csum.cs_len);
-			D_ASSERT(csum->cs_type == ent->en_csum.cs_type);
-			D_ASSERT(csum->cs_chunksize ==
-				 ent->en_csum.cs_chunksize);
-
-			/** Note: only need checksums for requested data, not
-			 * necessarily all checksums from the entire recx entry
-			 */
-			csum_ptr = dcb_off2csum(csum,
-				(uint32_t)((lo - recx->rx_idx) * rsize));
-			csum_nr = csum_chunk_count(csum->cs_chunksize,
-						   lo, hi, rsize);
-			memcpy(csum_ptr, ent->en_csum.cs_csum,
-			       csum_nr * ent->en_csum.cs_len);
-			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-				csum_ptr[0] += 2; /* poison the checksum */
-
-			csum_copied += csum_nr;
-			D_ASSERT(csum_copied <= csum->cs_nr);
+		if (ci_is_valid(&ent->en_csum)) {
+			rc = save_csum(ioc, &ent->en_csum);
+			if (rc != 0)
+				return rc;
+			biov_align_lens(&biov, ent, rsize);
+			csum_enabled = true;
+		} else {
+			bio_iov_set_extra(&biov, 0, 0);
+			if (csum_enabled)
+				D_ERROR("Checksum found in some entries, "
+					"but not all");
 		}
 
-		biov.bi_data_len = nr * ent_array.ea_inob;
-		biov.bi_addr = ent->en_addr;
 		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
 			goto failed;
@@ -540,9 +613,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
-				(int)iod->iod_name.iov_len,
-				(char *)iod->iod_name.iov_buf);
+			D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
+				DP_KEY(&iod->iod_name));
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			rc = 0;
 		} else {
@@ -570,7 +642,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size,
+				       &iod->iod_size, ioc);
 		goto out;
 	}
 
@@ -586,10 +659,11 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			continue;
 		}
 
-		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
-				     daos_iod_csum(iod, i), &rsize, ioc);
+		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i], &rsize,
+				     ioc);
 		if (rc != 0) {
-			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
+			D_DEBUG(DB_IO, "Failed to fetch index %d: "DF_RC"\n", i,
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -701,16 +775,17 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		bool size_fetch, daos_handle_t *ioh)
 {
 	struct vos_io_context *ioc;
 	int i, rc;
 
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
+		DP_UOID(oid), nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods, size_fetch,
+	rc = vos_ioc_create(coh, oid, true, epoch, nr, iods, NULL,
+			    size_fetch,
 			    &ioc);
 	if (rc != 0)
 		return rc;
@@ -723,7 +798,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
-		for (i = 0; i < iod_nr; i++)
+		for (i = 0; i < nr; i++)
 			iod_empty_sgl(ioc, i);
 	} else {
 		rc = dkey_fetch(ioc, dkey);
@@ -770,19 +845,18 @@ iod_update_biov(struct vos_io_context *ioc)
 
 static int
 akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
-		   struct vos_io_context *ioc)
+		   daos_size_t gsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_csum_buf_t		 csum;
+	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
 	umem_off_t		 umoff;
-	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
 
-	dcb_set_null(&csum);
+	ci_set_null(&csum);
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
@@ -798,20 +872,23 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
 		rbund.rb_csum	= &csum;
 	} else {
-		if (iod->iod_csums)
-			rbund.rb_csum	= &iod->iod_csums[0];
+		struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
+
+		if (value_csum != NULL)
+			rbund.rb_csum	= value_csum;
 		else
 			rbund.rb_csum	= &csum;
 	}
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
+	rbund.rb_gsize	= gsize;
 	rbund.rb_off	= umoff;
 	rbund.rb_ver	= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
-		D_ERROR("Failed to update subtree: %d\n", rc);
+		D_ERROR("Failed to update subtree: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -822,7 +899,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
  */
 static int
 akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
-		 daos_csum_buf_t *iod_csum, daos_size_t rsize,
+		 struct dcs_csum_info *csum, daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
 	struct evt_entry_in	 ent;
@@ -838,8 +915,8 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (dcb_is_valid(iod_csum)) {
-		ent.ei_csum = *iod_csum;
+	if (ci_is_valid(csum)) {
+		ent.ei_csum = *csum;
 		/* change the checksum for fault injection*/
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
 			ent.ei_csum.cs_csum[0] += 1;
@@ -858,6 +935,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
+	struct dcs_csum_info	*recx_csum = NULL;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
@@ -885,9 +964,13 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		uint64_t	gsize;
+
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n",
 			ioc->ic_epr.epr_hi);
-		rc = akey_update_single(toh, pm_ver, iod->iod_size, ioc);
+		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
+						   (uintptr_t)iod->iod_recxs;
+		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc);
 		goto out;
 	} /* else: array */
 
@@ -906,9 +989,10 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 			continue;
 		}
 
-		daos_csum_buf_t *csum = daos_iod_csum(iod, i);
-		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i], csum,
-				      iod->iod_size, ioc);
+		if (iod_csums != NULL)
+			recx_csum = &iod_csums[i];
+		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
+				      recx_csum, iod->iod_size, ioc);
 		if (rc != 0)
 			goto out;
 	}
@@ -968,7 +1052,7 @@ release:
 }
 
 static daos_size_t
-vos_recx2irec_size(daos_size_t rsize, daos_csum_buf_t *csum)
+vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum)
 {
 	struct vos_rec_bundle	rbund;
 
@@ -1051,7 +1135,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 
 	D_DEBUG(DB_IO, "media %hu offset "DF_U64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
-		biov->bi_data_len);
+		bio_iov2len(biov));
 	return 0;
 }
 
@@ -1066,8 +1150,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
-	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-
+	struct dcs_csum_info	*value_csum = vos_ioc2csum(ioc);
 
 	/*
 	 * TODO:
@@ -1078,19 +1161,19 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
 	 */
 	scm_size = (media == DAOS_MEDIA_SCM) ?
-		vos_recx2irec_size(size, iod->iod_csums) :
-		vos_recx2irec_size(0, iod->iod_csums);
+		vos_recx2irec_size(size, value_csum) :
+		vos_recx2irec_size(0, value_csum);
 
 	rc = vos_reserve(ioc, DAOS_MEDIA_SCM, scm_size, &off);
 	if (rc) {
-		D_ERROR("Reserve SCM for SV failed. %d\n", rc);
+		D_ERROR("Reserve SCM for SV failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	D_ASSERT(ioc->ic_umoffs_cnt > 0);
 	umoff = ioc->ic_umoffs[ioc->ic_umoffs_cnt - 1];
 	irec = (struct vos_irec_df *) umem_off2ptr(vos_ioc2umm(ioc), umoff);
-	vos_irec_init_csum(irec, iod->iod_csums);
+	vos_irec_init_csum(irec, value_csum);
 
 	memset(&biov, 0, sizeof(biov));
 	if (size == 0) { /* punch */
@@ -1108,13 +1191,14 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	} else {
 		rc = vos_reserve(ioc, DAOS_MEDIA_NVME, size, &off);
 		if (rc) {
-			D_ERROR("Reserve NVMe for SV failed. %d\n", rc);
+			D_ERROR("Reserve NVMe for SV failed. "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
-	biov.bi_data_len = size;
+	bio_iov_set_len(&biov, size);
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;
@@ -1146,12 +1230,12 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 	 */
 	rc = vos_reserve(ioc, media, size, &off);
 	if (rc) {
-		D_ERROR("Reserve recx failed. %d\n", rc);
+		D_ERROR("Reserve recx failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
-	biov.bi_data_len = size;
+	bio_iov_set_len(&biov, size);
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;
@@ -1238,8 +1322,8 @@ vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
 		       vea_cancel(vsi, hint_ctxt, blk_list);
 	if (rc)
-		D_ERROR("Error on %s NVMe reservations. %d\n",
-			publish ? "publish" : "cancel", rc);
+		D_ERROR("Error on %s NVMe reservations. "DF_RC"\n",
+			publish ? "publish" : "cancel", DP_RC(rc));
 
 	return rc;
 }
@@ -1300,7 +1384,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
 	    dth->dth_dti_cos_done == 0) {
 		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count);
+					dth->dth_dti_cos_count, 0);
 		dth->dth_dti_cos_done = 1;
 	}
 
@@ -1331,8 +1415,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 abort:
 	err = err ? umem_tx_abort(umem, err) : umem_tx_commit(umem);
 out:
-	if (err != 0)
+	if (err != 0) {
+		vos_dtx_cleanup_dth(dth);
 		update_cancel(ioc);
+	}
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
@@ -1342,7 +1428,8 @@ out:
 int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-		 daos_handle_t *ioh, struct dtx_handle *dth)
+		 struct dcs_iod_csums *iods_csums, daos_handle_t *ioh,
+		 struct dtx_handle *dth)
 {
 	struct vos_io_context	*ioc;
 	int			 rc;
@@ -1350,7 +1437,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_U64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, false, &ioc);
+	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
+			    false, &ioc);
 	if (rc != 0)
 		goto done;
 
@@ -1373,6 +1461,22 @@ vos_ioh2desc(daos_handle_t ioh)
 
 	D_ASSERT(ioc->ic_biod != NULL);
 	return ioc->ic_biod;
+}
+
+struct dcs_csum_info *
+vos_ioh2ci(daos_handle_t ioh)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	return ioc->ic_biov_csums;
+}
+
+uint32_t
+vos_ioh2ci_nr(daos_handle_t ioh)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+
+	return ioc->ic_biov_csums_at;
 }
 
 struct bio_sglist *
@@ -1420,21 +1524,25 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, d_sg_list_t *sgls)
+	       daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
+	       d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
 	int rc;
 
-	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh, NULL);
+	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, iods_csums,
+			      &ioh, NULL);
 	if (rc) {
-		D_ERROR("Update "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
 		return rc;
 	}
 
 	if (sgls) {
 		rc = vos_obj_copy(vos_ioh2ioc(ioh), sgls, iod_nr);
 		if (rc)
-			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+			D_ERROR("Copy "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+				DP_RC(rc));
 	}
 
 	rc = vos_update_end(ioh, pm_ver, dkey, rc, NULL);
@@ -1455,11 +1563,11 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
-				"conflict modification: %d\n",
-				DP_UOID(oid), rc);
+				"conflict modification: "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 		else
-			D_ERROR("Fetch "DF_UOID" failed %d\n",
-				DP_UOID(oid), rc);
+			D_ERROR("Fetch "DF_UOID" failed "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 		return rc;
 	}
 
@@ -1480,8 +1588,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_obj_copy(ioc, sgls, iod_nr);
 		if (rc)
-			D_ERROR("Copy "DF_UOID" failed %d\n",
-				DP_UOID(oid), rc);
+			D_ERROR("Copy "DF_UOID" failed "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 	}
 
 	rc = vos_fetch_end(ioh, rc);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,7 +160,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode);
 	else
-		DFUSE_REPLY_ATTR(req, &inode->ie_stat);
+		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
 	if (rlink)
 		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -239,7 +239,7 @@ static void
 df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*parent_inode;
+	struct dfuse_inode_entry	*parent_inode = NULL;
 	d_list_t			*rlink;
 	int				rc;
 
@@ -262,7 +262,7 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
 }
 
 static void
@@ -593,10 +593,37 @@ err:
 }
 
 static void
+df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	int				rc;
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu", ino);
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (!inode->ie_dfs->dfs_ops->statfs)
+		D_GOTO(decref, rc = ENOTSUP);
+
+	inode->ie_dfs->dfs_ops->statfs(req, inode);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	return;
+decref:
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+static void
 dfuse_fuse_destroy(void *userdata)
 {
-	DFUSE_TRA_INFO(userdata, "destroy callback");
-	DFUSE_TRA_DOWN(userdata);
 	D_FREE(userdata);
 }
 
@@ -617,15 +644,18 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.listxattr	= dfuse_cb_listxattr,
 	.removexattr	= dfuse_cb_removexattr,
 	.setattr	= dfuse_cb_setattr,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
 	.mkdir		= dfuse_cont_mkdir,
+	.statfs		= dfuse_cb_statfs,
 };
 
 struct dfuse_inode_ops dfuse_pool_ops = {
 	.lookup		= dfuse_pool_lookup,
+	.statfs		= dfuse_cb_statfs,
 };
 
 /* Return the ops that should be passed to fuse */
@@ -655,6 +685,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->listxattr	= df_ll_listxattr;
 	fuse_ops->removexattr	= df_ll_removexattr;
 	fuse_ops->setattr	= df_ll_setattr;
+	fuse_ops->statfs	= df_ll_statfs;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;

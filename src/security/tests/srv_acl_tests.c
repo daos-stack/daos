@@ -102,6 +102,7 @@ init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
 	Auth__Token		*token;
 	uint8_t			*buf;
 	size_t			buf_len;
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 
 	token = create_valid_auth_token(user, grp, grp_list, num_grps);
 
@@ -112,8 +113,10 @@ init_valid_cred(d_iov_t *cred, const char *user, const char *grp,
 	auth__credential__pack(&new_cred, buf);
 	d_iov_set(cred, buf, buf_len);
 
+	resp.token = token;
+
 	/* Return the cred token from the drpc mock, too */
-	pack_token_in_drpc_call_resp_body(token);
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	auth__token__free_unpacked(token, NULL);
 }
@@ -134,9 +137,12 @@ init_default_ownership(struct pool_owner *owner)
 static void
 setup_drpc_with_default_token(void)
 {
-	Auth__Token *token = create_default_auth_token();
+	Auth__Token		*token = create_default_auth_token();
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 
-	pack_token_in_drpc_call_resp_body(token);
+	resp.token = token;
+
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	auth__token__free_unpacked(token, NULL);
 }
@@ -313,16 +319,15 @@ test_validate_creds_drpc_response_malformed_body(void **state)
 }
 
 static void
-test_validate_creds_drpc_response_empty_token(void **state)
+test_validate_creds_drpc_response_null_token(void **state)
 {
-	d_iov_t		cred;
-	Auth__Token	*result = NULL;
-	Auth__Token	bad_token = AUTH__TOKEN__INIT;
+	d_iov_t			cred;
+	Auth__Token		*result = NULL;
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 
 	init_default_cred(&cred);
 
-	bad_token.data.data = NULL;
-	pack_token_in_drpc_call_resp_body(&bad_token);
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
 			 -DER_PROTO);
@@ -333,11 +338,57 @@ test_validate_creds_drpc_response_empty_token(void **state)
 }
 
 static void
+test_validate_creds_drpc_response_empty_token(void **state)
+{
+	d_iov_t			cred;
+	Auth__Token		*result = NULL;
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
+	Auth__Token		bad_token = AUTH__TOKEN__INIT;
+
+	init_default_cred(&cred);
+
+	bad_token.data.data = NULL;
+	resp.token = &bad_token;
+
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_PROTO);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
+test_validate_creds_drpc_response_bad_status(void **state)
+{
+	d_iov_t			cred;
+	Auth__Token		*result = NULL;
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
+
+	init_default_cred(&cred);
+
+	resp.status = -DER_UNKNOWN;
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
+
+	assert_int_equal(ds_sec_validate_credentials(&cred, &result),
+			 -DER_UNKNOWN);
+
+	assert_null(result);
+
+	daos_iov_free(&cred);
+}
+
+static void
 test_validate_creds_success(void **state)
 {
-	d_iov_t		cred;
-	Auth__Token	*result = NULL;
-	Auth__Sys	*authsys;
+	d_iov_t			cred;
+	Auth__Token		*result = NULL;
+	Auth__Sys		*authsys;
+	Auth__ValidateCredReq	*req;
+	uint8_t			*packed_cred;
+	size_t			packed_len;
 
 	init_default_cred(&cred);
 	setup_drpc_with_default_token();
@@ -366,6 +417,24 @@ test_validate_creds_success(void **state)
 	assert_non_null(drpc_call_resp_ptr);
 
 	assert_ptr_equal(drpc_close_ctx, drpc_call_ctx);
+
+	/* Make sure we sent a properly formatted req */
+	req = auth__validate_cred_req__unpack(NULL,
+					      drpc_call_msg_content.body.len,
+					      drpc_call_msg_content.body.data);
+	assert_non_null(req);
+	assert_non_null(req->cred);
+
+	/* Check the req credential against packed cred we passed in */
+	packed_len = auth__credential__get_packed_size(req->cred);
+	assert_int_equal(packed_len, cred.iov_len);
+	D_ALLOC(packed_cred, packed_len);
+	assert_non_null(packed_cred);
+	auth__credential__pack(req->cred, packed_cred);
+	assert_memory_equal(packed_cred, cred.iov_buf, packed_len);
+
+	D_FREE(packed_cred);
+	auth__validate_cred_req__free_unpacked(req, NULL);
 
 	daos_iov_free(&cred);
 	auth__sys__free_unpacked(authsys, NULL);
@@ -515,6 +584,7 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 	d_iov_t			cred;
 	size_t			data_len = 8;
 	Auth__Token		token = AUTH__TOKEN__INIT;
+	Auth__ValidateCredResp	resp = AUTH__VALIDATE_CRED_RESP__INIT;
 	struct pool_owner	ownership;
 
 	init_default_cred(&cred);
@@ -528,7 +598,9 @@ expect_no_access_bad_authsys_payload(int auth_flavor)
 	memset(token.data.data, 0xFF, data_len);
 	token.data.len = data_len;
 
-	pack_token_in_drpc_call_resp_body(&token);
+	resp.token = &token;
+
+	pack_validate_resp_in_drpc_call_resp_body(&resp);
 
 	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						  DAOS_PC_RO),
@@ -1269,7 +1341,7 @@ static void
 test_check_pool_access_grp_no_match(void **state)
 {
 	struct daos_acl		*acl;
-	size_t			num_aces = 2;
+	size_t			num_aces = 3;
 	struct daos_ace		*ace[num_aces];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
@@ -1291,7 +1363,7 @@ test_check_pool_access_grp_no_match(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_OWNER_GROUP, NULL);
 	ace[2]->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
 	ace[2]->dae_allow_perms = DAOS_ACL_PERM_READ;
-	acl = daos_acl_create(ace, 2);
+	acl = daos_acl_create(ace, num_aces);
 
 	assert_int_equal(ds_sec_check_pool_access(acl, &ownership, &cred,
 						  DAOS_PC_RO),
@@ -1373,6 +1445,80 @@ test_check_pool_access_grps_beat_everyone(void **state)
 	daos_iov_free(&cred);
 }
 
+/*
+ * Default ACL tests
+ */
+
+static void
+expect_ace_is_type_with_perms(struct daos_ace *ace,
+			      enum daos_acl_principal_type exp_type,
+			      uint8_t exp_flags, uint64_t exp_perms)
+{
+	assert_int_equal(ace->dae_principal_type, exp_type);
+	assert_int_equal(ace->dae_access_types, DAOS_ACL_ACCESS_ALLOW);
+	assert_int_equal(ace->dae_access_flags, exp_flags);
+	assert_int_equal(ace->dae_allow_perms, exp_perms);
+}
+
+static void
+test_default_pool_acl(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_ace	*current = NULL;
+	uint64_t	exp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+
+	acl = ds_sec_alloc_default_daos_pool_acl();
+
+	assert_non_null(acl);
+	assert_int_equal(daos_acl_pool_validate(acl), 0); /* valid pool ACL */
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0, exp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER_GROUP,
+				      DAOS_ACL_FLAG_GROUP, exp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_null(current); /* shouldn't be any more ACEs */
+
+	daos_acl_free(acl);
+}
+
+static void
+test_default_cont_acl(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_ace	*current = NULL;
+	uint64_t	exp_owner_perms = DAOS_ACL_PERM_CONT_ALL;
+	uint64_t	exp_grp_perms = DAOS_ACL_PERM_READ |
+					DAOS_ACL_PERM_WRITE |
+					DAOS_ACL_PERM_GET_PROP |
+					DAOS_ACL_PERM_SET_PROP;
+
+	acl = ds_sec_alloc_default_daos_cont_acl();
+
+	assert_non_null(acl);
+	assert_int_equal(daos_acl_cont_validate(acl), 0); /* valid cont ACL */
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0,
+				      exp_owner_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_non_null(current);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER_GROUP,
+				      DAOS_ACL_FLAG_GROUP, exp_grp_perms);
+
+	current = daos_acl_get_next_ace(acl, current);
+	assert_null(current); /* shouldn't be any more ACEs */
+
+	daos_acl_free(acl);
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -1388,7 +1534,9 @@ main(void)
 		ACL_UTEST(test_validate_creds_drpc_call_null_response),
 		ACL_UTEST(test_validate_creds_drpc_response_failure),
 		ACL_UTEST(test_validate_creds_drpc_response_malformed_body),
+		ACL_UTEST(test_validate_creds_drpc_response_null_token),
 		ACL_UTEST(test_validate_creds_drpc_response_empty_token),
+		ACL_UTEST(test_validate_creds_drpc_response_bad_status),
 		ACL_UTEST(test_validate_creds_success),
 		ACL_UTEST(test_check_pool_access_null_acl),
 		ACL_UTEST(test_check_pool_access_null_ownership),
@@ -1424,6 +1572,8 @@ main(void)
 		ACL_UTEST(test_check_pool_access_grp_no_match),
 		ACL_UTEST(test_check_pool_access_grp_check_includes_owner),
 		ACL_UTEST(test_check_pool_access_grps_beat_everyone),
+		cmocka_unit_test(test_default_pool_acl),
+		cmocka_unit_test(test_default_cont_acl),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
