@@ -1147,7 +1147,7 @@ iterate_records(struct ioreq *req)
 		if (number == 0)
 			continue;
 
-		for (i = 0; i < number; i++) {
+		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == ENUM_IOD_SIZE);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
