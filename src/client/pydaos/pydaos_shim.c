@@ -629,9 +629,10 @@ rewait:
 		if (ret == 1) {
 			int rc2;
 
+			op = container_of(evp, struct kv_op, ev);
+
 			/** check result of completed operation */
 			if (evp->ev_error == DER_SUCCESS) {
-				op = container_of(evp, struct kv_op, ev);
 				rc2 = kv_get_comp(op, daos_dict);
 				if (rc == DER_SUCCESS && rc2 != DER_SUCCESS)
 					D_GOTO(err, rc = rc2);
@@ -642,7 +643,6 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				op = container_of(evp, struct kv_op, ev);
 				op->size *= 2;
 				D_REALLOC(new_buff, op->buf, op->size);
 				if (new_buff == NULL)
