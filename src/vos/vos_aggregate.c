@@ -1233,7 +1233,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	memset(io->ic_scm_exts, 0, io->ic_scm_max * sizeof(*io->ic_scm_exts));
 	D_ASSERT(io->ic_scm_cnt == 0);
-	D_PRINT("++++++++++++++++++++++++++++++++ WINDOW START ++++++++++++++++++++++++");
+	D_PRINT("++++++++++++++++++++++++++ WINDOW START +++++++++++++++++++++++++\n");
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
