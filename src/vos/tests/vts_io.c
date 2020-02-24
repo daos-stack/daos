@@ -205,7 +205,7 @@ static struct io_test_args	test_args;
 int
 setup_io(void **state)
 {
-	srand(time(NULL));
+	//srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
 
 	*state = &test_args;

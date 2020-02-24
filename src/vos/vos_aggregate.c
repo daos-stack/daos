@@ -921,6 +921,8 @@ csum_agg_recalc(void *recalc_args)
 						ent_in->ei_inob);
 
 		D_PRINT("idx: %u, nr: %u\n", this_buf_idx, this_buf_nr);
+		memset(args->cra_ent_in->ei_csum.cs_csum, 0,
+		       args->cra_ent_in->ei_csum.cs_buf_len);
 		rc = daos_csummer_calc_one(csummer, &sgl, &csum_info,
 					   ent_in->ei_inob, this_buf_nr,
 					   this_buf_idx);
@@ -937,7 +939,8 @@ csum_agg_recalc(void *recalc_args)
 		}
 
 	}
-
+	memset(args->cra_ent_in->ei_csum.cs_csum, 0,
+	       args->cra_ent_in->ei_csum.cs_buf_len);
 	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
@@ -1230,6 +1233,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	memset(io->ic_scm_exts, 0, io->ic_scm_max * sizeof(*io->ic_scm_exts));
 	D_ASSERT(io->ic_scm_cnt == 0);
+	D_PRINT("++++++++++++++++++++++++++++++++ WINDOW START ++++++++++++++++++++++++");
 
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		lgc_seg = &io->ic_segs[i];
