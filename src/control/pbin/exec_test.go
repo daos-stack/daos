@@ -89,9 +89,9 @@ func generatePayload(size int) []byte {
 
 	ret := buf.Bytes()
 	if len(ret) > adjSize {
-		ret = ret[:len(ret)-(len(ret)-(adjSize))]
+		ret = ret[:adjSize]
 	}
-	ret = append(ret[:adjSize], []byte(post)...)
+	ret = append(ret, []byte(post)...)
 
 	return ret
 }
