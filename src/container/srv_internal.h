@@ -156,6 +156,9 @@ void cont_svc_put_leader(struct cont_svc *svc);
 int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		     struct cont *cont, struct container_hdl *hdl,
 		     crt_rpc_t *rpc);
+int ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		       struct cont *cont, struct container_hdl *hdl,
+		       crt_rpc_t *rpc);
 
 /*
  * srv_epoch.c

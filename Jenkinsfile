@@ -98,7 +98,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     !env.BRANCH_NAME.startsWith("releases/") &&
+     !env.BRANCH_NAME.startsWith("release/") &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
@@ -249,7 +249,7 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
                                           (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
@@ -274,17 +274,17 @@ pipeline {
                                        result: "FAILURE", ignore_failure: true
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/centos7
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/centos7/**'
@@ -328,10 +328,14 @@ pipeline {
                     }
                     post {
                         success {
-                            sh label: "Collect artifacts",
-                               script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
+                            sh label: "Build Log",
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
+                                          (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap15/)
-                                          createrepo artifacts/leap15/'''
+                                          createrepo artifacts/leap15/
+                                          rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/daos-server-*.x86_64.rpm > leap15-rpm-version
+                                          cat $mockroot/result/{root,build}.log'''
+                            stash name: 'Leap-rpm-version', includes: 'leap15-rpm-version'
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -349,18 +353,17 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
-                                          cat $mockroot/result/{root,build}.log
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/leap15
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/leap15/**'
@@ -850,7 +853,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: 'openmpi3 hwloc-devel argobots ' +
+                                       inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
                                                   "cart-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel'
@@ -887,7 +890,7 @@ pipeline {
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
+                                               IS_CI=true OLD_CI=false utils/run_test.sh"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1158,7 +1161,7 @@ pipeline {
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
                                            mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-                                           ./ftest.sh "$test_tag" $tnodes''',
+                                           ./ftest.sh "$test_tag" $tnodes "auto:Optane"''',
                                 junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
