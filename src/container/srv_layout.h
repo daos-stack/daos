@@ -106,7 +106,8 @@ struct container_hdl {
 	uuid_t		ch_pool_hdl;
 	uuid_t		ch_cont;
 	uint64_t	ch_hce;
-	uint64_t	ch_capas;
+	uint64_t	ch_flags;
+	uint64_t	ch_sec_capas;
 };
 
 extern daos_prop_t cont_prop_default;
