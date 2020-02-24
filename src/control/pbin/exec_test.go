@@ -122,45 +122,39 @@ func TestPbin_Exec(t *testing.T) {
 				Method:  "ping",
 				Payload: []byte(`{"reply":"pong"}`),
 			},
-			binPath: os.Args[0],
 		},
 		"giant payload": {
 			req: &pbin.Request{
 				Method:  "ping",
 				Payload: generatePayload((pbin.MessageBufferSize * 512) + 1),
 			},
-			binPath: os.Args[0],
 		},
 		"DAOS-4185 scan payload": {
 			req: &pbin.Request{
 				Method:  "scan",
 				Payload: loadJSONPayload(t, "boro-84-storage_scan"),
 			},
-			binPath: os.Args[0],
 		},
 		"oversize response payload": {
 			req: &pbin.Request{
 				Method:  "oversize",
 				Payload: []byte(`{"reply":"pong"}`),
 			},
-			binPath: os.Args[0],
-			expErr:  errors.New("size exceeded"),
+			expErr: errors.New("size exceeded"),
 		},
 		"garbage response": {
 			req: &pbin.Request{
 				Method:  "garbage",
 				Payload: []byte(`{"reply":"garbage"}`),
 			},
-			binPath: os.Args[0],
-			expErr:  errors.New("EOF"),
+			expErr: errors.New("decode response"),
 		},
 		"malformed payload (shouldn't hang)": {
 			req: &pbin.Request{
 				Method:  "ping",
 				Payload: []byte(`pong`),
 			},
-			binPath: os.Args[0],
-			expErr:  errors.New("error calling MarshalJSON"),
+			expErr: errors.New("error calling MarshalJSON"),
 		},
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -176,6 +170,9 @@ func TestPbin_Exec(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			os.Setenv(childModeEnvVar, childModeReqRes)
+			if tc.binPath == "" {
+				tc.binPath = os.Args[0]
+			}
 
 			ctx := context.Background()
 			res, err := pbin.ExecReq(ctx, log, tc.binPath, tc.req)

@@ -193,28 +193,28 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 		return nil, errors.Wrap(err, "pbin CloseWrite failed")
 	}
 
-	readCount := 0
 	maxReadAttempts := 5
-	for {
+	for readCount := 0; readCount < maxReadAttempts; readCount++ {
 		recvData, err := ReadMessage(conn)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to read message from sender")
 		}
 
 		res, err = decodeResponse(recvData)
-		if err != nil && err != io.EOF {
+		if err != nil {
 			log.Debugf("discarding garbage response %q", recvData)
-			if readCount < maxReadAttempts {
-				readCount++
-				continue
-			}
-			return nil, err
+			continue
 		}
 
-		if res.Error != nil {
-			return nil, res.Error
-		}
+		break
+	}
 
+	switch {
+	case res == nil:
+		return nil, errors.Errorf("Unable to decode response after %d attempts", maxReadAttempts)
+	case res.Error != nil:
+		return nil, res.Error
+	default:
 		return res, nil
 	}
 }
