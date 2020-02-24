@@ -1148,7 +1148,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	       daos_prop_t **prop_out)
 {
 	daos_prop_t	*prop = NULL;
-	d_iov_t	 value;
+	d_iov_t		 value;
 	uint64_t	 val, bitmap;
 	uint32_t	 idx = 0, nr = 0;
 	int		 rc = 0;
@@ -1174,7 +1174,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_label,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, rc);
 		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
 			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
 				DAOS_PROP_LABEL_MAX_LEN);
@@ -1304,12 +1304,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_acl,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
 		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out, rc = -DER_NOMEM);
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
 		       value.iov_buf_len);
 		idx++;
@@ -1319,18 +1319,18 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, rc);
 		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
 				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
+			D_GOTO(out, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out, rc = -DER_NOMEM);
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_OWNER_GROUP) {
@@ -1338,19 +1338,19 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_owner_group,
 				   &value);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out, rc);
 		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
 			D_ERROR("bad owner group length %zu (> %d).\n",
 				value.iov_len,
 				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
+			D_GOTO(out, rc = -DER_IO);
 		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
 		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
+			D_GOTO(out, rc = -DER_NOMEM);
 		idx++;
 	}
 
