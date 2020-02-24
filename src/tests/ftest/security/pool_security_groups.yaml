@@ -18,8 +18,6 @@ server_config:
 daos_server:
   start:
      insecure: True
-server_manager:
-  recreate: true
 dmg:
   request: pool
   action: create

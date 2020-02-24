@@ -15,8 +15,6 @@ timeout: 1200
 server_config:
   name: daos_server
   port: 10001
-server_manager:
-  recreate: true
 daos_server:
   start:
      insecure: True
