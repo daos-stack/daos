@@ -74,10 +74,11 @@ class daos_named_kv():
 LENGTH_KEY = '__length'
 
 def new_migrate(root):
+    """Migrate data from multiple KVs to a single KV"""
 
     batch_size = 200
 
-    files = sorted(daos_root.get_kv_list())
+    files = sorted(root.get_kv_list())
 
     if 'root' in files:
         files.remove('root')
@@ -93,8 +94,6 @@ def new_migrate(root):
         source = root.get_kv_by_name(ifile)
 
         at_end = False
-
-        start_time = time.time()
 
         while not at_end:
             data = {}
@@ -112,10 +111,9 @@ def new_migrate(root):
                     at_end = True
                 else:
                     i = int(key)
-                    tdata[src(i+target_offset)] = data[key]
+                    tdata[str(i+target_offset)] = data[key]
 
             target.bput(tdata)
-            now = time.time()
 
         target_offset += pickle.loads(source[LENGTH_KEY])
 
@@ -201,10 +199,10 @@ def main():
                 remaining_time = int((time_per_record * (to_copy - copy_count)))
 
                 print('Copied {}/{} records in {:.2f} seconds ({:.0f}) {} seconds remaining.'.format(copy_count,
-                                                                                                    to_copy,
-                                                                                                    now - start_time,
-                                                                                                    copy_count / (now - start_time),
-                                                                                                    remaining_time))
+                                                                                                     to_copy,
+                                                                                                     now - start_time,
+                                                                                                     copy_count / (now - start_time),
+                                                                                                     remaining_time))
                 last_report_time = now
         tdata[LENGTH_KEY] = pickle.dumps(idx)
         kv.bput(tdata)
