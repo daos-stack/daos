@@ -47,10 +47,7 @@
 #define REBUILD_PROTO_SRV_RPC_LIST					\
 	X(REBUILD_OBJECTS_SCAN,						\
 		0, &CQF_rebuild_scan,					\
-		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops),	\
-	X(REBUILD_OBJECTS,						\
-		0, &CQF_rebuild,					\
-		rebuild_obj_handler, NULL)
+		rebuild_tgt_scan_handler, &rebuild_tgt_scan_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
