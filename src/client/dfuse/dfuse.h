@@ -378,7 +378,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DEBUG(oh, "Returning open");		\
 		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
 			(fi)->keep_cache = 1;				\
-			(fi)->cache_readdir = 1;			\
 		}							\
 		__rc = fuse_reply_open(req, fi);			\
 		if (__rc != 0)						\
