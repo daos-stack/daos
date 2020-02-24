@@ -323,7 +323,7 @@ main(int argc, char **argv)
 
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, ret = rc);
+		D_GOTO(out_pool, ret = rc);
 
 	/* Remove all inodes from the hash tables */
 	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
@@ -332,11 +332,6 @@ main(int argc, char **argv)
 
 	D_GOTO(out_dfs, 0);
 
-out_cont:
-	if (dfuse_info->di_cont) {
-		dfs_umount(dfs->dfs_ns);
-		daos_cont_close(dfs->dfs_coh, NULL);
-	}
 out_pool:
 	if (dfp && !daos_handle_is_inval(dfp->dfp_poh))
 		daos_pool_disconnect(dfp->dfp_poh, NULL);
