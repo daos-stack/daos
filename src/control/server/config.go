@@ -158,7 +158,17 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 // which modify nested ioserver configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
+func (c *Configuration) updateServerConfig(cfgPtr **ioserver.Config) {
+	// If we somehow get a nil config, we can't return an error, and
+	// we don't want to cause a segfault. Instead, just create an
+	// empty config and return early, so that it eventually fails
+	// validation.
+	if *cfgPtr == nil {
+		*cfgPtr = &ioserver.Config{}
+		return
+	}
+
+	srvCfg := *cfgPtr
 	srvCfg.Fabric.Update(c.Fabric)
 	srvCfg.SystemName = c.SystemName
 	srvCfg.SocketDir = c.SocketDir
@@ -168,8 +178,8 @@ func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 // WithServers sets the list of IOServer configurations.
 func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration {
 	c.Servers = srvList
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 	return c
 }
@@ -264,11 +274,6 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	return c
 }
 
-// parse decodes YAML representation of configuration
-func (c *Configuration) parse(data []byte) error {
-	return yaml.Unmarshal(data, c)
-}
-
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
@@ -304,14 +309,14 @@ func (c *Configuration) Load() error {
 		return errors.WithMessage(err, "reading file")
 	}
 
-	if err = c.parse(bytes); err != nil {
+	if err = yaml.UnmarshalStrict(bytes, c); err != nil {
 		return errors.WithMessage(err, "parse failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples")
 	}
 
 	// propagate top-level settings to server configs
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 
 	return nil

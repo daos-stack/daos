@@ -892,10 +892,14 @@ populate_whitelist(struct spdk_env_opts *opts)
 	size_t				 i;
 	int				 rc = 0;
 
+	/* Don't need to pass whitelist for non-NVMe devices */
+	if (nvme_glb.bd_bdev_class != BDEV_CLASS_NVME)
+		return 0;
+
 	sp = spdk_conf_find_section(NULL, "Nvme");
 	if (sp == NULL) {
 		D_ERROR("unexpected empty config\n");
-		return -1;
+		return -DER_INVAL;
 	}
 
 	D_ALLOC_PTR(trid);
@@ -913,23 +917,32 @@ populate_whitelist(struct spdk_env_opts *opts)
 		rc = spdk_nvme_transport_id_parse(trid, val);
 		if (rc < 0) {
 			D_ERROR("Unable to parse TransportID: %s\n", val);
-			return -1;
+			rc = -DER_INVAL;
+			break;
 		}
 
 		if (trid->trtype != SPDK_NVME_TRANSPORT_PCIE) {
 			D_ERROR("unexpected non-PCIE transport\n");
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			break;
 		}
 
 		rc = opts_add_pci_addr(opts, &opts->pci_whitelist,
 				       trid->traddr);
 		if (rc < 0) {
 			D_ERROR("Invalid traddr=%s\n", trid->traddr);
-			return -DER_INVAL;
+			rc = -DER_INVAL;
+			break;
 		}
 	}
 
-	return 0;
+	D_FREE(trid);
+	if (rc && opts->pci_whitelist != NULL) {
+		D_FREE(opts->pci_whitelist);
+		opts->pci_whitelist = NULL;
+	}
+
+	return rc;
 }
 
 int
@@ -995,16 +1008,17 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 		if (nvme_glb.bd_mem_size != DAOS_NVME_MEM_PRIMARY) {
 			opts.mem_size = nvme_glb.bd_mem_size;
 		}
+
 		rc = populate_whitelist(&opts);
-		if (rc != 0) {
-			D_FREE(opts.pci_whitelist);
+		if (rc != 0)
 			goto out;
-		}
+
 		if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 			opts.shm_id = nvme_glb.bd_shm_id;
 
 		rc = spdk_env_init(&opts);
-		D_FREE(opts.pci_whitelist);
+		if (opts.pci_whitelist != NULL)
+			D_FREE(opts.pci_whitelist);
 		if (rc != 0) {
 			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			D_ERROR("failed to initialize SPDK env, "DF_RC"\n",

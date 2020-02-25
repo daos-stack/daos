@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ func TestFaults(t *testing.T) {
 		testErr     error
 		expFaultStr string
 		expFaultRes string
+		expNotFault bool
 	}{
 		{
 			name:        "nil error",
@@ -49,6 +50,7 @@ func TestFaults(t *testing.T) {
 			name:        "normal error",
 			testErr:     fmt.Errorf("not a fault"),
 			expFaultStr: "not a fault",
+			expNotFault: true,
 			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
 		},
 		{
@@ -96,6 +98,12 @@ func TestFaults(t *testing.T) {
 					t.Fatalf("expected %q, got %q", tc.expFaultStr, tc.testErr)
 				}
 			}
+
+			isFault := fault.IsFault(tc.testErr)
+			if tc.expNotFault && isFault {
+				t.Fatalf("expected %+v to not be a fault", tc.testErr)
+			}
+
 			actual := fault.ShowResolutionFor(tc.testErr)
 			if actual != tc.expFaultRes {
 				t.Fatalf("expected %q, got %q", tc.expFaultRes, actual)
@@ -145,11 +153,6 @@ func TestFaultComparison(t *testing.T) {
 		{
 			name:          "comparison with other different code",
 			other:         &fault.Fault{Code: testErr.Code + 1, Description: testErr.Description},
-			expComparison: false,
-		},
-		{
-			name:          "comparison with other different description",
-			other:         &fault.Fault{Code: testErr.Code, Description: testErr.Description + "A"},
 			expComparison: false,
 		},
 		{

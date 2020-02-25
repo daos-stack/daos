@@ -55,6 +55,12 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
+# Optional --nvme argument for launch.py
+NVME_ARG=""
+if [ -n "${3}" ]; then
+    NVME_ARG="-n ${3}"
+fi
+
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -357,7 +363,7 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
 fi
 
 # now run it!
-if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -caris -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
