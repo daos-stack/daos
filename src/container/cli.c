@@ -340,9 +340,6 @@ dc_cont_destroy(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	/* TODO: Implement "force". */
-	D_ASSERT(args->force != 0);
-
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err, rc = -DER_INVAL);
 
@@ -749,6 +746,12 @@ cont_close_complete(tse_task_t *task, void *data)
 			" pool_hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
+		rc = 0;
+	} else if (rc == -DER_NONEXIST) {
+		/* The container cannot be found on the server. */
+		D_DEBUG(DF_DSMC, DF_CONT": already destroyed: hdl="DF_UUID"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid),
+			DP_UUID(cont->dc_cont_hdl));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("failed to close container: "DF_RC"\n", DP_RC(rc));
