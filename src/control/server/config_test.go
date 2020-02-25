@@ -24,10 +24,8 @@
 package server
 
 import (
-	"fmt"
-	"io/ioutil"
+	"bufio"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -53,25 +51,48 @@ const (
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
 func uncommentServerConfig(t *testing.T, outFile string) {
-	cmd := exec.Command(
-		"bash", "-c", fmt.Sprintf("sed s/^#//g %s > %s", defaultConfig, outFile))
-
-	stderr, err := cmd.StderrPipe()
+	in, err := os.Open(defaultConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer in.Close()
 
-	if err := cmd.Start(); err != nil {
+	out, err := os.Create(outFile)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer out.Close()
 
-	slurp, _ := ioutil.ReadAll(stderr)
-	if string(slurp) != "" {
-		t.Fatal(errors.New(string(slurp)))
-	}
+	// Keep track of keys we've already seen in order
+	// to avoid writing duplicate parameters.
+	seenKeys := make(map[string]struct{})
 
-	if err := cmd.Wait(); err != nil {
-		t.Fatal(err)
+	scn := bufio.NewScanner(in)
+	for scn.Scan() {
+		line := scn.Text()
+		line = strings.TrimPrefix(line, "#")
+
+		fields := strings.Fields(line)
+		if len(fields) < 1 {
+			continue
+		}
+		key := fields[0]
+
+		// If we're in a server config, reset the
+		// seen map to allow the same params in different
+		// server configs.
+		if line == "-" {
+			seenKeys = make(map[string]struct{})
+		}
+		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
+			continue
+		}
+		seenKeys[key] = struct{}{}
+
+		line += "\n"
+		if _, err := out.WriteString(line); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -229,10 +250,10 @@ func TestServer_ConstructedConfig(t *testing.T) {
 				WithScmMountPoint("/mnt/daos/2").
 				WithScmClass("dcpm").
 				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("kdev").
-				WithBdevDeviceList("/dev/sdc", "/dev/sdd").
+				WithBdevClass("malloc").
+				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 				WithBdevDeviceCount(1).
-				WithBdevFileSize(16).
+				WithBdevFileSize(4).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
