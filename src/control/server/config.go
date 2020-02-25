@@ -274,11 +274,6 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	return c
 }
 
-// parse decodes YAML representation of configuration
-func (c *Configuration) parse(data []byte) error {
-	return yaml.Unmarshal(data, c)
-}
-
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
@@ -314,7 +309,7 @@ func (c *Configuration) Load() error {
 		return errors.WithMessage(err, "reading file")
 	}
 
-	if err = c.parse(bytes); err != nil {
+	if err = yaml.UnmarshalStrict(bytes, c); err != nil {
 		return errors.WithMessage(err, "parse failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples")
 	}
