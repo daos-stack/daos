@@ -42,6 +42,7 @@
  *
  *  \param	umm[IN]		The umem pool instance
  *  \param	umoff[in]	The offset to convert
+ *  test
  *
  *  \return	The oid.
  */
