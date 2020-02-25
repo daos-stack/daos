@@ -549,9 +549,12 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_flags & DAOS_PC_EX))
+	if (!ds_sec_pool_can_create_cont(pool_hdl->sph_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to create cont\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid));
 		D_GOTO(out, rc = -DER_NO_PERM);
+	}
 
 	/* Check if a container with this UUID already exists. */
 	d_iov_set(&key, in->cci_op.ci_uuid, sizeof(uuid_t));
@@ -674,24 +677,55 @@ out:
 	return rc;
 }
 
+/*
+ * Doesn't allocate anything new, just passes back pointers to data inside the
+ * prop.
+ */
+static void
+get_cont_prop_access_info(daos_prop_t *prop, struct ownership *owner,
+			  struct daos_acl **acl)
+{
+	struct daos_prop_entry	*acl_entry;
+	struct daos_prop_entry	*owner_entry;
+	struct daos_prop_entry	*owner_grp_entry;
+
+	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
+
+	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner->user = owner_entry->dpe_str;
+	owner->group = owner_grp_entry->dpe_str;
+
+	*acl = acl_entry->dpe_val_ptr;
+}
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-	     struct cont_svc *svc, crt_rpc_t *rpc)
+	     struct cont *cont, crt_rpc_t *rpc)
 {
 	struct cont_destroy_in *in = crt_req_get(rpc);
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	rdb_path_t		kvs;
 	int			rc;
+	struct cont_svc		*svc;
+	daos_prop_t		*prop = NULL;
+	struct ownership	owner;
+	struct daos_acl		*acl;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
 		in->cdi_force);
 
-	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_flags & DAOS_PC_EX))
-		D_GOTO(out, rc = -DER_NO_PERM);
+	svc = cont->c_svc;
 
 	/* Check if the container attribute KVS exists. */
 	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
@@ -703,10 +737,35 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc);
 	}
 
+	/* Fetch the container props to check access for delete */
+	rc = cont_prop_read(tx, cont,
+			    DAOS_CO_QUERY_PROP_ACL |
+			    DAOS_CO_QUERY_PROP_OWNER |
+			    DAOS_CO_QUERY_PROP_OWNER_GROUP, &prop);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_ASSERT(prop != NULL);
+
+	get_cont_prop_access_info(prop, &owner, &acl);
+
+	/*
+	 * Two groups of users can delete a container:
+	 * - Users who can delete any container in the pool
+	 * - Users who have been given access to delete the specific container
+	 */
+	if (!ds_sec_pool_can_delete_cont(pool_hdl->sph_sec_capas) &&
+	    !ds_sec_cont_can_delete(pool_hdl->sph_flags, &pool_hdl->sph_cred,
+				    &owner, acl)) {
+		D_ERROR(DF_CONT": permission denied to delete cont\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cdi_op.ci_uuid));
+		D_GOTO(out_prop, rc = -DER_NO_PERM);
+	}
+
 	/* Create a path to the container attribute KVS. */
 	rc = rdb_path_clone(&svc->cs_conts, &kvs);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_prop, rc);
 	rc = rdb_path_push(&kvs, &key);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
@@ -729,6 +788,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_tx_destroy_kvs(tx, &svc->cs_conts, &key);
 out_kvs:
 	rdb_path_fini(&kvs);
+out_prop:
+	daos_prop_free(prop);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
@@ -818,14 +879,12 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_t			key;
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
-	struct daos_prop_entry *acl_entry;
-	struct daos_prop_entry *owner_entry;
-	struct daos_prop_entry *owner_grp_entry;
 	struct container_hdl	chdl;
 	struct pool_map		*pmap;
 	struct cont_open_out   *out = crt_reply_get(rpc);
 	int			rc;
 	struct ownership	owner;
+	struct daos_acl		*acl;
 	uint64_t		sec_capas = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
@@ -847,30 +906,20 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
+	/*
+	 * Need props to check for pool redundancy requirements and access
+	 * control.
+	 */
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
 
-	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ACL);
-	D_ASSERT(acl_entry != NULL);
-	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
-
-	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
-	D_ASSERT(owner_entry != NULL);
-	D_ASSERT(owner_entry->dpe_str != NULL);
-
-	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
-	D_ASSERT(owner_grp_entry != NULL);
-	D_ASSERT(owner_grp_entry->dpe_str != NULL);
-
-	owner.user = owner_entry->dpe_str;
-	owner.group = owner_grp_entry->dpe_str;
+	get_cont_prop_access_info(prop, &owner, &acl);
 
 	rc = ds_sec_cont_get_capabilities(in->coi_flags, &pool_hdl->sph_cred,
-					  &owner, acl_entry->dpe_val_ptr,
-					  &sec_capas);
+					  &owner, acl, &sec_capas);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": refusing attempt to open with flags "
 			DF_X64" error: "DF_RC"\n",
@@ -2041,8 +2090,8 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, crt_rpc_t *rpc)
 {
 	struct cont_op_in      *in = crt_req_get(rpc);
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct container_hdl	hdl;
 	int			rc;
 
@@ -2052,6 +2101,9 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		break;
 	case CONT_CLOSE:
 		rc = cont_close(tx, pool_hdl, cont, rpc);
+		break;
+	case CONT_DESTROY:
+		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:
 		/* Look up the container handle. */
@@ -2110,9 +2162,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	switch (opc) {
 	case CONT_CREATE:
 		rc = cont_create(&tx, pool_hdl, svc, rpc);
-		break;
-	case CONT_DESTROY:
-		rc = cont_destroy(&tx, pool_hdl, svc, rpc);
 		break;
 	default:
 		rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
