@@ -2092,6 +2092,10 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
+	/* Propagate new snapshot list by IV */
+	if (rc == 0 && (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
+		ds_cont_update_snap_iv(pool_hdl->sph_pool, in->ci_uuid);
+
 	return rc;
 }
 

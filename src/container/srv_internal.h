@@ -188,10 +188,12 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-
 int
 ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 		      daos_epoch_t **snapshots, int *snap_count);
+void
+ds_cont_update_snap_iv(struct ds_pool *pool, uuid_t cont_uuid);
+
 /**
  * srv_target.c
  */
