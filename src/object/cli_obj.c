@@ -3403,21 +3403,13 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 	}
 
 	for (i = 0; i < reps; i++) {
-		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
-
 		dova[i].oh = oh;
 
 		dova[i].list_buf = dova[i].inline_buf;
-		dova[i].list_buf_len = DOVA_BUF_LEN;
+		dova[i].list_buf_len = sizeof(dova[i].inline_buf);
 
 		dova[i].fetch_buf = NULL;
 		dova[i].fetch_buf_len = 0;
-
-		cursor->iod.iod_recxs = &cursor->recx;
-		/* We merge the recxs if they can be merged.
-		 * So always signle IOD.
-		 */
-		cursor->iod.iod_nr = 1;
 	}
 
 	for (i = 0; i < obj->cob_grp_nr && rc == 0; i++) {

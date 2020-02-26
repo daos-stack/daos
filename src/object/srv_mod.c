@@ -86,6 +86,10 @@ obj_tls_init(const struct dss_thread_local_storage *dtls,
 	struct obj_tls *tls;
 
 	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	D_INIT_LIST_HEAD(&tls->ot_pool_list);
 	return tls;
 }
 
@@ -94,6 +98,12 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key, void *data)
 {
 	struct obj_tls *tls = data;
+	struct migrate_pool_tls *pool_tls;
+	struct migrate_pool_tls *tmp;
+
+	d_list_for_each_entry_safe(pool_tls, tmp, &tls->ot_pool_list,
+				   mpt_list)
+		migrate_pool_tls_destroy(pool_tls);
 
 	if (tls->ot_echo_sgl.sg_iovs != NULL)
 		daos_sgl_fini(&tls->ot_echo_sgl, true);

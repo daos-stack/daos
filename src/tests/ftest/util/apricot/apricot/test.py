@@ -272,6 +272,12 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+        # Kill commands left running on the hosts (from a previous test) before
+        # starting any tests.  Currently only handles 'orterun' processes, but
+        # can be expanded.
+        self.stop_leftover_processes(
+            ["orterun"], self.hostlist_servers + self.hostlist_clients)
+
         # Start the clients (agents)
         if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
@@ -280,6 +286,19 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
+
+    def stop_leftover_processes(self, processes, hosts):
+        """Stop leftover processes onthe specified hosts before starting tests.
+
+        Args:
+            processes (list): list of process names to stop
+            hosts (list): list of hosts on which to stop the leftover processes
+        """
+        if processes:
+            self.log.info(
+                "Stopping any of the following commands left running on %s: %s",
+                hosts, ",".join(processes))
+            stop_processes(hosts, "'({})'".format("|".join(processes)))
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -294,10 +313,6 @@ class TestWithServers(TestWithoutServers):
 
         # Stop the servers
         errors.extend(self.stop_servers())
-
-        # Kill any left over job manager processes - fail the test if any
-        # left over processes had to be terminated.
-        errors.extend(self.kill_job_managers())
 
         # Complete tear down actions from the inherited class
         try:
@@ -418,31 +433,6 @@ class TestWithServers(TestWithoutServers):
                     self.multi_log("  {}".format(error))
                     error_list.append(
                         "Error stopping servers: {}".format(error))
-        return error_list
-
-    def kill_job_managers(self):
-        """Kill the job manager command for each server manager.
-
-        In addition, report any job manager command that was killed as a falure
-        criteria for this test.
-
-        Returns:
-            list: a list of killed job manager commands
-
-        """
-        self.log.info("Killing any leftover job manager processes")
-        error_list = []
-        for manager in self.server_managers:
-            # Kill the job manager command on the hosts on which it was launched
-            pattern = "'({})'".format(manager.runner.command)
-            result = stop_processes(manager.hosts, pattern)
-
-            # Report any killed job manager command.  stop_processes yields a
-            # return code of 1 if it killed a command.
-            if 1 in result:
-                error_list.append(
-                    "Killed a leftover {} process on {}".format(
-                        manager.manager.command, result[1]))
         return error_list
 
     def start_servers(self, server_groups=None):

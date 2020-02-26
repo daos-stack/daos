@@ -797,7 +797,6 @@ def find_yaml_hosts(test_yaml):
 
     """
     return find_values(
-        None,
         get_yaml_data(test_yaml),
         [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
@@ -890,7 +889,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
-    spawn_commands(host_list, "; ".join(commands))
+    spawn_commands(host_list, "; ".join(commands), 900)
 
 
 def archive_config_files(avocado_logs_dir):
