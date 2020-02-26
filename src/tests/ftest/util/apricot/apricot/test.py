@@ -247,7 +247,7 @@ class TestWithServers(TestWithoutServers):
         # starting any tests.  Currently only handles 'orterun' processes, but
         # can be expanded.
         self.stop_leftover_processes(
-            self.hostlist_servers + self.hostlist_clients)
+            ["orterun"], self.hostlist_servers + self.hostlist_clients)
 
         # Start the clients (agents)
         if self.setup_start_agents:
@@ -257,17 +257,18 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_servers:
             self.start_servers()
 
-    def stop_leftover_processes(self, hosts):
-        """Stop leftover processes onthe specified hosts before starting tests.
+    def stop_leftover_processes(self, processes, hosts):
+        """Stop leftover processes on the specified hosts before starting tests.
 
         Args:
+            processes (list): list of process names to stop
             hosts (list): list of hosts on which to stop the leftover processes
         """
-        leftover_processes = ["orterun"]
-        self.log.info(
-            "Stopping any of the following commands left running on %s: %s",
-            hosts, ",".join(leftover_processes))
-        stop_processes(hosts, "'({})'".format("|".join(leftover_processes)))
+        if processes:
+            self.log.info(
+                "Stopping any of the following commands left running on %s: %s",
+                hosts, ",".join(processes))
+            stop_processes(hosts, "'({})'".format("|".join(processes)))
 
     def start_agents(self, agent_groups=None, servers=None):
         """Start the daos_agent processes.
