@@ -266,6 +266,28 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
 }
 
 int
+daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
+		     d_string_t name, daos_event_t *ev)
+{
+	daos_cont_delete_acl_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_DELETE_ACL);
+
+	rc = dc_task_create(dc_cont_delete_acl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->type	= (uint8_t)type;
+	args->name	= name;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	daos_cont_aggregate_t	*args;
