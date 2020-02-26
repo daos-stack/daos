@@ -4,9 +4,9 @@ hosts:
   test_servers:
     - server-A
   test_clients:
-    - client-A   #server client same host
+    - server-B   #server client different host
   transport_config:
-    - allow_insecure: False
+    - allow_insecure: True
     - ca_cert: ~/.daos/daosCA.crt
     - cert: ~/.daos/daos_agent.crt
     - key: ~/.daos/daos_agent.key
@@ -17,7 +17,7 @@ server_config:
   port: 10001
 daos_server:
   start:
-     insecure: False
+     insecure: True
 dmg:
   request: pool
   action: create
