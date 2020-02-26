@@ -303,33 +303,17 @@ void
 rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 		    bool discard)
 {
-	struct ioreq	req;
-	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
-	int		i;
-	int		punch_idx = 1;
+	int	rc;
+	int	i;
 
-	arg->fail_loc = DAOS_OBJ_SPECIAL_SHARD;
-	/* Validate data for each shard */
-	for (i = 0; i < OBJ_REPLICAS; i++) {
-		int j;
+	for (i = 0; i < oids_nr; i++) {
+		/* XXX: skip punch object. */
+		if (i == 1)
+			continue;
 
-		arg->fail_value = i;
-		for (j = 0; j < oids_nr; j++) {
-			ioreq_init(&req, arg->coh, oids[j], DAOS_IOD_ARRAY,
-				   arg);
-
-			/* how to validate punch object XXX */
-			if (j != punch_idx)
-				/* Validate eph data */
-				rebuild_io_obj_internal((&req), true, eph, eph,
-							arg->index);
-
-			ioreq_fini(&req);
-		}
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		assert_int_equal(rc, 0);
 	}
-
-	arg->fail_loc = 0;
-	arg->fail_value = 0;
 }
 
 /* Create a new pool for the sub_test */
