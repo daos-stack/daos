@@ -1927,8 +1927,10 @@ next_step:
 	sgl.sg_nr = 2;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	print_message("fetch with less buffer got %d.\n", rc);
+	print_message("fetch with less buffer got rc %d, iod_size %d.\n",
+		      rc, (int)iod.iod_size);
 	assert_int_equal(rc, -DER_REC2BIG);
+	assert_int_equal(iod.iod_size, 1);
 
 	print_message("reading un-existed record ...\n");
 	recx[3].rx_idx	= 2 * buf_len + 40960;
@@ -2092,7 +2094,7 @@ fetch_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		 dkey;
 	d_sg_list_t	 sgl[NUM_AKEYS];
 	d_iov_t	 sg_iov[NUM_AKEYS];
 	daos_iod_t	 iod[NUM_AKEYS];
@@ -2145,6 +2147,16 @@ fetch_size(void **state)
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_int_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++)
+		assert_int_equal(iod[i].iod_size, size * (i+1));
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
+		iod[i].iod_size	= DAOS_REC_ANY;
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_int_equal(rc, -DER_REC2BIG);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
