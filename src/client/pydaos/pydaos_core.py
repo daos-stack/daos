@@ -101,18 +101,19 @@ class Cont(object):
     __str__
         print pool and container UUIDs
     """
-    def __init__(self, puuid=None, cuuid=None, path=None):
+    def __init__(self, puuid=None, cuuid=None, path=None, svc='0'):
         self.coh = None
         if path is None and (puuid is None or cuuid is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path != None:
-            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path),
+            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path,
+                                                            svc, 0)
         else:
             self.puuid = uuid.UUID(puuid)
             self.cuuid = uuid.UUID(cuuid)
             (ret, poh, coh) = pydaos_shim.cont_open(DAOS_MAGIC, str(puuid),
-                                                    str(cuuid), 0)
+                                                    str(cuuid), svc, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
         self.poh = poh
