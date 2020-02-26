@@ -5,8 +5,6 @@ server_config:
 hosts:
   test_servers:
     - server-A
-server_manager:
-   recreate: true
 timeout: 700
 pool:
   control_method: dmg
