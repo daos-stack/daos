@@ -48,6 +48,9 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
 		D_ERROR("Invalid container properties.\n");
 		return -DER_INVAL;
@@ -74,6 +77,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_cont_open, NULL, ev, &task);
 	if (rc)
@@ -117,6 +122,8 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_cont_destroy, NULL, ev, &task);
 	if (rc)
@@ -232,6 +239,30 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 
 	daos_prop_free(prop);
 	return rc;
+}
+
+int
+daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
+{
+	daos_cont_update_acl_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_UPDATE_ACL);
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("invalid acl parameter.\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_cont_update_acl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->acl	= acl;
+
+	return dc_task_schedule(task, true);
 }
 
 int

@@ -10,7 +10,7 @@ I/O, advanced data protection with self-healing, end-to-end data
 integrity, fine-grained data control, and elastic storage, to optimize
 performance and cost.
 
-This administration guide version is associated with DAOS v0.9.
+This administration guide version is associated with DAOS v1.1.
 
 ## Additional Documentation
 

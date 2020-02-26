@@ -156,7 +156,7 @@ teardown_pools(void **state)
 	test_arg_t		*arg = *state;
 	struct test_list_pools	*lparg = arg->mgmt_lp_args;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lparg == NULL)
 		return 0;
