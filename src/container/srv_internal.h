@@ -82,9 +82,9 @@ struct cont_svc {
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	rdb_path_t		c_prop;		/* container properties KVS */
-	rdb_path_t		c_snaps;	/* Snapshots KVS */
-	rdb_path_t		c_user;		/* user attributes KVS */
+	rdb_path_t		c_prop;		/* container property KVS */
+	rdb_path_t		c_snaps;	/* snapshot KVS */
+	rdb_path_t		c_user;		/* user attribute KVS */
 };
 
 /* OID range for allocator */
