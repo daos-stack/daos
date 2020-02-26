@@ -4,8 +4,6 @@ hosts:
   test_servers:
     - server-A
 timeout: 650
-server_manager:
-  recreate: true
 evicttests:
    svrlist: !mux
      goodlist:
