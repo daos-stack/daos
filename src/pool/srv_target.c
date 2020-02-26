@@ -502,6 +502,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 		DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
+	daos_iov_free(&hdl->sph_cred);
 	ds_pool_put(hdl->sph_pool);
 	D_FREE(hdl);
 }
@@ -774,9 +775,18 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	hdl->sph_capas = in->tci_capas;
 	hdl->sph_pool = pool;
 
-	rc = pool_hdl_add(hdl);
+	rc = daos_iov_copy(&hdl->sph_cred, &in->tci_cred);
 	if (rc != 0) {
 		ds_pool_put(pool);
+		D_FREE(hdl);
+		D_GOTO(out, rc);
+	}
+
+	rc = pool_hdl_add(hdl);
+	if (rc != 0) {
+		daos_iov_free(&hdl->sph_cred);
+		ds_pool_put(pool);
+		D_FREE(hdl);
 		D_GOTO(out, rc);
 	}
 
