@@ -107,6 +107,8 @@ class Cont(object):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path != None:
+            self.puuid = None
+            self.cuuid = None
             (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path,
                                                             svc, 0)
         else:
@@ -153,7 +155,7 @@ class Cont(object):
         return KVObj(self.coh, oid, self)
 
     def __str__(self):
-        return str(self.cuuid) + "@" + str(self.puuid)
+        return '{}@{}'.format(self.cuuid, self.puuid)
 
 class _Obj(object):
     oh = None
