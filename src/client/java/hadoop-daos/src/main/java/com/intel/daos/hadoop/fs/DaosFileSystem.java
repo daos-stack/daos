@@ -146,6 +146,15 @@ public class DaosFileSystem extends FileSystem {
   private int blockSize;
   private int chunkSize;
 
+  static {
+    if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
+      LOG.info("daos finalizer relocated to hadoop ShutdownHookManager");
+    } else {
+      LOG.error("failed to relocate daos finalizer");
+    }
+  }
+
   @Override
   public void initialize(URI name, Configuration conf)
           throws IOException {

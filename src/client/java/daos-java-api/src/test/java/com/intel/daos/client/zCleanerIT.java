@@ -6,6 +6,7 @@ public class zCleanerIT {
 
   @Test
   public void clean() throws Exception{
-    DaosFsClient.closeAndFinalize();
+    DaosFsClient.closeAll();
+    DaosFsClient.daosFinalize();
   }
 }

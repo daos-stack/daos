@@ -55,7 +55,10 @@ public final class ShutdownHookManager {
     hookStack.add(runnable);
   }
 
-  public static void removeHook(Runnable runnable) {
-    hookStack.remove(runnable);
+  public static boolean removeHook(Runnable runnable) {
+    if (runnable == null) {
+      return false;
+    }
+    return hookStack.remove(runnable);
   }
 }

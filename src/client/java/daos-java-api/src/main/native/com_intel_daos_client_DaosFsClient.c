@@ -847,33 +847,21 @@ Java_com_intel_daos_client_DaosFsClient_delete(JNIEnv *env, jobject client,
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
 	int rc;
-	int ret;
 
 	if ((strlen(parent_path) > 0) &&
 			(strcmp(parent_path, "/") != 0)) {
 		rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode,
 				NULL);
 		if (rc) {
-			printf("Failed to open parent dir, %s, when delete, " \
-					"rc: %d, error msg: %s\n",
-					parent_path, rc, strerror(rc));
-			ret = 0;
 			goto out;
 		}
 	}
-	rc = dfs_remove(dfs, parent, file_name, force, NULL);
-	if (rc) {
-		printf("Failed to delete %s from %s, rc: %d, error msg: %s\n",
-				file_name, parent_path, rc, strerror(rc));
-		ret = 0;
-		goto out;
-	}
-	ret = 1;
+	dfs_remove(dfs, parent, file_name, force, NULL);
 out:
 	(*env)->ReleaseStringUTFChars(env, parentPath, parent_path);
 	(*env)->ReleaseStringUTFChars(env, name, file_name);
 	if (parent) dfs_release(parent);
-	return ret;
+	return 1;
 }
 
 /**
