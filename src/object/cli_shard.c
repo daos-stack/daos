@@ -168,8 +168,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	struct rw_cb_args	*rw_args = arg;
 	struct obj_rw_in	*orw;
 	struct obj_rw_out	*orwo;
+	daos_iod_t		*iods;
+	uint64_t		*sizes;
 	int			opc;
 	int                     ret = task->dt_result;
+	int			i, j;
 	int			rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
@@ -192,7 +195,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	orw = crt_req_get(rw_args->rpc);
-	D_ASSERT(orw != NULL);
+	orwo = crt_reply_get(rw_args->rpc);
+	D_ASSERT(orw != NULL && orwo != NULL);
 	if (ret != 0) {
 		/*
 		 * If any failure happens inside Cart, let's reset failure to
@@ -204,22 +208,25 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS)
+		if (rc == -DER_INPROGRESS) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", rw_args->rpc, opc, DP_RC(rc));
-		else
+		} else {
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				rw_args->rpc, opc, DP_RC(rc));
+			if (rc == -DER_REC2BIG && opc == DAOS_OBJ_RPC_FETCH) {
+				/* update the sizes in iods */
+				iods = orw->orw_iod_array.oia_iods;
+				sizes = orwo->orw_iod_sizes.ca_arrays;
+				for (i = 0; i < orw->orw_nr; i++)
+					iods[i].iod_size = sizes[i];
+			}
+		}
 		D_GOTO(out, rc);
 	}
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
-	orwo = crt_reply_get(rw_args->rpc);
 	if (opc == DAOS_OBJ_RPC_FETCH) {
-		daos_iod_t	*iods;
-		uint64_t	*sizes;
-		int		 i, j;
-
 		iods = orw->orw_iod_array.oia_iods;
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 
