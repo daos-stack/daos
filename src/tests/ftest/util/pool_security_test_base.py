@@ -370,7 +370,7 @@ class PoolSecurityTestBase(TestWithServers):
             fail to report the testlog and stop.
         '''
 
-        # (1)Create daos_shell command
+        # (1)Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.get_params(self)
         port = self.params.get("port", "/run/server_config/*", 10001)
@@ -430,12 +430,5 @@ class PoolSecurityTestBase(TestWithServers):
                 uuid, svc)
 
         # (8)Cleanup user and destroy pool
-        self.log.info("  (8)Cleanup user and destroy pool")
+        self.log.info("  (8)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)
-        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
-        dmg.request.value = "pool"
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        dmg.action.value = "destroy"
-        dmg.get_action_command()
-        dmg.action_command.pool.value = uuid
-        result = dmg.run()
