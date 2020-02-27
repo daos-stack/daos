@@ -125,7 +125,8 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix=""):
+    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
+                          cont_uuid=None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -136,8 +137,10 @@ class IorTestBase(TestWithServers):
                              only for POSIX through DFUSE.
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
+            cont_uuid(str, optional): container uuid. Default to None which will
+                                      create new container.
         """
-        self.update_ior_cmd_with_pool()
+        self.update_ior_cmd_with_pool(cont_uuid)
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
@@ -164,9 +167,13 @@ class IorTestBase(TestWithServers):
         # Always create a container
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
-        self.pool.connect()
-        self.create_cont()
-         # Update IOR params with the pool and container params
+        # Adding option to use the existing container data
+        if cont_uuid is None:
+            self.create_cont()
+        else:
+            self.container.uuid = cont_uuid
+
+        # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
