@@ -259,8 +259,7 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 		}
 
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
-				NVMECONTROL_GBYTE_BYTES;
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns);
 		ns_tmp->next = ctrlr->nss;
 		ctrlr->nss = ns_tmp;
 

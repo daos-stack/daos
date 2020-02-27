@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,8 +136,8 @@ static PyObject *
 cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 {
 	PyObject	*return_list;
-	daos_handle_t	 poh;
 	daos_handle_t	 coh;
+	daos_handle_t	 poh = {0};
 	d_rank_list_t	*svcl = NULL;
 	int		 rc;
 
@@ -320,6 +320,8 @@ cont_prop_define(PyObject *module)
 	DEFINE_CONT(CO_ACL);
 	DEFINE_CONT(CO_COMPRESS);
 	DEFINE_CONT(CO_ENCRYPT);
+	DEFINE_CONT(CO_OWNER);
+	DEFINE_CONT(CO_OWNER_GROUP);
 	DEFINE_CONT(CO_MAX);
 	DEFINE_CONT(CO_LAYOUT_UNKOWN);
 	DEFINE_CONT(CO_LAYOUT_POSIX);

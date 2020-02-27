@@ -51,11 +51,11 @@ var methodAuthorizations = map[string]Component{
 	"/mgmt.MgmtSvc/PoolDestroy":         ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolGetACL":          ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolOverwriteACL":    ComponentAdmin,
+	"/mgmt.MgmtSvc/PoolQuery":           ComponentAdmin,
 	"/mgmt.MgmtSvc/GetAttachInfo":       ComponentAgent,
 	"/mgmt.MgmtSvc/BioHealthQuery":      ComponentAdmin,
 	"/mgmt.MgmtSvc/SmdListDevs":         ComponentAdmin,
 	"/mgmt.MgmtSvc/SmdListPools":        ComponentAdmin,
-	"/mgmt.MgmtSvc/KillRank":            ComponentAdmin,
 	"/mgmt.MgmtSvc/ListPools":           ComponentAdmin,
 }
 

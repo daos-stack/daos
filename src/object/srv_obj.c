@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,10 +133,16 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		if (cont_hdl)
-			daos_csummer_free_dcbs(cont_hdl->sch_csummer,
-					       &orwo->orw_csum.ca_arrays);
-		orwo->orw_csum.ca_count = 0;
+		if (orwo->orw_iod_csum.ca_arrays != NULL) {
+			D_FREE(orwo->orw_iod_csum.ca_arrays);
+			orwo->orw_iod_csum.ca_count = 0;
+		}
+
+		if (cont_hdl) {
+			daos_csummer_free_ic(cont_hdl->sch_csummer,
+				&orwo->orw_iod_csum.ca_arrays);
+			orwo->orw_iod_csum.ca_count = 0;
+		}
 	}
 }
 
@@ -216,6 +222,28 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 			buf   += nob;
 		}
 	}
+}
+
+bool
+cont_prop_csum_enabled(struct ds_iv_ns *ns, uuid_t co_hdl)
+{
+	int			rc;
+	daos_prop_t		cont_prop = {0};
+	struct daos_prop_entry entry = {0};
+	uint32_t		csum_val;
+
+	entry.dpe_type = DAOS_PROP_CO_CSUM;
+	cont_prop.dpp_entries = &entry;
+	cont_prop.dpp_nr = 1;
+
+	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	if (rc != 0)
+		return false;
+	csum_val = daos_cont_prop2csum(&cont_prop);
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		return true;
+	else
+		return false;
 }
 
 static int
@@ -357,6 +385,28 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		rc = ret ? dss_abterr2der(ret) : *status;
 
 	ABT_eventual_free(&arg.eventual);
+	/* After RDMA is done, corrupt the server data */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_SDATA_CORRUPT)) {
+		struct obj_rw_in	*orw = crt_req_get(rpc);
+		struct ds_pool		*pool;
+
+		pool = ds_pool_lookup(orw->orw_pool_uuid);
+		if (pool == NULL)
+			return -DER_NONEXIST;
+		if (cont_prop_csum_enabled(pool->sp_iv_ns, orw->orw_co_hdl)) {
+			struct bio_sglist	*fbsgl;
+			d_sg_list_t		 fsgl;
+			int			*fbuffer;
+
+			D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+			fbsgl = vos_iod_sgl_at(ioh, 0);
+			bio_sgl_convert(fbsgl, &fsgl);
+			fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+			*fbuffer += 0x2;
+			daos_sgl_fini(&fsgl, false);
+		}
+		ds_pool_put(pool);
+	}
 	return rc;
 }
 
@@ -686,86 +736,143 @@ next:
 	return rc;
 }
 
-/** Link the list dcbs from the output to the iod structures of the input so
- * they are easily associated by VOS to the recxs the checksums are
- * derived from. After VOS has populated the checksums \obj_fetch_csums_unlink
- * should be called to avoid double freeing of the csum resources.
- */
-static void
-obj_fetch_csums_link(const struct obj_rw_in *orw, const struct obj_rw_out *orwo)
-{
-	daos_iods_link_dcbs(orw->orw_iod_array.oia_iods,
-			    orw->orw_iod_array.oia_iod_nr,
-			    orwo->orw_csum.ca_arrays, orwo->orw_csum.ca_count);
-}
-static void
-obj_fetch_csums_unlink(struct obj_rw_in *orw)
-{
-	daos_iods_unlink_dcbs(orw->orw_iod_array.oia_iods,
-			      orw->orw_iod_array.oia_iod_nr);
-}
-
 /** if checksums are enabled, fetch needs to allocate the memory that will be
- * used for the dcb structures and actual checksums. The RPC output
- * structure will hold the reference to the list of dcbs allocated, so the RPC
- * input iod strctures will need to be linked to these before VOS can use them
+ * used for the csum structures.
  */
-static void
+static int
 obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 			 struct obj_rw_in *orw,
 			 struct obj_rw_out *orwo)
 {
-	daos_csum_buf_t	*csums;
-	uint32_t	 csum_nr;
-	int		 rc;
+	int rc;
 
 	/**
-	 * Allocate memory for the input iod's daos_csum_buf_t structures.
+	 * Allocate memory for the csum structures.
 	 * This memory and information will be used by VOS to put the checksums
 	 * in as it fetches the data's metadata from the btree/evtree.
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_dcbs(cont_hdl->sch_csummer,
-				     orw->orw_iod_array.oia_iods,
-				     orw->orw_iod_array.oia_iod_nr,
-				     &csums,
-				     &csum_nr);
+	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
+					   orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr,
+					   false,
+					   &orwo->orw_iod_csum.ca_arrays);
 
-	if (rc == 0) {
-		/** Set the output csums to the memory allocated. This way
-		 * when VOS populates the csums it's already available by the
-		 * output/return structures.
-		 */
-		orwo->orw_csum.ca_arrays = csums;
-		orwo->orw_csum.ca_count = csum_nr;
+	if (rc >= 0) {
+		orwo->orw_iod_csum.ca_count = (uint64_t)rc;
+		rc = 0;
 	}
+
+	return rc;
+}
+
+static struct dcs_iod_csums *
+get_iod_csum(struct dcs_iod_csums *iod_csums, int i)
+{
+	if (iod_csums == NULL)
+		return NULL;
+	return &iod_csums[i];
 }
 
 static int
 csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
-	      struct daos_csummer *csummer)
+	      struct daos_csummer *csummer,
+	      struct dcs_iod_csums *iod_csums)
 {
-	int			 rc = 0;
-	uint32_t		 biov_dcbs_idx = 0;
-	size_t			 biov_dcbs_used = 0;
-	int			 i;
+	int	 rc = 0;
+	uint32_t biov_csums_idx = 0;
+	size_t	 biov_csums_used = 0;
+	int	 i;
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
-	daos_csum_buf_t *dcbs = vos_ioh2dcbs(ioh);
+	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
 			bio_iod_sgl(biod, i),
-			&dcbs[biov_dcbs_idx],
-			&biov_dcbs_used);
+			&csum_infos[biov_csums_idx],
+			&biov_csums_used, get_iod_csum(iod_csums, i));
+
 		if (rc != 0)
 			return rc;
-		biov_dcbs_idx += biov_dcbs_used;
+		biov_csums_idx += biov_csums_used;
 	}
 
 	return rc;
+}
+
+int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
+{
+	uint32_t	i;
+	int		rc;
+
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	rc = daos_csummer_verify_key(csummer, &orw->orw_dkey,
+				     orw->orw_dkey_csum);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_verify_key error for dkey: %d", rc);
+		return rc;
+	}
+
+	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+		daos_iod_t *iod = &orw->orw_iod_array.oia_iods[i];
+		struct dcs_iod_csums *csum = &orw->orw_iod_csums.ca_arrays[i];
+
+		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
+			continue;
+		rc = daos_csummer_verify_key(csummer,
+					     &iod->iod_name,
+					     &csum->ic_akey);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for akey: %d",
+				rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+/** Filter and prepare for the sing value EC update/fetch */
+static void
+obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
+		       bool for_update)
+{
+	struct daos_oclass_attr		*oca = NULL;
+	daos_iod_t			*iod;
+	struct obj_ec_singv_local	 loc;
+	uint32_t			 tgt_idx;
+	uint32_t			 i;
+
+	tgt_idx = orw->orw_oid.id_shard - orw->orw_start_shard;
+	for (i = 0; i < orw->orw_nr; i++) {
+		iod = &iods[i];
+		if (iod->iod_type != DAOS_IOD_SINGLE ||
+		    (orw->orw_flags & ORF_EC) == 0)
+			continue;
+		/* for singv EC */
+		D_ASSERT(iod->iod_recxs == NULL);
+		if (iod->iod_size == DAOS_REC_ANY) /* punch */
+			continue;
+		if (oca == NULL) {
+			oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
+			D_ASSERT(oca != NULL && DAOS_OC_IS_EC(oca));
+		}
+		/* using iod_recxs to pass ir_gsize (akey_update_single) */
+		if (for_update)
+			iod->iod_recxs = (void *)iod->iod_size;
+		if (!obj_ec_singv_one_tgt(iod, NULL, oca)) {
+			obj_ec_singv_local_sz(iod->iod_size, oca, tgt_idx,
+					      &loc);
+			offs[i] = loc.esl_off;
+			if (for_update)
+				iod->iod_size = loc.esl_size;
+		}
+	}
 }
 
 static int
@@ -805,6 +912,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		D_GOTO(out, rc = 0);
 	}
 
+	rc = csum_verify_keys(cont_hdl->sch_csummer, orw);
+	if (rc != 0) {
+		D_ERROR("csum_verify_keys error: %d", rc);
+		return rc;
+	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
 	D_DEBUG(DB_TRACE,
 		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_U64".\n",
@@ -816,10 +928,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
+		obj_singv_ec_rw_filter(orw, iods, offs, true);
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
-				      orw->orw_epoch, dkey, orw->orw_nr,
-				      iods, &ioh, dth);
+				      orw->orw_epoch, dkey, orw->orw_nr, iods,
+				      orw->orw_iod_csums.ca_arrays, &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -853,6 +966,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			orwo->orw_sgls.ca_count = orw->orw_sgls.ca_count;
 			orwo->orw_sgls.ca_arrays = orw->orw_sgls.ca_arrays;
 		}
+		obj_singv_ec_rw_filter(orw, iods, offs, false);
 	}
 
 	biod = vos_ioh2desc(ioh);
@@ -864,13 +978,17 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	}
 
 	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
-		obj_fetch_csum_init(cont_hdl, orw, orwo);
-		obj_fetch_csums_link(orw, orwo);
+		rc = obj_fetch_csum_init(cont_hdl, orw, orwo);
+		if (rc) {
+			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto post;
+		}
 		rc = csum_add2iods(ioh,
 				   orw->orw_iod_array.oia_iods,
 				   orw->orw_iod_array.oia_iod_nr,
-				   cont_hdl->sch_csummer);
-		obj_fetch_csums_unlink(orw);
+				   cont_hdl->sch_csummer,
+				   orwo->orw_iod_csum.ca_arrays);
 
 		if (rc) {
 			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
@@ -1199,6 +1317,23 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+
+/* Call internal method to increment CSUM media error. */
+static void
+obj_log_csum_err(void)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
+
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_log_csum_err(bxc, info->dmi_tgt_id);
+}
+
 void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
@@ -1216,6 +1351,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
+
 	rc = obj_ioc_begin(orw->orw_oid, orw->orw_map_ver,
 			   orw->orw_pool_uuid, orw->orw_co_hdl,
 			   orw->orw_co_uuid, opc_get(rpc->cr_opc), &ioc);
@@ -1239,6 +1375,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	if (obj_rpc_is_fetch(rpc)) {
+		if (orw->orw_flags & ORF_CSUM_REPORT) {
+			obj_log_csum_err();
+			D_GOTO(out, rc = -DER_CSUM);
+		}
+
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
 				  NULL, NULL, NULL);
 		if (rc != 0) {
@@ -1377,6 +1518,9 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 
 	if (oeo->oeo_recxs.ca_arrays != NULL)
 		D_FREE(oeo->oeo_recxs.ca_arrays);
+
+	if (oeo->oeo_csum_iov.iov_buf != NULL)
+		D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
 static int
@@ -1390,6 +1534,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	int			rc;
 	bool			recursive = false;
 
+	enum_arg->csummer = ioc->ioc_coh->sch_csummer;
 	/* prepare enumeration parameters */
 	param.ip_hdl = ioc->ioc_vos_coh;
 	param.ip_oid = oei->oei_oid;
@@ -1605,7 +1750,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		enum_arg.sgl = &oeo->oeo_sgl;
 		enum_arg.sgl_idx = 0;
 
-		/* Prepare key desciptor buffer */
+		/* Prepare key descriptor buffer */
 		oeo->oeo_kds.ca_count = 0;
 		D_ALLOC(oeo->oeo_kds.ca_arrays,
 			oei->oei_nr * sizeof(daos_key_desc_t));
@@ -1643,6 +1788,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oeo->oeo_kds.ca_count = enum_arg.kds_len;
 		oeo->oeo_num = enum_arg.kds_len;
 		oeo->oeo_size = oeo->oeo_sgl.sg_iovs[0].iov_len;
+		oeo->oeo_csum_iov = enum_arg.csum_iov;
 	}
 
 	rc = obj_enum_reply_bulk(rpc);
@@ -2078,6 +2224,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 	struct ds_pool		*pool;
 	daos_iod_t		*iods = orw->orw_iod_array.oia_iods;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
+	struct dcs_iod_csums	*iods_csums = orw->orw_iod_csums.ca_arrays;
 	unsigned int		 i;
 	int			 rc = 0;
 
@@ -2094,23 +2241,29 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		return 0;
 	}
 
-	for (i = 0; i < iods_nr && rc == 0; i++) {
+	for (i = 0; i < iods_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		struct bio_sglist	*bsgl = bio_iod_sgl(biod, i);
 		d_sg_list_t		 sgl;
-		/** Currently only supporting array types */
-		bool			 type_is_supported =
-						iod->iod_type == DAOS_IOD_ARRAY;
 
-		if (!type_is_supported || !dcb_is_valid(iod->iod_csums))
-			continue;
+		if (!ci_is_valid(iods_csums[i].ic_data)) {
+			D_ERROR("Checksums is enabled but the csum info is "
+				"invalid.");
+			return -DER_CSUM;
+		}
 
 		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
-			rc = daos_csummer_verify(csummer, iod, &sgl);
+			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
+						 &iods_csums[i]);
 
 		daos_sgl_fini(&sgl, false);
+
+		if (rc != 0) {
+			D_ERROR("Verify failed: %d\n", rc);
+			break;
+		}
 	}
 
 	ds_pool_put(pool);

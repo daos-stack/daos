@@ -28,7 +28,8 @@ from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
 from command_utils import BasicParameter
-from pydaos.raw import (DaosApiError, DaosContainer, c_uuid_to_str)
+from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
+                        c_uuid_to_str)
 from general_utils import get_random_string, DaosTestError
 
 
@@ -43,7 +44,6 @@ class TestContainerData(object):
                 Defaults to False.
         """
         self.obj = None
-        self.txn = None
         self.records = []
         self.log = getLogger(__name__)
         self.debug = debug
@@ -103,13 +103,13 @@ class TestContainerData(object):
             if isinstance(data, list):
                 kwargs["datalist"] = data
                 self._log_method("write_an_array_value", kwargs)
-                (self.obj, self.txn) = \
+                (self.obj) = \
                     container.container.write_an_array_value(**kwargs)
             else:
                 kwargs["thedata"] = data
                 kwargs["size"] = len(data)
                 self._log_method("write_an_obj", kwargs)
-                (self.obj, self.txn) = \
+                (self.obj) = \
                     container.container.write_an_obj(**kwargs)
         except DaosApiError as error:
             raise DaosTestError(
@@ -177,7 +177,7 @@ class TestContainerData(object):
             "dkey": dkey,
             "akey": akey,
             "obj": self.obj,
-            "txn": txn if txn is not None else self.txn,
+            "txn": txn,
         }
         try:
             if data_array_size > 0:
@@ -270,6 +270,9 @@ class TestContainer(TestDaosApiBase):
         self.dkey_size = BasicParameter(None)
         self.data_size = BasicParameter(None)
         self.data_array_size = BasicParameter(0, 0)
+        # Provider access to get input params values
+        # for enabling different container properties
+        self.input_params = DaosInputParams()
 
         self.container = None
         self.uuid = None
@@ -289,7 +292,7 @@ class TestContainer(TestDaosApiBase):
         return super(TestContainer, self).__str__()
 
     @fail_on(DaosApiError)
-    def create(self, uuid=None):
+    def create(self, uuid=None, con_in=None):
         """Create a container.
 
         Args:
@@ -303,6 +306,14 @@ class TestContainer(TestDaosApiBase):
         kwargs = {"poh": self.pool.pool.handle}
         if uuid is not None:
             kwargs["con_uuid"] = uuid
+        # Refer daos_api for setting input params for DaosContainer.
+        if con_in is not None:
+            self.input_params.type = con_in[0]
+            self.input_params.enable_chksum = con_in[1]
+            self.input_params.srv_verify = con_in[2]
+            self.input_params.chksum_type = con_in[3]
+            self.input_params.chunk_size = con_in[4]
+            kwargs["con_prop"] = self.input_params
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid %s", self.uuid)
@@ -392,10 +403,7 @@ class TestContainer(TestDaosApiBase):
             self._call_method(self.container.query, {"coh": coh})
             self.info = self.container.info
 
-    def check_container_info(self, ci_uuid=None, es_hce=None, es_lre=None,
-                             es_lhe=None, es_ghce=None, es_glre=None,
-                             es_ghpce=None, ci_nsnapshots=None,
-                             ci_min_slipped_epoch=None):
+    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None):
         # pylint: disable=unused-argument
         """Check the container info attributes.
 
@@ -406,15 +414,8 @@ class TestContainer(TestDaosApiBase):
 
         Args:
             ci_uuid (str, optional): container uuid. Defaults to None.
-            es_hce (int, optional): hc epoch?. Defaults to None.
-            es_lre (int, optional): lr epoch?. Defaults to None.
-            es_lhe (int, optional): lh epoch?. Defaults to None.
-            es_ghce (int, optional): ghc epoch?. Defaults to None.
-            es_glre (int, optional): glr epoch?. Defaults to None.
-            es_ghpce (int, optional): ghpc epoch?. Defaults to None.
             ci_nsnapshots (int, optional): number of snapshots.
                 Defaults to None.
-            ci_min_slipped_epoch (int, optional): . Defaults to None.
 
         Note:
             Arguments may also be provided as a string with a number preceeded

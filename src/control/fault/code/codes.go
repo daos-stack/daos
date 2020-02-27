@@ -33,6 +33,9 @@ const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	PrivilegedHelperNotPrivileged
+	PrivilegedHelperNotAvailable
+	PrivilegedHelperRequestFailed
 
 	// generic storage fault codes
 	StorageUnknown Code = iota + 100
@@ -62,6 +65,34 @@ const (
 	SystemMemberExists
 	SystemMemberMissing
 	SystemMemberChanged
+
+	// client fault codes
+	ClientUnknown Code = iota + 500
+	ClientConfigBadControlPort
+	ClientConfigBadAccessPoints
+
+	// server fault codes
+	ServerUnknown Code = iota + 600
+	ServerBadConfig
+	ServerNoConfigPath
+	ServerConfigBadControlPort
+	ServerConfigBadAccessPoints
+	ServerConfigBadProvider
+	ServerConfigNoServers
+	ServerScmUnmanaged
+	ServerBdevNotFound
+	ServerBdevFormatSkipped
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
+
+	// spdk library bindings codes
+	SpdkUnknown Code = iota + 700
+	SpdkCtrlrNoHealth
+	SpdkBindingRetNull
+	SpdkBindingFailed
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

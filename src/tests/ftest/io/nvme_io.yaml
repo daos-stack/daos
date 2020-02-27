@@ -13,12 +13,10 @@ timeout: 28800
 server_config:
  name: daos_server
 pool:
- createmode:
-  mode: 511
- createset:
-  setname: daos_server
- createsvc:
-  svcn: 1
+ mode: 511
+ name: daos_server
+ svcn: 1
+ control_method: dmg
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1

@@ -37,6 +37,10 @@ enum cont_op {
 	CONT_LIST_SNAPS,
 	CONT_DESTROY_SNAP,
 	CONT_ROLLBACK,
+	CONT_GET_ACL,
+	CONT_OVERWRITE_ACL,
+	CONT_UPDATE_ACL,
+	CONT_DELETE_ACL,
 };
 
 enum pool_op {
@@ -70,7 +74,7 @@ struct cmd_args_s {
 	daos_handle_t		cont;
 	char			*mdsrv_str;	/* --svc */
 	d_rank_list_t		*mdsrv;
-	int			force_destroy;	/* --force (cont destroy) */
+	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
 	char			*value_str;	/* --value attribute value */
 
@@ -90,6 +94,13 @@ struct cmd_args_s {
 	daos_prop_t		*props;		/* --properties cont create */
 
 	FILE			*ostream;	/* help_hdlr() stream */
+	char			*outfile;	/* --outfile path */
+	char			*aclfile;	/* --acl-file path */
+	char			*user;		/* --user name */
+	char			*group;		/* --group name */
+	bool			verbose;	/* --verbose mode */
+	char			*entry;		/* --entry for ACL */
+	char			*principal;	/* --principal for ACL */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
@@ -190,6 +201,10 @@ int cont_get_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
 int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
+int cont_get_acl_hdlr(struct cmd_args_s *ap);
+int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
+int cont_update_acl_hdlr(struct cmd_args_s *ap);
+int cont_delete_acl_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:

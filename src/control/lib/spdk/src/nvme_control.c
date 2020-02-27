@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2018-2019 Intel Corporation.
+* (C) Copyright 2018-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -70,6 +70,111 @@ nvme_discover(void)
 	return _discover(&spdk_nvme_probe, true, &get_dev_health_logs);
 }
 
+static void
+write_complete(void *arg, const struct spdk_nvme_cpl *completion)
+{
+	struct format_sequence	*sequence = arg;
+
+	if (sequence->using_cmb_io) {
+		spdk_nvme_ctrlr_free_cmb_io_buffer(sequence->ctrlr,
+						   sequence->buf, 0x1000);
+	} else {
+		spdk_free(sequence->buf);
+	}
+	sequence->is_completed = 1;
+}
+
+struct ret_t *
+nvme_wipe_first_ns(char *ctrlr_pci_addr)
+{
+	int			 ns_id, rc;
+	struct ctrlr_entry	*ctrlr_entry;
+	struct format_sequence   sequence;
+	struct ret_t		*ret;
+
+	ret = init_ret(0);
+
+	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
+	if (ret->rc != 0)
+		return ret;
+
+	sequence.ctrlr = ctrlr_entry->ctrlr;
+
+	ns_id = spdk_nvme_ctrlr_get_first_active_ns(sequence.ctrlr);
+	if (ns_id != 1) {
+		/* unexpected, don't wipe */
+		snprintf(ret->err, sizeof(ret->err),
+			"expected first active namespace at id 1, got %d",
+			ns_id);
+		ret->rc = -NVMEC_ERR_NS_ID_UNEXPECTED;
+		return ret;
+	}
+
+	if (spdk_nvme_ctrlr_get_next_active_ns(sequence.ctrlr, ns_id) != 0) {
+		/* unexpected, don't wipe */
+		snprintf(ret->err, sizeof(ret->err),
+			"expected a single active namespace, got multiple");
+		ret->rc = -NVMEC_ERR_MULTIPLE_ACTIVE_NS;
+		return ret;
+	}
+
+	sequence.ns = spdk_nvme_ctrlr_get_ns(sequence.ctrlr, ns_id);
+	if (!sequence.ns) {
+		snprintf(ret->err, sizeof(ret->err), "null ns");
+		ret->rc = -NVMEC_ERR_NULL_NS;
+		return ret;
+	}
+
+	sequence.qpair = spdk_nvme_ctrlr_alloc_io_qpair(sequence.ctrlr, NULL,
+							0);
+	if (sequence.qpair == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"spdk_nvme_ctrlr_alloc_io_qpair() failed");
+		ret->rc = -NVMEC_ERR_ALLOC_IO_QPAIR;
+		return ret;
+	}
+
+	sequence.using_cmb_io = 1;
+	sequence.buf = spdk_nvme_ctrlr_alloc_cmb_io_buffer(sequence.ctrlr,
+							   0x1000);
+	if (sequence.buf == NULL) {
+		sequence.using_cmb_io = 0;
+		sequence.buf = spdk_zmalloc(0x1000, 0x1000, NULL,
+					    SPDK_ENV_SOCKET_ID_ANY,
+					    SPDK_MALLOC_DMA);
+	}
+	if (sequence.buf == NULL) {
+		snprintf(ret->err, sizeof(ret->err),
+			"write buffer allocation failed\n");
+		ret->rc = -NVMEC_ERR_ALLOC_SEQUENCE_BUF;
+		return ret;
+	}
+	if (sequence.using_cmb_io) {
+		printf("INFO: using controller memory buffer for IO\n");
+	} else {
+		printf("INFO: using host memory buffer for IO\n");
+	}
+	sequence.is_completed = 0;
+
+	rc = spdk_nvme_ns_cmd_write(sequence.ns, sequence.qpair, sequence.buf,
+		0, /* LBA start */
+		1, /* number of LBAs */
+		write_complete, &sequence, 0);
+	if (rc != 0) {
+		snprintf(ret->err, sizeof(ret->err),
+			"starting write i/o failed (rc: %d)", rc);
+		ret->rc = -NVMEC_ERR_NS_WRITE_FAIL;
+		return ret;
+	}
+
+	while (!sequence.is_completed) {
+		spdk_nvme_qpair_process_completions(sequence.qpair, 0);
+	}
+	spdk_nvme_ctrlr_free_io_qpair(sequence.qpair);
+
+	return ret;
+}
+
 struct ret_t *
 nvme_format(char *ctrlr_pci_addr)
 {
@@ -89,7 +194,7 @@ nvme_format(char *ctrlr_pci_addr)
 	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 	if (!cdata->oacs.format) {
 		snprintf(ret->err, sizeof(ret->err),
-			"Controller does not support Format NVM command\n");
+			"controller does not support format nvm command");
 		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
 		return ret;
 	}
@@ -104,7 +209,7 @@ nvme_format(char *ctrlr_pci_addr)
 
 	if (ns == NULL) {
 		snprintf(ret->err, sizeof(ret->err),
-			"Namespace ID %d not found", ns_id);
+			"namespace with id %d not found", ns_id);
 		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
 		return ret;
 	}

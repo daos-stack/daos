@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,9 +82,9 @@ struct cont_svc {
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	rdb_path_t		c_prop;		/* container properties KVS */
-	rdb_path_t		c_snaps;	/* Snapshots KVS */
-	rdb_path_t		c_user;		/* user attributes KVS */
+	rdb_path_t		c_prop;		/* container property KVS */
+	rdb_path_t		c_snaps;	/* snapshot KVS */
+	rdb_path_t		c_user;		/* user attribute KVS */
 };
 
 /* OID range for allocator */
@@ -106,6 +106,8 @@ struct cont_iv_capa {
 /* flattened container properties */
 struct cont_iv_prop {
 	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		cip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char		cip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	cip_layout_type;
 	uint64_t	cip_layout_ver;
 	uint64_t	cip_csum;
@@ -116,6 +118,7 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+
 	struct daos_acl	cip_acl;
 };
 
@@ -150,6 +153,15 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
 void cont_svc_put_leader(struct cont_svc *svc);
+int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		     struct cont *cont, struct container_hdl *hdl,
+		     crt_rpc_t *rpc);
+int ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		       struct cont *cont, struct container_hdl *hdl,
+		       crt_rpc_t *rpc);
+int ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		       struct cont *cont, struct container_hdl *hdl,
+		       crt_rpc_t *rpc);
 
 /*
  * srv_epoch.c

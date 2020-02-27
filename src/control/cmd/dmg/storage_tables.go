@@ -28,18 +28,17 @@ import (
 	"fmt"
 	"sort"
 
-	bytesize "github.com/inhies/go-bytesize"
-
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/dustin/go-humanize"
 )
 
 func scmModuleScanTable(ms storage.ScmModules) string {
 	buf := &bytes.Buffer{}
 
 	if len(ms) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM modules found\n")
 		return buf.String()
 	}
 
@@ -63,7 +62,7 @@ func scmModuleScanTable(ms storage.ScmModules) string {
 		row[memCtrlrTitle] = fmt.Sprint(m.ControllerID)
 		row[channelTitle] = fmt.Sprint(m.ChannelID)
 		row[slotTitle] = fmt.Sprint(m.ChannelPosition)
-		row[capacityTitle] = bytesize.New(float64(m.Capacity)).String()
+		row[capacityTitle] = humanize.IBytes(m.Capacity)
 
 		table = append(table, row)
 	}
@@ -77,7 +76,7 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	buf := &bytes.Buffer{}
 
 	if len(nss) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM namespaces found\n")
 		return buf.String()
 	}
 
@@ -93,7 +92,7 @@ func scmNsScanTable(nss storage.ScmNamespaces) string {
 	for _, ns := range nss {
 		row := txtfmt.TableRow{deviceTitle: ns.BlockDevice}
 		row[socketTitle] = fmt.Sprint(ns.NumaNode)
-		row[capacityTitle] = bytesize.New(float64(ns.Size)).String()
+		row[capacityTitle] = humanize.Bytes(ns.Size)
 
 		table = append(table, row)
 	}
@@ -107,7 +106,7 @@ func scmFormatTable(smr proto.ScmMountResults) string {
 	buf := &bytes.Buffer{}
 
 	if len(smr) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo SCM mount results\n")
 		return buf.String()
 	}
 
@@ -144,7 +143,7 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 	buf := &bytes.Buffer{}
 
 	if len(ncs) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo NVMe devices found\n")
 		return buf.String()
 	}
 
@@ -162,16 +161,11 @@ func nvmeScanTable(ncs proto.NvmeControllers) string {
 	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
 	for _, ctrlr := range ncs {
-		tCap := bytesize.New(0)
-		for _, ns := range ctrlr.Namespaces {
-			tCap += bytesize.GB * bytesize.New(float64(ns.Size))
-		}
-
 		row := txtfmt.TableRow{pciTitle: ctrlr.Pciaddr}
 		row[modelTitle] = ctrlr.Model
 		row[fwTitle] = ctrlr.Fwrev
 		row[socketTitle] = fmt.Sprint(ctrlr.Socketid)
-		row[capacityTitle] = tCap.String()
+		row[capacityTitle] = humanize.Bytes((*proto.NvmeController)(ctrlr).Capacity())
 
 		table = append(table, row)
 	}
@@ -185,7 +179,7 @@ func nvmeFormatTable(ncr proto.NvmeControllerResults) string {
 	buf := &bytes.Buffer{}
 
 	if len(ncr) == 0 {
-		fmt.Fprint(buf, "\tnone\n")
+		fmt.Fprint(buf, "\tNo NVMe devices formatted\n")
 		return buf.String()
 	}
 

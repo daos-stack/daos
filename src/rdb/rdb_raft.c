@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -711,13 +711,13 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 #endif
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
 			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
-			      io->ui_iods, io->ui_sgls);
+			      io->ui_iods, NULL, io->ui_sgls);
 }
 
 static int
 rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data, int index)
 {
-	struct dss_enum_arg	   arg;
+	struct dss_enum_arg	   arg = { 0 };
 	struct rdb_raft_unpack_arg unpack_arg;
 	d_sg_list_t		   sgl;
 

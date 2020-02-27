@@ -74,7 +74,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	iod.iod_nr = 1;
 	iod.iod_type = type;
 	iod.iod_size = iod_size;
-	iod.iod_recxs = recx;
+	iod.iod_recxs = (type == DAOS_IOD_SINGLE) ? NULL : recx;
 
 	if (arg->ta_flags & TF_PUNCH) {
 		memset(buf, 0, buf_len);

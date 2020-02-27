@@ -57,11 +57,11 @@ var (
 	MockScmModules    = ScmModules{MockScmModule()}
 	MockModuleResults = ScmModuleResults{
 		&ctlpb.ScmModuleResult{
-			Loc:   &ctlpb.ScmModule_Location{},
-			State: &MockState,
+			Physicalid: 1234,
+			State:      &MockState,
 		},
 	}
-	MockScmNamespaces = ScmNamespaces{MockPmemDevice()}
+	MockScmNamespaces = ScmNamespaces{MockScmNamespace()}
 	MockMounts        = ScmMounts{MockScmMount()}
 	MockMountResults  = ScmMountResults{
 		&ctlpb.ScmMountResult{
@@ -138,9 +138,9 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageS
 			Ctrlrs: m.cfg.nvmeControllers,
 		},
 		Scm: &ctlpb.ScanScmResp{
-			State:   &MockSuccessState,
-			Modules: m.cfg.scmModules,
-			Pmems:   m.cfg.scmNamespaces,
+			State:      &MockSuccessState,
+			Modules:    m.cfg.scmModules,
+			Namespaces: m.cfg.scmNamespaces,
 		},
 	}, m.cfg.scanRet
 }
@@ -310,7 +310,11 @@ func (m *mockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.R
 	return &mgmtpb.RanksResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) KillRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+func (m *mockMgmtSvcClient) StopRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
 	return &mgmtpb.RanksResp{}, nil
 }
 
@@ -476,17 +480,19 @@ func defaultMockConnect(log logging.Logger) Connect {
 
 // MockScanResp mocks scan results from scm and nvme for multiple servers.
 // Each result indicates success or failure through presence of Err.
-func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses) *StorageScanResp {
+func MockScanResp(cs *NvmeControllers, ms *ScmModules, nss *ScmNamespaces, addrs Addresses) *StorageScanResp {
 	nvmeResults := make(NvmeScanResults)
 	scmResults := make(ScmScanResults)
 
 	for _, addr := range addrs {
-		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: cs}
+		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: *cs}
 
-		scmResults[addr] = &ScmScanResult{
-			Modules:    scmModulesFromPB(ms),
-			Namespaces: scmNamespacesFromPB(nss),
-		}
+		sResult := &ScmScanResult{}
+		modules, _ := ms.ToNative()
+		namespaces, _ := nss.ToNative()
+		sResult.Modules = modules
+		sResult.Namespaces = namespaces
+		scmResults[addr] = sResult
 	}
 
 	sort.Strings(addrs)

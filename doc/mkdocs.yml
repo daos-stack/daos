@@ -16,7 +16,7 @@ theme:
     collapse_by_default: false
 
 extra:
-    version: v0.8
+    version: v1.1
 
 docs_dir: ./
 

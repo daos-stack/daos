@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
+
+#define	CSUM_NO_CHUNK -1
 
 /**
  * -----------------------------------------------------------
@@ -64,6 +66,33 @@ enum DAOS_CSUM_TYPE {
 	CSUM_TYPE_ISAL_CRC64_REFL = 3,
 
 	CSUM_TYPE_END = 4,
+};
+
+struct dcs_csum_info {
+	/** buffer to store the checksums */
+	uint8_t		*cs_csum;
+	/** number of checksums stored in buffer. Only 1 for SV */
+	uint32_t	 cs_nr;
+	/** type of checksum */
+	uint16_t	 cs_type;
+	/** length of each checksum in bytes */
+	uint16_t	 cs_len;
+	/** length of entire buffer (cs_csum). buf_len can be larger than
+	*  nr * len, but never smaller
+	*/
+	uint32_t	 cs_buf_len;
+	/** bytes of data each checksum verifies (if value type is array) */
+	uint32_t	 cs_chunksize;
+};
+
+
+struct dcs_iod_csums {
+	/** akey checksum */
+	struct dcs_csum_info	 ic_akey;
+	/** csum for the data. will be 1 for each recx for arrays */
+	struct dcs_csum_info	*ic_data;
+	/** number of dcs_csum_info in ic_data. should be 1 for SV */
+	uint32_t		 ic_nr;
 };
 
 /** Lookup the appropriate CSUM_TYPE given daos container property */
@@ -184,8 +213,9 @@ int
 daos_csummer_finish(struct daos_csummer *obj);
 
 bool
-daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
-			 daos_csum_buf_t *b);
+daos_csummer_compare_csum_info(struct daos_csummer *obj,
+			       struct dcs_csum_info *a,
+			       struct dcs_csum_info *b);
 
 bool
 daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
@@ -193,28 +223,48 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 
 /**
  * Using the data from the sgl, calculates the checksums
- * for each extent. Will allocate memory for the daos_csum_buf_t structures and
- * the memory buffer for the checksums with in the daos_csum_buf_t.
- * When the checksums are not needed anymore, daos_csummer_destroy_csum_buf
- * should be called on each daos_csum_buf_t
+ * for each extent. Will allocate memory for the struct daos_csum_info
+ * structures and the memory buffer for the checksums with in the struct
+ * daos_csum_info.
+ * When the checksums are not needed anymore, daos_csummer_free_ic
+ * should be called on each struct daos_csum_info
  *
  * @param[in]	obj		the daos_csummer object
- * @param[in]	sgl		Scatter Gather List with the data to be used
+ * @param[in]	sgls		Scatter Gather Lists with the data to be used
  *				for the extents \a recxs. The total data
- *				length of the sgl should be the same as the sum
- *				of the lengths of all recxs
- * @param[in]	iod		I/O descriptor describing the data in sgl.
- *				Note: While iod has daos_csum_buf_t's, they
- *				are not updated in this function. The
- *				calculated checksums will be put into csum_bufs
- * @param[out]	pcsum_bufs	csum_bufs for the checksums created for each
- *				extent
+ *				length of each  sgl should be the same as the
+ *				sum of the lengths of all recxs. There should
+ *				be 1 sgl for each iod.
+ * @param[in]	iods		I/O descriptors describing the data in sgls.
+ * @param[in]	nr		Number of iods and sgls as well as number of
+ *				daos_iod_csums that will be created.
+ * @param[in]	akey_only	Only calcualte the checksum for the iod name
+ * @param[out]	p_iods_csums	Pointer that will reference the structures
+ *				to hold the csums described by the iods. In case
+ *				of error, memory will be freed internally to
+ *				this function.
  *
  * @return			0 for success, or an error code
  */
 int
-daos_csummer_calc(struct daos_csummer *obj, d_sg_list_t *sgl,
-		  daos_iod_t *iod, daos_csum_buf_t **pcsum_bufs);
+daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
+		       daos_iod_t *iods, uint32_t nr, bool akey_only,
+		       struct dcs_iod_csums **p_iods_csums);
+
+/**
+ * Calculate a checksum for a daos key. Memory will be allocated for the
+ * checksum info which must be freed by calling free_cis.
+ *
+ * @param[in]	csummer		the daos_csummer object
+ * @param[in]	key		Key from which the checksum is derived
+ * @param[out]	p_dcb		checksum buffer created. In case of error,
+ *				memory will be freed internally to this function
+ *
+ * @return			0 for success, or an error code.
+ */
+int
+daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
+		      struct dcs_csum_info **p_csum);
 
 /**
  * Using the data from the sgl, calculates the checksums for each extent and
@@ -229,130 +279,132 @@ daos_csummer_calc(struct daos_csummer *obj, d_sg_list_t *sgl,
  *			length of the sgl should be the same as the sum
  *			of the lengths of all recxs
  *
- * @return		0 for success, -DER_IO if corruption is detected
+ * @return		0 for success, -DER_CSUM if corruption is detected
  */
 int
-daos_csummer_verify(struct daos_csummer *obj,
-		    daos_iod_t *iod, d_sg_list_t *sgl);
+daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
+			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csums);
 
 /**
- * Allocate memory for a list of  daos_csum_buf_t structures and the
- * memory buffer for csum within the structure. Based on info in IOD. Will
- * also initialize the daos_csum_buf_t to appropriate values.
- * daos_csummer_free_csum_buf should be called when done with the
- * daos_csum_buf_t's
+ * Verify a single buffer to a checksum
+ *
+ * @param obj		the daos_csummer obj
+ * @param key		I/O vector of the key
+ * @param dcb		The dcs_csum_info that describes the checksum
+ *
+ * @return		0 for success, -DER_CSUM if corruption is detected
+ */
+int
+daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
+			struct dcs_csum_info *csum);
+
+/**
+ * Calculate the needed memory for all the structures that will
+ * store the checksums for the iods.
  *
  * @param[in]	obj		the daos_csummer object
- * @param[in]	iods		list of iods used as reference to determine
- *				num of csum desc to create
+ * @param[in]	iods		list of iods
  * @param[in]	nr		number of iods
- * @param[out]	p_csum		csum_bufs for the checksums created for each.
- *				on error, p_csum will not be allocated.
- * @param[out]	p_dcbs_nr	number of csum descs created
+ * @param[in]	akey_only	if true, don't include the csums for the data
+ *				(useful on client side fetch when only akey
+ *				csum is needed)
  *
  * @return			0 for success, or an error code
  */
-int
-daos_csummer_alloc_dcbs(struct daos_csummer *obj,
-			daos_iod_t *iods, uint32_t nr,
-			daos_csum_buf_t **p_dcbs, uint32_t *p_dcbs_nr);
+uint64_t
+daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
+			     uint32_t nr, bool akey_only);
 
-/** Destroy the csum buf and memory allocated for checksums */
+/**
+ * Allocate the checksum structures needed for the iods. This will also
+ * setup the structures appropriately, so that everything is set except
+ * the actual checksums
+ *
+ * @param[in]	obj		the daos_csummer obj
+ * @param[in]	iods		list of iods
+ * @param[in]	nr		number of iods
+ * @param[in]	p_iods_csums	pointer that will reference the
+ *				the memory allocated
+ * @return			number of iod_csums allocated, or
+ *				negative if error
+ */
+int
+daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
+			      uint32_t nr, bool akey_only,
+			      struct dcs_iod_csums **p_iods_csums);
+
+/** Destroy the iods csums */
 void
-daos_csummer_free_dcbs(struct daos_csummer *obj,
-		       daos_csum_buf_t **p_cds);
+daos_csummer_free_ic(struct daos_csummer *obj,
+		     struct dcs_iod_csums **p_cds);
+
+/** Destroy the csum infos allocated by daos_csummer_calc_key */
+void
+daos_csummer_free_ci(struct daos_csummer *obj,
+		     struct dcs_csum_info **p_cis);
 
 /**
  * -----------------------------------------------------------------------------
- * daos_csum_buf_t Functions
+ * struct dcs_iod_csums Functions
+ * -----------------------------------------------------------------------------
+ */
+uint8_t *
+ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
+	    uint32_t csum_idx);
+
+/**
+ * -----------------------------------------------------------------------------
+ * struct dcs_csum_info Functions
  * -----------------------------------------------------------------------------
  */
 
-/** Setup the \a daos_csum_buf_t with the checksum buffer,
+/** Setup the \a struct daos_csum_info with the checksum buffer,
  * buffer size, csum size, number of checksums, and the chunksize the
  * checksum represents
  */
 void
-dcb_set(daos_csum_buf_t *csum_buf, void *buf,
-	uint32_t csum_buf_size,
-	uint16_t csum_size,
-	uint32_t csum_count,
-	uint32_t chunksize);
+ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
+	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
+	uint16_t type);
 
 /** Set the csum buf to a NULL value */
 void
-dcb_set_null(daos_csum_buf_t *csum_buf);
+ci_set_null(struct dcs_csum_info *csum_buf);
 
-/** Is the \a daos_csum_buf_t setup appropriately to be used */
+/** Is the \a struct daos_csum_info setup appropriately to be used */
 bool
-dcb_is_valid(const daos_csum_buf_t *csum);
+ci_is_valid(const struct dcs_csum_info *csum);
 
 /** insert a csum into a dcb at a specific index */
 void
-dcb_insert(daos_csum_buf_t *dcb, int idx, uint8_t *csum_buf, size_t len);
+ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len);
 
 /** Returns the index of the checksum provided the offset into the data
  * the checksums are derived from.
  */
 uint32_t
-dcb_off2idx(daos_csum_buf_t *csum_buf, uint32_t offset_bytes);
+ci_off2idx(struct dcs_csum_info *csum_buf, uint32_t offset_bytes);
 
 /** Returns the appropriate checksum given the index of the checksum. */
 uint8_t *
-dcb_idx2csum(daos_csum_buf_t *csum_buf, uint32_t idx);
+ci_idx2csum(struct dcs_csum_info *csum_buf, uint32_t idx);
 
 /** Returns the appropriate checksum given the data offset based on chunk
  *	information.
  */
 uint8_t *
-dcb_off2csum(daos_csum_buf_t *csum_buf, uint32_t offset);
+ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset);
+
+/**
+ * -----------------------------------------------------------------------------
+ * Helper Functions
+ * -----------------------------------------------------------------------------
+ */
 
 /** Gets the number checksums needed given a record extent.  */
 uint32_t
 daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 		      uint32_t chunk_size);
-
-/**
- * A helper function to count the needed number of daos_csum_buf_t's and total
- * checksums all will have. This is useful for when allocating memory for
- * a collection of iods.
- *
- * @param iods[in]		list of iods
- * @param nr[in]		number of iods
- * @param chunksize[in]		chunk size is used to determine num
- *				of csums needed
- * @param p_dcb_nr[out]		number of daos_csum_buf_t's
- * @param p_csum_nr[out]	number of total checksums for all p_dcb_nr
- */
-void
-daos_iods_count_needed_csum(daos_iod_t *iods, int nr, int chunksize,
-			    uint32_t *p_dcb_nr, uint32_t *p_csum_nr);
-
-/**
- * take a list of daos_csum_buf_ts and assign to iods.csum, making sure each
- * iod has the appropriate number of daos_csum_buf_t for an iod's recxs.
- *
- * @param iods		list of iods
- * @param iods_nr	number of iods
- * @param dcbs		list of dcbs - there should be one dcb for each recx in
- *			all the iods
- * @param dcbs_nr	number of dcbs
- */
-void
-daos_iods_link_dcbs(daos_iod_t *iods, uint32_t iods_nr, daos_csum_buf_t *dcbs,
-		    uint32_t dcbs_nr);
-
-/**
- * Remove the daos_csum_buf_t's from the iods after they're not needed anymore.
- * This would be the case when the data has been verified with the checksums
- * on the client. It should be done in conjunction with freeing the
- * daos_csum_buf_t's resources.
- *
- * @param iods
- * @param iods_nr
- */
-void
-daos_iods_unlink_dcbs(daos_iod_t *iods, uint32_t iods_nr);
 
 
 /** Helper function for dividing a range (lo-hi) into number of chunks, using
@@ -362,25 +414,16 @@ uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
 
-/**
- * A facade for verifying data (represented by an sgl) is not corrupt. Uses the
- * checksums stored in the iod to compare against calculated checksums.
- *
- * @param iod	I/O Descriptor which contains checksums
- * @param sgl	Scatter Gather List pointing to the data to be verified
- *
- * @return	0 for success, -DER_IO if corruption is detected
- */
-int
-daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl);
-
 static inline bool
 csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
 {
-	/** Only support ARRAY Type currently */
-	return iod->iod_type == DAOS_IOD_ARRAY &&
-	       iod->iod_size > 0 &&
-	       iod->iod_size <= chunksize;
+	/**
+	 * iod_size must be greater than 1 and chunksize must be larger
+	 * than iod size if it's an array type. Doesn't support very large
+	 * record size yet for array types
+	 */
+	return iod->iod_size > 0 &&
+	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
 }
 
 /**

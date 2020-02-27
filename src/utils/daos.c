@@ -80,6 +80,14 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
+	else if (strcmp(str, "get-acl") == 0)
+		return CONT_GET_ACL;
+	else if (strcmp(str, "overwrite-acl") == 0)
+		return CONT_OVERWRITE_ACL;
+	else if (strcmp(str, "update-acl") == 0)
+		return CONT_UPDATE_ACL;
+	else if (strcmp(str, "delete-acl") == 0)
+		return CONT_DELETE_ACL;
 	return -1;
 }
 
@@ -461,6 +469,13 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"oid",		required_argument,	NULL,	'i'},
 		{"force",	no_argument,		NULL,	'f'},
 		{"properties",	required_argument,	NULL,	DAOS_PROPERTIES_OPTION},
+		{"outfile",	required_argument,	NULL,	'O'},
+		{"verbose",	no_argument,		NULL,	'V'},
+		{"acl-file",	required_argument,	NULL,	'A'},
+		{"entry",	required_argument,	NULL,	'E'},
+		{"user",	required_argument,	NULL,	'u'},
+		{"group",	required_argument,	NULL,	'g'},
+		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -625,8 +640,40 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			}
 			break;
 		case 'f':
-			/* only applies to cont destroy */
-			ap->force_destroy = 1;
+			ap->force = 1;
+			break;
+		case 'O':
+			D_STRNDUP(ap->outfile, optarg, strlen(optarg));
+			if (ap->outfile == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'V':
+			ap->verbose = true;
+			break;
+		case 'A':
+			D_STRNDUP(ap->aclfile, optarg, strlen(optarg));
+			if (ap->aclfile == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'E':
+			D_STRNDUP(ap->entry, optarg, strlen(optarg));
+			if (ap->entry == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'u':
+			D_STRNDUP(ap->user, optarg, strlen(optarg));
+			if (ap->user == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'g':
+			D_STRNDUP(ap->group, optarg, strlen(optarg));
+			if (ap->group == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'P':
+			D_STRNDUP(ap->principal, optarg, strlen(optarg));
+			if (ap->principal == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case DAOS_PROPERTIES_OPTION:
 			/* parse properties to be set at cont create time */
@@ -705,6 +752,14 @@ out_free:
 		ap->props->dpp_nr = DAOS_PROP_ENTRIES_MAX_NR;
 		daos_prop_free(ap->props);
 	}
+	if (ap->outfile != NULL)
+		D_FREE(ap->outfile);
+	if (ap->aclfile != NULL)
+		D_FREE(ap->aclfile);
+	if (ap->entry != NULL)
+		D_FREE(ap->entry);
+	if (ap->principal != NULL)
+		D_FREE(ap->principal);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -875,6 +930,18 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
 		break;
+	case CONT_GET_ACL:
+		rc = cont_get_acl_hdlr(ap);
+		break;
+	case CONT_OVERWRITE_ACL:
+		rc = cont_overwrite_acl_hdlr(ap);
+		break;
+	case CONT_UPDATE_ACL:
+		rc = cont_update_acl_hdlr(ap);
+		break;
+	case CONT_DELETE_ACL:
+		rc = cont_delete_acl_hdlr(ap);
+		break;
 	default:
 		break;
 	}
@@ -1039,6 +1106,10 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-objects     list all objects in container\n"
 "	  list-obj\n"
 "	  query            query a container\n"
+"	  get-acl          get a container's ACL\n"
+"	  overwrite-acl    replace a container's ACL\n"
+"	  update-acl       add/modify entries in a container's ACL\n"
+"	  delete-acl       delete an entry from a container's ACL\n"
 "	  stat             get container statistics\n"
 "	  list-attrs       list container user-defined attributes\n"
 "	  del-attr         delete container user-defined attribute\n"
@@ -1093,6 +1164,13 @@ help_hdlr(struct cmd_args_s *ap)
 "			   cksum_size can be any size\n"
 "			   srv_cksum values can be on, off\n"
 "			   rf supported values are [0-4]\n"
+"	--acl-file=PATH    input file containing ACL\n"
+"	--user=ID          user who will own the container.\n"
+"			   format: username@[domain]\n"
+"			   default is the effective user\n"
+"	--group=ID         group who will own the container.\n"
+"			   format: groupname@[domain]\n"
+"			   default is the effective group\n"
 "container options (destroy):\n"
 "	--force            destroy container regardless of state\n"
 "container options (query, and all commands except create):\n"
@@ -1106,7 +1184,17 @@ help_hdlr(struct cmd_args_s *ap)
 "container options (snapshot and rollback-related):\n"
 "	--snap=NAME        container snapshot (create/destroy-snap, rollback)\n"
 "	--epc=EPOCHNUM     container epoch (destroy-snap, rollback)\n"
-"	--eprange=B-E      container epoch range (destroy-snap)\n");
+"	--eprange=B-E      container epoch range (destroy-snap)\n"
+"container options (ACL-related):\n"
+"	--acl-file=PATH    input file containing ACL (overwrite-acl, "
+"			   update-acl)\n"
+"	--entry=ACE        add or modify a single ACL entry (update-acl)\n"
+"	--principal=ID     principal of entry (delete-acl)\n"
+"			   for users: u:name@[domain]\n"
+"			   for groups: g:name@[domain]\n"
+"			   special principals: OWNER@, GROUP@, EVERYONE@\n"
+"	--verbose          verbose mode (get-acl)\n"
+"	--outfile=PATH     write ACL to file (get-acl)\n");
 
 	fprintf(stream, "\n"
 "object (obj) commands:\n"

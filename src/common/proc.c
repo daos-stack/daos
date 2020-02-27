@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,13 +89,18 @@ crt_proc_prop_entries(crt_proc_t proc, daos_prop_t *prop)
 		if (entry->dpe_type == DAOS_PROP_PO_LABEL ||
 		    entry->dpe_type == DAOS_PROP_CO_LABEL ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER ||
-		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP)
+		    entry->dpe_type == DAOS_PROP_CO_OWNER ||
+		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP ||
+		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP)
 			rc = crt_proc_d_string_t(proc, &entry->dpe_str);
 		else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
 			 entry->dpe_type == DAOS_PROP_CO_ACL)
 			rc = crt_proc_struct_daos_acl(proc,
 						      (struct daos_acl **)
 						      &entry->dpe_val_ptr);
+		else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
+			rc = crt_proc_d_rank_list_t(proc,
+					(d_rank_list_t **)&entry->dpe_val_ptr);
 		else
 			rc = crt_proc_uint64_t(proc, &entry->dpe_val);
 		if (rc)

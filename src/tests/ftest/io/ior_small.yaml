@@ -16,20 +16,28 @@ server_config:
     name: daos_server
     servers:
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        scm_size: 3000000000
-        nvme_size: 9000000000
-    createsvc:
-        svcn: 1
+    mode: 146
+    name: daos_server
+    scm_size: 3000000000
+    nvme_size: 9000000000
+    svcn: 1
+    control_method: dmg
+# Container Properties
+# 1. API used for creating container [POSIX]
+# 2. Checksum_Enable : True/False
+# 3. Server Verify : True/False
+# 4. Checksum Type : 100 (default).
+#                    1: CRC16, 2: CRC32
+#                    3: CRC64, 4: SHA1
+# 5. Chunk Size: 0 (default)
+#                16384: 16K
+# DAOS-4173: Improvement in this area required.
+container:
+    container_properties: [POSIX, True, True, 100, 0]
 ior:
     client_processes:
         np_16:
