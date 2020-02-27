@@ -77,12 +77,12 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
                             sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
-                            sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
-                            sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
-                            cat /usr/etc/daos_server.yml
-                            cat /usr/etc/daos_agent.yml
+                            sudo cp /tmp/daos_server_baseline.yaml /etc/daos/daos_server.yml
+                            sudo cp /tmp/daos_agent_baseline.yaml /etc/daos/daos_agent.yml
+                            cat /etc/daos/daos_server.yml
+                            cat /etc/daos/daos_agent.yml
                             module load mpi/openmpi3-x86_64
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -i --recreate-superblocks
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug --config /etc/daos/daos_server.yml start -t 1 -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -90,7 +90,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                                 echo \"Server stdout: \\\$line\"
                             done
                             echo \"Server started!\"
-                            daos_agent -o /usr/etc/daos_agent.yml -i &
+                            daos_agent -o /etc/daos/daos_agent.yml -i &
                             AGENT_PID=\\\$!
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             orterun -np 1 -x OFI_INTERFACE=eth0 daos_test -m'''
