@@ -421,11 +421,59 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 }
 
 int
+test_teardown_cont_hdl(test_arg_t *arg)
+{
+	int	rc = 0;
+	int	rc_reduce = 0;
+
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	arg->coh = DAOS_HDL_INVAL;
+	arg->setup_state = SETUP_CONT_CREATE;
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return rc;
+	}
+
+	return rc;
+}
+
+int
+test_teardown_cont(test_arg_t *arg)
+{
+	int	rc = 0;
+
+	while (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+				       NULL);
+		if (rc == -DER_BUSY) {
+			print_message("Container is busy, wait\n");
+			sleep(1);
+			continue;
+		}
+		break;
+	}
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		print_message("failed to destroy container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+
+	uuid_clear(arg->co_uuid);
+	arg->setup_state = SETUP_POOL_CONNECT;
+	return rc;
+}
+
+int
 test_teardown(void **state)
 {
 	test_arg_t	*arg = *state;
 	int		 rc = 0;
-	int              rc_reduce = 0;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -437,33 +485,13 @@ test_teardown(void **state)
 		MPI_Barrier(MPI_COMM_WORLD);
 
 	if (!daos_handle_is_inval(arg->coh)) {
-		rc = daos_cont_close(arg->coh, NULL);
-		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_reduce;
-		}
-		arg->coh = DAOS_HDL_INVAL;
-		if (rc) {
-			print_message("failed to close container "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		rc = test_teardown_cont_hdl(arg);
+		if (rc)
 			return rc;
-		}
 	}
 
 	if (!uuid_is_null(arg->co_uuid)) {
-		while (arg->myrank == 0) {
-			rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
-					       NULL);
-			if (rc == -DER_BUSY) {
-				print_message("Container is busy, wait\n");
-				sleep(1);
-				continue;
-			}
-			break;
-		}
-		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		rc = test_teardown_cont(arg);
 		if (rc) {
 			/* The container might be left some reference count
 			 * during rebuild test due to "hacky"exclude triggering
@@ -474,8 +502,6 @@ test_teardown(void **state)
 			 * so let's destory the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
-			print_message("failed to destroy container "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->co_uuid), rc);
 			goto free;
 		}
 	}
@@ -886,11 +912,9 @@ daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 	daos_exclude_server(pool_uuid, grp, svc, rank);
 }
 
-
-daos_prop_t *
-get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
+struct daos_acl *
+get_daos_acl_with_owner_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
 	struct daos_ace	*owner_ace;
 
@@ -902,10 +926,21 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	acl = daos_acl_create(&owner_ace, 1);
 	assert_non_null(acl);
 
+	daos_ace_free(owner_ace);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+
+	acl = get_daos_acl_with_owner_perms(perms);
+
 	prop = daos_prop_alloc(1);
 	prop->dpp_entries[0].dpe_type = type;
 	prop->dpp_entries[0].dpe_val_ptr = acl;
 
-	daos_ace_free(owner_ace);
 	return prop;
 }
