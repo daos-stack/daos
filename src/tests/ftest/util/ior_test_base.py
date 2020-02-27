@@ -158,7 +158,7 @@ class IorTestBase(TestWithServers):
 
         return out
 
-    def update_ior_cmd_with_pool(self):
+    def update_ior_cmd_with_pool(self, cont_uuid=None):
         """Update ior_cmd with pool
         """
         # Create a pool if one does not already exist

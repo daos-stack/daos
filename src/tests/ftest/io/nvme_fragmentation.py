@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2019-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ class IorSmall(IorTestBase):
         """Jira ID: DAOS-2332.
 
         Test Description:
-            Purpose of this test is to verify there is no Fragmentation 
+            Purpose of this test is to verify there is no Fragmentation
             after doing some IO write/delete operation for ~hour.
 
         Use case:
@@ -91,3 +91,4 @@ class IorSmall(IorTestBase):
             self.container.uuid = container_info[key]
             self.container.destroy()
         self.pool.display_pool_daos_space("Pool space at the End")
+

@@ -33,7 +33,7 @@ server_config:
       bdev_list: ["0000:da:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1    
+      scm_mount: /mnt/daos1
 pool:
     mode: 146
     name: daos_server
