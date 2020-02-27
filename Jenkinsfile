@@ -1081,7 +1081,6 @@ pipeline {
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
@@ -1345,7 +1344,6 @@ pipeline {
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
