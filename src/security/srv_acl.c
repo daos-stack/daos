@@ -715,3 +715,39 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 
 	return (capas & CONT_CAPA_DELETE) != 0;
 }
+
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_OWNER) != 0;
+}
+
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
+}
