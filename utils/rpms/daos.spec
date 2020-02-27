@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.9.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -109,6 +109,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
+Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
@@ -334,6 +335,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-3
+- daos-server requires daos-client (same version)
+
 * Wed Feb 12 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-2
 - Remove undefine _missing_build_ids_terminate_build
 
