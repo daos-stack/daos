@@ -102,7 +102,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
                     test_permission = ""
                 if user_types[ind] == "group":
                     group_acl = test_permission
-            #"A::OWNER@:" + permission
             test_acl_entries[ind] = default_acl_entries[ind] + test_permission
         #union of ownergroup and group permission
         if user_type == "ownergroup":
