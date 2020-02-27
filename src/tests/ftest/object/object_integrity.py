@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,20 +21,18 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
 import ctypes
 import time
 import avocado
 import random
 
-from pydaos.raw import (DaosPool, DaosContainer, IORequest,
-                        DaosObj, DaosApiError)
-from apricot import skipForTicket, TestWithServers
+from pydaos.raw import IORequest, DaosObj, DaosApiError
+from apricot import TestWithServers
 
 
 class ObjectDataValidation(TestWithServers):
-    """
+    """Object data validation test cases.
+
     Test Class Description:
         Tests that create Different length records,
         Disconnect the pool/container and reconnect,
@@ -56,23 +54,13 @@ class ObjectDataValidation(TestWithServers):
     def setUp(self):
         """Set up a ObjectDataValidation object."""
         super(ObjectDataValidation, self).setUp()
-
         self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.pool = DaosPool(self.context)
-        self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
-                         os.geteuid(),
-                         os.getegid(),
-                         self.params.get("size", '/run/pool/createsize/*'),
-                         self.params.get("setname", '/run/pool/createset/*'),
-                         None)
-        self.pool.connect(2)
-
-        self.container = DaosContainer(self.context)
-        self.container.create(self.pool.handle)
+        self.add_pool()
+        self.add_container(self.pool)
         self.container.open()
 
         self.obj = DaosObj(self.context, self.container)
@@ -100,17 +88,21 @@ class ObjectDataValidation(TestWithServers):
 
     @avocado.fail_on(DaosApiError)
     def test_invalid_tx_commit_close(self):
-        """
+        """Test cases.
+
         Test ID:
             (1)DAOS-1346: Verify commit tx bad parameter behavior.
             (2)DAOS-1343: Verify tx_close bad parameter behavior.
             (3)DAOS-1342: Verify tx_close through daos_api.
             (4)DAOS-1338: Add and verify tx_abort through daos_api.
             (5)DAOS-1339: Verify tx_abort bad parameter behavior.
+
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=all,object,full_regression,small,invalid_tx
+
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectintegrity,invalid_tx
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
@@ -124,7 +116,7 @@ class ObjectDataValidation(TestWithServers):
         c_value = ctypes.create_string_buffer(indata)
         c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
         try:
-            new_transaction = self.container.get_new_tx()
+            new_transaction = self.container.container.get_new_tx()
         except DaosApiError as excep:
             # initial container get_new_tx failed, skip rest of the test
             self.fail("##container get_new_tx failed: {}".format(excep))
@@ -134,7 +126,7 @@ class ObjectDataValidation(TestWithServers):
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
                                  new_transaction)
         try:
-            self.container.commit_tx(invalid_transaction)
+            self.container.container.commit_tx(invalid_transaction)
             self.fail(
                 "##(1.1)Container.commit_tx passing with invalid handle")
         except DaosApiError as excep:
@@ -146,7 +138,7 @@ class ObjectDataValidation(TestWithServers):
                     "##(1.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
         try:
-            self.container.close_tx(invalid_transaction)
+            self.container.container.close_tx(invalid_transaction)
             self.fail(
                 "##(2.1)Container.close_tx passing with invalid handle")
         except DaosApiError as excep:
@@ -158,14 +150,14 @@ class ObjectDataValidation(TestWithServers):
                     "##(2.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
         try:
-            self.container.close_tx(new_transaction)
+            self.container.container.close_tx(new_transaction)
             self.log.info("==(3)container.close_tx test passed.")
         except DaosApiError as excep:
             self.log.info(str(excep))
             self.fail("##(3)Failed on close_tx.")
 
         try:
-            self.container.abort_tx(invalid_transaction)
+            self.container.container.abort_tx(invalid_transaction)
             self.fail(
                 "##(4.1)Container.abort_tx passing with invalid handle")
         except DaosApiError as excep:
@@ -179,7 +171,7 @@ class ObjectDataValidation(TestWithServers):
 
         # Try to abort the transaction which already closed.
         try:
-            self.container.abort_tx(new_transaction)
+            self.container.container.abort_tx(new_transaction)
             self.fail(
                 "##(5.1)Container.abort_tx passing with a closed handle")
         except DaosApiError as excep:
@@ -193,27 +185,29 @@ class ObjectDataValidation(TestWithServers):
 
         # open another transaction for abort test
         try:
-            new_transaction2 = self.container.get_new_tx()
+            new_transaction2 = self.container.container.get_new_tx()
         except DaosApiError as excep:
             self.fail("##(6.1)container get_new_tx failed: {}".format(excep))
         self.log.info("==new_transaction2=     %s", new_transaction2)
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
                                  new_transaction2)
         try:
-            self.container.abort_tx(new_transaction2)
+            self.container.container.abort_tx(new_transaction2)
             self.log.info("==(6)container.abort_tx test passed.")
         except DaosApiError as excep:
             self.log.info(str(excep))
             self.fail("##(6.2)Failed on abort_tx.")
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_single_object_validation(self):
-        """
-        Test ID: DAOS-707
-        Test Description: Write Avocado Test to verify single data after
-                          pool/container disconnect/reconnect.
-        :avocado: tags=all,object,full_regression,small,single_object
+        """Test ID: DAOS-707.
+
+        Test Description:
+            Write Avocado Test to verify single data after pool/container
+            disconnect/reconnect.
+
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectintegrity,single_object
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -261,13 +255,15 @@ class ObjectDataValidation(TestWithServers):
                     record_index = 0
 
     @avocado.fail_on(DaosApiError)
-    @skipForTicket("DAOS-3208")
     def test_array_object_validation(self):
-        """
-        Test ID: DAOS-707
-        Test Description: Write Avocado Test to verify Array data after
-                          pool/container disconnect/reconnect.
-        :avocado: tags=all,object,full_regression,small,array_object
+        """Test ID: DAOS-707.
+
+        Test Description:
+            Write Avocado Test to verify Array data after pool/container
+            disconnect/reconnect.
+
+        :avocado: tags=all,full_regression,small
+        :avocado: tags=object,objectintegrity,array_object
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0

@@ -105,11 +105,18 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
+
+        # Used to drop privileges before starting data plane
+        # (if started as root to perform hardware provisioning)
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
+        # Defines the number of single server config parameters to define in
+        # the yaml file
+        self.servers_per_host = BasicParameter(None)
+
         # Single server config parameters
-        self.server_params = [self.PerServerYamlParameters()]
+        self.server_params = []
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -121,6 +128,15 @@ class DaosServerYamlParameters(YamlParameters):
             test (Test): avocado Test object
         """
         super(DaosServerYamlParameters, self).get_params(test)
+
+        # Create the requested number of single server parameters
+        if isinstance(self.servers_per_host.value, int):
+            self.server_params = [
+                self.PerServerYamlParameters(index)
+                for index in range(self.servers_per_host.value)]
+        else:
+            self.server_params = [self.PerServerYamlParameters()]
+
         for server_params in self.server_params:
             server_params.get_params(test)
 

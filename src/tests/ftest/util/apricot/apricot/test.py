@@ -246,8 +246,10 @@ class TestWithServers(TestWithoutServers):
         # Kill commands left running on the hosts (from a previous test) before
         # starting any tests.  Currently only handles 'orterun' processes, but
         # can be expanded.
-        self.stop_leftover_processes(
-            ["orterun"], self.hostlist_servers + self.hostlist_clients)
+        hosts = self.hostlist_servers
+        if self.hostlist_clients:
+            hosts = self.hostlist_servers + self.hostlist_clients
+        self.stop_leftover_processes(["orterun"], hosts)
 
         # Start the clients (agents)
         if self.setup_start_agents:

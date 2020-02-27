@@ -243,6 +243,11 @@ class EvictTests(TestWithServers):
                         "Pool # %s was unable to query pool info due to "
                         "expected invalid handle error (-1002):\n\t%s",
                         count+1, error)
+
+                    # Remove the last container to avoid expected destroy error
+                    # in tearDown() due to evicted pool
+                    self.container.pop()
+
                 # unexpected error from pool_query
                 else:
                     self.fail(

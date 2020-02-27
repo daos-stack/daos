@@ -41,6 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 
+def daos_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -58,7 +59,7 @@ def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
                       fi
                       nodelist=(${NODELIST//,/ })
-                      src/tests/ftest/config_file_gen.py -n $(hostname -s) -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
+                      src/tests/ftest/config_file_gen.py -n ${nodelist[0]} -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
                       scp -i ci_key /tmp/daos_agent.yml jenkins@${nodelist[0]}:/tmp
                       scp -i ci_key /tmp/daos_server.yml jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
@@ -143,7 +144,6 @@ pipeline {
                 allOf {
                     not { branch 'weekly-testing' }
                     expression { env.CHANGE_TARGET != 'weekly-testing' }
-                    expression { return env.QUICKBUILD == '1' }
                 }
             }
             parallel {
@@ -258,6 +258,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -337,6 +338,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -1078,7 +1080,6 @@ pipeline {
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
@@ -1342,7 +1343,6 @@ pipeline {
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                   arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                  arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                   if [ -n "$arts" ]; then
                                       mv $(echo $arts | tr '\n' ' ') "Functional/"
                                   fi'''
@@ -1377,7 +1377,9 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-test-centos-rpms').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1405,7 +1407,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: "master"
+            notifyBrokenBranch branches: daos_branch
         }
     }
 }
