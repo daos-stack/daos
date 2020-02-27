@@ -847,7 +847,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	/* Determine pool meets container redundancy factor requirments*/
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -890,6 +889,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Determine pool meets container redundancy factor requirements */
 	if (!(in->coi_flags & DAOS_COO_FORCE)) {
 		pmap = pool_hdl->sph_pool->sp_map;
 		rc = cont_verify_redun_req(pmap, prop);

@@ -1291,7 +1291,7 @@ cont_open_one(void *vin)
 
 int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		 uuid_t cont_uuid, uint64_t capas, uint64_t sec_capas)
+		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
 	struct ds_pool		*pool = NULL;
 	struct cont_tgt_open_arg arg;
@@ -1302,7 +1302,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.flags = capas;
+	arg.flags = flags;
 	arg.sec_capas = sec_capas;
 
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
