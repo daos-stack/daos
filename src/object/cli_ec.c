@@ -440,6 +440,7 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 	unsigned char			*c_data[k]; /* copied data */
 	unsigned char			*from;
 	struct obj_ec_singv_local	 loc = {0};
+	bool				 with_padding = false;
 	int				 i, c_idx = 0;
 	int				 rc = 0;
 
@@ -452,15 +453,17 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 		if (i == k - 1) {
 			len = cell_bytes - loc.esl_bytes_pad;
 			D_ASSERT(len > 0 && len <= cell_bytes);
+			with_padding = (loc.esl_bytes_pad > 0);
 		}
-		if (daos_iov_left(sgl, iov_idx, iov_off) >= len) {
+		if (daos_iov_left(sgl, iov_idx, iov_off) >= len &&
+		    !with_padding) {
 			from = (unsigned char *)sgl->sg_iovs[iov_idx].iov_buf;
 			data[i] = &from[iov_off];
 			daos_sgl_move(sgl, iov_idx, iov_off, len);
 		} else {
 			uint64_t copied = 0;
 
-			D_ALLOC(c_data[c_idx], len);
+			D_ALLOC(c_data[c_idx], cell_bytes);
 			if (c_data[c_idx] == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			while (copied < len) {
@@ -1219,6 +1222,8 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 
 	r_sgl = &reasb_req->orr_sgls[iod_idx];
 	if (singv_parity) {
+		uint32_t	iov_nr = 0, iov_idx = 0, iov_off = 0;
+
 		/* encode the EC parity for evenly distributed singv update */
 		ec_recx_array->oer_stripe_total = 1;
 		D_ASSERT(iod->iod_size != DAOS_REC_ANY);
@@ -1237,11 +1242,15 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				   sgl->sg_nr + obj_ec_parity_tgt_nr(oca));
 		if (rc)
 			goto out;
-		memcpy(r_sgl->sg_iovs, sgl->sg_iovs,
-		       sizeof(*sgl->sg_iovs) * sgl->sg_nr);
+
+		/* take singv size as input sgl possibly with more buffer */
+		daos_sgl_consume(sgl, iov_idx, iov_off, iod->iod_size,
+				 r_sgl->sg_iovs, iov_nr);
+		D_ASSERT(iov_nr > 0 && iov_nr <= sgl->sg_nr);
 		for (idx = 0; idx < obj_ec_parity_tgt_nr(oca); idx++)
-			d_iov_set(&r_sgl->sg_iovs[sgl->sg_nr + idx],
+			d_iov_set(&r_sgl->sg_iovs[iov_nr + idx],
 				  ec_recx_array->oer_pbufs[idx], cell_bytes);
+		r_sgl->sg_nr = iov_nr + obj_ec_parity_tgt_nr(oca);
 	} else {
 		/* copy the sgl */
 		rc = daos_sgl_init(r_sgl, sgl->sg_nr);
