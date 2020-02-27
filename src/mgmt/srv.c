@@ -82,8 +82,8 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_PREP_SHUTDOWN:
 		ds_mgmt_drpc_prep_shutdown(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_KILL_RANK:
-		ds_mgmt_drpc_kill_rank(drpc_req, drpc_resp);
+	case DRPC_METHOD_MGMT_PING_RANK:
+		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
@@ -273,7 +273,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -321,7 +321,7 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "mark hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -366,15 +366,9 @@ ds_mgmt_init()
 {
 	int rc;
 
-	rc = ds_mgmt_tgt_init();
-	if (rc)
-		return rc;
-
 	rc = ds_mgmt_system_module_init();
-	if (rc != 0) {
-		ds_mgmt_tgt_fini();
+	if (rc != 0)
 		return rc;
-	}
 
 	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
@@ -384,14 +378,21 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_system_module_fini();
-	ds_mgmt_tgt_fini();
-	D_DEBUG(DB_MGMT, "successfull fini call\n");
+
+	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
+}
+
+static int
+ds_mgmt_setup()
+{
+	return ds_mgmt_tgt_setup();
 }
 
 static int
 ds_mgmt_cleanup()
 {
+	ds_mgmt_tgt_cleanup();
 	return ds_mgmt_svc_stop();
 }
 
@@ -401,6 +402,7 @@ struct dss_module mgmt_module = {
 	.sm_ver			= DAOS_MGMT_VERSION,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
+	.sm_setup		= ds_mgmt_setup,
 	.sm_cleanup		= ds_mgmt_cleanup,
 	.sm_proto_fmt		= &mgmt_proto_fmt,
 	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,

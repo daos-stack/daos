@@ -74,12 +74,12 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	iod.iod_nr = 1;
 	iod.iod_type = type;
 	iod.iod_size = iod_size;
-	iod.iod_recxs = recx;
+	iod.iod_recxs = (type == DAOS_IOD_SINGLE) ? NULL : recx;
 
 	if (arg->ta_flags & TF_PUNCH) {
 		memset(buf, 0, buf_len);
 		iod.iod_size = 0;
-	} else {
+	} else if ((arg->ta_flags & TF_USE_VAL) == 0) {
 		dts_buf_render(buf, buf_len);
 		if (rand() % 2 == 0)
 			arg->ta_flags |= TF_ZERO_COPY;
@@ -194,7 +194,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 		VOS_ITER_SINGLE : VOS_ITER_RECX;
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
-			 counting_cb, &nr);
+			 counting_cb, NULL, &nr);
 	assert_int_equal(rc, 0);
 
 	return nr;
@@ -1017,6 +1017,209 @@ discard_13(void **state)
 	aggregate_basic(arg, &ds, -1, NULL);
 }
 
+enum {
+	AGG_OBJ_TYPE,
+	AGG_DKEY_TYPE,
+	AGG_AKEY_TYPE,
+};
+
+/** Type of update */
+enum {
+	AGG_NONE,
+	AGG_PUNCH,
+	AGG_UPDATE,
+};
+
+static void
+do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
+	 daos_epoch_t epoch, char *dkey, char *akey)
+{
+	daos_key_t	*dkey_ptr = NULL;
+	daos_key_t	*akey_ptr = NULL;
+	int		 num_akeys = 0;
+	daos_key_t	 dkey_iov;
+	daos_key_t	 akey_iov;
+	int		 rc;
+
+	if (type >= AGG_DKEY_TYPE) {
+		dkey_ptr = &dkey_iov;
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	}
+
+	if (type == AGG_AKEY_TYPE) {
+		akey_ptr = &akey_iov;
+		d_iov_set(&akey_iov, akey, strlen(akey));
+		num_akeys = 1;
+	}
+
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0,
+			   dkey_ptr, num_akeys, akey_ptr, NULL);
+	assert_int_equal(rc, 0);
+}
+
+#define NUM_INTERNAL 200
+static void
+agg_punches_test_helper(void **state, int record_type, int type, bool discard,
+			int first, int last)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	daos_epoch_range_t	 epr = {1, DAOS_EPOCH_MAX - 1};
+	daos_epoch_t		 epoch;
+	daos_epoch_t		 middle_epoch = 0;
+	int			 i, rc;
+	char			 first_val = 'f';
+	char			 last_val = 'l';
+	char			 middle_val = 'm';
+	char			 fetch_val;
+	char			 expected;
+	char			 dkey[2] = "a";
+	char			 akey[2] = "b";
+	int			 old_flags = arg->ta_flags;
+	daos_recx_t		 recx = {0, 1};
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+
+	arg->ta_flags = TF_USE_VAL;
+
+	if (first != AGG_NONE) {
+		update_value(arg, oid, epr.epr_lo++, dkey, akey,
+			     record_type, sizeof(first_val), &recx,
+			     &first_val);
+		if (first == AGG_PUNCH) {
+			/* Punch the first update */
+			do_punch(arg, type, oid, epr.epr_lo++, dkey, akey);
+		}
+	}
+
+	/** fake snapshot at epr.epr_lo, if first != AGG_NONE */
+	epoch = epr.epr_lo + 1;
+
+	for (i = 1; i <= NUM_INTERNAL; i++) {
+		bool	punch = (rand() % 5) == 0;
+
+		if (i == NUM_INTERNAL || punch) {
+			do_punch(arg, type, oid, epoch++, dkey, akey);
+			continue;
+		}
+		update_value(arg, oid, epoch++, dkey, akey,
+			     record_type, sizeof(middle_val), &recx,
+			     &middle_val);
+		middle_epoch = epoch;
+	}
+
+	if (last == AGG_UPDATE) {
+		update_value(arg, oid, epoch++, dkey, akey, record_type,
+			     sizeof(last_val), &recx, &last_val);
+	}
+
+	/* Set upper bound for aggregation */
+	epr.epr_hi = epoch++;
+
+	for (i = 0; i < 2; i++) {
+		if (discard)
+			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
+		else
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr);
+
+		assert_int_equal(rc, 0);
+
+		if (first != AGG_NONE) {
+			/* regardless of aggregate or discard, the first entry
+			 * should exist because it's outside of the epr.
+			 */
+			fetch_val = 0;
+			fetch_value(arg, oid, 1, dkey, akey, record_type,
+				    sizeof(first_val), &recx, &fetch_val);
+			assert_int_equal(fetch_val, first_val);
+			/* Reading at "snapshot" should also work except for
+			 * punch, it will be gone.
+			 */
+			fetch_val = 0;
+			fetch_value(arg, oid, epr.epr_lo, dkey, akey,
+				    record_type, sizeof(first_val), &recx,
+				    &fetch_val);
+			assert_int_equal(fetch_val,
+					 (first == AGG_PUNCH) ? 0 : first_val);
+		}
+
+		/* Intermediate value should be gone regardless but fetch will
+		 * get first_val if it's a discard
+		 */
+		expected = 0;
+		fetch_val = 0;
+		if (first == AGG_UPDATE && discard)
+			expected = first_val;
+		fetch_value(arg, oid, middle_epoch, dkey, akey, record_type,
+			    sizeof(middle_val), &recx, &fetch_val);
+		assert_int_equal(fetch_val, expected);
+
+		/* Final value should be present for aggregation but not
+		 * discard
+		 */
+		fetch_val = 0;
+		fetch_value(arg, oid, epr.epr_hi, dkey, akey, record_type,
+			    sizeof(last_val), &recx, &fetch_val);
+		expected = last_val;
+		if (discard) {
+			expected = 0;
+			if (first == AGG_UPDATE) {
+				/** Old value should still be there */
+				expected = first_val;
+			}
+		} else if (last != AGG_UPDATE) {
+			expected = 0;
+		}
+
+		assert_int_equal(fetch_val, expected);
+
+		/* One more test.  Punch the object at higher epoch, then
+		 * aggregate same epoch should get same results as the punch
+		 * is out of range.  Test is pointless for discard.
+		 */
+		if (discard)
+			break;
+
+		do_punch(arg, AGG_OBJ_TYPE, oid, epoch++, dkey, akey);
+	}
+
+	arg->ta_flags = old_flags;
+}
+
+/** Do a punch aggregation test */
+static void
+agg_punches_test(void **state, int record_type, bool discard)
+{
+	int	first, last, type;
+	int	lstart;
+
+	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
+	for (first = AGG_NONE; first <= AGG_UPDATE; first++) {
+		lstart = first == AGG_NONE ? AGG_PUNCH : AGG_NONE;
+		for (last = lstart; last <= AGG_UPDATE; last++) {
+			for (type = AGG_OBJ_TYPE; type <= AGG_AKEY_TYPE;
+			     type++) {
+				agg_punches_test_helper(state, record_type,
+							type, discard, first,
+							last);
+			}
+		}
+	}
+	daos_fail_loc_set(0);
+}
+
+static void
+discard_14(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_SINGLE, true);
+}
+
+static void
+discard_15(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+}
+
 /*
  * Aggregate on single akey-SV with epr [A, B].
  */
@@ -1627,6 +1830,18 @@ aggregate_14(void **state)
 	assert_int_equal(i, repeat_cnt);
 }
 
+static void
+aggregate_15(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_SINGLE, false);
+}
+
+static void
+aggregate_16(void **state)
+{
+	agg_punches_test(state, DAOS_IOD_ARRAY, false);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -1661,6 +1876,10 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_12, NULL, agg_tst_teardown },
 	{ "VOS463: Discard won't run into infinite loop",
 	  discard_13, NULL, agg_tst_teardown },
+	{ "VOS464: Discard object/key punches sv",
+	  discard_14, NULL, agg_tst_teardown },
+	{ "VOS465: Discard object/key punches array",
+	  discard_15, NULL, agg_tst_teardown },
 
 };
 
@@ -1693,6 +1912,10 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
 	  aggregate_14, NULL, agg_tst_teardown },
+	{ "VOS415: Aggregate many object/key punches sv",
+	  aggregate_15, NULL, agg_tst_teardown },
+	{ "VOS416: Aggregate many object/key punches array",
+	  aggregate_16, NULL, agg_tst_teardown },
 };
 
 int

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -531,7 +531,7 @@ struct vos_rec_bundle {
 	/** Optional, externally allocated buffer umoff */
 	umem_off_t		 rb_off;
 	/** checksum buffer for the daos key */
-	daos_csum_buf_t		*rb_csum;
+	struct dcs_csum_info	*rb_csum;
 	/**
 	 * Input  : value buffer (non-rdma data)
 	 *	    TODO also support scatter/gather list input.
@@ -625,7 +625,7 @@ static inline uint16_t vos_irec2csum_size(struct vos_irec_df *irec)
 }
 
 static inline void vos_irec_init_csum(struct vos_irec_df *irec,
-	daos_csum_buf_t *csum)
+				      struct dcs_csum_info *csum)
 {
 	if (csum) {
 		irec->ir_cs_size = csum->cs_len;
@@ -998,5 +998,35 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
+
+/**
+ * Aggregate the creation/punch records in the current entry of the object
+ * iterator
+ *
+ * \param ih[IN]	Iterator handle
+ * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ *
+ * \return		Zero on Success
+ *			1 if a reprobe is needed (entry is removed or not
+ *			visible)
+ *			negative value otherwise
+ */
+int
+oi_iter_aggregate(daos_handle_t ih, bool discard);
+
+/**
+ * Aggregate the creation/punch records in the current entry of the key
+ * iterator
+ *
+ * \param ih[IN]	Iterator handle
+ * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ *
+ * \return		Zero on Success
+ *			1 if a reprobe is needed (entry is removed or not
+ *			visible)
+ *			negative value otherwise
+ */
+int
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
 
 #endif /* __VOS_INTERNAL_H__ */

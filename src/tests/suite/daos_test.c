@@ -146,7 +146,8 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_checksum_test(rank, size);
+			nr_failed += run_daos_checksum_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'x':
 			daos_test_print(rank, "\n\n=================");
@@ -295,7 +296,7 @@ main(int argc, char **argv)
 		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
-		{"rebuild_simple",	no_argument,	NULL,	's'},
+		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,

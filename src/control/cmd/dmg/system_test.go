@@ -31,27 +31,39 @@ import (
 func TestSystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"system member query with no arguments",
-			"system member-query",
-			"ConnectClients SystemMemberQuery",
+			"system query with no arguments",
+			"system query",
+			"ConnectClients SystemQuery-{-1}",
+			nil,
+		},
+		{
+			"system query with single rank",
+			"system query --rank 0",
+			"ConnectClients SystemQuery-{0}",
+			nil,
+		},
+		{
+			"system query verbose",
+			"system query --verbose",
+			"ConnectClients SystemQuery-{-1}",
 			nil,
 		},
 		{
 			"system stop with no arguments",
 			"system stop",
-			"ConnectClients SystemStop",
+			"ConnectClients SystemStop-{true true [] false}",
 			nil,
 		},
 		{
-			"system stop with kill",
-			"system stop --kill",
-			"ConnectClients SystemStop",
+			"system stop with force",
+			"system stop --force",
+			"ConnectClients SystemStop-{true true [] true}",
 			nil,
 		},
 		{
-			"system stop with prep",
-			"system stop --prep",
-			"ConnectClients SystemStop",
+			"system start with no arguments",
+			"system start",
+			"ConnectClients SystemStart-{[]}",
 			nil,
 		},
 		{

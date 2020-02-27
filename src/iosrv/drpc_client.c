@@ -95,7 +95,7 @@ out:
 
 /* Notify daos_server that there has been a I/O error. */
 int
-notify_bio_error(bool unmap, bool update, int tgt_id)
+notify_bio_error(int media_err_type, int tgt_id)
 {
 	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
 	Drpc__Call		*dreq;
@@ -113,14 +113,13 @@ notify_bio_error(bool unmap, bool update, int tgt_id)
 	if (rc != 0)
 		return rc;
 
-	if (unmap)
+	/* TODO: add checksum error */
+	if (media_err_type == MET_UNMAP)
 		bioerr_req.unmaperr = true;
-	else {
-		if (update)
-			bioerr_req.writeerr = true;
-		else
-			bioerr_req.readerr = true;
-	}
+	else if (media_err_type == MET_WRITE)
+		bioerr_req.writeerr = true;
+	else if (media_err_type == MET_READ)
+		bioerr_req.readerr = true;
 	bioerr_req.tgtid = tgt_id;
 	bioerr_req.instanceidx = dss_instance_idx;
 	bioerr_req.drpclistenersock = drpc_listener_socket_path;
@@ -197,6 +196,6 @@ drpc_fini(void)
 
 	D_ASSERT(dss_drpc_ctx != NULL);
 	rc = drpc_close(dss_drpc_ctx);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	dss_drpc_ctx = NULL;
 }

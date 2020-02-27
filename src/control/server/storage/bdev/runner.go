@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,14 +34,14 @@ import (
 )
 
 const (
-	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
+	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciWhiteListEnv    = "_PCI_WHITELIST"
 )
 
-type runCmdFn func([]string, string, ...string) (string, error)
+type runCmdFn func(logging.Logger, []string, string, ...string) (string, error)
 
 type runCmdError struct {
 	wrapped error
@@ -57,7 +57,7 @@ func (rce *runCmdError) Error() string {
 	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
 }
 
-func run(env []string, cmdStr string, args ...string) (string, error) {
+func run(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
 	if os.Geteuid() != 0 {
 		return "", errors.New("must be run with root privileges")
 	}
@@ -65,7 +65,7 @@ func run(env []string, cmdStr string, args ...string) (string, error) {
 	var cmdPath string
 	var err error
 	if cmdPath, err = exec.LookPath(cmdStr); err != nil {
-		cmdPath, err = common.GetAbsInstallPath(cmdStr)
+		cmdPath, err = common.GetAdjacentPath(cmdStr)
 		if err != nil {
 			return "", errors.Wrapf(err, "unable to resolve path to %s", cmdStr)
 		}
@@ -74,6 +74,7 @@ func run(env []string, cmdStr string, args ...string) (string, error) {
 		}
 	}
 
+	log.Debugf("running script: %s", cmdPath)
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Env = env
 	out, err := cmd.Output()
@@ -106,7 +107,7 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetupScript) Reset() error {
-	out, err := s.runCmd(nil, s.scriptPath, "reset")
+	out, err := s.runCmd(s.log, nil, s.scriptPath, "reset")
 	return errors.Wrapf(err, "spdk reset failed (%s)", out)
 }
 
@@ -132,6 +133,7 @@ func (s *spdkSetupScript) Prepare(nrHugepages int, targetUser, pciWhiteList stri
 	}
 
 	s.log.Debugf("spdk setup env: %v", env)
-	out, err := s.runCmd(env, s.scriptPath)
+	out, err := s.runCmd(s.log, env, s.scriptPath)
+	s.log.Debugf("spdk setup stdout:\n%s\n", out)
 	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }

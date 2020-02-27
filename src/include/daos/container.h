@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,9 @@ int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
+int dc_cont_set_prop(tse_task_t *task);
+int dc_cont_update_acl(tse_task_t *task);
+int dc_cont_delete_acl(tse_task_t *task);
 int dc_cont_aggregate(tse_task_t *task);
 int dc_cont_rollback(tse_task_t *task);
 int dc_cont_subscribe(tse_task_t *task);

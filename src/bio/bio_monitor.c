@@ -28,11 +28,6 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
-/*
- * Period to query raw device health stats, auto detect faulty and transition
- * device state. 60 seconds by default.
- */
-#define NVME_MONITOR_PERIOD	(60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define NVME_MAX_ERROR_LOG_PAGES	256
 
@@ -76,6 +71,22 @@ bio_dev_set_faulty_internal(void *msg_arg)
 
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
+
+/* Call internal method to increment CSUM media error. */
+void
+bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
+{
+	struct media_error_msg	*mem;
+
+	D_ALLOC_PTR(mem);
+	if (mem == NULL)
+		return;
+	mem->mem_bs		= bxc->bxc_blobstore;
+	mem->mem_err_type	= MET_CSUM;
+	mem->mem_tgt_id		= tgt_id;
+	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+}
+
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
@@ -379,12 +390,18 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
 	int			 rc;
+	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
 	D_ASSERT(ctxt->bxc_blobstore != NULL);
 	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
 
-	if (dev_health->bdh_stat_age + NVME_MONITOR_PERIOD >= now)
+	if (dev_health->bdh_monitor_pd > 0)
+		monitor_period = dev_health->bdh_monitor_pd;
+	else
+		monitor_period = NVME_MONITOR_PERIOD;
+
+	if (dev_health->bdh_stat_age + monitor_period >= now)
 		return;
 	dev_health->bdh_stat_age = now;
 
@@ -527,6 +544,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	bb->bb_dev_health.bdh_io_channel = channel;
 
 	bb->bb_dev_health.bdh_inflights = 0;
+	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
 
 	return 0;
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,14 @@ package pbin_test
 import (
 	"fmt"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 const (
@@ -59,5 +64,30 @@ func TestMain(m *testing.M) {
 		reqRes()
 	default:
 		childErrExit(errors.Errorf("Unknown child mode: %q", mode))
+	}
+}
+
+func TestPbin_CheckHelper(t *testing.T) {
+	for name, tc := range map[string]struct {
+		helperName string
+		expErr     error
+	}{
+		"unknown helper": {
+			helperName: "bad-helper-name",
+			expErr:     pbin.PrivilegedHelperNotAvailable("bad-helper-name"),
+		},
+		"success": {
+			helperName: path.Base(os.Args[0]),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			os.Setenv(childModeEnvVar, childModeReqRes)
+
+			gotErr := pbin.CheckHelper(log, tc.helperName)
+			common.CmpErr(t, tc.expErr, gotErr)
+		})
 	}
 }

@@ -37,7 +37,7 @@ args = {'sources': ['pydaos/pydaos_shim.c'],
 if conf:
     args['include_dirs'] = [os.path.join(conf['PREFIX'], 'include'),
                                       os.path.join(conf['CART_PREFIX'], 'include')]
-    args['library_dirs'] = [os.path.join(conf['PREFIX'], 'lib')]
+    args['library_dirs'] = [os.path.join(conf['PREFIX'], 'lib64')]
     args['runtime_library_dirs'] = args['library_dirs']
 
 if sys.version_info < (3, 0):

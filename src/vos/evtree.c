@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -875,7 +875,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -925,7 +926,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	return 0;
 
  failed:
-	V_TRACE(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	V_TRACE(DB_TRACE, "Failed to create tree context: "DF_RC"\n",
+		DP_RC(rc));
 	evt_tcx_decref(tcx);
 	return rc;
 }
@@ -1389,13 +1391,14 @@ out:
 static int
 evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
-	struct evt_root		*root;
-	umem_off_t		 nd_off;
-	int			 rc;
+	struct evt_root			*root;
+	umem_off_t			 nd_off;
+	int				 rc;
+	const struct dcs_csum_info	*csum;
 
 	root = tcx->tc_root;
 	uint32_t inob = ent->ei_inob;
-	const daos_csum_buf_t *csum = &ent->ei_csum;
+	csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
 	D_ASSERT(UMOFF_IS_NULL(root->tr_node));
@@ -1413,7 +1416,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (dcb_is_valid(csum)) {
+	if (ci_is_valid((struct dcs_csum_info *) csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -1608,7 +1611,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 
 		rc = evt_node_split(tcx, leaf, nd_cur, nd_new);
 		if (rc != 0) {
-			V_TRACE(DB_TRACE, "Failed to split node: %d\n", rc);
+			V_TRACE(DB_TRACE, "Failed to split node: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(failed, rc);
 		}
 
@@ -1674,7 +1678,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
  out:
 	return 0;
  failed:
-	D_ERROR("Failed to insert entry to level %d: %d\n", level, rc);
+	D_ERROR("Failed to insert entry to level %d: "DF_RC"\n", level,
+		DP_RC(rc));
 	return rc;
 }
 
@@ -3025,10 +3030,10 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t	*csum = &ent->ei_csum;
-	daos_size_t		 csum_buf_len;
+	const struct dcs_csum_info	*csum = &ent->ei_csum;
+	daos_size_t			 csum_buf_len;
 
-	if (!dcb_is_valid(csum))
+	if (!ci_is_valid(csum))
 		return;
 
 	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);

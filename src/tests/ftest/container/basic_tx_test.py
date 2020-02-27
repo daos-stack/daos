@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-import os
+
 import time
 import traceback
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class BasicTxTest(TestWithServers):
     """
@@ -49,29 +49,14 @@ class BasicTxTest(TestWithServers):
 
         :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
-        pool = None
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to the pool
+        self.prepare_pool()
 
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # need a connection to create container
-            pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.pool.handle)
 
             # now open it
             container.open()
@@ -90,12 +75,12 @@ class BasicTxTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            oid, txn = container.write_an_obj(thedata, thedatasize,
-                                              dkey, akey, None, None, 2)
+            oid = container.write_an_obj(thedata, thedatasize,
+                                         dkey, akey, None, None, 2)
 
             # read the data back and make sure its correct
             thedata2 = container.read_an_obj(thedatasize, dkey, akey,
-                                             oid, txn)
+                                             oid)
             if thedata != thedata2.value:
                 print("thedata>" + thedata)
                 print("thedata2>" + thedata2.value)
@@ -110,12 +95,12 @@ class BasicTxTest(TestWithServers):
             dkey = "this is the dkey"
             akey = "this is the akey"
 
-            oid, tx2 = container.write_an_obj(thedata3, thedatasize2,
-                                              dkey, akey, oid, None, 2)
+            oid = container.write_an_obj(thedata3, thedatasize2,
+                                         dkey, akey, oid, None, 2)
 
             # read the data back and make sure its correct
             thedata4 = container.read_an_obj(thedatasize2, dkey, akey,
-                                             oid, tx2)
+                                             oid)
             if thedata3 != thedata4.value:
                 self.fail("Write data 2, read it back, didn't match\n")
 
@@ -139,8 +124,3 @@ class BasicTxTest(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            # cleanup the pool
-            if pool is not None:
-                pool.disconnect()
-                pool.destroy(1)

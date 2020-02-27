@@ -32,14 +32,17 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd       `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	MemberQuery systemMemberQueryCmd `command:"member-query" alias:"q" description:"Retrieve DAOS system membership"`
-	Stop        systemStopCmd        `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	ListPools   systemListPoolsCmd   `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd     `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd     `command:"query" alias:"q" description:"Query DAOS system status"`
+	Stop        systemStopCmd      `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd     `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
+	ListPools   systemListPoolsCmd `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
 }
 
 type leaderQueryCmd struct {
@@ -61,75 +64,39 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemStopCmd is the struct representing the command to shutdown system.
-type systemStopCmd struct {
-	logCmd
-	connectedCmd
-	Prep bool `long:"prep" description:"Perform prep phase of controlled shutdown."`
-	Kill bool `long:"kill" description:"Perform kill phase of controlled shutdown."`
+// addRankPrefix is a hack, but don't want to modify the hostlist library to
+// accept invalid hostnames.
+func addRankPrefix(rank uint32) string {
+	return fmt.Sprintf("r-%d", rank)
 }
 
-// Execute is run when systemStopCmd activates
-func (cmd *systemStopCmd) Execute(args []string) error {
-	if !cmd.Prep && !cmd.Kill {
-		cmd.Prep = true
-		cmd.Kill = true
-	}
+// removeRankPrefixes is a hack, but don't want to modify the hostlist library to
+// accept invalid hostnames.
+func removeRankPrefixes(in string) string {
+	return strings.Replace(in, "r-", "", -1)
+}
 
-	req := client.SystemStopReq{Prep: cmd.Prep, Kill: cmd.Kill}
-	results, err := cmd.conns.SystemStop(req)
-	if err != nil {
-		return errors.Wrap(err, "System-Stop command failed")
-	}
-
-	if len(results) == 0 {
-		cmd.log.Debug("System-Stop no member results returned\n")
-		return nil
-	}
-	cmd.log.Debug("System-Stop command succeeded\n")
-
+func displaySystemQuery(log logging.Logger, members system.Members) error {
 	groups := make(hostlist.HostGroups)
-
-	for _, r := range results {
-		msg := "OK"
-		if r.Err != nil {
-			msg = r.Err.Error()
-		}
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
-		if err = groups.AddHost(resStr, fmt.Sprintf("rank%d", r.Rank)); err != nil {
-			return errors.Wrap(err, "adding rank result to group")
+	for _, m := range members {
+		if err := groups.AddHost(m.State().String(), addRankPrefix(m.Rank)); err != nil {
+			return err
 		}
 	}
 
-	out, err := tabulateHostGroups(groups, "Ranks", "Operation", "Result")
+	out, err := tabulateHostGroups(groups, "Rank", "State")
 	if err != nil {
-		return errors.Wrap(err, "printing result table")
+		return err
 	}
 
-	cmd.log.Info(out)
+	// kind of a hack, but don't want to modify the hostlist library to
+	// accept invalid hostnames.
+	log.Info(removeRankPrefixes(out))
 
 	return nil
 }
 
-// systemMemberQueryCmd is the struct representing the command to shutdown system.
-type systemMemberQueryCmd struct {
-	logCmd
-	connectedCmd
-}
-
-// Execute is run when systemMemberQueryCmd activates
-func (cmd *systemMemberQueryCmd) Execute(args []string) error {
-	members, err := cmd.conns.SystemMemberQuery()
-	if err != nil {
-		return errors.Wrap(err, "System-Member-Query command failed")
-	}
-
-	cmd.log.Debug("System-Member-Query command succeeded\n")
-	if len(members) == 0 {
-		cmd.log.Info("No members in system\n")
-		return nil
-	}
-
+func displaySystemQueryVerbose(log logging.Logger, members system.Members) {
 	rankTitle := "Rank"
 	uuidTitle := "UUID"
 	addrTitle := "Control Address"
@@ -147,9 +114,137 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		table = append(table, row)
 	}
 
-	cmd.log.Info(formatter.Format(table))
+	log.Info(formatter.Format(table))
+}
+
+func displaySystemQuerySingle(log logging.Logger, members system.Members) error {
+	if len(members) != 1 {
+		return errors.Errorf("expected 1 member in result, got %d", len(members))
+	}
+
+	m := members[0]
+
+	table := []txtfmt.TableRow{
+		{"address": m.Addr.String()},
+		{"uuid": m.UUID},
+		{"status": m.State().String()},
+		{"reason": "unknown"},
+	}
+
+	title := fmt.Sprintf("Rank %d", m.Rank)
+	log.Info(txtfmt.FormatEntity(title, table))
 
 	return nil
+}
+
+// systemQueryCmd is the struct representing the command to query system status.
+type systemQueryCmd struct {
+	logCmd
+	connectedCmd
+	Verbose bool  `long:"verbose" short:"v" description:"Display more member details"`
+	Rank    int32 `long:"rank" short:"r" default:"-1" description:"System member rank to query"`
+}
+
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(_ []string) error {
+	req := client.SystemQueryReq{Rank: cmd.Rank}
+
+	resp, err := cmd.conns.SystemQuery(req)
+	if err != nil {
+		return errors.Wrap(err, "System-Query command failed")
+	}
+
+	cmd.log.Debug("System-Query command succeeded")
+	if len(resp.Members) == 0 {
+		cmd.log.Info("No members in system")
+		return nil
+	}
+
+	if cmd.Rank >= 0 {
+		return displaySystemQuerySingle(cmd.log, resp.Members)
+	}
+
+	if cmd.Verbose {
+		displaySystemQueryVerbose(cmd.log, resp.Members)
+		return nil
+	}
+
+	return displaySystemQuery(cmd.log, resp.Members)
+}
+
+func displaySystemAction(log logging.Logger, results system.MemberResults) error {
+	groups := make(hostlist.HostGroups)
+
+	for _, r := range results {
+		msg := "OK"
+		if r.Errored {
+			msg = r.Msg
+		}
+
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if err := groups.AddHost(resStr, addRankPrefix(r.Rank)); err != nil {
+			return errors.Wrap(err, "adding rank result to group")
+		}
+	}
+
+	out, err := tabulateHostGroups(groups, "Rank", "Operation", "Result")
+	if err != nil {
+		return errors.Wrap(err, "printing result table")
+	}
+
+	log.Info(removeRankPrefixes(out))
+
+	return nil
+}
+
+// systemStopCmd is the struct representing the command to shutdown DAOS system.
+type systemStopCmd struct {
+	logCmd
+	connectedCmd
+	Force bool `long:"force" description:"Force stop DAOS system members"`
+}
+
+// Execute is run when systemStopCmd activates
+//
+// Perform prep and kill stages with stop command.
+func (cmd *systemStopCmd) Execute(_ []string) error {
+	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
+	resp, err := cmd.conns.SystemStop(req)
+	if err != nil {
+		return errors.Wrap(err, "System-Stop command failed")
+	}
+
+	if len(resp.Results) == 0 {
+		cmd.log.Debug("System-Stop no results returned")
+		return nil
+	}
+	cmd.log.Debug("System-Stop command succeeded")
+
+	return displaySystemAction(cmd.log, resp.Results)
+}
+
+// systemStartCmd is the struct representing the command to start system.
+type systemStartCmd struct {
+	logCmd
+	connectedCmd
+}
+
+// Execute is run when systemStartCmd activates
+func (cmd *systemStartCmd) Execute(_ []string) error {
+	req := client.SystemStartReq{}
+
+	resp, err := cmd.conns.SystemStart(req)
+	if err != nil {
+		return errors.Wrap(err, "System-Start command failed")
+	}
+
+	if len(resp.Results) == 0 {
+		cmd.log.Info("No results returned")
+		return nil
+	}
+	cmd.log.Debug("System-Start command succeeded")
+
+	return displaySystemAction(cmd.log, resp.Results)
 }
 
 // systemListPoolsCmd represents the command to fetch a list of all DAOS pools in the system.
@@ -172,7 +267,7 @@ func formatPoolSvcReps(svcReps []uint32) string {
 }
 
 // Execute is run when systemListPoolsCmd activates
-func (cmd *systemListPoolsCmd) Execute(args []string) error {
+func (cmd *systemListPoolsCmd) Execute(_ []string) error {
 	if cmd.config == nil {
 		return errors.New("No configuration loaded")
 	}

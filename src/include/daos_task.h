@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@ typedef enum {
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
+	DAOS_OPC_CONT_SET_PROP,
+	DAOS_OPC_CONT_UPDATE_ACL,
+	DAOS_OPC_CONT_DELETE_ACL,
 	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
@@ -291,6 +294,22 @@ typedef struct {
 	daos_cont_info_t	*info;
 	daos_prop_t		*prop;
 } daos_cont_query_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	daos_prop_t		*prop;
+} daos_cont_set_prop_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	struct daos_acl		*acl;
+} daos_cont_update_acl_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	uint8_t			type;
+	d_string_t		name;
+} daos_cont_delete_acl_t;
 
 typedef struct {
 	daos_handle_t		coh;
@@ -580,7 +599,6 @@ typedef struct {
 	daos_handle_t		th;
 	daos_array_iod_t	*iod;
 	d_sg_list_t		*sgl;
-	daos_csum_buf_t		*csums;
 } daos_array_io_t;
 
 typedef struct {

@@ -634,7 +634,7 @@ rw_completion(void *cb_arg, int err)
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto skip_media_error;
-		mem->mem_update = biod->bd_update;
+		mem->mem_err_type = biod->bd_update ? MET_WRITE : MET_READ;
 		mem->mem_bs = biod->bd_ctxt->bic_xs_ctxt->bxc_blobstore;
 		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
@@ -1012,7 +1012,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 
 	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
 	if (rc)
-		D_ERROR("Copy biod failed, rc:%d\n", rc);
+		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
 
 	/* release DMA buffer, write data back to NVMe device for write */
 	rc = bio_iod_post(biod);

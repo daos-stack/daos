@@ -1,13 +1,10 @@
-# Needed because of the GO binaries
-%undefine _missing_build_ids_terminate_build
-
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 # Unlimited maximum version
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.8.0
+Version:       1.1.0
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -112,6 +109,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
+Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
@@ -221,6 +219,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/io_conf
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
+%{_bindir}/pl_bench
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so
@@ -228,7 +227,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
-# TODO: this should move to %{_libdir}/daos/libplacement.so
+# TODO: this should move from daos_srv to daos
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %dir %{_libdir}/%{name}
@@ -272,6 +271,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
+%{_libdir}/%{name}/API_VERSION
 %if (0%{?suse_version} >= 1500)
 /lib64/libdfs.so
 %endif
@@ -335,7 +335,22 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Fri Dec 17 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
+* Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
+- daos-server requires daos-client (same version)
+
+* Fri Feb 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
+- Version bump up to 1.1.0
+
+* Wed Feb 12 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-2
+- Remove undefine _missing_build_ids_terminate_build
+
+* Thu Feb 06 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.0-1
+- Version bump up to 0.9.0
+
+* Sat Jan 18 2020 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-3
+- Fixing a few warnings in the RPM spec file
+
+* Fri Dec 27 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 0.8.0-2
 - Remove openmpi, pmix, and hwloc builds, use hwloc and openmpi packages
 
 * Tue Dec 17 2019 Johann Lombardi <johann.lombardi@intel.com> - 0.8.0-1

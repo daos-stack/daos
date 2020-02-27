@@ -173,9 +173,13 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientResp := cc.StorageScan(&StorageScanReq{})
+	gotResp := cc.StorageScan(&StorageScanReq{})
 
-	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers), clientResp, "")
+	expResp := MockScanResp(&MockCtrlrs, &MockScmModules, &MockScmNamespaces, MockServers)
+
+	if diff := cmp.Diff(expResp, gotResp); diff != "" {
+		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestStorageFormat(t *testing.T) {
@@ -215,29 +219,6 @@ func TestStorageFormat(t *testing.T) {
 					"unexpected client NVMe SSD controller results returned")
 			}
 		})
-	}
-}
-
-func TestKillRank(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	tests := []struct {
-		killRet error
-	}{
-		{
-			nil,
-		},
-	}
-
-	for _, tt := range tests {
-		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
-			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
-			nil, tt.killRet, nil, MockACL, nil)
-
-		resultMap := cc.KillRank(0)
-
-		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
 	}
 }
 

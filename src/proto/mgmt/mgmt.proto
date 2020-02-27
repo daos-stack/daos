@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,28 @@ import "pool.proto";
 import "srv.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
 import "acl.proto"; // ACL-related requests
+
+// Generic request indicating which ranks to operate on.
+// Used in gRPC fanout to operate on hosts with multiple ranks.
+message RanksReq {
+	repeated uint32 ranks = 1;
+	float timeout = 2;
+	bool force = 3;
+}
+
+// Generic response containing DER result from multiple ranks.
+// Used in gRPC fanout to operate on hosts with multiple ranks.
+message RanksResp {
+	// Identical to ctl.system.RankResult proto message.
+	message RankResult {
+		uint32 rank = 1;
+		string action = 2;
+		bool errored = 3;
+		string msg = 4;
+		uint32 state = 5;
+	}
+	repeated RankResult results = 1;
+}
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -64,10 +86,6 @@ service MgmtSvc {
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
 	// Get SMD pool list.
 	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
-	// Prepare DAOS IO server identified by rank for controlled shutdown.
-	rpc PrepShutdown(PrepShutdownReq) returns (DaosResp) {}
-	// Kill DAOS IO server identified by rank.
-	rpc KillRank(KillRankReq) returns (DaosResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
 	// Get the current state of the device
@@ -76,4 +94,12 @@ service MgmtSvc {
 	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
+	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
+	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
+	// Stop DAOS IO servers on a host. (gRPC fanout)
+	rpc StopRanks(RanksReq) returns (RanksResp) {}
+	// Ping DAOS IO servers on a host. (gRPC fanout)
+	rpc PingRanks(RanksReq) returns (RanksResp) {}
+	// Start DAOS IO servers on a host. (gRPC fanout)
+	rpc StartRanks(RanksReq) returns (RanksResp) {}
 }

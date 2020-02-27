@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -71,7 +72,7 @@ const maxIoServers = 2
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	err := cfg.Validate()
+	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
@@ -149,6 +150,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			break
 		}
 
+		// Provide special handling for the ofi+verbs provider.
+		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
+		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+		// specify the correct device for each.
+		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
+			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			if err != nil {
+				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+			}
+			envVar := "OFI_DOMAIN=" + deviceAlias
+			srvCfg.WithEnvVars(envVar)
+		}
+
 		// If the configuration specifies that we should explicitly set hugepage values
 		// per instance, do it. Otherwise, let SPDK/DPDK figure it out.
 		if cfg.SetHugepages {
@@ -181,11 +195,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		}
 	}
 
-	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
-		return errors.WithMessage(err, "dRPC setup")
-	}
-
 	// Create and setup control service.
 	controlService, err := NewControlService(log, harness, bdevProvider, scmProvider, cfg, membership)
 	if err != nil {
@@ -202,12 +211,29 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
+	var opts []grpc.ServerOption
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
+	opts = append(opts, tcOpt)
 
-	grpcServer := grpc.NewServer(tcOpt)
+	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if uintOpt != nil {
+		opts = append(opts, uintOpt)
+	}
+	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	if err != nil {
+		return err
+	}
+	if sintOpt != nil {
+		opts = append(opts, sintOpt)
+	}
+
+	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
 
@@ -237,5 +263,5 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 
-	return errors.Wrapf(harness.Start(ctx, membership), "%s exited with error", DataPlaneName)
+	return errors.Wrapf(harness.Start(ctx, membership, cfg), "%s exited with error", DataPlaneName)
 }

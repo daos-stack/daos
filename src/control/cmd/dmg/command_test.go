@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -35,7 +37,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -113,11 +114,6 @@ func (tc *testConn) StorageFormat(reformat bool) client.StorageFormatResults {
 	return client.StorageFormatResults{}
 }
 
-func (tc *testConn) KillRank(rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
-	return nil
-}
-
 func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
 	return &client.PoolCreateResp{}, nil
@@ -183,14 +179,19 @@ func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultState
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() (system.Members, error) {
-	tc.appendInvocation("SystemMemberQuery")
-	return make(system.Members, 0), nil
+func (tc *testConn) SystemQuery(req client.SystemQueryReq) (*client.SystemQueryResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemQuery-%v", req))
+	return &client.SystemQueryResp{}, nil
 }
 
-func (tc *testConn) SystemStop(req client.SystemStopReq) (system.MemberResults, error) {
-	tc.appendInvocation("SystemStop")
-	return make(system.MemberResults, 0), nil
+func (tc *testConn) SystemStop(req client.SystemStopReq) (*client.SystemStopResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemStop-%v", req))
+	return &client.SystemStopResp{}, nil
+}
+
+func (tc *testConn) SystemStart(req client.SystemStartReq) (*client.SystemStartResp, error) {
+	tc.appendInvocation(fmt.Sprintf("SystemStart-%v", req))
+	return &client.SystemStartResp{}, nil
 }
 
 func (tc *testConn) LeaderQuery(req client.LeaderQueryReq) (*client.LeaderQueryResp, error) {
@@ -226,6 +227,38 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
+func createTestConfig(t *testing.T, log logging.Logger, path string) (*os.File, func()) {
+	t.Helper()
+
+	defaultConfig := client.NewConfiguration()
+	if err := defaultConfig.SetPath(path); err != nil {
+		t.Fatal(err)
+	}
+
+	// create default config file
+	if err := os.MkdirAll(filepath.Dir(defaultConfig.Path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(defaultConfig.Path)
+	if err != nil {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+		t.Fatal(err)
+	}
+	cleanup := func() {
+		os.RemoveAll(filepath.Dir(defaultConfig.Path))
+	}
+
+	return f, cleanup
+}
+
+func runCmd(t *testing.T, cmd string, log *logging.LeveledLogger, conn client.Connect) error {
+	t.Helper()
+
+	var opts cliOptions
+	args := append([]string{"--insecure"}, strings.Split(cmd, " ")...)
+	return parseOpts(args, &opts, conn, log)
+}
+
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 	t.Helper()
 
@@ -235,13 +268,19 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			var opts cliOptions
+			f, cleanup := createTestConfig(t, log, "")
+			f.Close()
+			defer cleanup()
+
 			conn := newTestConn(t)
-			args := append([]string{"--insecure"}, strings.Split(st.cmd, " ")...)
-			err := parseOpts(args, &opts, conn, log)
+			err := runCmd(t, st.cmd, log, conn)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
+				}
+
+				if err == nil {
+					t.Fatalf("expected err '%v', got nil", st.expectedErr)
 				}
 
 				testExpectedError(t, st.expectedErr, err)

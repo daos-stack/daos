@@ -296,5 +296,5 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 	return;
 
 err:
-	DFUSE_FUSE_REPLY_ERR(req, rc);
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }

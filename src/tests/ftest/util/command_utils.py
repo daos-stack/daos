@@ -34,6 +34,7 @@ from env_modules import load_mpi
 class CommandFailure(Exception):
     """Base exception for this module."""
 
+
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
@@ -70,15 +71,31 @@ class BasicParameter(object):
         else:
             self.value = test.params.get(name, path, self._default)
 
-    def update(self, value, name=None):
+    def update(self, value, name=None, append=False):
         """Update the value of the parameter.
 
         Args:
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
+            append (bool, optional): appemnd/extend/update the current list/dict
+                with the provided value.  Defaults to False - override the
+                current value.
         """
-        self.value = value
+        if append and isinstance(self.value, list):
+            if isinstance(value, list):
+                # Add the new list of value to the existing list
+                self.value.extend(value)
+            else:
+                # Add the new value to the existing list
+                self.value.append(value)
+        elif append and isinstance(self.value, dict):
+            # Update the dictionary with the new key/value pairs
+            self.value.update(value)
+        else:
+            # Override the current value with the new value
+            self.value = value
+
         if name is not None:
             self.log.debug("Updated param %s => %s", name, self.value)
 
@@ -495,17 +512,17 @@ class JobManager(ExecutableCommand):
 
         return " ".join(commands)
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(subprocess)
+        return self.job.check_subprocess_status(sub_process)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the job manager command with common inputs.
@@ -535,6 +552,14 @@ class Orterun(JobManager):
         super(Orterun, self).__init__(
             "/run/orterun", "orterun", job, path, subprocess)
 
+        # Default mca values to avoid queue pair errors
+        mca_default = {
+            "btl_openib_warn_default_gid_prefix": "0",
+            "btl": "tcp,self",
+            "oob": "tcp",
+            "pml": "ob1",
+        }
+
         self.hostfile = FormattedParameter("--hostfile {}", None)
         self.processes = FormattedParameter("--np {}", 1)
         self.display_map = FormattedParameter("--display-map", False)
@@ -543,7 +568,8 @@ class Orterun(JobManager):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = FormattedParameter("--mca {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
@@ -592,6 +618,7 @@ class Mpirun(JobManager):
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
+        self.ppn = FormattedParameter("-ppn {}", None)
         self.mpitype = mpitype
 
     def setup_command(self, env, hostfile, processes):
@@ -642,6 +669,11 @@ class Srun(JobManager):
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
+        self.nodelist = FormattedParameter("--nodelist={}", None)
+        self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.reservation = FormattedParameter("--reservation={}", None)
+        self.partition = FormattedParameter("--partition={}", None)
+        self.output = FormattedParameter("--output={}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the srun command with common inputs.
@@ -651,6 +683,7 @@ class Srun(JobManager):
                 the launch command
             hostfile (str): file defining host names and slots
             processes (int): number of host processes
+            processpernode (int): number of process per node
         """
         # Setup the env for the job to export with the srun command
         self.export.value = ",".join(["ALL"] + env.get_list())

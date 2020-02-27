@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,8 +78,8 @@ ctl_update(struct dts_io_credit *cred)
 		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
-		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				    0xcafe, &cred->tc_dkey, 1, &cred->tc_iod,
+		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
+				    &cred->tc_dkey, 1, &cred->tc_iod, NULL,
 				    &cred->tc_sgl);
 	}
 	return rc;
@@ -234,7 +234,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	daos_key_desc_t	 kds[KDS_NR];
 	daos_anchor_t	 anchor;
 	int		 i;
-	int		 rc;
+	int		 rc = 0;
 	int		 total = 0;
 
 	memset(&anchor, 0, sizeof(anchor));
@@ -258,7 +258,8 @@ ctl_daos_list(struct dts_io_credit *cred)
 		}
 
 		if (rc) {
-			fprintf(stderr, "Failed to list keys: %d\n", rc);
+			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 
@@ -471,7 +472,8 @@ out:
 
 	switch (rc) {
 	case -2: /* real failure */
-		D_PRINT("Operation failed, rc=%d\n", rc);
+		D_PRINT("Operation failed, rc="DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case -1: /* invalid input */
@@ -533,7 +535,8 @@ main(int argc, char **argv)
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to initialize utility: %d\n", rc);
+		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

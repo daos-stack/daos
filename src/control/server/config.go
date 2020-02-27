@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,15 @@ package server
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -38,17 +42,12 @@ import (
 )
 
 const (
-	defaultRuntimeDir        = "/var/run/daos_server"
-	defaultConfigPath        = "etc/daos_server.yml"
-	defaultSystemName        = "daos_server"
-	defaultPort              = 10001
-	configOut                = ".daos_server.active.yml"
-	relConfExamplesPath      = "utils/config/examples/"
-	msgBadConfig             = "insufficient config file, see examples in "
-	msgConfigNoProvider      = "provider not specified in config"
-	msgConfigNoPath          = "no config path set"
-	msgConfigNoServers       = "no servers specified in config"
-	msgConfigBadAccessPoints = "only a single access point is currently supported"
+	defaultRuntimeDir   = "/var/run/daos_server"
+	defaultConfigPath   = "../etc/daos_server.yml"
+	defaultSystemName   = "daos_server"
+	defaultPort         = 10001
+	configOut           = ".daos_server.active.yml"
+	relConfExamplesPath = "../utils/config/examples/"
 )
 
 type networkProviderValidation func(string, string) error
@@ -69,8 +68,6 @@ type Configuration struct {
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
-	UserName            string                    `yaml:"user_name"`
-	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 
 	// duplicated in ioserver.Config
@@ -161,7 +158,17 @@ func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 // which modify nested ioserver configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
 // function.
-func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
+func (c *Configuration) updateServerConfig(cfgPtr **ioserver.Config) {
+	// If we somehow get a nil config, we can't return an error, and
+	// we don't want to cause a segfault. Instead, just create an
+	// empty config and return early, so that it eventually fails
+	// validation.
+	if *cfgPtr == nil {
+		*cfgPtr = &ioserver.Config{}
+		return
+	}
+
+	srvCfg := *cfgPtr
 	srvCfg.Fabric.Update(c.Fabric)
 	srvCfg.SystemName = c.SystemName
 	srvCfg.SocketDir = c.SocketDir
@@ -171,8 +178,8 @@ func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
 // WithServers sets the list of IOServer configurations.
 func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration {
 	c.Servers = srvList
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 	return c
 }
@@ -267,23 +274,6 @@ func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
 	return c
 }
 
-// WithUserName sets the user to run as.
-func (c *Configuration) WithUserName(name string) *Configuration {
-	c.UserName = name
-	return c
-}
-
-// WithGroupName sets the group to run as.
-func (c *Configuration) WithGroupName(name string) *Configuration {
-	c.GroupName = name
-	return c
-}
-
-// parse decodes YAML representation of configuration
-func (c *Configuration) parse(data []byte) error {
-	return yaml.Unmarshal(data, c)
-}
-
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
@@ -311,7 +301,7 @@ func NewConfiguration() *Configuration {
 // Load reads the serialized configuration from disk and validates it.
 func (c *Configuration) Load() error {
 	if c.Path == "" {
-		return errors.New(msgConfigNoPath)
+		return FaultConfigNoPath
 	}
 
 	bytes, err := ioutil.ReadFile(c.Path)
@@ -319,14 +309,14 @@ func (c *Configuration) Load() error {
 		return errors.WithMessage(err, "reading file")
 	}
 
-	if err = c.parse(bytes); err != nil {
+	if err = yaml.UnmarshalStrict(bytes, c); err != nil {
 		return errors.WithMessage(err, "parse failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples")
 	}
 
 	// propagate top-level settings to server configs
-	for _, srvCfg := range c.Servers {
-		c.updateServerConfig(srvCfg)
+	for i := range c.Servers {
+		c.updateServerConfig(&c.Servers[i])
 	}
 
 	return nil
@@ -344,20 +334,18 @@ func (c *Configuration) SaveToFile(filename string) error {
 }
 
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(path string) error {
-	if path != "" {
-		c.Path = path
+func (c *Configuration) SetPath(inPath string) error {
+	newPath, err := common.ResolvePath(inPath, c.Path)
+	if err != nil {
+		return err
+	}
+	c.Path = newPath
+
+	if _, err = os.Stat(c.Path); err != nil {
+		return err
 	}
 
-	if !filepath.IsAbs(c.Path) {
-		newPath, err := c.ext.getAbsInstallPath(c.Path)
-		if err != nil {
-			return err
-		}
-		c.Path = newPath
-	}
-
-	return nil
+	return err
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
@@ -380,27 +368,47 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 }
 
 // Validate asserts that config meets minimum requirements.
-func (c *Configuration) Validate() (err error) {
+func (c *Configuration) Validate(log logging.Logger) (err error) {
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution
 	defer func() {
-		if err != nil {
+		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-			err = errors.WithMessage(err, msgBadConfig+examplesPath)
+			err = errors.WithMessage(FaultBadConfig,
+				err.Error()+", examples: "+examplesPath)
 		}
 	}()
 
 	if c.Fabric.Provider == "" {
-		return errors.New(msgConfigNoProvider)
+		return FaultConfigNoProvider
 	}
 
 	// only single access point valid for now
 	if len(c.AccessPoints) != 1 {
-		return errors.New(msgConfigBadAccessPoints)
+		return FaultConfigBadAccessPoints
+	}
+	for i := range c.AccessPoints {
+		// apply configured control port if not supplied
+		host, port, err := common.SplitPort(c.AccessPoints[i], c.ControlPort)
+		if err != nil {
+			return errors.Wrap(FaultConfigBadAccessPoints, err.Error())
+		}
+
+		// warn if access point port differs from config control port
+		if strconv.Itoa(c.ControlPort) != port {
+			log.Debugf("access point (%s) port (%s) differs from control port (%d)",
+				host, port, c.ControlPort)
+		}
+
+		if port == "0" {
+			return FaultConfigBadControlPort
+		}
+
+		c.AccessPoints[i] = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	if len(c.Servers) == 0 {
-		return errors.New(msgConfigNoServers)
+		return FaultConfigNoServers
 	}
 
 	for i, srv := range c.Servers {
@@ -428,5 +436,75 @@ func (c *Configuration) Validate() (err error) {
 			}
 		}
 	}
+
+	if len(c.Servers) > 1 {
+		if err := validateMultiServerConfig(log, c); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateMultiServerConfig performs an extra level of validation
+// for multi-server configs. The goal is to ensure that each instance
+// has unique values for resources which cannot be shared (e.g. log files,
+// fabric configurations, PCI devices, etc.)
+func validateMultiServerConfig(log logging.Logger, c *Configuration) error {
+	if len(c.Servers) < 2 {
+		return nil
+	}
+
+	seenValues := make(map[string]int)
+	seenScmSet := make(map[string]int)
+	seenBdevSet := make(map[string]int)
+
+	for idx, srv := range c.Servers {
+		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+			srv.Fabric.Provider,
+			srv.Fabric.Interface,
+			srv.Fabric.InterfacePort)
+
+		if seenIn, exists := seenValues[fabricConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", fabricConfig, idx, seenIn)
+			return FaultConfigDuplicateFabric(idx, seenIn)
+		}
+		seenValues[fabricConfig] = idx
+
+		if srv.LogFile != "" {
+			logConfig := fmt.Sprintf("log_file:%s", srv.LogFile)
+			if seenIn, exists := seenValues[logConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", logConfig, idx, seenIn)
+				return FaultConfigDuplicateLogFile(idx, seenIn)
+			}
+			seenValues[logConfig] = idx
+		}
+
+		scmConf := srv.Storage.SCM
+		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
+		if seenIn, exists := seenValues[mountConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+			return FaultConfigDuplicateScmMount(idx, seenIn)
+		}
+		seenValues[mountConfig] = idx
+
+		for _, dev := range scmConf.DeviceList {
+			if seenIn, exists := seenScmSet[dev]; exists {
+				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
+				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+			}
+			seenScmSet[dev] = idx
+		}
+
+		bdevConf := srv.Storage.Bdev
+		for _, dev := range bdevConf.DeviceList {
+			if seenIn, exists := seenBdevSet[dev]; exists {
+				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+			}
+			seenBdevSet[dev] = idx
+		}
+	}
+
 	return nil
 }

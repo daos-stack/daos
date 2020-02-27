@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,10 +62,10 @@ func TestFlattenAddrs(t *testing.T) {
 			addrPatterns: "localhost:10001,abc-[1-3]",
 			expAddrs:     "abc-1:9999,abc-2:9999,abc-3:9999,localhost:10001",
 		},
-		"too many colons":     {"bad:addr:here", "", "cannot parse \"bad:addr:here\""},
+		"too many colons":     {"bad:addr:here", "", "address bad:addr:here: too many colons in address"},
 		"no host":             {"valid:10001,:100", "", "invalid hostname \":100\""},
 		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
-		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
+		"bad port alphabetic": {"foo:bar", "", "invalid port \"bar\""},
 		"bad port empty":      {"foo:", "", "invalid port \"\""},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -272,7 +272,13 @@ func TestTabulateHostGroups(t *testing.T) {
 		"formatted results": {
 			g:       mockHostGroups(t),
 			cTitles: mockColumnTitles,
-			out:     "Hosts\t\tSCM\t\tNVME\t\t\t\n-----\t\t---\t\t----\t\t\t\nhost5\t\t10GB (2 devices)200TB (1 devices)\t\nhost[1-2]\t13GB (3 devices)200TB (4 devices)\t\nhost[3-4]\t13GB (3 devices)400TB (4 devices)\t\n",
+			out: `
+Hosts     SCM              NVME              
+-----     ---              ----              
+host5     10GB (2 devices) 200TB (1 devices) 
+host[1-2] 13GB (3 devices) 200TB (4 devices) 
+host[3-4] 13GB (3 devices) 400TB (4 devices) 
+`,
 		},
 		"column number mismatch": {
 			g:         mockHostGroups(t),
@@ -288,7 +294,7 @@ func TestTabulateHostGroups(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			table, err := tabulateHostGroups(tt.g, tt.cTitles...)
 			ExpectError(t, err, tt.expErrMsg, name)
-			if diff := cmp.Diff(tt.out, table); diff != "" {
+			if diff := cmp.Diff(strings.TrimLeft(tt.out, "\n"), table); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}
 		})
