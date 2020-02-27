@@ -415,7 +415,6 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 		rc = fetch_entry(oh, th, name, true, &exists, &check_entry);
 		if (rc)
 			return rc;
-
 		if (exists)
 			return EEXIST;
 	}
@@ -1061,8 +1060,15 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
 
+	/*
+	 * Since we don't support daos cont create atomicity (2 or more cont
+	 * creates on the same container will always succeed), we can get into a
+	 * situation where the SB is created by one process, but return EEXIST
+	 * on another. in this case we can just assume it is inserted, and
+	 * continue.
+	 */
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", true, entry);
-	if (rc) {
+	if (rc && rc != EEXIST) {
 		D_ERROR("Failed to insert root entry (%d).", rc);
 		D_GOTO(err_super, rc);
 	}
