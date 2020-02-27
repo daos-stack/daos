@@ -25,7 +25,7 @@ evicttests:
           setname:
              - badname_server
              - FAIL
-     nullname: #default name applied
+     nullname:
           setname:
              - NULL
              - PASS
