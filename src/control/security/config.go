@@ -92,6 +92,7 @@ func DefaultServerTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
+			ServerName:      defaultServer,
 			CARootPath:      defaultCACert,
 			ClientCertDir:   defaultClientCertDir,
 			CertificatePath: defaultServerCert,
