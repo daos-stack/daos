@@ -173,10 +173,13 @@ public class Main {
 
       List<ShellExecutor> executors = new ArrayList<>();
       for (int i=0; i<parallel; i++) {
-        File out = Files.createTempFile("tttout", "").toFile();
-        out.deleteOnExit();
-        File err = Files.createTempFile("ttterr", "").toFile();
-        err.deleteOnExit();
+        File dir = new File(".", i+"");
+        if (!dir.exists()) {
+          dir.mkdir();
+        }
+        File out = new File(dir, "out");
+        File err = new File(dir, "err");
+
         List<String> list = new ArrayList<>();
         list.add("/root/daos/java-test.sh");
         list.add("write");
@@ -329,10 +332,12 @@ public class Main {
 
       List<ShellExecutor> executors = new ArrayList<>();
       for (int i=0; i<parallel; i++) {
-        File out = Files.createTempFile("tttout", "").toFile();
-        out.deleteOnExit();
-        File err = Files.createTempFile("ttterr", "").toFile();
-        err.deleteOnExit();
+        File dir = new File(".", i+"");
+        if (!dir.exists()) {
+          dir.mkdir();
+        }
+        File out = new File(dir, "out");
+        File err = new File(dir, "err");
         List<String> list = new ArrayList<>();
         list.add("/root/daos/java-test.sh");
         list.add("read");

@@ -140,15 +140,16 @@ public final class DaosFsClient {
       }
     };
     ShutdownHookManager.addHook(FINALIZER);
-    log.info("daos finalizer hook added");
+    if (log.isDebugEnabled()) {
+      log.debug("daos finalizer hook added");
+    }
   }
 
   private static void loadLib() {
     try {
-      log.info("loading lib{}.so", LIB_NAME);
       System.loadLibrary(LIB_NAME);
+      log.info("lib{}.so loaded from library", LIB_NAME);
     } catch (UnsatisfiedLinkError e) {
-      log.info("try to load it from jar " + LIB_NAME);
       loadFromJar();
     }
   }
@@ -209,25 +210,35 @@ public final class DaosFsClient {
     poolPtr = daosOpenPool(poolId, builder.serverGroup,
             builder.ranks,
             builder.poolFlags);
-    log.info("opened pool {}", poolPtr);
+    if (log.isDebugEnabled()) {
+      log.debug("opened pool {}", poolPtr);
+    }
 
     if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
       contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
-      log.info("opened container {}", contPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("opened container {}", contPtr);
+      }
       dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
-      log.info("mounted FS {}", dfsPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("mounted FS {}", dfsPtr);
+      }
     } else {
       contId = ROOT_CONT_UUID;
       contPtr = -1;
       dfsPtr = mountFileSystem(poolPtr, -1, builder.readOnlyFs);
-      log.info("mounted FS {} on root container", dfsPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("mounted FS {} on root container", dfsPtr);
+      }
     }
 
     cleanerExe.execute(new Cleaner.CleanerTask());
-    log.info("cleaner task running");
+    if (log.isDebugEnabled()) {
+      log.debug("cleaner task running");
+    }
 
     inited = true;
-    log.info("DaosFsClient for {}, {} inited", poolId, contId);
+    log.info("DaosFsClient for {}, {} initialized", poolId, contId);
   }
 
   public long getDfsPtr() {

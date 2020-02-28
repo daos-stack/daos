@@ -149,7 +149,9 @@ public class DaosFileSystem extends FileSystem {
   static {
     if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
       org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
-      LOG.info("daos finalizer relocated to hadoop ShutdownHookManager");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
+      }
     } else {
       LOG.error("failed to relocate daos finalizer");
     }
@@ -159,7 +161,7 @@ public class DaosFileSystem extends FileSystem {
   public void initialize(URI name, Configuration conf)
           throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem initialize");
+      LOG.debug("DaosFileSystem initializing");
     }
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
@@ -243,6 +245,7 @@ public class DaosFileSystem extends FileSystem {
       //mkdir workingDir in DAOS
       daos.mkdir(workingDir.toUri().getPath(), true);
       setConf(conf);
+      LOG.info("DaosFileSystem initialized");
     } catch (IOException e) {
       throw new IOException("failed to initialize " + this.getClass().getName(), e);
     }
@@ -492,10 +495,10 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem close");
     }
+    super.close();
     if (daos != null) {
       daos.disconnect();
     }
-    super.close();
   }
 
   public boolean isBufferedReadEnabled() {
