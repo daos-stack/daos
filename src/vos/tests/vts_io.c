@@ -298,7 +298,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
 				bio_iov2req_buf(&ent.ie_biov) == NULL ?
-				"[NULL]" : (char *)bio_iov2req_buf(&ent.ie_biov));
+				"[NULL]" :
+				(char *)bio_iov2req_buf(&ent.ie_biov));
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
@@ -502,7 +503,8 @@ io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
 	rc = daos_csummer_type_init(p_csummer, type, chunk_size);
 	if (rc)
 		return rc;
-	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, 1, false, p_iod_csums);
+	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, 1, false,
+				    p_iod_csums);
 	if (rc)
 		daos_csummer_destroy(p_csummer);
 	return rc;
