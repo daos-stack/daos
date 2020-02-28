@@ -825,7 +825,8 @@ support is to pass the -i flag to daos_agent.
 The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
-(`install/etc/daos_agent.yml`).
+(`install/etc/daos_agent.yml`). If installed from rpms the default location is
+(`/usr/etc/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -861,7 +862,7 @@ incomplete integration of certificate support as of the 0.6 release.
 To start the DAOS Agent from the command line, run:
 
 ```bash
-$ daos_agent -i
+$ daos_agent -i &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -874,20 +875,20 @@ Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
-$ systemctl enable daos-agent
-$ systemctl start daos-agent
+$ sudo systemctl enable daos-agent
+$ sudo systemctl start daos-agent
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-agent
+$ sudo systemctl status daos-agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ journalctl --unit daos-agent
+$ sudo journalctl --unit daos-agent
 ```
 
 ## System Validation
