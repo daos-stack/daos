@@ -224,8 +224,7 @@ enum {
 
 struct media_error_msg {
 	struct bio_blobstore	*mem_bs;
-	bool			 mem_update; /* read or write error */
-	bool			 mem_unmap; /* unmap error */
+	int			 mem_err_type;
 	int			 mem_tgt_id;
 };
 

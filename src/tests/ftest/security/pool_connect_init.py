@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@
 from __future__ import print_function
 import os
 import traceback
+
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosApiError
 from test_utils_pool import TestPool
+
 
 class PoolSecurityTest(TestWithServers):
     """
@@ -54,7 +55,7 @@ class PoolSecurityTest(TestWithServers):
         user_uid = os.geteuid()
         user_gid = os.getegid()
 
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         uid, gid, expected = self.params.get("ids", "/run/pool/tests/*")

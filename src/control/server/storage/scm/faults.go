@@ -23,6 +23,8 @@
 package scm
 
 import (
+	"fmt"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -65,16 +67,19 @@ var (
 		"request included already-mounted mount target (cannot double-mount)",
 		"unmount the target and retry the operation",
 	)
-	FaultFormatMissingDevice = scmFault(
-		code.ScmFormatMissingDevice,
-		"configured SCM device does not exist",
-		"check the configured value and/or perform the SCM preparation procedure",
-	)
 	FaultMissingNdctl = scmFault(
 		code.MissingSoftwareDependency,
 		"ndctl utility not found", "install the ndctl software for your OS",
 	)
 )
+
+func FaultFormatMissingDevice(device string) *fault.Fault {
+	return scmFault(
+		code.ScmFormatMissingDevice,
+		fmt.Sprintf("configured SCM device %s does not exist", device),
+		"check the configured value and/or perform the SCM preparation procedure",
+	)
+}
 
 func scmFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{

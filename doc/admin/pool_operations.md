@@ -18,6 +18,10 @@ $ dmg pool create --scm-size=xxG --nvme-size=yyT
 
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
+The actual space allocated will be a base-2 representation for SCM
+(i.e. 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
+representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
+bytes) following convention of units for memory and storage capacity.
 The UUID allocated to the newly created pool is printed to stdout
 (referred as ${puuid}) as well as the rank where the pool service is
 located (referred as ${svcl}).
@@ -278,8 +282,8 @@ Below is the output for a pool created with SCM space only.
     Pool space info:
     - Target(VOS) count:56
     - SCM:
-        Total size: 30064771072
-        Free: 30044570496, min:530139584, max:536869696, mean:536510187
+        Total size: 28GB
+        Free: 28GB, min:505MB, max:512MB, mean:512MB
     - NVMe:
         Total size: 0
         Free: 0, min:0, max:0, mean:0
@@ -296,11 +300,11 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Pool space info:
     - Target(VOS) count:56
     - SCM:
-        Total size: 30064771072
-        Free: 29885237632, min:493096384, max:536869696, mean:533664957
+        Total size: 28GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
     - NVMe:
-        Total size: 60129542144
-        Free: 29885237632, min:493096384, max:536869696, mean:533664957
+        Total size: 56GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
 
 Additional status and telemetry data are planned to be exported through
