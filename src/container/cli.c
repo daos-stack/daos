@@ -479,12 +479,21 @@ struct cont_open_args {
 static int
 cont_open_complete(tse_task_t *task, void *data)
 {
+	daos_cont_open_t	*task_args;
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
+	struct cont_open_in     *in = crt_req_get(arg->rpc);
 	struct cont_open_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
-	struct dc_cont		*cont = daos_task_get_priv(task);
+	struct dc_cont		*cont;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
+
+	task_args = dc_task_get_args(task);
+	cont = dc_cont_alloc(task_args->uuid);
+	if (cont == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	uuid_copy(cont->dc_cont_hdl, in->coi_op.ci_hdl);
+	cont->dc_capas = task_args->flags;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->coo_op, task);
@@ -632,14 +641,13 @@ dc_cont_open(tse_task_t *task)
 	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
 	struct dc_pool		*pool;
-	struct dc_cont		*cont;
+	uuid_t			 dc_cont_hdl;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct cont_open_args	 arg;
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	cont = dc_task_get_priv(task);
 
 	if (uuid_is_null(args->uuid) || args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
@@ -651,17 +659,9 @@ dc_cont_open(tse_task_t *task)
 	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
-	if (cont == NULL) {
-		cont = dc_cont_alloc(args->uuid);
-		if (cont == NULL)
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		uuid_generate(cont->dc_cont_hdl);
-		cont->dc_capas = args->flags;
-		dc_task_set_priv(task, cont);
-	}
-
+	uuid_generate(dc_cont_hdl);
 	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
+		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(dc_cont_hdl),
 		args->flags);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
@@ -671,13 +671,13 @@ dc_cont_open(tse_task_t *task)
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_cont, rc);
+		D_GOTO(err_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_op.ci_uuid, args->uuid);
-	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
+	uuid_copy(in->coi_op.ci_hdl, dc_cont_hdl);
 	in->coi_capas = args->flags;
 	/** Determine which container properties need to be retrieved while
 	 * opening the contianer
@@ -703,8 +703,6 @@ dc_cont_open(tse_task_t *task)
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-err_cont:
-	dc_cont_put(cont);
 err_pool:
 	dc_pool_put(pool);
 err:
