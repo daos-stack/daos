@@ -223,15 +223,15 @@ pipeline {
                         unsuccessful {
                             sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/centos7
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/centos7/**'
@@ -263,20 +263,29 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/leap15/
-                              mkdir -p artifacts/leap15/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/leap15/
+                                  mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
+                                  if ! make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild; then
+                                      cp /etc/mock/opensuse-leap-15.1-x86_64.cfg artifacts/leap15/;
+                                      exit 1
+                                  fi'''
+                        }
                     }
                     post {
                         success {
                             sh label: "Build Log",
-                               script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
+                                          (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap15/)
-                                          createrepo artifacts/leap15/'''
+                                          createrepo artifacts/leap15/
+                                          rpm --qf %{version}-%{release}.%{arch} -qp artifacts/centos7/cart-*.x86_64.rpm > leap15-rpm-version
+                                          cat $mockroot/result/{root,build}.log'''
+                            stash name: 'Leap-rpm-version', includes: 'leap15-rpm-version'
                             publishToRepository product: 'cart',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -296,16 +305,15 @@ pipeline {
                         unsuccessful {
                             sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
-                                          cat $mockroot/result/{root,build}.log
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true
                                           artdir=$PWD/artifacts/leap15
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
                                           fi
                                           (if cd $mockroot/result/; then
                                                cp -r . $artdir
-                                           fi)
-                                          cat $mockroot/result/{root,build}.log \
-                                              2>/dev/null || true'''
+                                           fi)'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/leap15/**'

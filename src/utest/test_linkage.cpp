@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -96,6 +96,7 @@ test_crt_api_linkage(void **state)
 	(void)state;
 
 	setenv("OFI_INTERFACE", "lo", 1);
+	setenv("CRT_PHY_ADDR_STR", "ofi+sockets", 1);
 
 	rc = crt_init(bogus_client_group, 0x0);
 	assert_int_equal(rc, 0);

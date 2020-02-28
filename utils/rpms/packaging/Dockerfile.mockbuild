@@ -15,6 +15,12 @@ ARG UID=1000
 RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
                    git python-srpm-macros
 
+# Temporary fix for https://github.com/rpm-software-management/mock/issues/484
+RUN if [ ! -f /etc/mock/opensuse-leap-15.1-x86_64.cfg ]; then  \
+        ln /etc/mock/templates/opensuse-leap-15.1.tpl          \
+           /etc/mock/opensuse-leap-15.1-x86_64.cfg;            \
+    fi
+
 # Add build user (to keep rpmbuild happy)
 ENV USER build
 ENV PASSWD build
