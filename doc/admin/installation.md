@@ -1,7 +1,7 @@
 # Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
-on CentOS 7, OpenSUSE 42.2, and Ubuntu 18.04 distributions.
+on CentOS 7, OpenSUSE Leap 15.1, and Ubuntu 18.04 distributions.
 
 ## Software Dependencies
 
@@ -293,8 +293,11 @@ So, after the first time, during development, only "scons --config=force" and
 "scons --config=force install" would suffice for compiling changes to DAOS
 source code.
 
-If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
-the scons command line. This option is also saved for future compilations.
+### Using other compilers
+
+If you wish to compile DAOS with clang or use the Intel compilers rather than
+gcc, set COMPILER=clang or COMPILER=icc on the scons command line.
+This option is also saved for future compilations.
 
 ### Go dependencies
 
