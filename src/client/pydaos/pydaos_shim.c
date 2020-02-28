@@ -476,6 +476,7 @@ struct kv_op {
 	char		*key;
 	char		*buf;
 	daos_size_t	 size;
+	daos_size_t	buf_size;
 };
 
 static inline int
@@ -544,8 +545,9 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 			rc = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
-			op->size = v_size;
-			D_ALLOC(op->buf, op->size);
+			op->buf_size = v_size;
+			op->size = op->buf_size;
+			D_ALLOC(op->buf, op->buf_size);
 			if (op->buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
@@ -573,16 +575,18 @@ rewait:
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
 					D_GOTO(err, 0);
+				/* Reset the size of the request */
+				op->size = op->buf_size;
+				evp->ev_error = 0;
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
 
-				op->size *= 2;
 				D_REALLOC(new_buff, op->buf, op->size);
 				if (new_buff == NULL) {
 					rc = -DER_NOMEM;
 					break;
 				}
-
+				op->buf_size = op->size;
 				op->buf = new_buff;
 
 				daos_event_fini(evp);
@@ -599,9 +603,6 @@ rewait:
 				rc = evp->ev_error;
 				break;
 			}
-			if (op->size < v_size)
-				op->size = v_size;
-			evp->ev_error = 0;
 		}
 
 		/** submit get request */
@@ -643,11 +644,11 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				op->size *= 2;
 				D_REALLOC(new_buff, op->buf, op->size);
 				if (new_buff == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 
+				op->buf_size = op->size;
 				op->buf = new_buff;
 
 				rc2 = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key,
