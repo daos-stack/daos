@@ -44,7 +44,7 @@ class IorSmall(IorTestBase):
         Create object with different transfer size
         wait for Aggregation to happen
         read the data again
-        Delete all the objects
+        Delete all the objects.
         Run above code in loop for some time (1 hour) and expected not to fail
         with NO ENOM SPAC.
 
