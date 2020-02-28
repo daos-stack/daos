@@ -1,0 +1,21 @@
+Collapsing Nav Panel
+Symlinks for Design document - same as current
+API document - in github
+Release notes trial
+User Guide
+External ticket dashboard
+PR reviews
+
+Travel move to Q1
+MS172a - No NRE mod - get in as soon as possible - Wednesday
+Quarterly
+Wednesday meeting
+	Qtrly - 
+	Johann update on SDL
+	0.8 Update/status
+	External ticket update
+	0.9/1.0 Planning
+	Johann exit criteria for 1.0
+	
+	
+	

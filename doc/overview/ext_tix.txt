@@ -1,0 +1,10 @@
+We need to be responsive to these initial POCs. They need tracked and responded to.
+A process need established to process the request and parse out the tix to responsible EMs and track the tix through the process (Craig).
+Verify closure on tix and appropriate response.
+Triage Channel to prioritize external tix
+Wiki to establish how to submit tix
+HP has been told to email their ticket to Johann directly (blocking only) - General questions are to be mailed to the group (onboarding Wiki for access).
+Can we close the ability to create issues in Github? (Scott K) - Yes. Question is if requesting access to Jira too high a bar? How to tell them how to request an account? Brian can close. Lets wait until we find how difficult requests are to approve. In the interim, monitor github issues.
+Do external users have read access to ALL Jira tix? Is this intended? Private projects will be created at the appropriate time.
+We need codenames for external customers/tix for sortability and to conceal customer identity - NO
+Triage channel to be created. Use the channel to create a rapid response.

@@ -11,14 +11,18 @@ repo_url: https://github.com/daos-stack/daos
 
 # Theme
 theme:
-    name: readthedocs
+    name: windmill
     language: en
+    collapse_by_default: false
+
+extra:
+    version: v0.8
 
 docs_dir: ./
 
 # Page tree
 nav:
-    - Home: index.md
+    - Home: 'index.md'
     - Overview:
         - 'Terminology': 'overview/terminology.md'
         - 'Storage Model': 'overview/storage.md'
@@ -26,17 +30,38 @@ nav:
         - 'Fault Model': 'overview/fault.md'
         - 'Security Model': 'overview/security.md'
     - Administration Guide:
-        - 'Introduction': 'admin/intro.md'
         - 'DAOS Architecture': 'admin/architecture.md'
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
         - 'System Deployment': 'admin/deployment.md'
-        - 'System Administration': 'admin/administration.md'
+        - 'Administration': 'admin/administration.md'
         - 'Pool Operations': 'admin/pool_operations.md'
         - 'Applications Interface and Tiering': 'admin/app_interface_tiering.md'
         - 'Performance Tuning': 'admin/performance_tuning.md'
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
-    - User Guide:
-    - Developer Guide:
+    - Developers Guide:
+        - 'DAOS Storage Model': 'Dev/store.md'
+        - 'DAOS Internals': 'Dev/DAOS_internals.md'
+        - 'DAOS Control Plane (daos_server)': 'Dev/control_plane.md'
+        - 'Management Tool': 'Dev/management_tool.md'
+        - 'DAOS Agent': 'Dev/DAOS_agent.md'
+        - 'Certificate Management': 'Dev/cert_mgmt.md'
+        - 'Security': 'Dev/DAOS_security.md'
+        - 'DAOS Data Plane': 'Dev/data_plane.md'
+        - 'Replicated Database (RDB)': 'Dev/rdb.md'
+        - 'Replicated Services': 'Dev/rsvc.md'
+        - 'DAOS Pool': 'DAOS_pool.md'
+        - 'DAOS Container': 'Dev/DAOS_container.md'
+        - 'DAOS Object': 'Dev/object.md'
+        - 'Versioning Object Store': 'Dev/VOS.md'
+        - 'Blob I/O': 'Dev/blob_io.md'
+        - 'Algorithmic Object Placement': 'Dev/alg_obj_placement.md'
+        - 'Self-Healing (Rebuild)': 'Dev/rebuild.md'
+        - 'DAOS Common Libraries': 'Dev/common_libs.md'
+        - 'Daos Client Library': 'Dev/client_lib.md'
+    - DAOS Internals: 
+        - 'DAOS Internals': 'Dev/DAOS_internals.md'
+    - DAOS API Documentation: 
+        - 'DAOS API': 'html/doc/index.html'
