@@ -199,7 +199,6 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	return nr;
 }
-#ifdef NO
 static int
 lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 {
@@ -218,7 +217,6 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }
-#endif
 
 struct agg_tst_dataset {
 	daos_unit_oid_t			 td_oid;
@@ -342,7 +340,6 @@ generate_recx(daos_recx_t *recx_tot, daos_recx_t *recx)
 	recx->rx_nr = rand() % max_nr + 1;
 }
 
-#ifdef NO
 static void
 generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 {
@@ -362,7 +359,7 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 	}
 	D_FREE(buf_u);
 }
-#endif
+
 static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[], bool with_csums)
@@ -424,7 +421,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, with_csums);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, 0);
 	assert_int_equal(rc, 0);
 
 	verify_view(arg, oid, dkey, akey, ds);
@@ -436,7 +433,6 @@ get_ds_index(int oid_idx, int dkey_idx, int akey_idx, int nr)
 	return oid_idx * nr * nr + dkey_idx * nr + akey_idx;
 }
 
-#ifdef NO
 static void
 generate_or_verify(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 		   char *akey, struct agg_tst_dataset *ds_arr, int ds_idx,
@@ -484,13 +480,11 @@ multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 		}
 	}
 }
-#endif
 
 #define AT_SV_IOD_SIZE_SMALL	32			/* SCM record */
 #define AT_SV_IOD_SIZE_LARGE	(VOS_BLK_SZ + 500)	/* NVMe record */
 #define AT_OBJ_KEY_NR		3
 
-#ifdef NO
 static void
 aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
@@ -603,7 +597,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
 	D_FREE(ds_arr);
 }
-#endif
+
 /*
  * Discard on single akey->SV with specified epoch.
  */
@@ -631,7 +625,6 @@ discard_1(void **state)
 		aggregate_basic(arg, &ds, 0, NULL, false);
 	}
 }
-#ifdef NO
 /*
  * Discard on single akey-SV with epr [A, B].
  */
@@ -1021,7 +1014,7 @@ discard_13(void **state)
 
 	aggregate_basic(arg, &ds, -1, NULL, false);
 }
-#endif
+
 enum {
 	AGG_OBJ_TYPE,
 	AGG_DKEY_TYPE,
@@ -1035,7 +1028,6 @@ enum {
 	AGG_UPDATE,
 };
 
-#ifdef NO
 static void
 do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 	 daos_epoch_t epoch, char *dkey, char *akey)
@@ -1629,7 +1621,6 @@ aggregate_11(void **state)
 	aggregate_basic(arg, &ds, -1, NULL, false);
 	daos_fail_loc_set(0);
 }
-#endif
 
 /*
  * Aggregate on single akey->EV, random punch, small flush threshold.
@@ -1649,7 +1640,7 @@ aggregate_12(void **state)
 		generate_recx(&recx_tot, &recx_arr[i]);
 
 	ds.td_type = DAOS_IOD_ARRAY;
-	ds.td_iod_size = 16;
+	ds.td_iod_size = 10;
 	ds.td_expected_recs = -1;
 	ds.td_recx_nr = 500;
 	ds.td_recx = &recx_arr[0];
@@ -1672,7 +1663,6 @@ aggregate_12(void **state)
 /*
  * Aggregate EV on multiple objects, keys.
  */
-#ifdef NO
 static void
 aggregate_13(void **state)
 {
@@ -1849,7 +1839,7 @@ aggregate_16(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
 }
-#endif
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -1860,7 +1850,6 @@ agg_tst_teardown(void **state)
 static const struct CMUnitTest discard_tests[] = {
 	{ "VOS451: Discard SV with specified epoch",
 	  discard_1, NULL, agg_tst_teardown },
-	/*
 	{ "VOS452: Discard SV with confined epr",
 	  discard_2, NULL, agg_tst_teardown },
 	{ "VOS453: Discard SV with epr [0, DAOS_EPOCH_MAX]",
@@ -1889,12 +1878,9 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
-	  */
-
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	/*
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -1917,10 +1903,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_10, NULL, agg_tst_teardown },
 	{ "VOS411: Aggregate EV with random punch, random yield",
 	  aggregate_11, NULL, agg_tst_teardown },
-	  */
 	{ "VOS412: Aggregate EV with random punch, small flush threshold",
 	  aggregate_12, NULL, agg_tst_teardown },
-	/*
 	{ "VOS413: Aggregate EV, multiple objects, keys",
 	  aggregate_13, NULL, agg_tst_teardown },
 	{ "VOS414: Update and Aggregate EV repeatedly",
@@ -1929,7 +1913,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS416: Aggregate many object/key punches array",
 	  aggregate_16, NULL, agg_tst_teardown },
-	*/
 };
 
 int

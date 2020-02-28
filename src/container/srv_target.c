@@ -61,13 +61,34 @@
 static inline int
 cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 {
+	daos_prop_t	*props;
+	unsigned int	 csum_val, agg_flags = 0;
+	int		 rc;
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
 	 * on ds_cont_child purging.
 	 */
 	if (cont->sc_abort_vos_aggregating)
 		return 1;
-	return vos_aggregate(cont->sc_hdl, epr, false);
+
+	props = daos_prop_alloc(2);
+	if (props == NULL)
+		return -DER_NOMEM;
+
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	rc = cont_iv_prop_fetch(cont->sc_pool->spc_pool->sp_iv_ns,
+				hdl->sch_uuid, props);
+	if (rc != 0)
+		goto out;
+	csum_val = daos_cont_prop2csum(props);
+
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		agg_flags |= VAF_CSUM;
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_flags);
+out:
+	daos_prop_free(props);
+	return rc;
 }
 
 static bool

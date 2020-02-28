@@ -409,6 +409,11 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 int
 vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
 
+enum vos_agg_flags {
+	VAF_CSUM	= (1 << 0),
+	VAF_UNIT_TEST	= (1 << 2),
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -421,7 +426,8 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, bool with_csums);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+	      unsigned int agg_flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
