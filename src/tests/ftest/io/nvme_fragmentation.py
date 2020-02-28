@@ -91,3 +91,4 @@ class IorSmall(IorTestBase):
             self.container.uuid = container_info[key]
             self.container.destroy()
         self.pool.display_pool_daos_space("Pool space at the End")
+
