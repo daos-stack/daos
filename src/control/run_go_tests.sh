@@ -45,19 +45,19 @@ function setup_environment()
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
-	LD_LIBRARY_PATH=${SL_PREFIX}/lib64
-	LD_LIBRARY_PATH+=":${SL_SPDK_PREFIX}/lib"
-	LD_LIBRARY_PATH+=":${SL_OFI_PREFIX}/lib"
-	LD_LIBRARY_PATH+=":${SL_ISAL_PREFIX}/lib"
-	CGO_LDFLAGS=-L${SL_PREFIX}/lib64
-	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
-	CGO_LDFLAGS+=" -L${SL_OFI_PREFIX}/lib"
-	CGO_LDFLAGS+=" -L${SL_ISAL_PREFIX}/lib"
+	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib64}
+	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
+	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
+	LD_LIBRARY_PATH+="${SL_ISAL_PREFIX+:${SL_ISAL_PREFIX}/lib}"
+	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib64}
+	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
+	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
+	CGO_LDFLAGS+="${SL_ISAL_PREFIX+ -L${SL_ISAL_PREFIX}/lib}"
 	CGO_LDFLAGS+=" -lisal"
-	CGO_CFLAGS=-I${SL_PREFIX}/include
-	CGO_CFLAGS+=" -I${SL_SPDK_PREFIX}/include"
-	CGO_CFLAGS+=" -I${SL_OFI_PREFIX}/include"
-	CGO_CFLAGS+=" -I${SL_ISAL_PREFIX}/include"
+	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
+	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
 }
 
 function check_formatting()
