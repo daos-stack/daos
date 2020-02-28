@@ -1130,7 +1130,7 @@ vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 	    bool unit_test);
 
 unsigned int
-vos_csum_prepare_ent(struct evt_entry_in * ent_in,
+vos_csum_prepare_ent(struct evt_entry_in *ent_in,
 		     struct vos_agg_phy_ent *phy_ent);
 
 int

@@ -644,8 +644,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			unsigned int wider = 0; /* length of per-ext csum add */
 			unsigned int add_cnt =
 				vos_csum_widen_biov(&bsgl.bs_iovs[biov_idx],
-						    phy_ent, &ext, ent_in->ei_inob,
-						    phy_lo, &wider);
+						    phy_ent, &ext,
+						    ent_in->ei_inob, phy_lo,
+						    &wider);
 
 			/* add_cnt is the number of data segments to add. */
 			if (add_cnt) {
@@ -680,7 +681,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (added_csum_segs) {
-		rc = vos_csum_append_added_segs(&bsgl,added_csum_segs);
+		rc = vos_csum_append_added_segs(&bsgl, added_csum_segs);
 		if (rc) {
 			D_ERROR("Extend bsgl error: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -850,9 +851,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		/* The physical entry was truncated on prev window
 		 * flush
 		 */
-		if (phy_ent->pe_off != 0) {
+		if (phy_ent->pe_off != 0)
 			rect.rc_ex.ex_lo += phy_ent->pe_off;
-		}
 
 		D_ASSERT(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi);
 		D_ASSERT(rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
@@ -875,8 +875,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
 			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
-				""DF_RC"\n", DP_RECT(&rect),
-				phy_ent->pe_off,
+				""DF_RC"\n", DP_RECT(&rect), phy_ent->pe_off,
 				DP_RC(rc));
 			goto abort;
 		}

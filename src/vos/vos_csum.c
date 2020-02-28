@@ -36,10 +36,8 @@ struct csum_recalc_args {
 	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
 	struct csum_recalc	*cra_recalcs;   /* recalc info */
 	void			*cra_buf;	/* read buffer */
-	daos_size_t		 cra_seg_size;  /* size of coalesced entry,
-						   (in bytes) */
-	unsigned int		 cra_seg_cnt;   /* # of read segments,
-						   (not including adds) */
+	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
 	unsigned int		 cra_buf_len;	/* length of read buffer */
 	int			 cra_rc;	/* return code */
 	ABT_eventual		 csum_eventual;
@@ -129,8 +127,8 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		if (orig_offset != out_offset) {
 			unsigned int add_start = chunksize -
 							orig_offset % chunksize;
-
 			unsigned int offset = orig_offset + add_start;
+
 			if (add_start)
 				j++;
 			while (offset < out_offset) {
@@ -322,14 +320,14 @@ vos_csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 
 int
 vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
-	    d_sg_list_t *sgl, struct evt_entry_in*ent_in,
+	    d_sg_list_t *sgl, struct evt_entry_in *ent_in,
 	    struct csum_recalc *recalcs,
 	    unsigned int recalc_seg_cnt, daos_size_t seg_size, bool unit_test)
 {
 	struct csum_recalc_args	args = { 0 };
 
-	D_ASSERT(recalc_seg_cnt && recalcs[0].cr_phy_ent->pe_csum_info.cs_csum &&
-		 recalcs[0].cr_phy_ent->pe_csum_info.cs_nr &&
+	D_ASSERT(recalc_seg_cnt && recalcs[0].cr_phy_ent->pe_csum_info.cs_csum
+		 && recalcs[0].cr_phy_ent->pe_csum_info.cs_nr &&
 		 recalcs[0].cr_phy_ent->pe_csum_info.cs_type);
 
 	args.cra_bsgl		= bsgl;
@@ -356,14 +354,14 @@ vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 }
 
 unsigned int
-vos_csum_prepare_ent(struct evt_entry_in * ent_in,
+vos_csum_prepare_ent(struct evt_entry_in *ent_in,
 		     struct vos_agg_phy_ent *phy_ent)
 {
 	unsigned int chunksize = phy_ent->pe_csum_info.cs_chunksize;
 	unsigned int cur_cnt = csum_chunk_count(chunksize,
-					        ent_in->ei_rect.rc_ex.ex_lo,
-					        ent_in->ei_rect.rc_ex.ex_hi,
-					        ent_in->ei_inob);
+						ent_in->ei_rect.rc_ex.ex_lo,
+						ent_in->ei_rect.rc_ex.ex_hi,
+						ent_in->ei_inob);
 
 	ent_in->ei_csum.cs_nr = cur_cnt;
 	ent_in->ei_csum.cs_type = phy_ent->pe_csum_info.cs_type;
@@ -390,8 +388,9 @@ vos_csum_prepare_buf(struct vos_agg_lgc_seg *segs, unsigned int seg_cnt,
 		return -DER_NOMEM;
 	csum_buf = buffer;
 	memset(&csum_buf[cur_buf], 0, add_len);
-	for (i =0; i < seg_cnt; i++) {
+	for (i = 0; i < seg_cnt; i++) {
 		struct dcs_csum_info *csum_info = &segs[i].ls_ent_in.ei_csum;
+
 		csum_info->cs_csum = &csum_buf[cur_buf];
 		cur_buf += csum_info->cs_len * csum_info->cs_nr;
 		D_ASSERT(cur_buf <= new_len);
