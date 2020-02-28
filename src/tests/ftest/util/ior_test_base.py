@@ -52,6 +52,7 @@ class IorTestBase(TestWithServers):
         self.hostfile_clients_slots = None
         self.dfuse = None
         self.container = None
+        self.container.uuid = None
         self.co_prop = None
         self.lock = None
 
@@ -140,7 +141,8 @@ class IorTestBase(TestWithServers):
             cont_uuid(str, optional): container uuid. Default to None which will
                                       create new container.
         """
-        self.update_ior_cmd_with_pool(cont_uuid)
+        self.container.uuid = cont_uuid
+        self.update_ior_cmd_with_pool()
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
@@ -158,7 +160,7 @@ class IorTestBase(TestWithServers):
 
         return out
 
-    def update_ior_cmd_with_pool(self, cont_uuid=None):
+    def update_ior_cmd_with_pool(self):
         """Update ior_cmd with pool
         """
         # Create a pool if one does not already exist
@@ -168,10 +170,8 @@ class IorTestBase(TestWithServers):
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         # Adding option to use the existing container data
-        if cont_uuid is None:
+        if self.container.uuid is None:
             self.create_cont()
-        else:
-            self.container.uuid = cont_uuid
 
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
