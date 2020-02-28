@@ -548,7 +548,6 @@ done:
 	return rc;
 }
 
-
 static int
 calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl,
 	       size_t rec_len, daos_recx_t *recxs, size_t nr,
@@ -654,7 +653,7 @@ daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
 
 	recx.rx_idx = idx;
 	recx.rx_nr = nr;
-	return calc_csum(obj, sgl, rec_len, &recx, 1, csums);
+	return calc_csum_recx(obj, sgl, rec_len, &recx, 1, csums);
 }
 
 int
