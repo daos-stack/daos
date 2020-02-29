@@ -1,0 +1,48 @@
+server_config:
+   name: daos_server
+hosts:
+  test_servers:
+    - server-A
+timeout: 650
+evicttests:
+   svrlist: !mux
+     goodlist:
+          ranklist:
+             - VALID
+             - PASS
+     badlist:
+          ranklist:
+             - NULL
+             - FAIL
+   connectsetnames: !mux
+     goodname:
+          setname:
+             - daos_server
+             - PASS
+     badname:
+          setname:
+             - badname_server
+             - FAIL
+     nullname:
+          setname:
+             - NULL
+             - PASS
+   UUID: !mux
+     gooduuid:
+          uuid:
+             - VALID
+             - PASS
+     nulluuid:
+          uuid:
+             - NULL
+             - FAIL
+     baduuid:
+          uuid:
+             - JUNK
+             - FAIL
+   createmode:
+     mode: 511
+   createset:
+     setname: daos_server
+   createsize:
+     size: 1073741824
