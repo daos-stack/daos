@@ -41,6 +41,7 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 
+def daos_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -49,7 +50,7 @@ def el7_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl " +
+def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl spdk-tools " +
                        "ior-hpc-cart-4-daos-0 mpich-autoload-cart-4-daos-0 " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
@@ -121,11 +122,13 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
-                        returnStatus: true)
+       QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
-        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config", returnStdout: true).trim()
+        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config",
+                         returnStdout: true).trim()
+        QUICKBUILD_DEPS = sh(script: "rpmspec -q --define cart_sha1\\ ${env.CART_COMMIT} --srpm --requires utils/rpms/daos.spec 2>/dev/null",
+                             returnStdout: true)
     }
 
     options {
@@ -146,7 +149,6 @@ pipeline {
                 allOf {
                     not { branch 'weekly-testing' }
                     expression { env.CHANGE_TARGET != 'weekly-testing' }
-                    expression { return env.QUICKBUILD == '1' }
                 }
             }
             parallel {
@@ -217,13 +219,6 @@ pipeline {
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                        }
-                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
@@ -261,6 +256,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -340,6 +336,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -379,7 +376,8 @@ pipeline {
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=' + env.QUICKBUILD +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
+                                                ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
+                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
                                                 ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
@@ -464,7 +462,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -525,7 +523,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -587,7 +585,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -648,7 +646,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -709,7 +707,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -771,7 +769,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -854,7 +852,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
-                                                  "cart-${env.CART_COMMIT} fuse3-libs " +
+                                                  "cart-devel-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
                                                   'spdk-devel libfabric-devel pmix numactl-devel'
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
@@ -993,8 +991,9 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                '--build-arg QUICKBUILD=0' +
-                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
+                                                '--build-arg QUICKBUILD=true' +
+                                                ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
+                                                '" --build-arg CART_COMMIT=-' + env.CART_COMMIT +
                                                 ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
@@ -1378,7 +1377,9 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-test-centos-rpms').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1406,7 +1407,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: "master"
+            notifyBrokenBranch branches: daos_branch
         }
     }
 }

@@ -1703,7 +1703,8 @@ out:
 
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		   const uuid_t pool_hdl, uint64_t capas, d_iov_t creds,
+		   const uuid_t pool_hdl, uint64_t flags, uint64_t sec_capas,
+		   d_iov_t creds,
 		   struct daos_pool_space *ps, crt_bulk_t map_buf_bulk)
 {
 	struct pool_tgt_connect_in     *in;
@@ -1725,7 +1726,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in = crt_req_get(rpc);
 	uuid_copy(in->tci_uuid, svc->ps_uuid);
 	uuid_copy(in->tci_hdl, pool_hdl);
-	in->tci_capas = capas;
+	in->tci_flags = flags;
+	in->tci_sec_capas = sec_capas;
 	in->tci_cred = creds;
 	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
@@ -1877,9 +1879,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	daos_prop_t		       *prop = NULL;
 	uint64_t			prop_bits;
 	struct daos_prop_entry	       *acl_entry;
-	struct pool_owner		owner;
+	struct ownership		owner;
 	struct daos_prop_entry	       *owner_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
+	uint64_t			sec_capas = 0;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -1920,7 +1923,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
 	if (rc == 0) {
-		if (hdl.ph_capas == in->pci_capas) {
+		if (hdl.ph_flags == in->pci_flags) {
 			/*
 			 * The handle already exists; only do the pool map
 			 * transfer.
@@ -1963,12 +1966,24 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	owner.user = owner_entry->dpe_str;
 	owner.group = owner_grp_entry->dpe_str;
 
-	rc = ds_sec_check_pool_access(acl_entry->dpe_val_ptr, &owner,
-			&in->pci_cred, in->pci_capas);
+	/*
+	 * Security capabilities determine the access control policy on this
+	 * pool handle.
+	 */
+	rc = ds_sec_pool_get_capabilities(in->pci_flags, &in->pci_cred, &owner,
+					  acl_entry->dpe_val_ptr,
+					  &sec_capas);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": refusing connect attempt for "
 			DF_X64" error: "DF_RC"\n", DP_UUID(in->pci_op.pi_uuid),
-			in->pci_capas, DP_RC(rc));
+			in->pci_flags, DP_RC(rc));
+		D_GOTO(out_map_version, rc);
+	}
+
+	if (!ds_sec_pool_can_connect(sec_capas)) {
+		D_ERROR(DF_UUID": permission denied for connect attempt for "
+			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid),
+			in->pci_flags);
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
@@ -2001,7 +2016,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	/* Take care of exclusive handles. */
 	if (nhandles != 0) {
-		if (in->pci_capas & DAOS_PC_EX) {
+		if (in->pci_flags & DAOS_PC_EX) {
 			D_DEBUG(DF_DSMS, DF_UUID": others already connected\n",
 				DP_UUID(in->pci_op.pi_uuid));
 			D_GOTO(out_map_version, rc = -DER_BUSY);
@@ -2016,13 +2031,13 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 					  NULL /* key_out */, &value);
 			if (rc != 0)
 				D_GOTO(out_map_version, rc);
-			if (hdl.ph_capas & DAOS_PC_EX)
+			if (hdl.ph_flags & DAOS_PC_EX)
 				D_GOTO(out_map_version, rc = -DER_BUSY);
 		}
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas, in->pci_cred,
+				in->pci_flags, sec_capas, in->pci_cred,
 				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
 				&out->pco_space : NULL, CRT_BULK_NULL);
 	if (rc != 0) {
@@ -2031,7 +2046,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 	}
 
-	hdl.ph_capas = in->pci_capas;
+	hdl.ph_flags = in->pci_flags;
+	hdl.ph_sec_capas = sec_capas;
 	nhandles++;
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
