@@ -584,6 +584,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		setbit(tgts_used, target->ta_comp.co_id);
 
 		if (pool_target_unavail(target, for_reint)) {
+			fail_tgt_cnt++;
 			rc = remap_alloc_one(remap_list, 0, target, false);
 			if (rc)
 				D_GOTO(out, rc);

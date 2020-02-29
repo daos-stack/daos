@@ -109,7 +109,7 @@ func main() {
 		sendFailureAndExit(log, errors.Wrap(err, "unable to setuid(0)"), conn)
 	}
 
-	req, err := readRequest(log, conn)
+	req, err := readRequest(conn)
 	if err != nil {
 		exitWithError(log, err)
 	}
