@@ -868,8 +868,8 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_TRACE, "class_id %d crt class id %d opc %d\n",
-		key_iv->class_id, class->iv_cart_class_id, opc);
+	D_DEBUG(DB_TRACE, "class_id %d master %d crt class id %d opc %d\n",
+		key_iv->class_id, key_iv->rank, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
 	memset(&cb_info, 0, sizeof(cb_info));

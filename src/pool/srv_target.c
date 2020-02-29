@@ -384,6 +384,19 @@ ds_pool_lookup(const uuid_t uuid)
 }
 
 void
+ds_pool_get(struct ds_pool *pool)
+{
+	struct daos_llink	*llink;
+	int			rc;
+
+	ABT_mutex_lock(pool_cache_lock);
+	rc = daos_lru_ref_hold(pool_cache, (void *)pool->sp_uuid, sizeof(uuid_t),
+			  NULL, &llink);
+	ABT_mutex_unlock(pool_cache_lock);
+	D_ASSERT(rc == 0);
+}
+
+void
 ds_pool_put(struct ds_pool *pool)
 {
 	ABT_mutex_lock(pool_cache_lock);
@@ -432,7 +445,6 @@ ds_pool_start(uuid_t uuid)
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
 			rc);
-
 out_lock:
 	ABT_mutex_unlock(pool_cache_lock);
 	return rc;
@@ -722,98 +734,62 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	return rc;
 }
 
-void
-ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
+int
+ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 {
-	struct pool_tgt_connect_in	*in = crt_req_get(rpc);
-	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
-	struct ds_pool			*pool;
-	struct ds_pool_hdl		*hdl;
-	int				 rc;
+	struct ds_pool_hdl	*hdl = NULL;
+	d_iov_t			cred_iov;
+	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_hdl));
-
-	hdl = ds_pool_hdl_lookup(in->tci_hdl);
+	hdl = ds_pool_hdl_lookup(pic->pic_hdl);
 	if (hdl != NULL) {
-		if (hdl->sph_flags == in->tci_flags) {
+		if (hdl->sph_sec_capas == pic->pic_capas) {
 			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
-				"handle: hdl="DF_UUID" flags="DF_U64"\n",
-				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
-				hdl->sph_flags);
+				"handle: hdl="DF_UUID" capas="DF_U64"\n",
+				DP_UUID(pool->sp_uuid), DP_UUID(pic->pic_hdl),
+				hdl->sph_sec_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
-				DF_UUID" flags="DF_U64"\n",
-				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
-				hdl->sph_flags);
+				DF_UUID" capas="DF_U64"\n",
+				DP_UUID(pool->sp_uuid), DP_UUID(pic->pic_hdl),
+				hdl->sph_sec_capas);
 			rc = -DER_EXIST;
 		}
 		ds_pool_hdl_put(hdl);
-		D_GOTO(out, rc);
+		return 0;
 	}
 
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	pool = ds_pool_lookup(in->tci_uuid);
-	if (pool == NULL) {
-		D_FREE(hdl);
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	rc = ds_pool_tgt_map_update(pool, NULL, in->tci_map_version);
-	if (rc != 0) {
-		ds_pool_put(pool);
-		D_FREE(hdl);
-		goto out;
-	}
-
-	uuid_copy(hdl->sph_uuid, in->tci_hdl);
-	hdl->sph_flags = in->tci_flags;
-	hdl->sph_sec_capas = in->tci_sec_capas;
+	ds_pool_get(pool);
+	uuid_copy(hdl->sph_uuid, pic->pic_hdl);
+	hdl->sph_flags = pic->pic_flags;
+	hdl->sph_sec_capas = pic->pic_capas;
 	hdl->sph_pool = pool;
 
-	rc = daos_iov_copy(&hdl->sph_cred, &in->tci_cred);
-	if (rc != 0) {
-		ds_pool_put(pool);
-		D_FREE(hdl);
+	cred_iov.iov_len = pic->pic_cred_size;
+	cred_iov.iov_buf_len = pic->pic_cred_size;
+	cred_iov.iov_buf = &pic->pic_creds[0];
+	rc = daos_iov_copy(&hdl->sph_cred, &cred_iov);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	rc = pool_hdl_add(hdl);
 	if (rc != 0) {
 		daos_iov_free(&hdl->sph_cred);
-		ds_pool_put(pool);
-		D_FREE(hdl);
 		D_GOTO(out, rc);
 	}
 
-	ds_pool_iv_ns_update(pool, in->tci_master_rank);
-
-	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
-		rc = pool_tgt_query(pool, &out->tco_space);
 out:
-	out->tco_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d "DF_RC"\n",
-		DP_UUID(in->tci_uuid), rpc, out->tco_rc, DP_RC(rc));
-	crt_reply_send(rpc);
-}
+	if (rc != 0 && hdl != NULL)
+		D_FREE(hdl);
 
-int
-ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct pool_tgt_connect_out	*out_source = crt_reply_get(source);
-	struct pool_tgt_connect_out	*out_result = crt_reply_get(result);
-
-	out_result->tco_rc += out_source->tco_rc;
-	if (out_source->tco_rc != 0)
-		return 0;
-
-	aggregate_pool_space(&out_result->tco_space, &out_source->tco_space);
-	return 0;
+	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",
+		DP_UUID(pool->sp_uuid), DP_RC(rc));
+	return rc;
 }
 
 void

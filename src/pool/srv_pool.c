@@ -973,21 +973,33 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
 	struct ds_pool_evict_arg	*ult_arg;
+	daos_prop_t			prop = { 0 };
+	struct daos_prop_entry		*entry;
 	struct pool_svc			*svc = arg;
 	int				rc = 0;
 
 	/* Only used for evict the rank for the moment */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore src/type %u/%u\n", src, type);
+	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD || pool_disable_evict) {
+		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u%d\n",
+			src, type, pool_disable_evict);
 		return;
 	}
 
-	if (pool_disable_evict) {
-		D_DEBUG(DB_MGMT, "event response is disabled\n");
-		return;
+	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+	if (rc)
+		D_GOTO(out, rc);
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	if (entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE) {
+		D_DEBUG(DB_MGMT, "self healing is disabled\n");
+		D_GOTO(out, rc);
 	}
 
 	D_ALLOC_PTR(ult_arg);
+	if (ult_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	/* Failure allocation might cause event lost,
 	 * let's use assert for now XXX
 	 */
@@ -1006,6 +1018,11 @@ ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		D_FREE_PTR(ult_arg);
 		D_ERROR("create evict ult failed: rc %d\n", rc);
 	}
+out:
+	if (rc)
+		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
+			DP_UUID(svc->ps_uuid), src, rc);
+	daos_prop_entries_free(&prop);
 }
 
 static void
@@ -1044,6 +1061,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 		return rc;
 	}
 	ds_pool_iv_ns_update(pool, dss_self_rank());
+	
 	D_ASSERT(svc->ps_pool == NULL);
 	svc->ps_pool = pool;
 	return 0;
@@ -1060,12 +1078,194 @@ fini_svc_pool(struct pool_svc *svc)
 }
 
 static int
+pool_map_update(struct pool_svc *svc, uint32_t map_version,
+		struct pool_buf *buf)
+{
+	int			rc;
+
+	/* If iv_ns is NULL, it means the pool is not connected,
+	 * then it only update its own(leader's) pool map, instead
+	 * of distributing pool map to all other servers. offline
+	 * rebuild will redistribute the pool map by itself anyway.
+	 */
+	if (svc->ps_pool->sp_iv_ns == NULL) {
+		rc = ds_pool_tgt_map_update(svc->ps_pool, buf, map_version);
+		return rc;
+	}
+
+	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
+		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
+
+	rc = ds_pool_iv_map_update(svc->ps_pool, buf, map_version);
+
+	return rc;
+}
+
+static int
+pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
+	       daos_prop_t **prop_out)
+{
+	daos_prop_t	*prop;
+	d_iov_t	 value;
+	uint64_t	 val;
+	uint32_t	 idx = 0, nr = 0;
+	int		 rc;
+
+	if (bits & DAOS_PO_QUERY_PROP_LABEL)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_SELF_HEAL)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_RECLAIM)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_ACL)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_OWNER)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP)
+		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST)
+		nr++;
+	if (nr == 0)
+		return 0;
+
+	prop = daos_prop_alloc(nr);
+	if (prop == NULL)
+		return -DER_NOMEM;
+	*prop_out = prop;
+	if (bits & DAOS_PO_QUERY_PROP_LABEL) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_label,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
+				DAOS_PROP_LABEL_MAX_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_space_rb,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SPACE_RB;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_SELF_HEAL) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_self_heal,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SELF_HEAL;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_RECLAIM) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reclaim,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_ACL) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
+				   &value);
+		if (rc != 0)
+			return rc;
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
+		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
+			return -DER_NOMEM;
+		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
+		       value.iov_buf_len);
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_OWNER) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner_group,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
+			D_ERROR("bad owner group length %zu (> %d).\n",
+				value.iov_len,
+				DAOS_ACL_MAX_PRINCIPAL_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST) {
+		d_rank_list_t	*svc_list = NULL;
+
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &svc_list);
+		if (rc) {
+			D_ERROR("get svc list failed: rc %d\n", rc);
+			return rc;
+		}
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
+		prop->dpp_entries[idx].dpe_val_ptr = svc_list;
+		idx++;
+	}
+
+	return 0;
+}
+
+static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
+	daos_prop_t	       *prop = NULL;
+	uint64_t		prop_bits;
 	bool			cont_svc_up = false;
 	bool			event_cb_registered = false;
 	d_rank_t		rank;
@@ -1086,8 +1286,18 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 			D_ERROR(DF_UUID": failed to read pool map buffer: "
 				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		}
+		D_GOTO(unlock, rc);
 	}
 
+	prop_bits = DAOS_PO_QUERY_PROP_ALL;
+	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot get access data for pool, "
+			"rc="DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_GOTO(unlock, rc);
+	}
+
+unlock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
@@ -1112,6 +1322,19 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out;
 	event_cb_registered = true;
 
+	/* Update pool map by IV */
+	rc = pool_map_update(svc, map_version, map_buf);
+	if (rc) {
+		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
+	if (rc) {
+		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
 	rc = ds_rebuild_regenerate_task(svc->ps_pool);
 	if (rc != 0)
 		goto out;
@@ -1131,6 +1354,8 @@ out:
 	}
 	if (map_buf != NULL)
 		D_FREE(map_buf);
+	if (prop != NULL)
+		daos_prop_free(prop);
 	return rc;
 }
 
@@ -1390,186 +1615,6 @@ ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint)
 	hint->sh_flags |= RSVC_HINT_VALID;
 }
 
-static int
-pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
-	       daos_prop_t **prop_out)
-{
-	daos_prop_t	*prop;
-	d_iov_t	 value;
-	uint64_t	 val;
-	uint32_t	 idx = 0, nr = 0;
-	int		 rc;
-
-	if (bits & DAOS_PO_QUERY_PROP_LABEL)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_SELF_HEAL)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_RECLAIM)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_ACL)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_OWNER)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP)
-		nr++;
-	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST)
-		nr++;
-	if (nr == 0)
-		return 0;
-
-	prop = daos_prop_alloc(nr);
-	if (prop == NULL)
-		return -DER_NOMEM;
-	*prop_out = prop;
-	if (bits & DAOS_PO_QUERY_PROP_LABEL) {
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_label,
-				   &value);
-		if (rc != 0)
-			return rc;
-		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
-			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
-				DAOS_PROP_LABEL_MAX_LEN);
-			return -DER_IO;
-		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_SPACE_RB) {
-		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_space_rb,
-				   &value);
-		if (rc != 0)
-			return rc;
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SPACE_RB;
-		prop->dpp_entries[idx].dpe_val = val;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_SELF_HEAL) {
-		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_self_heal,
-				   &value);
-		if (rc != 0)
-			return rc;
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SELF_HEAL;
-		prop->dpp_entries[idx].dpe_val = val;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_RECLAIM) {
-		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reclaim,
-				   &value);
-		if (rc != 0)
-			return rc;
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RECLAIM;
-		prop->dpp_entries[idx].dpe_val = val;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_ACL) {
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_acl,
-				   &value);
-		if (rc != 0)
-			return rc;
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
-		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
-			return -DER_NOMEM;
-		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
-		       value.iov_buf_len);
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_OWNER) {
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner,
-				   &value);
-		if (rc != 0)
-			return rc;
-		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
-			D_ERROR("bad owner length %zu (> %d).\n", value.iov_len,
-				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
-		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_OWNER_GROUP) {
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_owner_group,
-				   &value);
-		if (rc != 0)
-			return rc;
-		if (value.iov_len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
-			D_ERROR("bad owner group length %zu (> %d).\n",
-				value.iov_len,
-				DAOS_ACL_MAX_PRINCIPAL_LEN);
-			return -DER_IO;
-		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			return -DER_NOMEM;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_SVC_LIST) {
-		d_rank_list_t	*svc_list = NULL;
-
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &svc_list);
-		if (rc) {
-			D_ERROR("get svc list failed: rc %d\n", rc);
-			return rc;
-		}
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
-		prop->dpp_entries[idx].dpe_val_ptr = svc_list;
-		idx++;
-	}
-
-	return 0;
-}
-
-static int
-pool_map_update(struct pool_svc *svc, uint32_t map_version,
-		struct pool_buf *buf)
-{
-	int			rc;
-
-	/* If iv_ns is NULL, it means the pool is not connected,
-	 * then it only update its own(leader's) pool map, instead
-	 * of distributing pool map to all other servers. offline
-	 * rebuild will redistribute the pool map by itself anyway.
-	 */
-	if (svc->ps_pool->sp_iv_ns == NULL) {
-		rc = ds_pool_tgt_map_update(svc->ps_pool, buf, map_version);
-		return rc;
-	}
-
-	D_DEBUG(DF_DSMS, DF_UUID": update ver %d pb_nr %d\n",
-		 DP_UUID(svc->ps_uuid), map_version, buf->pb_nr);
-
-	rc = ds_pool_iv_map_update(svc->ps_pool, buf, map_version);
-
-	return rc;
-}
-
 /*
  * We use this RPC to not only create the pool metadata but also initialize the
  * pool/container service DB.
@@ -1707,16 +1752,11 @@ out:
 }
 
 static int
-pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		   const uuid_t pool_hdl, uint64_t flags, uint64_t sec_capas,
-		   d_iov_t creds,
-		   struct daos_pool_space *ps, crt_bulk_t map_buf_bulk)
+pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
+		     uint64_t flags, uint64_t sec_capas, d_iov_t *cred)
 {
-	struct pool_tgt_connect_in     *in;
-	struct pool_tgt_connect_out    *out;
-	d_rank_t		       rank;
-	crt_rpc_t		       *rpc;
-	int				rc;
+	d_rank_t rank;
+	int	 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
@@ -1724,41 +1764,10 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, map_buf_bulk, &rpc);
-	if (rc != 0)
+	rc = ds_pool_iv_hdl_update(svc->ps_pool, pool_hdl, flags,
+				   sec_capas, cred);
+	if (rc)
 		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tci_uuid, svc->ps_uuid);
-	uuid_copy(in->tci_hdl, pool_hdl);
-	in->tci_flags = flags;
-	in->tci_sec_capas = sec_capas;
-	in->tci_cred = creds;
-	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
-	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
-	in->tci_master_rank = rank;
-	if (ps != NULL)
-		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
-
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tco_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to "DF_RC" targets\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		rc = -DER_IO;
-	} else {
-		if (ps != NULL)
-			*ps = out->tco_space;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
 		DP_RC(rc));
@@ -1862,6 +1871,49 @@ out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
 out:
+	return rc;
+}
+
+static int
+pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		       struct daos_pool_space *ps)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+
+	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, NULL, &rpc);
+	if (rc != 0)
+		goto out;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		rc = -DER_IO;
+	} else {
+		D_ASSERT(ps != NULL);
+		*ps = out->tqo_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2041,10 +2093,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_flags, sec_capas, in->pci_cred,
-				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
-				&out->pco_space : NULL, CRT_BULK_NULL);
+	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
+				  sec_capas, &in->pci_cred);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
@@ -2054,15 +2104,14 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	hdl.ph_flags = in->pci_flags;
 	hdl.ph_sec_capas = sec_capas;
 	nhandles++;
-
-	d_iov_set(&value, &nhandles, sizeof(nhandles));
-	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
+	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -2070,28 +2119,16 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out_map_version, rc);
 
-	/* Update pool map by IV */
-	rc = pool_map_update(svc, map_version, map_buf);
-	if (rc) {
-		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
-
+	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
+					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-	/*
-	 * TODO: Introduce prop version to avoid inconsistent prop over targets
-	 *	 caused by the out of order IV sync.
-	 */
-	if (!rc && prop != NULL) {
-		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
-		if (rc)
-			D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
-	}
-	daos_prop_free(prop);
+	if (prop)
+		daos_prop_free(prop);
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -2251,49 +2288,6 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-}
-
-static int
-pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
-		       struct daos_pool_space *ps)
-{
-	struct pool_tgt_query_in	*in;
-	struct pool_tgt_query_out	*out;
-	crt_rpc_t			*rpc;
-	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
-
-	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, NULL, &rpc);
-	if (rc != 0)
-		goto out;
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
-	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		goto out_rpc;
-
-	out = crt_reply_get(rpc);
-	rc = out->tqo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		rc = -DER_IO;
-	} else {
-		D_ASSERT(ps != NULL);
-		*ps = out->tqo_space;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-		DP_RC(rc));
-	return rc;
 }
 
 /*

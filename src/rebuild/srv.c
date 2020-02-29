@@ -1821,7 +1821,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
-	daos_prop_t			*prop = NULL;
+	daos_prop_t			prop = { 0 };
 	struct daos_prop_entry		*entry;
 	int				rc;
 
@@ -1877,19 +1877,14 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_ASSERT(pool->sp_iv_ns != NULL);
 	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
-	D_ALLOC_PTR(prop);
-	if (prop == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	rc = ds_pool_iv_prop_fetch(pool, prop);
-	if (rc) {
-		daos_prop_free(prop);
+	rc = ds_pool_iv_prop_fetch(pool, &prop);
+	if (rc)
 		D_GOTO(out, rc);
-	}
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	rc = daos_rank_list_dup(&rpt->rt_svc_list,
 				(d_rank_list_t *)entry->dpe_val_ptr);
-	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1920,6 +1915,7 @@ out:
 			rpt_put(rpt);
 
 		ds_pool_put(pool);
+		daos_prop_entries_free(&prop);
 	}
 
 	return rc;
