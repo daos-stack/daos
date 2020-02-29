@@ -59,6 +59,7 @@ struct ds_pool {
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
 void ds_pool_put(struct ds_pool *pool);
+void ds_pool_get(struct ds_pool *pool);
 
 /*
  * Pool handle object

@@ -100,11 +100,6 @@ cleanup(void)
 	return ds_pool_stop_all();
 }
 
-static struct crt_corpc_ops ds_pool_tgt_connect_co_ops = {
-	.co_aggregate	= ds_pool_tgt_connect_aggregator,
-	.co_pre_forward	= NULL,
-};
-
 static struct crt_corpc_ops ds_pool_tgt_disconnect_co_ops = {
 	.co_aggregate	= ds_pool_tgt_disconnect_aggregator,
 	.co_pre_forward	= NULL,

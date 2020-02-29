@@ -1707,16 +1707,11 @@ out:
 }
 
 static int
-pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		   const uuid_t pool_hdl, uint64_t flags, uint64_t sec_capas,
-		   d_iov_t creds,
-		   struct daos_pool_space *ps, crt_bulk_t map_buf_bulk)
+pool_connect_iv_dist(struct pool_svc *svc, uuid_t pool_hdl,
+		     uint64_t flags, uint64_t sec_capas, d_iov_t *cred)
 {
-	struct pool_tgt_connect_in     *in;
-	struct pool_tgt_connect_out    *out;
-	d_rank_t		       rank;
-	crt_rpc_t		       *rpc;
-	int				rc;
+	d_rank_t rank;
+	int	 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
@@ -1724,41 +1719,10 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, map_buf_bulk, &rpc);
-	if (rc != 0)
+	rc = ds_pool_iv_hdl_update(svc->ps_pool, pool_hdl, flags,
+				   sec_capas, cred);
+	if (rc)
 		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tci_uuid, svc->ps_uuid);
-	uuid_copy(in->tci_hdl, pool_hdl);
-	in->tci_flags = flags;
-	in->tci_sec_capas = sec_capas;
-	in->tci_cred = creds;
-	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
-	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
-	in->tci_master_rank = rank;
-	if (ps != NULL)
-		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
-
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tco_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to connect to "DF_RC" targets\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		rc = -DER_IO;
-	} else {
-		if (ps != NULL)
-			*ps = out->tco_space;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
 		DP_RC(rc));
@@ -1862,6 +1826,49 @@ out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
 out:
+	return rc;
+}
+
+static int
+pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
+		       struct daos_pool_space *ps)
+{
+	struct pool_tgt_query_in	*in;
+	struct pool_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+
+	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, NULL, &rpc);
+	if (rc != 0)
+		goto out;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
+	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
+	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	rc = out->tqo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		rc = -DER_IO;
+	} else {
+		D_ASSERT(ps != NULL);
+		*ps = out->tqo_space;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+		DP_RC(rc));
 	return rc;
 }
 
@@ -2041,10 +2048,15 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_flags, sec_capas, in->pci_cred,
-				(in->pci_query_bits & DAOS_PO_QUERY_SPACE) ?
-				&out->pco_space : NULL, CRT_BULK_NULL);
+	/* Update pool map by IV */
+	rc = pool_map_update(svc, map_version, map_buf);
+	if (rc) {
+		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_map_version, rc);
+	}
+
+	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
+				  sec_capas, &in->pci_cred);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
@@ -2054,15 +2066,14 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	hdl.ph_flags = in->pci_flags;
 	hdl.ph_sec_capas = sec_capas;
 	nhandles++;
-
-	d_iov_set(&value, &nhandles, sizeof(nhandles));
-	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &hdl, sizeof(hdl));
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
+	rc = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -2070,13 +2081,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out_map_version, rc);
 
-	/* Update pool map by IV */
-	rc = pool_map_update(svc, map_version, map_buf);
-	if (rc) {
-		D_ERROR("pool_map_update failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
-
+	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
+					    &out->pco_space);
 out_map_version:
 	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
@@ -2251,49 +2258,6 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
-}
-
-static int
-pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
-		       struct daos_pool_space *ps)
-{
-	struct pool_tgt_query_in	*in;
-	struct pool_tgt_query_out	*out;
-	crt_rpc_t			*rpc;
-	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
-
-	rc = bcast_create(ctx, svc, POOL_TGT_QUERY, NULL, &rpc);
-	if (rc != 0)
-		goto out;
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
-	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
-	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
-		rc = -DER_TIMEDOUT;
-	if (rc != 0)
-		goto out_rpc;
-
-	out = crt_reply_get(rpc);
-	rc = out->tqo_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		rc = -DER_IO;
-	} else {
-		D_ASSERT(ps != NULL);
-		*ps = out->tqo_space;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DB_MD, DF_UUID": bcasted: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-		DP_RC(rc));
-	return rc;
 }
 
 /*
