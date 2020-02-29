@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,14 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var (
-	daosVersion string
-	configDir   string
-)
-
-const (
-	defaultConfigFile = "daos.yml"
-)
+var daosVersion string
 
 type (
 	// this interface decorates a command which
@@ -142,13 +135,6 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 
 		if logCmd, ok := cmd.(cmdLogger); ok {
 			logCmd.setLog(log)
-		}
-
-		if opts.ConfigPath == "" {
-			defaultConfigPath := path.Join(configDir, defaultConfigFile)
-			if _, err := os.Stat(defaultConfigPath); err == nil {
-				opts.ConfigPath = defaultConfigPath
-			}
 		}
 
 		config, err := client.GetConfig(log, opts.ConfigPath)

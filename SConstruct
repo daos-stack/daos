@@ -343,13 +343,9 @@ def scons():
         env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
     opts.Save(opts_file, env)
 
-    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
-
     env.Alias('install', '$PREFIX')
     platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'API_VERSION',
-           'env', 'prereqs', 'platform_arm',
-           'CONF_DIR')
+    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm', 'API_VERSION')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib

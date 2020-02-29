@@ -82,17 +82,17 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     def go_ldflags():
         return ' '.join(['-ldflags',
                          '"-X main.daosVersion=%s' % DAOS_VERSION,
-                         '-X main.configDir=%s' % CONF_DIR,
-                         '-B %s"' % gen_build_id()])
+                         '-B %s"' % gen_build_id(),
+                         '-v'])
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
-                           'go install -v %s %s' % (go_ldflags(), install_src)))
+                           'go install %s %s' % (go_ldflags(), install_src)))
     denv.InstallAs(install_bin, bin_path)
 #pylint: enable=too-many-arguments
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
+    Import('env', 'prereqs', 'DAOS_VERSION')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -203,8 +203,9 @@ def scons():
                        sep=" ")
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.
-    senv.Install(join('$PREFIX', 'share/daos/control'),
-                 join(gosrc, 'server/init/setup_spdk.sh'))
+    senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
+                 join(gosrc, "server", "init", "setup_spdk.sh"),
+                 [Delete("$TARGET"), Copy("$TARGET", "$SOURCE")])
 
     install_go_bin(senv, gosrc, gopath, [denv.nvmecontrol], "daos_server",
                    "daos_server")
