@@ -45,7 +45,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             DAOS-3546: Test ACL access when user/group management
                        isn't synced between client and server nodes.
             DAOS-2961: DAOS dmg pool overwrite-acl verification
-            DAOS-2962: DAOS dmg pool deete-acl verification
+            DAOS-2962: DAOS dmg pool delete-acl verification
             DAOS-2963: DAOS dmg pool get-acl verification
         Description:
             Create pool with pass-in user on primary and secondary group

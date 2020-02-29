@@ -38,7 +38,7 @@ PERMISSIONS = ["", "r", "w", "rw"]
 def acl_entry(usergroup, name, permission):
     '''
     Deascription:
-        Create a daos acl entry on the specified user or groups
+        Create a daos acl entry for the specified user or group.
         with specified or random permission.
     Args:
         usergroup: user or group.
@@ -55,6 +55,22 @@ def acl_entry(usergroup, name, permission):
         entry = "A:G:" + name + "@:" + permission
     else:
         entry = "A::" + name + "@:" + permission
+    return entry
+
+def acl_principal(usergroup, name):
+    '''
+    Deascription:
+        Create a daos ace principal for the specified user or group.
+    Args:
+        usergroup: user or group.
+        name: user or group name to be created.
+    Return:
+        entry: daos pool acl entry.
+    '''
+    if "group" in usergroup:
+        entry = "g:" + name + "@"
+    else:
+        entry = "u:" + name + "@"
     return entry
 
 def add_del_user(hosts, ba_cmd, user):
@@ -157,6 +173,36 @@ class PoolSecurityTestBase(TestWithServers):
                 if found_group:
                     pool_permission_list.append(line)
         return pool_permission_list
+
+    def update_pool_acl_entry(self, uuid, action, entry):
+        '''
+        Deascription:
+            Update daos pool acl list by dmg tool.
+        Args:
+            uuid: pool uuid.
+            action: update-acl or delete-acl.
+            entry: pool acl entry or principal to be updated.
+        Return:
+            none.
+        '''
+        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
+        dmg.request.value = "pool"
+        if action is "delete":
+            dmg.action.value = "delete-acl --pool " + uuid
+            dmg.action.value += " --principal " + entry
+        elif action is "update":
+            dmg.action.value = "update-acl --pool " + uuid
+            dmg.action.value += " --entry " + entry
+        else:
+            self.fail("##update_pool_acl_entry, action: {} is not supported."
+                      "\n  supported action: update, delete.".format(action))
+        port = self.params.get("port", "/run/server_config/*")
+        servers_with_ports = [
+            "{}:{}".format(host, port) for host in self.hostlist_servers]
+        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+        result = dmg.run()
+        self.log.info(" At update_pool_acl_entry, dmg.run result=\n %s",\
+            result)
 
     def verify_daos_pool_result(self, result, action, expect, err_code):
         '''
@@ -298,10 +344,10 @@ class PoolSecurityTestBase(TestWithServers):
         for group in sec_group:
             add_del_user(self.hostlist_clients, "groupadd", group)
         cmd = "usermod -G " + ",".join(sec_group)
-        self.log.info("  (7-1)verify_pool_acl_prim_sec_groups, cmd= %s", cmd)
+        self.log.info("  (8-1)verify_pool_acl_prim_sec_groups, cmd= %s", cmd)
         add_del_user(self.hostlist_clients, cmd, l_group)
 
-        self.log.info("  (7-2)Before update sec_group permission,\
+        self.log.info("  (8-2)Before update sec_group permission,\
             pool_acl_list= %s", pool_acl_list)
         for group, permission in zip(sec_group, sec_group_perm):
             if permission == "none":
@@ -309,7 +355,7 @@ class PoolSecurityTestBase(TestWithServers):
             n_acl = acl_entry("group", group, permission)
             pool_acl_list.append(n_acl)
 
-        self.log.info("  (7-3)After update sec_group permission,\
+        self.log.info("  (8-3)After update sec_group permission,\
             pool_acl_list= %s", pool_acl_list)
         self.log.info("      pool acl_file= %s", acl_file)
         create_acl_file(acl_file, pool_acl_list)
@@ -328,19 +374,19 @@ class PoolSecurityTestBase(TestWithServers):
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
-        self.log.info("  (7-4)dmg= %s", dmg)
+        self.log.info("  (8-4)dmg= %s", dmg)
         result = dmg.run()
-        self.log.info("  (7-5)dmg.run() result=\n %s", result)
+        self.log.info("  (8-5)dmg.run() result=\n %s", result)
 
         #Verify pool read operation
         #daos pool query --pool <uuid>
-        self.log.info("  (7-6)Verify pool read by: daos pool query --pool")
+        self.log.info("  (8-6)Verify pool read by: daos pool query --pool")
         exp_read = sec_group_rw[0]
         self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
 
         #Verify pool write operation
         #daos continer create --pool <uuid>
-        self.log.info("  (7-7)Verify pool write by: daos continer create pool")
+        self.log.info("  (8-7)Verify pool write by: daos continer create pool")
         exp_write = sec_group_rw[1]
         self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
 
@@ -348,7 +394,7 @@ class PoolSecurityTestBase(TestWithServers):
             add_del_user(self.hostlist_clients, "groupdel", group)
 
     def pool_acl_verification(self, current_user_acl, read, write,\
-        secondary_grp=False):
+        secondary_grp_test=False):
         '''
         Deascription:
             Daos pool security verification with acl file.
@@ -358,9 +404,10 @@ class PoolSecurityTestBase(TestWithServers):
                 (3)Create a pool with acl
                 (4)Verify the pool create status
                 (5)Get the pool's acl list
-                (6)Verify pool read operation
-                (7)Verify pool write operation
-                (8)Cleanup user and destroy pool
+                (6)Verify pool's ace entry update and delete
+                (7)Verify pool read operation
+                (8)Verify pool write operation
+                (9)Cleanup user and destroy pool
         Args:
             current_user_acl: acl with read write access credential.
             read: expecting read permission.
@@ -369,7 +416,6 @@ class PoolSecurityTestBase(TestWithServers):
             pass to continue.
             fail to report the testlog and stop.
         '''
-
         # (1)Create dmg command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.get_params(self)
@@ -415,20 +461,32 @@ class PoolSecurityTestBase(TestWithServers):
         self.log.info(
             "   pool get_acl  permission_list: %s", pool_acl_list)
 
-        # (6)Verify pool read operation
+        # (6)Verify pool acl ace update and delete
+        self.log.info("  (6)Verify update and delete of pool's acl entry.")
+        tmp_ace = "daos_ci_test_new"
+        new_entrys = [acl_entry("user", tmp_ace, ""),
+                      acl_entry("group", tmp_ace, "")]
+        acl_principals = [acl_principal("user", tmp_ace),
+                          acl_principal("group", tmp_ace)]
+        for new_entry in new_entrys:
+            self.update_pool_acl_entry(uuid, "update", new_entry)
+        for principal in acl_principals:
+            self.update_pool_acl_entry(uuid, "delete", principal)
+
+        # (7)Verify pool read operation
         #    daos pool query --pool <uuid>
-        self.log.info("  (6)Verify pool read by: daos pool query --pool")
+        self.log.info("  (7)Verify pool read by: daos pool query --pool")
         self.verify_pool_readwrite(svc, uuid, "read", expect=read)
 
-        # (7)Verify pool write operation
+        # (8)Verify pool write operation
         #    daos continer create --pool <uuid>
-        self.log.info("  (7)Verify pool write by: daos continer create --pool")
+        self.log.info("  (8)Verify pool write by: daos continer create --pool")
         self.verify_pool_readwrite(svc, uuid, "write", expect=write)
-        if secondary_grp:
-            self.log.info("  (7-0)Verifying verify_pool_acl_prim_sec_groups")
+        if secondary_grp_test:
+            self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(pool_acl_list, acl_file,\
                 uuid, svc)
 
-        # (8)Cleanup user and destroy pool
-        self.log.info("  (8)Cleanup users and groups")
+        # (9)Cleanup user and destroy pool
+        self.log.info("  (9)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)

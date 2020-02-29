@@ -6,7 +6,7 @@ hosts:
   test_clients:
     - server-B
   transport_config:
-    - allow_insecure: True
+    - allow_insecure: False
     - ca_cert: ~/.daos/daosCA.crt
     - cert: ~/.daos/daos_agent.crt
     - key: ~/.daos/daos_agent.key
@@ -17,7 +17,7 @@ server_config:
   port: 10001
 daos_server:
   start:
-     insecure: True
+     insecure: False
 dmg:
   request: pool
   action: create
