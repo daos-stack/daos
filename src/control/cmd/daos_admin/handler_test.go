@@ -434,7 +434,7 @@ func TestDaosAdmin_Handler(t *testing.T) {
 
 func TestDaosAdmin_ReadRequest(t *testing.T) {
 	alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	giantPayload := make([]byte, pbin.MaxMessageSize)
+	giantPayload := make([]byte, (pbin.MessageBufferSize*5)+1)
 	for i := 0; i < len(giantPayload); i++ {
 		giantPayload[i] = alnum[rand.Intn(len(alnum))]
 	}
@@ -454,19 +454,15 @@ func TestDaosAdmin_ReadRequest(t *testing.T) {
 				Method:  "too big to fail",
 				Payload: append(append([]byte(`{"foo":"`), giantPayload...), []byte(`"}`)...),
 			},
-			expErr: errors.New("unexpected end of JSON input"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
 			data, err := json.Marshal(tc.req)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			gotReq, gotErr := readRequest(log, bytes.NewBuffer(data))
+			gotReq, gotErr := readRequest(bytes.NewBuffer(data))
 			common.CmpErr(t, tc.expErr, gotErr)
 
 			if diff := cmp.Diff(tc.req, gotReq); gotErr == nil && diff != "" {

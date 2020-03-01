@@ -288,7 +288,7 @@ vos_nvme_init(void)
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;

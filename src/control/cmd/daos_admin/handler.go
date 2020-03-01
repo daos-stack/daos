@@ -66,16 +66,14 @@ func sendSuccess(payloadSrc interface{}, res *pbin.Response, dest io.Writer) err
 	return err
 }
 
-func readRequest(log logging.Logger, rdr io.Reader) (*pbin.Request, error) {
-	buf := make([]byte, pbin.MaxMessageSize)
-
-	readLen, err := rdr.Read(buf)
+func readRequest(rdr io.Reader) (*pbin.Request, error) {
+	buf, err := pbin.ReadMessage(rdr)
 	if err != nil {
 		return nil, err
 	}
 
 	var req pbin.Request
-	if err := json.Unmarshal(buf[:readLen], &req); err != nil {
+	if err := json.Unmarshal(buf, &req); err != nil {
 		return nil, err
 	}
 
