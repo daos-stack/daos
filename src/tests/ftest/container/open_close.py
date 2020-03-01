@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,12 +23,10 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import uuid
 from apricot import TestWithServers
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
 
 
 class OpenClose(TestWithServers):
@@ -46,27 +44,17 @@ class OpenClose(TestWithServers):
         self.container = []
         saved_coh = None
 
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/pool/createmode/')
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname", '/run/pool/createset/')
-        createsize = self.params.get("size", '/run/pool/createsize/')
         coh_params = self.params.get("coh",
                                      '/run/container/container_handle/*/')
 
         expected_result = coh_params[1]
 
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.prepare_pool()
+        poh = self.pool.pool.handle
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            poh = self.pool.handle
-            self.pool.connect(1 << 1)
-
             # Container initialization and creation
             self.container.append(DaosContainer(self.context))
             self.container[0].create(poh)

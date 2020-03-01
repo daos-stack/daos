@@ -66,15 +66,33 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
     src = [mod_src]
     if libs is not None:
         src.extend(libs)
+    # generate a unique build id per binary for use by RPM
+    # https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID
+    def gen_build_id():
+        from os import urandom
+        from binascii import b2a_hex
+        buildid = b2a_hex(urandom(20))
+        if isinstance(buildid, str):
+            # Python 2 is a str already, using decode() here transforms it
+            # into a 'unicode' type
+            return '0x' + buildid
+        else:
+            # Python 3 is a bytes, decode() it to a str
+            return '0x' + buildid.decode()
+    def go_ldflags():
+        return ' '.join(['-ldflags',
+                         '"-X main.daosVersion=%s' % DAOS_VERSION,
+                         '-X main.configDir=%s' % CONF_DIR,
+                         '-B %s"' % gen_build_id()])
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
-                           'go install -ldflags "-X main.daosVersion=%s" %s' % (DAOS_VERSION, install_src)))
+                           'go install -v %s %s' % (go_ldflags(), install_src)))
     denv.InstallAs(install_bin, bin_path)
 #pylint: enable=too-many-arguments
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'DAOS_VERSION')
+    Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -185,9 +203,8 @@ def scons():
                        sep=" ")
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.
-    senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
-                 join(gosrc, "server", "init", "setup_spdk.sh"),
-                 [Delete("$TARGET"), Copy("$TARGET", "$SOURCE")])
+    senv.Install(join('$PREFIX', 'share/daos/control'),
+                 join(gosrc, 'server/init/setup_spdk.sh'))
 
     install_go_bin(senv, gosrc, gopath, [denv.nvmecontrol], "daos_server",
                    "daos_server")

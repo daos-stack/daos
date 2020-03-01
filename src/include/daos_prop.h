@@ -79,6 +79,10 @@ enum daos_pool_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_PO_OWNER_GROUP,
+	/**
+	 * The pool svc rank list.
+	 */
+	DAOS_PROP_PO_SVC_LIST,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -272,6 +276,17 @@ daos_prop_alloc(uint32_t entries_nr);
  */
 void
 daos_prop_free(daos_prop_t *prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ *
+ * \return	Newly allocated merged property
+ */
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
  * Duplicate a generic pointer value from one DAOS prop entry to another.

@@ -364,6 +364,9 @@ dfs_test_short_read(void **state)
 	dfs_obj_share(dfs_mt, O_RDONLY, arg->myrank, &obj);
 
 	/** reading empty file should return 0 */
+	rsgl.sg_nr = 1;
+	d_iov_set(&iov, rbuf[0], buf_size);
+	rsgl.sg_iovs = &iov;
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);

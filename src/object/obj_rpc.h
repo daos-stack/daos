@@ -102,8 +102,10 @@
 		ds_obj_tgt_punch_handler, NULL),			\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
-		ds_obj_tgt_punch_handler, NULL)
-
+		ds_obj_tgt_punch_handler, NULL),			\
+	X(DAOS_OBJ_RPC_MIGRATE,						\
+		0, &CQF_obj_migrate,					\
+		ds_obj_migrate_handler, NULL)
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -123,6 +125,13 @@ enum obj_rpc_flags {
 	ORF_RESEND		= (1 << 1),
 	/** Commit DTX synchronously. */
 	ORF_DTX_SYNC		= (1 << 2),
+	/** Reports prior fetch CSUM mismatch */
+	ORF_CSUM_REPORT		= (1 << 3),
+	/**
+	 * Erasure coding flag, to avoid server recheck from oca,
+	 * now only used for single value EC handling.
+	 */
+	ORF_EC			= (1 << 4),
 };
 
 struct obj_iod_array {
@@ -153,6 +162,7 @@ struct obj_iod_array {
 	((uint32_t)		(orw_start_shard)	CRT_VAR) \
 	((uint32_t)		(orw_flags)		CRT_VAR) \
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
+	((struct dcs_csum_info)	(orw_dkey_csum)		CRT_PTR) \
 	((struct obj_iod_array)	(orw_iod_array)		CRT_VAR) \
 	((struct dcs_iod_csums)	(orw_iod_csums)		CRT_ARRAY) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
@@ -206,6 +216,7 @@ CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oeo_akey_anchor)	CRT_VAR) \
 	((daos_key_desc_t)	(oeo_kds)		CRT_ARRAY) \
 	((d_sg_list_t)		(oeo_sgl)		CRT_VAR) \
+	((d_iov_t)		(oeo_csum_iov)		CRT_VAR) \
 	((daos_recx_t)		(oeo_recxs)		CRT_ARRAY) \
 	((daos_epoch_range_t)	(oeo_eprs)		CRT_ARRAY)
 
@@ -272,6 +283,23 @@ CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 	((uint64_t)		(oso_epoch)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
+
+#define DAOS_ISEQ_OBJ_MIGRATE	/* input fields */			\
+	((uuid_t)		(om_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_cont_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_poh_uuid)		CRT_VAR)	\
+	((uuid_t)		(om_coh_uuid)		CRT_VAR)	\
+	((uint64_t)		(om_max_eph)		CRT_VAR)	\
+	((uint32_t)		(om_version)		CRT_VAR)	\
+	((uint32_t)		(om_tgt_idx)		CRT_VAR)	\
+	((daos_unit_oid_t)	(om_oids)		CRT_ARRAY)	\
+	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
+	((uint32_t)		(om_shards)		CRT_ARRAY)
+
+#define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
+	((int32_t)		(om_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

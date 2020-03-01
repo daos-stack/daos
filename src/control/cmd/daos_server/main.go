@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -35,10 +36,18 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
-var daosVersion string
+var (
+	daosVersion string
+	configDir   string
+)
+
+const (
+	defaultConfigFile = "daos_server.yml"
+)
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -105,6 +114,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.setLog(log)
 		}
 
+		if opts.ConfigPath == "" {
+			defaultConfigPath := path.Join(configDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				opts.ConfigPath = defaultConfigPath
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
@@ -137,6 +153,11 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 func main() {
 	log := logging.NewCommandLineLogger()
 	var opts mainOpts
+
+	// Check this right away to avoid lots of annoying failures later.
+	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
+		exitWithError(log, err)
+	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {

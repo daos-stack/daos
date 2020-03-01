@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-import os
 import traceback
 import random
 import string
 from apricot import TestWithServers
-from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
-                        DaosApiError, c_uuid_to_str)
+from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
+                        c_uuid_to_str)
+
 
 # pylint: disable=broad-except
 class Snapshot(TestWithServers):
@@ -54,33 +54,16 @@ class Snapshot(TestWithServers):
         set up method
         """
         super(Snapshot, self).setUp()
-        # get parameters from yaml file, set default
-        createmode = self.params.get("mode",
-                                     '/run/poolparams/createmode/', 511)
-        createuid = os.geteuid()
-        creategid = os.getegid()
-        createsetid = self.params.get("setname",
-                                      '/run/poolparams/createset/')
-        createsize = self.params.get("size", '/run/poolparams/createsize/')
         self.log.info("==In setUp, self.context= %s", self.context)
 
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.prepare_pool()
+
         try:
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            # need a connection to the pool with rw permission
-            #    DAOS_PC_RO = int(1 << 0)
-            #    DAOS_PC_RW = int(1 << 1)
-            #    DAOS_PC_EX = int(1 << 2)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
         except DaosApiError as error:
             self.log.info("Error detected in DAOS pool container setup: %s"
@@ -163,6 +146,7 @@ class Snapshot(TestWithServers):
         return status
 
     def test_snapshot_negativecases(self):
+        # pylint: disable=no-member
         """
         Test ID: DAOS-1390 Verify snap_create bad parameter behavior.
                  DAOS-1322 Create a new container, verify snapshot state.
@@ -205,7 +189,7 @@ class Snapshot(TestWithServers):
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
-                                      for i in xrange(n)])
+                                      for i in range(n)])
         thedata = "--->>>Happy Daos Snapshot-Create Negative Testing " + \
                   "<<<---" + rand_str(random.randint(1, data_size))
         try:
@@ -351,6 +335,7 @@ class Snapshot(TestWithServers):
 
 
     def test_snapshots(self):
+        # pylint: disable=no-member
         """
         Test ID: DAOS-1386 Test container SnapShot information
                  DAOS-1371 Test list snapshots
@@ -388,7 +373,7 @@ class Snapshot(TestWithServers):
         snapshot_loop = self.params.get("num_of_snapshot",
                                         '/run/snapshot/*', default=3)
         rand_str = lambda n: ''.join([random.choice(string.lowercase)
-                                      for i in xrange(n)])
+                                      for i in range(n)])
         #
         #Test loop for creat, modify and snapshot object in the DAOS container.
         #
@@ -411,7 +396,7 @@ class Snapshot(TestWithServers):
                 obj.close()
             except DaosApiError as error:
                 self.fail("##(1)Test failed during the initial object "
-                    "write: {}".format(str(error)))
+                          "write: {}".format(str(error)))
             #Take a snapshot of the container
             snapshot = DaosSnapshot(self.context)
             snapshot.create(self.container.coh, tx_handle)
@@ -488,7 +473,7 @@ class Snapshot(TestWithServers):
                           "still available", num_transactions)
 
         #(5)Verify the snapshots data
-        for ind in range(len(test_data)):
+        for ind, _ in enumerate(test_data):
             ss_number = ind + 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
                           , ss_number, ss_number)
