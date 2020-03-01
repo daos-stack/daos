@@ -374,17 +374,22 @@ endif
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	if [ -w /etc/mock/$(CHROOT_NAME).cfg ]; then                                        \
-	    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/$(CHROOT_NAME).cfg;  \
-	    case $(DISTRO_ID) in                                            \
-	        el7) distro="centos7";                                      \
-	        ;;                                                          \
-	        sle12.3) distro="sles12.3";                                 \
-	        ;;                                                          \
-	        sl42.3) distro="leap42.3";                                  \
-	        ;;                                                          \
-	        sl15.1) distro="leap15";                                    \
-	        ;;                                                          \
-	    esac;                                                           \
+	    if grep dnf.conf /etc/mock/$(CHROOT_NAME).cfg; then                             \
+	        cfg_f="dnf.conf";                                                           \
+	    else                                                                            \
+	        cfg_f="yum.conf";                                                           \
+	    fi;                                                                             \
+	    echo -e "config_opts['$$cfg_f'] += \"\"\"\n" >> /etc/mock/$(CHROOT_NAME).cfg;   \
+	    case $(DISTRO_ID) in                                                            \
+	        el7) distro="centos7";                                                      \
+	        ;;                                                                          \
+	        sle12.3) distro="sles12.3";                                                 \
+	        ;;                                                                          \
+	        sl42.3) distro="leap42.3";                                                  \
+	        ;;                                                                          \
+	        sl15.1) distro="leap15";                                                    \
+	        ;;                                                                          \
+	    esac;                                                                           \
 	    for repo in $($(DISTRO_BASE)_PR_REPOS) $(PR_REPOS); do                          \
 	        branch="master";                                                            \
 	        build_number="lastSuccessfulBuild";                                         \
