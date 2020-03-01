@@ -15,8 +15,7 @@ def scons():
 
     # Link to DPDK static libs
     senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
-                                 '-lrte_vhost', '-lrte_mempool', \
-                                 '-lrte_mempool_ring', \
+                                 '-lrte_mempool', '-lrte_mempool_ring', \
                                  '-lrte_bus_pci', '-lrte_pci', '-lrte_ring', \
                                  '-lrte_mbuf', '-lrte_eal', '-lrte_kvargs', \
                                  '-Wl,--no-whole-archive'])
