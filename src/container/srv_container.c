@@ -548,8 +548,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if a container with this UUID already exists. */
@@ -688,8 +688,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		in->cdi_force);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if the container attribute KVS exists. */
@@ -829,8 +829,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Verify the pool handle capabilities. */
 	if ((in->coi_capas & DAOS_COO_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	    !(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* See if this container handle already exists. */
@@ -1531,27 +1531,12 @@ ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	return set_prop(tx, pool_hdl, cont, hdl, in->cpsi_op.ci_hdl, prop_in);
 }
 
-int
-ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		   struct cont *cont, struct container_hdl *hdl,
-		   crt_rpc_t *rpc)
+static int
+get_acl(struct rdb_tx *tx, struct cont *cont, struct daos_acl **acl)
 {
-	struct cont_acl_update_in	*in  = crt_req_get(rpc);
-	int				rc = 0;
-	daos_prop_t			*acl_prop = NULL;
-	daos_prop_t			*prop_in = NULL;
-	struct daos_prop_entry		*entry;
-	struct daos_acl			*acl_in;
-	struct daos_acl			*acl = NULL;
-	struct daos_ace			*ace;
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->caui_op.ci_uuid), rpc,
-		DP_UUID(in->caui_op.ci_hdl));
-
-	acl_in = in->caui_acl;
-	if (daos_acl_cont_validate(acl_in) != 0)
-		D_GOTO(out, rc = -DER_INVAL);
+	int			rc;
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*acl_prop = NULL;
 
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ACL, &acl_prop);
 	if (rc != 0) {
@@ -1564,16 +1549,62 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (entry == NULL) {
 		D_ERROR(DF_UUID": cont prop read didn't return ACL property\n",
 			DP_UUID(cont->c_uuid));
-		D_GOTO(out_prop, rc = -DER_NONEXIST);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	acl = daos_acl_dup(entry->dpe_val_ptr);
-	if (acl == NULL) {
+	*acl = daos_acl_dup(entry->dpe_val_ptr);
+	if (*acl == NULL) {
 		D_ERROR(DF_UUID": couldn't copy container's ACL for "
 			"modification\n",
 			DP_UUID(cont->c_uuid));
-		D_GOTO(out_prop, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
+
+out:
+	daos_prop_free(acl_prop);
+	return rc;
+}
+
+static int
+set_acl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+	struct cont *cont, struct container_hdl *hdl, uuid_t hdl_uuid,
+	struct daos_acl *acl)
+{
+	daos_prop_t	*prop = NULL;
+	int		rc;
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+
+	rc = set_prop(tx, pool_hdl, cont, hdl, hdl_uuid, prop);
+	daos_prop_free(prop);
+
+	return rc;
+}
+
+int
+ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		   struct cont *cont, struct container_hdl *hdl,
+		   crt_rpc_t *rpc)
+{
+	struct cont_acl_update_in	*in  = crt_req_get(rpc);
+	int				rc = 0;
+	struct daos_acl			*acl_in;
+	struct daos_acl			*acl = NULL;
+	struct daos_ace			*ace;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->caui_op.ci_uuid), rpc,
+		DP_UUID(in->caui_op.ci_hdl));
+
+	acl_in = in->caui_acl;
+	if (daos_acl_cont_validate(acl_in) != 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = get_acl(tx, cont, &acl);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	ace = daos_acl_get_next_ace(acl_in, NULL);
 	while (ace != NULL) {
@@ -1582,23 +1613,51 @@ ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			D_ERROR(DF_UUID": failed to add/update ACEs\n",
 				DP_UUID(cont->c_uuid));
 			daos_acl_free(acl);
-			D_GOTO(out_prop, rc);
+			D_GOTO(out_acl, rc);
 		}
 
 		ace = daos_acl_get_next_ace(acl_in, ace);
 	}
 
 	/* Just need to re-set the ACL prop with the merged ACL */
-	prop_in = daos_prop_alloc(1);
-	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
-	prop_in->dpp_entries[0].dpe_val_ptr = acl;
-	acl = NULL; /* we'll free it with the prop now */
+	rc = set_acl(tx, pool_hdl, cont, hdl, in->caui_op.ci_hdl, acl);
 
-	rc = set_prop(tx, pool_hdl, cont, hdl, in->caui_op.ci_hdl, prop_in);
-	daos_prop_free(prop_in);
+out_acl:
+	daos_acl_free(acl);
+out:
+	return rc;
+}
 
-out_prop:
-	daos_prop_free(acl_prop);
+int
+ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		   struct cont *cont, struct container_hdl *hdl,
+		   crt_rpc_t *rpc)
+{
+	struct cont_acl_delete_in	*in  = crt_req_get(rpc);
+	int				rc = 0;
+	struct daos_acl			*acl = NULL;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cadi_op.ci_uuid), rpc,
+		DP_UUID(in->cadi_op.ci_hdl));
+
+	rc = get_acl(tx, cont, &acl);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* remove principal's entry from current ACL */
+	rc = daos_acl_remove_ace(&acl, in->cadi_principal_type,
+				 in->cadi_principal_name);
+	if (rc != 0) {
+		D_ERROR("Unable to remove ACE from ACL\n");
+		D_GOTO(out_acl, rc);
+	}
+
+	/* Re-set the ACL prop with the updated ACL */
+	rc = set_acl(tx, pool_hdl, cont, hdl, in->cadi_op.ci_hdl, acl);
+
+out_acl:
+	daos_acl_free(acl);
 out:
 	return rc;
 }
@@ -1927,6 +1986,8 @@ cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		return ds_cont_prop_set(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ACL_UPDATE:
 		return ds_cont_acl_update(tx, pool_hdl, cont, hdl, rpc);
+	case CONT_ACL_DELETE:
+		return ds_cont_acl_delete(tx, pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}

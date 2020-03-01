@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,14 +23,12 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import logging
-from avocado import main
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class ObjUpdateBadParam(TestWithServers):
     """
@@ -50,28 +48,12 @@ class ObjUpdateBadParam(TestWithServers):
 
         :avocado: tags=all,object,full_regression,small,objbadhand
         """
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/conttests/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/conttests/createset/')
-            createsize = self.params.get("size", '/run/conttests/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.plog.info("Pool %s created.", pool.get_uuid_str())
-
-            # need a connection to create container
-            pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -94,16 +76,12 @@ class ObjUpdateBadParam(TestWithServers):
             container.oh = saved_oh
             container.close()
             container.destroy()
-            pool.disconnect()
-            pool.destroy(1)
             self.fail("Test was expected to return a -1002 but it has not.\n")
 
         except DaosApiError as excep:
             container.oh = saved_oh
             container.close()
             container.destroy()
-            pool.disconnect()
-            pool.destroy(1)
             self.plog.info("Test Complete")
             if '-1002' not in str(excep):
                 print(excep)
@@ -118,28 +96,12 @@ class ObjUpdateBadParam(TestWithServers):
 
         :avocado: tags=all,object,full_regression,small,objupdatenull
         """
+        self.prepare_pool()
+
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/conttests/createmode/')
-            createsetid = self.params.get("setname",
-                                          '/run/conttests/createset/')
-            createsize = self.params.get("size", '/run/conttests/createsize/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            self.plog.info("Pool %s created.", pool.get_uuid_str())
-
-            # need a connection to create container
-            pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(pool.handle)
+            container.create(self.pool.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it
@@ -164,8 +126,6 @@ class ObjUpdateBadParam(TestWithServers):
 
             container.close()
             container.destroy()
-            pool.disconnect()
-            pool.destroy(1)
             self.plog.error("Didn't get expected return code.")
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
@@ -173,8 +133,6 @@ class ObjUpdateBadParam(TestWithServers):
             if '-1003' not in str(excep):
                 container.close()
                 container.destroy()
-                pool.disconnect()
-                pool.destroy(1)
                 self.plog.error("Didn't get expected return code.")
                 print(excep)
                 print(traceback.format_exc())
@@ -209,8 +167,6 @@ class ObjUpdateBadParam(TestWithServers):
         except DaosApiError as excep:
             container.close()
             container.destroy()
-            pool.disconnect()
-            pool.destroy(1)
             print(excep)
             print(traceback.format_exc())
             self.plog.error("Update with no data failed")
@@ -218,9 +174,4 @@ class ObjUpdateBadParam(TestWithServers):
 
         container.close()
         container.destroy()
-        pool.disconnect()
-        pool.destroy(1)
         self.plog.info("Test Complete")
-
-if __name__ == "__main__":
-    main()
