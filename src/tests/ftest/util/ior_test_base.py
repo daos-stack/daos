@@ -52,7 +52,6 @@ class IorTestBase(TestWithServers):
         self.hostfile_clients_slots = None
         self.dfuse = None
         self.container = None
-        self.container.uuid = None
         self.co_prop = None
         self.lock = None
 
