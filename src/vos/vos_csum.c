@@ -322,7 +322,7 @@ int
 vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 	    d_sg_list_t *sgl, struct evt_entry_in *ent_in,
 	    struct csum_recalc *recalcs,
-	    unsigned int recalc_seg_cnt, daos_size_t seg_size, bool unit_test)
+	    unsigned int recalc_seg_cnt, daos_size_t seg_size)
 {
 	struct csum_recalc_args	args = { 0 };
 
@@ -340,16 +340,14 @@ vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 	args.cra_buf_len	= io->ic_buf_len;
 
 #ifdef OFF_LOAD
-	if (!unit_test) {
-		ABT_eventual_create(0, &args.csum_eventual);
-		dss_ult_create(csum_agg_recalc, &args,
-			       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);
-		ABT_eventual_wait(args.csum_eventual, NULL);
-		ABT_eventual_free(*&args.csum_eventual);
-	} else
+	ABT_eventual_create(0, &args.csum_eventual);
+	dss_ult_create(csum_agg_recalc, &args,
+		       DSS_ULT_CHECKSUM, DSS_TGT_SELF, 0, NULL);
+	ABT_eventual_wait(args.csum_eventual, NULL);
+	ABT_eventual_free(*&args.csum_eventual);
+#else
+	csum_agg_recalc(&args);
 #endif
-		csum_agg_recalc(&args);
-
 	return args.cra_rc;
 }
 

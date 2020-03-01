@@ -69,6 +69,7 @@ struct agg_merge_window {
 	unsigned int			 mw_lgc_cnt;
 	/* I/O context for transfering data on flush */
 	struct vos_agg_io_context	 mw_io_ctxt;
+	bool				 mw_csum_support;
 };
 
 struct vos_agg_param {
@@ -85,9 +86,6 @@ struct vos_agg_param {
 	/* EV tree: Merge window for evtree aggregation */
 	struct agg_merge_window	 ap_window;
 };
-
-static bool cont_has_csums;
-static bool unit_test;
 
 static inline void
 mark_yield(bio_addr_t *addr, unsigned int *acts)
@@ -413,7 +411,7 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Merge to highest pool map version */
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
-		if (cont_has_csums && ent_in->ei_inob != 0)
+		if (mw->mw_csum_support && ent_in->ei_inob != 0)
 			cs_total += vos_csum_prepare_ent(ent_in, phy_ent);
 	}
 
@@ -460,13 +458,13 @@ prepare_segments(struct agg_merge_window *mw)
 			ent_in->ei_inob = 0;
 		}
 
-		if (cont_has_csums && ent_in->ei_inob != 0)
+		if (mw->mw_csum_support && ent_in->ei_inob != 0)
 			cs_total += vos_csum_prepare_ent(ent_in, phy_ent);
 
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
-	if (cont_has_csums && cs_total) {
+	if (mw->mw_csum_support && cs_total) {
 		rc = vos_csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
 				      &io->ic_csum_buf, io->ic_csum_buf_len,
 				      cs_total);
@@ -596,7 +594,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 	}
 
-	if (cont_has_csums) {
+	if (mw->mw_csum_support) {
 		D_ALLOC_ARRAY(csum_recalcs, seg_count);
 		if (csum_recalcs == NULL) {
 			rc = -DER_NOMEM;
@@ -640,7 +638,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ASSERT(biov_idx < bsgl.bs_nr);
 		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 
-		if (cont_has_csums) {
+		if (mw->mw_csum_support) {
 			unsigned int wider = 0; /* length of per-ext csum add */
 			unsigned int add_cnt =
 				vos_csum_widen_biov(&bsgl.bs_iovs[biov_idx],
@@ -701,9 +699,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	D_ASSERT(iov.iov_len == seg_size + buf_add);
 
-	if (cont_has_csums) {
+	if (mw->mw_csum_support) {
 		rc = vos_csum_recalc(io, &bsgl, &sgl, ent_in, csum_recalcs,
-				     seg_count, seg_size, unit_test);
+				     seg_count, seg_size);
 		if (rc) {
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -733,7 +731,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 out:
 	bio_sgl_fini(&bsgl);
-	if (cont_has_csums)
+	if (mw->mw_csum_support)
 		D_FREE(csum_recalcs);
 	return rc;
 }
@@ -1566,13 +1564,14 @@ aggregate_exit(struct vos_container *cont, bool discard)
 }
 
 static void
-merge_window_init(struct agg_merge_window *mw)
+merge_window_init(struct agg_merge_window *mw, bool cont_has_csums)
 {
 	struct vos_agg_io_context *io = &mw->mw_io_ctxt;
 
 	memset(mw, 0, sizeof(*mw));
 	D_INIT_LIST_HEAD(&mw->mw_phy_ents);
 	D_INIT_LIST_HEAD(&io->ic_nvme_exts);
+	mw->mw_csum_support = cont_has_csums;
 	io->ic_csum_buf = NULL;
 	io->ic_csum_buf_len = 0;
 }
@@ -1586,9 +1585,9 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct vos_agg_param	 agg_param = { 0 };
 	struct vos_iter_anchors	 anchors = { 0 };
 	int			 rc;
+	bool			 cont_has_csums;
 
 	cont_has_csums = agg_flags & VAF_CSUM;
-	unit_test = agg_flags & VAF_UNIT_TEST;
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
@@ -1617,7 +1616,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = false;
-	merge_window_init(&agg_param.ap_window);
+	merge_window_init(&agg_param.ap_window, cont_has_csums);
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,

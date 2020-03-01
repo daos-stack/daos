@@ -1126,8 +1126,7 @@ int
 vos_csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 	    d_sg_list_t *sgl, struct evt_entry_in *ent_in,
 	    struct csum_recalc *recalcs,
-	    unsigned int recalc_seg_cnt, daos_size_t seg_size,
-	    bool unit_test);
+	    unsigned int recalc_seg_cnt, daos_size_t seg_size);
 
 unsigned int
 vos_csum_prepare_ent(struct evt_entry_in *ent_in,
