@@ -494,14 +494,6 @@ reint_cont_destroy_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
-	rc = dtx_resync(iter_param->ip_hdl, rpt->rt_pool_uuid, entry->ie_couuid,
-			rpt->rt_rebuild_ver, true);
-	if (rc) {
-		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
-			DP_UUID(rpt->rt_pool_uuid), rc);
-		return rc;
-	}
-
 	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid,
 			&ds_cont_child);
 	if (rc != 0) {

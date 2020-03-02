@@ -3728,7 +3728,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	}
 
 	int ret;
-	daos_rebuild_opc_t op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD); ;
+	daos_rebuild_opc_t op = (opc == POOL_EXCLUDE ? RB_OP_FAIL : RB_OP_ADD);
 
 	ret = ds_rebuild_schedule(pool_uuid, *map_version, &target_list, op);
 	if (ret != 0) {

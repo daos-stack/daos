@@ -256,13 +256,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is down.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
-				PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWN;
-				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
-			}
 		} else if (opc == POOL_ADD &&
 			 target->ta_comp.co_status != PO_COMP_ST_UP &&
 			 target->ta_comp.co_status != PO_COMP_ST_UPIN) {
@@ -274,18 +267,8 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_index);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_fseq = ++version;
+			target->ta_comp.co_ver = version;
 
-			if (pool_map_node_status_match(dom, ~PO_COMP_ST_UPIN) &&
-			    !pool_map_node_status_match(dom, ~PO_COMP_ST_UP)) {
-				/*
-				 * If no ranks are UPIN but any rank is UP,
-				 * the domain is UP
-				 */
-				D_DEBUG(DF_DSMS, "change rank %u to UP\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_UP;
-				dom->do_comp.co_fseq = target->ta_comp.co_fseq;
-			}
 		} else if (opc == POOL_ADD_IN &&
 			   target->ta_comp.co_status == PO_COMP_ST_UP) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
@@ -293,12 +276,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				target->ta_comp.co_index, map);
 			target->ta_comp.co_status = PO_COMP_ST_UPIN;
 			version++;
-			if (pool_map_node_status_match(dom,
-				PO_COMP_ST_UP | PO_COMP_ST_UPIN)) {
-				D_DEBUG(DF_DSMS, "change rank %u to UPIN\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_UPIN;
-			}
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			 target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to DOWNOUT %p\n",
@@ -309,12 +286,6 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_PRINT("Target (rank %u idx %u) is excluded.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			if (pool_map_node_status_match(dom,
-						PO_COMP_ST_DOWNOUT)) {
-				D_DEBUG(DF_DSMS, "change rank %u to DOWNOUT\n",
-					dom->do_comp.co_rank);
-				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-			}
 		}
 	}
 
