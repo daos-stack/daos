@@ -1169,7 +1169,7 @@ cond_test(void **state)
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 5, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, &sgl, "foo");
-	/** Underwrite of prior cond update with higher epoch should fail */
+	/** Non conditional update should fail due to later read */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 3, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, &sgl, "foo");
 	/** Conditional insert should succeed */
@@ -1198,10 +1198,10 @@ cond_test(void **state)
 	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, 11, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-	/** Transaction conflict with prior conditional */
+	/** Key doesn't exist still, that supercedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, 11, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
-			   -DER_AGAIN);
+			   -DER_NONEXIST);
 	/** Conditional punch of non-existed dkey should fail */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, 12, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,

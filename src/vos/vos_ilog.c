@@ -497,7 +497,6 @@ vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 	uint32_t		*idx;
 	uint64_t		 hash;
 
-
 	if (ts_set == NULL)
 		return;
 
@@ -524,8 +523,6 @@ vos_ilog_ts_evict(struct ilog_df *ilog)
 	uint32_t	*idx;
 
 	idx = ilog_ts_idx_get(ilog);
-
-	D_PRINT("Evicting ilog idx %d\n", *idx);
 
 	return vos_ts_evict(idx);
 }

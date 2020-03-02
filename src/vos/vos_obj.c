@@ -58,6 +58,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_ilog_info	 akey_info = {0};
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
+	bool			 read_conflict = false;
 	int			 rc;
 
 	if (flags & VOS_OF_COND_PUNCH) {
@@ -103,7 +104,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		}
 
 		if (vos_ts_check_rl_conflict(ts_set, epoch))
-			D_GOTO(out, rc = -DER_AGAIN);
+			read_conflict = true;
 
 		rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr,
 				    &obj_info, &dkey_info, ts_set, false);
@@ -135,18 +136,25 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		vos_ilog_fetch_finish(&dkey_info);
 		vos_ilog_fetch_finish(&akey_info);
 	}
+
+	if (rc == 0 && read_conflict)
+		rc = -DER_AGAIN;
+
 	return rc;
 }
 
 static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
-	  uint64_t flags)
+	  uint64_t flags, struct vos_ts_set *ts_set)
 {
 	struct vos_container	*cont;
+	struct vos_ilog_info	 info;
 	int			 rc;
 
+	vos_ilog_fetch_init(&info);
 	cont = vos_hdl2cont(coh);
-	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df);
+	rc = vos_oi_punch(cont, obj->obj_id, epoch, flags, obj->obj_df, &info,
+			  ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -155,6 +163,7 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	 */
 	vos_obj_evict(obj);
 failed:
+	vos_ilog_fetch_finish(&info);
 	return rc;
 }
 
@@ -189,10 +198,11 @@ update_read_timestamps(struct vos_ts_set *ts_set, daos_epoch_t epoch,
 	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
 
 	if (ts_set->ts_init_count == 2) {
-		entry->te_ts_rl = MAX(entry->te_ts_rh, epoch);
+		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
 		return;
 	}
 	entry = vos_ts_set_get_entry_type(ts_set, VOS_TS_TYPE_DKEY, 0);
+	entry->te_ts_rh = MAX(entry->te_ts_rh, epoch);
 	if (ts_set->ts_init_count == 3) {
 		entry->te_ts_rl = MAX(entry->te_ts_rl, epoch);
 		return;
@@ -221,6 +231,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
+	bool			 read_conflict = false;
 	int			 rc = 0;
 
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
@@ -238,10 +249,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		entry = vos_ts_alloc(ts_set, cont->vc_ts_idx, 0);
 	}
 
-	if (vos_ts_check_rl_conflict(ts_set, epoch)) {
-		rc = -DER_AGAIN;
-		goto reset;
-	}
+	if (vos_ts_check_rl_conflict(ts_set, epoch))
+		read_conflict = true;
 
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc != 0)
@@ -259,22 +268,23 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
 			  false, DAOS_INTENT_PUNCH, true, &obj, ts_set);
 	if (rc == 0) {
-		if (vos_ts_check_rl_conflict(ts_set, epoch)) {
-			rc = -DER_AGAIN;
-			goto abort;
-		}
+		if (dkey) { /* key punch */
+			if (vos_ts_check_rl_conflict(ts_set, epoch))
+				read_conflict = true;
 
-		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
 				       akey_nr, akeys, flags, ts_set);
-		else /* object punch */
-			rc = obj_punch(coh, obj, epoch, flags);
+		} else { /* object punch */
+			rc = obj_punch(coh, obj, epoch, flags, ts_set);
+		}
 	}
+
+	if (rc == 0 && read_conflict)
+		rc = -DER_AGAIN;
 
 	if (dth != NULL && rc == 0)
 		rc = vos_dtx_prepared(dth);
 
-abort:
 	rc = umem_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);

@@ -213,7 +213,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj);
+	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj,
+	     struct vos_ilog_info *info, struct vos_ts_set *ts_set);
 
 
 /** delete an object from OI table */

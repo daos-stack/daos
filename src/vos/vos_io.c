@@ -71,6 +71,8 @@ struct vos_io_context {
 	d_list_t		 ic_blk_exts;
 	/** number DAOS IO descriptors */
 	unsigned int		 ic_iod_nr;
+	/** IO had a read conflict */
+	bool			 ic_read_conflict;
 	/** flags */
 	unsigned int		 ic_update:1,
 				 ic_size_fetch:1;
@@ -213,6 +215,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_update = !read_only;
 	ioc->ic_size_fetch = size_fetch;
 	ioc->ic_actv = NULL;
+	ioc->ic_read_conflict = false;
 	ioc->ic_actv_cnt = ioc->ic_actv_at = 0;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
@@ -966,7 +969,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 		return rc;
 
 	if (vos_ts_check_rh_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
-		return -DER_AGAIN;
+		ioc->ic_read_conflict = true;
 
 	if (ioc->ic_ts_set) {
 		switch (ioc->ic_ts_set->ts_flags & VOS_COND_AKEY_UPDATE_MASK) {
@@ -1062,7 +1065,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	subtr_created = true;
 
 	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
-		return -DER_AGAIN;
+		ioc->ic_read_conflict = true;
 
 	if (ioc->ic_ts_set) {
 		switch (ioc->ic_ts_set->ts_flags & VOS_COND_DKEY_UPDATE_MASK) {
@@ -1481,10 +1484,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 				     0);
 	}
 
-	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
-		err = -DER_AGAIN;
-		goto out;
-	}
+	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+		ioc->ic_read_conflict = true;
 
 	umem = vos_ioc2umm(ioc);
 
@@ -1500,10 +1501,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 
 	/** Check object timestamp */
-	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
-		err = -DER_AGAIN;
-		goto out;
-	}
+	if (vos_ts_check_rl_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+		ioc->ic_read_conflict = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
@@ -1529,6 +1528,14 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		D_CDEBUG(err == -DER_EXIST || err == -DER_NONEXIST, DB_IO,
 			 DLOG_ERR, "Failed to update tree index: "DF_RC"\n",
 			 DP_RC(err));
+		goto abort;
+	}
+
+	/** Now that we are past the existence checks, ensure there isn't a
+	 * read conflict
+	 */
+	if (ioc->ic_read_conflict) {
+		err = -DER_AGAIN;
 		goto abort;
 	}
 

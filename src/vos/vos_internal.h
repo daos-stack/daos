@@ -933,18 +933,8 @@ gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 static inline uint64_t
 vos_hash_get(void *buf, uint64_t len)
 {
-	uint64_t hash = vos_kh_get();
-
-	if (hash != 0) {
-		/** If 0 is a valid hash, we may do double calculate but that
-		 *  should be rare so acceptible.   The vos key trees will save
-		 *  the hash they already calculate so we can avoid this.
-		 */
-		vos_kh_set(0);
-		return hash;
-	}
-
-	D_ASSERT(buf != NULL);
+	if (buf == NULL)
+		return vos_kh_get();
 
 	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
 }

@@ -997,6 +997,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
 	bool			 found = false;
+	bool			 mark = false;
 	int			 rc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
@@ -1027,13 +1028,15 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 				DP_RC(rc));
 			return rc;
 		}
+
+		mark = true;
 	}
 
 	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
 
-	if (!found)
+	if (mark)
 		vos_ilog_ts_mark(ts_set, ilog);
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
@@ -1042,6 +1045,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
 			 "Failed to update incarnation log entry: "DF_RC"\n",
 			 DP_RC(rc));
+
+	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
+		rc = -DER_AGAIN;
 
 	return rc;
 }
