@@ -736,17 +736,17 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 
 	hdl = ds_pool_hdl_lookup(in->tci_hdl);
 	if (hdl != NULL) {
-		if (hdl->sph_capas == in->tci_capas) {
+		if (hdl->sph_flags == in->tci_flags) {
 			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
-				"handle: hdl="DF_UUID" capas="DF_U64"\n",
+				"handle: hdl="DF_UUID" flags="DF_U64"\n",
 				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
-				hdl->sph_capas);
+				hdl->sph_flags);
 			rc = 0;
 		} else {
 			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
-				DF_UUID" capas="DF_U64"\n",
+				DF_UUID" flags="DF_U64"\n",
 				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
-				hdl->sph_capas);
+				hdl->sph_flags);
 			rc = -DER_EXIST;
 		}
 		ds_pool_hdl_put(hdl);
@@ -772,7 +772,8 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	}
 
 	uuid_copy(hdl->sph_uuid, in->tci_hdl);
-	hdl->sph_capas = in->tci_capas;
+	hdl->sph_flags = in->tci_flags;
+	hdl->sph_sec_capas = in->tci_sec_capas;
 	hdl->sph_pool = pool;
 
 	rc = daos_iov_copy(&hdl->sph_cred, &in->tci_cred);
