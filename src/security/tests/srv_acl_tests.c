@@ -1785,6 +1785,29 @@ test_pool_can_connect(void **state)
 					    POOL_CAPA_DEL_CONT));
 }
 
+/*
+ * Container access tests
+ */
+static void
+test_cont_can_open(void **state)
+{
+	assert_false(ds_sec_cont_can_open(0));
+	/* Need read access at minimum - write-only isn't allowed */
+	assert_false(ds_sec_cont_can_open(~CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_READ_DATA));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_PROP));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_ACL));
+	assert_true(ds_sec_cont_can_open(CONT_CAPAS_RO_MASK));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_READ_DATA |
+					 CONT_CAPA_WRITE_DATA |
+					 CONT_CAPA_GET_PROP |
+					 CONT_CAPA_SET_PROP |
+					 CONT_CAPA_GET_ACL |
+					 CONT_CAPA_SET_ACL |
+					 CONT_CAPA_SET_OWNER));
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -1846,6 +1869,7 @@ main(void)
 		cmocka_unit_test(test_cont_get_capas_success),
 		cmocka_unit_test(test_cont_get_capas_denied),
 		cmocka_unit_test(test_pool_can_connect),
+		cmocka_unit_test(test_cont_can_open),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
