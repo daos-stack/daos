@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,8 @@ struct ds_cont_child {
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
 	uuid_t			sch_uuid;	/* of the container handle */
-	uint64_t		sch_capas;
+	uint64_t		sch_flags;	/* user-supplied flags */
+	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
@@ -123,7 +124,8 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
+		   uint64_t flags, uint64_t sec_capas,
+		   struct ds_cont_hdl **cont_hdl);
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 

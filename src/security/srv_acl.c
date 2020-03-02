@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -659,4 +659,13 @@ bool
 ds_sec_pool_can_connect(uint64_t pool_capas)
 {
 	return (pool_capas & POOL_CAPA_READ) != 0;
+}
+
+bool
+ds_sec_cont_can_open(uint64_t cont_capas)
+{
+	/*
+	 * Need to have some form of read access at minimum.
+	 */
+	return (cont_capas & CONT_CAPAS_RO_MASK) != 0;
 }

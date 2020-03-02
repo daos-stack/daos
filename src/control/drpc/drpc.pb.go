@@ -193,7 +193,9 @@ func init() {
 	proto.RegisterType((*Response)(nil), "drpc.Response")
 }
 
-func init() { proto.RegisterFile("drpc.proto", fileDescriptor_e4c8b3f839895dc3) }
+func init() {
+	proto.RegisterFile("drpc.proto", fileDescriptor_e4c8b3f839895dc3)
+}
 
 var fileDescriptor_e4c8b3f839895dc3 = []byte{
 	// 285 bytes of a gzipped FileDescriptorProto

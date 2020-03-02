@@ -1047,10 +1047,10 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		return rc;
 	}
 
-	if (obj_is_modification_opc(opc) && !(coh->sch_capas & DAOS_COO_RW)) {
+	if (obj_is_modification_opc(opc) && !(coh->sch_flags & DAOS_COO_RW)) {
 		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sch_capas "DF_U64", "
 			"NO_PERM to update.\n", DP_UUID(cont_uuid),
-			DP_UUID(coh_uuid), coh->sch_capas);
+			DP_UUID(coh_uuid), coh->sch_flags);
 		D_GOTO(failed, rc = -DER_NO_PERM);
 	}
 
