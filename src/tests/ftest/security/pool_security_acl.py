@@ -48,6 +48,8 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
             DAOS-3611: Pool ACL verification after user removed from a
                        granted group.
             DAOS-3612: ACL update to remove/grant user/group access pool
+            DAOS-3546: Test ACL access when user/group management isn't
+                       synced between client and server nodes
         Description:
             Create pool with pass-in user and group acl permission,
             verify pool user and group read, write, read-write and none
