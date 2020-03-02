@@ -1103,7 +1103,8 @@ ds_dtx_resync(void *arg)
 
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t capas, struct ds_cont_hdl **cont_hdl)
+		   uint64_t flags, uint64_t sec_capas,
+		   struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
@@ -1112,19 +1113,19 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
 	if (hdl != NULL) {
-		if (capas != 0) {
-			if (hdl->sch_capas != capas) {
+		if (flags != 0) {
+			if (hdl->sch_flags != flags) {
 				D_ERROR(DF_CONT": conflicting container : hdl="
 					DF_UUID" capas="DF_U64"\n",
 					DP_CONT(pool_uuid, cont_uuid),
-					DP_UUID(cont_hdl_uuid), capas);
+					DP_UUID(cont_hdl_uuid), flags);
 				rc = -DER_EXIST;
 			} else {
 				D_DEBUG(DF_DSMS, DF_CONT": found compatible"
 					" container handle: hdl="DF_UUID
 					" capas="DF_U64"\n",
 				      DP_CONT(pool_uuid, cont_uuid),
-				      DP_UUID(cont_hdl_uuid), hdl->sch_capas);
+				      DP_UUID(cont_hdl_uuid), hdl->sch_flags);
 			}
 		}
 
@@ -1153,7 +1154,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	}
 
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
-	hdl->sch_capas = capas;
+	hdl->sch_flags = flags;
+	hdl->sch_sec_capas = sec_capas;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -1267,10 +1269,11 @@ err_hdl:
 }
 
 struct cont_tgt_open_arg {
-	uuid_t	pool_uuid;
-	uuid_t	cont_uuid;
-	uuid_t	cont_hdl_uuid;
-	uint64_t capas;
+	uuid_t		pool_uuid;
+	uuid_t		cont_uuid;
+	uuid_t		cont_hdl_uuid;
+	uint64_t	flags;
+	uint64_t	sec_capas;
 };
 
 /*
@@ -1283,12 +1286,13 @@ cont_open_one(void *vin)
 	struct cont_tgt_open_arg	*arg = vin;
 
 	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
-				  arg->cont_uuid, arg->capas, NULL);
+				  arg->cont_uuid, arg->flags, arg->sec_capas,
+				  NULL);
 }
 
 int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		 uuid_t cont_uuid, uint64_t capas)
+		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
 	struct ds_pool		*pool = NULL;
 	struct cont_tgt_open_arg arg;
@@ -1299,7 +1303,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.capas = capas;
+	arg.flags = flags;
+	arg.sec_capas = sec_capas;
 
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
