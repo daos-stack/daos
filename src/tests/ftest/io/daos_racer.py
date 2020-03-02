@@ -29,7 +29,7 @@ from daos_racer_utils import DaosRacerCommand
 class DaosRacerTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
-    avocado: recursive
+    :avocado: recursive
     """
 
     def test_daos_racer(self):
@@ -46,7 +46,7 @@ class DaosRacerTest(TestWithServers):
         Use Cases:
             Running simultaneous, conflicting I/O requests.
 
-        avocado: tags=all,full_regression,large,io,daosracer
+        :avocado: tags=all,full_regression,hw,large,io,daosracer
         """
         self.assertEqual(
             len(self.hostlist_clients), 1,
