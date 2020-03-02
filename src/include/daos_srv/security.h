@@ -117,4 +117,17 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 bool
 ds_sec_pool_can_connect(uint64_t pool_capas);
 
+/**
+ * Determine if the container can be opened based on the calculated set of
+ * container capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_open(uint64_t cont_capas);
+
 #endif /* __DAOS_SRV_SECURITY_H__ */
