@@ -896,6 +896,15 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     ]
     spawn_commands(host_list, "; ".join(commands), 900)
 
+def check_log_size(avocado_logs_dir):
+    """Check the size of the the directoy of the host test log files in
+    the avocado results directory.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files
+        test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
+    """
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
