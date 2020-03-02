@@ -96,21 +96,7 @@ class FioBase(TestWithServers):
 
         # create container
         self.container.create(con_in=self.co_prop)
-        # env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
-        # command to create container of posix type
-        # cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
-        #    self.pool.uuid, ":".join(
-        #        [str(item) for item in self.pool.svc_ranks]))
-        # try:
-        #   container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-        #                                 shell=True)
-        #    (output, err) = container.communicate()
-        #    self.log.info("Container created with UUID %s", output.split()[3])
 
-        # except subprocess.CalledProcessError as err:
-        #    self.fail("Container create failed:{}".format(err))
-
-        # return output.split()[3]
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
