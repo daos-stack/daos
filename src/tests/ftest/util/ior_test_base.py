@@ -140,7 +140,8 @@ class IorTestBase(TestWithServers):
             cont_uuid(str, optional): container uuid. Default to None which will
                                       create new container.
         """
-        self.container.uuid = cont_uuid
+        if cont_uuid is not None:
+            self.container.uuid = cont_uuid
         self.update_ior_cmd_with_pool()
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
