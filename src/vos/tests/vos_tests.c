@@ -130,7 +130,6 @@ main(int argc, char **argv)
 		{"exclude",		required_argument, 0, 'e'},
 	};
 
-	srand(1);
 	d_register_alt_assert(mock_assert);
 
 	rc = daos_debug_init(NULL);
