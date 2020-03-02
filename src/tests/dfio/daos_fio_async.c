@@ -36,13 +36,14 @@
 #include <fcntl.h>
 #include <libgen.h>
 
+#include <config-host.h>
 #include <fio.h>
 #include <optgroup.h>
 
-#include <gurt/common.h>
-#include <gurt/hash.h>
 #include <daos.h>
 #include <daos_fs.h>
+#include <gurt/common.h>
+#include <gurt/hash.h>
 
 #define ERR(MSG)							\
 do {									\
@@ -196,12 +197,11 @@ static void
 daos_fio_cleanup(struct thread_data *td)
 {
 	struct daos_data *dd = td->io_ops_data;
-	int rc;
 
-	rc = dfs_umount(dd->dfs);
-	rc = daos_cont_close(dd->coh, NULL);
-	rc = daos_pool_disconnect(dd->poh, NULL);
-	rc = daos_fini();
+	dfs_umount(dd->dfs);
+	daos_cont_close(dd->coh, NULL);
+	daos_pool_disconnect(dd->poh, NULL);
+	daos_fini();
 
 	free(dd->io_us);
 	free(dd);
@@ -321,7 +321,6 @@ static int
 daos_fio_queue(struct thread_data *td, struct io_u *io_u)
 {
 	struct daos_data *dd = td->io_ops_data;
-	d_iov_t iov;
 	struct daos_iou *io = io_u->engine_data;
 	daos_off_t offset = io_u->offset;
 	daos_size_t ret;
@@ -379,7 +378,6 @@ static int
 daos_fio_close(struct thread_data *td, struct fio_file *f)
 {
 	struct daos_data *dd = td->io_ops_data;
-	dfs_obj_t *parent = NULL;
 	int rc;
 
 	rc = dfs_release(dd->obj);

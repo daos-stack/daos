@@ -36,7 +36,15 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const MaxMessageSize = 4096
+const (
+	// MessageBufferSize is the starting size of the receive buffer. If
+	// the buffer must be grown to accommodate larger messages, it is
+	// expanded in increments of this value.
+	MessageBufferSize = 1024
+	// MaxMessageSize is the largest single message that can be written to
+	// or read from the privileged binary.
+	MaxMessageSize = MessageBufferSize * 1024
+)
 
 type (
 	// Request represents a request sent to the privileged binary. The
@@ -100,6 +108,36 @@ func decodeResponse(resBuf []byte) (*Response, error) {
 	return nil, errors.Wrapf(err, "pbin failed to decode response data(%q)", resBuf)
 }
 
+// ReadMessage attempts to read a message from the sender and
+// returns a buffer containing the message if successful. Relies
+// on the writer being closed so that the reader gets an io.EOF
+// to signal that the message is complete.
+func ReadMessage(conn io.Reader) ([]byte, error) {
+	readBuf := make([]byte, MessageBufferSize)
+
+	startIdx := 0
+	for {
+		readLen, err := conn.Read(readBuf[startIdx:])
+		startIdx += readLen
+		if err != nil {
+			if err == io.EOF && startIdx > 0 {
+				break
+			}
+			return nil, err
+		}
+
+		if len(readBuf)+MessageBufferSize > MaxMessageSize {
+			return nil, errors.New("max message size exceeded in ReadMessage()")
+		}
+
+		readBuf = append(readBuf, make([]byte, MessageBufferSize)...)
+	}
+
+	return readBuf[:startIdx], nil
+}
+
+// ExecReq executes the supplied Request by starting a child process
+// to service the request. Returns a Response if successful.
 func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Request) (res *Response, err error) {
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -150,29 +188,33 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	if _, err := conn.Write(sendData); err != nil {
 		return nil, errors.Wrap(err, "pbin write failed")
 	}
+	// Signal to the receiver that we're finished.
+	if err := conn.CloseWrite(); err != nil {
+		return nil, errors.Wrap(err, "pbin CloseWrite failed")
+	}
 
 	maxReadAttempts := 5
-	readCount := 0
-	for {
-		recvData := make([]byte, MaxMessageSize)
-		recvLen, err := conn.Read(recvData)
-		if err != nil {
-			return nil, errors.Wrap(err, "pbin read failed")
-		}
-
-		res, err = decodeResponse(recvData[:recvLen])
+	for readCount := 0; readCount < maxReadAttempts; readCount++ {
+		recvData, err := ReadMessage(conn)
 		if err != nil && err != io.EOF {
-			log.Debugf("discarding garbage response %q", recvData[:recvLen])
-			readCount++
-			if readCount < maxReadAttempts {
-				continue
-			}
-			return nil, err
-		}
-		if res.Error != nil {
-			return nil, res.Error
+			return nil, errors.Wrap(err, "failed to read message from sender")
 		}
 
+		res, err = decodeResponse(recvData)
+		if err != nil {
+			log.Debugf("discarding garbage response %q", recvData)
+			continue
+		}
+
+		break
+	}
+
+	switch {
+	case res == nil:
+		return nil, errors.Errorf("Unable to decode response after %d attempts", maxReadAttempts)
+	case res.Error != nil:
+		return nil, res.Error
+	default:
 		return res, nil
 	}
 }
