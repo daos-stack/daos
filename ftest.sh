@@ -206,13 +206,19 @@ sudo mkdir -p /usr/share/daos/control
 sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
            /usr/share/daos/control
 sudo mkdir -p /usr/share/spdk/scripts
-sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
-           /usr/share/spdk/scripts
-sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
-           /usr/share/spdk/scripts
-sudo rm -f /usr/share/spdk/include
-sudo ln -s $SL_PREFIX/include \
-           /usr/share/spdk/include
+if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
+    sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+               /usr/share/spdk/scripts
+fi
+if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
+    sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+               /usr/share/spdk/scripts
+fi
+if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
+    sudo rm -f /usr/share/spdk/include
+    sudo ln -s $SL_PREFIX/include \
+               /usr/share/spdk/include
+fi
 
 # first, strip the execute bit from the in-tree binary,
 # then copy daos_admin binary into \$PATH and fix perms
