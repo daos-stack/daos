@@ -43,14 +43,14 @@ testparams:
          uuid:
             - VALID
             - PASS
-     nulluuid:
-          uuid:
-             - NULLPTR
-             - FAIL
-     baduuid:
-          uuid:
-             - CRAP
-             - FAIL
+      nulluuid:
+         uuid:
+            - NULLPTR
+            - FAIL
+      baduuid:
+         uuid:
+            - CRAP
+            - FAIL
 pool:
    mode: 511
    name: daos_server
