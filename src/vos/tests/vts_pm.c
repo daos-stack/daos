@@ -1154,9 +1154,8 @@ cond_test(void **state)
 	d_sg_list_t		 sgl = {0};
 	int			 rc;
 
-	setenv("D_LOG_MASK", "bio=DEBUG,vos=DEBUG", 1);
-	setenv("DD_MASK", "all", 1);
-	d_log_sync_mask();
+	if (getenv("DAOS_IO_BYPASS"))
+		skip();
 
 	test_args_reset(arg, VPOOL_SIZE);
 
