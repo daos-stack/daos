@@ -1466,6 +1466,28 @@ cont_delete_acl_hdlr(struct cmd_args_s *ap)
 }
 
 int
+cont_set_owner_hdlr(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	if (!ap->user && !ap->group) {
+		fprintf(stderr,
+			"parameter --user or --group is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to set owner for container: %d\n", rc);
+		return rc;
+	}
+
+	fprintf(stdout, "successfully updated owner for container\n");
+	return rc;
+}
+
+int
 obj_query_hdlr(struct cmd_args_s *ap)
 {
 	struct daos_obj_layout *layout;

@@ -88,6 +88,8 @@ cont_op_parse(const char *str)
 		return CONT_UPDATE_ACL;
 	else if (strcmp(str, "delete-acl") == 0)
 		return CONT_DELETE_ACL;
+	else if (strcmp(str, "set-owner") == 0)
+		return CONT_SET_OWNER;
 	return -1;
 }
 
@@ -941,6 +943,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_DELETE_ACL:
 		rc = cont_delete_acl_hdlr(ap);
+		break;
+	case CONT_SET_OWNER:
+		rc = cont_set_owner_hdlr(ap);
 		break;
 	default:
 		break;
