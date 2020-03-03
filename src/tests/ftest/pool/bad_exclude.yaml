@@ -3,48 +3,48 @@ agent_config:
 server_config:
    name: test_server
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
+   test_servers:
+      - server-A
+      - server-B
+      - server-C
 timeout: 200
 testparams:
    tgtlist: !mux
-     goodlist:
-          ranklist:
-             - 2
-             - PASS
-     badlist:
-          ranklist:
-             - 44
-             - FAIL
-     nulllist:
-          ranklist:
-             - NULLPTR
-             - FAIL
+      goodlist:
+         ranklist:
+            - 2
+            - PASS
+      badlist:
+         ranklist:
+            - 44
+            - FAIL
+      nulllist:
+         ranklist:
+            - NULLPTR
+            - FAIL
    svrlist: !mux
-     goodlist:
-          ranklist:
-             - VALID
-             - PASS
-     badlist:
-          ranklist:
-             - NULLPTR
-             - FAIL
+      goodlist:
+         ranklist:
+            - VALID
+            - PASS
+      badlist:
+         ranklist:
+            - NULLPTR
+            - FAIL
    connectsetnames: !mux
-     goodname:
-          setname:
-             - test_server
-             - PASS
-     badname:
-          setname:
-             - NULLPTR
-             - FAIL
+      goodname:
+         setname:
+            - test_server
+            - PASS
+      badname:
+         setname:
+            - NULLPTR
+            - FAIL
    UUID: !mux
-     gooduuid:
-          uuid:
-             - VALID
-             - PASS
+      gooduuid:
+         uuid:
+            - VALID
+            - PASS
      nulluuid:
           uuid:
              - NULLPTR
@@ -54,10 +54,7 @@ testparams:
              - CRAP
              - FAIL
 pool:
-   createmode:
-     mode: 511
-   createset:
-     setname: test_server
-   createsize:
-     size: 1073741824
-
+   mode: 511
+   name: daos_server
+   scm_size: 1073741824
+   control_method: dmg

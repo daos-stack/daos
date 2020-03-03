@@ -291,6 +291,8 @@ co_properties(void **state)
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
+	char			*exp_owner;
+	char			*exp_owner_grp;
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -374,24 +376,28 @@ co_properties(void **state)
 	}
 
 	/* default owner */
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &exp_owner), 0);
 	print_message("Checking owner set to default\n");
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "NOBODY@",
-		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+	    strncmp(entry->dpe_str, exp_owner, DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(exp_owner);
 
 	/* default owner-group */
+	assert_int_equal(daos_acl_gid_to_principal(getegid(), &exp_owner_grp),
+			 0);
 	print_message("Checking owner-group set to default\n");
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER_GROUP);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "NOBODY@",
+	    strncmp(entry->dpe_str, exp_owner_grp,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+	D_FREE(exp_owner_grp);
 
 	if (arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
@@ -545,8 +551,10 @@ co_acl(void **state)
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl;
 	struct daos_ace		*ace;
-	uid_t			uid;
+	uid_t			 uid;
 	char			*user;
+	d_string_t		 name_to_remove = "friendlyuser@";
+	uint8_t			 type_to_remove = DAOS_ACL_USER;
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -652,6 +660,30 @@ co_acl(void **state)
 	assert_int_equal(rc, 0);
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 4: delete entry from ACL with bad handle\n");
+	rc = daos_cont_delete_acl(DAOS_HDL_INVAL, type_to_remove,
+				  name_to_remove, NULL);
+	assert_int_equal(rc, -DER_NO_HDL);
+
+	print_message("Case 5: delete entry from ACL\n");
+
+	/* Update expected ACL to remove the entry */
+	assert_int_equal(daos_acl_remove_ace(&exp_acl, type_to_remove,
+					     name_to_remove), 0);
+
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, 0);
+
+	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
+
+	print_message("Case 6: delete entry no longer in ACL\n");
+
+	/* try deleting same entry again - should be gone */
+	rc = daos_cont_delete_acl(arg->coh, type_to_remove, name_to_remove,
+				  NULL);
+	assert_int_equal(rc, -DER_NONEXIST);
 
 	/* Clean up */
 	if (arg->myrank == 0)

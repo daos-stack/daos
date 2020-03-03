@@ -4,7 +4,7 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.9.0
+Version:       1.1.0
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -109,6 +109,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
+Requires: %{name}-client = %{version}-%{release}
 Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
@@ -181,20 +182,25 @@ rpath_files="utils/daos_build.py"
 rpath_files+=" $(find . -name SConscript)"
 sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
 
+%define conf_dir %{_sysconfdir}/daos
+
 scons %{?no_smp_mflags}    \
       --config=force       \
       USE_INSTALLED=all    \
+      CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?no_smp_mflags}              \
-      --config=force                 \
-      install                        \
-      USE_INSTALLED=all              \
-      PREFIX=%{?buildroot}%{_prefix}
+scons %{?no_smp_mflags}               \
+      --config=force                  \
+      --install-sandbox=%{?buildroot} \
+      %{?buildroot}%{_prefix}         \
+      %{?buildroot}%{conf_dir}        \
+      USE_INSTALLED=all               \
+      CONF_DIR=%{conf_dir}            \
+      PREFIX=%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/daos/.build_vars.*
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -235,7 +241,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %doc
 
 %files server
-%{_prefix}%{_sysconfdir}/daos_server.yml
+%config(noreplace) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -306,8 +312,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
-%{_prefix}%{_sysconfdir}/daos.yml
-%{_prefix}%{_sysconfdir}/daos_agent.yml
+%config(noreplace) %{conf_dir}/daos_agent.yml
+%config(noreplace) %{conf_dir}/daos.yml
 %{_unitdir}/daos-agent.service
 
 %files tests
@@ -334,6 +340,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
+- daos-server requires daos-client (same version)
+
+* Fri Feb 14 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-1
+- Version bump up to 1.1.0
+
 * Wed Feb 12 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-2
 - Remove undefine _missing_build_ids_terminate_build
 

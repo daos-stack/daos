@@ -316,6 +316,10 @@ int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
 		       daos_size_t pool_size, int *sub_tests,
 		       int sub_tests_size, test_setup_cb_t setup_cb,
 		       test_teardown_cb_t teardown_cb);
+int
+run_daos_sub_tests_only(const struct CMUnitTest *tests, int tests_size,
+			daos_size_t pool_size, int *sub_tests,
+			int sub_tests_size, void *state);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
@@ -477,8 +481,10 @@ test_rmdir(const char *path, bool force)
 			continue;   /* skips the dots */
 
 		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
-		if (fullpath == NULL)
-			D_GOTO(out, -DER_NOMEM);
+		if (fullpath == NULL) {
+			closedir(dir);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		switch (ent->d_type) {
 		case DT_DIR:

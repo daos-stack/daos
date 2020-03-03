@@ -46,6 +46,9 @@
 
 #include "daos_hdlr.h"
 
+static int
+parse_acl_file(const char *path, struct daos_acl **acl);
+
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
@@ -841,11 +844,147 @@ err_out:
 	return rc;
 }
 
+static size_t
+get_num_prop_entries_to_add(struct cmd_args_s *ap)
+{
+	size_t nr = 0;
+
+	if (ap->aclfile)
+		nr++;
+	if (ap->user)
+		nr++;
+	if (ap->group)
+		nr++;
+
+	return nr;
+}
+
+/*
+ * Returns the first empty prop entry in ap->props.
+ * If ap->props wasn't set previously, a new prop is created.
+ */
+static int
+get_first_empty_prop_entry(struct cmd_args_s *ap,
+			   struct daos_prop_entry **entry)
+{
+	size_t nr = 0;
+
+	nr = get_num_prop_entries_to_add(ap);
+	if (nr == 0) {
+		*entry = NULL;
+		return 0; /* nothing to do */
+	}
+
+	if (ap->props == NULL) {
+		/*
+		 * Note that we don't control the memory this way, the prop is
+		 * freed by the external caller
+		 */
+		ap->props = daos_prop_alloc(nr);
+		if (ap->props == NULL) {
+			fprintf(stderr,
+				"failed to allocate memory while processing "
+				"access control parameters\n");
+			return -DER_NOMEM;
+		}
+		*entry = &(ap->props->dpp_entries[0]);
+	} else {
+		*entry = &(ap->props->dpp_entries[ap->props->dpp_nr]);
+		ap->props->dpp_nr += nr;
+	}
+
+	if (ap->props->dpp_nr > DAOS_PROP_ENTRIES_MAX_NR) {
+		fprintf(stderr,
+			"too many properties supplied. Try again with "
+			"fewer props set.\n");
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+static int
+update_props_for_access_control(struct cmd_args_s *ap)
+{
+	int			rc = 0;
+	struct daos_acl		*acl = NULL;
+	struct daos_prop_entry	*entry = NULL;
+
+	rc = get_first_empty_prop_entry(ap, &entry);
+	if (rc != 0 || entry == NULL)
+		return rc;
+
+	D_ASSERT(entry->dpe_type == 0);
+	D_ASSERT(entry->dpe_val_ptr == NULL);
+
+	/*
+	 * When we allocate new memory here, we always do it in the prop entry,
+	 * which is a pointer into ap->props.
+	 * This will be freed by the external caller on exit, so we don't have
+	 * to worry about it here.
+	 */
+
+	if (ap->aclfile) {
+		rc = parse_acl_file(ap->aclfile, &acl);
+		if (rc != 0)
+			return rc;
+
+		entry->dpe_type = DAOS_PROP_CO_ACL;
+		entry->dpe_val_ptr = acl;
+		acl = NULL; /* acl will be freed with the prop now */
+
+		entry++;
+	}
+
+	if (ap->user) {
+		if (!daos_acl_principal_is_valid(ap->user)) {
+			fprintf(stderr,
+				"invalid user name.\n");
+			return -DER_INVAL;
+		}
+
+		entry->dpe_type = DAOS_PROP_CO_OWNER;
+		D_STRNDUP(entry->dpe_str, ap->user, DAOS_ACL_MAX_PRINCIPAL_LEN);
+		if (entry->dpe_str == NULL) {
+			fprintf(stderr,
+				"failed to allocate memory for user name.\n");
+			return -DER_NOMEM;
+		}
+
+		entry++;
+	}
+
+	if (ap->group) {
+		if (!daos_acl_principal_is_valid(ap->group)) {
+			fprintf(stderr,
+				"invalid group name.\n");
+			return -DER_INVAL;
+		}
+
+		entry->dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+		D_STRNDUP(entry->dpe_str, ap->group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		if (entry->dpe_str == NULL) {
+			fprintf(stderr,
+				"failed to allocate memory for group name.\n");
+			return -DER_NOMEM;
+		}
+
+		entry++;
+	}
+
+	return 0;
+}
+
 /* cont_create_hdlr() - create container by UUID */
 int
 cont_create_hdlr(struct cmd_args_s *ap)
 {
-	int		rc;
+	int rc;
+
+	rc = update_props_for_access_control(ap);
+	if (rc != 0)
+		return rc;
 
 	/** allow creating a POSIX container without a link in the UNS path */
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
@@ -1273,6 +1412,49 @@ cont_update_acl_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		fprintf(stderr,
 			"update appeared to succeed, but cannot fetch ACL "
+			"for confirmation: %d\n", rc);
+		return rc;
+	}
+
+	rc = print_acl(stdout, prop_out, false);
+
+	daos_prop_free(prop_out);
+	return rc;
+}
+
+int
+cont_delete_acl_hdlr(struct cmd_args_s *ap)
+{
+	int				rc;
+	enum daos_acl_principal_type	type;
+	char				*name;
+	daos_prop_t			*prop_out;
+
+	if (!ap->principal) {
+		fprintf(stderr,
+			"parameter --principal is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
+	if (rc != 0) {
+		fprintf(stderr, "unable to parse principal string '%s': %d\n",
+			ap->principal, rc);
+		return rc;
+	}
+
+	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
+	D_FREE(name);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to delete ACL entry for container: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"delete appeared to succeed, but cannot fetch ACL "
 			"for confirmation: %d\n", rc);
 		return rc;
 	}

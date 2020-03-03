@@ -39,7 +39,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-const msgFormatErr = "failure formatting storage, check RPC response for details"
+const (
+	msgFormatErr      = "failure formatting storage, check RPC response for details"
+	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
+)
 
 // newState creates, populates and returns ResponseState in addition
 // to logging any err.
@@ -55,39 +58,6 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	}
 
 	return state
-}
-
-func scmModulesToPB(mms []storage.ScmModule) (pbMms proto.ScmModules) {
-	for _, c := range mms {
-		pbMms = append(
-			pbMms,
-			&ctlpb.ScmModule{
-				Loc: &ctlpb.ScmModule_Location{
-					Channel:    c.ChannelID,
-					Channelpos: c.ChannelPosition,
-					Memctrlr:   c.ControllerID,
-					Socket:     c.SocketID,
-				},
-				Physicalid: c.PhysicalID,
-				Capacity:   c.Capacity,
-			})
-	}
-	return
-}
-
-func scmNamespacesToPB(nss []storage.ScmNamespace) (pbNss proto.ScmNamespaces) {
-	for _, ns := range nss {
-		pbNss = append(pbNss,
-			&ctlpb.PmemDevice{
-				Uuid:     ns.UUID,
-				Blockdev: ns.BlockDevice,
-				Dev:      ns.Name,
-				Numanode: ns.NumaNode,
-				Size:     ns.Size,
-			})
-	}
-
-	return
 }
 
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
@@ -131,8 +101,12 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 		info = scm.MsgScmRebootRequired
 	}
 
+	pbResp.Namespaces = make(proto.ScmNamespaces, 0, len(resp.Namespaces))
+	if err := (*proto.ScmNamespaces)(&pbResp.Namespaces).FromNative(resp.Namespaces); err != nil {
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
 	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
-	pbResp.Pmems = scmNamespacesToPB(resp.Namespaces)
 
 	return
 }
@@ -190,9 +164,19 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
 		if len(ssr.Namespaces) > 0 {
-			resp.Scm.Pmems = scmNamespacesToPB(ssr.Namespaces)
+			resp.Scm.Namespaces = make(proto.ScmNamespaces, 0, len(ssr.Namespaces))
+			err := (*proto.ScmNamespaces)(&resp.Scm.Namespaces).FromNative(ssr.Namespaces)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		} else {
-			resp.Scm.Modules = scmModulesToPB(ssr.Modules)
+			resp.Scm.Modules = make(proto.ScmModules, 0, len(ssr.Modules))
+			err := (*proto.ScmModules)(&resp.Scm.Modules).FromNative(ssr.Modules)
+			if err != nil {
+				resp.Scm.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM,
+					err.Error(), "", msg+"SCM")
+			}
 		}
 	}
 
@@ -260,10 +244,8 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
 	needsSuperblock := true
 	needsScmFormat := reformat
-	// indicate that NVMe not yet formatted
-	skipErr := FaultBdevFormatSkipped(i.Index())
-	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME,
-		skipErr.Error(), skipErr.Resolution)
+	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_SUCCESS, "",
+		fmt.Sprintf(msgNvmeFormatSkip, i.Index()))
 
 	c.log.Infof("formatting storage for %s instance %d (reformat: %t)",
 		DataPlaneName, i.Index(), reformat)
@@ -283,7 +265,10 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 				newMntRet(c.log, "format", scmConfig.MountPoint,
 					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
 					fault.ShowResolutionFor(err)))
-			resp.Crets = append(resp.Crets, skipNvmeResult)
+
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
 
 			return nil // don't continue if formatted and no reformat opt
 		}
@@ -299,7 +284,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 		if result.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
 			c.log.Error(msgFormatErr)
-			resp.Crets = append(resp.Crets, skipNvmeResult)
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
 
 			return nil // don't continue if we can't format SCM
 		}

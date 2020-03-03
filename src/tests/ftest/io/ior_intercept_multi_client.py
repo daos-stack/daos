@@ -65,7 +65,8 @@ class IorInterceptMultiClient(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,daosio,hw,full_regression,iorinterceptmulticlient
+        :avocado: tags=all,full_regression,hw,large
+        :avocado: tags=daosio,iorinterceptmulticlient
         """
         suffix = self.ior_cmd.transfer_size.value
         out = self.run_ior_with_pool(test_file_suffix=suffix)

@@ -104,9 +104,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	if !cfgHasBdev(cfg) {
-		// If there are no bdevs in the config, don't waste memory on configuring
-		// hugepages (1 is minimum to avoid default).
-		cfg.NrHugepages = 1
+		// If there are no bdevs in the config, use a minimal amount of hugepages.
+		cfg.NrHugepages = 128
 	}
 
 	// Perform an automatic prepare based on the values in the config file.

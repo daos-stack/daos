@@ -114,7 +114,7 @@ repeat:
 		else if (type == VEA_TYPE_AGGREGATE)
 			d_list_del_init(&entry->ve_link);
 
-		rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
+		rc = dbtree_delete(btr_hdl, BTR_PROBE_BYPASS, &key_out, NULL);
 		if (rc)
 			return rc;
 	}
