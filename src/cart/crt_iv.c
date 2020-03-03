@@ -1979,7 +1979,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
 	rc = iv_ops->ivo_pre_sync(ivns_internal, &input->ivs_key, 0,
-				  &iv_value, user_priv);
+				  &tmp_iv, user_priv);
 	if (rc != 0)
 		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
 
