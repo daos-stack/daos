@@ -29,6 +29,7 @@
 
 #include "vts_io.h"
 #include <vos_internal.h>
+#include <daos_srv/container.h>
 
 #define VERBOSE_MSG(...)			\
 {						\
@@ -421,7 +422,8 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, 0);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
+				   ds_csum_agg_recalc);
 	assert_int_equal(rc, 0);
 
 	verify_view(arg, oid, dkey, akey, ds);
@@ -591,7 +593,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL);
 	assert_int_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1118,7 +1120,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
 
 		assert_int_equal(rc, 0);
 
@@ -1654,9 +1656,7 @@ aggregate_12(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
 	daos_fail_value_set(50);
-	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_basic(arg, &ds, -1, NULL, true);
-	arg->ta_flags &= ~TF_USE_CSUMS;
 	daos_fail_loc_set(0);
 }
 
@@ -1686,6 +1686,7 @@ aggregate_13(void **state)
 
 	aggregate_multi(arg, &ds);
 }
+
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
@@ -1807,7 +1808,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;

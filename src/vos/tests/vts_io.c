@@ -526,10 +526,8 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
-		if (rc != 0) {
-			D_PRINT("add csums failed\n");
+		if (rc != 0)
 			return rc;
-		}
 	}
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {

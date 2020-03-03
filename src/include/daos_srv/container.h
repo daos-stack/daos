@@ -181,4 +181,34 @@ int
 cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 			    unsigned int sync_mode);
 
+struct csum_recalc {
+	struct evt_extent	*cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+	unsigned int		 cr_prefix_len;
+	unsigned int		 cr_suffix_len;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	d_sg_list_t		*cra_sgl;	/* write sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	void			*cra_buf;	/* read buffer */
+	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	unsigned int		 cra_buf_len;	/* length of read buffer */
+	int			 cra_rc;	/* return code */
+	ABT_eventual		 csum_eventual;
+};
+
+/* Callback funtion to pass to vos_aggregation */
+void
+ds_csum_recalc(void *args);
+
+/* Used for VOS unit tests */
+void
+ds_csum_agg_recalc(void *args);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

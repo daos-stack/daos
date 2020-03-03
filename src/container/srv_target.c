@@ -67,7 +67,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 */
 	if (cont->sc_abort_vos_aggregating)
 		return 1;
-	return vos_aggregate(cont->sc_hdl, epr, 0);
+	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc);
 }
 
 static bool
@@ -614,7 +614,7 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 }
 
 static int
-cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
+cont_child_start(struct ds_pool_child *pool_child, uuid_t co_uuid,
 		 struct ds_cont_child **cont_out)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
@@ -640,6 +640,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	 * 2. Pool is going to be destroyed, or;
 	 * 3. Pool service is going to be stopped;
 	 */
+
 	if (cont_child->sc_stopping) {
 		D_ERROR(DF_CONT"[%d]: Container is in stopping\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
