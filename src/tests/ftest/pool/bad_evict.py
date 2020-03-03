@@ -93,6 +93,9 @@ class BadEvictTest(TestWithServers):
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
 
+            # connect to test pool destroy ; evict will fail due to bad params)
+            pool.connect()
+
             # trash the the pool service rank list
             if not svc == 'VALID':
                 savedsvc = pool.svc

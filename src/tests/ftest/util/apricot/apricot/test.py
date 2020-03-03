@@ -371,10 +371,9 @@ class TestWithServers(TestWithoutServers):
                             "Error disconnecting pool: {}".format(error))
 
                 # Only destroy a pool that has been created by the test
-                # destroy with force=0 since disconnect has occurred above
                 if not hasattr(pool, "attached") or pool.attached:
                     try:
-                        pool.destroy(0)
+                        pool.destroy(1)
                     except (DaosApiError, TestFail) as error:
                         self.multi_log("  {}".format(error))
                         error_list.append(
