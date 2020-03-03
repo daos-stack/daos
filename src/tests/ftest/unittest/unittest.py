@@ -23,7 +23,7 @@
 '''
 from avocado.utils import process
 from general_utils import get_file_path
-from apricot import Test, TestWithServers, skipForTicket
+from apricot import Test
 
 def unittest_runner(self, unit_testname):
     """
