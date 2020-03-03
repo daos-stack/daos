@@ -356,6 +356,10 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (merge_window_status(&agg_param->ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window isn't closed.\n");
 
+	/* Reset the output checksum buffer, since all overlap consumed. */
+	D_FREE(agg_param->ap_window.mw_io_ctxt.ic_csum_buf);
+	agg_param->ap_window.mw_io_ctxt.ic_csum_buf_len = 0;
+
 	return 0;
 }
 
@@ -401,6 +405,7 @@ delete:
 	return rc;
 }
 
+/* Allocates sub-ranges of the checksum buffer to each output segment. */
 static unsigned int
 csum_prepare_ent(struct evt_entry_in *ent_in, struct vos_agg_phy_ent *phy_ent)
 {
@@ -420,6 +425,13 @@ csum_prepare_ent(struct evt_entry_in *ent_in, struct vos_agg_phy_ent *phy_ent)
 	return cur_cnt * ent_in->ei_csum.cs_len;
 }
 
+/* Each new segment requires an allocated buffer range to hold the checksums
+ * calculated for the new segment. This buffer range is also used to hold
+ * the verification checksum for the component (input) segments.
+ * The full buffer is extended to hold checksums for entire merge window.
+ * Allocations for prior windows are retained until aggregation for a evtree
+ * is complete (in vos_agg_akey).
+ */
 static int
 csum_prepare_buf(struct vos_agg_lgc_seg *segs, unsigned int seg_cnt,
 		 void **csum_bufp, unsigned int cur_buf, unsigned int add_len)
@@ -524,6 +536,7 @@ prepare_segments(struct agg_merge_window *mw)
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
 		if (mw->mw_csum_support && ent_in->ei_inob != 0)
+			/* Allocates csum buffer range. */
 			cs_total += csum_prepare_ent(ent_in, phy_ent);
 	}
 
@@ -571,12 +584,14 @@ prepare_segments(struct agg_merge_window *mw)
 		}
 
 		if (mw->mw_csum_support && ent_in->ei_inob != 0)
+			/* Allocates csum buf range for truncated segments. */
 			cs_total += csum_prepare_ent(ent_in, phy_ent);
 
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
 	if (mw->mw_csum_support && cs_total) {
+		/* Reallocates csum buffer. */
 		rc = csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
 				      &io->ic_csum_buf, io->ic_csum_buf_len,
 				      cs_total);
@@ -678,15 +693,19 @@ csum_widen_biov(struct bio_iov *biov, struct vos_agg_phy_ent *phy_ent,
 			  rsize,
 			  (aligned_extent.ex_hi - ent.en_sel_ext.ex_hi) *
 			  rsize);
+	/*Amount to add to IO buffer. */
 	*wider = biov->bi_prefix_len + biov->bi_suffix_len;
 	added_segs += biov->bi_prefix_len != 0;
 	added_segs += biov->bi_suffix_len != 0;
+	/* Number of additional read segments for this component extent. */
 	return added_segs;
 }
 
 
 /* Extends bio_sglist to include extension to csum boumdaries (added to the end
- * of the list).
+ * of the list) with added_segs additional entries. These entries will hold the
+ * extended prefix and suffix data ranges needed to widen the aggregatable range
+ * to prior checksum boundaries.
  */
 static int
 csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
@@ -702,6 +721,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 
 	for (i = 0; i < bsgl->bs_nr; i++) {
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
+			/* Add the prefix. */
 			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
 			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
 					bsgl->bs_iovs[i].bi_addr.ba_off;
@@ -717,6 +737,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
 		}
 		if (bsgl->bs_iovs[i].bi_suffix_len) {
+			/* Add the suffix. */
 			D_ASSERT(add_idx < bsgl->bs_nr + added_segs);
 			bsgl->bs_iovs[add_idx].bi_addr.ba_off =
 					bsgl->bs_iovs[i].bi_addr.ba_off +
@@ -731,6 +752,8 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 			bsgl->bs_iovs[add_idx].bi_buf = NULL;
 			bsgl->bs_iovs[add_idx++].bi_addr.ba_hole = 0;
 		}
+
+		/* Reset the parameters for the write (non-extended) data. */
 
 		if (bsgl->bs_iovs[i].bi_prefix_len) {
 			bsgl->bs_iovs[i].bi_addr.ba_off +=
@@ -749,6 +772,10 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 	return 0;
 }
 
+/* An array of csum_recalc structures is constructed for each output entry.
+ * This data is used for checksum verification of the input data, and for
+ * calculating the checksum(s) for the output extent.
+ */
 static void
 csum_add_recalcs(struct csum_recalc **recalcs_p,
 		 struct vos_agg_phy_ent *phy_ent, struct evt_extent *ext,
@@ -756,13 +783,18 @@ csum_add_recalcs(struct csum_recalc **recalcs_p,
 {
 	struct csum_recalc      *recalcs = *recalcs_p;
 
-	recalcs[idx].cr_log_ext         = ext;
+	recalcs[idx].cr_log_ext         = *ext;
 	recalcs[idx].cr_phy_ext		= &phy_ent->pe_rect.rc_ex;
 	recalcs[idx].cr_phy_csum	= &phy_ent->pe_csum_info;
 	recalcs[idx].cr_phy_off		= phy_ent->pe_off;
 	recalcs[idx].cr_prefix_len	= bsgl->bs_iovs[idx].bi_prefix_len;
 	recalcs[idx].cr_suffix_len	= bsgl->bs_iovs[idx].bi_suffix_len;
 }
+
+/* Checksum calculations are performed using a call-back function (function
+ * pointer passed in the invocation of the aggregation. A single argument
+ * struct, passed as a void pointer, is passed to the callback.
+ */
 static int
 csum_recalc(struct vos_agg_io_context *io, struct bio_sglist *bsgl,
 	    d_sg_list_t *sgl, struct evt_entry_in *ent_in,
@@ -834,6 +866,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (mw->mw_csum_support) {
+		/* An array of recalc structs (one per output segment). */
 		D_ALLOC_ARRAY(csum_recalcs, seg_count);
 		if (csum_recalcs == NULL) {
 			rc = -DER_NOMEM;
@@ -879,6 +912,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 		if (mw->mw_csum_support) {
 			unsigned int wider = 0; /* length of per-ext csum add */
+			/* Extends the biov entry to include additional
+			 * data ranges (prefix, suffix) required for csum
+			 * verification.
+			 */
 			unsigned int add_cnt =
 				csum_widen_biov(&bsgl.bs_iovs[biov_idx],
 						phy_ent, &ext,
@@ -892,8 +929,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 				copy_size += wider;
 				added_csum_segs += add_cnt;
 			}
-			csum_add_recalcs(&csum_recalcs, phy_ent,
-					 &ent_in->ei_rect.rc_ex, &bsgl,
+			csum_add_recalcs(&csum_recalcs, phy_ent, &ext, &bsgl,
 					 biov_idx);
 		}
 		biov_idx++;
@@ -919,6 +955,11 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (added_csum_segs) {
+		/* Additional data requird to verify checksums is read
+		 * into end of read buffer. This allows the write data
+		 * to be placed as a single contiguous range at begining
+		 * of the buffer.
+		 */
 		rc = csum_append_added_segs(&bsgl, added_csum_segs);
 		if (rc) {
 			D_ERROR("Extend bsgl error: "DF_RC"\n", DP_RC(rc));
@@ -940,6 +981,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(iov.iov_len == seg_size + buf_add);
 
 	if (mw->mw_csum_support) {
+		/* Verify prior data, calculate csums for output range. */
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
@@ -949,7 +991,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* For csum support, this has moved reserve to after read, in case
-	 * there's a csum mismatch on the verification of the read data
+	 * there's a csum mismatch on the verification of the read data.
+	 * In case of a verification mismatch, the output extent is not
+	 * reserved or inserted, and the data is not written to media.
 	 */
 	rc = reserve_segment(obj, io, seg_size, &ent_in->ei_addr);
 	if (rc) {
@@ -1106,9 +1150,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			continue;
 		}
 		if (phy_ent->pe_csum_info.cs_not_valid)
+			/* Invalid physical extents are retained. */
 			continue;
-
-		mark_yield(&phy_ent->pe_addr, acts);
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
@@ -1143,6 +1186,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 	/* Insert new segments into EV tree */
 	for (i = 0; i < io->ic_seg_cnt; i++) {
+		/* Don't insert new segments with component csum errors. */
 		if (io->ic_segs[i].ls_has_csum_err)
 			continue;
 		ent_in = &io->ic_segs[i].ls_ent_in;
@@ -1340,6 +1384,8 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
 
+	/* Physical entry with valid csum type triggers checksum recalcuation.
+	 */
 	if (phy_ent->pe_csum_info.cs_type && mw->mw_csum_support == false)
 		mw->mw_csum_support = true;
 	else if (!phy_ent->pe_csum_info.cs_type && mw->mw_csum_support == true)
@@ -1878,7 +1924,6 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
 exit:
 	aggregate_exit(cont, false);
-	D_FREE(agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
 
 	if (merge_window_status(&agg_param.ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window resource leaked.\n");

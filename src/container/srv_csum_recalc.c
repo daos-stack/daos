@@ -29,9 +29,44 @@
 #include <daos_srv/container.h>
 #include <daos_srv/evtree.h>
 
-/* Checksum recalculation code. Called from vos_aggregate.c */
+/*
+ * Checksum recalculation code. Called from vos_aggregate.c.
+ *
+ * Recalculation is driven by an array of csum_recalc structs,
+ * one per input segment. These segments are coalecsed into a single
+ * output segment, by the aggregation process.
+ *
+ * The input data is held in a buffer that is specifed by bio sg_list.
+ * The data for the output segment is place within the initial range of
+ * the buffer. Following this range, the additional data required for
+ * checksum data is stored. These additional segments, either prefix
+ * or suffix rangess, are place in order in the buffer, with corresponding
+ * entries in the bgsl's biov array
+ *
+ * A temporary sg_list is constructed for each input segment, with an
+ * optional prefix entry, the outputable range, and an option suffix
+ * makeing up the data used to calculate the checksum used to verify
+ * the data for each input segment.
+ *
+ * The calculated checksums, are then compared to the checksums
+ * associatied with the input segments.  These input checksums are
+ * returned by the evtree iterator that generates the input extents.
+ * Input segments that overlap a merge window are an exception to this.
+ * Here, the checksums used for verification are from the overlapping
+ * output extent (who's checksums were verified in the previous window).
+ *
+ * If an input segment fails verification, an checksum error code is returned
+ * to the caller (in vos_aggregate.c).
+ *
+ * Following input verification, generation of the checksum(s) for the
+ * output segment is performed.
+ *
+ * All checksum calculation is performed using the DAOS checksum library.
+ * The calculations are offloaded to a helper Xstream, when one is available.
+ *
+ */
 
-/* construct sgl to send to csummer for verify of read data */
+/* Construct sgl to send to csummer for verify of an input segment. */
 static unsigned int
 csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl,
 		 struct csum_recalc *recalcs, uint8_t *buf,
@@ -75,15 +110,16 @@ csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl,
 	return add_offset;
 }
 
+/* Determine checksum parameters for verification of an input segemnt. */
 static unsigned int
 calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 		 unsigned int prefix_len, unsigned int suffix_len,
 		 unsigned int rec_size)
 {
 
-	unsigned int cs_cnt, low_idx = recalc->cr_log_ext->ex_lo -
+	unsigned int cs_cnt, low_idx = recalc->cr_log_ext.ex_lo -
 							prefix_len / rec_size;
-	unsigned int high_idx = recalc->cr_log_ext->ex_hi +
+	unsigned int high_idx = recalc->cr_log_ext.ex_hi +
 							suffix_len / rec_size;
 
 	assert(prefix_len % rec_size == 0);
@@ -94,6 +130,7 @@ calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
 	return low_idx;
 }
 
+/* Verifies checksums for an input segement. */
 static bool
 csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
@@ -106,7 +143,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int orig_offset =
 			(recalc->cr_phy_ext->ex_lo +
 			 recalc->cr_phy_off)  * rec_size;
-		unsigned int out_offset = recalc->cr_log_ext->ex_lo * rec_size -
+		unsigned int out_offset = recalc->cr_log_ext.ex_lo * rec_size -
 								prefix_len;
 
 		D_ASSERT(new_csum->cs_nr <
@@ -135,6 +172,11 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	return true;
 }
 
+/* Driver for the checksum verification of input segements, and calculation
+ * of checksum array for the output segment. This fuction is called directly
+ * from the VOS unit test, but is invoked in a ULT (running in a helper xstream
+ * when available) for standard aggregation running within the DAOS server.
+ */
 void
 ds_csum_agg_recalc(void *recalc_args)
 {
@@ -172,8 +214,8 @@ ds_csum_agg_recalc(void *recalc_args)
 					      args->cra_seg_size, i, add_offset,
 					      &buf_idx, &add_idx);
 
-		D_ASSERT(recalcs[i].cr_log_ext->ex_hi -
-			 recalcs[i].cr_log_ext->ex_lo + 1 ==
+		D_ASSERT(recalcs[i].cr_log_ext.ex_hi -
+			 recalcs[i].cr_log_ext.ex_lo + 1 ==
 			 bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
 
 		this_buf_idx = calc_csum_params(&csum_info, &recalcs[i],
@@ -215,6 +257,7 @@ out:
 }
 
 #ifndef VOS_UNIT_TEST
+/* Entry point for offload invocation. */
 void
 ds_csum_recalc(void *args)
 {

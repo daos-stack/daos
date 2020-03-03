@@ -35,6 +35,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
+#include <daos_srv/evtree.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -182,7 +183,7 @@ cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 			    unsigned int sync_mode);
 
 struct csum_recalc {
-	struct evt_extent	*cr_log_ext;
+	struct evt_extent	 cr_log_ext;
 	struct evt_extent	*cr_phy_ext;
 	struct dcs_csum_info	*cr_phy_csum;
 	daos_off_t		 cr_phy_off;
