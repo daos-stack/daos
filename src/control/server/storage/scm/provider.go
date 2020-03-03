@@ -264,7 +264,7 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	args := []string{
 		"-m", "0", // don't reserve blocks for super-user
 		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
-		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metdata overhead)
+		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
 		"-C", "1M",
 		device, // device always comes last
 	}
