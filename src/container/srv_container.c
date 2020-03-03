@@ -764,13 +764,11 @@ static int
 evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 {
 	struct recs_buf	buf;
-	bool		buf_initialized = false;
 	int		rc;
 
 	rc = recs_buf_init(&buf);
 	if (rc != 0)
 		return rc;
-	buf_initialized = true;
 
 	rc = rdb_tx_iterate(tx, &cont->c_hdls, false /* !backward */,
 			    find_hdls_by_cont_cb, &buf);
@@ -788,8 +786,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 	rc = cont_close_hdls(cont->c_svc, buf.rb_recs, buf.rb_nrecs, ctx);
 
 out:
-	if (buf_initialized)
-		recs_buf_fini(&buf);
+	recs_buf_fini(&buf);
 	return rc;
 }
 
@@ -1036,6 +1033,10 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	/*
+	 * Add the handle to the handle index KVS. The value is unused. (See
+	 * the handle index KVS comment in srv_layout.h.)
+	 */
 	d_iov_set(&value, &zero, sizeof(zero));
 	rc = rdb_tx_update(tx, &cont->c_hdls, &key, &value);
 	if (rc != 0)
@@ -1930,6 +1931,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 	arg.cia_pool_hdls = pool_hdls;
 	arg.cia_n_pool_hdls = n_pool_hdls;
 
+	/* Iterate through the handles of all containers in this service. */
 	rc = rdb_tx_iterate(&tx, &svc->cs_hdls, false /* !backward */,
 			    close_iter_cb, &arg);
 	if (rc != 0)
