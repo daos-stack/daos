@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,55 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 	args = dc_task_get_args(task);
 	args->coh	= coh;
 	args->prop	= prop;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
+			daos_event_t *ev)
+{
+	daos_prop_t	*prop;
+	int		rc;
+
+	if (daos_acl_cont_validate(acl) != 0) {
+		D_ERROR("invalid acl parameter\n");
+		return -DER_INVAL;
+	}
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+
+	rc = daos_cont_set_prop(coh, prop, ev);
+
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
+daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
+{
+	daos_cont_update_acl_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_UPDATE_ACL);
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("invalid acl parameter.\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_cont_update_acl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->acl	= acl;
 
 	return dc_task_schedule(task, true);
 }

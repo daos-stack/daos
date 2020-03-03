@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
@@ -87,8 +88,8 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
-func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
-	nvmeResult := &NvmeScanResult{}
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScanResult) {
+	nvmeResult = &NvmeScanResult{}
 
 	nState := resp.GetState()
 	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -97,15 +98,16 @@ func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
 		}
 		nvmeResult.Err = errors.Errorf(msg)
-		return nvmeResult
+		return
 	}
 
 	nvmeResult.Ctrlrs = resp.GetCtrlrs()
-	return nvmeResult
+	return
 }
 
-func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
-	scmResult := &ScmScanResult{}
+func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) (scmResult *ScmScanResult) {
+	var err error
+	scmResult = &ScmScanResult{}
 
 	sState := resp.GetState()
 	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -114,12 +116,24 @@ func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
 		scmResult.Err = errors.Errorf(msg)
-		return scmResult
+		return
 	}
 
-	scmResult.Modules = scmModulesFromPB(resp.GetModules())
-	scmResult.Namespaces = scmNamespacesFromPB(resp.GetPmems())
-	return scmResult
+	modules := resp.GetModules()
+	scmResult.Modules, err = (*proto.ScmModules)(&modules).ToNative()
+	if err != nil {
+		scmResult.Err = errors.Wrap(err, "scm modules")
+		return
+	}
+
+	namespaces := resp.GetNamespaces()
+	scmResult.Namespaces, err = (*proto.ScmNamespaces)(&namespaces).ToNative()
+	if err != nil {
+		scmResult.Err = errors.Wrap(err, "scm namespaces")
+		return
+	}
+
+	return
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each

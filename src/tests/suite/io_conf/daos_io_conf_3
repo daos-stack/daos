@@ -58,7 +58,7 @@
 
 test_lvl daos
 dkey dkey_3
-akey akey_3
+akey akey_array_1
 iod_size 1024
 obj_class ec
 
@@ -78,3 +78,19 @@ fetch --tx 3 -r "[1, 5]"
 update --tx 3 -r "[1, 2]6"
 fetch --tx 3 -r "[0, 18]"
 fetch --tx 3 -r "[1, 15]"
+
+# single value on one target
+akey akey_single_1
+iod_size 1024
+obj_class ec
+update --tx 10 -s -u 13
+fetch --tx 10 -s
+punch -d dkey_3 -a akey_single_1 --tx 10 -s
+
+# single value evenly distributed to all targets
+akey akey_single_2
+iod_size 10240
+obj_class ec
+update --tx 11 -s -u 17
+fetch --tx 11 -s
+punch -d dkey_3 -a akey_single_2 --tx 11 -s

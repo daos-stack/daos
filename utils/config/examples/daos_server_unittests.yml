@@ -1,6 +1,6 @@
-# Example configuration file using sockets
+# Example configuration file using loopback and emulated storage
 
-name: daos_server           # map to -g daos_server
+name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
@@ -27,10 +27,10 @@ servers:
 -
   targets: 1                # count of storage targets per each server
   first_core: 0             # offset of the first core for service xstreams
-  nr_xs_helpers: 0          # count of offload/helper xstreams per target
+  nr_xs_helpers: 0          # count of offload/helper xstreams per server
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
-  log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
+  log_file: /tmp/server0.log # map to D_LOG_FILE=/tmp/server0.log
 
   # Environment variable values should be supplied without encapsulating quotes.
   env_vars:                 # influence DAOS IO Server behaviour by setting env variables
@@ -51,7 +51,7 @@ servers:
 
   # When scm_class is set to ram, tmpfs will be used to emulate SCM.
   # The size of ram is specified by scm_size in GB units.
-  scm_mount: /mnt/daos	# map to -s /mnt/daos
+  scm_mount: /mnt/daos0
   scm_class: ram
   scm_size: 1
 
@@ -61,7 +61,7 @@ servers:
   # scm_list: [/dev/pmem0]
 
   # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # service with -n <path>)
+  # server with -n <path>)
   bdev_class: nvme
   bdev_list: []
 

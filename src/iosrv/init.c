@@ -214,21 +214,22 @@ modules_load(uint64_t *facs)
 static int
 dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 {
-	int nr_default;
+	int tgt_nr;
 
 	D_ASSERT(ncores >= 1);
-	/* Each system XS uses one core, and each main XS with
-	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
-	 * as the number of main XS based on number of cores.
-	 */
-	if (dss_numa_node == -1)
-		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
-	else
-		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
-			      DSS_XS_NR_PER_TGT);
 
-	if (nr_default == 0)
-		nr_default = 1;
+	/* at most 2 helper XS per target */
+	if (dss_tgt_offload_xs_nr > 2 * nr)
+		dss_tgt_offload_xs_nr = 2 * nr;
+
+	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
+	 * offload XS. Calculate the tgt_nr as the number of main XS based
+	 * on number of cores.
+	 */
+retry:
+	tgt_nr = ncores - DAOS_TGT0_OFFSET - dss_tgt_offload_xs_nr;
+	if (tgt_nr <= 0)
+		tgt_nr = 1;
 
 	/* If user requires less target threads then set it as dss_tgt_nr,
 	 * if user oversubscribes, then:
@@ -237,14 +238,23 @@ dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 	 *        use the number calculated above
 	 * Note: oversubscribing  may hurt performance.
 	 */
-	if (nr >= 1 && ((nr < nr_default) || oversubscribe))
-		nr_default = nr;
+	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
+		tgt_nr = nr;
+		if (dss_tgt_offload_xs_nr > 2 * tgt_nr)
+			dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
+		dss_tgt_offload_xs_nr--;
+		goto retry;
+	}
 
-	if (nr_default != nr)
+	if (tgt_nr != nr)
 		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, nr_default);
+			"use (%d) target XS\n", nr, ncores, tgt_nr);
 
-	return nr_default;
+	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
+		dss_helper_pool = true;
+
+	return tgt_nr;
 }
 
 static int
@@ -313,12 +323,12 @@ dss_topo_init()
 		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
 		if (corenode == NULL)
 			continue;
-		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
-					    numa_obj->allowed_cpuset) != 0) {
+		if (hwloc_bitmap_isincluded(corenode->cpuset,
+					    numa_obj->cpuset) != 0) {
 			if (num_cores_visited++ >= dss_core_offset) {
 				hwloc_bitmap_set(core_allocation_bitmap, k);
 				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->allowed_cpuset);
+						      corenode->cpuset);
 			}
 			dss_num_cores_numa_node++;
 		}
@@ -456,8 +466,9 @@ abt_fini(void)
 static int
 server_init(int argc, char *argv[])
 {
-	int	rc;
-	char	hostname[256] = { 0 };
+	unsigned int	ctx_nr;
+	char		hostname[256] = { 0 };
+	int		rc;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -484,9 +495,10 @@ server_init(int argc, char *argv[])
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
+	ctx_nr = dss_ctx_nr_get();
 	rc = crt_init_opt(daos_sysname,
 			  CRT_FLAG_BIT_SERVER,
-			  daos_crt_init_opt_get(true, DSS_CTX_NR_TOTAL));
+			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
@@ -561,10 +573,9 @@ server_init(int argc, char *argv[])
 
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"with %u target, %d helper XS per target, "
-		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(),
-		dss_self_rank(), dss_tgt_nr, dss_tgt_offload_xs_nr,
-		dss_core_offset, hostname);
+		"with %u target, %d helper XS, firstcore %d, host %s.\n",
+		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
+		dss_tgt_offload_xs_nr, dss_core_offset, hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
@@ -760,12 +771,6 @@ parse(int argc, char **argv)
 			nr = strtoul(optarg, &end, 10);
 			if (end == optarg || nr == ULONG_MAX) {
 				rc = -DER_INVAL;
-				break;
-			}
-			if (nr > 2) {
-				printf("invalid xshelpernr %u, should within "
-				       "[0, 2], user default value %u instead",
-				       nr, dss_tgt_offload_xs_nr);
 				break;
 			}
 			dss_tgt_offload_xs_nr = nr;

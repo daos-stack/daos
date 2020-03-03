@@ -72,6 +72,22 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
+/* Call internal method to increment CSUM media error. */
+void
+bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
+{
+	struct media_error_msg	*mem;
+
+	D_ALLOC_PTR(mem);
+	if (mem == NULL)
+		return;
+	mem->mem_bs		= bxc->bxc_blobstore;
+	mem->mem_err_type	= MET_CSUM;
+	mem->mem_tgt_id		= tgt_id;
+	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+}
+
+
 /* Call internal method to get BIO device state from the device owner xstream */
 int
 bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
