@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -152,7 +153,12 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Info(res.Controllers.String())
+		ctrlrs := proto.NvmeControllers{}
+		if err := ctrlrs.FromNative(res.Controllers); err != nil {
+			scanErrors = append(scanErrors, err)
+		} else {
+			cmd.log.Info(ctrlrs.String())
+		}
 	}
 
 	scmResp, err := svc.ScmScan()

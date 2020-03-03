@@ -80,6 +80,7 @@ const (
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerScmUnmanaged
+	ServerBdevNotFound
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
