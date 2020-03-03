@@ -152,6 +152,7 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
+void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		     struct cont *cont, struct container_hdl *hdl,
@@ -192,7 +193,7 @@ int
 ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 		      daos_epoch_t **snapshots, int *snap_count);
 void
-ds_cont_update_snap_iv(struct ds_pool *pool, uuid_t cont_uuid);
+ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 
 /**
  * srv_target.c

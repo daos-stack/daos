@@ -455,6 +455,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 		D_GOTO(out_lock, rc);
 
 	rc = read_snap_list(&tx, cont, snapshots, snap_count);
+	cont_put(cont);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -475,9 +476,8 @@ out_put:
  * are ignored.
  */
 void
-ds_cont_update_snap_iv(struct ds_pool *pool, uuid_t cont_uuid)
+ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 {
-	struct cont_svc	*svc;
 	struct rdb_tx	 tx;
 	struct cont	*cont = NULL;
 	uint64_t	*snapshots = NULL;
@@ -485,45 +485,37 @@ ds_cont_update_snap_iv(struct ds_pool *pool, uuid_t cont_uuid)
 
 	/* Only happens on xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	rc = cont_svc_lookup_leader(pool->sp_uuid, 0, &svc, NULL);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to lookup leader: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		return;
-	}
-
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": Failed to start rdb tx: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		goto out_put;
+			DP_UUID(svc->cs_pool_uuid), rc);
+		return;
 	}
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed to look container: %d\n",
-			DP_CONT(pool->sp_uuid, cont_uuid), rc);
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 		goto out_lock;
 	}
 
 	rc = read_snap_list(&tx, cont, &snapshots, &snap_count);
+	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed to read snap list: %d\n",
-			DP_CONT(pool->sp_uuid, cont_uuid), rc);
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 		goto out_lock;
 	}
 
-	rc = cont_iv_snapshots_update(pool->sp_iv_ns, cont_uuid, snapshots,
-				      snap_count);
+	rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
+				      snapshots, snap_count);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
-			DP_CONT(pool->sp_uuid, cont_uuid), rc);
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 
 	D_FREE(snapshots);
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
-out_put:
-	cont_svc_put_leader(svc);
 }
