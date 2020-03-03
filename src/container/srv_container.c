@@ -37,6 +37,7 @@
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
@@ -548,8 +549,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if a container with this UUID already exists. */
@@ -688,8 +689,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		in->cdi_force);
 
 	/* Verify the pool handle capabilities. */
-	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
+	if (!(pool_hdl->sph_flags & DAOS_PC_RW) &&
+	    !(pool_hdl->sph_flags & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if the container attribute KVS exists. */
@@ -817,28 +818,27 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	d_iov_t			key;
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
+	struct daos_prop_entry *acl_entry;
+	struct daos_prop_entry *owner_entry;
+	struct daos_prop_entry *owner_grp_entry;
 	struct container_hdl	chdl;
 	struct pool_map		*pmap;
 	struct cont_open_out   *out = crt_reply_get(rpc);
 	int			rc;
+	struct ownership	owner;
+	uint64_t		sec_capas = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
 		DF_X64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coi_op.ci_uuid), rpc,
-		DP_UUID(in->coi_op.ci_hdl), in->coi_capas);
-
-	/* Verify the pool handle capabilities. */
-	if ((in->coi_capas & DAOS_COO_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_RW) &&
-	    !(pool_hdl->sph_capas & DAOS_PC_EX))
-		D_GOTO(out, rc = -DER_NO_PERM);
+		DP_UUID(in->coi_op.ci_hdl), in->coi_flags);
 
 	/* See if this container handle already exists. */
 	d_iov_set(&key, in->coi_op.ci_hdl, sizeof(uuid_t));
 	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != -DER_NONEXIST) {
-		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
+		if (rc == 0 && chdl.ch_flags != in->coi_flags) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid));
@@ -847,14 +847,50 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
-	/* Determine pool meets container redundancy factor requirments*/
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
 
-	if (!(in->coi_capas & DAOS_COO_FORCE)) {
+	acl_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	owner_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
+
+	owner_grp_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
+
+	rc = ds_sec_cont_get_capabilities(in->coi_flags, &pool_hdl->sph_cred,
+					  &owner, acl_entry->dpe_val_ptr,
+					  &sec_capas);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": refusing attempt to open with flags "
+			DF_X64" error: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			in->coi_flags, DP_RC(rc));
+		daos_prop_free(prop);
+		D_GOTO(out, rc);
+	}
+
+	if (!ds_sec_cont_can_open(sec_capas)) {
+		D_ERROR(DF_CONT": permission denied opening with flags "
+			DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			in->coi_flags);
+		daos_prop_free(prop);
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
+	/* Determine pool meets container redundancy factor requirements */
+	if (!(in->coi_flags & DAOS_COO_FORCE)) {
 		pmap = pool_hdl->sph_pool->sp_map;
 		rc = cont_verify_redun_req(pmap, prop);
 		if (rc != 0) {
@@ -882,7 +918,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	/* update container capa to IV */
 	rc = cont_iv_capability_update(pool_hdl->sph_pool->sp_iv_ns,
 				       in->coi_op.ci_hdl, in->coi_op.ci_uuid,
-				       in->coi_capas);
+				       in->coi_flags, sec_capas);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_iv_capability_update failed %d.\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -893,7 +929,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
-	chdl.ch_capas = in->coi_capas;
+	chdl.ch_flags = in->coi_flags;
+	chdl.ch_sec_capas = sec_capas;
 
 	rc = ds_cont_epoch_init_hdl(tx, cont, in->coi_op.ci_hdl, &chdl);
 	if (rc != 0)
@@ -1484,7 +1521,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	 * Can't modify the container props without RW perms to the container.
 	 * TODO DAOS-2063: Update check when set-prop and set-acl capas added.
 	 */
-	if (!(hdl->ch_capas & DAOS_COO_RW))
+	if (!(hdl->ch_flags & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Read all props for prop IV update */

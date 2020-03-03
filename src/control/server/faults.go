@@ -87,14 +87,6 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 	)
 }
 
-func FaultBdevFormatSkipped(instanceIdx uint32) *fault.Fault {
-	return serverFault(
-		code.ServerBdevFormatSkipped,
-		fmt.Sprintf("NVMe format skipped on instance %d as SCM format did not complete", instanceIdx),
-		fmt.Sprintf("resolve SCM formatting issues on instance %d", instanceIdx),
-	)
-}
-
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverFault(
 		code.ServerConfigDuplicateFabric,
