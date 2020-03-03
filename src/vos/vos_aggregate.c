@@ -892,7 +892,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 				copy_size += wider;
 				added_csum_segs += add_cnt;
 			}
-			csum_add_recalcs(&csum_recalcs, phy_ent, &ext, &bsgl,
+			csum_add_recalcs(&csum_recalcs, phy_ent,
+					 &ent_in->ei_rect.rc_ex, &bsgl,
 					 biov_idx);
 		}
 		biov_idx++;
