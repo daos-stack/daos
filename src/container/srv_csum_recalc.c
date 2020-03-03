@@ -138,6 +138,14 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	unsigned int j = 0;
 	bool match;
 
+	/* The index j is used to determine the start offset within
+	 * the prior checksum array (associated with the input physical
+	 * extent). If the array sizes for input and output segments are
+	 * the same, then the comparison begins at the beginning of the input
+	 * checksum array. Otherwise, the start index is set by incrementing
+	 * j on each checksum boundary until the offset associated with j
+	 * matches the offset of the (csum-extended) output segment.
+	 */
 	if (new_csum->cs_nr != recalc->cr_phy_csum->cs_nr) {
 		unsigned int chunksize = new_csum->cs_chunksize;
 		unsigned int orig_offset =
@@ -164,6 +172,10 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		}
 	}
 
+	/* Comparison is for the full length of the output csum array,
+	 * starting a the corrent offset of the checksum array for the inout
+	 * segment.
+	 */
 	match = memcmp(new_csum->cs_csum,
 		&recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
 			new_csum->cs_nr * new_csum->cs_len) == 0;
