@@ -497,7 +497,7 @@ vea_ut_setup(void **state)
 		return rc;
 
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
 		fprintf(stderr, "register DBTREE_CLASS_IV error %d\n", rc);

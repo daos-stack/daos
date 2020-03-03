@@ -119,6 +119,9 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_DESTROY);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_destroy, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -140,6 +143,9 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -161,7 +167,9 @@ daos_pool_add_tgt(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, POOL_ADD);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_add, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -184,7 +192,9 @@ daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
 	tse_task_t		*task;
 	int			 rc;
 
-	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE_OUT);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
 	rc = dc_task_create(dc_pool_exclude_out, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -208,6 +218,8 @@ daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_EXCLUDE);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_exclude, NULL, ev, &task);
 	if (rc)
@@ -239,6 +251,8 @@ daos_pool_add_replicas(const uuid_t uuid, const char *group,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_ADD_REPLICAS);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_add_replicas, NULL, ev, &task);
 	if (rc)
@@ -264,6 +278,8 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, POOL_REMOVE_REPLICAS);
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
 
 	rc = dc_task_create(dc_pool_remove_replicas, NULL, ev, &task);
 	if (rc)

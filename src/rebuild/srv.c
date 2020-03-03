@@ -1773,7 +1773,7 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	/* Create ds_container locally on main XS */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, NULL);
+				NULL, 0, 0, NULL);
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 

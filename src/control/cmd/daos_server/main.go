@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -39,7 +40,14 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 )
 
-var daosVersion string
+var (
+	daosVersion string
+	configDir   string
+)
+
+const (
+	defaultConfigFile = "daos_server.yml"
+)
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -104,6 +112,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 		if logCmd, ok := cmd.(cmdLogger); ok {
 			logCmd.setLog(log)
+		}
+
+		if opts.ConfigPath == "" {
+			defaultConfigPath := path.Join(configDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				opts.ConfigPath = defaultConfigPath
+			}
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {

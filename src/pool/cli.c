@@ -549,7 +549,7 @@ dc_pool_connect(tse_task_t *task)
 
 	uuid_copy(pci->pci_op.pi_uuid, args->uuid);
 	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
-	pci->pci_capas = args->flags;
+	pci->pci_flags = args->flags;
 	pci->pci_query_bits = pool_query_bits(args->info, NULL);
 
 	rc = map_bulk_create(daos_task2ctx(task), &pci->pci_map_bulk, &map_buf,

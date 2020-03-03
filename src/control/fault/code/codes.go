@@ -81,7 +81,6 @@ const (
 	ServerConfigNoServers
 	ServerScmUnmanaged
 	ServerBdevNotFound
-	ServerBdevFormatSkipped
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
