@@ -27,8 +27,10 @@
 ## Transport Credentials Specifying certificates to secure communications
 
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Admin certificate for use in TLS handshakes
