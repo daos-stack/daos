@@ -204,8 +204,8 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_agent.service %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -262,7 +262,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
-%{_unitdir}/daos-server.service
+%{_unitdir}/daos_server.service
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
@@ -314,7 +314,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos.yml
-%{_unitdir}/daos-agent.service
+%{_unitdir}/daos_agent.service
 
 %files tests
 %dir %{_prefix}/lib/daos
