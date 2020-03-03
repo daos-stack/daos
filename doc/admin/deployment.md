@@ -43,6 +43,31 @@ Before getting started, please make sure to review and complete the
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
+### (Optional) Enable IOMMU
+
+In order to run DAOS server as a non-root user with NVMe devices, the hardware
+must support virtualized device access, and it must be enabled in the system BIOS.
+On Intel® systems, this capability is named Intel® Virtualization Technology for
+Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
+the Linux kernel. Exact details depend on the distribution, but the following
+example should be illustrative:
+
+```bash
+# Enable IOMMU on CentOS 7
+# All commands must be run as root/sudo!
+
+$ sudo vi /etc/default/grub # add the following line:
+GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on"
+
+# after saving the file, run the following to reconfigure
+# the bootloader:
+$ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
+
+# if the command completed with no errors, reboot the system
+# in order to make the changes take effect
+$ sudo reboot
+```
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
