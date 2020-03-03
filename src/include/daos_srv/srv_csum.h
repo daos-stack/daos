@@ -26,7 +26,6 @@
 
 #include <daos_srv/bio.h>
 #include <daos/checksum.h>
-#include <daos_srv/evtree.h>
 
 /**
  * Determine if the saved checksum for a chunk can be used, or if a

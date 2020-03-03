@@ -276,12 +276,6 @@ struct evt_entry_in {
 	bio_addr_t		ei_addr;
 };
 
-struct evt_csum_recalc {
-	struct evt_entry_in	*ecr_ent;
-	struct evt_rect		*ecr_orig_rect;
-	struct dcs_csum_info	*ei_orig_csum;
-};
-
 enum evt_visibility {
 	/** It is unknown if entry is covered or visible */
 	EVT_UNKNOWN	= 0,

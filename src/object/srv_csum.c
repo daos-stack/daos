@@ -26,7 +26,7 @@
 #include <daos/common.h>
 #include <daos/checksum.h>
 #include <daos_types.h>
-#include <daos_srv/srv_csum.h>
+#include "daos_srv/srv_csum.h"
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 

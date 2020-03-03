@@ -298,8 +298,7 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
 				bio_iov2req_buf(&ent.ie_biov) == NULL ?
-				"[NULL]" :
-				(char *)bio_iov2req_buf(&ent.ie_biov));
+				"[NULL]" : (char *)bio_iov2req_buf(&ent.ie_biov));
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
