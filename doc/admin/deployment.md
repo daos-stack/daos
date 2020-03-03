@@ -857,12 +857,13 @@ DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release.
+incomplete integration of certificate support as of the 0.6 release and 
+configured to use a non-default agent configuration file.
 
 To start the DAOS Agent from the command line, run:
 
 ```bash
-$ daos_agent -i &
+$ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -870,6 +871,8 @@ unit file is installed in the correct location when installing from RPMs.
 If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_agent binary.
+
+ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>
 
 Once the service file is installed, you can start daos_agent
 with the following commands:
