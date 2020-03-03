@@ -1014,8 +1014,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		if (!found)
 			vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
 
-		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH))
-			return -DER_NONEXIST;
+		if (rc == -DER_NONEXIST && (flags & VOS_OF_COND_PUNCH)) {
+			rc = -DER_NONEXIST;
+			goto done;
+		}
 	}
 
 	if (rc != 0) {
@@ -1023,11 +1025,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
-		if (rc) {
-			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
+		if (rc)
+			goto done;
 
 		mark = true;
 	}
@@ -1041,13 +1040,14 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, parent,
 			    info, ts_set, true);
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 "Failed to update incarnation log entry: "DF_RC"\n",
-			 DP_RC(rc));
 
 	if (rc == 0 && vos_ts_check_rh_conflict(ts_set, epoch))
 		rc = -DER_AGAIN;
+done:
+	if (rc != 0)
+		D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
+			 "Failed to punch key: "DF_RC"\n",
+			 DP_RC(rc));
 
 	return rc;
 }

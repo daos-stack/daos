@@ -328,7 +328,7 @@ ilog_init(void)
 #define ILOG_MAGIC_MASK		0x0000000f
 #define ILOG_PUNCH_MASK		0x00000010
 #define ILOG_VERSION_INC	0x00000020
-#define ILOG_VERSION_MASK	~(ILOG_MAGIC_MASK | ILOG_PUNCH_MASK)
+#define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
 static inline int
@@ -697,6 +697,7 @@ ilog_root_migrate(struct ilog_context *lctx, daos_epoch_t epoch, bool new_punch)
 	tmp.lr_tree.it_root = tree_root;
 	tmp.lr_tree.it_embedded = 0;
 	tmp.lr_magic = ilog_ver_inc(lctx);
+	tmp.lr_magic &= ~ILOG_PUNCH_MASK;
 	tmp.lr_ts_idx = root->lr_ts_idx;
 
 
@@ -827,6 +828,7 @@ set:
 	*toh = DAOS_HDL_INVAL;
 
 	tmp.lr_magic = ilog_ver_inc(lctx);
+	D_ASSERT((tmp.lr_magic & ILOG_PUNCH_MASK) == 0);
 	tmp.lr_id = key;
 	tmp.lr_ts_idx = root->lr_ts_idx;
 	if (punch)
@@ -1008,6 +1010,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		D_DEBUG(DB_IO, "Inserting "DF_U64" at ilog root\n",
 			id_in->id_epoch);
 		tmp.lr_magic = ilog_ver_inc(lctx);
+		D_ASSERT((tmp.lr_magic & ILOG_PUNCH_MASK) == 0);
 		tmp.lr_ts_idx = root->lr_ts_idx;
 		tmp.lr_id.id_epoch = id_in->id_epoch;
 		if (punch)
@@ -1031,6 +1034,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 				D_DEBUG(DB_IO, "Removing "DF_U64
 					" from ilog root\n", id_in->id_epoch);
 				tmp.lr_magic = ilog_ver_inc(lctx);
+				tmp.lr_magic &= ~ILOG_PUNCH_MASK;
 				rc = ilog_ptr_set(lctx, root, &tmp);
 			}
 			goto done;
@@ -1607,6 +1611,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			old_id = root->lr_id;
 			tmp.lr_ts_idx = root->lr_ts_idx;
 			tmp.lr_magic = ilog_ver_inc(lctx);
+			tmp.lr_magic &= ~ILOG_PUNCH_MASK;
 			rc = ilog_ptr_set(lctx, root, &tmp);
 			if (rc != 0)
 				break;
