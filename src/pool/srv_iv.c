@@ -529,7 +529,7 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 static int
 pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
-	       unsigned int sync_mode)
+	       unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
@@ -548,8 +548,7 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 	key.class_id = class_id;
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
-			  true /* retry */);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
@@ -582,7 +581,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	 * to revisit here once pool/cart_group/IV is upgraded.
 	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, false);
 	if (rc != 0)
 		D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u: %d\n",
 			DP_UUID(pool->sp_uuid), map_ver, rc);
@@ -692,7 +691,7 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 	pool_iv_prop_l2g(prop, &iv_entry->piv_prop);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER, true);
 	if (rc)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 	D_FREE(iv_entry);

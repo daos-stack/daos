@@ -184,7 +184,7 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,pr,hw,medium,nvme_object_single_pool,nvme_object
+        :avocado: tags=all,pr,hw,large,nvme_object_single_pool,nvme_object
         """
         # perform multiple object writes to a single pool
         test_runner(self, self.pool_size[0], self.record_size[:-1], 0,
@@ -203,7 +203,7 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
 
-        :avocado: tags=all,full_regression,hw,medium,nvme_object_multiple_pools
+        :avocado: tags=all,full_regression,hw,large,nvme_object_multiple_pools
         :avocado: tags=nvme_object
         """
         # thread to perform simulatneous object writes to multiple pools

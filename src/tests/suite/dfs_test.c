@@ -466,6 +466,92 @@ dfs_test_short_read(void **state)
 	D_FREE(rsgl.sg_iovs);
 }
 
+static int
+check_one_success(int rc, int err, MPI_Comm comm)
+{
+	int *rc_arr;
+	int mpi_size, mpi_rank, i;
+	int passed, expect_fail, failed;
+
+	MPI_Comm_size(comm, &mpi_size);
+	MPI_Comm_rank(comm, &mpi_rank);
+
+	rc_arr = calloc(sizeof(int), mpi_size);
+	assert_non_null(rc_arr);
+
+	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, mpi_size, MPI_INT, comm);
+
+	passed = expect_fail = failed = 0;
+	for (i = 0; i < mpi_size; i++) {
+		if (rc_arr[i] == 0)
+			passed++;
+		else if (rc_arr[i] == err)
+			expect_fail++;
+		else
+			failed++;
+	}
+
+	free(rc_arr);
+
+	if (failed || passed != 1)
+		return -1;
+	assert_int_equal(expect_fail + passed, mpi_size);
+	return 0;
+}
+
+static void
+dfs_test_cond(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*file;
+	char			*filename = "cond_testfile";
+	char			*dirname = "cond_testdir";
+	int			rc;
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same file with O_EXCL\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	rc = check_one_success(rc, EEXIST, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent file creation\n");
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks unlink the same file\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent file unlink\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_mkdir(dfs_mt, NULL, dirname, S_IWUSR | S_IRUSR, 0);
+	rc = check_one_success(rc, EEXIST, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent dir creation\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks remove the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	rc = check_one_success(rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -473,6 +559,8 @@ static const struct CMUnitTest dfs_tests[] = {
 	  dfs_test_short_read, async_disable, test_case_teardown},
 	{ "DFS_TEST3: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_TEST4: Conditional OPs",
+	  dfs_test_cond, async_disable, test_case_teardown},
 };
 
 static int

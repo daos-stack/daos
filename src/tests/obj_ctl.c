@@ -312,7 +312,8 @@ ctl_cmd_run(char opc, char *args)
 	bool			 opened = false;
 
 	if (args) {
-		strcpy(buf, args);
+		strncpy(buf, args, CTL_BUF_LEN);
+		buf[CTL_BUF_LEN - 1] = '\0';
 		str = daos_str_trimwhite(buf);
 	} else {
 		str = NULL;
@@ -371,14 +372,16 @@ ctl_cmd_run(char opc, char *args)
 		}
 	}
 
-	if (ctl_abits & CTL_ARG_DKEY) {
-		strcpy(cred->tc_dbuf, dkey);
+	if ((ctl_abits & CTL_ARG_DKEY) && dkey != NULL) {
+		strncpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
+		cred->tc_dbuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			     strlen(cred->tc_dbuf) + 1);
 	}
 
-	if (ctl_abits & CTL_ARG_AKEY) {
-		strcpy(cred->tc_abuf, akey);
+	if ((ctl_abits & CTL_ARG_AKEY) && akey != NULL) {
+		strncpy(cred->tc_abuf, akey, DTS_KEY_LEN);
+		cred->tc_abuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
 			     strlen(cred->tc_abuf) + 1);
 
@@ -389,9 +392,10 @@ ctl_cmd_run(char opc, char *args)
 		cred->tc_recx.rx_nr	= 1;
 	}
 
-	if (ctl_abits & CTL_ARG_VAL) {
+	if ((ctl_abits & CTL_ARG_VAL) && val != NULL) {
 		cred->tc_iod.iod_size = strlen(val) + 1;
-		strcpy(cred->tc_vbuf, val);
+		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize);
+		cred->tc_vbuf[ctl_ctx.tsc_cred_vsize - 1] = '\0';
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     strlen(cred->tc_vbuf) + 1);
 	} else {

@@ -34,8 +34,10 @@
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Location where daos_server will look for Client certificates
 #  client_cert_dir: .daos/clients
 #  # Custom CA Root certificate for generated certs
@@ -62,17 +64,6 @@
 #fault_cb: ./.daos/fd_callback
 #
 #
-## Use specific OFI interfaces
-#
-## Specify either a single fabric interface that will be used by all
-## spawned servers or a comma-seperated list of fabric interfaces to be
-## assigned individually.
-## By default, the DAOS server will auto-detect and use all fabric
-## interfaces if any and fall back to socket on the first eth card
-## otherwise.
-#
-#fabric_ifaces: [qib0,qib1]
-#
 #
 ## Use specific OFI provider
 #
@@ -83,19 +74,6 @@
 #
 #provider: ofi+verbs;ofi_rxm
 #
-#
-## Storage mount directory
-#
-## TODO: If no pre-configured mountpoints are specified, DAOS will auto-detect
-## NVDIMMs, configure them in interleave mode, format with ext4 and
-## mount with the DAX extension creating a subdirectory within scm_mount_path.
-#
-## This option allows to specify a preferred path where the mountpoints will
-## be created. Either the specified directory or its parent must be a mount
-## point.
-#
-## default: /mnt/daos
-#scm_mount_path: /mnt/daosa
 #
 #
 ## NVMe SSD whitelist
