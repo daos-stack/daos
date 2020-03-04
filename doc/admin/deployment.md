@@ -898,7 +898,7 @@ running daos_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
 environment variables are properly set as described [here](#server-startup).
 
 ```bash
-orterun -np <num_clients> --hostfile <hostfile> ./daos_test
+mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
 
 daos_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
