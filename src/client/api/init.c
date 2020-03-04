@@ -43,6 +43,7 @@
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
+bool			dfs_cond_op;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Managment */
@@ -78,6 +79,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_query, sizeof(daos_cont_query_t)},
 	{dc_cont_set_prop, sizeof(daos_cont_set_prop_t)},
 	{dc_cont_update_acl, sizeof(daos_cont_update_acl_t)},
+	{dc_cont_delete_acl, sizeof(daos_cont_delete_acl_t)},
 	{dc_cont_aggregate, sizeof(daos_cont_aggregate_t)},
 	{dc_cont_rollback, sizeof(daos_cont_rollback_t)},
 	{dc_cont_subscribe, sizeof(daos_cont_subscribe_t)},
@@ -191,6 +193,8 @@ daos_init(void)
 	rc = dc_agent_init();
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
+
+	d_getenv_bool("DFS_COND_OP", &dfs_cond_op);
 
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);

@@ -28,49 +28,74 @@ If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on th
 
 ## Go dependencies
 
-Developers contributing Go code may need to change the external dependencies located in the src/control/vendor directory. The DAOS codebase uses [dep](https://github.com/golang/dep) to manage these dependencies.
+Developers contributing Go code may need to change the external dependencies located in the src/control/vendor
+directory. The DAOS codebase uses [Go Modules](https://github.com/golang/go/wiki/Modules) to manage these
+dependencies. As this feature is built in to Go distributions starting with version 1.11, no
+additional tools are needed to manage dependencies.
 
-On EL7 and later:
+Among other benefits, one of the major advantages of using Go Modules is that it removes the requirement
+for builds to be done within the $GOPATH, which simplifies our build system and other internal tooling.
 
-```
-    yum install yum-plugin-copr
-    yum copr enable hnakamur/golang-dep
-    yum install golang-dep
-```
+While it is possible to use Go Modules without checking a vendor directory into SCM, the DAOS project
+continues to use vendored dependencies in order to insulate our build system from transient network
+issues and other problems associated with nonvendored builds.
 
-On Fedora 27 and later:
+The following is a short list of example workflows. For more details, please refer to
+[one](https://github.com/golang/go/wiki/Modules#quick-start) of
+[the](https://engineering.kablamo.com.au/posts/2018/just-tell-me-how-to-use-go-modules/)
+[many](https://blog.golang.org/migrating-to-go-modules) resources available online.
 
-```
-    dnf install dep
-```
-
-On Ubuntu 18.04 and later:
-
-```
-    apt-get install go-dep
-```
-
-For OSes that don't supply a package:
-* Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as "$GOPATH" in this document) and a GOBIN ($GOPATH/bin) set up and included in your PATH:
-
-```
-    mkdir -p $GOPATH/bin
-    export PATH=$GOPATH/bin:$PATH
-```
-
-* Then follow the [installation instructions on Github](https://github.com/golang/dep).
-
-To update the vendor directory using dep after changing Gopkg.toml, first make sure DAOS is cloned into
-
-```
-    $GOPATH/src/github.com/daos-stack/daos
+```bash
+# add a new dependency
+$ cd ~/daos/src/control # or wherever your daos clone lives
+$ go get github.com/awesome/thing
+# make sure that github.com/awesome/thing is imported somewhere in the codebase
+$ ./run_go_tests.sh
+# note that go.mod and go.sum have been updated automatically
+#
+# when ready to commit and push for review:
+$ go mod vendor
+$ git commit -a # should pick up go.mod, go.sum, vendor/*, etc.
 ```
 
-Then:
-
+```bash
+# update an existing dependency
+$ cd ~/daos/src/control # or wherever your daos clone lives
+$ go get -u github.com/awesome/thing
+# make sure that github.com/awesome/thing is imported somewhere in the codebase
+$ ./run_go_tests.sh
+# note that go.mod and go.sum have been updated automatically
+#
+# when ready to commit and push for review:
+$ go mod vendor
+$ git commit -a # should pick up go.mod, go.sum, vendor/*, etc.
 ```
-    cd $GOPATH/src/github.com/daos-stack/daos/src/control
-    dep ensure
+
+```bash
+# replace/remove an existing dependency
+$ cd ~/daos/src/control # or wherever your daos clone lives
+$ go get github.com/other/thing
+# make sure that github.com/other/thing is imported somewhere in the codebase,
+# and that github.com/awesome/thing is no longer imported
+$ ./run_go_tests.sh
+# note that go.mod and go.sum have been updated automatically
+#
+# when ready to commit and push for review:
+$ go mod tidy
+$ go mod vendor
+$ git commit -a # should pick up go.mod, go.sum, vendor/*, etc.
+```
+
+In all cases, after updating the vendor directory, it is a good idea to verify that your
+changes were applied as expected. In order to do this, a simple workflow is to clear the
+caches to force a clean build and then run the test script, which is vendor-aware and
+will not try to download missing modules:
+
+```bash
+$ cd ~/daos/src/control # or wherever your daos clone lives
+$ go clean -modcache -cache
+$ ./run_go_tests.sh
+$ ls ~/go/pkg/mod # ~/go/pkg/mod should either not exist or be empty
 ```
 
 ## Protobuf Compiler
@@ -83,20 +108,33 @@ The recommended installation method is to clone the git repositories, check out 
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.5.1. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
 - [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.1. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
-- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.2.0. **Must match the proto version in src/control/Gopkg.toml.** Install the specific version using GIT_TAG instructions [here](https://github.com/golang/protobuf/blob/master/README.md).
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.3.4. **Must match the proto version in
+src/control/go.mod.** Install the specific version using GIT_TAG instructions
+[here](https://github.com/golang/protobuf/blob/master/README.md).
 
 ### Compiling Protobuf Files
 
-Generate the Go file using the gRPC plugin. You can designate the directory location:
+The source (.proto) files live under $DAOSREPO/src/proto. The preferred mechanism for generating
+compiled C/Go protobuf definitions is to use the Makefile in this directory. Care should be taken
+to keep the Makefile updated when source files are added or removed, or generated file destinations
+are updated.
 
-```
-	protoc myfile.proto --go_out=plugins=grpc:<go_file_dir>
+Note that the generated files are checked into SCM and are not generated as part of the normal DAOS
+build process. This allows developers to ensure that the generated files are correct after any changes
+to the source files are made.
+
+```bash
+$ cd ~/daos/src/proto # or wherever your daos clone lives
+$ make
+protoc -I /home/foo/daos/src/proto/mgmt/ --go_out=plugins=grpc:/home/foo/daos/src/control/common/proto/mgmt/ acl.proto
+protoc -I /home/foo/daos/src/proto/mgmt/ --go_out=plugins=grpc:/home/foo/daos/src/control/common/proto/mgmt/ mgmt.proto
+...
+$ git status
+...
+#       modified:   ../control/common/proto/mgmt/acl.pb.go
+#       modified:   ../control/common/proto/mgmt/mgmt.pb.go
+...
 ```
 
-Generate the C files using Protobuf-C. As the header and source files in DAOS are typically kept in separate locations, you will need to move them manually to their destination directories:
-
-```
-	protoc-c myfile.proto --c_out=.
-	mv myfile.pb-c.h <c_file_include_dir>
-	mv myfile.pb-c.c <c_file_src_dir>
-```
+After verifying that the generated C/Go files are correct, add and commit them as you would any other
+file.

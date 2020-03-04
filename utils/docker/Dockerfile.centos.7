@@ -58,7 +58,7 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch python python-devel python36-devel                \
+        pandoc patch python python-devel python36-devel python-magic   \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
         readline-devel scons sg3_utils ShellCheck yasm pciutils        \
         valgrind-devel python36-pylint man
@@ -96,10 +96,11 @@ RUN chown daos.daos /mnt/daos
 # Packages for NVML exist in CentOS, but are
 # unfortunately outdated. The DAOS build system will rebuild those packages.
 ARG JENKINS_URL=""
-ARG QUICKBUILD=1
+ARG QUICKBUILD=false
+ARG QUICKBUILD_DEPS=""
 ARG CART_COMMIT=""
 ARG REPOS=""
-RUN if [ $QUICKBUILD -eq 0 ]; then                                               \
+RUN if $QUICKBUILD; then                                                         \
         echo -e "[repo.dc.hpdd.intel.com_repository_daos-stack-el-7-x86_64-stable-local]\n\
 name=created by dnf config-manager from https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
 baseurl=https://repo.dc.hpdd.intel.com/repository/daos-stack-el-7-x86_64-stable-local\n\
@@ -122,13 +123,8 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;          \
         done;                                                                    \
-        pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
-              libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
-              fio-3.3-5.el7 libisa-l-devel mercury-devel-1.0.1-21.el7            \
-              openpa-devel libfabric-devel                                       \
-              dpdk-devel";                     \
-        echo "Installing: $pkgs";                                                \
-        yum -y install $pkgs;                                                    \
+        echo "Installing: $QUICKBUILD_DEPS";                                     \
+        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 yum -y install;        \
     fi
 
 # force an upgrade to get any newly built RPMs

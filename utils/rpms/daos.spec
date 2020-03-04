@@ -184,25 +184,30 @@ rpath_files="utils/daos_build.py"
 rpath_files+=" $(find . -name SConscript)"
 sed -i -e '/AppendUnique(RPATH=.*)/d' $rpath_files
 
+%define conf_dir %{_sysconfdir}/daos
+
 scons %{?no_smp_mflags}    \
       --config=force       \
       USE_INSTALLED=all    \
+      CONF_DIR=%{conf_dir} \
       PREFIX=%{?buildroot}
 
 %install
-scons %{?no_smp_mflags}              \
-      --config=force                 \
-      install                        \
-      USE_INSTALLED=all              \
-      PREFIX=%{?buildroot}%{_prefix}
+scons %{?no_smp_mflags}               \
+      --config=force                  \
+      --install-sandbox=%{?buildroot} \
+      %{?buildroot}%{_prefix}         \
+      %{?buildroot}%{conf_dir}        \
+      USE_INSTALLED=all               \
+      CONF_DIR=%{conf_dir}            \
+      PREFIX=%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/daos/.build_vars.*
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_agent.service %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -238,7 +243,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %doc
 
 %files server
-%{_prefix}%{_sysconfdir}/daos_server.yml
+%config(noreplace) %{conf_dir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_admins) %{_bindir}/daos_admin
@@ -259,7 +264,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
-%{_unitdir}/daos-server.service
+%{_unitdir}/daos_server.service
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
@@ -309,9 +314,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
-%{_prefix}%{_sysconfdir}/daos.yml
-%{_prefix}%{_sysconfdir}/daos_agent.yml
-%{_unitdir}/daos-agent.service
+%config(noreplace) %{conf_dir}/daos_agent.yml
+%config(noreplace) %{conf_dir}/daos.yml
+%{_unitdir}/daos_agent.service
 
 %files tests
 %dir %{_prefix}/lib/daos

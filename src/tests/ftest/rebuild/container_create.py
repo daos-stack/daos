@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 import os
 
 from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure, Mpirun
 from ior_utils import IorCommand
@@ -150,7 +149,8 @@ class ContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(
+                TestPool(self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
 
         if use_ior:
@@ -291,7 +291,6 @@ class ContainerCreate(TestWithServers):
 
             # Destroy the pools
             for pool in self.pool:
-                pool.disconnect()
                 pool.destroy(1)
 
             self.log.info(

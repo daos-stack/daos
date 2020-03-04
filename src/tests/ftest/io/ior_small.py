@@ -47,7 +47,7 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,pr,hw,medium,daosio,iorsmall
+        :avocado: tags=all,pr,hw,large,daosio,iorsmall
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
