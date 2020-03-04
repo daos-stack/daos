@@ -236,6 +236,7 @@ main(int argc, char **argv)
 		case 't':
 			nr_failed += run_ts_tests();
 			test_run = true;
+			break;
 		case 'f':
 		case 'e':
 			/** already handled */

@@ -172,7 +172,7 @@ enum {
 	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
 	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
-	/** replay punch (underwrite) */
+	/** Indicates the operation should check mvcc timestamps */
 	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC	= (1 << 8),
