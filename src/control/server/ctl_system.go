@@ -24,6 +24,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -31,6 +33,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+var systemRPCMaxDuration = 30 * time.Second
 
 func (svc *ControlService) getMSMemberAddress() (string, error) {
 	if svc.membership == nil || svc.harnessClient == nil {
@@ -115,13 +119,16 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 // SystemQuery implements the method defined for the Management Service.
 //
 // Return system status.
-func (svc *ControlService) SystemQuery(ctx context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
+func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.SystemQueryReq) (*ctlpb.SystemQueryResp, error) {
 	svc.log.Debug("Received SystemQuery RPC")
 
 	_, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	defer cancel()
 
 	// Update status of each system member.
 	// TODO: Should only given rank be updated if supplied in request?
@@ -246,12 +253,15 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 // Initiate controlled shutdown of DAOS system.
 //
 // TODO: specify the ranks managed by the harness that should be started.
-func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
+func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
 	svc.log.Debug("Received SystemStop RPC")
 
 	resp := &ctlpb.SystemStopResp{}
 
 	// TODO: consider locking to prevent join attempts when shutting down
+
+	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	defer cancel()
 
 	if req.Prep {
 		// prepare system members for shutdown
@@ -347,8 +357,11 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 // Initiate controlled start of DAOS system.
 //
 // TODO: specify the specific ranks that should be started in request.
-func (svc *ControlService) SystemStart(ctx context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
+func (svc *ControlService) SystemStart(parent context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
+
+	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	defer cancel()
 
 	// start any stopped system members, note that instances will only
 	// be started on hosts with all instances stopped

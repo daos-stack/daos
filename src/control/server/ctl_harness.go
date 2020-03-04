@@ -35,8 +35,14 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// defaultTimeout used in harness requests.
-const defaultTimeout = 10 * time.Second
+const (
+	// timeout per rank request
+	harnessClientRankTimeount    = 3 * time.Second
+	harnessClientStopRankTimeout = 6 * time.Second
+	// timeout per harness request
+	harnessClientTimeount    = maxIoServers * harnessClientRankTimeount
+	harnessClientStopTimeout = maxIoServers * harnessClientStopRankTimeout
+)
 
 // HarnessClient provides methods for requesting actions on remote harnesses
 // (attached to listening gRPC servers) identified by host addresses.
@@ -55,7 +61,7 @@ type RemoteHarnessReq struct {
 	Addr    string
 	Ranks   []uint32
 	Force   bool
-	Timeout float32
+	Timeout int64
 }
 
 // harnessClient implements the HarnessClient interface.
@@ -99,15 +105,18 @@ func (hc *harnessClient) processReturn(rpcResp *mgmtpb.RanksResp) (system.Member
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Query request to harness at %s", addr)
 
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
-		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+		Addr: addr, Ranks: ranks, Force: false, Timeout: int64(harnessClientRankTimeount),
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(parent, maxIoServers*harnessClientRankTimeount)
+	defer cancel()
 
 	var rpcResp *mgmtpb.RanksResp
 	rpcResp, err = hc.client.Status(ctx, addr, *rpcReq)
@@ -124,15 +133,18 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) PrepShutdown(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing PrepShutdown request to harness at %s", addr)
 
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
-		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+		Addr: addr, Ranks: ranks, Force: false, Timeout: int64(harnessClientRankTimeount),
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(parent, maxIoServers*harnessClientRankTimeount)
+	defer cancel()
 
 	var rpcResp *mgmtpb.RanksResp
 	rpcResp, err = hc.client.PrepShutdown(ctx, addr, *rpcReq)
@@ -150,15 +162,18 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 // if they are being managed by the remote control server.
 //
 // Ranks will be forcefully stopped if the force parameter is specified.
-func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Stop(parent context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Stop request to harness at %s", addr)
 
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
-		Addr: addr, Ranks: ranks, Force: force, Timeout: float32(defaultTimeout),
+		Addr: addr, Ranks: ranks, Force: force, Timeout: int64(harnessClientStopRankTimeout),
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(parent, maxIoServers*harnessClientStopRankTimeout)
+	defer cancel()
 
 	var rpcResp *mgmtpb.RanksResp
 	rpcResp, err = hc.client.Stop(ctx, addr, *rpcReq)
@@ -174,15 +189,18 @@ func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, rank
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Start(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
 	hc.log.Debugf("issuing Start request to harness at %s", addr)
 
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{
-		Addr: addr, Ranks: ranks, Force: false, Timeout: float32(defaultTimeout),
+		Addr: addr, Ranks: ranks, Force: false, Timeout: int64(harnessClientRankTimeount),
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(parent, maxIoServers*harnessClientRankTimeount)
+	defer cancel()
 
 	var rpcResp *mgmtpb.RanksResp
 	rpcResp, err = hc.client.Start(ctx, addr, *rpcReq)

@@ -235,8 +235,6 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req mgmtpb
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
 
-			ctx, _ = context.WithTimeout(ctx, retryDelay)
-
 			// returns on time out or when all instances are running
 			// don't retry
 			resp, err = pbClient.StartRanks(ctx, &req)

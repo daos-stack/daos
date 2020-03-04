@@ -2047,7 +2047,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 			}
 
 			if tc.req != nil && tc.req.Timeout == 0 {
-				tc.req.Timeout = float32(100 * time.Millisecond)
+				tc.req.Timeout = int64(100 * time.Millisecond)
 			}
 
 			gotResp, gotErr := svc.PingRanks(context.TODO(), tc.req)
@@ -2153,7 +2153,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 
 func TestMgmtSvc_ConvertTimeout(t *testing.T) {
 	duration := 5 * time.Second
-	req := &mgmtpb.RanksReq{Timeout: float32(duration)}
+	req := &mgmtpb.RanksReq{Timeout: int64(duration)}
 
 	if diff := cmp.Diff(duration.String(), time.Duration(req.Timeout).String()); diff != "" {
 		t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
