@@ -985,6 +985,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
+			lgc_seg->ls_has_csum_err = true;
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
@@ -1051,6 +1052,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			lgc_seg->ls_idx_start, lgc_seg->ls_idx_end,
 			DP_RECT(&lgc_seg->ls_ent_in.ei_rect));
 
+		lgc_seg->ls_has_csum_err = false;
 		rc = fill_one_segment(ih, mw, lgc_seg, acts);
 		if (rc) {
 			D_ERROR("Fill seg %u-%u %p "DF_RECT" error: "DF_RC"\n",
@@ -1121,6 +1123,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
 			phy_ent->pe_addr = ent_in->ei_addr;
+			/* Checksum from ent_in is assigned to truncated
+			 * physical entry, in additon to re-assigning address.
+			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
 		}
 	}
@@ -1147,16 +1152,15 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			leftovers++;
 			continue;
 		}
-		if (phy_ent->pe_csum_info.cs_not_valid)
-			/* Invalid physical extents are retained. */
-			continue;
 
-		rc = evt_delete(oiter->it_hdl, &rect, NULL);
-		if (rc) {
-			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
+		if (!phy_ent->pe_csum_info.cs_not_valid) {
+			rc = evt_delete(oiter->it_hdl, &rect, NULL);
+			if (rc) {
+				D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
 				""DF_RC"\n", DP_RECT(&rect), phy_ent->pe_off,
 				DP_RC(rc));
-			goto abort;
+				goto abort;
+			}
 		}
 
 		/* Physical entry is in window */
@@ -1377,6 +1381,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_epc = epoch;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
+	phy_ent->pe_csum_info.cs_not_valid = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -1921,6 +1926,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
 exit:
 	aggregate_exit(cont, false);
+
+	D_FREE(agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
 
 	if (merge_window_status(&agg_param.ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window resource leaked.\n");

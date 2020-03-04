@@ -34,29 +34,31 @@
  *
  * Recalculation is driven by an array of csum_recalc structs,
  * one per input segment. These segments are coalecsed into a single
- * output segment, by the aggregation process.
+ * output segment by the overall aggregation process.
  *
- * The input data is held in a buffer that is specifed by bio sg_list.
+ * The input data is held in a buffer that is specifed by a bio sg_list.
  * The data for the output segment is place within the initial range of
  * the buffer. Following this range, the additional data required for
  * checksum data is stored. These additional segments, either prefix
- * or suffix rangess, are place in order in the buffer, with corresponding
- * entries in the bgsl's biov array
+ * or suffix ranges of each input physical extent, are appended in order
+ * at the end of the buffer, with corresponding * entries in the bgsl's
+ * biov array.
  *
  * A temporary sg_list is constructed for each input segment, with an
- * optional prefix entry, the outputable range, and an option suffix
- * makeing up the data used to calculate the checksum used to verify
+ * optional prefix entry, the outputable range, and an optional suffix
+ * making up the data used to calculate the checksum used to verify
  * the data for each input segment.
  *
  * The calculated checksums, are then compared to the checksums
- * associatied with the input segments.  These input checksums are
+ * associatied with the input segments. These input checksums were
  * returned by the evtree iterator that generates the input extents.
  * Input segments that overlap a merge window are an exception to this.
  * Here, the checksums used for verification are from the overlapping
  * output extent (who's checksums were verified in the previous window).
  *
  * If an input segment fails verification, an checksum error code is returned
- * to the caller (in vos_aggregate.c).
+ * to the caller (in vos_aggregate.c), and the output checksum data is left
+ * at zero values.
  *
  * Following input verification, generation of the checksum(s) for the
  * output segment is performed.
@@ -217,9 +219,16 @@ ds_csum_agg_recalc(void *recalc_args)
 		unsigned int	this_buf_nr, this_buf_idx;
 
 
+		/* Number of records in this input segment, include added
+		 * segments.
+		 */
 		this_buf_nr = (bsgl->bs_iovs[i].bi_data_len +
 			       recalcs[i].cr_prefix_len +
 			       recalcs[i].cr_suffix_len) / ent_in->ei_inob;
+		/* Sets up the SGL for the (verification) checksum calculation.
+		 * Returns the offset of the next add-on (prefix/suffix)
+		 * segment.
+		 */
 		add_offset = csum_agg_set_sgl(&sgl, bsgl, recalcs,
 					      args->cra_buf, args->cra_buf_len,
 					      args->cra_seg_cnt,
@@ -230,38 +239,58 @@ ds_csum_agg_recalc(void *recalc_args)
 			 recalcs[i].cr_log_ext.ex_lo + 1 ==
 			 bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
 
+		/* Determines number of checksum entries, and start index, for
+		 * calculating verification checksum,
+		 */
 		this_buf_idx = calc_csum_params(&csum_info, &recalcs[i],
 						recalcs[i].cr_prefix_len,
 						recalcs[i].cr_suffix_len,
 						ent_in->ei_inob);
 
+		/* Ensure buffer is zero-ed. */
 		memset(csum_info.cs_csum, 0, csum_info.cs_buf_len);
+
+		/* Calculates the checksums for the input segment. */
 		rc = daos_csummer_calc_one(csummer, &sgl, &csum_info,
 					   ent_in->ei_inob, this_buf_nr,
 					   this_buf_idx);
 		if (rc)
 			goto out;
 
+		/* Verifies that calculated checksums match prior (input)
+		 * checksums, for the appropriate range.
+		 */
 		is_valid = csum_agg_verify(&recalcs[i], &csum_info,
 					   ent_in->ei_inob,
 					   recalcs[i].cr_prefix_len);
 		if (!is_valid) {
+			/* Ensure carryover is invalidated. */
+			memset(csum_info.cs_csum, 255, csum_info.cs_buf_len);
 			rc = -DER_CSUM;
 			goto out;
 		}
 	}
 
+	/* Re-set checksum buffer to zero values. (Input and output
+	 * checksum infos share a buffer range.)
+	 */
 	memset(ent_in->ei_csum.cs_csum, 0, ent_in->ei_csum.cs_buf_len);
 	args->cra_sgl->sg_iovs[0].iov_len = args->cra_seg_size;
+
+	/* Calculate checksum(s) for output segment. */
 	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
 				   ent_in->ei_rect.rc_ex.ex_lo);
 out:
+	/* Eventual set okay, even with no offload (unit test). */
 	ABT_eventual_set(args->csum_eventual, NULL, 0);
 	daos_csummer_destroy(&csummer);
 	D_FREE(sgl.sg_iovs);
 	args->cra_rc = rc;
+
+	/* Set checksums for physical entries to invalid, if verification fails.
+	 */
 	if (rc == -DER_CSUM) {
 		for (i = 0; i < args->cra_seg_cnt; i++)
 			recalcs[i].cr_phy_csum->cs_not_valid = true;
