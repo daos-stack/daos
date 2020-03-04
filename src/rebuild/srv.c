@@ -986,7 +986,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint32_t	map_ver;
-	d_iov_t	map_buf_iov = {0};
+	d_iov_t		map_buf_iov = {0};
 	daos_prop_t	*prop = NULL;
 	uint64_t	leader_term;
 	int		rc;
@@ -1008,6 +1008,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		D_GOTO(out, rc);
 	}
 
+re_dist:
 	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
 	if (rc) {
 		D_ERROR("pool map broadcast failed: rc "DF_RC"\n", DP_RC(rc));
@@ -1016,11 +1017,22 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	/* IV bcast the pool map in case for offline rebuild */
 	rc = ds_pool_iv_map_update(pool, map_buf_iov.iov_buf, map_ver);
-	if (rc) {
-		D_ERROR("ds_pool_iv_map_update failed %d.\n", rc);
-		D_GOTO(out, rc);
-	}
 	D_FREE(map_buf_iov.iov_buf);
+	if (rc) {
+		/* If the failure is due to stale group version, then maybe
+		 * the leader upgrade group version during this time, let's
+		 * retry in this case.
+		 */
+		memset(&map_buf_iov, 0, sizeof(map_buf_iov));
+		if (rc == -DER_GRPVER) {
+			D_DEBUG(DB_REBUILD, DF_UUID" redistribute pool map\n",
+				DP_UUID(pool->sp_uuid)); 
+			goto re_dist;
+		} else {
+			D_ERROR("pool map broadcast failed: rc "DF_RC"\n",
+				DP_RC(rc));
+		}
+	}
 
 	rc = ds_pool_prop_fetch(pool, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc) {
