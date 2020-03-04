@@ -1927,8 +1927,10 @@ next_step:
 	sgl.sg_nr = 2;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	print_message("fetch with less buffer got %d.\n", rc);
+	print_message("fetch with less buffer got rc %d, iod_size %d.\n",
+		      rc, (int)iod.iod_size);
 	assert_int_equal(rc, -DER_REC2BIG);
+	assert_int_equal(iod.iod_size, 1);
 
 	print_message("reading un-existed record ...\n");
 	recx[3].rx_idx	= 2 * buf_len + 40960;
@@ -2092,7 +2094,7 @@ fetch_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		 dkey;
 	d_sg_list_t	 sgl[NUM_AKEYS];
 	d_iov_t	 sg_iov[NUM_AKEYS];
 	daos_iod_t	 iod[NUM_AKEYS];
@@ -2145,6 +2147,16 @@ fetch_size(void **state)
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_int_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++)
+		assert_int_equal(iod[i].iod_size, size * (i+1));
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
+		iod[i].iod_size	= DAOS_REC_ANY;
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_int_equal(rc, -DER_REC2BIG);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
@@ -3729,15 +3741,13 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
-		rc = cmocka_run_group_tests_name("DAOS IO tests", io_tests,
-						 obj_setup, test_teardown);
-		MPI_Barrier(MPI_COMM_WORLD);
-		return rc;
+		sub_tests_size = ARRAY_SIZE(io_tests);
+		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(io_tests, ARRAY_SIZE(io_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				obj_setup_internal, NULL);
+	rc = run_daos_sub_tests("DAOS IO tests", io_tests,
+				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
+				obj_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
