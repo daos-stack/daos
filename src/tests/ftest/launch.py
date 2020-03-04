@@ -745,12 +745,13 @@ def run_tests(test_files, tag_filter, args):
             return_code |= time_command(
                 " ".join([item for item in test_command_list if item != ""]))
 
+            # Optionally get the size of the logs and log_dir of the tests
+            if args.size:
+                get_log_size(test_file["yaml"], args)
+
             # Optionally store all of the doas server and client log files
             # along with the test results
             if args.archive:
-                # Optionally get the size of the logs and log_dir of the tests
-                if args.size:
-                    get_log_size(test_file["yaml"], args)
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
                 archive_config_files(avocado_logs_dir)
 
