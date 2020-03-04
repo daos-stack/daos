@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,12 +25,10 @@ package server
 
 import (
 	"context"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,15 +42,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func TestHarnessCreateSuperblocks(t *testing.T) {
+func TestServer_HarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
 
 	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
@@ -110,6 +105,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	h.setStarted()
 	mi, err := h.GetMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +130,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 }
 
-func TestHarnessGetMSLeaderInstance(t *testing.T) {
+func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
 	for name, tc := range map[string]struct {
@@ -228,6 +224,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			h.setStarted()
 
 			_, err := h.GetMSLeaderInstance()
 			common.CmpErr(t, tc.expError, err)
@@ -235,7 +232,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 	}
 }
 
-func TestHarnessIOServerStart(t *testing.T) {
+func TestServer_HarnessIOServerStart(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trc           *ioserver.TestRunnerConfig
 		expStartErr   error
@@ -265,11 +262,8 @@ func TestHarnessIOServerStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, cleanup := common.CreateTestDir(t)
+			defer cleanup()
 
 			srvCfgs := make([]*ioserver.Config, maxIOServers)
 			for i := 0; i < maxIOServers; i++ {
