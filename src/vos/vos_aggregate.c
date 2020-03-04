@@ -888,6 +888,11 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 		i++;
 
+		if (phy_ent->pe_csum_info.cs_not_valid) {
+			rc = -DER_CSUM;
+			goto out;
+		}
+
 		D_ASSERT(ext1_covers_ext2(&ent_in->ei_rect.rc_ex, &ext));
 		D_ASSERT(ext1_covers_ext2(&phy_ent->pe_rect.rc_ex, &ext));
 
@@ -1121,7 +1126,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		ent_in = &io->ic_segs[i].ls_ent_in;
 		phy_ent = lgc_seg->ls_phy_ent;
 
-		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
+		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr) &&
+					!lgc_seg->ls_has_csum_err) {
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in additon to re-assigning address.
