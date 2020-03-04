@@ -700,68 +700,85 @@ test_rebuild_wait(test_arg_t **args, int args_cnt)
 }
 
 int
-run_daos_sub_tests_only(const struct CMUnitTest *tests, int tests_size,
-			daos_size_t pool_size, int *sub_tests,
-			int sub_tests_size, void *state)
+run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
+			int tests_size, int *sub_tests, int sub_tests_size)
 {
 	int i;
+	int rc = 0;
 
-	for (i = 0; i < sub_tests_size; i++) {
-		int idx = sub_tests ? sub_tests[i] : i;
-		test_arg_t	*arg;
+	if (sub_tests != NULL) {
+		struct CMUnitTest *subtests;
+		int subtestsnb = 0;
 
-		if (idx >= tests_size) {
-			print_message("No test %d\n", idx);
-			continue;
+		D_ALLOC_ARRAY(subtests, sub_tests_size);
+		if (subtests == NULL) {
+			print_message("failed allocating subtests array\n");
+			return -DER_NOMEM;
 		}
 
-		print_message("%s\n", tests[idx].name);
-		daos_mgmt_add_mark(tests[idx].name);
-		if (tests[idx].setup_func)
-			tests[idx].setup_func(&state);
+		for (i = 0; i < sub_tests_size; i++) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+				print_message("No subtest %d\n", sub_tests[i]);
+				continue;
+			}
+			subtests[i] = tests[sub_tests[i] - 1];
+			subtestsnb++;
+		}
 
-		arg = state;
-		arg->index = idx;
-
-		tests[idx].test_func(&state);
-		if (tests[idx].teardown_func)
-			tests[idx].teardown_func(&state);
+		/* run the sub-tests */
+		if (subtestsnb > 0)
+			rc = _cmocka_run_group_tests(test_name, subtests,
+						     subtestsnb, NULL, NULL);
+		D_FREE(subtests);
+	} else {
+		/* run the full suite */
+		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
+					     NULL, NULL);
 	}
 
-	return 0;
+	return rc;
 }
 
 int
-run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
-		   daos_size_t pool_size, int *sub_tests,
-		   int sub_tests_size, test_setup_cb_t setup_cb,
-		   test_teardown_cb_t teardown_cb)
+run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
+		   int tests_size, int *sub_tests, int sub_tests_size,
+		   test_setup_cb_t setup_cb, test_teardown_cb_t teardown_cb)
 {
-	void *state = NULL;
-	int rc;
+	int i;
+	int rc = 0;
 
-	D_ASSERT(pool_size > 0);
-	rc = test_setup(&state, SETUP_CONT_CONNECT, true, pool_size, NULL);
-	if (rc)
-		return rc;
+	if (sub_tests != NULL) {
+		struct CMUnitTest *subtests;
+		int subtestsnb = 0;
 
-	if (setup_cb != NULL) {
-		rc = setup_cb(&state);
-		if (rc)
-			return rc;
-	}
+		D_ALLOC_ARRAY(subtests, sub_tests_size);
+		if (subtests == NULL) {
+			print_message("failed allocating subtests array\n");
+			return -DER_NOMEM;
+		}
 
-	run_daos_sub_tests_only(tests, tests_size, pool_size,
-				sub_tests, sub_tests_size, state);
-	if (teardown_cb != NULL) {
-		rc = teardown_cb(&state);
-		if (rc)
-			return rc;
+		for (i = 0; i < sub_tests_size; i++) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+				print_message("No subtest %d\n", sub_tests[i]);
+				continue;
+			}
+			subtests[i] = tests[sub_tests[i] - 1];
+			subtestsnb++;
+		}
+
+		/* run the sub-tests */
+		if (subtestsnb > 0)
+			rc = _cmocka_run_group_tests(test_name, subtests,
+						     subtestsnb, setup_cb,
+						     teardown_cb);
+		D_FREE(subtests);
 	} else {
-		test_teardown(&state);
+		/* run the full suite */
+		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
+					     setup_cb, teardown_cb);
 	}
 
-	return 0;
+	return rc;
 }
 
 void

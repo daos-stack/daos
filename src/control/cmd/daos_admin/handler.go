@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -66,16 +67,14 @@ func sendSuccess(payloadSrc interface{}, res *pbin.Response, dest io.Writer) err
 	return err
 }
 
-func readRequest(log logging.Logger, rdr io.Reader) (*pbin.Request, error) {
-	buf := make([]byte, pbin.MaxMessageSize)
-
-	readLen, err := rdr.Read(buf)
+func readRequest(rdr io.Reader) (*pbin.Request, error) {
+	buf, err := pbin.ReadMessage(rdr)
 	if err != nil {
 		return nil, err
 	}
 
 	var req pbin.Request
-	if err := json.Unmarshal(buf[:readLen], &req); err != nil {
+	if err := json.Unmarshal(buf, &req); err != nil {
 		return nil, err
 	}
 
@@ -90,7 +89,7 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *
 
 	switch req.Method {
 	case "Ping":
-		return sendSuccess(struct{}{}, &res, resDest)
+		return sendSuccess(&pbin.PingResp{Version: build.DaosVersion}, &res, resDest)
 	case "ScmMount", "ScmUnmount":
 		var mReq scm.MountRequest
 		if err := json.Unmarshal(req.Payload, &mReq); err != nil {

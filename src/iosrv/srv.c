@@ -280,12 +280,13 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 {
 	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
 
-	/* TODO: add interface to calculate average workload and reset stime */
-	if (cntr->rc_stime == 0)
-		daos_gettime_coarse(&cntr->rc_stime);
-
+	daos_gettime_coarse(&cntr->rc_active_time);
 	cntr->rc_active++;
 	cntr->rc_total++;
+
+	/* TODO: add interface to calculate average workload and reset stime */
+	if (cntr->rc_stime == 0)
+		cntr->rc_stime = cntr->rc_active_time;
 }
 
 /**
@@ -524,12 +525,11 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx)) {
-			check_sleep_list();
-			break;
-		}
-
 		check_sleep_list();
+
+		if (dss_xstream_exiting(dx))
+			break;
+
 		ABT_thread_yield();
 	}
 	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
@@ -807,9 +807,12 @@ dss_xstreams_empty(void)
 bool
 dss_xstream_is_busy(void)
 {
-	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	struct dss_rpc_cntr	*cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
+	uint64_t		 cur_sec = 0;
 
-	return cntr->rc_active != 0;
+	daos_gettime_coarse(&cur_sec);
+	/* No IO requests for more than 5 seconds */
+	return cur_sec < (cntr->rc_active_time + 5);
 }
 
 static int

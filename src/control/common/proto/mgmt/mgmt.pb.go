@@ -200,7 +200,9 @@ func init() {
 	proto.RegisterType((*RanksResp_RankResult)(nil), "mgmt.RanksResp.RankResult")
 }
 
-func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73) }
+func init() {
+	proto.RegisterFile("mgmt.proto", fileDescriptor_24cf82780fd24e73)
+}
 
 var fileDescriptor_24cf82780fd24e73 = []byte{
 	// 621 bytes of a gzipped FileDescriptorProto
@@ -247,11 +249,11 @@ var fileDescriptor_24cf82780fd24e73 = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConn
+var _ grpc.ClientConnInterface
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // MgmtSvcClient is the client API for MgmtSvc service.
 //
@@ -305,10 +307,10 @@ type MgmtSvcClient interface {
 }
 
 type mgmtSvcClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewMgmtSvcClient(cc *grpc.ClientConn) MgmtSvcClient {
+func NewMgmtSvcClient(cc grpc.ClientConnInterface) MgmtSvcClient {
 	return &mgmtSvcClient{cc}
 }
 
