@@ -486,7 +486,10 @@ test_default_pool_acl(void **state)
 {
 	struct daos_acl	*acl;
 	struct daos_ace	*current = NULL;
-	uint64_t	exp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
+	uint64_t	exp_owner_perms = DAOS_ACL_PERM_READ |
+					  DAOS_ACL_PERM_WRITE;
+	uint64_t	exp_grp_perms = DAOS_ACL_PERM_READ |
+					DAOS_ACL_PERM_WRITE;
 
 	acl = ds_sec_alloc_default_daos_pool_acl();
 
@@ -495,12 +498,13 @@ test_default_pool_acl(void **state)
 
 	current = daos_acl_get_next_ace(acl, NULL);
 	assert_non_null(current);
-	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0, exp_perms);
+	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER, 0,
+				      exp_owner_perms);
 
 	current = daos_acl_get_next_ace(acl, current);
 	assert_non_null(current);
 	expect_ace_is_type_with_perms(current, DAOS_ACL_OWNER_GROUP,
-				      DAOS_ACL_FLAG_GROUP, exp_perms);
+				      DAOS_ACL_FLAG_GROUP, exp_grp_perms);
 
 	current = daos_acl_get_next_ace(acl, current);
 	assert_null(current); /* shouldn't be any more ACEs */
@@ -1739,6 +1743,11 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_SET_ACL |
 				     CONT_CAPA_GET_ACL |
 				     CONT_CAPA_SET_OWNER);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_READ |
+				     DAOS_ACL_PERM_DEL_CONT,
+				     DAOS_COO_RW,
+				     CONT_CAPA_READ_DATA |
+				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
 				     CONT_CAPA_READ_DATA |
@@ -1747,7 +1756,8 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_GET_PROP |
 				     CONT_CAPA_SET_ACL |
 				     CONT_CAPA_GET_ACL |
-				     CONT_CAPA_SET_OWNER);
+				     CONT_CAPA_SET_OWNER |
+				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RO,
 				     CONT_CAPA_READ_DATA |
@@ -1764,6 +1774,7 @@ test_cont_get_capas_denied(void **state)
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_GET_ACL, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_WRITE, DAOS_COO_RW, 0);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_PROP, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_ACL, DAOS_COO_RW, 0);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_SET_OWNER, DAOS_COO_RW, 0);
@@ -1776,13 +1787,106 @@ static void
 test_pool_can_connect(void **state)
 {
 	assert_false(ds_sec_pool_can_connect(0));
-	assert_false(ds_sec_pool_can_connect(POOL_CAPA_CREATE_CONT |
-					     POOL_CAPA_DEL_CONT));
+	assert_false(ds_sec_pool_can_connect(~POOL_CAPA_READ));
 
 	assert_true(ds_sec_pool_can_connect(POOL_CAPA_READ));
 	assert_true(ds_sec_pool_can_connect(POOL_CAPA_READ |
 					    POOL_CAPA_CREATE_CONT |
 					    POOL_CAPA_DEL_CONT));
+}
+
+static void
+test_pool_can_create_cont(void **state)
+{
+	assert_false(ds_sec_pool_can_create_cont(0));
+	assert_false(ds_sec_pool_can_create_cont(~POOL_CAPA_CREATE_CONT));
+
+	assert_true(ds_sec_pool_can_create_cont(POOL_CAPA_CREATE_CONT));
+	assert_true(ds_sec_pool_can_create_cont(POOL_CAPA_READ |
+						POOL_CAPA_CREATE_CONT |
+						POOL_CAPA_DEL_CONT));
+}
+
+static void
+test_pool_can_delete_cont(void **state)
+{
+	assert_false(ds_sec_pool_can_delete_cont(0));
+	assert_false(ds_sec_pool_can_delete_cont(~POOL_CAPA_DEL_CONT));
+
+	assert_true(ds_sec_pool_can_delete_cont(POOL_CAPA_DEL_CONT));
+	assert_true(ds_sec_pool_can_delete_cont(POOL_CAPA_READ |
+						POOL_CAPA_CREATE_CONT |
+						POOL_CAPA_DEL_CONT));
+}
+
+/*
+ * Container access tests
+ */
+static void
+test_cont_can_open(void **state)
+{
+	assert_false(ds_sec_cont_can_open(0));
+	/* Need read access at minimum - write-only isn't allowed */
+	assert_false(ds_sec_cont_can_open(~CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_READ_DATA));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_PROP));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_ACL));
+	assert_true(ds_sec_cont_can_open(CONT_CAPAS_RO_MASK));
+	assert_true(ds_sec_cont_can_open(CONT_CAPA_READ_DATA |
+					 CONT_CAPA_WRITE_DATA |
+					 CONT_CAPA_GET_PROP |
+					 CONT_CAPA_SET_PROP |
+					 CONT_CAPA_GET_ACL |
+					 CONT_CAPA_SET_ACL |
+					 CONT_CAPA_SET_OWNER));
+}
+
+static void
+test_cont_can_delete(void **state)
+{
+	d_iov_t			cred;
+	struct ownership	owner;
+	struct daos_acl		*default_acl;
+	struct daos_acl		*no_del_acl;
+	struct daos_acl		*min_acl;
+
+	init_default_cred(&cred);
+	init_default_ownership(&owner);
+
+	/* minimal good container ACL that allows delete */
+	min_acl = get_acl_with_perms(DAOS_ACL_PERM_READ |
+				     DAOS_ACL_PERM_DEL_CONT, 0);
+
+	/* all container perms except delete */
+	no_del_acl = get_acl_with_perms(DAOS_ACL_PERM_CONT_ALL &
+					~DAOS_ACL_PERM_DEL_CONT, 0);
+
+	/* default container ACL */
+	default_acl = ds_sec_alloc_default_daos_cont_acl();
+
+	/* Default ACL allows owner to delete it */
+	assert_true(ds_sec_cont_can_delete(DAOS_PC_RW, &cred, &owner,
+					   default_acl));
+
+	/* Minimal ACL with RW access allowing delete */
+	assert_true(ds_sec_cont_can_delete(DAOS_PC_RW, &cred, &owner, min_acl));
+
+	/* Read-only pool flags will prevent deletion */
+	assert_false(ds_sec_cont_can_delete(DAOS_PC_RO, &cred, &owner,
+					    min_acl));
+
+	/* Invalid inputs don't get any perms */
+	assert_false(ds_sec_cont_can_delete(DAOS_PC_RW, NULL, NULL, NULL));
+
+	/* doesn't have delete perms */
+	assert_false(ds_sec_cont_can_delete(DAOS_PC_RW, &cred, &owner,
+					    no_del_acl));
+
+	daos_acl_free(min_acl);
+	daos_acl_free(no_del_acl);
+	daos_acl_free(default_acl);
+	daos_iov_free(&cred);
 }
 
 /* Convenience macro for unit tests */
@@ -1846,6 +1950,10 @@ main(void)
 		cmocka_unit_test(test_cont_get_capas_success),
 		cmocka_unit_test(test_cont_get_capas_denied),
 		cmocka_unit_test(test_pool_can_connect),
+		cmocka_unit_test(test_pool_can_create_cont),
+		cmocka_unit_test(test_pool_can_delete_cont),
+		cmocka_unit_test(test_cont_can_open),
+		cmocka_unit_test(test_cont_can_delete),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

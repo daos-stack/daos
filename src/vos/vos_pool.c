@@ -744,10 +744,15 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
 		break;
-	case VOS_PO_CTL_VEA_FLUSH:
+	case VOS_PO_CTL_VEA_PLUG:
 		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info);
+			vea_flush(pool->vp_vea_info, true);
+		break;
+	case VOS_PO_CTL_VEA_UNPLUG:
+		if (pool->vp_vea_info != NULL)
+			vea_flush(pool->vp_vea_info, false);
 		break;
 	}
+
 	return 0;
 }
