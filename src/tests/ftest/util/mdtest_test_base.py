@@ -27,7 +27,7 @@ import os
 import subprocess
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
@@ -182,7 +182,7 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), self.tmp, get_log_file(self.client_log))
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             manager.run()

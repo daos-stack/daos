@@ -55,6 +55,19 @@ def skipForTicket(ticket):
 # pylint: enable=invalid-name
 
 
+def get_log_name(name):
+    """Get the full log file name and path.
+
+    Args:
+        name (str): log file name
+
+    Returns:
+        str: full log file name including path
+
+    """
+    return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
+
+
 class Test(avocadoTest):
     """Basic Test class.
 
