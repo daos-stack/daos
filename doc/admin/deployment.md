@@ -857,7 +857,7 @@ DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release and 
+incomplete integration of certificate support as of the 0.6 release and
 configured to use a non-default agent configuration file.
 
 To start the DAOS Agent from the command line, run:
