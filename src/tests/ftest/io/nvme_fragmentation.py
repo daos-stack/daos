@@ -59,7 +59,7 @@ class IorSmall(IorTestBase):
         self.create_pool()
         self.pool.display_pool_daos_space("Pool space at the Beginning")
         container_info = {}
-        # Write IOR data for different transfer size.
+        # Write IOR data for different transfer size
         self.ior_cmd.flags.update(write_flags[0])
         for oclass in obj_class:
             self.ior_cmd.daos_oclass.update(oclass)
