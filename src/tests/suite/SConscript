@@ -42,6 +42,8 @@ def scons():
                 for h in headers:
                     if parse_version(h['version']) < parse_version('1.1.5'):
                         newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
+                    else:
+                        print "libcmocka version without fixed skip(), running with workaround (DAOS-1093)."
         elif distro in ('"debian"', '"ubuntu"'):
             import apt
             cache = apt.Cache()
@@ -53,7 +55,7 @@ def scons():
                     if parse_version(instver.version) < parse_version('1.1.5'):
                         newenv.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
                     else:
-                        print "libcmocka version without fixed skip()."
+                        print "libcmocka version without fixed skip(), running with workaround (DAOS-1093)."
                 else:
                     print "No package libcmocka installed."
             else:
