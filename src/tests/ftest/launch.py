@@ -748,6 +748,9 @@ def run_tests(test_files, tag_filter, args):
             # Optionally store all of the doas server and client log files
             # along with the test results
             if args.archive:
+                # Optionally get the size of the logs and log_dir of the tests
+                if args.size:
+                    get_log_size(test_file["yaml"], args)
                 archive_logs(avocado_logs_dir, test_file["yaml"], args)
                 archive_config_files(avocado_logs_dir)
 
@@ -896,15 +899,24 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     ]
     spawn_commands(host_list, "; ".join(commands), 900)
 
-def check_log_size(avocado_logs_dir):
-    """Check the size of the the directoy of the host test log files in
-    the avocado results directory.
+
+def get_log_size(test_yaml, args):
+    """Get the size of the the directoy of the host test log files in
+    the avocado results directory and store the values in a file.
 
     Args:
         avocado_logs_dir (str): path to the avocado log files
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    log_size_file = os.path.join(logs_dir, "log_size.log")
+    host_list = get_hosts_from_yaml(test_yaml, args)
+
+    # Create a file that contains the sizes on each test log and the logs_dir.
+    command = "du -h {} &> {}".format(logs_dir, log_size_file)
+    spawn_commands(host_list, command, 30)
+
 
 def archive_config_files(avocado_logs_dir):
     """Copy all of the configuration files to the avocado results directory.
@@ -1232,6 +1244,10 @@ def main():
         "-p", "--process_cores",
         action="store_true",
         help="process core files from tests")
+    parser.add_argument(
+        "-ls", "--log_size",
+        action="store_true",
+        help="get log file sizes")
     parser.add_argument(
         "-s", "--sparse",
         action="store_true",
