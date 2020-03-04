@@ -678,7 +678,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_op.ci_uuid, args->uuid);
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_capas = args->flags;
+	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
 	 * opening the contianer
 	 */
