@@ -228,10 +228,10 @@ enum {
 #define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /** Iterator ops for objects and OIDs */
-struct vos_iter_ops vos_oi_iter_ops;
-struct vos_iter_ops vos_obj_iter_ops;
-struct vos_iter_ops vos_cont_iter_ops;
-struct vos_iter_ops vos_dtx_iter_ops;
+extern struct vos_iter_ops vos_oi_iter_ops;
+extern struct vos_iter_ops vos_obj_iter_ops;
+extern struct vos_iter_ops vos_cont_iter_ops;
+extern struct vos_iter_ops vos_dtx_iter_ops;
 
 static inline void
 vos_pool_addref(struct vos_pool *pool)
