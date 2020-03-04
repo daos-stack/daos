@@ -746,7 +746,7 @@ def run_tests(test_files, tag_filter, args):
                 " ".join([item for item in test_command_list if item != ""]))
 
             # Optionally get the size of the logs and log_dir of the tests
-            if args.size:
+            if args.log_size:
                 get_log_size(test_file["yaml"], args)
 
             # Optionally store all of the doas server and client log files
@@ -906,7 +906,6 @@ def get_log_size(test_yaml, args):
     the avocado results directory and store the values in a file.
 
     Args:
-        avocado_logs_dir (str): path to the avocado log files
         test_yaml (str): yaml file containing host names
         args (argparse.Namespace): command line arguments for this program
     """
