@@ -1171,10 +1171,9 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
 				csum_tests, setup, test_teardown);
 		} else {
-			rc = run_daos_sub_tests(csum_tests,
-				ARRAY_SIZE(csum_tests), DEFAULT_POOL_SIZE,
-				sub_tests, sub_tests_size, setup,
-				test_teardown);
+			rc = run_daos_sub_tests("DAOS Checksum Tests",
+				csum_tests, ARRAY_SIZE(csum_tests), sub_tests,
+				sub_tests_size, setup, test_teardown);
 		}
 	}
 
