@@ -62,8 +62,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     def go_ldflags():
         return ' '.join(['-ldflags',
-                         '"-X main.daosVersion=%s' % DAOS_VERSION,
-                         '-X main.configDir=%s' % CONF_DIR,
+                         '"-X github.com/daos-stack/daos/src/control/build.DaosVersion=%s' % DAOS_VERSION,
+                         '-X github.com/daos-stack/daos/src/control/build.ConfigDir=%s' % CONF_DIR,
                          '-B %s"' % gen_build_id()])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
