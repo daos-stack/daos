@@ -264,8 +264,6 @@ ds_csum_agg_recalc(void *recalc_args)
 					   ent_in->ei_inob,
 					   recalcs[i].cr_prefix_len);
 		if (!is_valid) {
-			/* Ensure carryover is invalidated. */
-			memset(csum_info.cs_csum, 255, csum_info.cs_buf_len);
 			rc = -DER_CSUM;
 			goto out;
 		}
