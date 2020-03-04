@@ -32,12 +32,16 @@ testparams:
    connectsetnames: !mux
       goodname:
          setname:
-            - test_server
+            - daos_server
             - PASS
       badname:
          setname:
-            - NULLPTR
+            - bad_name_server
             - FAIL
+      defaultname:
+         setname:
+            - NULLPTR
+            - PASS
    UUID: !mux
       gooduuid:
          uuid:
