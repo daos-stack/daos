@@ -23,7 +23,7 @@
 """
 
 from avocado.utils import process
-from apricot import TestWithServers, get_log_name
+from apricot import TestWithServers, get_log_file
 from env_modules import load_mpi
 
 
@@ -63,7 +63,7 @@ class DaosCoreBase(TestWithServers):
 
         cmd = "{} {} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
             self.orterun, self.client_mca, num_clients,
-            get_log_name(self.client_log), self.daos_test, num_replicas,
+            get_log_file(self.client_log), self.daos_test, num_replicas,
             subtest, args)
 
         env = {}

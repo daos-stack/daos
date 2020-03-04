@@ -55,7 +55,7 @@ def skipForTicket(ticket):
 # pylint: enable=invalid-name
 
 
-def get_log_name(name):
+def get_log_file(name):
     """Get the full log file name and path.
 
     Args:
