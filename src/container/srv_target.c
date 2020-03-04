@@ -948,15 +948,20 @@ cont_child_destroy_one(void *vin)
 		 * the container has never been opened */
 		rc = 0;
 	}
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
+
 	/* XXX there might be a race between GC and pool destroy, let's do
 	 * synchronous GC for now.
 	 */
 	dss_gc_run(pool->spc_hdl, -1);
-	/*
-	 * Force VEA to expire all the just freed extents and make them
-	 * available for allocation immediately.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
 	if (rc) {
 		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));

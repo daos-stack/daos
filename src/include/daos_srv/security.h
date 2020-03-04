@@ -118,6 +118,32 @@ bool
 ds_sec_pool_can_connect(uint64_t pool_capas);
 
 /**
+ * Determine if a pool handle with given security capabilities can create a
+ * container.
+ *
+ * \param	pool_capas	Capability bits acquired via
+ *				ds_sec_pool_get_capabilities
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_pool_can_create_cont(uint64_t pool_capas);
+
+/**
+ * Determine if a pool handle with given security capabilities can delete a
+ * container.
+ *
+ * \param	pool_capas	Capability bits acquired via
+ *				ds_sec_pool_get_capabilities
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_pool_can_delete_cont(uint64_t pool_capas);
+
+/**
  * Determine if the container can be opened based on the calculated set of
  * container capabilities.
  *
@@ -129,5 +155,21 @@ ds_sec_pool_can_connect(uint64_t pool_capas);
  */
 bool
 ds_sec_cont_can_open(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be deleted by the user with the given
+ * credential, based on the container ACL and ownership information.
+ *
+ * \param	pool_flags	Parent pool handle flags
+ * \param	cred		Pool's security credential
+ * \param	ownership	Container ownership information
+ * \param	acl		Container ACL
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
+		       struct ownership *ownership, struct daos_acl *acl);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */
