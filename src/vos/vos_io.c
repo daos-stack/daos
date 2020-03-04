@@ -802,7 +802,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, true, DAOS_INTENT_DEFAULT, true,
-			  &ioc->ic_obj, ioc->ic_ts_set);
+			  &ioc->ic_obj, NULL);
 	if (rc != -DER_NONEXIST && rc != 0)
 		goto error;
 
