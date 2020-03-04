@@ -922,10 +922,16 @@ int
 vos_pool_get_scm_cutoff(void);
 
 enum vos_pool_opc {
-	/** reset pool GC statistics */
+	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** force VEA flush */
-	VOS_PO_CTL_VEA_FLUSH,
+	/**
+	 * Pause flushing the free extents in aging buffer. This is usually
+	 * called before container destroy where huge amount of extents could
+	 * be freed in a short period of time.
+	 */
+	VOS_PO_CTL_VEA_PLUG,
+	/** Pairing with PLUG, usually called after container destroy done. */
+	VOS_PO_CTL_VEA_UNPLUG,
 };
 
 /**
