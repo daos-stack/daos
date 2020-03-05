@@ -65,6 +65,7 @@ type PoolCreateCmd struct {
 	RankList   string `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
 	NumSvcReps uint32 `short:"v" long:"nsvc" default:"1" description:"Number of pool service replicas"`
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
+	UUID       string `short:"p" long:"pool" description:"UUID to be used when creating the pool, randomly generated if not specified"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -120,6 +121,7 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 	req := &client.PoolCreateReq{
 		ScmBytes: scmBytes, NvmeBytes: nvmeBytes, RankList: ranks,
 		NumSvcReps: c.NumSvcReps, Sys: c.Sys, Usr: usr, Grp: grp, ACL: acl,
+		UUID: c.UUID,
 	}
 
 	resp, err := c.conns.PoolCreate(req)
