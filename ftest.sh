@@ -270,6 +270,7 @@ EOF
 mkdir -p ~/.config/avocado/sysinfo/
 cat <<EOF > ~/.config/avocado/sysinfo/commands
 ps axf
+cat /proc/mounts
 dmesg
 df -h
 EOF

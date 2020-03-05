@@ -17,6 +17,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from logging import getLogger
+import time
+
 from __future__ import print_function
 import general_utils
 
@@ -24,7 +27,6 @@ from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet
 from server_utils import AVOCADO_FILE
-
 
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
@@ -41,6 +43,7 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
+        self.log = getLogger(__name__)
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse parameters for the DAOS group, pool, and container uuid
@@ -113,7 +116,7 @@ class Dfuse(DfuseCommand):
         if not dir_exists:
             cmd = "mkdir -p {}".format(self.mount_dir.value)
             ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
-            if 0 not in ret_code:
+            if len(ret_code) > 1 or 0 not in ret_code:
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in ret_code.items()
@@ -126,31 +129,52 @@ class Dfuse(DfuseCommand):
         """Remove dfuse directory
         Raises:
             CommandFailure: In case of error deleting directory
+
+        Try once with a simple rmdir which should succeed, if this
+        does not then try again with rm -rf, but still raise an error
         """
         # raise exception if mount point not specified
         if self.mount_dir.value is None:
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        dir_exists, _ = general_utils.check_file_exists(
+        dir_exists,clean_nodes _ = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
+
+            target_nodes = self.hosts
+            target_nodes.remove(clean_nodes)
+
+            cmd = "rmdir {}".format(self.mount_dir.value)
+            ret_code = general_utils.pcmd(target_nodes, cmd, timeout=30)
+            if len(ret_code) == 1 and 0 in ret_code:
+                return
+
+            failed_nodes = NodeSet(",".join(
+                [str(node_set) for code, node_set in ret_code.items()
+                 if code != 0]))
+
             cmd = "rm -rf {}".format(self.mount_dir.value)
-            ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
-            if 0 not in ret_code:
+            ret_code = general_utils.pcmd(failed_nodes, cmd, timeout=30)
+            if len(ret_code) > 1 or 0 not in ret_code:
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in ret_code.items()
                          if code != 0]))
                 raise CommandFailure(
-                    "Error removing the {} dfuse mount point on the following "
+                    "Error removing the {} dfuse mount point with rm on the following "
                     "hosts: {}".format(self.mount_dir.value, error_hosts))
+            raise CommandFailure(
+                "Error removing the {} dfuse mount point with rmdir on the following "
+                "hosts: {}".format(self.mount_dir.value, failed_nodes))
 
     def run(self):
         """ Run the dfuse command.
         Raises:
             CommandFailure: In case dfuse run command fails
         """
+
+        self.log.info('Starting dfuse at %s', self.mount_dir.value)
 
         # create dfuse dir if does not exist
         self.create_mount_point()
@@ -160,7 +184,7 @@ class Dfuse(DfuseCommand):
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
         # check for any failures
-        if 0 not in ret_code:
+        if len(ret_code) > 1 or 0 not in ret_code:
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in ret_code.items()
@@ -173,21 +197,35 @@ class Dfuse(DfuseCommand):
         """Stop dfuse
         Raises:
             CommandFailure: In case dfuse stop fails
-        """
 
+        Try to stop dfuse.  Try once nicely by using fusermount, then if that
+        fails try to pkill it to see if that works.  Abort based on the result
+        of the fusermount, as if pkill is necessary then dfuse itself has
+        not worked correctly.
+
+        Finally, try and remove the mount point, and that itself should work.
+        """
+        self.log.info('Stopping dfuse at %s', self.mount_dir.value)
+
+        if self.mount_dir.value is None:
+            return
         cmd = "if [ -x '$(command -v fusermount)' ]; "
         cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)
         ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
-        self.remove_mount_point()
-        if 0 not in ret_code:
+        if len(ret_code) > 1 or 0 not in ret_code:
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in ret_code.items()
                      if code != 0]))
+
+            cmd = "pkill dfuse --signal KILL"
+            general_utils.pcmd(error_hosts, cmd, timeout=30)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
                     error_hosts))
+        time.sleep(2)
+        self.remove_mount_point()
 
     def get_default_env(self):
 
@@ -200,7 +238,6 @@ class Dfuse(DfuseCommand):
         # obtain any env variables to be exported
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = self.tmp
-        env["DAOS_SINGLETON_CLI"] = 1
 
         if self.dfuse_env:
             try:
