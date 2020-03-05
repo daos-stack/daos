@@ -88,7 +88,8 @@ class IorSmall(IorTestBase):
                         self.ior_cmd.transfer_size.update(test[0])
                         self.ior_cmd.block_size.update(test[1])
                         # run ior
-                        self.run_ior_with_pool(cont_uuid=container_info[test[0]])
+                        self.run_ior_with_pool(cont_uuid=
+                                               container_info[test[0]])
             #Destroy all the container from same pool
             for key in container_info:
                 self.container.uuid = container_info[key]
