@@ -92,6 +92,7 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	uint64_t		pool_connect_flags;
 	/* Updated if some ranks are killed during degraged or rebuild
 	 * test, so we know whether some tests is allowed to be run.
 	 */
@@ -126,11 +127,11 @@ typedef struct {
 	const char	       *group;
 	struct test_pool	pool;
 	uuid_t			co_uuid;
-	unsigned int		mode;
 	unsigned int		uid;
 	unsigned int		gid;
 	daos_handle_t		eq;
 	daos_handle_t		coh;
+	uint64_t		cont_open_flags;
 	daos_cont_info_t	co_info;
 	int			setup_state;
 	bool			async;
@@ -295,6 +296,8 @@ void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 			      const char *grp, d_rank_list_t *svc);
+daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
+						uint32_t prop_type);
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
@@ -313,14 +316,12 @@ void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
 void daos_add_server(const uuid_t pool_uuid, const char *grp,
 		     const d_rank_list_t *svc, d_rank_t rank);
 
-int run_daos_sub_tests(const struct CMUnitTest *tests, int tests_size,
-		       daos_size_t pool_size, int *sub_tests,
-		       int sub_tests_size, test_setup_cb_t setup_cb,
-		       test_teardown_cb_t teardown_cb);
+int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
+		       int tests_size, int *sub_tests, int sub_tests_size,
+		       test_setup_cb_t setup_cb, test_setup_cb_t teardown_cb);
 int
-run_daos_sub_tests_only(const struct CMUnitTest *tests, int tests_size,
-			daos_size_t pool_size, int *sub_tests,
-			int sub_tests_size, void *state);
+run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
+			int tests_size, int *sub_tests, int sub_tests_size);
 
 void rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr);
 void rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
@@ -335,6 +336,7 @@ void rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank,
 			   int *failed_tgts, int nr);
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 
 static inline void

@@ -243,9 +243,6 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
@@ -349,9 +346,6 @@ dc_cont_destroy(tse_task_t *task)
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
-
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
@@ -647,9 +641,6 @@ dc_cont_open(tse_task_t *task)
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
-
-	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	if (cont == NULL) {
 		cont = dc_cont_alloc(args->uuid);
@@ -1767,10 +1758,6 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 			DP_UUID(cont_glob->dcg_pool_hdl));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-
-	if ((cont_glob->dcg_capas & DAOS_COO_RW) &&
-	    (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(out_pool, rc = -DER_NO_PERM);
 
 	cont = dc_cont_alloc(cont_glob->dcg_uuid);
 	if (cont == NULL)

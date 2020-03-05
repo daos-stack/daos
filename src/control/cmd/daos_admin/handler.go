@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -88,7 +89,7 @@ func handleRequest(log logging.Logger, scmProvider *scm.Provider, bdevProvider *
 
 	switch req.Method {
 	case "Ping":
-		return sendSuccess(struct{}{}, &res, resDest)
+		return sendSuccess(&pbin.PingResp{Version: build.DaosVersion}, &res, resDest)
 	case "ScmMount", "ScmUnmount":
 		var mReq scm.MountRequest
 		if err := json.Unmarshal(req.Payload, &mReq); err != nil {
