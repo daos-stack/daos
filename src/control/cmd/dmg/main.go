@@ -31,14 +31,10 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-var (
-	daosVersion string
-	configDir   string
 )
 
 const (
@@ -110,7 +106,7 @@ type cliOptions struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("dmg version %s\n", daosVersion)
+	fmt.Printf("dmg version %s\n", build.DaosVersion)
 	os.Exit(0)
 	return nil
 }
@@ -145,7 +141,7 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 		}
 
 		if opts.ConfigPath == "" {
-			defaultConfigPath := path.Join(configDir, defaultConfigFile)
+			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
 			if _, err := os.Stat(defaultConfigPath); err == nil {
 				opts.ConfigPath = defaultConfigPath
 			}

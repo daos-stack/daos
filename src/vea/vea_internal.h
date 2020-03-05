@@ -134,6 +134,7 @@ struct vea_space_info {
 	struct vea_unmap_context	 vsi_unmap_ctxt;
 	/* Statistics */
 	uint64_t			 vsi_stat[STAT_MAX];
+	bool				 vsi_agg_scheduled;
 };
 
 static inline bool ext_is_idle(struct vea_free_extent *vfe)
@@ -179,7 +180,7 @@ int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		  unsigned int flags);
 int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 int aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
-void migrate_free_exts(struct vea_space_info *vsi);
+void migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb);
 
 /* vea_hint.c */
 void hint_get(struct vea_hint_context *hint, uint64_t *off);

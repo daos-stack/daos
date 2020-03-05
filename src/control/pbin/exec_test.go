@@ -62,6 +62,14 @@ func reqRes() {
 			Payload: req.Payload,
 		}
 
+		if req.Method == "Ping" {
+			childVersion := os.Getenv(childVersionEnvVar)
+			res.Payload, err = json.Marshal(pbin.PingResp{Version: childVersion})
+			if err != nil {
+				childErrExit(err)
+			}
+		}
+
 		writeBuf, err = json.Marshal(&res)
 		if err != nil {
 			childErrExit(err)
