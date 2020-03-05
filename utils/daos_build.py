@@ -43,7 +43,8 @@ def _find_mpicc(env):
         env.Replace(LINK="mpicc")
         if env.subst("$COMPILER") == "icc":
             linkflags = str(env.get("LINKFLAGS")).split()
-            linkflags.remove('-static-intel')
+            if '-static-intel' in linkflags:
+                linkflags.remove('-static-intel')
             env.Replace(LINKFLAGS=linkflags)
 
         load_mpi_path(env)
