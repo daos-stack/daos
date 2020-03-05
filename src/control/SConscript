@@ -159,7 +159,7 @@ def scons():
                        senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                                   "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
                                   "-L$HWLOC_PREFIX/lib -L$OFI_PREFIX/lib "
-                                  "-L$ISAL_PREFIX/lib $_RPATH")
+                                  "-L$ISAL_PREFIX/lib $_RPATH"))
 
     senv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
