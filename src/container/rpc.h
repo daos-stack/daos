@@ -179,7 +179,8 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
-	((uint64_t)		(coi_capas)		CRT_VAR) \
+	((uint64_t)		(coi_flags)		CRT_VAR) \
+	((uint64_t)		(coi_sec_capas)		CRT_VAR) \
 	((uint64_t)		(coi_prop_bits)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_OPEN	/* output fields */		 \

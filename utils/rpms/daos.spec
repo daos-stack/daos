@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -50,7 +50,7 @@ BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin
+BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
@@ -61,7 +61,7 @@ BuildRequires: python-devel python36-devel
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-BuildRequires: go1.10
+BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
@@ -204,8 +204,8 @@ PREFIX="%{?_prefix}"
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
-install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos_agent.service %{?buildroot}/%{_unitdir}
 
 %pre server
 getent group daos_admins >/dev/null || groupadd -r daos_admins
@@ -262,7 +262,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
-%{_unitdir}/daos-server.service
+%{_unitdir}/daos_server.service
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
@@ -277,9 +277,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
-%if (0%{?suse_version} >= 1500)
-/lib64/libdfs.so
-%endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
@@ -314,7 +311,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos.yml
-%{_unitdir}/daos-agent.service
+%{_unitdir}/daos_agent.service
 
 %files tests
 %dir %{_prefix}/lib/daos
@@ -340,6 +337,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
+- bump up go minimum version to 1.12
+
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)
 
