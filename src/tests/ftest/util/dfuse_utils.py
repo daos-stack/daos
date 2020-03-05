@@ -138,7 +138,7 @@ class Dfuse(DfuseCommand):
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        dir_exists,clean_nodes _ = general_utils.check_file_exists(
+        dir_exists,clean_nodes = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
 
