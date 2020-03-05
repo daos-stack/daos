@@ -1177,7 +1177,6 @@ cond_test(void **state)
 	daos_unit_oid_t		 oid;
 	d_sg_list_t		 sgl[MAX_SGL] = {0};
 	d_iov_t			 iov[MAX_SGL];
-	int			 rc;
 	int			 i;
 
 	if (getenv("DAOS_IO_BYPASS"))
