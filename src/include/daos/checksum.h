@@ -83,8 +83,6 @@ struct dcs_csum_info {
 	uint32_t	 cs_buf_len;
 	/** bytes of data each checksum verifies (if value type is array) */
 	uint32_t	 cs_chunksize;
-	/** used for aggregation */
-	bool		 cs_not_valid;
 };
 
 

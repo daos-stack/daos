@@ -286,13 +286,6 @@ out:
 	daos_csummer_destroy(&csummer);
 	D_FREE(sgl.sg_iovs);
 	args->cra_rc = rc;
-
-	/* Set checksums for physical entries to invalid, if verification fails.
-	 */
-	if (rc == -DER_CSUM) {
-		for (i = 0; i < args->cra_seg_cnt; i++)
-			recalcs[i].cr_phy_csum->cs_not_valid = true;
-	}
 }
 
 #ifndef VOS_UNIT_TEST

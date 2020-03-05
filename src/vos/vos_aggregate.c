@@ -73,6 +73,7 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
+	bool			pe_retain;
 };
 
 /* EV tree logical entry */
@@ -106,6 +107,9 @@ struct agg_io_context {
 	/* Buffer to hold output csums for entire aggregation */
 	void			*ic_csum_buf;
 	unsigned int		 ic_csum_buf_len;
+	/* Array of structs used for recalculation of checksums */
+	struct csum_recalc	*ic_csum_recalcs;
+	unsigned int		 ic_csum_recalc_cnt;
 	/* Segments being involved on merge window flush */
 	struct agg_lgc_seg	*ic_segs;
 	unsigned int		 ic_seg_max;
@@ -420,7 +424,6 @@ csum_prepare_ent(struct evt_entry_in *ent_in, struct agg_phy_ent *phy_ent)
 	ent_in->ei_csum.cs_len = phy_ent->pe_csum_info.cs_len;
 	ent_in->ei_csum.cs_buf_len = cur_cnt * ent_in->ei_csum.cs_len;
 	ent_in->ei_csum.cs_chunksize = chunksize;
-	ent_in->ei_csum.cs_not_valid = false;
 
 	return cur_cnt * ent_in->ei_csum.cs_len;
 }
@@ -785,6 +788,7 @@ csum_add_recalcs(struct csum_recalc **recalcs_p,
 
 	recalcs[idx].cr_log_ext         = *ext;
 	recalcs[idx].cr_phy_ext		= &phy_ent->pe_rect.rc_ex;
+	recalcs[idx].cr_phy_ent		= phy_ent;  /* used in this file only */
 	recalcs[idx].cr_phy_csum	= &phy_ent->pe_csum_info;
 	recalcs[idx].cr_phy_off		= phy_ent->pe_off;
 	recalcs[idx].cr_prefix_len	= bsgl->bs_iovs[idx].bi_prefix_len;
@@ -827,7 +831,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
 	struct bio_sglist	 bsgl;
-	struct csum_recalc	*csum_recalcs = NULL;
 	d_sg_list_t		 sgl;
 	d_iov_t			 iov;
 	bio_addr_t		 addr_dst, addr_src;
@@ -865,13 +868,18 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		return rc;
 	}
 
-	if (mw->mw_csum_support) {
+	if (mw->mw_csum_support && seg_count > io->ic_csum_recalc_cnt) {
+		void *buffer;
+
 		/* An array of recalc structs (one per output segment). */
-		D_ALLOC_ARRAY(csum_recalcs, seg_count);
-		if (csum_recalcs == NULL) {
+		D_REALLOC(buffer, io->ic_csum_recalcs,
+			  seg_count * sizeof(struct csum_recalc));
+		if (buffer == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		io->ic_csum_recalcs = buffer;
+		io->ic_csum_recalc_cnt = seg_count;
 	}
 
 	iov.iov_buf_len = buf_max; /* for sanity check */
@@ -888,7 +896,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 		i++;
 
-		if (phy_ent->pe_csum_info.cs_not_valid) {
+		if (phy_ent->pe_retain) {
 			rc = -DER_CSUM;
 			goto out;
 		}
@@ -934,8 +942,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 				copy_size += wider;
 				added_csum_segs += add_cnt;
 			}
-			csum_add_recalcs(&csum_recalcs, phy_ent, &ext, &bsgl,
-					 biov_idx);
+			csum_add_recalcs(&io->ic_csum_recalcs, phy_ent, &ext,
+					 &bsgl, biov_idx);
 		}
 		biov_idx++;
 		D_ASSERT(iov.iov_buf_len >= copy_size);
@@ -987,10 +995,13 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	if (mw->mw_csum_support) {
 		/* Verify prior data, calculate csums for output range. */
-		rc = csum_recalc(io, &bsgl, &sgl, ent_in, csum_recalcs,
+		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
 			lgc_seg->ls_has_csum_err = true;
+			for (i = 0; i < seg_count; i++)
+				io->ic_csum_recalcs[i].cr_phy_ent->pe_retain =
+									true;
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
@@ -1021,8 +1032,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 out:
 	bio_sgl_fini(&bsgl);
-	if (mw->mw_csum_support)
-		D_FREE(csum_recalcs);
 	return rc;
 }
 
@@ -1159,7 +1168,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			continue;
 		}
 
-		if (!phy_ent->pe_csum_info.cs_not_valid) {
+		if (!phy_ent->pe_retain) {
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
 			if (rc) {
 				D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
@@ -1387,7 +1396,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_epc = epoch;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
-	phy_ent->pe_csum_info.cs_not_valid = false;
+	phy_ent->pe_retain = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -1506,6 +1515,12 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		D_FREE(io->ic_scm_exts);
 		io->ic_scm_exts = NULL;
 		io->ic_scm_max = 0;
+	}
+
+	if (io->ic_csum_recalcs != NULL) {
+		D_FREE(io->ic_csum_recalcs);
+		io->ic_csum_recalcs = NULL;
+		io->ic_csum_recalc_cnt = 0;
 	}
 }
 
