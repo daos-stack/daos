@@ -28,7 +28,9 @@ package spdk
 
 /*
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control -lspdk
+#cgo LDFLAGS: -lspdk_env_dpdk -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
+#cgo LDFLAGS: -L . -lnvme_control
 
 #include "stdlib.h"
 #include "spdk/stdinc.h"

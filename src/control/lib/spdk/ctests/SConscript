@@ -19,7 +19,7 @@ def scons():
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
                                    unit_env.nc],
-                                  LIBS=['spdk', 'isal', 'spdk_env_dpdk', 'numa',
+                                  LIBS=['rte_bus_pci', 'isal', 'numa',
                                         'cmocka', 'pthread', 'dl'])
         unit_env.Install("$PREFIX/bin", testbin)
     else:
