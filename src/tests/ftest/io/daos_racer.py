@@ -48,8 +48,8 @@ class DaosRacerTest(TestWithServers):
 
         :avocado: tags=all,full_regression,hw,large,io,daosracer
         """
-        self.assertEqual(
-            len(self.hostlist_clients), 1,
+        self.assertGreater(
+            len(self.hostlist_clients), 0,
             "This test requires one client: {}".format(self.hostlist_clients))
         daos_racer = DaosRacerCommand(self.hostlist_clients[0])
         daos_racer.get_params(self)
