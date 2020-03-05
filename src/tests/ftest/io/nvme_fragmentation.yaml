@@ -7,7 +7,7 @@ hosts:
   test_clients:
     - client-C
     - client-D
-timeout: 1800
+timeout: 3600
 server_config:
   servers_per_host: 2
   name: daos_server
@@ -56,8 +56,8 @@ ior:
           ior_api:
             - DAOS
           transfer_block_size:
-            - [2048, 1G]
-            - [256K, 8G]
-            - [16M, 32G]
+            - [2048, 128M]
+            - [256K, 128M]
+            - [16M, 2G]
           obj_class:
             - "SX"
