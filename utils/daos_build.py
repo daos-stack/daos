@@ -35,14 +35,21 @@ def load_mpi_path(env):
     if mpicc:
         env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
-def _configure_mpi_pkg(env, libs):
-    """Configure MPI using pkg-config"""
-    if GetOption('help'):
-        return
+def _find_mpicc(env):
+    """find mpicc"""
     mpicc = find_executable("mpicc")
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
+        load_mpi_path(env)
+        return True
+    return False
+
+def _configure_mpi_pkg(env, libs):
+    """Configure MPI using pkg-config"""
+    if GetOption('help'):
+        return
+    if _find_mpicc(env):
         return env.subst("$MPI_PKG")
     try:
         env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
@@ -74,10 +81,8 @@ def configure_mpi(prereqs, env, libs, required=None):
         comp = mpi
         if mpi == "openmpi":
             comp = "ompi"
-        if prereqs.check_component(comp):
-            prereqs.require(env, comp)
+        if _find_mpicc(env):
             print("%s is installed" % mpi)
-            libs.append('mpi')
             return comp
         print("No %s installed and/or loaded" % mpi)
     print("No OMPI installed")
