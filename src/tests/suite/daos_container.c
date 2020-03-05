@@ -1634,12 +1634,8 @@ co_set_owner(void **state)
 	d_string_t	 new_grp = "newgrp@";
 	int		 rc;
 
-	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			DEFAULT_POOL_SIZE, NULL);
-	assert_int_equal(rc, 0);
-
-	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
 	/*
