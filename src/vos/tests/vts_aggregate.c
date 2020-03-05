@@ -1841,6 +1841,97 @@ aggregate_16(void **state)
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
 }
 
+/*
+ * Aggregate on single akey-EV, disjoint records.
+ */
+static void
+aggregate_17(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_6(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey-EV, fully covered records.
+ */
+static void
+aggregate_18(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_9(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey-EV, records spans merge window.
+ */
+static void
+aggregate_19(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_10(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey->EV, random punch, random yield.
+ */
+static void
+aggregate_20(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_11(state);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+}
+
+/*
+ * Aggregate on single akey->EV, random punch, small flush threshold.
+ */
+static void
+aggregate_21(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[500];
+	daos_recx_t		 recx_tot;
+	int			 i;
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr = 1000;
+	for (i = 0; i < 500; i++)
+		generate_recx(&recx_tot, &recx_arr[i]);
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 16;
+	ds.td_expected_recs = -1;
+	ds.td_recx_nr = 500;
+	ds.td_recx = &recx_arr[0];
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 500;
+	ds.td_agg_epr.epr_lo = 100;
+	ds.td_agg_epr.epr_hi = 500;
+	ds.td_discard = false;
+
+	VERBOSE_MSG("Aggregate with random punch, small flush threshold.\n");
+
+	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(50);
+	arg->ta_flags |= TF_USE_CSUMS;
+	aggregate_basic(arg, &ds, -1, NULL);
+	arg->ta_flags &= ~TF_USE_CSUMS;
+	daos_fail_loc_set(0);
+}
+
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -1914,6 +2005,16 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_15, NULL, agg_tst_teardown },
 	{ "VOS416: Aggregate many object/key punches array",
 	  aggregate_16, NULL, agg_tst_teardown },
+	{ "VOS417: Aggregate EV, disjoint records, csum",
+	  aggregate_17, NULL, agg_tst_teardown },
+	{ "VOS418: Aggregate EV, fully covered records, csum",
+	  aggregate_18, NULL, agg_tst_teardown },
+	{ "VOS419: Aggregate EV, records spanning window end, csum",
+	  aggregate_19, NULL, agg_tst_teardown },
+	{ "VOS420: Aggregate EV with random punch, random yield, csum",
+	  aggregate_20, NULL, agg_tst_teardown },
+	{ "VOS421: Aggregate EV with random punch, small flush threshold, csum",
+	  aggregate_21, NULL, agg_tst_teardown },
 };
 
 int
