@@ -29,10 +29,10 @@ from general_utils import pcmd
 
 
 class DaosRacerCommand(ExecutableCommand):
-    """Defines a object representing a dfuse command."""
+    """Defines a object representing a daos_racer command."""
 
     def __init__(self, host):
-        """Create a dfuse Command object."""
+        """Create a daos_racer command object."""
         super(DaosRacerCommand, self).__init__("/run/daos_racer", "daos_racer")
 
         # Number of seconds to run
@@ -74,4 +74,6 @@ class DaosRacerCommand(ExecutableCommand):
                     "Stopping timed out daos_racer process on %s", self.host)
                 pcmd([self.host], "pkill daos_racer", True)
 
-            raise CommandFailure("Error running '{}'".format(self._command)
+            raise CommandFailure("Error running '{}'".format(self._command))
+
+        self.log.info("Test passed!")
