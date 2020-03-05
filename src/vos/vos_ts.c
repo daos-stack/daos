@@ -347,6 +347,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	struct vos_ts_info	*info;
 	uint32_t		 hash_idx;
 	int			 i;
+	int			 parent_idx;
 
 	if (ts_set == NULL)
 		return;
@@ -363,7 +364,8 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 		D_ASSERT(i != 0); /** no negative lookup on container */
 		D_ASSERT(set_entry->se_create_idx != NULL);
 
-		parent = ts_set->ts_entries[i - 1].se_entry;
+		parent_idx = MIN(2, i - 1);
+		parent = ts_set->ts_entries[parent_idx].se_entry;
 		info = parent->te_info;
 		hash_idx = set_entry->se_hash & info->ti_cache_mask;
 		vos_ts_evict_lru(ts_table, parent, &entry,

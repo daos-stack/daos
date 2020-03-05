@@ -1112,47 +1112,73 @@ cond_fetch_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
 }
 
 static void
-cond_update_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
-	       daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
-	       uint64_t flags, int expected_rc, d_sg_list_t *sgl,
-	       const char *value_str)
+cond_updaten_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+	       daos_epoch_t epoch, const char *dkey_str,
+	       uint64_t flags, int expected_rc, d_sg_list_t *sgl, int n, ...)
 {
+	const char	*val_arg;
+	const char	*akey_arg;
+	va_list		list;
 	char		dkey_buf[OP_MAX_STRING];
-	char		akey_buf[OP_MAX_STRING];
-	char		value_buf[OP_MAX_STRING];
-	daos_iod_t	iod = {0};
+	char		akey_buf[n][OP_MAX_STRING];
+	char		value_buf[n][OP_MAX_STRING];
+	daos_iod_t	iod[n];
 	d_iov_t		dkey;
 	size_t		dkey_len;
-	size_t		akey_len;
-	size_t		value_len;
+	size_t		akey_len[n];
+	size_t		value_len[n];
 	int		rc;
+	int		i;
 
-	copy_str(value_buf, value_str, &value_len);
+	memset(&iod, 0, sizeof(iod[0]) * n);
+
 	copy_str(dkey_buf, dkey_str, &dkey_len);
 	d_iov_set(&dkey, dkey_buf, dkey_len);
-	copy_str(akey_buf, akey_str, &akey_len);
-	d_iov_set(&iod.iod_name, akey_buf, akey_len);
-	copy_str(value_buf, value_str, &value_len);
+	va_start(list, n);
+	for (i = 0; i < n; i++) {
+		akey_arg = va_arg(list, const char *);
+		val_arg = va_arg(list, const char *);
+		copy_str(value_buf[i], val_arg, &value_len[i]);
+		copy_str(akey_buf[i], akey_arg, &akey_len[i]);
+		d_iov_set(&iod[i].iod_name, akey_buf[i], akey_len[i]);
+		d_iov_set(&sgl[i].sg_iovs[0], value_buf[i], value_len[i]);
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
 
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = value_len;
-	d_iov_set(&sgl->sg_iovs[0], value_buf, value_len);
-	iod.iod_nr = 1;
-	iod.iod_recxs = NULL;
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+		iod[i].iod_size = value_len[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = NULL;
 
-	rc = vos_obj_update(coh, oid, epoch, 0, flags, &dkey, 1, &iod, NULL,
+	}
+	va_end(list);
+	rc = vos_obj_update(coh, oid, epoch, 0, flags, &dkey, n, iod, NULL,
 			    sgl);
 	assert_int_equal(rc, expected_rc);
 
 }
 
 static void
+cond_update_op(void **state, daos_handle_t coh, daos_unit_oid_t oid,
+	       daos_epoch_t epoch, const char *dkey_str, const char *akey_str,
+	       uint64_t flags, int expected_rc, d_sg_list_t *sgl,
+	       const char *value_str)
+{
+
+	cond_updaten_op(state, coh, oid, epoch, dkey_str, flags, expected_rc,
+			sgl, 1, akey_str, value_str);
+}
+
+#define MAX_SGL 10
+static void
 cond_test(void **state)
 {
 	struct io_test_args	*arg = *state;
 	daos_unit_oid_t		 oid;
-	d_sg_list_t		 sgl = {0};
+	d_sg_list_t		 sgl[MAX_SGL] = {0};
+	d_iov_t			 iov[MAX_SGL];
 	int			 rc;
+	int			 i;
 
 	if (getenv("DAOS_IO_BYPASS"))
 		skip();
@@ -1161,38 +1187,41 @@ cond_test(void **state)
 
 	oid = gen_oid(0);
 
-	rc = daos_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
+	for (i = 0; i < MAX_SGL; i++) {
+		sgl[i].sg_iovs = &iov[i];
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 1;
+	}
 
 	/** Conditional update of non-existed key should fail */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 5, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
-		       -DER_NONEXIST, &sgl, "foo");
+		       -DER_NONEXIST, sgl, "foo");
 	/** Non conditional update should fail due to later read */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 3, "a", "b",
-		       VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, &sgl, "foo");
+		       VOS_OF_USE_TIMESTAMPS, -DER_AGAIN, sgl, "foo");
 	/** Conditional insert should succeed */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 6, "a", "b",
-		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT, 0, &sgl,
+		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT, 0, sgl,
 		       "foo");
 	/** Conditional insert should fail */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 7, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_INSERT,
-		       -DER_EXIST, &sgl, "bar");
+		       -DER_EXIST, sgl, "bar");
 	/** Check the value */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 8, "a", "b",
-		      VOS_OF_USE_TIMESTAMPS, 0, &sgl, "foo", 'x');
+		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "foo", 'x');
 	/** Check the value before, should be empty */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 5, "a", "b",
-		      VOS_OF_USE_TIMESTAMPS, 0, &sgl, "xxxx", 'x');
+		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	obj_punch_op(state, arg->ctx.tc_co_hdl, oid, 9);
 	/** Non conditional fetch should not see data anymore */
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, 10, "a", "b",
-		      VOS_OF_USE_TIMESTAMPS, 0, &sgl, "xxxx", 'x');
+		      VOS_OF_USE_TIMESTAMPS, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existed key should fail */
 	cond_update_op(state, arg->ctx.tc_co_hdl, oid, 9, "a", "b",
 		       VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_DKEY_UPDATE,
-		       -DER_NONEXIST, &sgl, "foo");
+		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existed akey should fail */
 	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, 11, "a", "b",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
@@ -1205,8 +1234,18 @@ cond_test(void **state)
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, 12, "a",
 			   VOS_OF_USE_TIMESTAMPS | VOS_OF_COND_PUNCH,
 			   -DER_NONEXIST);
-
-	daos_sgl_fini(&sgl, false);
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 13, "z",
+			VOS_OF_COND_DKEY_UPDATE | VOS_OF_USE_TIMESTAMPS,
+			-DER_NONEXIST, sgl, 5, "a", "foo", "b", "bar", "c",
+			"foobar", "d", "value", "e", "abc");
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 12, "z",
+			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
+			-DER_AGAIN, sgl, 5, "a", "foo", "b", "bar", "c",
+			"foobar", "d", "value", "e", "abc");
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 14, "z",
+			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
+			0, sgl, 5, "a", "foo", "b", "bar", "c",
+			"foobar", "d", "value", "e", "abc");
 }
 
 static const struct CMUnitTest punch_model_tests[] = {
