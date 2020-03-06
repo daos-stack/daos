@@ -276,7 +276,7 @@ df -h
 EOF
 
 cat <<EOF > ~/.config/avocado/sysinfo/files
-cat /proc/mounts
+/proc/mounts
 EOF
 
 # apply patch for https://github.com/avocado-framework/avocado/pull/3076/
