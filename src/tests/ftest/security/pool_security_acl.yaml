@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
   test_clients:
-    - client-A   #server client same host
+    - server-B   #server client different host
   transport_config:
     - allow_insecure: False
     - ca_cert: ~/.daos/daosCA.crt
