@@ -205,6 +205,10 @@ enum {
 int
 test_teardown(void **state);
 int
+test_teardown_cont_hdl(test_arg_t *arg);
+int
+test_teardown_cont(test_arg_t *arg);
+int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool);
 int
@@ -295,6 +299,7 @@ void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 			      const char *grp, d_rank_list_t *svc);
+struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
 typedef int (*test_setup_cb_t)(void **state);
