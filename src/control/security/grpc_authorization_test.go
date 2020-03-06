@@ -69,6 +69,7 @@ func TestHasAccess(t *testing.T) {
 		{"StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat"},
 		{"NetworkScanDevices", ComponentAdmin, "/ctl.MgmtCtl/NetworkScanDevices"},
 		{"Join", ComponentServer, "/mgmt.MgmtSvc/Join"},
+		{"PingRanks", ComponentServer, "/mgmt.MgmtSvc/PingRanks"},
 		{"PoolCreate", ComponentAdmin, "/mgmt.MgmtSvc/PoolCreate"},
 		{"PoolDestroy", ComponentAdmin, "/mgmt.MgmtSvc/PoolDestroy"},
 		{"PoolGetACL", ComponentAdmin, "/mgmt.MgmtSvc/PoolGetACL"},

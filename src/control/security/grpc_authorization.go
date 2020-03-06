@@ -48,6 +48,7 @@ var methodAuthorizations = map[string]Component{
 	"/ctl.MgmtCtl/StorageFormat":        ComponentAdmin,
 	"/ctl.MgmtCtl/NetworkScanDevices":   ComponentAdmin,
 	"/mgmt.MgmtSvc/Join":                ComponentServer,
+	"/mgmt.MgmtSvc/PingRanks":           ComponentServer,
 	"/mgmt.MgmtSvc/PoolCreate":          ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolDestroy":         ComponentAdmin,
 	"/mgmt.MgmtSvc/PoolGetACL":          ComponentAdmin,
