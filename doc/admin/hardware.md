@@ -18,7 +18,8 @@ different ways:
     storage nodes are integrated into compute racks and can be either
     dedicated or shared (e.g., in a hyper-converged infrastructure)
     nodes. The DAOS servers are thus massively distributed and storage
-    access is non-uniform and must take locality into account.
+    access is non-uniform and must take locality into account. This model is
+    common in hyperconverged infrastructure.
 
 While DAOS is mostly deployed following the pooled model, active
 research is conducted to efficiently support the disaggregated model as
@@ -30,7 +31,7 @@ well.
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel 64 architecture. The DAOS software and the libraries it depends
-on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel® SSE
+on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel SSE
 and AVX extensions.
 
 DAOS is also regularly tested on 64-bit ARM processors configured in
@@ -42,7 +43,7 @@ systems for ARM platforms.
 ## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
-for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray’s GNI, and the Intel
+for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray's GNI, and the Intel
 Omni-Path Architecture. An RDMA-capable fabric is preferred for better
 performance. DAOS can support multiple rails by binding different
 instances of the DAOS server to individual network cards.
@@ -83,7 +84,7 @@ On recent Xeon platforms, PCIe slots have a natural affinity to one CPU.
 Although globally accessible from any of the system cores, NVMe SSDs and
 network interface cards connected through the PCIe bus may provide
 different performance characteristics (e.g., higher latency, lower
-bandwidth) to each CPU. Accessing “remote” PCIe devices may involve
+bandwidth) to each CPU. Accessing non-local PCIe devices may involve
 traffic over the UPI (Ultra Path Interconnect) link that might become a
 point of congestion. Similarly, persistent memory is non-uniformly
 accessible (NUMA), and CPU affinity must be respected for maximal

@@ -27,10 +27,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -39,7 +41,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 )
 
-var daosVersion string
+const (
+	defaultConfigFile = "daos_server.yml"
+)
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -60,7 +64,7 @@ type mainOpts struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_server version %s\n", daosVersion)
+	fmt.Printf("daos_server version %s\n", build.DaosVersion)
 	os.Exit(0)
 	return nil
 }
@@ -104,6 +108,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 		if logCmd, ok := cmd.(cmdLogger); ok {
 			logCmd.setLog(log)
+		}
+
+		if opts.ConfigPath == "" {
+			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				opts.ConfigPath = defaultConfigPath
+			}
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
