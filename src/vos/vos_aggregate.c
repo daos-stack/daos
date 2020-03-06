@@ -361,8 +361,10 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_ASSERTF(false, "Merge window isn't closed.\n");
 
 	/* Reset the output checksum buffer, since all overlap consumed. */
-	D_FREE(agg_param->ap_window.mw_io_ctxt.ic_csum_buf);
-	agg_param->ap_window.mw_io_ctxt.ic_csum_buf_len = 0;
+	if (agg_param->ap_window.mw_csum_support) {
+		D_FREE(agg_param->ap_window.mw_io_ctxt.ic_csum_buf);
+		agg_param->ap_window.mw_io_ctxt.ic_csum_buf_len = 0;
+	}
 
 	return 0;
 }
@@ -414,6 +416,9 @@ static unsigned int
 csum_prepare_ent(struct evt_entry_in *ent_in, struct agg_phy_ent *phy_ent)
 {
 	unsigned int chunksize = phy_ent->pe_csum_info.cs_chunksize;
+	      D_PRINT("prepare -- lo: %lu, hi: %lu\n",
+	               ent_in->ei_rect.rc_ex.ex_lo,
+	               ent_in->ei_rect.rc_ex.ex_hi);
 	unsigned int cur_cnt = csum_chunk_count(chunksize,
 						ent_in->ei_rect.rc_ex.ex_lo,
 						ent_in->ei_rect.rc_ex.ex_hi,
@@ -424,6 +429,12 @@ csum_prepare_ent(struct evt_entry_in *ent_in, struct agg_phy_ent *phy_ent)
 	ent_in->ei_csum.cs_len = phy_ent->pe_csum_info.cs_len;
 	ent_in->ei_csum.cs_buf_len = cur_cnt * ent_in->ei_csum.cs_len;
 	ent_in->ei_csum.cs_chunksize = chunksize;
+	
+	D_PRINT("prepare -- nr: %u, cs: %u, len: %u, blen: %u\n",
+		ent_in->ei_csum.cs_nr,
+		ent_in->ei_csum.cs_chunksize,
+		ent_in->ei_csum.cs_len,
+		ent_in->ei_csum.cs_buf_len);
 
 	return cur_cnt * ent_in->ei_csum.cs_len;
 }
@@ -519,7 +530,7 @@ prepare_segments(struct agg_merge_window *mw)
 			lgc_seg->ls_phy_ent = NULL;
 			lgc_seg->ls_idx_start = i;
 			ent_in->ei_inob = mw->mw_rsize;
-			ent_in->ei_rect.rc_ex.ex_lo = ext.ex_lo;
+			cent_in->ei_rect.rc_ex.ex_lo = ext.ex_lo;
 			bio_addr_set_hole(&ent_in->ei_addr, hole);
 			if (hole) {
 				bio_addr_set(&ent_in->ei_addr, DAOS_MEDIA_SCM,
@@ -538,10 +549,13 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Merge to highest pool map version */
 		if (ent_in->ei_ver < phy_ent->pe_ver)
 			ent_in->ei_ver = phy_ent->pe_ver;
-		if (mw->mw_csum_support && ent_in->ei_inob != 0)
+		if (mw->mw_csum_support && ent_in->ei_inob != 0) {
 			/* Allocates csum buffer range. */
+			D_PRINT("Coalasced\n");
 			cs_total += csum_prepare_ent(ent_in, phy_ent);
+		}
 	}
+dd
 
 	io->ic_seg_cnt++;
 	D_ASSERT(io->ic_seg_cnt < io->ic_seg_max);
@@ -586,9 +600,11 @@ prepare_segments(struct agg_merge_window *mw)
 			ent_in->ei_inob = 0;
 		}
 
-		if (mw->mw_csum_support && ent_in->ei_inob != 0)
+		if (mw->mw_csum_support && ent_in->ei_inob != 0) {
 			/* Allocates csum buf range for truncated segments. */
+			D_PRINT("for each\n");
 			cs_total += csum_prepare_ent(ent_in, phy_ent);
+		}
 
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
@@ -995,6 +1011,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	if (mw->mw_csum_support) {
 		/* Verify prior data, calculate csums for output range. */
+		D_PRINT("Checksum Recalculation!!!\n");
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
 		if (rc) {
@@ -1325,6 +1342,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	 */
 	if (!need_flush(mw))
 		return 0;
+	D_PRINT("Merge Window Flush\n");
 
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
@@ -1391,6 +1409,9 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	D_ALLOC_PTR(phy_ent);
 	if (phy_ent == NULL)
 		return NULL;
+	D_PRINT("Enqueuing: lo: %lu, hi: %lu\n",
+		phy_ext->ex_lo,
+		phy_ext->ex_hi);
 
 	phy_ent->pe_rect.rc_ex = *phy_ext;
 	phy_ent->pe_rect.rc_epc = epoch;
@@ -1729,6 +1750,11 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Aggregation */
+	D_PRINT("oid:"DF_UOID", lgc_ext:"DF_EXT", "
+		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
+		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
+		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_vis_flags);
+
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
 		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
 		DP_UOID(agg_param->ap_oid), DP_EXT(&lgc_ext),
@@ -1758,6 +1784,9 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	int			 rc;
 
 	cont = vos_hdl2cont(param->ip_hdl);
+	D_PRINT(DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
+		agg_param->ap_discard);
 	D_DEBUG(DB_EPC, DF_CONT": Aggregate pre, type:%d, is_discard:%d\n",
 		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), type,
 		agg_param->ap_discard);
@@ -1931,9 +1960,11 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 	merge_window_init(&agg_param.ap_window, func);
 
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	D_PRINT("Starting iterator\n");
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &agg_param);
+	D_PRINT("Finished iterator\n");
 	if (rc != 0) {
 		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
@@ -1948,7 +1979,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *))
 exit:
 	aggregate_exit(cont, false);
 
-	D_FREE(agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
+	if (agg_param.ap_window.mw_csum_support)
+		D_FREE(agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
 
 	if (merge_window_status(&agg_param.ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window resource leaked.\n");

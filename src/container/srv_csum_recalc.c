@@ -276,6 +276,14 @@ ds_csum_agg_recalc(void *recalc_args)
 	args->cra_sgl->sg_iovs[0].iov_len = args->cra_seg_size;
 
 	/* Calculate checksum(s) for output segment. */
+	D_PRINT("lo: %lu, hi: %lu\n",
+		   ent_in->ei_rect.rc_ex.ex_lo,
+		   ent_in->ei_rect.rc_ex.ex_hi);
+	D_PRINT("nr: %u, cs: %u, len: %u, blen: %u\n",
+		ent_in->ei_csum.cs_nr,
+		ent_in->ei_csum.cs_chunksize,
+		ent_in->ei_csum.cs_len,
+		ent_in->ei_csum.cs_buf_len);
 	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
