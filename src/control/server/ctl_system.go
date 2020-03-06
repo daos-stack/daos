@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-var systemRequestTimeout = 30 * time.Second
+const systemRequestTimeout = 30 * time.Second
 
 func (svc *ControlService) getMSMemberAddress() (string, error) {
 	if svc.membership == nil || svc.harnessClient == nil {
