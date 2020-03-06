@@ -64,6 +64,7 @@ func TestHasAccess(t *testing.T) {
 		{"StorageScan", ComponentAdmin, "/ctl.MgmtCtl/StorageScan"},
 		{"SystemMemberQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemMemberQuery"},
 		{"SystemStop", ComponentAdmin, "/ctl.MgmtCtl/SystemStop"},
+		{"SystemQuery", ComponentAdmin, "/ctl.MgmtCtl/SystemQuery"},
 		{"NetworkListProviders", ComponentAdmin, "/ctl.MgmtCtl/NetworkListProviders"},
 		{"StorageFormat", ComponentAdmin, "/ctl.MgmtCtl/StorageFormat"},
 		{"NetworkScanDevices", ComponentAdmin, "/ctl.MgmtCtl/NetworkScanDevices"},

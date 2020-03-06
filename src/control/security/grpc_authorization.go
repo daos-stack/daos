@@ -43,6 +43,7 @@ var methodAuthorizations = map[string]Component{
 	"/ctl.MgmtCtl/StorageScan":          ComponentAdmin,
 	"/ctl.MgmtCtl/SystemMemberQuery":    ComponentAdmin,
 	"/ctl.MgmtCtl/SystemStop":           ComponentAdmin,
+	"/ctl.MgmtCtl/SystemQuery":          ComponentAdmin,
 	"/ctl.MgmtCtl/NetworkListProviders": ComponentAdmin,
 	"/ctl.MgmtCtl/StorageFormat":        ComponentAdmin,
 	"/ctl.MgmtCtl/NetworkScanDevices":   ComponentAdmin,
