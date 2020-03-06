@@ -814,6 +814,13 @@ test_pool_get_capas_owner_success(void **state)
 	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO,
 				      POOL_CAPA_READ);
 	srv_acl_resetup(state);
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
 	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RO, POOL_CAPA_READ);
 	srv_acl_resetup(state);
@@ -827,12 +834,12 @@ test_pool_get_capas_owner_success(void **state)
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT |
 				      POOL_CAPA_DEL_CONT);
 	srv_acl_resetup(state);
-	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_CREATE_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT);
 	srv_acl_resetup(state);
-	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_DEL_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_DEL_CONT);
@@ -861,6 +868,13 @@ test_pool_get_capas_group_success(void **state)
 	expect_group_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO,
 				      POOL_CAPA_READ);
 	srv_acl_resetup(state);
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
+	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
 	expect_group_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RO, POOL_CAPA_READ);
 	srv_acl_resetup(state);
@@ -874,12 +888,12 @@ test_pool_get_capas_group_success(void **state)
 				      POOL_CAPA_CREATE_CONT |
 				      POOL_CAPA_DEL_CONT);
 	srv_acl_resetup(state);
-	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_CREATE_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT);
 	srv_acl_resetup(state);
-	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_DEL_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_DEL_CONT);

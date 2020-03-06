@@ -287,7 +287,8 @@ pool_capas_from_perms(uint64_t perms)
 {
 	uint64_t capas = 0;
 
-	if (perms & DAOS_ACL_PERM_READ)
+	if ((perms & DAOS_ACL_PERM_READ) ||
+	    (perms & DAOS_ACL_PERM_GET_PROP))
 		capas |= POOL_CAPA_READ;
 	if ((perms & DAOS_ACL_PERM_WRITE) ||
 	    (perms & DAOS_ACL_PERM_CREATE_CONT))
