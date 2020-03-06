@@ -914,7 +914,7 @@ def get_log_size(test_yaml, args):
     host_list = get_hosts_from_yaml(test_yaml, args)
 
     # Create a file that contains the sizes on each test log and the logs_dir.
-    command = "du -h {} &> {}".format(logs_dir, log_size_file)
+    command = "du -ah -d 1 {} &> {}".format(logs_dir, log_size_file)
     spawn_commands(host_list, command, 30)
 
 
