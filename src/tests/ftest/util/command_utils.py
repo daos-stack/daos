@@ -47,7 +47,7 @@ class BasicParameter(object):
         """
         self.value = value if value is not None else default
         self._default = default
-        self.log = getLogger(__name__)
+        self.log = getLogger(self.__class__.__name__)
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -147,7 +147,7 @@ class ObjectWithParameters(object):
             namespace (str): yaml namespace (path to parameters)
         """
         self.namespace = namespace
-        self.log = getLogger(__name__)
+        self.log = getLogger(self.__class__.__name__)
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.

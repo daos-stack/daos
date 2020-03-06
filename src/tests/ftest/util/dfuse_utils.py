@@ -18,7 +18,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-from logging import getLogger
 import time
 
 from command_utils import ExecutableCommand, EnvironmentVariables
@@ -43,7 +42,6 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.singlethreaded = FormattedParameter("--singlethreaded", False)
         self.foreground = FormattedParameter("--foreground", False)
-        self.log = getLogger(__name__)
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse parameters for the DAOS group, pool, and container uuid
