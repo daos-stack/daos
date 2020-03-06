@@ -78,7 +78,7 @@ function check_formatting()
 
 function get_test_runner()
 {
-	test_args="-race -cover -v ./..."
+	test_args="-mod vendor -race -cover -v ./..."
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
@@ -106,10 +106,7 @@ export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
 
-DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
-GOPATH="$(readlink -f "$DIR/../../build/src/control")"
-repopath=github.com/daos-stack/daos
-controldir="$GOPATH/src/$repopath/src/control"
+controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 check_formatting "$controldir"
 
@@ -119,7 +116,6 @@ echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
 echo "  CGO_CFLAGS: $CGO_CFLAGS"
 
-echo "  GOPATH: $GOPATH"
 echo
 
 echo "Running all tests under $controldir..."
@@ -128,7 +124,6 @@ set +e
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-GOPATH="$GOPATH" \
 	$GO_TEST_RUNNER
 testrc=$?
 popd >/dev/null
