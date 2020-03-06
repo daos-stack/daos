@@ -138,7 +138,6 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
 	unsigned int j = 0;
-	bool match;
 
 	/* The index j is used to determine the start offset within
 	 * the prior checksum array (associated with the input physical
@@ -178,12 +177,9 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * starting a the corrent offset of the checksum array for the inout
 	 * segment.
 	 */
-	match = memcmp(new_csum->cs_csum,
-		&recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
+	return  !memcmp(new_csum->cs_csum,
+			&recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
 			new_csum->cs_nr * new_csum->cs_len) == 0;
-	if (!match)
-		return false;
-	return true;
 }
 
 /* Driver for the checksum verification of input segements, and calculation
@@ -234,7 +230,6 @@ ds_csum_agg_recalc(void *recalc_args)
 					      args->cra_seg_cnt,
 					      args->cra_seg_size, i, add_offset,
 					      &buf_idx, &add_idx);
-
 		D_ASSERT(recalcs[i].cr_log_ext.ex_hi -
 			 recalcs[i].cr_log_ext.ex_lo + 1 ==
 			 bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
@@ -276,14 +271,6 @@ ds_csum_agg_recalc(void *recalc_args)
 	args->cra_sgl->sg_iovs[0].iov_len = args->cra_seg_size;
 
 	/* Calculate checksum(s) for output segment. */
-	D_PRINT("lo: %lu, hi: %lu\n",
-		   ent_in->ei_rect.rc_ex.ex_lo,
-		   ent_in->ei_rect.rc_ex.ex_hi);
-	D_PRINT("nr: %u, cs: %u, len: %u, blen: %u\n",
-		ent_in->ei_csum.cs_nr,
-		ent_in->ei_csum.cs_chunksize,
-		ent_in->ei_csum.cs_len,
-		ent_in->ei_csum.cs_buf_len);
 	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
