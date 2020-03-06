@@ -287,7 +287,8 @@ pool_capas_from_perms(uint64_t perms)
 {
 	uint64_t capas = 0;
 
-	if (perms & DAOS_ACL_PERM_READ)
+	if ((perms & DAOS_ACL_PERM_READ) ||
+	    (perms & DAOS_ACL_PERM_GET_PROP))
 		capas |= POOL_CAPA_READ;
 	if ((perms & DAOS_ACL_PERM_WRITE) ||
 	    (perms & DAOS_ACL_PERM_CREATE_CONT))
@@ -714,4 +715,40 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 	}
 
 	return (capas & CONT_CAPA_DELETE) != 0;
+}
+
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_OWNER) != 0;
+}
+
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
 }

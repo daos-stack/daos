@@ -27,6 +27,7 @@
 
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/security.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
@@ -238,7 +239,7 @@ ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_UUID(in->cei_op.ci_hdl), in->cei_epoch);
 
 	/* Verify the container handle capabilities. */
-	if (!(hdl->ch_flags & DAOS_COO_RW))
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	if (in->cei_epoch >= DAOS_EPOCH_MAX)
@@ -319,7 +320,7 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		in->cei_epoch);
 
 	/* Verify the container handle capabilities. */
-	if (!(hdl->ch_flags & DAOS_COO_RW)) {
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
 		rc = -DER_NO_PERM;
 		goto out;
 	}
