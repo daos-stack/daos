@@ -31,13 +31,19 @@ from general_utils import pcmd
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, host):
-        """Create a daos_racer command object."""
-        super(DaosRacerCommand, self).__init__("/run/daos_racer", "daos_racer")
+    def __init__(self, path, host):
+        """Create a daos_racer command object.
+
+        Args:
+            path (str): path of the daos_racer command
+            host (str): host on which to run the daos_racer command
+        """
+        super(DaosRacerCommand, self).__init__(
+            "/run/daos_racer", "daos_racer", path)
+        self.host = host
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
-        self.host = host
 
     def run(self):
         """Run the daos_racer command remotely.

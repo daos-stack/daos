@@ -51,6 +51,6 @@ class DaosRacerTest(TestWithServers):
         self.assertGreater(
             len(self.hostlist_clients), 0,
             "This test requires one client: {}".format(self.hostlist_clients))
-        daos_racer = DaosRacerCommand(self.hostlist_clients[0])
+        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         daos_racer.get_params(self)
         daos_racer.run()
