@@ -17,16 +17,16 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from __future__ import print_function
 from logging import getLogger
 import time
-
-from __future__ import print_function
-import general_utils
 
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet
 from server_utils import AVOCADO_FILE
+
+import general_utils
 
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
@@ -138,7 +138,7 @@ class Dfuse(DfuseCommand):
             raise CommandFailure("Mount point not specified, "
                                  "check test yaml file")
 
-        dir_exists,clean_nodes = general_utils.check_file_exists(
+        dir_exists, clean_nodes = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
 
@@ -162,11 +162,13 @@ class Dfuse(DfuseCommand):
                         [str(node_set) for code, node_set in ret_code.items()
                          if code != 0]))
                 raise CommandFailure(
-                    "Error removing the {} dfuse mount point with rm on the following "
-                    "hosts: {}".format(self.mount_dir.value, error_hosts))
+                    "Error removing the {} dfuse mount point with rm on the "
+                    "following hosts: {}".format(self.mount_dir.value,
+                                                 error_hosts))
             raise CommandFailure(
-                "Error removing the {} dfuse mount point with rmdir on the following "
-                "hosts: {}".format(self.mount_dir.value, failed_nodes))
+                "Error removing the {} dfuse mount point with rmdir on the "
+                "following hosts: {}".format(self.mount_dir.value,
+                                             failed_nodes))
 
     def run(self):
         """ Run the dfuse command.
