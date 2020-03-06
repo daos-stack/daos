@@ -245,6 +245,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	vsi->vsi_agg_time = 0;
+	vsi->vsi_agg_scheduled = false;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 
 	rc = create_free_class(&vsi->vsi_class, md);
@@ -324,7 +325,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 migrate:
 	/* Trigger free extents migration */
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
@@ -560,7 +561,7 @@ done:
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Migrate the expired aggregated free extents to compound index */
 	if (rc == 0)
-		migrate_free_exts(vsi);
+		migrate_free_exts(vsi, true);
 error:
 	if (fca != NULL)
 		D_FREE(fca);
@@ -657,7 +658,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		return -DER_INVAL;
 
 	/* Trigger free extents migration */
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 
 	if (attr != NULL) {
 		struct vea_space_df *vsd = vsi->vsi_md;
@@ -723,10 +724,15 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 }
 
 void
-vea_flush(struct vea_space_info *vsi)
+vea_flush(struct vea_space_info *vsi, bool plug)
 {
 	D_ASSERT(vsi != NULL);
 
+	if (plug) {
+		vsi->vsi_agg_time = UINT64_MAX;
+		return;
+	}
+
 	vsi->vsi_agg_time = 0;
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 }
