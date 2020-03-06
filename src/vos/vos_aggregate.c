@@ -475,7 +475,7 @@ prepare_segments(struct agg_merge_window *mw)
 	struct evt_extent	 ext;
 	unsigned int		 i, seg_max;
 	unsigned int		 cs_type = 0;
-        unsigned int		 cs_len = 0;
+	unsigned int		 cs_len = 0;
 	unsigned int		 chunksize = 0;
 	unsigned int		 cs_total = 0;
 	bool			 hole = false, coalesce;
@@ -600,7 +600,7 @@ prepare_segments(struct agg_merge_window *mw)
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
 	if (mw->mw_csum_support) {
-		for ( i = 0; i < io->ic_seg_cnt; i++) {
+		for (i = 0; i < io->ic_seg_cnt; i++) {
 			lgc_seg = &io->ic_segs[i];
 			ent_in = &lgc_seg->ls_ent_in;
 			if (ent_in->ei_inob != 0)
@@ -611,12 +611,11 @@ prepare_segments(struct agg_merge_window *mw)
 		/* Reallocates csum buffer. */
 		if (cs_total) {
 			rc = csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
-					      &io->ic_csum_buf, io->ic_csum_buf_len,
-					      cs_total);
+					      &io->ic_csum_buf,
+					      io->ic_csum_buf_len, cs_total);
 			io->ic_csum_buf_len += cs_total;
 		}
 	}
-
 	return rc;
 }
 

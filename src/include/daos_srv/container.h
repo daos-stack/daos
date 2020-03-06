@@ -187,9 +187,7 @@ cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 struct csum_recalc {
 	struct evt_extent	 cr_log_ext;
 	struct evt_extent	*cr_phy_ext;
-	struct agg_phy_ent	*cr_phy_ent; /* Incomplete, ouside of VOS
-						aggregation.c
-					*/
+	struct agg_phy_ent	*cr_phy_ent; /* Incomplete ex vos_aggregate.c */
 	struct dcs_csum_info	*cr_phy_csum;
 	daos_off_t		 cr_phy_off;
 	unsigned int		 cr_prefix_len;
