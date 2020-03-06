@@ -46,6 +46,8 @@
 
 #include "daos_hdlr.h"
 
+#define MAX_PROP_NAME_LEN	(64)
+
 static int
 parse_acl_file(const char *path, struct daos_acl **acl);
 
@@ -487,7 +489,6 @@ out:
  *
  * cont_list_objs_hdlr()
  * int cont_stat_hdlr()
- * int cont_set_prop_hdlr()
  * int cont_del_attr_hdlr()
  * int cont_rollback_hdlr()
  */
@@ -845,6 +846,46 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 err_out:
 	daos_prop_free(prop_query);
+	return rc;
+}
+
+int
+cont_set_prop_hdlr(struct cmd_args_s *ap)
+{
+	int		rc;
+	daos_prop_t	*prop = NULL;
+
+	if (ap->name == NULL || ap->value_str == NULL) {
+		fprintf(stderr, "--name and --value params required\n");
+		return -DER_INVAL;
+	}
+
+	/* Only set one at a time */
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	/* Only label supported for now */
+	if (strncmp(ap->name, "LABEL", MAX_PROP_NAME_LEN) == 0) {
+		/* TODO: validate string length */
+		prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+		/* TODO: export label max len */
+		D_STRNDUP(prop->dpp_entries[0].dpe_str, ap->value_str, 256);
+	} else {
+		fprintf(stderr, "unsupported property '%s'\n", ap->name);
+		D_GOTO(err_out, rc = -DER_INVAL);
+	}
+
+	rc = daos_cont_set_prop(ap->cont, prop, NULL);
+	if (rc) {
+		fprintf(stderr, "Container set-prop failed, result: %d\n", rc);
+		D_GOTO(err_out, rc);
+	}
+
+	D_PRINT("Property '%s' was set to '%s'\n", ap->name, ap->value_str);
+
+err_out:
+	daos_prop_free(prop);
 	return rc;
 }
 

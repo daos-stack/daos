@@ -478,6 +478,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"user",	required_argument,	NULL,	'u'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"principal",	required_argument,	NULL,	'P'},
+		{"name",	required_argument,	NULL,	'n'},
 		{NULL,		0,			NULL,	0}
 	};
 	int			rc;
@@ -693,6 +694,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			if (rc != 0)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
+		case 'n':
+			D_STRNDUP(ap->name, optarg, strlen(optarg));
+			if (ap->name == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
 		default:
 			fprintf(stderr, "unknown option : %d\n", rc);
 			D_GOTO(out_free, rc = RC_PRINT_HELP);
@@ -712,7 +718,6 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	if (ap->c_op != -1 &&
 	    (ap->c_op == CONT_LIST_OBJS ||
 	     ap->c_op == CONT_STAT ||
-	     ap->c_op == CONT_SET_PROP ||
 	     ap->c_op == CONT_DEL_ATTR ||
 	     ap->c_op == CONT_ROLLBACK)) {
 		fprintf(stderr,
@@ -762,6 +767,8 @@ out_free:
 		D_FREE(ap->entry);
 	if (ap->principal != NULL)
 		D_FREE(ap->principal);
+	if (ap->name != NULL)
+		D_FREE(ap->name);
 	D_FREE(cmdname);
 	return rc;
 }
@@ -906,7 +913,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_get_prop_hdlr(ap);
 		break;
 	case CONT_SET_PROP:
-		/* rc = cont_set_prop_hdlr(ap); */
+		rc = cont_set_prop_hdlr(ap);
 		break;
 	case CONT_LIST_ATTRS:
 		rc = cont_list_attrs_hdlr(ap);
