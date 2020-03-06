@@ -51,9 +51,9 @@ type IOServerHarness struct {
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
 		log:       log,
-		instances: make([]*IOServerInstance, 0, maxIoServers),
+		instances: make([]*IOServerInstance, 0, maxIOServers),
 		restart:   make(chan struct{}, 1),
-		errChan:   make(chan error, maxIoServers),
+		errChan:   make(chan error, maxIOServers),
 	}
 }
 
@@ -396,7 +396,7 @@ func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*ioserver.Rank, 0, maxIoServers)
+	ranks := make([]*ioserver.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
 		if i.hasSuperblock() && i.IsStarted() {
 			ranks = append(ranks, i.getSuperblock().Rank)

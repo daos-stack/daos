@@ -1073,7 +1073,7 @@ func TestMgmtSvc_SmdListDevs(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			if tc.numIO > 0 {
 				ioserverCount = tc.numIO
 			}
@@ -1205,7 +1205,7 @@ func TestMgmtSvc_SmdListPools(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			if tc.numIO > 0 {
 				ioserverCount = tc.numIO
 			}
@@ -1328,7 +1328,7 @@ func TestMgmtSvc_BioHealthQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			if tc.numIO > 0 {
 				ioserverCount = tc.numIO
 			}
@@ -1435,7 +1435,7 @@ func TestMgmtSvc_DevStateQuery(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			if tc.numIO > 0 {
 				ioserverCount = tc.numIO
 			}
@@ -1542,7 +1542,7 @@ func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			if tc.numIO > 0 {
 				ioserverCount = tc.numIO
 			}
@@ -1724,7 +1724,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -1864,7 +1864,7 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -1996,26 +1996,27 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				},
 			},
 		},
-		"ping timeout": {
-			req:           &mgmtpb.RanksReq{},
-			responseDelay: 200 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResp: &mgmtpb.RanksResp{
-				Results: []*mgmtpb.RanksResp_RankResult{
-					{Rank: 1, Action: "ping", State: 6, Errored: true},
-					{Rank: 2, Action: "ping", State: 6, Errored: true},
-				},
-			},
-		},
+		// TODO: reenable when timeouts can be mocked
+		//		"ping timeout": {
+		//			req:           &mgmtpb.RanksReq{},
+		//			responseDelay: 200 * time.Millisecond,
+		//			drpcResps: []proto.Message{
+		//				&mgmtpb.DaosResp{Status: 0},
+		//				&mgmtpb.DaosResp{Status: 0},
+		//			},
+		//			expResp: &mgmtpb.RanksResp{
+		//				Results: []*mgmtpb.RanksResp_RankResult{
+		//					{Rank: 1, Action: "ping", State: 6, Errored: true},
+		//					{Rank: 2, Action: "ping", State: 6, Errored: true},
+		//				},
+		//			},
+		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			svc := newTestMgmtSvcMulti(log, ioserverCount, tc.setupAP)
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
@@ -2046,9 +2047,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			if tc.req != nil && tc.req.Timeout == 0 {
-				tc.req.Timeout = int64(100 * time.Millisecond)
-			}
+			// TODO: apply mock request timeouts
 
 			gotResp, gotErr := svc.PingRanks(context.TODO(), tc.req)
 
@@ -2118,7 +2117,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			ioserverCount := maxIoServers
+			ioserverCount := maxIOServers
 			svc := newTestMgmtSvcMulti(log, ioserverCount, false)
 
 			svc.harness.setStarted()
@@ -2148,14 +2147,5 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
-	}
-}
-
-func TestMgmtSvc_ConvertTimeout(t *testing.T) {
-	duration := 5 * time.Second
-	req := &mgmtpb.RanksReq{Timeout: int64(duration)}
-
-	if diff := cmp.Diff(duration.String(), time.Duration(req.Timeout).String()); diff != "" {
-		t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 	}
 }

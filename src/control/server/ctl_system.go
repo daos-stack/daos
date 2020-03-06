@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-var systemRPCMaxDuration = 30 * time.Second
+var systemRequestTimeout = 30 * time.Second
 
 func (svc *ControlService) getMSMemberAddress() (string, error) {
 	if svc.membership == nil || svc.harnessClient == nil {
@@ -127,7 +127,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
 	defer cancel()
 
 	// Update status of each system member.
@@ -167,7 +167,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
 
 	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostAddrs)
 
@@ -212,7 +212,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
 
 	svc.log.Debugf("stopping ranks on hosts: %v", hostAddrs)
 
@@ -260,7 +260,7 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 
 	// TODO: consider locking to prevent join attempts when shutting down
 
-	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
 	defer cancel()
 
 	if req.Prep {
@@ -306,7 +306,7 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) start(ctx context.Context) (system.MemberResults, error) {
 	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIoServers)
+	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
 
 	svc.log.Debugf("starting ranks on hosts: %v", hostAddrs)
 
@@ -360,7 +360,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 func (svc *ControlService) SystemStart(parent context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
 
-	ctx, cancel := context.WithTimeout(parent, systemRPCMaxDuration)
+	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
 	defer cancel()
 
 	// start any stopped system members, note that instances will only

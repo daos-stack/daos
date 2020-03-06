@@ -51,6 +51,8 @@ import (
 const (
 	ControlPlaneName = "DAOS Control Server"
 	DataPlaneName    = "DAOS I/O Server"
+	// define supported maximum number of I/O servers
+	maxIOServers = 2
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -66,9 +68,6 @@ func cfgHasBdev(cfg *Configuration) bool {
 func instanceShmID(idx int) int {
 	return os.Getpid() + idx + 1
 }
-
-// define supported maximum number of I/O servers
-const maxIoServers = 2
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
@@ -145,7 +144,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIoServers {
+		if i+1 > maxIOServers {
 			break
 		}
 

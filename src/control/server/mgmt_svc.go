@@ -783,8 +783,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	timeout := time.Duration(req.Timeout)
-	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
+	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -828,7 +827,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	select {
 	case <-stopped:
-	case <-time.After(timeout):
+	case <-time.After(rankStopTimeout):
 	}
 
 	// either all instances stopped or timeout occurred
@@ -896,8 +895,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	timeout := time.Duration(req.Timeout)
-	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
+	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -917,7 +915,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
-		resp.Results = append(resp.Results, ping(i, *rank, time.Duration(req.Timeout)))
+		resp.Results = append(resp.Results, ping(i, *rank, rankRequestTimeout))
 	}
 
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
@@ -937,8 +935,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	timeout := time.Duration(req.Timeout)
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v, timeout:%s\n", *req, timeout)
+	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
 
 	resp := &mgmtpb.RanksResp{}
 
@@ -962,7 +959,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	select {
 	case <-started:
-	case <-time.After(timeout):
+	case <-time.After(rankRequestTimeout):
 	}
 
 	// either all instances started or timeout occurred
