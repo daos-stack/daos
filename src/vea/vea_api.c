@@ -143,8 +143,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	/* Create free extent tree */
 	uma.uma_id = umem->umm_id;
 	uma.uma_pool = umem->umm_pool;
-	rc = dbtree_create_inplace(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
-				   &md->vsd_free_tree, &free_btr);
+	rc = dbtree_create_inplace(DBTREE_CLASS_IV, BTR_FEAT_DIRECT_KEY,
+				   VEA_TREE_ODR, &uma, &md->vsd_free_tree,
+				   &free_btr);
 	if (rc != 0)
 		goto out;
 
@@ -163,8 +164,9 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		goto out;
 
 	/* Create extent vector tree */
-	rc = dbtree_create_inplace(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
-				   &md->vsd_vec_tree, &vec_btr);
+	rc = dbtree_create_inplace(DBTREE_CLASS_IV, BTR_FEAT_DIRECT_KEY,
+				   VEA_TREE_ODR, &uma, &md->vsd_vec_tree,
+				   &vec_btr);
 	if (rc != 0)
 		goto out;
 
@@ -245,6 +247,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	vsi->vsi_agg_btr = DAOS_HDL_INVAL;
 	vsi->vsi_vec_btr = DAOS_HDL_INVAL;
 	vsi->vsi_agg_time = 0;
+	vsi->vsi_agg_scheduled = false;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
 
 	rc = create_free_class(&vsi->vsi_class, md);
@@ -254,20 +257,20 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	/* Create in-memory free extent tree */
-	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
-			   NULL, &vsi->vsi_free_btr);
+	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
+			   &uma, NULL, &vsi->vsi_free_btr);
 	if (rc != 0)
 		goto error;
 
 	/* Create in-memory extent vector tree */
-	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
-			   NULL, &vsi->vsi_vec_btr);
+	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
+			   &uma, NULL, &vsi->vsi_vec_btr);
 	if (rc != 0)
 		goto error;
 
 	/* Create in-memory aggregation tree */
-	rc = dbtree_create(DBTREE_CLASS_IV, 0, VEA_TREE_ODR, &uma,
-			   NULL, &vsi->vsi_agg_btr);
+	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
+			   &uma, NULL, &vsi->vsi_agg_btr);
 	if (rc != 0)
 		goto error;
 
@@ -324,7 +327,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 migrate:
 	/* Trigger free extents migration */
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
@@ -560,8 +563,15 @@ done:
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Migrate the expired aggregated free extents to compound index */
 	if (rc == 0)
-		migrate_free_exts(vsi);
+		migrate_free_exts(vsi, true);
 error:
+	/*
+	 * -DER_NONEXIST or -DER_ENOENT could be ignored by some caller,
+	 * let's convert them to more serious error here.
+	 */
+	if (rc == -DER_NONEXIST || rc == -DER_ENOENT)
+		rc = -DER_INVAL;
+
 	if (fca != NULL)
 		D_FREE(fca);
 	return rc;
@@ -657,7 +667,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		return -DER_INVAL;
 
 	/* Trigger free extents migration */
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 
 	if (attr != NULL) {
 		struct vea_space_df *vsd = vsi->vsi_md;
@@ -723,10 +733,15 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 }
 
 void
-vea_flush(struct vea_space_info *vsi)
+vea_flush(struct vea_space_info *vsi, bool plug)
 {
 	D_ASSERT(vsi != NULL);
 
+	if (plug) {
+		vsi->vsi_agg_time = UINT64_MAX;
+		return;
+	}
+
 	vsi->vsi_agg_time = 0;
-	migrate_free_exts(vsi);
+	migrate_free_exts(vsi, false);
 }

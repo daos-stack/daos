@@ -75,6 +75,12 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
 
+	/* snapshot list isn't fetched yet */
+	if (cont->sc_aggregation_max == 0) {
+		D_DEBUG(DB_EPC, "No aggregation before snapshots fetched\n");
+		return false;
+	}
+
 	if ((pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ||
 	    (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy()))
 		return false;
@@ -96,14 +102,9 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
 
-	if (!cont_aggregate_runnable(cont)) {
-		*sleep = NSEC_PER_SEC << 2;
-		return 0;
-	}
-
-	*sleep = NSEC_PER_SEC;
-	/* snapshot list isn't fetched yet */
-	if (cont->sc_aggregation_max == 0)
+	/* Check if it's ok to start aggregation in every 2 seconds */
+	*sleep = 2ULL * NSEC_PER_SEC;
+	if (!cont_aggregate_runnable(cont))
 		return 0;
 
 	/*
@@ -947,15 +948,20 @@ cont_child_destroy_one(void *vin)
 		 * the container has never been opened */
 		rc = 0;
 	}
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
+
 	/* XXX there might be a race between GC and pool destroy, let's do
 	 * synchronous GC for now.
 	 */
 	dss_gc_run(pool->spc_hdl, -1);
-	/*
-	 * Force VEA to expire all the just freed extents and make them
-	 * available for allocation immediately.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
 	if (rc) {
 		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
@@ -1102,7 +1108,8 @@ ds_dtx_resync(void *arg)
 
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t capas, struct ds_cont_hdl **cont_hdl)
+		   uint64_t flags, uint64_t sec_capas,
+		   struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
@@ -1111,19 +1118,19 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
 	if (hdl != NULL) {
-		if (capas != 0) {
-			if (hdl->sch_capas != capas) {
+		if (flags != 0) {
+			if (hdl->sch_flags != flags) {
 				D_ERROR(DF_CONT": conflicting container : hdl="
 					DF_UUID" capas="DF_U64"\n",
 					DP_CONT(pool_uuid, cont_uuid),
-					DP_UUID(cont_hdl_uuid), capas);
+					DP_UUID(cont_hdl_uuid), flags);
 				rc = -DER_EXIST;
 			} else {
 				D_DEBUG(DF_DSMS, DF_CONT": found compatible"
 					" container handle: hdl="DF_UUID
 					" capas="DF_U64"\n",
 				      DP_CONT(pool_uuid, cont_uuid),
-				      DP_UUID(cont_hdl_uuid), hdl->sch_capas);
+				      DP_UUID(cont_hdl_uuid), hdl->sch_flags);
 			}
 		}
 
@@ -1152,7 +1159,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	}
 
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
-	hdl->sch_capas = capas;
+	hdl->sch_flags = flags;
+	hdl->sch_sec_capas = sec_capas;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -1266,10 +1274,11 @@ err_hdl:
 }
 
 struct cont_tgt_open_arg {
-	uuid_t	pool_uuid;
-	uuid_t	cont_uuid;
-	uuid_t	cont_hdl_uuid;
-	uint64_t capas;
+	uuid_t		pool_uuid;
+	uuid_t		cont_uuid;
+	uuid_t		cont_hdl_uuid;
+	uint64_t	flags;
+	uint64_t	sec_capas;
 };
 
 /*
@@ -1282,12 +1291,13 @@ cont_open_one(void *vin)
 	struct cont_tgt_open_arg	*arg = vin;
 
 	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
-				  arg->cont_uuid, arg->capas, NULL);
+				  arg->cont_uuid, arg->flags, arg->sec_capas,
+				  NULL);
 }
 
 int
 ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		 uuid_t cont_uuid, uint64_t capas)
+		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas)
 {
 	struct ds_pool		*pool = NULL;
 	struct cont_tgt_open_arg arg;
@@ -1298,7 +1308,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.capas = capas;
+	arg.flags = flags;
+	arg.sec_capas = sec_capas;
 
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));

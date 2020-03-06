@@ -252,10 +252,15 @@ open(void **state)
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	/** open container in read/write mode */
+	/** open container in read/write mode - this is OK, RW on pool handle
+	 * only applies to creating/deleting containers.
+	 */
 	print_message("opening container RW with RO pool handle ...\n");
 	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
 
 	/** invalidate pool handle */
 	poh_invalidate_local(&poh);

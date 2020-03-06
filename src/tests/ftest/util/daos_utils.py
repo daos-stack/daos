@@ -86,8 +86,8 @@ class DaosCommand(CommandWithSubCommand):
                         "/run/daos/pool/{}/*".format(sub_command), sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.sys = FormattedParameter("--sys={}")
                 self.svc = FormattedParameter("--svc={}")
+                self.sys = FormattedParameter("--sys={}")
 
         class ListContainersSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool list-containers command."""
@@ -403,6 +403,93 @@ class DaosCommand(CommandWithSubCommand):
                 super(
                     DaosCommand.ObjectSubCommand.DumpSubCommand,
                     self).__init__("dump")
+
+    def _get_result(self):
+        """Get the result from running the configured daos command.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos command fails.
+
+        """
+        result = None
+        try:
+            result = self.run()
+        except CommandFailure as error:
+            raise CommandFailure("<daos> command failed: {}".format(error))
+
+        return result
+
+    def pool_query(self, pool, sys_name=None, svc=None, sys=None, env=None):
+        """Query a pool.
+
+        Args:
+            pool ([type]): [description]
+            sys_name ([type], optional): [description]. Defaults to None.
+            svc ([type], optional): [description]. Defaults to None.
+            sys ([type], optional): [description]. Defaults to None.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas pool query command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("query")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.sys.value = sys
+        self.env = env
+        return self._get_result()
+
+    def container_create(self, pool, sys_name=None, svc=None, cont=None,
+                         path=None, cont_type=None, oclass=None,
+                         chunk_size=None, env=None):
+        """Create a container.
+
+        Args:
+            pool (str): UUID of the pool in which to create the container
+            sys_name (str, optional): [description]. Defaults to None.
+            svc (str, optional): the pool service replicas, e.g. '1,2,3'.
+                Defaults to None.
+            cont (str, optional): [description]. Defaults to None.
+            path (str, optional): [description]. Defaults to None.
+            cont_type (str, optional): the type of container to create. Defaults
+                to None.
+            oclass (str, optional): object class. Defaults to None.
+            chunk_size ([type], optional): [description]. Defaults to None.
+            env (dict, optional): dictionary of environment variable names and
+                values (EnvironmentVariables). Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the doas container create command fails.
+
+        """
+        self.set_sub_command("container")
+        self.sub_command_class.set_sub_command("create")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.sys_name.value = sys_name
+        self.sub_command_class.sub_command_class.svc.value = svc
+        self.sub_command_class.sub_command_class.cont.value = cont
+        self.sub_command_class.sub_command_class.path.value = path
+        self.sub_command_class.sub_command_class.type.value = cont_type
+        self.sub_command_class.sub_command_class.oclass.value = oclass
+        self.sub_command_class.sub_command_class.chunk_size.value = chunk_size
+        self.env = env
+        return self._get_result()
 
 
 def create_container(path, pool_uuid, svc, cont_type, env=None):

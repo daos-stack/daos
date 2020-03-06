@@ -41,8 +41,7 @@ from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import OpenMPI
 
-NO_OF_MAX_CONTAINER = 13180
-
+NO_OF_MAX_CONTAINER = 14286
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -103,7 +102,6 @@ class ObjectMetadata(TestWithServers):
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
 
-    @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
 
@@ -113,21 +111,22 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,pr,small,metadatafill
+        :avocado: tags=all,metadata,large,metadatafill,hw
+        :avocado: tags=full_regression
         """
         # Create a pool
         self.add_pool(connect=False)
         self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
-        self.d_log.debug("Fillup Metadata....")
+        self.log.info("Fillup Metadata....")
         for _cont in range(NO_OF_MAX_CONTAINER):
             container.create(self.pool.pool.handle)
 
         # This should fail with no Metadata space Error.
-        self.d_log.debug("Metadata Overload...")
+        self.log.info("Metadata Overload...")
         try:
-            for _cont in range(250):
+            for _cont in range(400):
                 container.create(self.pool.pool.handle)
             self.fail("Test expected to fail with a no metadata space error")
 
@@ -147,7 +146,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,small,hw
+        :avocado: tags=metadata,metadata_free_space,nvme,large,hw
         :avocado: tags=full_regression
         """
         # Create a pool
@@ -180,7 +179,7 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_ior,nvme,small
+        :avocado: tags=metadata,metadata_ior,nvme,large
         """
         # Create a pool
         self.add_pool(connect=False)

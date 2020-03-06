@@ -395,7 +395,7 @@ class DmgCommand(CommandWithSubCommand):
         return self._get_result()
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, group=None):
+                    target_list=None, svcn=None, group=None, acl_file=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -414,6 +414,7 @@ class DmgCommand(CommandWithSubCommand):
             group (str, optional): DAOS system group name in which to create the
                 pool. Defaults to None, in which case "daos_server" is used by
                 default.
+            acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -436,14 +437,15 @@ class DmgCommand(CommandWithSubCommand):
                 [str(target) for target in target_list])
         self.sub_command_class.sub_command_class.nsvc.value = svcn
         self.sub_command_class.sub_command_class.sys.value = group
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
         return self._get_result()
 
     def pool_destroy(self, pool, force=True):
-        """Destroy a  pool with the dmg command.
+        """Destroy a pool with the dmg command.
 
         Args:
             pool (str): Pool UUID to destroy.
-            foce (bool, optional): Force removal of DAOS pool. Defaults to True.
+            force (bool, optional): Force removal of pool. Defaults to True.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -457,6 +459,90 @@ class DmgCommand(CommandWithSubCommand):
         self.sub_command_class.set_sub_command("destroy")
         self.sub_command_class.sub_command_class.pool.value = pool
         self.sub_command_class.sub_command_class.force.value = force
+        return self._get_result()
+
+    def pool_get_acl(self, pool):
+        """Get the ACL for a given pool.
+
+        Args:
+            pool (str): Pool for which to get the ACL.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool get-acl command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("get-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        return self._get_result()
+
+    def pool_update_acl(self, pool, acl_file, entry):
+        """Update the acl for a given pool.
+
+        Args:
+            pool (str): Pool for which to update the ACL.
+            acl_file (str): ACL file to update
+            entry (str): entry to be updated
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool update-acl command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("update-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        self.sub_command_class.sub_command_class.entry.value = entry
+        return self._get_result()
+
+    def pool_overwrite_acl(self, pool, acl_file):
+        """Overwrite the acl for a given pool.
+
+        Args:
+            pool (str): Pool for which to overwrite the ACL.
+            acl_file (str): ACL file to update
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool overwrite-acl command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("overwrite-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.acl_file.value = acl_file
+        return self._get_result()
+
+    def pool_delete_acl(self, pool, principal):
+        """Delete the acl for a given pool.
+
+        Args:
+            pool (str): Pool for which to delete the ACL.
+            principal (str): principal to be deleted
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool delete-acl command fails.
+
+        """
+        self.set_sub_command("pool")
+        self.sub_command_class.set_sub_command("delete-acl")
+        self.sub_command_class.sub_command_class.pool.value = pool
+        self.sub_command_class.sub_command_class.principal.value = principal
         return self._get_result()
 
 

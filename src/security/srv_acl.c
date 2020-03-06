@@ -105,7 +105,12 @@ ds_sec_alloc_default_daos_pool_acl(void)
 	uint64_t	owner_perms;
 	uint64_t	grp_perms;
 
-	/* pool owner and grp have full read/write access */
+	/*
+	 * TODO: modify default pool owner/group perms to the more granular
+	 * create_cont/del_cont
+	 */
+
+	/* pool owner and group have full read/write access */
 	owner_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 	grp_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE;
 
@@ -282,7 +287,8 @@ pool_capas_from_perms(uint64_t perms)
 {
 	uint64_t capas = 0;
 
-	if (perms & DAOS_ACL_PERM_READ)
+	if ((perms & DAOS_ACL_PERM_READ) ||
+	    (perms & DAOS_ACL_PERM_GET_PROP))
 		capas |= POOL_CAPA_READ;
 	if ((perms & DAOS_ACL_PERM_WRITE) ||
 	    (perms & DAOS_ACL_PERM_CREATE_CONT))
@@ -553,6 +559,8 @@ cont_capas_from_perms(uint64_t perms)
 		capas |= CONT_CAPA_SET_ACL;
 	if (perms & DAOS_ACL_PERM_SET_OWNER)
 		capas |= CONT_CAPA_SET_OWNER;
+	if (perms & DAOS_ACL_PERM_DEL_CONT)
+		capas |= CONT_CAPA_DELETE;
 
 	return capas;
 }
@@ -659,4 +667,88 @@ bool
 ds_sec_pool_can_connect(uint64_t pool_capas)
 {
 	return (pool_capas & POOL_CAPA_READ) != 0;
+}
+
+bool
+ds_sec_pool_can_create_cont(uint64_t pool_capas)
+{
+	return (pool_capas & POOL_CAPA_CREATE_CONT) != 0;
+}
+bool
+ds_sec_pool_can_delete_cont(uint64_t pool_capas)
+{
+	return (pool_capas & POOL_CAPA_DEL_CONT) != 0;
+}
+
+bool
+ds_sec_cont_can_open(uint64_t cont_capas)
+{
+	/*
+	 * Need to have some form of read access at minimum.
+	 */
+	return (cont_capas & CONT_CAPAS_RO_MASK) != 0;
+}
+
+bool
+ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
+		       struct ownership *ownership,
+		       struct daos_acl *acl)
+{
+	int		rc;
+	uint64_t	capas = 0;
+	uint64_t	cont_flags = 0;
+
+	/*
+	 * Translate the pool flags to allow us to properly filter RO/RW
+	 * permissions
+	 */
+	if (pool_flags & DAOS_PC_RO)
+		cont_flags |= DAOS_COO_RO;
+	if (pool_flags & DAOS_PC_RW)
+		cont_flags |= DAOS_COO_RW;
+
+	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl,
+					  &capas);
+	if (rc != 0) {
+		D_ERROR("failed to get container capabilities: %d\n", rc);
+		return false;
+	}
+
+	return (capas & CONT_CAPA_DELETE) != 0;
+}
+
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_PROP) != 0;
+}
+
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_GET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_ACL) != 0;
+}
+
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_SET_OWNER) != 0;
+}
+
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
 }

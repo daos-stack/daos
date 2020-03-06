@@ -438,19 +438,12 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 				return rc;
 		}
 	} else if (found_end > vfe_end) {
-		/* Adjust the in-tree integer key */
-		rc = umem_tx_add_ptr(vsi->vsi_umem, blk_off, sizeof(*blk_off));
-		if (rc)
-			return rc;
-
-		*blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
-
-		/* Adjust the in-tree extent offset */
+		/* Adjust the in-tree extent offset & length */
 		rc = umem_tx_add_ptr(vsi->vsi_umem, found, sizeof(*found));
 		if (rc)
 			return rc;
 
-		found->vfe_blk_off = *blk_off;
+		found->vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 		found->vfe_blk_cnt = found_end - vfe_end;
 		rc = daos_gettime_coarse(&found->vfe_age);
 		if (rc)
