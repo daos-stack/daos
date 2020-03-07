@@ -1409,7 +1409,7 @@ class DaosContainer(object):
 
         # ignoring caller parameters for now
 
-        self.uuid = (ctypes.c_ubyte * 1)(0)
+        self.uuid = (ctypes.c_ubyte * 16)(0)
         self.coh = ctypes.c_uint64(0)
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
