@@ -481,12 +481,7 @@ check_one_success(int rc, int err, MPI_Comm comm)
 	D_ALLOC_ARRAY(rc_arr, mpi_size);
 	assert_non_null(rc_arr);
 
-	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, mpi_size, MPI_INT, comm);
-	if (rc != rc_arr[mpi_rank]) {
-		print_message("MPI_Allgather bug!!!! rank %d sent %s, got %s\n",
-			      mpi_rank, strerror(rc),
-			      strerror(rc_arr[mpi_rank]));
-	}
+	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, 1, MPI_INT, comm);
 	passed = expect_fail = failed = 0;
 	for (i = 0; i < mpi_size; i++) {
 		if (rc_arr[i] == 0)
