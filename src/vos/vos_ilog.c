@@ -353,13 +353,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	daos_handle_t		 loh;
 	int			 rc;
 
-	if (ts_set == NULL) {
-		if (leaf)
-			goto punch_log;
-		return 0;
-	}
-
-	if ((ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
+	if (ts_set == NULL || (ts_set->ts_flags & VOS_OF_COND_PUNCH) == 0) {
 		if (leaf)
 			goto punch_log;
 		return 0;
@@ -403,6 +397,9 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+	if (!leaf)
+		return 0;
+
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
