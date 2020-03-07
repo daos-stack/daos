@@ -8,7 +8,8 @@ server_config:
   name: daos_server
   port: 10001
   servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    # Uncommment once DAOS-4287 has been closed.
+    # bdev_class: nvme
+    # bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
