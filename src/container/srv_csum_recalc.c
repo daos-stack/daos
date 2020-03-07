@@ -203,7 +203,7 @@ ds_csum_agg_recalc(void *recalc_args)
 	int			 rc = 0;
 
 	/* need at most prefix + buf + suffix in sgl */
-	rc = daos_sgl_init(sgl, 3);
+	rc = daos_sgl_init(&sgl, 3);
 	if (rc) {
 		args->cra_rc = -DER_NOMEM;
 		return;
