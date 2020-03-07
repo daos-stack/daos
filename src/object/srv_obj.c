@@ -39,6 +39,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos_srv/security.h>
 #include <daos/checksum.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
@@ -1044,10 +1045,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		return rc;
 	}
 
-	if (obj_is_modification_opc(opc) && !(coh->sch_flags & DAOS_COO_RW)) {
-		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sch_capas "DF_U64", "
+	if (obj_is_modification_opc(opc) &&
+	    !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
+		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to update.\n", DP_UUID(cont_uuid),
-			DP_UUID(coh_uuid), coh->sch_flags);
+			DP_UUID(coh_uuid), coh->sch_sec_capas);
 		D_GOTO(failed, rc = -DER_NO_PERM);
 	}
 
