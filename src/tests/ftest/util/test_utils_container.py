@@ -273,7 +273,10 @@ class TestContainer(TestDaosApiBase):
         # Provider access to get input params values
         # for enabling different container properties
         self.input_params = DaosInputParams()
-
+        self.cksum = BasicParameter(None)
+        self.cksum_size = BasicParameter(None)
+        self.srv_cksum = BasicParameter(None)
+        
         self.container = None
         self.uuid = None
         self.info = None

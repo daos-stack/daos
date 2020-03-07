@@ -40,16 +40,16 @@ pool:
   control_method: dmg
 # Container Properties
 # 1. API used for creating container [POSIX]
-# 2. Checksum_Enable : True/False
-# 3. Server Verify : True/False
-# 4. Checksum Type : 100 (default).
-#                    1: CRC16, 2: CRC32
-#                    3: CRC64, 4: SHA1
-# 5. Chunk Size: 0 (default)
-#                16384: 16K
+# 2. Checksum_Enable : off or checksum_type
+#    Checksum Type : crc16, crc32
+#                    crc64, sha1
+# 5. Chunk Size: 16384: 16K (default)
+# 3. Server Verify : on or off
 # DAOS-4173: Improvement in this area required.
 container:
-    container_properties: [POSIX, True, True, 100, 0]
+  cksum: 'crc16'
+  cksum_size: 16384
+  srv_cksum: 'off'
 fio:
   names:
     - global

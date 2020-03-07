@@ -65,8 +65,6 @@ class FioBase(TestWithServers):
         self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
-        self.co_prop = self.params.get("container_properties",
-                                       "/run/container/*")
 
     def tearDown(self):
         """Tear down each test case."""
@@ -90,13 +88,40 @@ class FioBase(TestWithServers):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
-        # Get Container params
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        self.cont = TestContainer(self.pool)
+        self.cont.get_params(self)
 
         # create container
-        self.container.create(con_in=self.co_prop)
+        # self.container.create()
+        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
+        # command to create container of posix type
+        if self.cont.cksum == "off" or self.cont.cksum is None:
+            cmd = env + ("daos cont create --pool={} --svc={} "
+                         "--type=POSIX".format(
+                            self.pool.uuid, ":".join(
+                                [str(item) for item in self.pool.svc_ranks])))
+        else:
+            cmd = env + ("daos cont create --pool={} --svc={} --type=POSIX "
+                         "--properties=cksum:{},cksum_size:{},"
+                         "srv_cksum:{}".format(
+                            self.pool.uuid,
+                            ":".join(
+                                [str(item) for item in self.pool.svc_ranks]),
+                            self.cont.cksum,
+                            self.cont.cksum_size,
+                            self.cont.srv_cksum))
+        try:
+            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                         shell=True)
+            (output, err) = container.communicate()
+            self.log.info("%s", cmd)
+            self.log.info("%s", self.cont.cksum)
+            self.log.info("Container created with UUID %s", output.split()[3])
 
+        except subprocess.CalledProcessError as err:
+            self.fail("Container create failed:{}".format(err))
+
+        return output.split()[3]
 
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -106,7 +131,7 @@ class FioBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_cont_param(self._create_cont())
 
         try:
             # start dfuse
@@ -128,8 +153,8 @@ class FioBase(TestWithServers):
         if self.fio_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             # Uncomment below two lines once DAOS-3355 is resolved
-            self.pool.connect()
-            self._create_cont()
+            # self.pool.connect()
+            # self._create_cont()
             self._start_dfuse()
             self.fio_cmd.update(
                 "global", "directory", self.dfuse.mount_dir.value,
