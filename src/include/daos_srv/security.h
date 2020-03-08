@@ -250,4 +250,17 @@ ds_sec_cont_can_set_owner(uint64_t cont_capas);
 bool
 ds_sec_cont_can_write_data(uint64_t cont_capas);
 
+/**
+ * Determine if the container can be read based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas);
+
 #endif /* __DAOS_SRV_SECURITY_H__ */

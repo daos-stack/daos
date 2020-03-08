@@ -1951,6 +1951,17 @@ test_cont_can_write_data(void **state)
 	assert_true(ds_sec_cont_can_write_data(CONT_CAPA_WRITE_DATA));
 }
 
+static void
+test_cont_can_read_data(void **state)
+{
+	assert_false(ds_sec_cont_can_read_data(0));
+	assert_false(ds_sec_cont_can_read_data(~CONT_CAPA_READ_DATA));
+
+	assert_true(ds_sec_cont_can_read_data(CONT_CAPAS_RO_MASK));
+	assert_true(ds_sec_cont_can_read_data(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_read_data(CONT_CAPA_READ_DATA));
+}
+
 /* Convenience macro for unit tests */
 #define ACL_UTEST(X)	cmocka_unit_test_setup_teardown(X, srv_acl_setup, \
 							srv_acl_teardown)
@@ -2022,6 +2033,7 @@ main(void)
 		cmocka_unit_test(test_cont_can_set_acl),
 		cmocka_unit_test(test_cont_can_set_owner),
 		cmocka_unit_test(test_cont_can_write_data),
+		cmocka_unit_test(test_cont_can_read_data),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

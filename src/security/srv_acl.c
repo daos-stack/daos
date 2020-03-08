@@ -752,3 +752,9 @@ ds_sec_cont_can_write_data(uint64_t cont_capas)
 {
 	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
 }
+
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPA_READ_DATA) != 0;
+}

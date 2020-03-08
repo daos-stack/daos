@@ -1050,6 +1050,14 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		return rc;
 	}
 
+	if (!obj_is_modification_opc(opc) &&
+	    !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
+		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sec_capas "DF_U64", "
+			"NO_PERM to read.\n", DP_UUID(cont_uuid),
+			DP_UUID(coh_uuid), coh->sch_sec_capas);
+		D_GOTO(failed, rc = -DER_NO_PERM);
+	}
+
 	if (obj_is_modification_opc(opc) &&
 	    !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
 		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sec_capas "DF_U64", "
