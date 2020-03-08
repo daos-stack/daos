@@ -200,9 +200,11 @@ struct csum_recalc_args {
 	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
 	struct csum_recalc	*cra_recalcs;   /* recalc info */
 	void			*cra_buf;	/* read buffer */
+	struct bio_xs_context	*cra_bio_ctxt;	/* used to log error */
 	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
 	unsigned int		 cra_seg_cnt;   /* # of read segments */
 	unsigned int		 cra_buf_len;	/* length of read buffer */
+	int			 cra_tgt_id;	/* used to log error */
 	int			 cra_rc;	/* return code */
 	ABT_eventual		 csum_eventual;
 };

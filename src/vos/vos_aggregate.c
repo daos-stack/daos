@@ -832,6 +832,8 @@ csum_recalc(struct agg_io_context *io, struct bio_sglist *bsgl,
 	args.cra_buf_len	= io->ic_buf_len;
 
 	io->ic_csum_recalc_func(&args);
+	if (args.cra_rc == -DER_CSUM && args.cra_bio_ctxt != NULL)
+		bio_log_csum_err(args.cra_bio_ctxt, args.cra_tgt_id);
 	return args.cra_rc;
 }
 
@@ -1012,14 +1014,15 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		/* Verify prior data, calculate csums for output range. */
 		rc = csum_recalc(io, &bsgl, &sgl, ent_in, io->ic_csum_recalcs,
 				 seg_count, seg_size);
-		if (rc) {
+		if (rc == -DER_CSUM) {
 			lgc_seg->ls_has_csum_err = true;
 			for (i = 0; i < seg_count; i++)
 				io->ic_csum_recalcs[i].cr_phy_ent->pe_retain =
 									true;
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
-		}
+		} else if (rc)
+			goto out;
 	}
 
 	/* For csum support, this has moved reserve to after read, in case
