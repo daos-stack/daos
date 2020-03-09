@@ -75,11 +75,11 @@ fi
 echo "calling into script: $scriptpath"
 
 if [[ $1 == reset ]]; then
-	"$scriptpath" reset
+	PATH=/sbin:$PATH "$scriptpath" reset
 else
 	# avoid shadowing by prefixing input envars
 	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
-	TARGET_USER="$_TARGET_USER" "$scriptpath"
+	TARGET_USER="$_TARGET_USER" PATH=/sbin:$PATH "$scriptpath"
 
 	# build arglist manually to filter missing directories/files
 	# so we don't error on non-existent entities

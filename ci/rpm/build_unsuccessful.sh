@@ -7,7 +7,7 @@ set -uex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # shellcheck disable=SC0191
+  # shellcheck source=ci/parse_ci_envs.sh
   source "${ci_envs}"
 fi
 
@@ -24,3 +24,7 @@ fi
 (if cd "$mockroot/result/"; then
   cp -r . "$artdir"
 fi)
+
+if ls $mockroot/root/builddir/build/BUILD/daos-*/config"${ARCH}".log; then
+    mv $mockroot/root/builddir/build/BUILD/daos-*/config"${ARCH}".log ${artdir}/config.log-rpm
+fi

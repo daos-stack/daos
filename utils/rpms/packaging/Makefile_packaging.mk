@@ -7,6 +7,9 @@
 # Put site overrides (i.e. REPOSITORY_URL, DAOS_STACK_*_LOCAL_REPO) in here
 -include Makefile.local
 
+# default to Leap 15 distro for chrootbuild
+CHROOT_NAME ?= opensuse-leap-15.1-x86_64
+
 ifeq ($(DEB_NAME),)
 DEB_NAME := $(NAME)
 endif
