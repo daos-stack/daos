@@ -52,7 +52,6 @@ pool:
 #                    3: CRC64, 4: SHA1
 # 5. Chunk Size: 0 (default)
 #                16384: 16K
-# DAOS-4173: Improvement in this area required.
 container:
     container_properties: [POSIX, True, True, 100, 0]
 ior:
