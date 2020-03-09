@@ -70,25 +70,27 @@ func (svc *ControlService) getMSMemberAddress() (string, error) {
 //
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
-	// exclude members with states that can't be updated with response check
-	statesToExclude := []system.MemberState{
-		system.MemberStateEvicted, system.MemberStateErrored,
-		system.MemberStateUnknown, system.MemberStateStopped,
-		system.MemberStateUnresponsive,
-	}
-	hostAddrs := svc.membership.Hosts(statesToExclude...)
+	hostRanks := svc.membership.HostRanks()
 
-	svc.log.Debugf("updating response status for ranks on hosts: %v", hostAddrs)
+	svc.log.Debugf("updating response status for ranks %v", hostRanks)
 
 	// Update either:
 	// - members unresponsive to ping
 	// - members with stopped processes
 	// TODO: update members with ping errors
 	badRanks := make(map[uint32]system.MemberState)
-	for _, addr := range hostAddrs {
+	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
-			return err
+			if err == context.DeadlineExceeded {
+				// harness unresponsive and likely stopped
+				for _, rank := range ranks {
+					badRanks[rank] = system.MemberStateStopped
+				}
+				continue
+			}
+
+			return errors.Wrapf(err, "query to harness at %s", addr)
 		}
 
 		for _, result := range hResults {
@@ -103,12 +105,14 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 
 	// only update members in the appropriate state (Started/Stopping)
 	// leave unresponsive members to be updated by a join
-	filteredMembers := svc.membership.Members(statesToExclude...)
+	filteredMembers := svc.membership.Members(system.MemberStateEvicted,
+		system.MemberStateErrored, system.MemberStateUnknown,
+		system.MemberStateStopped, system.MemberStateUnresponsive)
 
 	for _, m := range filteredMembers {
 		if state, exists := badRanks[m.Rank]; exists {
 			if err := svc.membership.SetMemberState(m.Rank, state); err != nil {
-				return err
+				return errors.Wrapf(err, "setting state of rank %d", m.Rank)
 			}
 		}
 	}
@@ -166,17 +170,17 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 //
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResults, error) {
-	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
+	hostRanks := svc.membership.HostRanks()
+	results := make(system.MemberResults, 0, len(hostRanks)*maxIOServers)
 
-	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostAddrs)
+	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostRanks)
 
 	msAddr, err := svc.getMSMemberAddress()
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving MS address")
 	}
 
-	for _, addr := range hostAddrs {
+	for addr := range hostRanks {
 		if addr == msAddr {
 			continue // leave MS harness until last
 		}
@@ -211,17 +215,17 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 //
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.MemberResults, error) {
-	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
+	hostRanks := svc.membership.HostRanks()
+	results := make(system.MemberResults, 0, len(hostRanks)*maxIOServers)
 
-	svc.log.Debugf("stopping ranks on hosts: %v", hostAddrs)
+	svc.log.Debugf("stopping ranks on hosts: %v", hostRanks)
 
 	msAddr, err := svc.getMSMemberAddress()
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving MS address")
 	}
 
-	for _, addr := range hostAddrs {
+	for addr := range hostRanks {
 		if addr == msAddr {
 			continue // leave MS harness until last
 		}
@@ -305,10 +309,10 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 //
 // TODO: specify the ranks managed by the harness that should be started.
 func (svc *ControlService) start(ctx context.Context) (system.MemberResults, error) {
-	hostAddrs := svc.membership.Hosts()
-	results := make(system.MemberResults, 0, len(hostAddrs)*maxIOServers)
+	hostRanks := svc.membership.HostRanks()
+	results := make(system.MemberResults, 0, len(hostRanks)*maxIOServers)
 
-	svc.log.Debugf("starting ranks on hosts: %v", hostAddrs)
+	svc.log.Debugf("starting ranks on hosts: %v", hostRanks)
 
 	msAddr, err := svc.getMSMemberAddress()
 	if err != nil {
@@ -323,7 +327,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 
 	results = append(results, hResults...)
 
-	for _, addr := range hostAddrs {
+	for addr := range hostRanks {
 		if addr == msAddr {
 			continue // MS member harness already started
 		}

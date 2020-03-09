@@ -115,10 +115,21 @@ func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uin
 	ctx, cancel := context.WithTimeout(parent, clientRequestTimeout)
 	defer cancel()
 
+	errChan := make(chan error)
 	var rpcResp *mgmtpb.RanksResp
-	rpcResp, err = hc.client.Status(ctx, addr, *rpcReq)
-	if err != nil {
-		return nil, err
+	go func() {
+		var innerErr error
+		rpcResp, innerErr = hc.client.Status(ctx, addr, *rpcReq)
+		errChan <- innerErr
+	}()
+
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return nil, err
+		}
+	case <-ctx.Done():
+		return nil, errors.Wrapf(ctx.Err(), "status request to harness %s", addr)
 	}
 
 	return hc.processReturn(rpcResp)
