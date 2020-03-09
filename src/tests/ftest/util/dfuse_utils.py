@@ -20,6 +20,7 @@
 from __future__ import print_function
 import time
 
+from apricot import get_log_file
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet

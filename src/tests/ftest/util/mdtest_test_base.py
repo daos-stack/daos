@@ -103,7 +103,7 @@ class MdtestBase(TestWithServers):
 
         # create container
         # self.container.create()
-        env = self.mdtest_cmd.get_default_env()
+        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
         # command to create container of posix type
         cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
             self.mdtest_cmd.dfs_pool_uuid.value, self.mdtest_cmd.dfs_svcl.value)
