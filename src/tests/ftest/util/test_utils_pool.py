@@ -80,7 +80,7 @@ class TestPool(TestDaosApiBase):
         # used.
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
         uname = getpass.getuser()
-        gname = grp.getgrnam(uname)[0]
+        gname = grp.getgrgid(self.gid)[0]
         self.username = BasicParameter(uname, uname)
         self.groupname = BasicParameter(gname, gname)
 
