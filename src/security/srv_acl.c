@@ -392,6 +392,13 @@ get_capas_for_groups(struct daos_acl *acl,
 	return -DER_NONEXIST;
 }
 
+static bool
+authsys_user_is_owner(Auth__Sys *authsys, struct ownership *ownership)
+{
+	return strncmp(authsys->user, ownership->user,
+		       DAOS_ACL_MAX_PRINCIPAL_LEN) == 0;
+}
+
 static int
 get_authsys_capas(struct daos_acl *acl,
 		  struct ownership *ownership,
@@ -402,8 +409,7 @@ get_authsys_capas(struct daos_acl *acl,
 	int rc;
 
 	/* If this is the owner, and there's an owner entry... */
-	if (strncmp(authsys->user, ownership->user,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0) {
+	if (authsys_user_is_owner(authsys, ownership)) {
 		rc = get_capas_for_principal(acl, DAOS_ACL_OWNER, NULL,
 					     convert_perms,
 					     capas);
@@ -464,7 +470,7 @@ is_ownership_valid(struct ownership *ownership)
 
 static int
 get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
-			struct daos_acl *acl,
+			struct daos_acl *acl, uint64_t owner_min_capas,
 			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
 {
 	int		rc;
@@ -489,6 +495,10 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 		*capas = 0;
 		rc = 0;
 	}
+
+	/* Owner may have certain implicit permissions */
+	if (authsys_user_is_owner(authsys, ownership))
+		*capas |= owner_min_capas;
 
 	auth__sys__free_unpacked(authsys, NULL);
 	return rc;
@@ -532,6 +542,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 	}
 
 	rc = get_sec_capas_for_token(token, ownership, acl,
+				     0, /* no special owner perms */
 				     pool_capas_from_perms, capas);
 	if (rc == 0)
 		filter_pool_capas_based_on_flags(flags, capas);
@@ -621,6 +632,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 {
 	Auth__Token	*token;
 	int		rc;
+	uint64_t	owner_min_perms = CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL;
 
 	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
 		D_ERROR("NULL input\n");
@@ -655,6 +667,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 		return -DER_INVAL;
 
 	rc = get_sec_capas_for_token(token, ownership, acl,
+				     owner_min_perms, /* owner access to ACL */
 				     cont_capas_from_perms, capas);
 	if (rc == 0)
 		filter_cont_capas_based_on_flags(flags, capas);
