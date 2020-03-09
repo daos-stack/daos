@@ -19,7 +19,7 @@ Moreover, the DAOS stack leverages the following open source projects:
 
 -   [*SPDK*](http://spdk.io/) for userspace NVMe device access and management.
 
--   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux I/O
+-   [*FIO*](https://github.com/axboe/fio) for flexible testing of Linux I/O
     subsystems, specifically enabling validation of userspace NVMe device
     performance through fio-spdk plugin.
 
@@ -196,30 +196,7 @@ $ docker exec server scons --build-deps=yes install PREFIX=/usr
 
 ### Running DAOS in Docker
 
-Please first make sure that the uio_pci_generic module is loaded:
-
-```bash
-$ ls /sys/bus/pci/drivers/uio_pci_generic
-ls: cannot access /sys/bus/pci/drivers/uio_pci_generic: No such file or director
-
-$ sudo modprobe uio_pci_generic
-
-$ ls /sys/bus/pci/drivers/uio_pci_generic
-0000:00:04.0  0000:00:04.3  0000:00:04.6  0000:5f:00.0  0000:80:04.2  0000:80:04.5  0000:81:00.0  module     uevent
-0000:00:04.1  0000:00:04.4  0000:00:04.7  0000:80:04.0  0000:80:04.3  0000:80:04.6  0000:da:00.0  new_id     unbind
-0000:00:04.2  0000:00:04.5  0000:5e:00.0  0000:80:04.1  0000:80:04.4  0000:80:04.7  bind          remove_id
-```
-
-SCM and NVMe storage can then be configured by running the follow command:
-
-```bash
-$ docker exec server daos_server storage prepare
-```
-
-Note that this command reports that /dev/hugepages is not accessible on
-OSX. This still allows running the DAOS service despite the error.
-
-The DAOS service can then be started as follows:
+The DAOS service can be started as follows:
 
 ```bash
 $ docker exec server mkdir /var/run/daos_server
@@ -241,6 +218,9 @@ $ docker exec server dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool (see next section).
+
+!!! note
+    Please make sure that the uio_pci_generic module is loaded.
 
 ## DAOS for Development
 
