@@ -167,6 +167,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 
 	csum_len = daos_csummer_get_csum_len(ctx->csummer);
 	cs = daos_csummer_get_chunksize(ctx->csummer);
+	assert_true(cs != 0);
 	dummy_csums = (uint8_t *) "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	rec_size = setup->rec_size;
 

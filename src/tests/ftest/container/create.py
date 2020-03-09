@@ -56,7 +56,6 @@ class CreateContainerTest(TestWithServers):
         if handleparam == 'VALID':
             poh = self.pool.pool.handle
         else:
-            self.cancel("skipping this test case until DAOS-4099 is fixed")
             poh = handleparam
             expected_results.append('FAIL')
 
@@ -64,11 +63,7 @@ class CreateContainerTest(TestWithServers):
         uuidparam = self.params.get("uuid", "/uuids/*")
         expected_results.append(uuidparam[1])
         if uuidparam[0] == 'NULLPTR':
-            self.cancel("skipping this test until DAOS-2043 is fixed")
-            # Commenting the line below as it will result in an
-            # AttributeError and never get to the DAOS API code.
-            # Should be further investigated as part of DAOS-3081
-            # contuuid = 'NULLPTR'
+            contuuid = 'NULLPTR'
         else:
             contuuid = uuid.UUID(uuidparam[0])
 

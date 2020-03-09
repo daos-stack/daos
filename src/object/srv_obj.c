@@ -39,6 +39,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos_srv/security.h>
 #include <daos/checksum.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
@@ -255,6 +256,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
 	int			i, rc, *status, ret;
+
+	if (remote_bulks == NULL) {
+		D_ERROR("No remote bulks provided\n");
+		return -DER_INVAL;
+	}
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
@@ -1044,10 +1050,11 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		return rc;
 	}
 
-	if (obj_is_modification_opc(opc) && !(coh->sch_capas & DAOS_COO_RW)) {
-		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sch_capas "DF_U64", "
+	if (obj_is_modification_opc(opc) &&
+	    !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
+		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to update.\n", DP_UUID(cont_uuid),
-			DP_UUID(coh_uuid), coh->sch_capas);
+			DP_UUID(coh_uuid), coh->sch_sec_capas);
 		D_GOTO(failed, rc = -DER_NO_PERM);
 	}
 
@@ -1794,8 +1801,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	rc = obj_enum_reply_bulk(rpc);
 out:
 	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
-	if (rc == -DER_KEY2BIG)
+	if (rc == -DER_KEY2BIG) {
+		D_ASSERT(enum_arg.kds != NULL);
 		oeo->oeo_size = enum_arg.kds[0].kd_key_len;
+	}
 	obj_enum_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }

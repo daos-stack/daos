@@ -63,6 +63,11 @@ var (
 		"no DAOS IO Servers specified in configuration",
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
+	FaultServerIommuDisabled = serverFault(
+		code.ServerIommuDisabled,
+		"no IOMMU detected while running as non-root user with NVMe devices",
+		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
+	)
 )
 
 func FaultScmUnmanaged(mntPoint string) *fault.Fault {
@@ -84,14 +89,6 @@ func FaultBdevNotFound(bdevs []string) *fault.Fault {
 		fmt.Sprintf("NVMe SSD%s %v not found", plural, bdevs),
 		fmt.Sprintf("check SSD%s %v that are specified in server config "+
 			"exist and are accessible by SPDK", plural, bdevs),
-	)
-}
-
-func FaultBdevFormatSkipped(instanceIdx uint32) *fault.Fault {
-	return serverFault(
-		code.ServerBdevFormatSkipped,
-		fmt.Sprintf("NVMe format skipped on instance %d as SCM format did not complete", instanceIdx),
-		fmt.Sprintf("resolve SCM formatting issues on instance %d", instanceIdx),
 	)
 }
 

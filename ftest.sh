@@ -142,7 +142,13 @@ CLUSH_ARGS=($CLUSH_ARGS)
 DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
-ulimit -c unlimited
+# allow core files to be generated
+sudo bash -c \"set -ex
+if [ \\\"\\\$(ulimit -c)\\\" != \\\"unlimited\\\" ]; then
+    echo \\\"*  soft  core  unlimited\\\" >> /etc/security/limits.conf
+fi
+echo \\\"/var/tmp/core.%e.%t.%p\\\" > /proc/sys/kernel/core_pattern\"
+rm -f /var/tmp/core.*
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
     if grep /mnt/daos\\  /proc/mounts; then
         sudo umount /mnt/daos
@@ -200,13 +206,19 @@ sudo mkdir -p /usr/share/daos/control
 sudo ln -sf $SL_PREFIX/share/daos/control/setup_spdk.sh \
            /usr/share/daos/control
 sudo mkdir -p /usr/share/spdk/scripts
-sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
-           /usr/share/spdk/scripts
-sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
-           /usr/share/spdk/scripts
-sudo rm -f /usr/share/spdk/include
-sudo ln -s $SL_PREFIX/include \
-           /usr/share/spdk/include
+if [ ! -f /usr/share/spdk/scripts/setup.sh ]; then
+    sudo ln -sf $SL_PREFIX/share/spdk/scripts/setup.sh \
+               /usr/share/spdk/scripts
+fi
+if [ ! -f /usr/share/spdk/scripts/common.sh ]; then
+    sudo ln -sf $SL_PREFIX/share/spdk/scripts/common.sh \
+               /usr/share/spdk/scripts
+fi
+if [ ! -f /usr/share/spdk/include/spdk/pci_ids.h ]; then
+    sudo rm -f /usr/share/spdk/include
+    sudo ln -s $SL_PREFIX/include \
+               /usr/share/spdk/include
+fi
 
 # first, strip the execute bit from the in-tree binary,
 # then copy daos_admin binary into \$PATH and fix perms
@@ -231,7 +243,6 @@ args+=" $*"
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
-ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
@@ -356,31 +367,21 @@ if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     fi
 fi
 
+# install the debuginfo repo in case we get segfaults
+sudo bash -c \"cat <<\\\"EOF\\\" > /etc/yum.repos.d/CentOS-Debuginfo.repo
+[core-0-debuginfo]
+name=CentOS-7 - Debuginfo
+baseurl=http://debuginfo.centos.org/7/\\\$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
+enabled=0
+EOF\"
+
 # now run it!
-if ! ./launch.py -caris -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -crispa -ts ${TEST_NODES} ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
-fi
-
-# get stacktraces for the core files
-if ls core.*; then
-    # this really should be a debuginfo-install command but our systems lag
-    # current releases
-    python_rpm=\$(rpm -q python)
-    python_debuginfo_rpm=\"\${python_rpm/-/-debuginfo-}\"
-
-    if ! rpm -q \$python_debuginfo_rpm; then
-        sudo yum --enablerepo=\*debug\* -y install \$python_debuginfo_rpm
-    fi
-    sudo yum -y install gdb
-    for file in core.*; do
-        gdb -ex \"set pagination off\"                 \
-            -ex \"thread apply all bt full\"           \
-            -ex \"detach\"                             \
-            -ex \"quit\"                               \
-            /usr/bin/python2 \$file > \$file.stacktrace
-    done
 fi
 
 exit \$rc"; then

@@ -50,7 +50,7 @@ class DaosAdminPrivTest(TestWithServers):
         JIRA ID: DAOS-2895
         Test Description: Test daso_admin functionality to perform format
         privileged operations while daos_server is run as normal user.
-        :avocado: tags=all,tiny,pr,hw,daos_admin,basic
+        :avocado: tags=all,pr,hw,small,daos_admin,basic
         """
         # Verify that daos_admin has the correct permissions
         self.log.info("Checking daos_admin binary permissions")
@@ -85,12 +85,13 @@ class DaosAdminPrivTest(TestWithServers):
         except ServerFailed as err:
             self.fail("Failed preparing SCM as non-root user: {}".format(err))
 
+        # Uncomment the below line after DAOS-4287 is resolved
         # Prep server for format, run command under non-root user
-        self.log.info("Performing NVMe storage prepare")
-        try:
-            server.storage_prepare(user, "nvme")
-        except ServerFailed as err:
-            self.fail("Failed preparing nvme as non-root user: {}".format(err))
+        # self.log.info("Performing NVMe storage prepare")
+        # try:
+        #     server.storage_prepare(user, "nvme")
+        # except ServerFailed as err:
+        #     self.fail("Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:

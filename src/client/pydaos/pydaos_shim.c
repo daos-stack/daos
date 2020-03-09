@@ -133,7 +133,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
+cont_open(int ret, uuid_t puuid, uuid_t cuuid, char *svc_str, int flags)
 {
 	PyObject	*return_list;
 	daos_handle_t	 coh = {0};
@@ -146,7 +146,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 		goto out;
 	}
 
-	svcl = daos_rank_list_parse("0", ":");
+	svcl = daos_rank_list_parse(svc_str, ":");
 	if (svcl == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -179,33 +179,35 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	const char	*puuid_str;
 	const char	*cuuid_str;
+	char		*svc_str;
 	uuid_t		 puuid;
 	uuid_t		 cuuid;
 	int		 flags;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &puuid_str, &cuuid_str,
-				       &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sssi", &puuid_str, &cuuid_str,
+				       &svc_str, &flags);
 	uuid_parse(puuid_str, puuid);
 	uuid_parse(cuuid_str, cuuid);
 
-	return cont_open(DER_SUCCESS, puuid, cuuid, flags);
+	return cont_open(DER_SUCCESS, puuid, cuuid, svc_str, flags);
 }
 
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
+	char			*svc_str;
 	int			 flags;
 	struct duns_attr_t	 attr;
 	int			 rc;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &path, &svc_str, &flags);
 
 	rc = duns_resolve_path(path, &attr);
 
-	return cont_open(rc, attr.da_puuid, attr.da_cuuid, flags);
+	return cont_open(rc, attr.da_puuid, attr.da_cuuid, svc_str, flags);
 }
 
 static PyObject *
@@ -924,7 +926,8 @@ out:
 	PyList_SetItem(return_list, 1, PyInt_FromLong(nr_req));
 	PyList_SetItem(return_list, 2, PyInt_FromLong(size));
 	if (rc || daos_anchor_is_eof(anchor)) {
-		Py_DECREF(anchor_cap);
+		if (anchor_cap != NULL)
+			Py_DECREF(anchor_cap);
 		Py_INCREF(Py_None);
 		PyList_SetItem(return_list, 3, Py_None);
 	} else {

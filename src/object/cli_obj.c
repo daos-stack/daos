@@ -1111,6 +1111,9 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 	int			k;
 
 	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
 	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
 	D_ASSERT(oc_attr != NULL);
 	grp_size = daos_oclass_grp_size(oc_attr);
@@ -3365,13 +3368,16 @@ int
 dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 {
 	struct dc_obj_verify_args		*dova = NULL;
-	struct dc_object			*obj = NULL;
+	struct dc_object			*obj;
 	struct daos_oclass_attr			*oc_attr;
 	unsigned int				 reps = 0;
 	int					 rc = 0;
 	int					 i;
 
 	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
 	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
 	D_ASSERT(oc_attr != NULL);
 
@@ -3403,21 +3409,13 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 	}
 
 	for (i = 0; i < reps; i++) {
-		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
-
 		dova[i].oh = oh;
 
 		dova[i].list_buf = dova[i].inline_buf;
-		dova[i].list_buf_len = DOVA_BUF_LEN;
+		dova[i].list_buf_len = sizeof(dova[i].inline_buf);
 
 		dova[i].fetch_buf = NULL;
 		dova[i].fetch_buf_len = 0;
-
-		cursor->iod.iod_recxs = &cursor->recx;
-		/* We merge the recxs if they can be merged.
-		 * So always signle IOD.
-		 */
-		cursor->iod.iod_nr = 1;
 	}
 
 	for (i = 0; i < obj->cob_grp_nr && rc == 0; i++) {

@@ -48,7 +48,7 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=all,daosio,full_regression,hw,nvme_io
+        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io
         """
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')

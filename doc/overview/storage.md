@@ -1,5 +1,4 @@
 # Storage Model
-We consider a data center with hundreds of thousands of compute nodes interconnected via a scalable high-performance fabric (i.e., Ethernet, RoCE or Infiniband), where all or a subset of the nodes, called storage nodes, have direct access to byte-addressable storage-class memory (SCM) and, optionally, block-based NVMe storage. The DAOS server is a multi-tenant daemon running on a Linux instance (i.e., natively on the physical node or in a VM or container) of each storage node and exporting through the network the locally-attached storage. Inside a DAOS server, the storage is statically partitioned across multiple targets to optimize concurrency. To avoid contention, each target has its private storage, own pool of service threads and dedicated network context that can be directly addressed over the fabric independently of the other targets hosted on the same storage node. The number of targets exported by a DAOS server instance is configurable and depends on the underlying hardware (i.e., number of SCM modules, CPUs, NVMe SSDs, ...). A target is the unit of fault. All DAOS servers connected to the same fabric are grouped to form a DAOS system, identified by a system name. Membership of the DAOS servers is recorded into the system map that assigns a unique integer rank to each server. Two different systems comprise two disjoint sets of servers and do not coordinate with each other.
 
 The <a href="#f4.1">figure </a> below represents the fundamental abstractions of the DAOS storage model.
 
@@ -18,14 +17,6 @@ The table below shows the targeted level of scalability for each DAOS concept.
 |Server|10<sup>1</sup> Targets (tens)|
 |Pool|10<sup>2</sup> Containers (hundreds)|
 |Container|10<sup>9</sup> Objects (billions)|
-
-<a id="4.1.1"></a>
-
-## DAOS Target
-
-A target is typically associated with a single-ported SCM module and NVMe SSD attached to a single storage node. Moreover, a target does not implement any internal data protection mechanism against storage media failure. As a result, a target is a single point of failure. A dynamic state is associated with each target and is set to either up and running, or down and not available. A target is the unit of performance. Hardware components associated with the target, such as the backend storage medium, the server, and the network, have limited capability and capacity. Target performance parameters such as bandwidth and latency are exported to the upper layers.
-
-<a id="4.1.2"></a>
 
 ## DAOS Pool
 
@@ -102,4 +93,3 @@ A DAOS object can be accessed through different APIs:
 -    **Key-value** API provides a simple key and variable-length value interface. It supports the traditional put, get, remove and list operations.
 
 -    **Array API** implements a one-dimensional array of fixed-size elements addressed by a 64-bit offset. A DAOS array supports arbitrary extent read, write and punch operations.
-
