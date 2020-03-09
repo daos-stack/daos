@@ -365,7 +365,7 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 	daos_handle_t	oh;
 	int		rc;
 
-	if (cond_check && dfs_cond_op)
+	if (cond_check && !dfs_no_cond_op)
 		cond = DAOS_COND_PUNCH;
 
 	if (S_ISLNK(entry.mode))
@@ -404,7 +404,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 	unsigned int	i;
 	int		rc;
 
-	if (cond_check && dfs_cond_op) {
+	if (cond_check && !dfs_no_cond_op) {
 		cond = DAOS_COND_DKEY_INSERT;
 	} else if (cond_check) {
 		/** if cond_ops not enabled, fetch and check (non-atomically) */
@@ -942,7 +942,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		else
 			oclass = DFS_DEFAULT_OBJ_CLASS;
 
-		if (dfs_cond_op)
+		if (!dfs_no_cond_op)
 			cond = DAOS_COND_DKEY_INSERT;
 
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, cond, &dkey, SB_AKEYS,
@@ -3096,7 +3096,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	if (dfs_cond_op)
+	if (!dfs_no_cond_op)
 		cond = DAOS_COND_DKEY_UPDATE;
 
 	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
@@ -3208,7 +3208,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	if (dfs_cond_op)
+	if (!dfs_no_cond_op)
 		cond = DAOS_COND_DKEY_INSERT;
 
 	rc = daos_obj_update(oh, th, cond, &dkey, 1, &iod, &sgl, NULL);
@@ -3665,7 +3665,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 	/** if not default flag, check for xattr existence */
 	if (flags != 0) {
-		if (dfs_cond_op) {
+		if (!dfs_no_cond_op) {
 			if (flags == XATTR_CREATE)
 				cond |= DAOS_COND_AKEY_UPDATE;
 			if (flags == XATTR_REPLACE)
@@ -3700,7 +3700,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iov;
 
-	if (dfs_cond_op)
+	if (!dfs_no_cond_op)
 		cond |= DAOS_COND_DKEY_INSERT;
 
 	iod.iod_size	= size;
@@ -3826,7 +3826,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** set akey as the xattr name */
 	d_iov_set(&akey, xname, strlen(xname));
 
-	if (dfs_cond_op)
+	if (!dfs_no_cond_op)
 		cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
