@@ -1153,12 +1153,12 @@ pipeline {
                                              "set -x
                                               for i in 0 1; do
                                                 if [ -e /sys/class/net/ib\\\$i ]; then
-                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
                                                     {
                                                       echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
                                                       systemctl status
                                                       systemctl --failed
-                                                      journalct -n 500
+                                                      journalctl -n 500
                                                       ifconfig ib\\\$i
                                                       cat /sys/class/net/ib\\\$i/mode
                                                       ifup ib\\\$i
@@ -1258,12 +1258,12 @@ pipeline {
                                              "set -x
                                               for i in 0 1; do
                                                 if [ -e /sys/class/net/ib\\\$i ]; then
-                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
                                                     {
                                                       echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
                                                       systemctl status
                                                       systemctl --failed
-                                                      journalct -n 500
+                                                      journalctl -n 500
                                                       ifconfig ib\\\$i
                                                       cat /sys/class/net/ib\\\$i/mode
                                                       ifup ib\\\$i
@@ -1363,12 +1363,12 @@ pipeline {
                                              "set -x
                                               for i in 0 1; do
                                                 if [ -e /sys/class/net/ib\\\$i ]; then
-                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
                                                     {
                                                       echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
                                                       systemctl status
                                                       systemctl --failed
-                                                      journalct -n 500
+                                                      journalctl -n 500
                                                       ifconfig ib\\\$i
                                                       cat /sys/class/net/ib\\\$i/mode
                                                       ifup ib\\\$i
