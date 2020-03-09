@@ -53,9 +53,9 @@ struct vos_ts_entry {
 	uint32_t		*te_parent_ptr;
 	/** negative entry cache */
 	uint32_t		*te_miss_idx;
-	/** Low read time */
+	/** Low read time or read time for the object/key */
 	daos_epoch_t		 te_ts_rl;
-	/** High read time */
+	/** Max read time for subtrees */
 	daos_epoch_t		 te_ts_rh;
 	/** Write time */
 	daos_epoch_t		 te_ts_w;
