@@ -345,6 +345,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		return rc;
 	}
 
+	D_ASSERT(obj != NULL);
 	/* only integer keys supported */
 	obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
 	if ((flags & DAOS_GET_DKEY) &&
@@ -428,7 +429,6 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (!daos_handle_is_inval(query.qt_dkey_toh))
 		dbtree_close(query.qt_dkey_toh);
 out:
-	if (obj)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+	vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }
