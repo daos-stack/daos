@@ -177,9 +177,9 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * starting a the corrent offset of the checksum array for the inout
 	 * segment.
 	 */
-	return  !memcmp(new_csum->cs_csum,
+	return  !(memcmp(new_csum->cs_csum,
 			&recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
-			new_csum->cs_nr * new_csum->cs_len) == 0;
+			new_csum->cs_nr * new_csum->cs_len) == 0);
 }
 
 /* Driver for the checksum verification of input segements, and calculation
