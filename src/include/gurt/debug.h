@@ -42,6 +42,9 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <assert.h>
+#include <time.h>
+#include <sys/time.h>
+#include <sys/utsname.h>
 
 #include <gurt/debug_setup.h>
 #include <gurt/errno.h>
@@ -285,7 +288,22 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
  */
 #define D_PRINT(fmt, ...)						\
 	do {								\
-		fprintf(stdout, fmt, ## __VA_ARGS__);			\
+		struct timeval _tv;					\
+		struct tm *_tm;						\
+		struct utsname _uts;					\
+		char   *end;						\
+									\
+		(void) gettimeofday(&_tv, 0);				\
+		_tm = localtime(&_tv.tv_sec);				\
+		uname(&_uts);						\
+		for (end = _uts.nodename; *end && *end != '.'; end++)	\
+			;						\
+		*end = 0;						\
+		fprintf(stdout, " %02d/%02d-%02d:%02d:%02d.%02ld %s " fmt, \
+			 _tm->tm_mon + 1, _tm->tm_mday,			\
+			 _tm->tm_hour, _tm->tm_min, _tm->tm_sec,	\
+			(long int)_tv.tv_usec / 10000,			\
+			_uts.nodename, ## __VA_ARGS__);			\
 		fflush(stdout);						\
 	} while (0)
 
