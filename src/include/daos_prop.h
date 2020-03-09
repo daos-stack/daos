@@ -179,6 +179,11 @@ enum daos_cont_props {
 	DAOS_PROP_CO_MAX,
 };
 
+/**
+ * Number of container property types
+ */
+#define DAOS_PROP_CO_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
+
 typedef uint16_t daos_cont_layout_t;
 
 /** container layout type */
