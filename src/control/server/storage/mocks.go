@@ -55,8 +55,8 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := getIndex(varIdx...)
 	return &NvmeNamespace{
-		ID:   idx,
-		Size: idx,
+		ID:   uint32(idx),
+		Size: uint64(idx),
 	}
 }
 

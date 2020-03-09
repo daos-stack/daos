@@ -81,19 +81,21 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 
 	rc = ABT_eventual_create(0, &dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		return rc;
+		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_get_dev_state_internal, &dsm);
-	ABT_eventual_wait(dsm.eventual, NULL);
+	rc = ABT_eventual_wait(dsm.eventual, NULL);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 
 	*dev_state = dsm.devstate;
 
 	rc = ABT_eventual_free(&dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		D_ERROR("BIO get device state ABT future not freed\n");
+		rc = dss_abterr2der(rc);
 
 	return rc;
 }
@@ -111,7 +113,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 
 	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
 	if (rc != ABT_SUCCESS)
-		return rc;
+		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
 
@@ -124,7 +126,7 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 		rc = dss_abterr2der(rc);
 
 	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
-		D_ERROR("BIO set device state ABT future not freed\n");
+		rc = dss_abterr2der(rc);
 
 	return rc;
 }

@@ -114,7 +114,7 @@ repeat:
 		else if (type == VEA_TYPE_AGGREGATE)
 			d_list_del_init(&entry->ve_link);
 
-		rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
+		rc = dbtree_delete(btr_hdl, BTR_PROBE_BYPASS, &key_out, NULL);
 		if (rc)
 			return rc;
 	}
@@ -329,8 +329,8 @@ migrate_end_cb(void *data, bool noop)
 	if (rc)
 		return;
 
-	D_ASSERT(cur_time >= vsi->vsi_agg_time);
-	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	if (vsi->vsi_agg_time == UINT64_MAX ||
+	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -388,6 +388,7 @@ migrate_end_cb(void *data, bool noop)
 
 	/* Update aggregation time before yield */
 	vsi->vsi_agg_time = cur_time;
+	vsi->vsi_agg_scheduled = false;
 
 	/*
 	 * According to NVMe spec, unmap isn't an expensive non-queue command
@@ -421,7 +422,7 @@ migrate_end_cb(void *data, bool noop)
 }
 
 void
-migrate_free_exts(struct vea_space_info *vsi)
+migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 {
 	uint64_t	cur_time;
 	int		rc;
@@ -433,6 +434,13 @@ migrate_free_exts(struct vea_space_info *vsi)
 	}
 
 	/*
+	 * Skip this free extent migration if the transaction is started
+	 * without tx callback data provided, see umem_tx_begin().
+	 */
+	if (!add_tx_cb)
+		return;
+
+	/*
 	 * Check aggregation time in advance to avoid unnecessary
 	 * umem_tx_add_callback() calls.
 	 */
@@ -440,8 +448,12 @@ migrate_free_exts(struct vea_space_info *vsi)
 	if (rc)
 		return;
 
-	D_ASSERT(cur_time >= vsi->vsi_agg_time);
-	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	if (vsi->vsi_agg_time == UINT64_MAX ||
+	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+		return;
+
+	/* Schedule one migrate_end_cb() is enough */
+	if (vsi->vsi_agg_scheduled)
 		return;
 
 	/*
@@ -450,7 +462,10 @@ migrate_free_exts(struct vea_space_info *vsi)
 	 */
 	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, TX_STAGE_NONE,
 				  migrate_end_cb, vsi);
-	if (rc)
+	if (rc) {
 		D_ERROR("Add transaction end callback error "DF_RC"\n",
 			DP_RC(rc));
+		return;
+	}
+	vsi->vsi_agg_scheduled = true;
 }

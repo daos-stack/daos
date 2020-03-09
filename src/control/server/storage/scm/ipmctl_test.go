@@ -44,10 +44,10 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 
 	return ipmctl.DeviceDiscovery{
 		Physical_id:          uint16(m.Physicalid),
-		Channel_id:           uint16(m.Loc.Channel),
-		Channel_pos:          uint16(m.Loc.Channelpos),
-		Memory_controller_id: uint16(m.Loc.Memctrlr),
-		Socket_id:            uint16(m.Loc.Socket),
+		Channel_id:           uint16(m.Channelid),
+		Channel_pos:          uint16(m.Channelposition),
+		Memory_controller_id: uint16(m.Controllerid),
+		Socket_id:            uint16(m.Socketid),
 		Capacity:             m.Capacity,
 	}
 }

@@ -468,6 +468,8 @@ struct dss_rpc_cntr {
 	 * workload.
 	 */
 	uint64_t		rc_stime;
+	/* the time when processing last active RPC */
+	uint64_t		rc_active_time;
 	/** number of active RPCs */
 	uint64_t		rc_active;
 	/** total number of processed RPCs since \a rc_stime */

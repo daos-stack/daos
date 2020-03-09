@@ -75,6 +75,12 @@ cont_aggregate_runnable(struct ds_cont_child *cont)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
 
+	/* snapshot list isn't fetched yet */
+	if (cont->sc_aggregation_max == 0) {
+		D_DEBUG(DB_EPC, "No aggregation before snapshots fetched\n");
+		return false;
+	}
+
 	if ((pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ||
 	    (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy()))
 		return false;
@@ -96,14 +102,9 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
 
-	if (!cont_aggregate_runnable(cont)) {
-		*sleep = NSEC_PER_SEC << 2;
-		return 0;
-	}
-
-	*sleep = NSEC_PER_SEC;
-	/* snapshot list isn't fetched yet */
-	if (cont->sc_aggregation_max == 0)
+	/* Check if it's ok to start aggregation in every 2 seconds */
+	*sleep = 2ULL * NSEC_PER_SEC;
+	if (!cont_aggregate_runnable(cont))
 		return 0;
 
 	/*
@@ -936,15 +937,20 @@ cont_child_destroy_one(void *vin)
 		 * the container has never been opened */
 		rc = 0;
 	}
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
+
 	/* XXX there might be a race between GC and pool destroy, let's do
 	 * synchronous GC for now.
 	 */
 	dss_gc_run(pool->spc_hdl, -1);
-	/*
-	 * Force VEA to expire all the just freed extents and make them
-	 * available for allocation immediately.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
 	if (rc) {
 		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
@@ -1217,12 +1223,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 csummer:
 		rc = cont_hdl_csummer_init(hdl);
-		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_cont->sc_pool);
-			D_FREE(ddra);
+		if (rc != 0)
 			D_GOTO(err_register, rc);
-		}
-
 	}
 
 	if (cont_hdl != NULL) {
