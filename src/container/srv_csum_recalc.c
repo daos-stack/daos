@@ -137,7 +137,7 @@ static bool
 csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		unsigned int rec_size, unsigned int prefix_len)
 {
-	unsigned int j = 0;
+	unsigned int	j = 0;
 
 	/* The index j is used to determine the start offset within
 	 * the prior checksum array (associated with the input physical
@@ -177,9 +177,9 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * starting a the corrent offset of the checksum array for the inout
 	 * segment.
 	 */
-	return  !(memcmp(new_csum->cs_csum,
-			&recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
-			new_csum->cs_nr * new_csum->cs_len) == 0);
+	return !memcmp(new_csum->cs_csum,
+		       &recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
+		       new_csum->cs_nr * new_csum->cs_len);
 }
 
 /* Driver for the checksum verification of input segements, and calculation
