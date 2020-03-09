@@ -171,8 +171,7 @@ main(int argc, char **argv)
 		keys[1]);
 exit:
 	daos_lru_cache_destroy(tcache);
-	if (keys)
-		D_FREE(keys);
+	D_FREE(keys);
 
 	daos_debug_fini();
 	return rc;

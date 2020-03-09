@@ -452,6 +452,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(layout != NULL);
 	tgt_cnt = dtx_get_tgt_cnt(oid, layout);
 	if (tgt_cnt < 0) {
 		rc = tgt_cnt;
@@ -500,8 +501,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 	}
 
 out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
+	pl_obj_layout_free(layout);
 	return rc > 0 ? 0 : rc;
 }
 
