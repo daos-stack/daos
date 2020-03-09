@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -49,10 +50,14 @@ import (
 )
 
 const (
+	// ControlPlaneName defines a consistent name for the control plane server.
 	ControlPlaneName = "DAOS Control Server"
-	DataPlaneName    = "DAOS I/O Server"
+	// DataPlaneName defines a consistent name for the ioserver.
+	DataPlaneName = "DAOS I/O Server"
 	// define supported maximum number of I/O servers
 	maxIOServers = 2
+
+	iommuPath = "/sys/class/iommu"
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -67,6 +72,17 @@ func cfgHasBdev(cfg *Configuration) bool {
 
 func instanceShmID(idx int) int {
 	return os.Getpid() + idx + 1
+}
+
+func iommuDetected() bool {
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(iommuPath)
+	if err != nil {
+		return false
+	}
+
+	return len(dmars) > 0
 }
 
 // Start is the entry point for a daos_server instance.
@@ -135,6 +151,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if hugePages.FreeMB() == 0 {
 			// Is this appropriate? Or should we bomb out?
 			log.Error("no free hugepages -- NVMe performance may suffer")
+		}
+
+		if runningUser.Uid != "0" && !iommuDetected() {
+			return FaultServerIommuDisabled
 		}
 	}
 
