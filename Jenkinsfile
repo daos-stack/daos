@@ -1150,9 +1150,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-3)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib0 ]; then ifconfig ib0; ifup ib0; fi"
-                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib1 ]; then ifconfig ib1; ifup ib1; fi"
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalct -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -1242,9 +1255,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-5)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib0 ]; then ifconfig ib0; ifup ib0; fi"
-                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib1 ]; then ifconfig ib1; ifup ib1; fi"
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalct -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -1334,9 +1360,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib0 ]; then ifconfig ib0; ifup ib0; fi"
-                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
-                                             "if [ -e /sys/class/net/ib1 ]; then ifconfig ib1; ifup ib1; fi"
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$ | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalct -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
