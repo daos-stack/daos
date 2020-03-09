@@ -141,7 +141,10 @@ class Dfuse(DfuseCommand):
         if dir_exists:
 
             target_nodes = self.hosts
+            self.log.debug('remove: hosts %s', self.hosts)
+            self.log.debug('remove: clean %s', clean_nodes)
             target_nodes.remove(clean_nodes)
+            self.log.debug('remove: target %s', target_nodes)
 
             cmd = "rmdir {}".format(self.mount_dir.value)
             ret_code = general_utils.pcmd(target_nodes, cmd, timeout=30)
@@ -179,7 +182,7 @@ class Dfuse(DfuseCommand):
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env()
+        env = self.get_default_env(get_log_file(self.client_log))
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
@@ -227,7 +230,7 @@ class Dfuse(DfuseCommand):
         time.sleep(2)
         self.remove_mount_point()
 
-    def get_default_env(self):
+    def get_default_env(self, log_file=None):
 
         """Get the default enviroment settings for running Dfuse.
         Returns:
@@ -238,6 +241,9 @@ class Dfuse(DfuseCommand):
         # obtain any env variables to be exported
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = self.tmp
+
+        if log_file:
+            env["D_LOG_FILE"] = log_file
 
         if self.dfuse_env:
             try:
