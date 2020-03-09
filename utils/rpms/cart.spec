@@ -4,7 +4,7 @@
 
 Name:          cart
 Version:       4.6.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -125,6 +125,7 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %files
 %defattr(-, root, root, -)
 %{_bindir}/*
+%exclude %{_bindir}/crt_launch
 %{_libdir}/*.so.*
 %dir %{carthome}
 %{carthome}/utils
@@ -141,8 +142,13 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/TESTING
 %{carthome}/multi-node-test.sh
 %{carthome}/.build_vars-Linux.sh
+%{_bindir}/crt_launch
+
 
 %changelog
+* Mon Mar 09 2020 Brian J. Murrell <brian.murrell@intel.com> - 4.6.0-2
+- Move crt_launch to -tests subpackage
+
 * Thu Feb 13 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.6.0-1
 - Libcart version 4.6.0-1
 - crt_swim_init()/crt_swim_fini() APIs added
