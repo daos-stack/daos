@@ -814,6 +814,13 @@ test_pool_get_capas_owner_success(void **state)
 	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO,
 				      POOL_CAPA_READ);
 	srv_acl_resetup(state);
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
 	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RO, POOL_CAPA_READ);
 	srv_acl_resetup(state);
@@ -827,12 +834,12 @@ test_pool_get_capas_owner_success(void **state)
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT |
 				      POOL_CAPA_DEL_CONT);
 	srv_acl_resetup(state);
-	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_CREATE_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT);
 	srv_acl_resetup(state);
-	expect_owner_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_owner_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_DEL_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_DEL_CONT);
@@ -861,6 +868,13 @@ test_pool_get_capas_group_success(void **state)
 	expect_group_capas_with_perms(DAOS_ACL_PERM_READ, DAOS_PC_RO,
 				      POOL_CAPA_READ);
 	srv_acl_resetup(state);
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
+	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_GET_PROP, DAOS_PC_RO,
+				      POOL_CAPA_READ);
+	srv_acl_resetup(state);
 	expect_group_capas_with_perms(DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
 				      DAOS_PC_RO, POOL_CAPA_READ);
 	srv_acl_resetup(state);
@@ -874,12 +888,12 @@ test_pool_get_capas_group_success(void **state)
 				      POOL_CAPA_CREATE_CONT |
 				      POOL_CAPA_DEL_CONT);
 	srv_acl_resetup(state);
-	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_CREATE_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_CREATE_CONT);
 	srv_acl_resetup(state);
-	expect_group_capas_with_perms(DAOS_ACL_PERM_READ |
+	expect_group_capas_with_perms(DAOS_ACL_PERM_GET_PROP |
 				      DAOS_ACL_PERM_DEL_CONT,
 				      DAOS_PC_RW,
 				      POOL_CAPA_READ | POOL_CAPA_DEL_CONT);
@@ -1750,19 +1764,10 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
-				     CONT_CAPA_READ_DATA |
-				     CONT_CAPA_WRITE_DATA |
-				     CONT_CAPA_SET_PROP |
-				     CONT_CAPA_GET_PROP |
-				     CONT_CAPA_SET_ACL |
-				     CONT_CAPA_GET_ACL |
-				     CONT_CAPA_SET_OWNER |
-				     CONT_CAPA_DELETE);
+				     CONT_CAPAS_ALL);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RO,
-				     CONT_CAPA_READ_DATA |
-				     CONT_CAPA_GET_PROP |
-				     CONT_CAPA_GET_ACL);
+				     CONT_CAPAS_RO_MASK);
 }
 
 static void
@@ -1790,9 +1795,8 @@ test_pool_can_connect(void **state)
 	assert_false(ds_sec_pool_can_connect(~POOL_CAPA_READ));
 
 	assert_true(ds_sec_pool_can_connect(POOL_CAPA_READ));
-	assert_true(ds_sec_pool_can_connect(POOL_CAPA_READ |
-					    POOL_CAPA_CREATE_CONT |
-					    POOL_CAPA_DEL_CONT));
+	assert_true(ds_sec_pool_can_connect(POOL_CAPAS_RO_MASK));
+	assert_true(ds_sec_pool_can_connect(POOL_CAPAS_ALL));
 }
 
 static void
@@ -1802,9 +1806,7 @@ test_pool_can_create_cont(void **state)
 	assert_false(ds_sec_pool_can_create_cont(~POOL_CAPA_CREATE_CONT));
 
 	assert_true(ds_sec_pool_can_create_cont(POOL_CAPA_CREATE_CONT));
-	assert_true(ds_sec_pool_can_create_cont(POOL_CAPA_READ |
-						POOL_CAPA_CREATE_CONT |
-						POOL_CAPA_DEL_CONT));
+	assert_true(ds_sec_pool_can_create_cont(POOL_CAPAS_ALL));
 }
 
 static void
@@ -1833,13 +1835,7 @@ test_cont_can_open(void **state)
 	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_PROP));
 	assert_true(ds_sec_cont_can_open(CONT_CAPA_GET_ACL));
 	assert_true(ds_sec_cont_can_open(CONT_CAPAS_RO_MASK));
-	assert_true(ds_sec_cont_can_open(CONT_CAPA_READ_DATA |
-					 CONT_CAPA_WRITE_DATA |
-					 CONT_CAPA_GET_PROP |
-					 CONT_CAPA_SET_PROP |
-					 CONT_CAPA_GET_ACL |
-					 CONT_CAPA_SET_ACL |
-					 CONT_CAPA_SET_OWNER));
+	assert_true(ds_sec_cont_can_open(CONT_CAPAS_ALL));
 }
 
 static void
@@ -1887,6 +1883,72 @@ test_cont_can_delete(void **state)
 	daos_acl_free(no_del_acl);
 	daos_acl_free(default_acl);
 	daos_iov_free(&cred);
+}
+
+static void
+test_cont_can_get_props(void **state)
+{
+	assert_false(ds_sec_cont_can_get_props(0));
+	assert_false(ds_sec_cont_can_get_props(~CONT_CAPA_GET_PROP));
+
+	assert_true(ds_sec_cont_can_get_props(CONT_CAPAS_RO_MASK));
+	assert_true(ds_sec_cont_can_get_props(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_get_props(CONT_CAPA_GET_PROP));
+}
+
+static void
+test_cont_can_set_props(void **state)
+{
+	assert_false(ds_sec_cont_can_set_props(0));
+	assert_false(ds_sec_cont_can_set_props(~CONT_CAPA_SET_PROP));
+	assert_false(ds_sec_cont_can_set_props(CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_set_props(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_set_props(CONT_CAPA_SET_PROP));
+}
+
+static void
+test_cont_can_get_acl(void **state)
+{
+	assert_false(ds_sec_cont_can_get_acl(0));
+	assert_false(ds_sec_cont_can_get_acl(~CONT_CAPA_GET_ACL));
+
+	assert_true(ds_sec_cont_can_get_acl(CONT_CAPAS_RO_MASK));
+	assert_true(ds_sec_cont_can_get_acl(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_get_acl(CONT_CAPA_GET_ACL));
+}
+
+static void
+test_cont_can_set_acl(void **state)
+{
+	assert_false(ds_sec_cont_can_set_acl(0));
+	assert_false(ds_sec_cont_can_set_acl(~CONT_CAPA_SET_ACL));
+	assert_false(ds_sec_cont_can_set_acl(CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_set_acl(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_set_acl(CONT_CAPA_SET_ACL));
+}
+
+static void
+test_cont_can_set_owner(void **state)
+{
+	assert_false(ds_sec_cont_can_set_owner(0));
+	assert_false(ds_sec_cont_can_set_owner(~CONT_CAPA_SET_OWNER));
+	assert_false(ds_sec_cont_can_set_owner(CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_set_owner(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_set_owner(CONT_CAPA_SET_OWNER));
+}
+
+static void
+test_cont_can_write_data(void **state)
+{
+	assert_false(ds_sec_cont_can_write_data(0));
+	assert_false(ds_sec_cont_can_write_data(~CONT_CAPA_WRITE_DATA));
+	assert_false(ds_sec_cont_can_write_data(CONT_CAPAS_RO_MASK));
+
+	assert_true(ds_sec_cont_can_write_data(CONT_CAPAS_ALL));
+	assert_true(ds_sec_cont_can_write_data(CONT_CAPA_WRITE_DATA));
 }
 
 /* Convenience macro for unit tests */
@@ -1954,6 +2016,12 @@ main(void)
 		cmocka_unit_test(test_pool_can_delete_cont),
 		cmocka_unit_test(test_cont_can_open),
 		cmocka_unit_test(test_cont_can_delete),
+		cmocka_unit_test(test_cont_can_get_props),
+		cmocka_unit_test(test_cont_can_set_props),
+		cmocka_unit_test(test_cont_can_get_acl),
+		cmocka_unit_test(test_cont_can_set_acl),
+		cmocka_unit_test(test_cont_can_set_owner),
+		cmocka_unit_test(test_cont_can_write_data),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
