@@ -1223,12 +1223,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 csummer:
 		rc = cont_hdl_csummer_init(hdl);
-		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_cont->sc_pool);
-			D_FREE(ddra);
+		if (rc != 0)
 			D_GOTO(err_register, rc);
-		}
-
 	}
 
 	if (cont_hdl != NULL) {
