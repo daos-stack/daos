@@ -41,6 +41,7 @@ enum cont_op {
 	CONT_OVERWRITE_ACL,
 	CONT_UPDATE_ACL,
 	CONT_DELETE_ACL,
+	CONT_SET_OWNER,
 };
 
 enum pool_op {
@@ -205,6 +206,7 @@ int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);
+int cont_set_owner_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
