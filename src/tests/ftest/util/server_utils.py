@@ -206,7 +206,7 @@ class DaosServerConfig(ObjectWithParameters):
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
-            self.log_mask = BasicParameter(None, "DEBUG")
+            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
             self.log_file = BasicParameter(None, "daos_server.log")
             self.env_vars = BasicParameter(
                 None,
@@ -279,7 +279,7 @@ class DaosServerConfig(ObjectWithParameters):
         self.provider = BasicParameter(None, "ofi+sockets")
         self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
         self.nr_hugepages = BasicParameter(None, 4096)
-        self.control_log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
+        self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = BasicParameter(None, "daos_control.log")
         self.helper_log_file = BasicParameter(None, "daos_admin.log")
 
