@@ -257,6 +257,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	crt_bulk_perm_t		bulk_perm;
 	int			i, rc, *status, ret;
 
+	if (remote_bulks == NULL) {
+		D_ERROR("No remote bulks provided\n");
+		return -DER_INVAL;
+	}
+
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
 	if (rc != 0)
@@ -1796,8 +1801,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	rc = obj_enum_reply_bulk(rpc);
 out:
 	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
-	if (rc == -DER_KEY2BIG)
+	if (rc == -DER_KEY2BIG) {
+		D_ASSERT(enum_arg.kds != NULL);
 		oeo->oeo_size = enum_arg.kds[0].kd_key_len;
+	}
 	obj_enum_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }

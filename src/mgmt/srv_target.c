@@ -855,7 +855,7 @@ tgt_profile_task(void *arg)
 	int mod_id = 0;
 	int rc = 0;
 
-	for (mod_id = 0; mod_id < 64; mod_id++) {
+	for (mod_id = 0; mod_id < (sizeof(uint64_t) * NBBY); mod_id++) {
 		uint64_t mask = 1 << mod_id;
 		struct dss_module *module;
 
