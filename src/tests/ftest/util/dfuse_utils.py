@@ -219,18 +219,18 @@ class Dfuse(DfuseCommand):
 
         if self.mount_dir.value is None:
             return
-        cmd = "if [ -x '$(command -v fusermount)' ]; "
-        cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
+        umount_cmd = "if [ -x '$(command -v fusermount)' ]; "
+        umount_cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)
-        ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
+        ret_code = general_utils.pcmd(self.hosts, umount_cmd, timeout=30)
         if len(ret_code) > 1 or 0 not in ret_code:
             error_hosts = NodeSet(
                 ",".join(
                     [str(node_set) for code, node_set in ret_code.items()
                      if code != 0]))
-
             cmd = "pkill dfuse --signal KILL"
             general_utils.pcmd(error_hosts, cmd, timeout=30)
+            general_utils.pcmd(error_hosts, umount_cmd, timeout=30)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
                     error_hosts))
