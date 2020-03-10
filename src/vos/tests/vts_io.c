@@ -297,8 +297,9 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
-				bio_iov2buf(&ent.ie_biov) == NULL ?
-				"[NULL]" : (char *)bio_iov2buf(&ent.ie_biov));
+				bio_iov2req_buf(&ent.ie_biov) == NULL ?
+				"[NULL]" :
+				(char *)bio_iov2req_buf(&ent.ie_biov));
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
@@ -490,6 +491,25 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	return rc;
 }
 
+static int
+io_test_add_csums(daos_iod_t *iod, d_sg_list_t *sgl,
+		  struct daos_csummer **p_csummer,
+		  struct dcs_iod_csums **p_iod_csums)
+{
+	enum DAOS_CSUM_TYPE	 type = CSUM_TYPE_ISAL_CRC64_REFL;
+	size_t			 chunk_size = 1 << 12;
+	int			 rc = 0;
+
+	rc = daos_csummer_type_init(p_csummer, type, chunk_size);
+	if (rc)
+		return rc;
+	rc = daos_csummer_calc_iods(*p_csummer, sgl, iod, 1, false,
+				    p_iod_csums);
+	if (rc)
+		daos_csummer_destroy(p_csummer);
+	return rc;
+}
+
 int
 io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 		   daos_key_t *dkey, daos_iod_t *iod, d_sg_list_t *sgl,
@@ -497,29 +517,36 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 {
 	struct bio_sglist	*bsgl;
 	struct bio_iov		*biov;
-	d_iov_t		*srv_iov;
+	struct dcs_iod_csums	*iod_csums = NULL;
+	struct daos_csummer	*csummer = NULL;
+	d_iov_t			*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
-	int			i;
-	int			rc;
+	int			i, rc = 0;
+
+	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
+		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
+		if (rc != 0)
+			return rc;
+	}
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0,
-				    0, dkey, 1, iod, NULL, sgl);
+				    0, dkey, 1, iod, iod_csums, sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to update: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto end;
 	}
 	/* Punch can't be zero copy */
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, dkey, 1,
-			      iod, NULL, &ioh, dth);
+			      iod, iod_csums, &ioh, dth);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",
 				DP_RC(rc));
-		return rc;
+		goto end;
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
@@ -532,17 +559,23 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(bio_iov2buf(biov), srv_iov->iov_buf + off,
-		       bio_iov2len(biov));
-		off += bio_iov2len(biov);
+		memcpy(bio_iov2req_buf(biov), srv_iov->iov_buf + off,
+		       bio_iov2req_len(biov));
+		off += bio_iov2req_len(biov);
 	}
 	assert_true(srv_iov->iov_len == off);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh));
 end:
-	rc = vos_update_end(ioh, 0, dkey, rc, dth);
-	if (rc != 0 && verbose && rc != -DER_INPROGRESS)
+	if (rc == 0 && (arg->ta_flags & TF_ZERO_COPY))
+		rc = vos_update_end(ioh, 0, dkey, rc, dth);
+	if (rc != 0 && verbose && rc != -DER_INPROGRESS &&
+		(arg->ta_flags & TF_ZERO_COPY))
 		print_error("Failed to submit ZC update: "DF_RC"\n", DP_RC(rc));
+	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
+		daos_csummer_free_ic(csummer, &iod_csums);
+		daos_csummer_destroy(&csummer);
+	}
 
 	return rc;
 }
@@ -589,9 +622,9 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
 		if (!bio_addr_is_hole(&biov->bi_addr))
-			memcpy(dst_iov->iov_buf + off, bio_iov2buf(biov),
-			       bio_iov2len(biov));
-		off += bio_iov2len(biov);
+			memcpy(dst_iov->iov_buf + off, bio_iov2req_buf(biov),
+			       bio_iov2req_len(biov));
+		off += bio_iov2req_len(biov);
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);

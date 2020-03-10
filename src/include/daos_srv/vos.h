@@ -417,11 +417,12 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
+ * \param func	  [IN]		Pointer to csum recalculation function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr, void (*func)(void *));
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
