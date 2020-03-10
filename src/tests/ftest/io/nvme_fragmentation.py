@@ -25,7 +25,7 @@
 import time
 from ior_test_base import IorTestBase
 
-class IorSmall(IorTestBase):
+class NvmeFragmentation(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Verify the drive fragmentation does free
     the space and do not lead to ENOM_SPACE.
@@ -45,7 +45,7 @@ class IorSmall(IorTestBase):
         wait for Aggregation to happen
         read the data again
         Delete all the pool
-        Run above code in loop for some time (2 houra) and expected
+        Run above code in loop for some time (2 hours) and expected
         not to fail with NO ENOM SPAC.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
