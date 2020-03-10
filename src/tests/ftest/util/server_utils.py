@@ -279,7 +279,7 @@ class DaosServerConfig(ObjectWithParameters):
         self.provider = BasicParameter(None, "ofi+sockets")
         self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
         self.nr_hugepages = BasicParameter(None, 4096)
-        self.control_log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
+        self.control_log_mask = BasicParameter(None, "DEBUG,RPC=ERR")
         self.control_log_file = BasicParameter(None, "daos_control.log")
         self.helper_log_file = BasicParameter(None, "daos_admin.log")
 
