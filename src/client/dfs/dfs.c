@@ -937,6 +937,10 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		return 0;
 	}
 
+	sb_ver = 0;
+	layout_ver = 0;
+	magic = 0;
+
 	/* otherwise fetch the values and verify SB */
 	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
 			    NULL, NULL);
@@ -952,7 +956,18 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	}
 
 	if (magic != DFS_SB_MAGIC) {
-		D_ERROR("SB MAGIC verification failed\n");
+		D_ERROR("SB MAGIC verification failed.\n");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (iods[1].iod_size != sizeof(sb_ver) || sb_ver != DFS_SB_VERSION) {
+		D_ERROR("Incompatible SB version.\n");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (iods[2].iod_size != sizeof(layout_ver) ||
+	    layout_ver != DFS_LAYOUT_VERSION) {
+		D_ERROR("Incompatible DFS Layout version.\n");
 		D_GOTO(err, rc = EINVAL);
 	}
 
@@ -962,7 +977,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
 		DFS_DEFAULT_OBJ_CLASS;
 
-	/** TODO - check SB & layout versions */
 	return 0;
 err:
 	daos_obj_close(*oh, NULL);
