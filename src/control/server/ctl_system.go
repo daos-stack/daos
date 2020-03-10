@@ -43,6 +43,7 @@ func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err
 		results = append(results,
 			system.NewMemberResult(rank, action, err, system.MemberStateStopped))
 	}
+
 	return results
 }
 
@@ -202,8 +203,10 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 			if err != context.DeadlineExceeded {
 				return nil, errors.Wrapf(err, "harness %s prep shutdown", addr)
 			}
+
 			hResults = svc.reportStoppedRanks("prep shutdown", ranks,
 				errors.New("harness unresponsive"))
+			svc.log.Debugf("no response from harness %s", addr)
 		}
 
 		results = append(results, hResults...)
@@ -252,6 +255,7 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 				return nil, errors.Wrapf(err, "harness %s stop", addr)
 			}
 			hResults = svc.reportStoppedRanks("stop", ranks, nil)
+			svc.log.Debugf("no response from harness %s", addr)
 		}
 
 		results = append(results, hResults...)
@@ -358,6 +362,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 			}
 			hResults = svc.reportStoppedRanks("start", ranks,
 				errors.New("harness unresponsive"))
+			svc.log.Debugf("no response from harness %s", addr)
 		}
 
 		results = append(results, hResults...)
