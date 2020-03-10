@@ -213,7 +213,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		DFUSE_TRA_UP(dfs, dfp, "dfs");
 		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
 		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
-		dfs->dfs_attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+		dfuse_dfs_init(dfs, ie->ie_dfs);
 
 		/* Try to open the DAOS container (the mountpoint) */
 		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
@@ -325,8 +326,18 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
+		DFUSE_TRA_INFO(parent, "dfs_lookup() failed: (%s)",
 			       strerror(rc));
+
+		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
+			struct fuse_entry_param entry = {};
+
+			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+			DFUSE_REPLY_ENTRY(parent, req, entry);
+			D_GOTO(free, 0);
+		}
+
 		D_GOTO(err, rc);
 	}
 
@@ -347,6 +358,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+free:
 	D_FREE(ie);
 	return;
 }

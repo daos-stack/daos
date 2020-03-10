@@ -288,6 +288,62 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 }
 
 int
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
+		    daos_event_t *ev)
+{
+	daos_prop_t	*prop;
+	uint32_t	nr = 0;
+	uint32_t	i = 0;
+	int		rc;
+
+	if (user != NULL) {
+		if (!daos_acl_principal_is_valid(user)) {
+			D_ERROR("user principal invalid\n");
+			return -DER_INVAL;
+		}
+
+		nr++;
+	}
+
+	if (group != NULL) {
+		if (!daos_acl_principal_is_valid(group)) {
+			D_ERROR("group principal invalid\n");
+			return -DER_INVAL;
+		}
+
+		nr++;
+	}
+
+	if (nr == 0) {
+		D_ERROR("user or group required\n");
+		return -DER_INVAL;
+	}
+
+	prop = daos_prop_alloc(nr);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	if (user != NULL) {
+		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER;
+		D_STRNDUP(prop->dpp_entries[i].dpe_str, user,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		i++;
+	}
+
+	if (group != NULL) {
+		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+		D_STRNDUP(prop->dpp_entries[i].dpe_str, group,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		i++;
+	}
+
+	rc = daos_cont_set_prop(coh, prop, ev);
+
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
 daos_cont_aggregate(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	daos_cont_aggregate_t	*args;
