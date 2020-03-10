@@ -886,7 +886,10 @@ static void
 obj_log_csum_err(void)
 {
 	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
+	struct bio_xs_context	*bxc;
+
+	D_ASSERT(info != NULL);
+	bxc = info->dmi_nvme_ctxt;
 
 	if (bxc == NULL) {
 		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
