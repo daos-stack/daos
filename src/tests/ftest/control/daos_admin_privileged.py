@@ -89,9 +89,9 @@ class DaosAdminPrivTest(TestWithServers):
         # Prep server for format, run command under non-root user
         # self.log.info("Performing NVMe storage prepare")
         # try:
-        #     server.storage_prepare(user, "nvme")
+        #    server.storage_prepare(user, "nvme")
         # except ServerFailed as err:
-        #     self.fail("Failed preparing nvme as non-root user: {}".format(err))
+        #    self.fail("Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:
