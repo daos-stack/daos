@@ -20,7 +20,6 @@
 from __future__ import print_function
 import time
 
-from apricot import get_log_file
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet
@@ -94,7 +93,7 @@ class Dfuse(DfuseCommand):
         self.hosts = hosts
         self.tmp = tmp
         self.dfuse_env = dfuse_env
-        self.log_file
+        self.log_file = log_file
 
     def __del__(self):
         """Destroy Dfuse object and stop dfuse """
@@ -184,7 +183,8 @@ class Dfuse(DfuseCommand):
         # Allow Dfuse instances without a logfile so that they can
         # call get_default_env(), but do not launch dfuse itself
         # without one, as that means logs will be missing from the test.
-        self.assertIsNotNone(self.log_file)
+        if self.log_file is None:
+            assert(self.log_file is not None)
 
         # create dfuse dir if does not exist
         self.create_mount_point()
