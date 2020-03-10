@@ -172,16 +172,14 @@ public class DaosFileSystemTest {
     conf.set(Constants.DAOS_CONTAINER_UUID, "123");
     conf.set(Constants.DAOS_POOL_SVC, "0");
 
-    boolean defaultEnabled = Constants.DEFAULT_BUFFERED_READ_ENABLED;
-    conf.setBoolean(Constants.DAOS_BUFFERED_READ_ENABLED, defaultEnabled ^ true);
     DaosFileSystem fs = new DaosFileSystem();
     fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertTrue (fs.isBufferedReadEnabled() == defaultEnabled ^ true);
+    Assert.assertTrue(fs.isPreloadEnabled());
     fs.close();
     // if not set, should be default
-    conf.unset(Constants.DAOS_BUFFERED_READ_ENABLED);
+    conf.setInt(Constants.DAOS_PRELOAD_SIZE, 0);
     fs.initialize(URI.create("daos://1234:56"), conf);
-    Assert.assertTrue (fs.isBufferedReadEnabled() == defaultEnabled);
+    Assert.assertFalse(fs.isPreloadEnabled());
     fs.close();
   }
 

@@ -108,17 +108,10 @@ import org.slf4j.LoggerFactory;
  * <tr>
  * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_PRELOAD_SIZE}</td>
  * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
- * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_PRELOAD_SIZE} -
+ * <td> maximum is
  * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
  * <td>false</td>
  * <td>size for pre-loading more than requested data from DAOS into internal buffer when read</td>
- * </tr>
- * <tr>
- * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_BUFFERED_READ_ENABLED}</td>
- * <td>true</td>
- * <td>true or false</td>
- * <td>false</td>
- * <td>true for pre-loading more than requested data. false for loading exactly requested data</td>
  * </tr>
  * </tbody>
  * </table>
@@ -141,7 +134,6 @@ public class DaosFileSystem extends FileSystem {
   private DaosFsClient daos;
   private int readBufferSize;
   private int preLoadBufferSize;
-  private boolean bufferedReadEnabled;
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
@@ -193,8 +185,6 @@ public class DaosFileSystem extends FileSystem {
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
       this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
       this.preLoadBufferSize = conf.getInt(Constants.DAOS_PRELOAD_SIZE, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
-      this.bufferedReadEnabled = conf.getBoolean(Constants.DAOS_BUFFERED_READ_ENABLED,
-              Constants.DEFAULT_BUFFERED_READ_ENABLED);
 
       checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE,
               "internal read buffer size should be no less than ");
@@ -204,8 +194,6 @@ public class DaosFileSystem extends FileSystem {
               "block size should be no less than ");
       checkSizeMin(chunkSize, Constants.MINIMUM_DAOS_CHUNK_SIZE,
               "daos chunk size should be no less than ");
-      checkSizeMin(preLoadBufferSize, Constants.MINIMUM_DAOS_PRELOAD_SIZE,
-              "preload buffer size should be no less than ");
 
       checkSizeMax(readBufferSize, Constants.MAXIMUM_DAOS_READ_BUFFER_SIZE,
               "internal read buffer size should not be greater than ");
@@ -308,7 +296,7 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, preLoadBufferSize, bufferedReadEnabled));
+            file, statistics, readBufferSize, preLoadBufferSize));
   }
 
   @Override
@@ -501,7 +489,7 @@ public class DaosFileSystem extends FileSystem {
     }
   }
 
-  public boolean isBufferedReadEnabled() {
-    return bufferedReadEnabled;
+  public boolean isPreloadEnabled() {
+    return preLoadBufferSize > 0;
   }
 }

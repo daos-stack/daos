@@ -45,14 +45,14 @@
     <name>fs.daos.read.buffer.size</name>
     <value>8388608</value>
     <description>size of direct buffer for reading data from DAOS. Default is 8m.
-      Value range is 1m - 2g.
+      Value range is 64k - 2g.
     </description>
   </property>
   <property>
     <name>fs.daos.write.buffer.size</name>
     <value>8388608</value>
     <description>size of direct buffer for writing data to DAOS. Default is 8m.
-      Value range is 1m - 2g.
+      Value range is 64k - 2g.
     </description>
   </property>
   <property>
@@ -76,14 +76,8 @@
     <value>4194304</value>
     <description>
       size for pre-loading more than requested data from DAOS into internal buffer when read.
-      Value range is 1m - 2g.
-    </description>
-  </property>
-  <property>
-    <name>fs.daos.io.bufferedReadEnabled</name>
-    <value>true</value>
-    <description>
-      true for pre-loading more than requested data. false for loading exactly requested data.
+      value should not be greater than "fs.daos.read.buffer.size".
+      Maximum is 2g.
     </description>
   </property>
 </configuration>

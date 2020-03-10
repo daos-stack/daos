@@ -70,14 +70,12 @@ public class DaosInputStream extends FSInputStream {
 
   private boolean closed;
 
-  private static final int MAX_RETRIES = 100;
-
   private static final Logger LOG = LoggerFactory.getLogger(DaosInputStream.class);
 
   public DaosInputStream(DaosFile daosFile,
                          FileSystem.Statistics stats,
-                         int bufferCap, int preLoadSize, boolean bufferedReadEnabled) throws IOException {
-    this(daosFile, stats, ByteBuffer.allocateDirect(bufferCap), preLoadSize, bufferedReadEnabled);
+                         int bufferCap, int preLoadSize) throws IOException {
+    this(daosFile, stats, ByteBuffer.allocateDirect(bufferCap), preLoadSize);
   }
 
   /**
@@ -91,14 +89,12 @@ public class DaosInputStream extends FSInputStream {
    * direct byte buffer
    * @param preLoadSize
    * preload size
-   * @param bufferedReadEnabled
-   * enabling buffered read or not
    * @throws IOException
    * DaosIOException
    */
   public DaosInputStream(DaosFile daosFile,
                          FileSystem.Statistics stats,
-                         ByteBuffer buffer, int preLoadSize, boolean bufferedReadEnabled) throws IOException {
+                         ByteBuffer buffer, int preLoadSize) throws IOException {
     this.daosFile = daosFile;
     this.stats = stats;
     this.buffer = buffer;
@@ -109,7 +105,7 @@ public class DaosInputStream extends FSInputStream {
     this.fileLen = daosFile.length();
     this.bufferCapacity = buffer.capacity();
     this.preLoadSize = preLoadSize;
-    this.bufferedReadEnabled = bufferedReadEnabled;
+    this.bufferedReadEnabled = preLoadSize > 0;
     if (bufferCapacity < preLoadSize) {
       throw new IllegalArgumentException("preLoadSize " + preLoadSize +
               " should be not greater than buffer capacity " + bufferCapacity);

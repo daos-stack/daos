@@ -51,11 +51,4 @@
       Value range is 1m - 2g.
     </description>
   </property>
-  <property>
-    <name>fs.daos.io.bufferedReadEnabled</name>
-    <value>true</value>
-    <description>
-      true for pre-loading more than requested data. false for loading exactly requested data.
-    </description>
-  </property>
 </configuration>
