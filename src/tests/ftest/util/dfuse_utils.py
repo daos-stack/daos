@@ -86,7 +86,7 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand"""
 
-    def __init__(self, hosts, tmp, dfuse_env=False):
+    def __init__(self, hosts, tmp, log_file=None, dfuse_env=False):
         """Create a dfuse object"""
         super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
 
@@ -94,6 +94,7 @@ class Dfuse(DfuseCommand):
         self.hosts = hosts
         self.tmp = tmp
         self.dfuse_env = dfuse_env
+        self.log_file
 
     def __del__(self):
         """Destroy Dfuse object and stop dfuse """
@@ -180,10 +181,15 @@ class Dfuse(DfuseCommand):
 
         self.log.info('Starting dfuse at %s', self.mount_dir.value)
 
+        # Allow Dfuse instances without a logfile so that they can
+        # call get_default_env(), but do not launch dfuse itself
+        # without one, as that means logs will be missing from the test.
+        self.asserIsNotNone(self.log_file)
+
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env(get_log_file(self.client_log))
+        env = self.get_default_env()
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
@@ -231,7 +237,7 @@ class Dfuse(DfuseCommand):
         time.sleep(2)
         self.remove_mount_point()
 
-    def get_default_env(self, log_file=None):
+    def get_default_env(self):
 
         """Get the default enviroment settings for running Dfuse.
         Returns:
@@ -243,8 +249,8 @@ class Dfuse(DfuseCommand):
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = self.tmp
 
-        if log_file:
-            env["D_LOG_FILE"] = log_file
+        if self.log_file:
+            env["D_LOG_FILE"] = self.log_file
 
         if self.dfuse_env:
             try:

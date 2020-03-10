@@ -405,7 +405,8 @@ class Soak(TestWithServers):
             pool (obj):   TestPool obj
         """
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
+                           dfuse_env=self.basepath)
         self.dfuse.get_params(self)
 
         # update dfuse params
