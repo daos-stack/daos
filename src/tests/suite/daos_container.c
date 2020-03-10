@@ -1075,6 +1075,27 @@ co_query_access(void **state)
 			       ~DAOS_ACL_PERM_GET_ACL,
 			       -0);
 
+	print_message("Empty prop object (all props), but no get-prop\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_PROP,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), but no get-ACL\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_ACL,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), with access\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
 	print_message("All props with no get-prop access\n");
 	prop = get_query_prop_all();
 	expect_co_query_access(arg, prop,
