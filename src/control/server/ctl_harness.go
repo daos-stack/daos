@@ -125,11 +125,9 @@ func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uin
 
 	select {
 	case err = <-errChan:
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.Wrapf(err, "status request to harness %s", addr)
 	case <-ctx.Done():
-		return nil, errors.Wrapf(ctx.Err(), "status request to harness %s", addr)
+		return nil, ctx.Err()
 	}
 
 	return hc.processReturn(rpcResp)
