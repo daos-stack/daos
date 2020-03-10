@@ -1751,6 +1751,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
+
 			gotResp, gotErr := svc.PrepShutdownRanks(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1891,6 +1893,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
+
 			gotResp, gotErr := svc.StopRanks(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1996,21 +2000,20 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				},
 			},
 		},
-		// TODO: reenable when timeouts can be mocked
-		//		"ping timeout": {
-		//			req:           &mgmtpb.RanksReq{},
-		//			responseDelay: 200 * time.Millisecond,
-		//			drpcResps: []proto.Message{
-		//				&mgmtpb.DaosResp{Status: 0},
-		//				&mgmtpb.DaosResp{Status: 0},
-		//			},
-		//			expResp: &mgmtpb.RanksResp{
-		//				Results: []*mgmtpb.RanksResp_RankResult{
-		//					{Rank: 1, Action: "ping", State: 6, Errored: true},
-		//					{Rank: 2, Action: "ping", State: 6, Errored: true},
-		//				},
-		//			},
-		//		},
+		"ping timeout": {
+			req:           &mgmtpb.RanksReq{},
+			responseDelay: 200 * time.Millisecond,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: 0},
+				&mgmtpb.DaosResp{Status: 0},
+			},
+			expResp: &mgmtpb.RanksResp{
+				Results: []*mgmtpb.RanksResp_RankResult{
+					{Rank: 1, Action: "ping", State: 6, Errored: true},
+					{Rank: 2, Action: "ping", State: 6, Errored: true},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2047,10 +2050,9 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				srv.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			// TODO: apply mock request timeouts
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
 
 			gotResp, gotErr := svc.PingRanks(context.TODO(), tc.req)
-
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -2136,6 +2138,8 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
 			}
+
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
 
 			gotResp, gotErr := svc.StartRanks(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)

@@ -36,6 +36,16 @@ import (
 
 const systemRequestTimeout = 30 * time.Second
 
+// reportStoppedRanks populates relevant rank results indicating stopped state.
+func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
+	results := make(system.MemberResults, 0, len(ranks))
+	for _, rank := range ranks {
+		results = append(results,
+			system.NewMemberResult(rank, action, err, system.MemberStateStopped))
+	}
+	return results
+}
+
 func (svc *ControlService) getMSMemberAddress() (string, error) {
 	if svc.membership == nil || svc.harnessClient == nil {
 		return "", errors.New("host not an access point")
@@ -83,7 +93,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
 			if err == context.DeadlineExceeded {
-				// harness unresponsive and likely stopped
+				// harness unresponsive
 				for _, rank := range ranks {
 					badRanks[rank] = system.MemberStateStopped
 				}
@@ -141,16 +151,17 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 		return nil, err
 	}
 
-	var members []*system.Member
-	// negative Rank in request indicates none specified
-	if req.Rank < 0 {
-		members = svc.membership.Members()
-	} else {
-		member, err := svc.membership.Get(uint32(req.Rank))
-		if err != nil {
-			return nil, err
+	members := svc.membership.Members()
+	ranks := req.GetRanks()
+	if len(ranks) != 0 {
+		members = make(system.Members, 0, len(ranks))
+		for _, rank := range ranks {
+			member, err := svc.membership.Get(rank)
+			if err != nil {
+				return nil, err
+			}
+			members = append(members, member)
 		}
-		members = append(members, member)
 	}
 
 	resp := &ctlpb.SystemQueryResp{}
@@ -187,19 +198,12 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 		}
 
 		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr)
-		if err == context.DeadlineExceeded {
-			// harness unresponsive and likely stopped
-			for _, rank := range ranks {
-				results = append(results,
-					system.NewMemberResult(rank, "prep shutdown",
-						nil, system.MemberStateStopped))
-			}
-			svc.log.Debugf("no response from harness %s", addr)
-			continue
-		}
 		if err != nil {
-			return nil, errors.Wrapf(err,
-				"prep shutdown to harness at %s", addr)
+			if err != context.DeadlineExceeded {
+				return nil, errors.Wrapf(err, "harness %s prep shutdown", addr)
+			}
+			hResults = svc.reportStoppedRanks("prep shutdown", ranks,
+				errors.New("harness unresponsive"))
 		}
 
 		results = append(results, hResults...)
@@ -243,18 +247,11 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 		}
 
 		hResults, err := svc.harnessClient.Stop(ctx, addr, force)
-		if err == context.DeadlineExceeded {
-			// harness unresponsive and likely stopped
-			for _, rank := range ranks {
-				results = append(results,
-					system.NewMemberResult(rank, "stop",
-						nil, system.MemberStateStopped))
-			}
-			svc.log.Debugf("no response from harness %s", addr)
-			continue
-		}
 		if err != nil {
-			return nil, err
+			if err != context.DeadlineExceeded {
+				return nil, errors.Wrapf(err, "harness %s stop", addr)
+			}
+			hResults = svc.reportStoppedRanks("stop", ranks, nil)
 		}
 
 		results = append(results, hResults...)
@@ -323,20 +320,6 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 	return resp, nil
 }
 
-func checkInactive(results *system.MemberResults, ranks []uint32, err error) error {
-	if err == context.DeadlineExceeded {
-		// harness unresponsive and likely stopped
-		for _, rank := range ranks {
-			*results = append(*results,
-				system.NewMemberResult(rank, "", nil, system.MemberStateStopped))
-		}
-
-		return nil
-	}
-
-	return err
-}
-
 // start requests registered harnesses to start their instances (system members)
 // after a controlled shutdown using information in the membership registry.
 //
@@ -369,8 +352,12 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 		}
 
 		hResults, err := svc.harnessClient.Start(ctx, addr)
-		if checkInactive(&results, ranks, err) != nil {
-			return nil, err
+		if err != nil {
+			if err != context.DeadlineExceeded {
+				return nil, errors.Wrapf(err, "harness %s start", addr)
+			}
+			hResults = svc.reportStoppedRanks("start", ranks,
+				errors.New("harness unresponsive"))
 		}
 
 		results = append(results, hResults...)

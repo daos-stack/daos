@@ -26,6 +26,8 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 func TestSystemCommands(t *testing.T) {
@@ -33,19 +35,31 @@ func TestSystemCommands(t *testing.T) {
 		{
 			"system query with no arguments",
 			"system query",
-			"ConnectClients SystemQuery-{-1}",
+			"ConnectClients SystemQuery-{[]}",
 			nil,
 		},
 		{
 			"system query with single rank",
-			"system query --rank 0",
-			"ConnectClients SystemQuery-{0}",
+			"system query --ranks 0",
+			"ConnectClients SystemQuery-{[0]}",
 			nil,
+		},
+		{
+			"system query with multiple ranks",
+			"system query --ranks 0,1,4",
+			"ConnectClients SystemQuery-{[0 1 4]}",
+			nil,
+		},
+		{
+			"system query with bad rank option",
+			"system query --rank 0",
+			"ConnectClients SystemQuery-{[0]}",
+			errors.New("unknown flag `rank'"),
 		},
 		{
 			"system query verbose",
 			"system query --verbose",
-			"ConnectClients SystemQuery-{-1}",
+			"ConnectClients SystemQuery-{[]}",
 			nil,
 		},
 		{

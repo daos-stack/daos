@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -39,21 +40,23 @@ import (
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex
-	log         logging.Logger
-	instances   []*IOServerInstance
-	started     uint32
-	restartable uint32
-	restart     chan struct{}
-	errChan     chan error
+	log            logging.Logger
+	instances      []*IOServerInstance
+	started        uint32
+	restartable    uint32
+	restart        chan struct{}
+	errChan        chan error
+	rankReqTimeout time.Duration
 }
 
 // NewHarness returns an initialized *IOServerHarness
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		log:       log,
-		instances: make([]*IOServerInstance, 0, maxIOServers),
-		restart:   make(chan struct{}, 1),
-		errChan:   make(chan error, maxIOServers),
+		log:            log,
+		instances:      make([]*IOServerInstance, 0, maxIOServers),
+		restart:        make(chan struct{}, 1),
+		errChan:        make(chan error, maxIOServers),
+		rankReqTimeout: 3 * time.Second,
 	}
 }
 

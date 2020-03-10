@@ -35,15 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const (
-	// rank request handler timeouts
-	rankRequestTimeout = 3 * time.Second
-	rankStopTimeout    = rankRequestTimeout * 2
-	// client-side timeouts for requests sent to remote harnesses
-	clientRequestTimeout = maxIOServers * rankRequestTimeout
-	clientStopTimeout    = maxIOServers * rankStopTimeout
-)
-
 // HarnessClient provides methods for requesting actions on remote harnesses
 // (attached to listening gRPC servers) identified by host addresses.
 //
@@ -65,9 +56,10 @@ type RemoteHarnessReq struct {
 
 // harnessClient implements the HarnessClient interface.
 type harnessClient struct {
-	log          logging.Logger
-	localHarness *IOServerHarness
-	client       *mgmtSvcClient
+	log              logging.Logger
+	localHarness     *IOServerHarness
+	client           *mgmtSvcClient
+	clientReqTimeout time.Duration // remote harness requests
 }
 
 // prepareRequest will make sure we have a MgmtSvcClient and return a populated
@@ -105,14 +97,12 @@ func (hc *harnessClient) processReturn(rpcResp *mgmtpb.RanksResp) (system.Member
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
 func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
-	hc.log.Debugf("issuing Query request to harness at %s", addr)
-
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{Addr: addr, Ranks: ranks})
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, clientRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, hc.clientReqTimeout)
 	defer cancel()
 
 	errChan := make(chan error)
@@ -125,7 +115,9 @@ func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uin
 
 	select {
 	case err = <-errChan:
-		return nil, errors.Wrapf(err, "status request to harness %s", addr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "status request to harness %s", addr)
+		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -140,20 +132,29 @@ func (hc *harnessClient) Query(parent context.Context, addr string, ranks ...uin
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
 func (hc *harnessClient) PrepShutdown(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
-	hc.log.Debugf("issuing PrepShutdown request to harness at %s", addr)
-
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{Addr: addr, Ranks: ranks})
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, clientRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, hc.clientReqTimeout)
 	defer cancel()
 
+	errChan := make(chan error)
 	var rpcResp *mgmtpb.RanksResp
-	rpcResp, err = hc.client.PrepShutdown(ctx, addr, *rpcReq)
-	if err != nil {
-		return nil, err
+	go func() {
+		var innerErr error
+		rpcResp, innerErr = hc.client.PrepShutdown(ctx, addr, *rpcReq)
+		errChan <- innerErr
+	}()
+
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return nil, errors.Wrapf(err, "prep shutdown request to harness %s", addr)
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 	return hc.processReturn(rpcResp)
@@ -167,20 +168,29 @@ func (hc *harnessClient) PrepShutdown(parent context.Context, addr string, ranks
 //
 // Ranks will be forcefully stopped if the force parameter is specified.
 func (hc *harnessClient) Stop(parent context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
-	hc.log.Debugf("issuing Stop request to harness at %s", addr)
-
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{Addr: addr, Ranks: ranks, Force: force})
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, clientStopTimeout)
+	ctx, cancel := context.WithTimeout(parent, hc.clientReqTimeout*2)
 	defer cancel()
 
+	errChan := make(chan error)
 	var rpcResp *mgmtpb.RanksResp
-	rpcResp, err = hc.client.Stop(ctx, addr, *rpcReq)
-	if err != nil {
-		return nil, err
+	go func() {
+		var innerErr error
+		rpcResp, innerErr = hc.client.Stop(ctx, addr, *rpcReq)
+		errChan <- innerErr
+	}()
+
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return nil, errors.Wrapf(err, "stop request to harness %s", addr)
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 	return hc.processReturn(rpcResp)
@@ -192,20 +202,29 @@ func (hc *harnessClient) Stop(parent context.Context, addr string, force bool, r
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
 func (hc *harnessClient) Start(parent context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
-	hc.log.Debugf("issuing Start request to harness at %s", addr)
-
 	rpcReq, err := hc.prepareRequest(RemoteHarnessReq{Addr: addr, Ranks: ranks})
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, clientRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, hc.clientReqTimeout)
 	defer cancel()
 
+	errChan := make(chan error)
 	var rpcResp *mgmtpb.RanksResp
-	rpcResp, err = hc.client.Start(ctx, addr, *rpcReq)
-	if err != nil {
-		return nil, err
+	go func() {
+		var innerErr error
+		rpcResp, innerErr = hc.client.Start(ctx, addr, *rpcReq)
+		errChan <- innerErr
+	}()
+
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return nil, errors.Wrapf(err, "start request to harness %s", addr)
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
 	return hc.processReturn(rpcResp)
@@ -214,5 +233,8 @@ func (hc *harnessClient) Start(parent context.Context, addr string, ranks ...uin
 // NewHarnessClient returns a new harnessClient reference containing a reference
 // to the harness on the locally running control server.
 func NewHarnessClient(l logging.Logger, h *IOServerHarness) HarnessClient {
-	return &harnessClient{log: l, localHarness: h}
+	return &harnessClient{
+		log: l, localHarness: h,
+		clientReqTimeout: h.rankReqTimeout * maxIOServers,
+	}
 }

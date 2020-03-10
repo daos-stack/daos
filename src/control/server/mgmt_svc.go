@@ -827,7 +827,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	select {
 	case <-stopped:
-	case <-time.After(rankStopTimeout):
+	case <-time.After(svc.harness.rankReqTimeout * 2):
 	}
 
 	// either all instances stopped or timeout occurred
@@ -915,7 +915,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			continue
 		}
 
-		resp.Results = append(resp.Results, ping(i, *rank, rankRequestTimeout))
+		resp.Results = append(resp.Results, ping(i, *rank, svc.harness.rankReqTimeout))
 	}
 
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
@@ -959,7 +959,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	select {
 	case <-started:
-	case <-time.After(rankRequestTimeout):
+	case <-time.After(svc.harness.rankReqTimeout):
 	}
 
 	// either all instances started or timeout occurred
