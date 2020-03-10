@@ -1611,7 +1611,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 	unsigned int	 len = oca->u.ec.e_len;
 	unsigned int	 k = oca->u.ec.e_k;
 	daos_recx_t     *this_recx = &iod->iod_recxs[recx_idx];
-	uint64_t	 ss = len * k;
+	uint64_t	 ss = (uint64_t)len * k;
 	uint64_t	 recx_start_offset = this_recx->rx_idx * iod->iod_size;
 	uint64_t	 recx_end_offset = (this_recx->rx_nr * iod->iod_size) +
 					   recx_start_offset;
@@ -1880,11 +1880,11 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				 * first in the the recx array.
 				 */
 				D_ASSERT(!parity_include);
-				ss = p * len;
+				ss = (uint64_t)p * len;
 				p_offset = 0;
 
 			} else {
-				ss = k * len;
+				ss = (uint64_t)k * len;
 				p_offset = p;
 			}
 			/* Walk from start to end by len, except for the last
@@ -1992,7 +1992,7 @@ ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
 		/* can't have more than one stripe in a recx entry */
 		D_ASSERT(rem > 0);
 		while (rem) {
-			if (rem <= len * k) {
+			if (rem <= (uint64_t)len * k) {
 				params->niod.iod_recxs[params->niod.iod_nr].
 				rx_nr = rem/iod->iod_size;
 				params->niod.iod_recxs[params->niod.iod_nr++].

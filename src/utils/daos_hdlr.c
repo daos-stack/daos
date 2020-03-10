@@ -510,8 +510,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	}
 
 	D_PRINT("Container's snapshots :\n");
-	if (daos_anchor_is_eof < 0) {
-		fprintf(stderr, "invalid number of snapshots returned\n");
+	if (!daos_anchor_is_eof(&anchor)) {
+		fprintf(stderr, "too many snapshots returned\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (snaps_count == 0) {

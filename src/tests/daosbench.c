@@ -848,7 +848,7 @@ update_async(struct test *test, int key_type, uint64_t value)
 		kv_set_value(test, ioreq->val_iov.iov_buf, comm_world_rank, i,
 			     value);
 		insert((key_type == 2) ?
-		       ((comm_world_rank * test->t_nindexes) + i) : 0,
+		       (((uint64_t)comm_world_rank * test->t_nindexes) + i) : 0,
 		       DAOS_TX_NONE, ioreq, 0 /* sync */);
 	}
 
@@ -899,7 +899,7 @@ update_verify(struct test *test, int key_type, uint64_t value)
 		kv_set_value(test, valbuf, comm_world_rank, i, value);
 
 		lookup((key_type == 2) ?
-		       ((comm_world_rank * test->t_nindexes) + i) : 0,
+		       (((uint64_t)comm_world_rank * test->t_nindexes) + i) : 0,
 		       DAOS_TX_NONE, &ioreq, test, 1);
 
 		if (ioreq.val_iov.iov_len != test->t_val_bufsize ||
