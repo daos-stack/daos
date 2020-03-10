@@ -184,7 +184,7 @@ class Dfuse(DfuseCommand):
         # Allow Dfuse instances without a logfile so that they can
         # call get_default_env(), but do not launch dfuse itself
         # without one, as that means logs will be missing from the test.
-        self.asserIsNotNone(self.log_file)
+        self.assertIsNotNone(self.log_file)
 
         # create dfuse dir if does not exist
         self.create_mount_point()
