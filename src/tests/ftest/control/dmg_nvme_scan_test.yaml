@@ -7,6 +7,7 @@ server_config:
   name: daos_server
   port: 10001
 dmg:
-  request: storage
-  action: scan
+  sub_command: storage
+  storage:
+    sub_command: scan
   insecure: True
