@@ -32,10 +32,6 @@
 #include "obj_rpc.h"
 #include "rpc_csum.h"
 
-/** proc functions defined in other files */
-int
-crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum);
-
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 {
@@ -199,8 +195,9 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 
 #define IOD_REC_EXIST	(1 << 0)
 static int
-crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
-		    struct obj_io_desc *oiod)
+crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
+			   daos_iod_t *dvi, struct dcs_iod_csums *iod_csum,
+			   struct obj_io_desc *oiod)
 {
 	uint32_t	i, start, nr;
 	bool		proc_one = false;
@@ -294,6 +291,16 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 		}
 	}
 
+	if (iod_csum) {
+		rc = crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
+						       start, nr);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				D_GOTO(free, rc);
+			return rc;
+		}
+	}
+
 	if (oiod != NULL && !proc_one) {
 		rc = crt_proc_struct_obj_io_desc(proc, oiod);
 		if (rc != 0) {
@@ -318,7 +325,8 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 	struct obj_io_desc	*oiod;
 	void			*buf;
 	crt_proc_op_t		 proc_op;
-	daos_size_t		 iod_size, off_size, buf_size;
+	daos_size_t		 iod_size, off_size, buf_size, csum_size;
+	uint8_t			 with_iod_csums = 0;
 	uint32_t		 off_nr;
 	bool			 proc_one = false;
 	int			 i, rc;
@@ -348,6 +356,9 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			 iod_array->oia_iod_nr : 0;
 		if (crt_proc_uint32_t(proc, &off_nr) != 0)
 			return -DER_HG;
+		with_iod_csums = iod_array->oia_iod_csums != NULL ? 1 : 0;
+		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
+			return -DER_HG;
 		D_ASSERT(iod_array->oia_offs != NULL || off_nr == 0);
 		for (i = 0; i < off_nr; i++) {
 			if (crt_proc_uint64_t(proc, &iod_array->oia_offs[i]))
@@ -356,10 +367,17 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 	} else if (proc_op == CRT_PROC_DECODE) {
 		if (crt_proc_uint32_t(proc, &off_nr) != 0)
 			return -DER_HG;
+		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
+			return -DER_HG;
 		iod_size = roundup(sizeof(daos_iod_t) * iod_array->oia_iod_nr,
 				   8);
 		off_size = sizeof(uint64_t) * off_nr;
-		buf_size = iod_size + off_size;
+		if (with_iod_csums)
+			csum_size = roundup(sizeof(struct dcs_iod_csums) *
+					    iod_array->oia_iod_nr, 8);
+		else
+			csum_size = 0;
+		buf_size = iod_size + off_size + csum_size;
 		if (iod_array->oia_oiod_nr != 0)
 			buf_size += sizeof(struct obj_io_desc) *
 				    iod_array->oia_oiod_nr;
@@ -377,13 +395,22 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 		} else {
 			iod_array->oia_offs = NULL;
 		}
+
+		if (with_iod_csums)
+			iod_array->oia_iod_csums = buf + iod_size + off_size;
+		else
+			iod_array->oia_iod_csums = NULL;
+
 		if (iod_array->oia_oiod_nr != 0)
-			iod_array->oia_oiods = buf + iod_size + off_size;
+			iod_array->oia_oiods = buf + iod_size + off_size +
+					       csum_size;
 		else
 			iod_array->oia_oiods = NULL;
 	}
 
 	for (i = 0; i < iod_array->oia_iod_nr; i++) {
+		struct dcs_iod_csums	*iod_csum;
+
 		if (iod_array->oia_oiod_nr != 0 || proc_one) {
 			D_ASSERT(iod_array->oia_oiods != NULL);
 			oiod = &iod_array->oia_oiods[i];
@@ -391,8 +418,13 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			oiod = NULL;
 		}
 
-		rc = crt_proc_daos_iod_t(proc, proc_op, &iod_array->oia_iods[i],
-					 oiod);
+		iod_csum = (iod_array->oia_iod_csums != NULL) ?
+			   (&iod_array->oia_iod_csums[i]) :
+			   NULL;
+		rc = crt_proc_daos_iod_and_csum(proc, proc_op,
+						&iod_array->oia_iods[i],
+						iod_csum,
+						oiod);
 		if (rc)
 			break;
 	}

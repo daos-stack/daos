@@ -139,11 +139,11 @@ int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	orwo = crt_reply_get(rw_args->rpc);
 	sgls = rw_args->rwaa_sgls;
 	iods = orw->orw_iod_array.oia_iods;
-	iods_csums = orwo->orw_iod_csum.ca_arrays;
+	iods_csums = orwo->orw_iod_csums.ca_arrays;
 
 	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
 		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_iod_csum.ca_arrays->ic_data->cs_csum[0]++;
+		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
 	for (i = 0; i < orw->orw_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -428,13 +428,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		memset(&orw->orw_dkey_csum, 0, sizeof(orw->orw_dkey_csum));
 	orw->orw_iod_array.oia_iod_nr = nr;
 	orw->orw_iod_array.oia_iods = api_args->iods;
-	if (args->iod_csums != NULL) {
-		orw->orw_iod_csums.ca_arrays = args->iod_csums;
-		orw->orw_iod_csums.ca_count = api_args->nr;
-	} else {
-		orw->orw_iod_csums.ca_arrays = NULL;
-		orw->orw_iod_csums.ca_count = 0;
-	}
+	orw->orw_iod_array.oia_iod_csums = args->iod_csums;
 	orw->orw_iod_array.oia_oiods = args->oiods;
 	orw->orw_iod_array.oia_oiod_nr = (args->oiods == NULL) ?
 					 0 : nr;

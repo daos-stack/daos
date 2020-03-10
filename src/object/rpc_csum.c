@@ -136,23 +136,29 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, struct dcs_csum_info **p_csum)
 	return rc;
 }
 
+/** advanced iod_csums proc */
 int
-crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
+crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
+				  struct dcs_iod_csums *iod_csum,
+				  uint32_t idx, uint32_t nr)
 {
-	crt_proc_op_t		 proc_op;
-	int			 rc, i;
-
-	rc = crt_proc_get_op(proc, &proc_op);
-	if (rc != 0)
-		return -DER_HG;
+	int	rc, i;
 
 	rc = proc_struct_dcs_csum_info(proc, &iod_csum->ic_akey);
 	if (rc != 0)
 		return rc;
 
 	if (ENCODING(proc_op)) {
-		PROC(uint32_t, &iod_csum->ic_nr);
-		for (i = 0; i < iod_csum->ic_nr; i++) {
+		if (iod_csum->ic_nr != 0) {
+			D_ASSERT(nr <= iod_csum->ic_nr);
+			D_ASSERT(idx < iod_csum->ic_nr);
+		} else {
+			/* only with akey csum */
+			idx = 0;
+			nr = 0;
+		}
+		PROC(uint32_t, &nr);
+		for (i = idx; i < idx + nr; i++) {
 			rc = proc_struct_dcs_csum_info(proc,
 				&iod_csum->ic_data[i]);
 			if (rc != 0)
@@ -184,4 +190,18 @@ crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
 	}
 
 	return rc;
+}
+
+int
+crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum)
+{
+	crt_proc_op_t		 proc_op;
+	int			 rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -DER_HG;
+
+	return crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
+						 0, iod_csum->ic_nr);
 }

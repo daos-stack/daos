@@ -55,7 +55,8 @@ struct obj_io_context {
 };
 
 static int
-obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
+obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
+		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer);
 
 static bool
@@ -134,15 +135,15 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		if (orwo->orw_iod_csum.ca_arrays != NULL) {
-			D_FREE(orwo->orw_iod_csum.ca_arrays);
-			orwo->orw_iod_csum.ca_count = 0;
+		if (orwo->orw_iod_csums.ca_arrays != NULL) {
+			D_FREE(orwo->orw_iod_csums.ca_arrays);
+			orwo->orw_iod_csums.ca_count = 0;
 		}
 
 		if (cont_hdl) {
 			daos_csummer_free_ic(cont_hdl->sch_csummer,
-				&orwo->orw_iod_csum.ca_arrays);
-			orwo->orw_iod_csum.ca_count = 0;
+				&orwo->orw_iod_csums.ca_arrays);
+			orwo->orw_iod_csums.ca_count = 0;
 		}
 	}
 }
@@ -763,10 +764,10 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
 					   false,
-					   &orwo->orw_iod_csum.ca_arrays);
+					   &orwo->orw_iod_csums.ca_arrays);
 
 	if (rc >= 0) {
-		orwo->orw_iod_csum.ca_count = (uint64_t)rc;
+		orwo->orw_iod_csums.ca_count = (uint64_t)rc;
 		rc = 0;
 	}
 
@@ -825,8 +826,9 @@ int csum_verify_keys(struct daos_csummer *csummer, struct obj_rw_in *orw)
 	}
 
 	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
-		daos_iod_t *iod = &orw->orw_iod_array.oia_iods[i];
-		struct dcs_iod_csums *csum = &orw->orw_iod_csums.ca_arrays[i];
+		daos_iod_t		*iod = &orw->orw_iod_array.oia_iods[i];
+		struct dcs_iod_csums	*csum =
+					&orw->orw_iod_array.oia_iod_csums[i];
 
 		if (!csum_iod_is_supported(csummer->dcs_chunk_size, iod))
 			continue;
@@ -884,10 +886,12 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
-	     uint64_t *split_offs, struct dtx_handle *dth)
+	     struct dcs_iod_csums *split_csums, uint64_t *split_offs,
+	     struct dtx_handle *dth)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	struct dcs_iod_csums	*iod_csums;
 	uint32_t		tag = dss_get_module_info()->dmi_tgt_id;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	uint64_t		time_start = 0;
@@ -911,6 +915,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	iods = split_iods == NULL ? orw->orw_iod_array.oia_iods : split_iods;
 	offs = split_offs == NULL ? orw->orw_iod_array.oia_offs : split_offs;
+	iod_csums = split_csums == NULL ? orw->orw_iod_array.oia_iod_csums :
+					 split_csums;
 
 	if (daos_obj_is_echo(orw->orw_oid.id_pub) ||
 	    (daos_io_bypass & IOBP_TARGET)) {
@@ -938,7 +944,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_GET;
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 				      orw->orw_epoch, dkey, orw->orw_nr, iods,
-				      orw->orw_iod_csums.ca_arrays, &ioh, dth);
+				      iod_csums, &ioh, dth);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -994,7 +1000,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				   orw->orw_iod_array.oia_iods,
 				   orw->orw_iod_array.oia_iod_nr,
 				   cont_hdl->sch_csummer,
-				   orwo->orw_iod_csum.ca_arrays);
+				   orwo->orw_iod_csums.ca_arrays);
 
 		if (rc) {
 			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
@@ -1019,7 +1025,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		goto post;
 	}
 
-	rc = obj_verify_bio_csum(rpc, biod, cont_hdl->sch_csummer);
+	rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
+				 cont_hdl->sch_csummer);
 post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
@@ -1274,7 +1281,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
-	rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL, &dth);
+	rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc, NULL, NULL, NULL,
+			  &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
 			DP_RC(rc));
@@ -1301,6 +1309,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 	if (idx == -1) {
 		struct obj_ec_split_req	*split_req = exec_arg->args;
 		daos_iod_t		*split_iods;
+		struct dcs_iod_csums	*split_csums;
 		uint64_t		*split_offs;
 		int			 rc = 0;
 
@@ -1310,9 +1319,13 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 							 NULL;
 			split_offs = split_req != NULL ? split_req->osr_offs :
 							 NULL;
+			split_csums = split_req != NULL ?
+				      split_req->osr_iod_csums :
+				      NULL;
 			rc = obj_local_rw(exec_arg->rpc, exec_arg->cont_hdl,
 					  exec_arg->cont, split_iods,
-					  split_offs, &dlh->dlh_handle);
+					  split_csums, split_offs,
+					  &dlh->dlh_handle);
 		}
 		if (comp_cb != NULL)
 			comp_cb(dlh, idx, rc);
@@ -1388,7 +1401,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		}
 
 		rc = obj_local_rw(rpc, ioc.ioc_coh, ioc.ioc_coc,
-				  NULL, NULL, NULL);
+				  NULL, NULL, NULL, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": error="DF_RC".\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2226,14 +2239,13 @@ cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 }
 
 static int
-obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
+obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
+		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct ds_pool		*pool;
-	daos_iod_t		*iods = orw->orw_iod_array.oia_iods;
 	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
-	struct dcs_iod_csums	*iods_csums = orw->orw_iod_csums.ca_arrays;
 	unsigned int		 i;
 	int			 rc = 0;
 
@@ -2255,7 +2267,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 		struct bio_sglist	*bsgl = bio_iod_sgl(biod, i);
 		d_sg_list_t		 sgl;
 
-		if (!ci_is_valid(iods_csums[i].ic_data)) {
+		if (!ci_is_valid(iod_csums[i].ic_data)) {
 			D_ERROR("Checksums is enabled but the csum info is "
 				"invalid.");
 			return -DER_CSUM;
@@ -2265,7 +2277,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
-						 &iods_csums[i]);
+						 &iod_csums[i]);
 
 		daos_sgl_fini(&sgl, false);
 

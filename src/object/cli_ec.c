@@ -1035,7 +1035,6 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	}
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
 
-	/* for array case */
 	for (i = 0; i < iod->iod_nr; i++) {
 		recx = &iod->iod_recxs[i];
 		with_full_stripe = recx_with_full_stripe(i, ec_recx_array,

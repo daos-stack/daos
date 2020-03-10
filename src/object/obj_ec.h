@@ -157,6 +157,8 @@ struct obj_ec_split_req {
 	daos_iod_t		*osr_iods;
 	/* leader shard's offsets (one for each iod) */
 	uint64_t		*osr_offs;
+	/* leader shard's iod_csums */
+	struct dcs_iod_csums	*osr_iod_csums;
 };
 
 /**
