@@ -1188,15 +1188,24 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				       obj_ec_tgt_nr(oca) - 1);
 		}
 	} else {
+		struct dcs_singv_layout	*singv_lo;
+
+		singv_lo = &reasb_req->orr_singv_los[iod_idx];
+		singv_lo->cs_even_dist = 1;
+		if (iod->iod_size != DAOS_REC_ANY)
+			singv_lo->cs_bytes =
+				obj_ec_singv_cell_bytes(iod->iod_size, oca);
 		/* large singv evenly distributed to all data targets */
 		if (update) {
 			tgt_nr = obj_ec_tgt_nr(oca);
+			singv_lo->cs_nr = tgt_nr;
 			obj_ec_set_tgt(tgt_bitmap, idx, 0,
 				       obj_ec_tgt_nr(oca) - 1);
 			if (!punch)
 				singv_parity = true;
 		} else {
 			tgt_nr = obj_ec_data_tgt_nr(oca);
+			singv_lo->cs_nr = tgt_nr;
 			obj_ec_set_tgt(tgt_bitmap, idx, 0,
 				       obj_ec_data_tgt_nr(oca) - 1);
 		}
@@ -1407,6 +1416,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 				oiod = &tgt_oiod->oto_oiods[i];
 				oiod->oiod_flags |= OBJ_SIOD_SINGV;
 				oiod->oiod_nr = 0;
+				oiod->oiod_tgt_idx = tgt_oiod->oto_tgt_idx;
 				oiod->oiod_siods = NULL;
 			}
 			continue;

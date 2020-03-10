@@ -763,7 +763,7 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 	rc = daos_csummer_alloc_iods_csums(cont_hdl->sch_csummer,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
-					   false,
+					   false, NULL,
 					   &orwo->orw_iod_csums.ca_arrays);
 
 	if (rc >= 0) {
@@ -2277,7 +2277,7 @@ obj_verify_bio_csum(crt_rpc_t *rpc, daos_iod_t *iods,
 
 		if (rc == 0)
 			rc = daos_csummer_verify_iod(csummer, iod, &sgl,
-						 &iod_csums[i]);
+						     &iod_csums[i], NULL, 0);
 
 		daos_sgl_fini(&sgl, false);
 

@@ -560,14 +560,17 @@ struct partial_unaligned_fetch_testcase_args {
 };
 
 static void
-setup_obj_data_for_sv(struct csum_test_ctx *ctx)
+setup_obj_data_for_sv(struct csum_test_ctx *ctx, bool large_buf)
 {
+	uint32_t	repeat = large_buf ? 1024 : 1;
+
 	d_iov_set(&ctx->dkey, "dkey", strlen("dkey"));
 
 	d_iov_set(&ctx->update_iod.iod_name, "akey", strlen("akey"));
 
 	/** setup the buffers for update & fetch */
-	dts_sgl_init_with_strings(&ctx->update_sgl, 1, "ABCDEFGHIJKLMNOP");
+	dts_sgl_init_with_strings_repeat(&ctx->update_sgl, repeat, 1,
+					 "ABCDEFGHIJKLMNOP");
 
 	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0],
@@ -788,7 +791,7 @@ ARRAY_UPDATE_FETCH_TESTCASE(state, {
 }
 
 static void
-single_value(void **state)
+single_value_test(void **state, bool large_buf)
 {
 	struct csum_test_ctx	ctx = {0};
 	daos_oclass_id_t	oc = dts_csum_oc;
@@ -797,7 +800,7 @@ single_value(void **state)
 	setup_from_test_args(&ctx, *state);
 
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 4, oc);
-	setup_obj_data_for_sv(&ctx);
+	setup_obj_data_for_sv(&ctx, large_buf);
 
 	/** Base case ... no fault injection */
 	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
@@ -869,6 +872,18 @@ single_value(void **state)
 	cleanup_data(&ctx);
 	cleanup_cont_obj(&ctx);
 }
+
+static void
+single_value(void **state)
+{
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
+
+	print_message("test small single-value\n");
+	single_value_test(state, false);
+	print_message("test large single-value\n");
+	single_value_test(state, true);
+};
 
 static void
 mix_test(void **state)
@@ -1211,6 +1226,7 @@ static const struct CMUnitTest csum_tests[] = {
 	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
 	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
 		     io_with_server_side_verify),
+	EC_CSUM_TEST("DAOS_EC_CSUM02: Single Value Checksum", single_value),
 };
 
 int

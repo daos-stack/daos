@@ -57,7 +57,8 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 	uint32_t		 iod_nr = orw->orw_nr;
 	uint32_t		 start_shard = orw->orw_start_shard;
 	uint32_t		 i, tgt_idx, tgt_max_idx;
-	daos_size_t		 req_size, iods_size, csums_size = 0;
+	daos_size_t		 req_size, iods_size;
+	daos_size_t		 csums_size = 0, singv_ci_size = 0;
 	uint8_t			 tgt_bit_map[OBJ_TGT_BITMAP_LEN] = {0};
 	bool			 with_csums = (iod_csums != NULL);
 	void			*buf = NULL;
@@ -75,15 +76,20 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 
 	req_size = roundup(sizeof(struct obj_ec_split_req), 8);
 	iods_size = roundup(sizeof(daos_iod_t) * iod_nr, 8);
-	if (with_csums)
+	if (with_csums) {
 		csums_size = roundup(sizeof(struct dcs_iod_csums) * iod_nr, 8);
-	D_ALLOC(buf, req_size + iods_size + csums_size);
+		singv_ci_size = roundup(sizeof(struct dcs_csum_info) * iod_nr,
+					8);
+	}
+	D_ALLOC(buf, req_size + iods_size + csums_size + singv_ci_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
 	req = buf;
 	req->osr_iods = buf + req_size;
-	if (with_csums)
+	if (with_csums) {
 		req->osr_iod_csums = buf + req_size + iods_size;
+		req->osr_singv_cis = buf + req_size + iods_size + csums_size;
+	}
 	req->osr_start_shard = start_shard;
 
 	for (i = 0; i < tgt_nr; i++) {
@@ -122,8 +128,23 @@ obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **split_req)
 			D_ASSERT(iod->iod_type == DAOS_IOD_SINGLE);
 			idx = 0;
 			split_iod->iod_nr = 1;
-			if (with_csums)
-				split_iod_csum->ic_nr = 1;
+			if (with_csums) {
+				struct dcs_csum_info	*ci, *split_ci;
+
+				D_ASSERT(split_iod_csum->ic_nr == 1);
+				ci = &split_iod_csum->ic_data[0];
+				if (ci->cs_nr > 1) {
+					/* evenly distributed singv */
+					D_ASSERT(ci->cs_nr == tgt_max_idx + 1);
+					split_ci = &req->osr_singv_cis[i];
+					*split_ci = *ci;
+					split_iod_csum->ic_data = split_ci;
+					split_ci->cs_nr = 1;
+					split_ci->cs_csum +=
+						tgt_max_idx * ci->cs_len;
+					split_ci->cs_buf_len = ci->cs_len;
+				}
+			}
 		} else {
 			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
 			split_iod->iod_nr = siod->siod_nr;
