@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const systemRequestTimeout = 30 * time.Second
+const systemReqTimeout = 30 * time.Second
 
 // reportStoppedRanks populates relevant rank results indicating stopped state.
 func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
@@ -143,7 +143,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
 	// Update status of each system member.
@@ -287,7 +287,7 @@ func (svc *ControlService) SystemStop(parent context.Context, req *ctlpb.SystemS
 
 	// TODO: consider locking to prevent join attempts when shutting down
 
-	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
 	if req.Prep {
@@ -392,7 +392,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 func (svc *ControlService) SystemStart(parent context.Context, req *ctlpb.SystemStartReq) (*ctlpb.SystemStartResp, error) {
 	svc.log.Debug("Received SystemStart RPC")
 
-	ctx, cancel := context.WithTimeout(parent, systemRequestTimeout)
+	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
 	defer cancel()
 
 	// start any stopped system members, note that instances will only
