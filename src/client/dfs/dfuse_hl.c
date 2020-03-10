@@ -157,6 +157,7 @@ dfuse_access(const char *path, int mask)
 	if (rc)
 		return rc;
 
+	D_ASSERT(dir_name != NULL);
 	if (strcmp(dir_name, "/") != 0) {
 		rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode, NULL);
 		if (rc) {
@@ -178,8 +179,7 @@ dfuse_access(const char *path, int mask)
 out:
 	if (name)
 		free(name);
-	if (dir_name)
-		free(dir_name);
+	free(dir_name);
 	if (parent)
 		dfs_release(parent);
 	return rc;
@@ -210,6 +210,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 	if (rc)
 		return rc;
 
+	D_ASSERT(dir_name != NULL);
 	if (strcmp(dir_name, "/") != 0) {
 		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 		if (rc) {
@@ -231,8 +232,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 out:
 	if (name)
 		free(name);
-	if (dir_name)
-		free(dir_name);
+	free(dir_name);
 	if (parent)
 		dfs_release(parent);
 	return rc;
