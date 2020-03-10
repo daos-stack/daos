@@ -719,6 +719,15 @@ class PreReqComponent():
             env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
 
+        self.add_opts(PathVariable('ENV_SCRIPT',
+                                   "Location of environment script",
+                                   os.path.expanduser('~/.scons_localrc'),
+                                   PathVariable.PathAccept))
+
+        env_script = self.__env.get("ENV_SCRIPT")
+        if os.path.exists(env_script):
+            SConscript(env_script, exports=['env'])
+
         self.system_env = env.Clone()
 
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
@@ -772,15 +781,6 @@ class PreReqComponent():
 
         self._setup_compiler()
         self.setup_parallel_build()
-
-        self.add_opts(PathVariable('ENV_SCRIPT',
-                                   "Location of environment script",
-                                   os.path.expanduser('~/.scons_localrc'),
-                                   PathVariable.PathAccept))
-
-        env_script = self.__env.get("ENV_SCRIPT")
-        if os.path.exists(env_script):
-            SConscript(env_script, exports=['env'])
 
         self.config_file = config_file
         if config_file is not None:
