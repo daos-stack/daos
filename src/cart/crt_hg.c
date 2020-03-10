@@ -495,7 +495,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	struct crt_hg_gdata	*hg_gdata = NULL;
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
-	struct hg_init_info	 init_info = {};
+	struct hg_init_info	 init_info = HG_INIT_INFO_INITIALIZER;
 	int			 rc = 0;
 
 	if (crt_initialized()) {
@@ -515,7 +515,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	init_info.na_init_info.progress_mode = NA_DEFAULT;
+	init_info.na_init_info.progress_mode = 0;
 	init_info.na_init_info.max_contexts = 1;
 	if (crt_gdata.cg_share_na == false)
 		/* one context per NA class */
@@ -638,7 +638,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	char			*info_string = NULL;
-	struct hg_init_info	 init_info = {};
+	struct hg_init_info	 init_info = HG_INIT_INFO_INITIALIZER;
 	hg_return_t		 hg_ret;
 	int			 rc = 0;
 
@@ -676,7 +676,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		init_info.na_init_info.progress_mode = NA_DEFAULT;
+		init_info.na_init_info.progress_mode = 0;
 		init_info.na_init_info.max_contexts = 1;
 		na_class = NA_Initialize_opt(info_string, crt_is_service(),
 					     &init_info.na_init_info);

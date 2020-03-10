@@ -1,10 +1,10 @@
 %global carthome %{_exec_prefix}/lib/%{name}
 
-%global mercury_version 2.0.0a1-0.3.git.c2c2628%{?dist}
+%global mercury_version 2.0.0a1-0.4.git.5d0cd77%{?dist}
 
 Name:          cart
 Version:       4.6.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -146,6 +146,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 
 
 %changelog
+* Tue Mar 10 2020 Vikram Chhabra <vikram.chhabra@intel.com> - 4.6.0-3
+- mercury_version 2.0.0a1-0.4.git.5d0cd77 - Pulled in HG_Forward fix.
+
 * Mon Mar 09 2020 Brian J. Murrell <brian.murrell@intel.com> - 4.6.0-2
 - Move crt_launch to -tests subpackage
 
