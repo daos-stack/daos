@@ -144,7 +144,8 @@ class Dfuse(DfuseCommand):
             target_nodes = self.hosts
             self.log.debug('remove: hosts %s', self.hosts)
             self.log.debug('remove: clean %s', clean_nodes)
-            target_nodes.remove(clean_nodes)
+            if clean_nodes:
+                target_nodes.remove(clean_nodes)
             self.log.debug('remove: target %s', target_nodes)
 
             cmd = "rmdir {}".format(self.mount_dir.value)
@@ -183,8 +184,7 @@ class Dfuse(DfuseCommand):
         # Allow Dfuse instances without a logfile so that they can
         # call get_default_env(), but do not launch dfuse itself
         # without one, as that means logs will be missing from the test.
-        if self.log_file is None:
-            assert(self.log_file is not None)
+        assert self.log_file is not None
 
         # create dfuse dir if does not exist
         self.create_mount_point()
