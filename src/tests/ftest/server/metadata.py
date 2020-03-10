@@ -120,6 +120,7 @@ class ObjectMetadata(TestWithServers):
         self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
         return "PASS"
 
+    @skipForTicket("DAOS-1936/DAOS-1946")
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
 
