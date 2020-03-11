@@ -85,7 +85,7 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand"""
 
-    def __init__(self, hosts, tmp, log_file=None, dfuse_env=False):
+    def __init__(self, hosts, tmp, dfuse_env=False, log_file=None):
         """Create a dfuse object"""
         super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
 
@@ -141,7 +141,7 @@ class Dfuse(DfuseCommand):
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
 
-            target_nodes = self.hosts
+            target_nodes = list(self.hosts)
             self.log.debug('remove: hosts %s', self.hosts)
             self.log.debug('remove: clean %s', clean_nodes)
             if clean_nodes:
