@@ -442,7 +442,7 @@ static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 		 void **csum_bufp, unsigned int cur_buf, unsigned int add_len)
 {
-	uint8_t		*buffer;
+	unsigned char	*buffer;
 	unsigned int	 new_len = cur_buf + add_len;
 	int		 i;
 
@@ -458,7 +458,7 @@ csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 		cur_buf += csum_info->cs_len * csum_info->cs_nr;
 		D_ASSERT(cur_buf <= new_len);
 	}
-	csum_bufp = (void**)&buffer;
+	*csum_bufp = buffer;
 
 	return 0;
 }
