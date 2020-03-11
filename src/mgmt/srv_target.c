@@ -35,7 +35,6 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_srv/daos_server.h>
 #include <daos_mgmt.h>
 
 #include "srv_internal.h"
@@ -485,12 +484,13 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_scm_size, daos_size_t tgt_nvme_size)
 	int			rc = 0;
 	pthread_t		thread;
 
+
 	/**
 	 * Create one VOS file per execution stream
-	 * minimum per pmemobj file (SCM partition)
+	 * 16MB minimum per pmemobj file (SCM partition)
 	 */
 	D_ASSERT(dss_tgt_nr > 0);
-	scm_size = max(tgt_scm_size / dss_tgt_nr, DSS_TGT_SCM_MIN_SZ);
+	scm_size = max(tgt_scm_size / dss_tgt_nr, 1 << 24);
 	nvme_size = tgt_nvme_size / dss_tgt_nr;
 
 	vc.vc_tgt_nr = dss_tgt_nr;

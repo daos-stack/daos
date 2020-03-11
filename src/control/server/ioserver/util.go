@@ -24,16 +24,15 @@
 package ioserver
 
 import (
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
 
-// #cgo CFLAGS: -I${SRCDIR}/../../../include
-// #include <daos_srv/daos_server.h>
-import "C"
-
 const (
-	NvmeMinBytesPerTarget = C.DSS_TGT_NVME_MIN_SZ
-	ScmMinBytesPerTarget  = C.DSS_TGT_SCM_MIN_SZ
+	// NvmeMinBytesPerTarget is min NVMe pool allocation per target
+	NvmeMinBytesPerTarget = 1 * humanize.GiByte
+	// ScmMinBytesPerTarget is min SCM pool allocation per target
+	ScmMinBytesPerTarget = 16 * humanize.MiByte
 )
 
 type (

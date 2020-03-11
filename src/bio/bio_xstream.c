@@ -38,7 +38,6 @@
 #include <spdk/conf.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
-#include <daos_srv/daos_server.h>
 
 /* FIXME: remove it once SPDK being upgraded */
 void spdk_set_thread(struct spdk_thread *thread);
@@ -46,7 +45,7 @@ void spdk_set_thread(struct spdk_thread *thread);
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
-#define DAOS_BS_CLUSTER_SZ	DSS_TGT_NVME_MIN_SZ
+#define DAOS_BS_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	32		/* 32MB DMA chunks */
