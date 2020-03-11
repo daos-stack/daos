@@ -21,7 +21,7 @@
 int main(int argc, char *argv[])
 {
 	if (argc != 6) {
-		printf("need arguments of server group, pool UUID," \
+		printf("need arguments of server group, pool UUID,",
 		    "container UUID, file name and file length\n");
 		return 1;
 	}
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
 		printf("daos_init() failed with rc = %d\n", rc);
 		return rc;
 	}
-	// connect to pool
+	/* connect to pool */
 	uuid_t pool_uuid;
 
 	uuid_parse(pool_str, pool_uuid);
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		    pool_str, rc);
 		return rc;
 	}
-	// connect to container
+	/* connect to container */
 	uuid_t cont_uuid;
 
 	uuid_parse(cont_str, cont_uuid);
@@ -66,15 +66,15 @@ int main(int argc, char *argv[])
 		printf("Failed to connect to container (%s)\n", cont_str);
 		goto quit;
 	}
-	// mount FS
+	/* mount FS */
 	dfs_t *dfs = NULL;
 
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-	if(rc) {
+	if (rc) {
 		printf("Failed to mount fs\n");
 		goto quit;
 	}
-	// create file
+	/* create file */
 	dfs_obj_t *file = NULL;
 
 	rc = dfs_open(dfs, NULL, file_name, S_IFREG | 0755,
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 		printf("Failed to create file (%s)\n", file_name);
 		goto quit;
 	}
-	// write to file
+	/* write to file */
 	char *buf = (char *)malloc(file_len);
 	int j;
 
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 		goto quit;
 	}
 	printf("file length is %ld\n", size);
-	// read file
+	/* read file */
 	int more_len = file_len + 100;
 	char *read_buf = (char *)malloc(more_len);
 	d_iov_t sg_iov2 = {0};

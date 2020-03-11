@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/bin/sh
 
 cd /root/daos
 first=$1

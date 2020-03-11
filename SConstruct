@@ -368,7 +368,7 @@ def scons(): # pylint: disable=too-many-locals
     build_prefix = prereqs.get_src_build_dir()
 
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir(build_prefix, '.', duplicate=0)    
+    VariantDir(build_prefix, '.', duplicate=0)
     SConscript('{}/src/SConscript'.format(build_prefix))
 
 

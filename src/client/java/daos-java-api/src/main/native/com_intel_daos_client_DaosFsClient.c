@@ -609,7 +609,7 @@ static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
 		if (!recursive) {
 			goto out;
 		}
-		// recursively create it
+		/* recursively create it */
 		dirs = strdup(path);
 		dir = dirname(dirs);
 		bases = strdup(path);
@@ -634,8 +634,8 @@ static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
 			goto out;
 		}
 		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
-		// code to mitigate DAOS concurrency issue
-		// to be fixed by the conditional update feature in DAOS
+		/* code to mitigate DAOS concurrency issue */
+		/* to be fixed by the conditional update feature in DAOS */
 		if (rc == ERROR_NOT_EXIST) {
 			int count = 0;
 
@@ -1165,7 +1165,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		total += nr;
 		int i;
 		for(i=0; i<nr; i++){
-			// exactly 1 for each file because ',' and \0
+			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
 			if (acc >= size) {
 				size += READ_DIR_INITIAL_BUFFER_SIZE;
@@ -1350,7 +1350,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr(JNIEnv *env,
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	long value_len = expectedValueLen;
-	char *value = (char *)malloc(value_len+1); // 1 for \0
+	char *value = (char *)malloc(value_len+1); /* 1 for \0 */
 	jstring ret = NULL;
 
 	if (value == NULL) {
