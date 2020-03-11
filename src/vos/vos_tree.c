@@ -937,8 +937,11 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		break;
 	}
 
-	if (sub_toh)
+	if (sub_toh) {
+		D_ASSERT(krec != NULL);
 		rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+	}
+
 	if (rc)
 		goto out;
 

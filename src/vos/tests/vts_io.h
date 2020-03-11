@@ -69,6 +69,7 @@ enum vts_test_flags {
 	TF_FIXED_AKEY		= (1 << 5),
 	IF_USE_ARRAY		= (1 << 6),
 	TF_USE_VAL		= (1 << 7),
+	TF_USE_CSUMS		= (1 << 8),
 	IF_DISABLED		= (1 << 30),
 };
 

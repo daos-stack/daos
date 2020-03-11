@@ -43,6 +43,10 @@ struct vea_hint_context {
 
 /* Free extent informat stored in the in-memory compound free extent index */
 struct vea_entry {
+	/*
+	 * Always keep it as first item, since vfe_blk_off is the direct key
+	 * of DBTREE_CLASS_IV
+	 */
 	struct vea_free_extent	ve_ext;
 	/* Link to vfc_heap */
 	struct d_binheap_node	ve_node;
@@ -144,7 +148,6 @@ static inline bool ext_is_idle(struct vea_free_extent *vfe)
 
 enum vea_free_flags {
 	VEA_FL_NO_MERGE		= (1 << 0),
-	VEA_FL_GEN_AGE		= (1 << 1),
 };
 
 /* vea_init.c */
@@ -163,7 +166,6 @@ int vea_verify_alloc(struct vea_space_info *vsi, bool transient,
 		     uint64_t off, uint32_t cnt);
 
 /* vea_alloc.c */
-void free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry);
 int compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec);
 int reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 		 struct vea_resrvd_ext *resrvd);
@@ -176,6 +178,8 @@ int reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 
 /* vea_free.c */
+void free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry);
+int free_class_add(struct vea_free_class *vfc, struct vea_entry *entry);
 int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		  unsigned int flags);
 int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
