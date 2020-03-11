@@ -40,7 +40,6 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-
 def daos_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
@@ -849,12 +848,15 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
                                        inst_rpms: 'gotestsum openmpi3 hwloc-devel argobots ' +
                                                   "cart-devel-${env.CART_COMMIT} fuse3-libs " +
                                                   'libisa-l-devel libpmem libpmemobj protobuf-c ' +
-                                                  'spdk-devel libfabric-devel pmix numactl-devel'
+                                                  'spdk-devel libfabric-devel pmix numactl-devel ' +
+                                                  'libipmctl-devel'
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1046,6 +1048,8 @@ pipeline {
                         }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        snapshot: true,
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
@@ -1130,10 +1134,10 @@ pipeline {
                         script {
                             daos_packages_version = readFile('centos7-rpm-version').trim()
                         }
-                        // Just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 3,
-                                       power_only: true,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
@@ -1145,6 +1149,23 @@ pipeline {
                                                test_tag=pr,hw,small
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-3)
+                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalctl -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -1218,10 +1239,10 @@ pipeline {
                         script {
                             daos_packages_version = readFile('centos7-rpm-version').trim()
                         }
-                        // Just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 5,
-                                       power_only: true,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
@@ -1233,6 +1254,23 @@ pipeline {
                                                test_tag=pr,hw,medium,ib2
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-5)
+                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalctl -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -1306,10 +1344,10 @@ pipeline {
                         script {
                             daos_packages_version = readFile('centos7-rpm-version').trim()
                         }
-                        // Just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       power_only: true,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
@@ -1321,6 +1359,23 @@ pipeline {
                                                test_tag=pr,hw,large
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           clush -B -S -o '-i ci_key' -l root -w ${tnodes} \
+                                             "set -x
+                                              for i in 0 1; do
+                                                if [ -e /sys/class/net/ib\\\$i ]; then
+                                                  if ! ifconfig ib\\\$i | grep "inet "; then
+                                                    {
+                                                      echo \"Found interface ib\\\$i down after reboot on \\\$HOSTNAME\"
+                                                      systemctl status
+                                                      systemctl --failed
+                                                      journalctl -n 500
+                                                      ifconfig ib\\\$i
+                                                      cat /sys/class/net/ib\\\$i/mode
+                                                      ifup ib\\\$i
+                                                    } | mail -s \"Interface found down after reboot\" $OPERATIONS_EMAIL
+                                                  fi
+                                                fi
+                                              done"
                                            # set DAOS_TARGET_OVERSUBSCRIBE env here
                                            export DAOS_TARGET_OVERSUBSCRIBE=1
                                            rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
@@ -1392,8 +1447,11 @@ pipeline {
                         }
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
                                        snapshot: true,
-                                       inst_repos: el7_daos_repos
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'environment-modules'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                             "sudo yum -y install daos-client-${daos_packages_version}\n" +
