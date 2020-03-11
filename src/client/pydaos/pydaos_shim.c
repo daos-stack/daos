@@ -926,7 +926,8 @@ out:
 	PyList_SetItem(return_list, 1, PyInt_FromLong(nr_req));
 	PyList_SetItem(return_list, 2, PyInt_FromLong(size));
 	if (rc || daos_anchor_is_eof(anchor)) {
-		Py_DECREF(anchor_cap);
+		if (anchor_cap != NULL)
+			Py_DECREF(anchor_cap);
 		Py_INCREF(Py_None);
 		PyList_SetItem(return_list, 3, Py_None);
 	} else {
