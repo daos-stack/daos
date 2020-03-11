@@ -82,7 +82,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             cat /etc/daos/daos_server.yml
                             cat /etc/daos/daos_agent.yml
                             module load mpi/openmpi3-x86_64
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery daos_server --debug start -t 1 --recreate-superblocks
+                            coproc daos_server --debug start -t 1 --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -93,7 +93,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             daos_agent &
                             AGENT_PID=\\\$!
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
-                            orterun -np 1 -x OFI_INTERFACE=eth0 daos_test -m'''
+                            OFI_INTERFACE=eth0 daos_test -m'''
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
