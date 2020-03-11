@@ -304,9 +304,9 @@ class KVObj(_Obj):
     def __delitem__(self, key):
         self.put(key, None)
 
-    def bget(self, ddict):
+    def bget(self, ddict, value_size=4096):
         """Bulk get value for all the keys of the input python dictionary."""
-        ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict)
+        ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict, value_size)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)
 
