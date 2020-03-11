@@ -452,16 +452,26 @@ class CommandWithSubCommand(ExecutableCommand):
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
         # create uniquely named yaml parameter names.
+        #
+        # This parameter can be specified in the test yaml like so:
+        #   <command>:
+        #       <command>_sub_command: <sub_command>
+        #       <sub_command>:
+        #           <sub_command>_sub_command: <sub_command_sub_command>
+        #
         self.sub_command = NamedParameter(
             "{}_sub_command".format(self._command), None)
 
-        # The class used to define the sub-command and it's specific parameters.
-        # Multiple sub-commands may be available, but only one can be active at
-        # a given time.  The self.get_sub_command_class() method is called after
-        # obtaining the main command's parameter values, in self.get_params(),
-        # to assign the sub-command's class.  This is typically a class based
-        # upon CommandWithParameters class, but can be anything with a __str__()
-        # method.
+        # Define the class to represent the active sub-command and it's specific
+        # parameters.  Multiple sub-commands may be available, but only one can
+        # be active at a given time.
+        #
+        # The self.get_sub_command_class() method is called after obtaining the
+        # main command's parameter values, in self.get_params(), to assign the
+        # sub-command's class.  This is typically a class based upon the
+        # CommandWithParameters class, but can be any object with a __str__()
+        # method (including a simple str object).
+        #
         self.sub_command_class = None
 
     def get_param_names(self):
@@ -480,6 +490,11 @@ class CommandWithSubCommand(ExecutableCommand):
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
+        Calls self.get_sub_command_class() to assign the self.sub_command_class
+        after obtaining the latest self.sub_command definition.  If the
+        self.sub_command_class is assigned to an ObjectWithParameters-based
+        class its get_params() method is also called.
+
         Args:
             test (Test): avocado Test object
         """
@@ -490,6 +505,9 @@ class CommandWithSubCommand(ExecutableCommand):
 
     def get_sub_command_class(self):
         """Get the class assignment for the sub command.
+
+        Should be overridden to assign the self.sub_command_class using the
+        latest self.sub_command definition.
 
         Override this method with sub_command_class assignment that maps to the
         expected sub_command value.

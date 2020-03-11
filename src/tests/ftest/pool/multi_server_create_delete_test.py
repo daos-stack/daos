@@ -55,6 +55,9 @@ class MultiServerCreateDeleteTest(TestWithServers):
             self.server_managers[0].runner.job.yaml_params.access_points.value,
             "dmg.hostlist")
 
+        # Disable raising an exception if the dmg command fails
+        dmg.exit_status_exception = False
+
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -87,12 +90,12 @@ class MultiServerCreateDeleteTest(TestWithServers):
         test_destroy = True
         create_result = dmg.pool_create(
             "1GB", user, group, None, tgtlist, None, system_name)
-        if create_result is not None:
+        if create_result.exit_status == 0:
+            if expected_result == RESULT_FAIL:
+                self.fail(
+                    "Test was expected to fail but it passed at pool create.")
             uuid, _ = get_pool_uuid_service_replicas_from_stdout(
                 create_result.stdout)
-            if expected_result == RESULT_FAIL:
-                self.fail("Test was expected to fail but it passed at pool " +
-                          "create.")
             if '0' in tgtlist:
                 # check_for_pool checks if the uuid directory exists in host1
                 exists = check_for_pool.check_for_pool(host1, uuid)
@@ -112,7 +115,7 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         if test_destroy:
             destroy_result = dmg.pool_destroy(uuid)
-            if destroy_result is not None:
+            if destroy_result.exit_status == 0:
                 if expected_result == RESULT_FAIL:
                     self.fail("Test was expected to fail but it passed at " +
                               "pool create.")
