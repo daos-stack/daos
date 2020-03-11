@@ -263,4 +263,13 @@ ds_sec_cont_can_write_data(uint64_t cont_capas);
 bool
 ds_sec_cont_can_read_data(uint64_t cont_capas);
 
+/**
+ * Get the security capabilities for a rebuild container handle created by the
+ * DAOS server.
+ *
+ * @return	Bits representing security capabilities
+ */
+uint64_t
+ds_sec_get_rebuild_cont_capabilities(void);
+
 #endif /* __DAOS_SRV_SECURITY_H__ */
