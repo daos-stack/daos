@@ -3,7 +3,7 @@ This module is DAOS DFS Java API and DAOS DFS implementation of Hadoop FileSyste
 daos-java-api and hadoop-daos.
 
 ### daos-java-api
-It wraps most of common APIs from daos_fs.h, as well as some pool and container connection related APIs from 
+It wraps most of common APIs from daos_fs.h, as well as some pool and container connection related APIs from
 daos_api.h. There are two main classes, DaosFsClient and DaosFile.
 
 * DaosFsClient
@@ -32,9 +32,9 @@ DaosInputStream and DaosOutputStream.
 * DaosOutputStream, for writing file.
 
 #### Hadoop DAOS FileSystem Configuration
-DAOS FileSystem binds to schema, "daos". All DAOS FileSystem configuration will be read from daos-site.xml. So make 
+DAOS FileSystem binds to schema, "daos". All DAOS FileSystem configuration will be read from daos-site.xml. So make
 sure daos-site.xml can be loaded by Hadoop. Please check [example](hadoop-daos/src/main/resources/daos-site-example.xml)
-for configuration items, defaults and their description. 
+for configuration items, defaults and their description.
 
 ## Build
 It's Java module and built by Maven. Java 1.8 and Maven 3 are required to build this module. After they are installed,
@@ -62,11 +62,11 @@ final build status is success. Then go to target/site folder to find documentati
 
 ## Run
 Besides DAOS setup and environment variables, one more environment for JVM signal chaining should be set as below.
-    
+
     export LD_PRELOAD=<YOUR JDK HOME>/jre/lib/amd64/libjsig.so
 
 When run with Hadoop yarn, you need to add below configuration to core-site.xml.
-  
+
 ```xml
 <property>
 <name>fs.AbstractFileSystem.daos.impl</name>
@@ -74,7 +74,7 @@ When run with Hadoop yarn, you need to add below configuration to core-site.xml.
 </property>
   ```
 
-DAOS has no data locality since it is remote storage. You need to add below configuration to scheduler configuration 
+DAOS has no data locality since it is remote storage. You need to add below configuration to scheduler configuration
 file, like capacity-scheduler.xml in yarn.
 
 ```xml
@@ -83,7 +83,7 @@ file, like capacity-scheduler.xml in yarn.
   <value>-1</value>
 </property>
 ```
-  
+
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and

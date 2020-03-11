@@ -217,7 +217,7 @@ def scons(): # pylint: disable=too-many-locals
                   "You need to delete it or rename it to try again.".format(
                       branch))
             exit(1)
-            
+
         # and check it out
         print("Checking out branch for the PR...")
         repo.checkout(repo.lookup_branch(branch))
@@ -366,10 +366,11 @@ def scons(): # pylint: disable=too-many-locals
     set_defaults(env)
 
     build_prefix = prereqs.get_src_build_dir()
+
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir(build_prefix, '.', duplicate=0)
-    
+    VariantDir(build_prefix, '.', duplicate=0)    
     SConscript('{}/src/SConscript'.format(build_prefix))
+
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -388,9 +389,6 @@ def scons(): # pylint: disable=too-many-locals
 
     # install certificate generation files
     SConscript('utils/certs/SConscript')
-    
-    # build java
-    SConscript('{}/java/SConscript'.format(build_prefix))
 
     Default(build_prefix)
     Depends('install', build_prefix)
@@ -402,4 +400,3 @@ def scons(): # pylint: disable=too-many-locals
         Help(opts.GenerateHelpText(env))
 
 if __name__ == "SCons.Script":
-    scons()
