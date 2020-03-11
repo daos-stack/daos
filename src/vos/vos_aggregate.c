@@ -435,8 +435,8 @@ csum_prepare_ent(struct evt_entry_in *ent_in, unsigned int cs_type,
  * calculated for the new segment. This buffer range is also used to hold
  * the verification checksum for the component (input) segments.
  * The full buffer is extended to hold checksums for entire merge window.
- * Allocations for prior windows are retained until aggregation for a evtree
- * is complete (in vos_agg_akey).
+ * Currently, allocations for prior windows are retained until aggregation
+ * for an evtree is complete (in vos_agg_akey, and at end of agggregation).
  */
 static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
@@ -612,7 +612,6 @@ prepare_segments(struct agg_merge_window *mw)
 			rc = csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
 					      &io->ic_csum_buf,
 					      io->ic_csum_buf_len, cs_total);
-			D_ASSERT(io->ic_csum_buf != NULL);
 			io->ic_csum_buf_len += cs_total;
 		}
 	}
