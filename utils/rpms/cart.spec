@@ -1,10 +1,10 @@
 %global carthome %{_exec_prefix}/lib/%{name}
 
-%global mercury_version 2.0.0a1-0.4.git.5d0cd77%{?dist}
+%global mercury_version 2.0.0a1-0.5.git.ad5a3b3%{?dist}
 
 Name:          cart
 Version:       4.6.0
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -146,6 +146,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 
 
 %changelog
+* Wed Mar 11 2020 Alexander Oganezov <alexander.a.oganezov@intel.com> - 4.6.0-4
+- mercury update to mercury_version 2.0.0a1-0.5.git.ad5a3b3
+
 * Tue Mar 10 2020 Vikram Chhabra <vikram.chhabra@intel.com> - 4.6.0-3
 - mercury_version 2.0.0a1-0.4.git.5d0cd77 - Pulled in HG_Forward fix.
 

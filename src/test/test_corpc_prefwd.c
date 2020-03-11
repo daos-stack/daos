@@ -241,7 +241,6 @@ int main(void)
 		assert(rc == 0);
 	}
 
-
 	pthread_join(progress_thread, NULL);
 	DBG_PRINT("Test finished\n");
 
