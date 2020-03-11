@@ -302,9 +302,7 @@ void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
-daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms,
-					       uint32_t owner_prop_type,
-					       uint32_t acl_prop_type);
+daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 					      struct daos_acl *acl,
 					      uint32_t acl_type);

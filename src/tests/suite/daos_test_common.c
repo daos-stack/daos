@@ -937,11 +937,16 @@ get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 	daos_prop_t	*prop;
 
 	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
+
 	prop->dpp_entries[0].dpe_type = acl_type;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
 	prop->dpp_entries[1].dpe_type = owner_type;
 	D_STRNDUP(prop->dpp_entries[1].dpe_str, owner,
 		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	assert_non_null(prop->dpp_entries[1].dpe_str);
 
 	return prop;
 }
@@ -955,6 +960,8 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	acl = get_daos_acl_with_owner_perms(perms);
 
 	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
 	prop->dpp_entries[0].dpe_type = type;
 	prop->dpp_entries[0].dpe_val_ptr = acl;
 
@@ -963,9 +970,7 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 }
 
 daos_prop_t *
-get_daos_prop_with_user_acl_perms(uint64_t perms,
-				  uint32_t owner_prop_type,
-				  uint32_t acl_prop_type)
+get_daos_prop_with_user_acl_perms(uint64_t perms)
 {
 	daos_prop_t	*prop;
 	struct daos_acl	*acl;

@@ -960,8 +960,7 @@ expect_cont_open_access(test_arg_t *arg, uint64_t perms, uint64_t flags,
 	int		 rc = 0;
 
 	arg->cont_open_flags = flags;
-	prop = get_daos_prop_with_user_acl_perms(perms, DAOS_PROP_CO_OWNER,
-						 DAOS_PROP_CO_ACL);
+	prop = get_daos_prop_with_user_acl_perms(perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -1023,9 +1022,7 @@ expect_co_query_access(test_arg_t *arg, daos_prop_t *query_prop,
 	daos_cont_info_t	 info;
 	int			 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	arg->cont_open_flags = DAOS_COO_RO;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
@@ -1212,9 +1209,7 @@ expect_co_get_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	daos_prop_t		*acl_prop;
 	int			 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	arg->cont_open_flags = DAOS_COO_RO;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
@@ -1265,9 +1260,7 @@ expect_co_set_prop_access(test_arg_t *arg, daos_prop_t *prop, uint64_t perms,
 	daos_prop_t	*cont_prop;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
@@ -1495,9 +1488,7 @@ expect_co_overwrite_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	struct daos_acl	*acl = NULL;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
@@ -1525,9 +1516,7 @@ expect_co_update_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	struct daos_acl	*acl = NULL;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
@@ -1554,9 +1543,7 @@ expect_co_delete_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	daos_prop_t	*cont_prop;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms,
-						      DAOS_PROP_CO_OWNER,
-						      DAOS_PROP_CO_ACL);
+	cont_prop = get_daos_prop_with_user_acl_perms(perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
