@@ -105,8 +105,9 @@ class NvmeFragmentation(IorTestBase):
             self.log.info("--Test Repeat for loop %s---", test_loop)
             job_list = []
             for i in range(no_of_jobs):
-                job_list.append(threading.Thread(target=self.run_ior_parallel,
-                                                 kwargs={"results":self.out_queue}))
+                job_list.append(threading.
+                                Thread(target=self.run_ior_parallel,
+                                       kwargs={"results":self.out_queue}))
 
             for i in range(no_of_jobs):
                 job_list[i].start()
