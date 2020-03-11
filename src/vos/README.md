@@ -22,6 +22,8 @@ This document contains the following sections:
     - <a href="#723">Key in VOS KV Stores</a>
     - <a href="#724">Internal Data Structures</a>
 - <a href="#73">Key Array Stores</a>
+- <a href="#82">Conditional Update and MVCC</a>
+    - <a href="#821">Read Timestamps</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -132,9 +134,9 @@ Again, this ensures that the most recent data in the epoch history of the array 
 
 ### VOS Indexes
 
-The value of the object index table points to a DKEY index.
-The values in the DKEY index, indexed by DKEY and epoch, point to an AKEY index.
-The values in the AKEY index, indexed by AKEY and epoch, point to either a Single Value index or an Array index.
+The value of the object index table, indexed by OID, points to a DKEY index.
+The values in the DKEY index, indexed by DKEY, point to an AKEY index.
+The values in the AKEY index, indexed by AKEY, point to either a Single Value index or an Array index.
 A single value index is referenced by epoch and will return the latest value inserted at or prior to the epoch.
 An array value is indexed by the extent and the epoch and will return portions of extents visible at the epoch.
 
@@ -143,6 +145,12 @@ For example, an object can be replicated, erasure coded, use checksums, or have 
 If integer or lexical keys are used, the object index is ordered by keys, making queries, such as array size, more efficient.
 Otherwise, keys are ordered by the hashed value in the index.
 The object ID is 128 bits.  The upper 32 bits are used to encodes the object type, and key types while the lower 96 bits are a user defined identifier that must be unique to the container.
+
+Each object, dkey, and akey has an associated incarnation log.  The incarnation
+log can be described as an in-order log of creation and punch events for the
+associated entity.   The log is checked for each entity in the path to the value
+to ensure the entity, and therefore the value, is visible at the requested
+time.
 
 <a id="712"></a>
 
@@ -310,7 +318,7 @@ In the <a href="#7e">table</a> below, n is number of entries in tree, m is the n
 <b>Comparison of average case computational complexity for index</b>
 <a id="7e"></a>
 
-|Operation|Reb-black tree|B+Tree|
+|Operation|Red-black tree|B+Tree|
 |---|---|---|
 |Update|O(log2n)|O(log<sub>b</sub>n)|
 |Lookup|O(log2n)|O(log<sub>b</sub>n)|
@@ -422,6 +430,37 @@ EV-tree reinserts are done (instead of merging leaf-nodes as in B+ trees) becaus
 In VOS, delete is required only during aggregation and discard operations.
 These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
 
+<a id="82"></a>
+## Conditional Update (and future MVCC support)
+
+VOS supports conditional operations on individual dkeys and akeys.  The
+following operations are supported
+
+- Conditional fetch:  Fetch if key exists, fail with -DER_NONEXIST otherwise
+- Conditional update: Update if key exist, fail with -DER_NONEXIST otherwise
+- Conditional insert: Update if doesn't exist, fail with -DER_EXIST otherwise
+- Conditional punch:  Punch if the key exists, fail with -DER_NONEXIST otherwise
+
+These operations provide atomic operations enabling certain use cases that
+require such.  Conditional operations are implemented using a combination of
+existence checks and read timestamps.   The read timestamps enable limited
+MVCC to prevent read/write races and provide atomicity guarantees.
+
+<a id="821"></a>
+### Read Timestamps
+
+VOS tracks multiple read timestamps for containers, objects, dkeys, and akeys
+for the express purpose of supporting conditional operations and and
+distributed transactions from individual clients.  These timestamps are
+allocated from a flat array, partitioned by type, using an LRU algorithm
+for each type (container, object, dkey, akey, and negative entries for
+each).   For example, when a key is accessed, it is looked up by stored
+index.  If it's still in cache, the timestamps are used.   If it isn't
+in cache, or upon creation, it is pulled into cache by evicting the LRU
+entry for the type.   This provides an O(1) lookup for timestamps
+associated with each entity.   Two read timestamps: 1. A low timestamp
+tracks the max explicit read of the object or key (or value in the case of
+akeys) and 2. A high timestamp tracking the max read for any subtree.
 
 <a id="74"></a>
 
