@@ -442,24 +442,23 @@ static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 		 void **csum_bufp, unsigned int cur_buf, unsigned int add_len)
 {
-	void		*buffer;
-	unsigned char	*csum_buf = *csum_bufp;
+	uint8_t		*buffer;
 	unsigned int	 new_len = cur_buf + add_len;
 	int		 i;
 
 	D_ASSERT(add_len);
-	D_REALLOC(buffer, csum_buf, new_len);
+	D_REALLOC(buffer, *csum_bufp, new_len);
 	if (buffer == NULL)
 		return -DER_NOMEM;
-	csum_buf = buffer;
-	memset(&csum_buf[cur_buf], 0, add_len);
+	memset(&buffer[cur_buf], 0, add_len);
 	for (i = 0; i < seg_cnt; i++) {
 		struct dcs_csum_info *csum_info = &segs[i].ls_ent_in.ei_csum;
 
-		csum_info->cs_csum = &csum_buf[cur_buf];
+		csum_info->cs_csum = &buffer[cur_buf];
 		cur_buf += csum_info->cs_len * csum_info->cs_nr;
 		D_ASSERT(cur_buf <= new_len);
 	}
+	csum_bufp = (void**)&buffer;
 
 	return 0;
 }
@@ -613,6 +612,7 @@ prepare_segments(struct agg_merge_window *mw)
 			rc = csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
 					      &io->ic_csum_buf,
 					      io->ic_csum_buf_len, cs_total);
+			D_ASSERT(io->ic_csum_buf != NULL);
 			io->ic_csum_buf_len += cs_total;
 		}
 	}
