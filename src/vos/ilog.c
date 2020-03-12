@@ -331,10 +331,11 @@ ilog_init(void)
 #define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
-static inline int
+static inline uint32_t
 ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
-		return -DER_INVAL;
+		return 0;
+
 	return (magic & ILOG_VERSION_MASK);
 }
 
@@ -844,6 +845,10 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 		 bool is_punch)
 {
 	int			 rc = 0;
+
+	rc = ilog_tx_begin(lctx);
+	if (rc != 0)
+		return rc;
 
 	D_ASSERT(opc == ILOG_OP_ABORT);
 
@@ -1693,4 +1698,18 @@ ilog_ts_idx_get(struct ilog_df *ilog_df)
 	root = (struct ilog_root *)ilog_df;
 
 	return &root->lr_ts_idx;
+}
+
+uint32_t
+ilog_version_get(daos_handle_t loh)
+{
+	struct ilog_context	*lctx;
+
+	lctx = ilog_hdl2lctx(loh);
+	if (lctx == NULL) {
+		D_ERROR("Invalid log handle\n");
+		return 0;
+	}
+
+	return ilog_mag2ver(lctx->ic_root->lr_magic);
 }

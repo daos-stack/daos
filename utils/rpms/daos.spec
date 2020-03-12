@@ -320,7 +320,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
-%{_bindir}/daosbench
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl

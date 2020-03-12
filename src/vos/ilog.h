@@ -270,4 +270,13 @@ ilog_fetch_finish(struct ilog_entries *entries);
 uint32_t *
 ilog_ts_idx_get(struct ilog_df *ilog_df);
 
+/** Retrieve the current version of the incarnation log
+ *
+ * \param	loh[in]	Open log handle
+ *
+ * Returns the version of the log or 0 if log handle is invalid
+ **/
+uint32_t
+ilog_version_get(daos_handle_t loh);
+
 #endif /* __ILOG_H__ */

@@ -1568,6 +1568,14 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			int				 count;
 
 			dae_df = &dbd->dbd_active_data[i];
+			if (dae_df->dae_flags & DTX_EF_INVALID)
+				continue;
+
+			if (daos_is_zero_dti(&dae_df->dae_xid)) {
+				D_WARN("Hit zero active DTX entry.\n");
+				continue;
+			}
+
 			D_ALLOC_PTR(dae);
 			if (dae == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
