@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,15 @@
 package ioserver
 
 import (
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+)
+
+const (
+	// NvmeMinBytesPerTarget is min NVMe pool allocation per target
+	NvmeMinBytesPerTarget = 1 * humanize.GiByte
+	// ScmMinBytesPerTarget is min SCM pool allocation per target
+	ScmMinBytesPerTarget = 16 * humanize.MiByte
 )
 
 type (

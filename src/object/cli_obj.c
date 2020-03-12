@@ -40,7 +40,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(28)
+#define OBJ_TGT_INLINE_NR	(26)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -569,7 +569,7 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 {
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_size_t			 size_iod, size_sgl, size_oiod;
-	daos_size_t			 size_recx, size_tgt_nr;
+	daos_size_t			 size_recx, size_tgt_nr, size_singv;
 	daos_size_t			 size_sorter, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
@@ -577,16 +577,18 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	uint8_t				*tmp_ptr;
 	int				 i;
 
+	reasb_req->orr_oca = oca;
 	size_iod = roundup(sizeof(daos_iod_t) * iod_nr, 8);
 	size_sgl = roundup(sizeof(d_sg_list_t) * iod_nr, 8);
 	size_oiod = roundup(sizeof(struct obj_io_desc) * iod_nr, 8);
 	size_recx = roundup(sizeof(struct obj_ec_recx_array) * iod_nr, 8);
 	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
+	size_singv = roundup(sizeof(struct dcs_singv_layout) * iod_nr, 8);
 	/* for oer_tgt_recx_nrs/_idxs */
 	size_tgt_nr = roundup(sizeof(uint32_t) *
 			      (oca->u.ec.e_k + oca->u.ec.e_p), 8);
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
-		   size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN;
+		   size_singv + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -602,6 +604,8 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	tmp_ptr += size_recx;
 	reasb_req->orr_sorters = (void *)tmp_ptr;
 	tmp_ptr += size_sorter;
+	reasb_req->orr_singv_los = (void *)tmp_ptr;
+	tmp_ptr += size_singv;
 	reasb_req->tgt_bitmap = (void *)tmp_ptr;
 	tmp_ptr += OBJ_TGT_BITMAP_LEN;
 
@@ -2294,7 +2298,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			/** checksums sent and not retrying,
 			 * can destroy now
 			 */
-			obj_rw_csum_destroy(obj, dc_task_get_args(task));
+			obj_rw_csum_destroy(obj, obj_auxi);
 		if (obj_auxi->req_tgts.ort_shard_tgts !=
 		    obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
@@ -2364,9 +2368,20 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			shard_arg->oiods = reasb_req->orr_oiods;
 			shard_arg->offs = NULL;
 		}
+		if (obj_auxi->is_ec_obj)
+			shard_arg->reasb_req = reasb_req;
 	} else {
 		shard_arg->oiods = NULL;
 		shard_arg->offs = NULL;
+	}
+
+	/* csum_obj_update/_fetch set the dkey_csum/iod_csums to
+	 * obj_auxi->rw_args, but it is different than shard task's args
+	 * when there are multiple shard tasks (see obj_req_fanout).
+	 */
+	if (shard_arg != &obj_auxi->rw_args) {
+		shard_arg->dkey_csum = obj_auxi->rw_args.dkey_csum;
+		shard_arg->iod_csums = obj_auxi->rw_args.iod_csums;
 	}
 
 	return 0;
@@ -2390,11 +2405,12 @@ csum_obj_update(struct dc_object *obj, daos_obj_update_t *args,
 		return rc;
 
 	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods,
-				    args->nr, false, &iod_csums);
+	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
+				    false, obj_auxi->reasb_req.orr_singv_los,
+				    -1, &iod_csums);
 	if (rc != 0) {
 		daos_csummer_free_ci(csummer, &dkey_csum);
-		D_ERROR("daos_csummer_calc_key error: %d", rc);
+		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		return rc;
 	}
 	/** fault injection */
@@ -2431,7 +2447,8 @@ csum_obj_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 
 	/** akeys (1 for each iod) */
 	rc = daos_csummer_calc_iods(csummer, args->sgls, args->iods, args->nr,
-				    true, &iod_csums);
+				    true, obj_auxi->reasb_req.orr_singv_los,
+				    -1, &iod_csums);
 	if (rc != 0) {
 		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		daos_csummer_free_ci(csummer, &dkey_csum);

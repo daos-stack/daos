@@ -25,8 +25,11 @@ package server
 import (
 	"fmt"
 
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 var (
@@ -69,6 +72,28 @@ var (
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
 	)
 )
+
+func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolNvmeTooSmall,
+		fmt.Sprintf("requested NVMe capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("NVMe capacity should be larger than %s",
+			humanize.IBytes(ioserver.NvmeMinBytesPerTarget*uint64(targetCount))),
+	)
+}
+
+func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolScmTooSmall,
+		fmt.Sprintf("requested SCM capacity (%s) is too small (min %s)",
+			humanize.IBytes(reqBytes),
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("SCM capacity should be larger than %s",
+			humanize.IBytes(ioserver.ScmMinBytesPerTarget*uint64(targetCount))),
+	)
+}
 
 func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(

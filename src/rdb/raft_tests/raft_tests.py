@@ -50,7 +50,7 @@ def number_of_failures():
             return TEST_NOT_RUN
     else:
         os.chdir(os.path.join("build", DIR, "src"))
-        res = subprocess.check_output("./tests_main", shell=True)
+        res = subprocess.check_output("./tests_main", shell=True).decode()
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
