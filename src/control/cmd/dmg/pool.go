@@ -45,6 +45,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	List         systemListPoolsCmd  `command:"list" alias:"l" description:"List DAOS pools"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate a list of targets for a rank"`
 	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
 	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
 	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
@@ -188,7 +189,47 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 	return err
 }
 
-// PoolQueryCmd is the struct representing the command to destroy a DAOS pool.
+// PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
+type PoolReintegrateCmd struct {
+	logCmd
+	connectedCmd
+	UUID    string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
+	Rank    uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Targets string `long:"idx" required:"1" description:"list of idx(s) to be reintegrated into the rank"`
+}
+
+// Execute is run when PoolReintegrateCmd subcommand is activated
+func (r *PoolReintegrateCmd) Execute(args []string) error {
+	msg := "succeeded"
+
+	targetlist := make([]uint32, 0)
+	if len(r.Targets) > 0 {
+		targetStr := strings.Split(r.Targets, ",")
+		for _, rank := range targetStr {
+			t, err := strconv.Atoi(rank)
+			if err != nil {
+				return errors.WithMessage(err, "parsing rank list")
+			}
+			if t < 0 {
+				return errors.Errorf("invalid rank: %d", t)
+			}
+			targetlist = append(targetlist, uint32(t))
+		}
+	}
+
+	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targets: targetlist}
+
+	err := r.conns.PoolReintegrate(req)
+	if err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
+
+	r.log.Infof("Target reintegration command %s\n", msg)
+
+	return err
+}
+
+// PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	logCmd
 	connectedCmd

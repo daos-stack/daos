@@ -187,6 +187,96 @@ void   mgmt__pool_destroy_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_destroy_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__pool_reintegrate_req__init
+                     (Mgmt__PoolReintegrateReq         *message)
+{
+  static const Mgmt__PoolReintegrateReq init_value = MGMT__POOL_REINTEGRATE_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_reintegrate_req__get_packed_size
+                     (const Mgmt__PoolReintegrateReq *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_reintegrate_req__pack
+                     (const Mgmt__PoolReintegrateReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_reintegrate_req__pack_to_buffer
+                     (const Mgmt__PoolReintegrateReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolReintegrateReq *
+       mgmt__pool_reintegrate_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolReintegrateReq *)
+     protobuf_c_message_unpack (&mgmt__pool_reintegrate_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_reintegrate_req__free_unpacked
+                     (Mgmt__PoolReintegrateReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__pool_reintegrate_resp__init
+                     (Mgmt__PoolReintegrateResp         *message)
+{
+  static const Mgmt__PoolReintegrateResp init_value = MGMT__POOL_REINTEGRATE_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__pool_reintegrate_resp__get_packed_size
+                     (const Mgmt__PoolReintegrateResp *message)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__pool_reintegrate_resp__pack
+                     (const Mgmt__PoolReintegrateResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__pool_reintegrate_resp__pack_to_buffer
+                     (const Mgmt__PoolReintegrateResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__PoolReintegrateResp *
+       mgmt__pool_reintegrate_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__PoolReintegrateResp *)
+     protobuf_c_message_unpack (&mgmt__pool_reintegrate_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__pool_reintegrate_resp__free_unpacked
+                     (Mgmt__PoolReintegrateResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__pool_reintegrate_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__list_pools_req__init
                      (Mgmt__ListPoolsReq         *message)
 {
@@ -684,7 +774,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[9
     offsetof(Mgmt__PoolCreateReq, ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -814,7 +904,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     offsetof(Mgmt__PoolCreateResp, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -944,6 +1034,109 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[3] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolReintegrateReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rank",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolReintegrateReq, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "targets",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolReintegrateReq, n_targets),
+    offsetof(Mgmt__PoolReintegrateReq, targets),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
+  1,   /* field[1] = rank */
+  2,   /* field[2] = targets */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[2 + 1] =
+{
+  { 1, 0 },
+  { 3, 1 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolReintegrateReq",
+  "PoolReintegrateReq",
+  "Mgmt__PoolReintegrateReq",
+  "mgmt",
+  sizeof(Mgmt__PoolReintegrateReq),
+  3,
+  mgmt__pool_reintegrate_req__field_descriptors,
+  mgmt__pool_reintegrate_req__field_indices_by_name,
+  2,  mgmt__pool_reintegrate_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_reintegrate_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolReintegrateResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__pool_reintegrate_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__pool_reintegrate_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__pool_reintegrate_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.PoolReintegrateResp",
+  "PoolReintegrateResp",
+  "Mgmt__PoolReintegrateResp",
+  "mgmt",
+  sizeof(Mgmt__PoolReintegrateResp),
+  1,
+  mgmt__pool_reintegrate_resp__field_descriptors,
+  mgmt__pool_reintegrate_resp__field_indices_by_name,
+  1,  mgmt__pool_reintegrate_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__pool_reintegrate_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__list_pools_req__field_descriptors[1] =
 {
   {
@@ -1005,7 +1198,7 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     offsetof(Mgmt__ListPoolsResp__Pool, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
