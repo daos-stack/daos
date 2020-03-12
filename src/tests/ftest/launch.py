@@ -963,6 +963,7 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
                                 n_set, output, test_file)
                             emails = ["amanda.justiniano-pagn@intel.com"]
                             send_notification(sub, msg, emails, o_hosts)
+                            break
 
 
 def archive_config_files(avocado_logs_dir):
