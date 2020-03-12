@@ -959,8 +959,8 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
                 for line in str(output).splitlines():
                     if line.split("\t")[0] and line.split("\t")[0].isdigit():
                         if int(line.split("\t")[0]) > size_limit:
-                            msg.append("Host: {} \nTest File: {} \n{}".format(
-                                ",".join(o_hosts), test_file, str(output)))
+                            msg.append("Host: {} \nTest File: {}\n".format(
+                                ",".join(o_hosts), test_file))
                             break
             if msg:
                 sub = "Test Log Too Long Found"
