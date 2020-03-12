@@ -24,6 +24,7 @@ This document contains the following sections:
 - <a href="#73">Key Array Stores</a>
 - <a href="#82">Conditional Update and MVCC</a>
     - <a href="#821">Read Timestamps</a>
+    - <a href="#822">MVCC Rules</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -431,7 +432,7 @@ In VOS, delete is required only during aggregation and discard operations.
 These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
 
 <a id="82"></a>
-## Conditional Update (and future MVCC support)
+## Conditional Update and MVCC
 
 VOS supports conditional operations on individual dkeys and akeys.  The
 following operations are supported
@@ -458,9 +459,116 @@ each).   For example, when a key is accessed, it is looked up by the stored
 index.  If it's still in cache, the timestamps are used.   If it isn't
 in cache, or upon creation, it is pulled into cache by evicting the LRU
 entry for the type.   This provides an O(1) lookup for timestamps
-associated with each entity.   Two read timestamps: 1. A low timestamp
-tracks the max explicit read of the object or key (or value in the case of
-akeys) and 2. A high timestamp tracking the max read for any subtree.
+associated with each entity.  Two read timestamps for each entity: 1. A low
+timestamp (entity.low) indicating that _all_ nodes in the subtree rooted at the
+entity have been read at entity.low and 2. A high timestamp (entity.high)
+indicating that _at least_ one node in the subtree rooted at the entity has
+been read at entity.high. For any leaf node (i.e., akey), low == high; for any
+non-leaf node, low <= high.
+
+<a id="822"></a>
+### MVCC Rules
+
+Every DAOS I/O operation belongs to a transaction. If a user does not associate
+an operation with a transaction, DAOS regards this operation as a
+single-operation transaction. A conditional update, as defined above, is
+therefore regarded as a transaction comprising a conditional check, and if the
+check passes, an update or punch operation.
+
+Every transaction gets an epoch. Single-operation transactions and conditional
+updates get their epochs from the redundancy group servers they access,
+snapshot read transactions get their epoch from the snapshot records, and other
+transactions get their epochs from the initiating clients' HLC. A transaction
+performs all operations using its epoch.
+
+The MVCC rules ensure that transactions execute as if they are serialized in
+their epoch order while complying with external consistency, as long as the
+system clock offsets are always within the expected maximal system clock offset
+(epsilon). For convenience, the rules classify the I/O operations into reads
+and writes:
+
+  - Reads
+      - Fetch akeys [akey level]
+      - Check object emptiness [object level]
+      - Check dkey emptiness [dkey level]
+      - Check akey emptiness [akey level]
+      - List objects under container [container level]
+      - List dkeys under object [object level]
+      - List akeys under dkey [dkey level]
+      - Query min/max dkeys under object [object level]
+      - Query min/max akeys under dkey [dkey level]
+  - Writes
+      - Update akeys [akey level]
+      - Punch akeys [akey level]
+      - Punch dkey [dkey level]
+      - Punch object [object level]
+
+And each read or write is at one of the four levels: container, object, dkey,
+and akey. An operation is regarded as an access to the whole subtree rooted at
+its level. Although this introduces a few false conflicts (e.g., a list
+operation versus a lower level update that does not change the list result),
+the assumption simplies the rules.
+
+A read at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    find the highest overlapping, unaborted write in [0, e]
+    if the write is not committed
+        wait for the write to commit or abort
+        if aborted
+            retry the find skipping this write
+
+    // Read timestamp update
+    for level i from container to the read's level lv
+        update i.high
+    update lv.low
+
+A write at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    // Read timestamp check
+    for level i from container to one level above the write
+        if (i.low > e) || ((i.low == e) && (other reader @ i.low))
+            reject
+    if (i.high > e) || ((i.high == e) && (other reader @ i.high))
+        reject
+
+    find if there is any overlapping write at e
+    if found and from a different transaction
+        reject
+
+A transaction involving both reads and writes must follow both sets of rules.
+As an optimization, read-only transactions do not need to update read
+timestamps. Snapshot creations, however, must update the read timestamps as if
+it is a transaction reading the whole container.
+
+When a transaction is rejected, it restarts with the same transaction ID but a
+higher epoch. If the epoch becomes higher than the original epoch plus epsilon,
+the epoch becomes certain, guaranteeing the restarts due to the epoch
+uncertainty checks are bounded.
+
+Deadlocks among transactions are impossible. A transaction t_1 with epoch e_1
+may block a transaction t_2 with epoch e_2 only when t_2 needs to wait for
+t_1's writes to commit. Since the client caching is used, t_1 must be
+committing, whereas t_2 may be reading or committing. If t_2 is reading, then
+e_1 <= e_2. If t_2 is committing, then e_1 < e_2. Suppose there is a cycle of
+transactions reaching a deadlock. If the cycle includes a committing-committing
+edge, then the epochs along the cycle must increase and then decrease, causing
+a contradiction. If all edges are committing-reading, then there must be two
+such edges together, causing a contradiction that a reading transaction cannot
+block other transactions. Deadlocks are therefore not a concern.
+
+If an entity keeps getting reads with increasing epochs, writes to this entity
+may keep being rejected due to the entity's ever increasing read timestamps. A
+solution to starvation problems like this is a work in progress.
 
 <a id="74"></a>
 
