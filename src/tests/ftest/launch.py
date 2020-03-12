@@ -901,16 +901,17 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands), 900)
 
 
-def send_notification(hosts, subject, msg, emails):
+def send_notification(hosts, subject, msg, attachment, emails):
     """Send email notification to provided emails with given message.
 
     Args:
         host (list): hosts to perform command in.
         msg (str): message to be sent.
+        attachment (str): attachment to send on the email.
         emails (list): list of email addresses to send message to.
     """
-    mail_cmd = "echo \"{}\" | mail -s \"{} from {}\" {}".format(
-        msg, subject, hosts, ",".join(emails))
+    mail_cmd = "mail -s \"{}\" -a {} {} <<< \"{}\"".format(
+        subject, attachment, ",".join(emails), msg)
     spawn_commands(hosts, mail_cmd, 30)
 
 
@@ -930,7 +931,7 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
     host_list = get_hosts_from_yaml(test_yaml, args)
 
     # Create a file that contains the sizes on each test log and the logs_dir.
-    command = "du -ah -d 1 {} &> {}".format(logs_dir, log_size_file)
+    command = "du -ab -d 1 {} &> {}".format(logs_dir, log_size_file)
     spawn_commands(host_list, command, 30)
 
     # Check log_size.log file to see if anything goes over size_limit
@@ -948,22 +949,24 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
     # Check the command output
     for code in sorted(results):
         output_data = list(size_info_out.iter_buffers(results[code]))
+        print("Out data: {}".format(output_data))
         if not output_data:
             err_nodes = NodeSet.fromlist(results[code])
             print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
         else:
+            msg = []
             for output, o_hosts in output_data:
-                lines = str(output).splitlines()
-                n_set = NodeSet.fromlist(o_hosts)
-                for line in lines:
-                    if line.split(" ")[0]:
-                        if int(line.split(" ")[0]) > size_limit:
-                            sub = "Test Log Too Long Found"
-                            msg = "{}: \n{} \n{}".format(
-                                n_set, output, test_file)
-                            emails = ["amanda.justiniano-pagn@intel.com"]
-                            send_notification(sub, msg, emails, o_hosts)
+                for line in str(output).splitlines():
+                    if line.split("\t")[0] and line.split("\t")[0].isdigit():
+                        if int(line.split("\t")[0]) > size_limit:
+                            msg.append("Host: {} \nTest File: {} \n{}".format(
+                                ",".join(o_hosts), test_file, str(output)))
                             break
+            if msg:
+                sub = "Test Log Too Long Found"
+                emails = ["amanda.justiniano-pagn@intel.com"]
+                send_notification(
+                    o_hosts, sub, "\n\n".join(msg), log_size_file, emails)
 
 
 def archive_config_files(avocado_logs_dir):
