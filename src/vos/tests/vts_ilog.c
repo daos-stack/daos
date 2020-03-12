@@ -406,10 +406,10 @@ struct version_cache {
 };
 
 static void
-version_cache_init(struct version_cache *vcache, uint32_t initial_version)
+version_cache_init(struct version_cache *vcache)
 {
 	memset(vcache, 0, sizeof(*vcache));
-	vcache->vc_ver[1] = initial_version;
+	vcache->vc_ver[1] = 1;
 }
 
 static bool
@@ -418,11 +418,6 @@ version_cache_fetch_helper(struct version_cache *vcache, daos_handle_t loh,
 {
 	vcache->vc_ver[vcache->vc_idx] = ilog_version_get(loh);
 	if (expect_change) {
-		if (vcache->vc_ver[0] == vcache->vc_ver[1]) {
-			print_message("version unexpectedly matches: %d\n",
-				      vcache->vc_ver[0]);
-			return false;
-		}
 		if (vcache->vc_ver[vcache->vc_idx] <=
 		    vcache->vc_ver[1 - vcache->vc_idx]) {
 			print_message("version %d should be greater than %d\n",
@@ -460,7 +455,7 @@ ilog_test_update(void **state)
 	int			 rc;
 	int			 idx;
 
-	version_cache_init(&version_cache, 1);
+	version_cache_init(&version_cache);
 
 	assert_non_null(entries);
 
@@ -613,7 +608,7 @@ ilog_test_abort(void **state)
 	int			 iter;
 	int			 rc;
 
-	version_cache_init(&version_cache, 1);
+	version_cache_init(&version_cache);
 	assert_non_null(entries);
 
 	pool = vos_hdl2pool(args->ctx.tc_po_hdl);
@@ -760,7 +755,7 @@ ilog_test_persist(void **state)
 	assert_non_null(pool);
 	umm = vos_pool2umm(pool);
 
-	version_cache_init(&version_cache, 1);
+	version_cache_init(&version_cache);
 
 	ilog = ilog_alloc_root(umm);
 
