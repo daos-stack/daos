@@ -24,6 +24,7 @@
 package server
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -93,16 +94,15 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
-			if err == context.DeadlineExceeded {
-				// harness unresponsive
+			if strings.Contains(err.Error(), "connection refused") {
 				for _, rank := range ranks {
 					badRanks[rank] = system.MemberStateStopped
 				}
-				svc.log.Debugf("no response from harness %s", addr)
+				svc.log.Debugf("harness at %s is unreachable", addr)
 				continue
 			}
 
-			return errors.Wrapf(err, "query to harness at %s", addr)
+			return err
 		}
 
 		for _, result := range hResults {
@@ -200,7 +200,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 
 		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr)
 		if err != nil {
-			if err != context.DeadlineExceeded {
+			if !strings.Contains(err.Error(), "connection refused") {
 				return nil, errors.Wrapf(err, "harness %s prep shutdown", addr)
 			}
 
@@ -251,7 +251,7 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 
 		hResults, err := svc.harnessClient.Stop(ctx, addr, force)
 		if err != nil {
-			if err != context.DeadlineExceeded {
+			if !strings.Contains(err.Error(), "connection refused") {
 				return nil, errors.Wrapf(err, "harness %s stop", addr)
 			}
 			hResults = svc.reportStoppedRanks("stop", ranks, nil)
@@ -357,7 +357,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 
 		hResults, err := svc.harnessClient.Start(ctx, addr)
 		if err != nil {
-			if err != context.DeadlineExceeded {
+			if !strings.Contains(err.Error(), "connection refused") {
 				return nil, errors.Wrapf(err, "harness %s start", addr)
 			}
 			hResults = svc.reportStoppedRanks("start", ranks,

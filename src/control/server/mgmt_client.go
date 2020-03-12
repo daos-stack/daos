@@ -68,7 +68,7 @@ func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
 }
 
 func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
-	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
+	fn func(context.Context, mgmtpb.MgmtSvcClient) error, extraDialOpts ...grpc.DialOption) error {
 
 	var opts []grpc.DialOption
 	authDialOption, err := security.DialOptionForTransportConfig(msc.cfg.TransportConfig)
@@ -77,11 +77,10 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 
 	// Setup Dial Options that will always be included.
-	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(retryDelay),
-		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
-	conn, err := grpc.DialContext(ctx, ap, opts...)
+	opts = append(opts, grpc.WithBlock(), authDialOption)
+	conn, err := grpc.DialContext(ctx, ap, append(opts, extraDialOpts...)...)
 	if err != nil {
-		return errors.Wrapf(err, "dial %s", ap)
+		return err
 	}
 	defer conn.Close()
 
@@ -158,7 +157,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 
 				return nil
 			}
-		})
+		}, grpc.WithBackoffMaxDelay(retryDelay), grpc.WithDefaultCallOptions(grpc.FailFast(false)))
 
 	return
 }
@@ -176,7 +175,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 			resp, err = pbClient.PrepShutdownRanks(ctx, &req)
 
 			return
-		})
+		}, grpc.FailOnNonTempDialError(true))
 
 	return
 }
@@ -216,7 +215,7 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.
 
 				return nil
 			}
-		})
+		}, grpc.FailOnNonTempDialError(true))
 
 	return
 }
@@ -240,7 +239,7 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req mgmtpb
 			resp, err = pbClient.StartRanks(ctx, &req)
 
 			return
-		})
+		}, grpc.FailOnNonTempDialError(true))
 
 	return
 }
@@ -262,7 +261,7 @@ func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req mgmtp
 			resp, err = pbClient.PingRanks(ctx, &req)
 
 			return
-		})
+		}, grpc.FailOnNonTempDialError(true))
 
 	return
 }
