@@ -1473,6 +1473,8 @@ rebuild_fini_one(void *arg)
 			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
+	ds_pool_child_put(dpc);
+
 	return 0;
 }
 
@@ -1691,6 +1693,9 @@ rebuild_prepare_one(void *data)
 	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID
 		" rebuild eph "DF_U64" rc %d\n", DP_UUID(rpt->rt_pool_uuid),
 		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, rc);
+
+	ds_pool_child_put(dpc);
+
 	return rc;
 }
 
