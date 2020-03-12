@@ -124,7 +124,7 @@ class Dfuse(DfuseCommand):
                     "Error creating the {} dfuse mount point on the following "
                     "hosts: {}".format(self.mount_dir.value, error_hosts))
 
-    def remove_mount_point(self):
+    def remove_mount_point(self, fail=True):
         """Remove dfuse directory
         Raises:
             CommandFailure: In case of error deleting directory
@@ -142,11 +142,8 @@ class Dfuse(DfuseCommand):
         if dir_exists:
 
             target_nodes = list(self.hosts)
-            self.log.debug('remove: hosts %s', self.hosts)
-            self.log.debug('remove: clean %s', clean_nodes)
             if clean_nodes:
                 target_nodes.remove(clean_nodes)
-            self.log.debug('remove: target %s', target_nodes)
 
             cmd = "rmdir {}".format(self.mount_dir.value)
             ret_code = general_utils.pcmd(target_nodes, cmd, timeout=30)
@@ -164,14 +161,16 @@ class Dfuse(DfuseCommand):
                     ",".join(
                         [str(node_set) for code, node_set in ret_code.items()
                          if code != 0]))
+                if fail:
+                    raise CommandFailure(
+                        "Error removing the {} dfuse mount point with rm on "
+                        "the following hosts: {}".format(self.mount_dir.value,
+                                                         error_hosts))
+            if fail:
                 raise CommandFailure(
-                    "Error removing the {} dfuse mount point with rm on the "
+                    "Error removing the {} dfuse mount point with rmdir on the "
                     "following hosts: {}".format(self.mount_dir.value,
-                                                 error_hosts))
-            raise CommandFailure(
-                "Error removing the {} dfuse mount point with rmdir on the "
-                "following hosts: {}".format(self.mount_dir.value,
-                                             failed_nodes))
+                                                 failed_nodes))
 
     def run(self):
         """ Run the dfuse command.
@@ -231,6 +230,7 @@ class Dfuse(DfuseCommand):
             cmd = "pkill dfuse --signal KILL"
             general_utils.pcmd(error_hosts, cmd, timeout=30)
             general_utils.pcmd(error_hosts, umount_cmd, timeout=30)
+            self.remove_mount_point(fail=False)
             raise CommandFailure(
                 "Error stopping dfuse on the following hosts: {}".format(
                     error_hosts))
