@@ -109,19 +109,24 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 		return;
 	}
 
-	fb.count = 1;
-	fb.buf[0].mem = buff + len;
-	fb.buf[0].size = size - len;
+	rc = pthread_mutex_trylock(&oh->doh_ie->ie_dfs->dfs_read_mutex);
+	if (rc == 0) {
 
-	DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
-		       position + len, position + size - 1);
+		fb.count = 1;
+		fb.buf[0].mem = buff + len;
+		fb.buf[0].size = size - len;
 
-	rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session, ino,
-					position + len, &fb, 0);
-	if (rc == 0)
-		DFUSE_TRA_DEBUG(oh, "notfiy_store returned %d", rc);
-	else
-		DFUSE_TRA_INFO(oh, "notfiy_store returned %d", rc);
+		DFUSE_TRA_INFO(oh, "%#zx-%#zx was readahead",
+			position + len, position + size - 1);
+
+		rc = fuse_lowlevel_notify_store(fs_handle->dpi_info->di_session,
+						ino, position + len, &fb, 0);
+		if (rc == 0)
+			DFUSE_TRA_DEBUG(oh, "notify_store returned %d", rc);
+		else
+			DFUSE_TRA_INFO(oh, "notify_store returned %d", rc);
+		pthread_mutex_unlock(&oh->doh_ie->ie_dfs->dfs_read_mutex);
+	}
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);
 	D_FREE(buff);

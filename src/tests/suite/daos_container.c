@@ -1074,6 +1074,27 @@ co_query_access(void **state)
 			       ~DAOS_ACL_PERM_GET_ACL,
 			       -0);
 
+	print_message("Empty prop object (all props), but no get-prop\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_PROP,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), but no get-ACL\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_GET_ACL,
+			       -DER_NO_PERM);
+	daos_prop_free(prop);
+
+	print_message("Empty prop object (all props), with access\n");
+	prop = daos_prop_alloc(0);
+	expect_co_query_access(arg, prop,
+			       DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL,
+			       0);
+	daos_prop_free(prop);
+
 	print_message("All props with no get-prop access\n");
 	prop = get_query_prop_all();
 	expect_co_query_access(arg, prop,
@@ -1751,6 +1772,43 @@ co_set_owner_access(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+co_destroy_force(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid);
+
+	print_message("creating container "DF_UUIDF"\n",
+		      DP_UUID(uuid));
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("opening container\n");
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
+			    &info, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("destroying container (force=false): should err\n");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 0 /* force */, NULL);
+	assert_int_equal(rc, -DER_BUSY);
+
+	print_message("destroying container (force=true): should succeed\n");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("closing container: should succeed\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -1813,6 +1871,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_set_owner, NULL, test_case_teardown},
 	{ "CONT19: container set-owner access by ACL",
 	  co_set_owner_access, NULL, test_case_teardown},
+	{ "CONT20: container destroy force",
+	  co_destroy_force, NULL, test_case_teardown},
 };
 
 int

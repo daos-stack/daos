@@ -160,7 +160,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 			entry = &result->dpp_entries[result_i];
 			result_i++;
 		}
-		daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
+		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
 		if (rc != 0)
 			goto err;
 	}
