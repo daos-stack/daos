@@ -747,7 +747,7 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally get the size of the logs and log_dir of the tests
             if args.log_size:
-                get_log_size(test_file["yaml"], args)
+                get_log_size(test_file["yaml"], test_file["py"], args)
 
             # Optionally store all of the doas server and client log files
             # along with the test results
@@ -901,13 +901,29 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands), 900)
 
 
-def get_log_size(test_yaml, args):
+def send_notification(hosts, subject, msg, emails):
+    """Send email notification to provided emails with given message.
+
+    Args:
+        host (list): hosts to perform command in.
+        msg (str): message to be sent.
+        emails (list): list of email addresses to send message to.
+    """
+    mail_cmd = "echo \"{}\" | mail -s \"{} from {}\" {}".format(
+        msg, subject, hosts, ",".join(emails))
+    spawn_commands(hosts, mail_cmd, 30)
+
+
+def get_log_size(test_yaml, test_file, args, size_limit=2**33):
     """Get the size of the the directoy of the host test log files in
     the avocado results directory and store the values in a file.
 
     Args:
         test_yaml (str): yaml file containing host names
+        test_file (str): the test python file
         args (argparse.Namespace): command line arguments for this program
+        size_limit (int): limitsize in bytes that determines when to send
+            notification.
     """
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     log_size_file = os.path.join(logs_dir, "log_size.log")
@@ -916,6 +932,37 @@ def get_log_size(test_yaml, args):
     # Create a file that contains the sizes on each test log and the logs_dir.
     command = "du -ah -d 1 {} &> {}".format(logs_dir, log_size_file)
     spawn_commands(host_list, command, 30)
+
+    # Check log_size.log file to see if anything goes over size_limit
+    size_info_cmd = "cat {}".format(log_size_file)
+    size_info_out = get_remote_output(host_list, size_info_cmd, 30)
+
+    # Create a dictionary of hosts for each unique return code
+    results = {code: hosts for code, hosts in size_info_out.iter_retcodes()}
+
+    # Determine if the command completed successfully across all the hosts
+    status = len(results) == 1 and 0 in results
+    if not status:
+        print("  Errors detected running \"{}\":".format(command))
+
+    # Check the command output
+    for code in sorted(results):
+        output_data = list(size_info_out.iter_buffers(results[code]))
+        if not output_data:
+            err_nodes = NodeSet.fromlist(results[code])
+            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
+        else:
+            for output, o_hosts in output_data:
+                lines = str(output).splitlines()
+                n_set = NodeSet.fromlist(o_hosts)
+                for line in lines:
+                    if line.split(" ")[0]:
+                        if int(line.split(" ")[0]) > size_limit:
+                            sub = "Test Log Too Long Found"
+                            msg = "{}: \n{} \n{}".format(
+                                n_set, output, test_file)
+                            emails = ["amanda.justiniano-pagn@intel.com"]
+                            send_notification(sub, msg, emails, o_hosts)
 
 
 def archive_config_files(avocado_logs_dir):
