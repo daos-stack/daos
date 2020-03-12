@@ -24,6 +24,7 @@ This document contains the following sections:
 - <a href="#73">Key Array Stores</a>
 - <a href="#82">Conditional Update and MVCC</a>
     - <a href="#821">Read Timestamps</a>
+    - <a href="#822">MVCC Rules</a>
 - <a href="#74">Epoch Based Operations</a>
     - <a href="#741">VOS Discard</a>
     - <a href="#742">VOS Aggregate</a>
@@ -431,14 +432,14 @@ In VOS, delete is required only during aggregation and discard operations.
 These operations are discussed in a following section (<a hfer="#74">Epoch Based Operations</a>).
 
 <a id="82"></a>
-## Conditional Update (and future MVCC support)
+## Conditional Update and MVCC
 
 VOS supports conditional operations on individual dkeys and akeys.  The
-following operations are supported
+following operations are supported:
 
-- Conditional fetch:  Fetch if key exists, fail with -DER_NONEXIST otherwise
-- Conditional update: Update if key exist, fail with -DER_NONEXIST otherwise
-- Conditional insert: Update if doesn't exist, fail with -DER_EXIST otherwise
+- Conditional fetch:  Fetch if the key exists, fail with -DER_NONEXIST otherwise
+- Conditional update: Update if the key exists, fail with -DER_NONEXIST otherwise
+- Conditional insert: Update if the key doesn't exist, fail with -DER_EXIST otherwise
 - Conditional punch:  Punch if the key exists, fail with -DER_NONEXIST otherwise
 
 These operations provide atomic operations enabling certain use cases that
@@ -458,9 +459,116 @@ each).   For example, when a key is accessed, it is looked up by the stored
 index.  If it's still in cache, the timestamps are used.   If it isn't
 in cache, or upon creation, it is pulled into cache by evicting the LRU
 entry for the type.   This provides an O(1) lookup for timestamps
-associated with each entity.   Two read timestamps: 1. A low timestamp
-tracks the max explicit read of the object or key (or value in the case of
-akeys) and 2. A high timestamp tracking the max read for any subtree.
+associated with each entity.  Two read timestamps for each entity: 1. A low
+timestamp (entity.low) indicating that _all_ nodes in the subtree rooted at the
+entity have been read at entity.low and 2. A high timestamp (entity.high)
+indicating that _at least_ one node in the subtree rooted at the entity has
+been read at entity.high. For any leaf node (i.e., akey), low == high; for any
+non-leaf node, low <= high.
+
+<a id="822"></a>
+### MVCC Rules
+
+Every DAOS I/O operation belongs to a transaction. If a user does not associate
+an operation with a transaction, DAOS regards this operation as a
+single-operation transaction. A conditional update, as defined above, is
+therefore regarded as a transaction comprising a conditional check, and if the
+check passes, an update, or punch operation.
+
+Every transaction gets an epoch. Single-operation transactions and conditional
+updates get their epochs from the redundancy group servers they access,
+snapshot read transactions get their epoch from the snapshot records and other
+transactions get their epochs from the initiating clients' HLC. A transaction
+performs all operations using its epoch.
+
+The MVCC rules ensure that transactions execute as if they are serialized in
+their epoch order while complying with external consistency, as long as the
+system clock offsets are always within the expected maximal system clock offset
+(epsilon). For convenience, the rules classify the I/O operations into reads
+and writes:
+
+  - Reads
+      - Fetch akeys [akey level]
+      - Check object emptiness [object level]
+      - Check dkey emptiness [dkey level]
+      - Check akey emptiness [akey level]
+      - List objects under container [container level]
+      - List dkeys under object [object level]
+      - List akeys under dkey [dkey level]
+      - Query min/max dkeys under object [object level]
+      - Query min/max akeys under dkey [dkey level]
+  - Writes
+      - Update akeys [akey level]
+      - Punch akeys [akey level]
+      - Punch dkey [dkey level]
+      - Punch object [object level]
+
+And each read or write is at one of the four levels: container, object, dkey,
+and akey. An operation is regarded as an access to the whole subtree rooted at
+its level. Although this introduces a few false conflicts (e.g., a list
+operation versus a lower level update that does not change the list result),
+the assumption simplifies the rules.
+
+A read at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    find the highest overlapping, unaborted write in [0, e]
+    if the write is not committed
+        wait for the write to commit or abort
+        if aborted
+            retry the find skipping this write
+
+    // Read timestamp update
+    for level i from container to the read's level lv
+        update i.high
+    update lv.low
+
+A write at epoch e follows these rules:
+
+    // Epoch uncertainty check
+    if e is uncertain
+        if there is any overlapping, unaborted write in (e, e + epsilon]
+            reject
+
+    // Read timestamp check
+    for level i from container to one level above the write
+        if (i.low > e) || ((i.low == e) && (other reader @ i.low))
+            reject
+    if (i.high > e) || ((i.high == e) && (other reader @ i.high))
+        reject
+
+    find if there is any overlapping write at e
+    if found and from a different transaction
+        reject
+
+A transaction involving both reads and writes must follow both sets of rules.
+As an optimization, read-only transactions do not need to update read
+timestamps. Snapshot creations, however, must update the read timestamps as if
+it is a transaction reading the whole container.
+
+When a transaction is rejected, it restarts with the same transaction ID but a
+higher epoch. If the epoch becomes higher than the original epoch plus epsilon,
+the epoch becomes certain, guaranteeing the restarts due to the epoch
+uncertainty checks are bounded.
+
+Deadlocks among transactions are impossible. A transaction t_1 with epoch e_1
+may block a transaction t_2 with epoch e_2 only when t_2 needs to wait for
+t_1's writes to commit. Since the client caching is used, t_1 must be
+committing, whereas t_2 may be reading or committing. If t_2 is reading, then
+e_1 <= e_2. If t_2 is committing, then e_1 < e_2. Suppose there is a cycle of
+transactions reaching a deadlock. If the cycle includes a committing-committing
+edge, then the epochs along the cycle must increase and then decrease, causing
+a contradiction. If all edges are committing-reading, then there must be two
+such edges together, causing a contradiction that a reading transaction cannot
+block other transactions. Deadlocks are, therefore, not a concern.
+
+If an entity keeps getting reads with increasing epochs, writes to this entity
+may keep being rejected due to the entity's ever-increasing read timestamps. A
+solution to starvation problems like this is a work in progress.
 
 <a id="74"></a>
 
@@ -490,7 +598,7 @@ Aggregate and discard operations in VOS accept a range of epochs to be aggregate
 ### VOS Discard
 
 Discard forcefully removes epochs without aggregation.
-Use of this operation is necessary only when value/extent-data associated with a pair needs to be discarded.
+This operation is necessary only when the value/extent-data associated with a pair needs to be discarded.
 During this operation, VOS looks up all objects associated with each cookie in the requested epoch range from the cookie index table and removes the records directly from the respective object trees by looking at their respective epoch validity.
 DAOS requires a discard to service abort requests.
 Abort operations require a discard to be synchronous.
@@ -507,7 +615,7 @@ During aggregation, VOS must retain the latest update to a key/extent-range disc
 VOS can freely remove or consolidate keys or extents so long as it doesn't alter the view visible at the latest timestamp or any persistent snapshot epoch.
 Aggregation makes use of the vos_iterate API to find both visible and hidden entries between persistent snapshots and removes hidden keys and extents and merges contiguous partial extents to reduce metadata overhead.
 Aggregation can be an expensive operation but doesn't need to consume cycles on the critical path.
-A special aggregation ULT processes aggregation, yielding frequently to avoid blocking continuing I/O.
+A special aggregation ULT processes aggregation, frequently yielding to avoid blocking the continuing I/O.
 
 <a id="79"></a>
 
@@ -521,7 +629,7 @@ The **Chunk Size** is defined as the maximum number of bytes of data that a chec
 While extents are defined in terms of records, the chunk size is defined in terms of bytes.
 When calculating the number of checksums needed for an extent, the number of records and the record size is needed.
 Checksums should typically be derived from Chunk Size bytes, however,
-if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned" than a checksum might be derived from bytes smaller than Chunk Size.
+if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned," then a checksum might be derived from bytes smaller than Chunk Size.
 
 The **Chunk Alignment** will have an absolute offset, not an I/O offset. So even if an extent is exactly, or less than, Chunk Size bytes long, it may have more than one Chunk if it crosses the alignment barrier.
 
@@ -542,7 +650,7 @@ The following diagram illustrates the overall VOS layout and where checksums wil
 ### Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
 
 On update, the checksum(s) are part of the I/O Descriptor.
-Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert) the checksum(s) are copied to the end of the persistent structure.
+Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert), the checksum(s) are copied to the end of the persistent structure.
 
 On a fetch, the update flow is essentially reversed.
 
@@ -571,7 +679,7 @@ Then run vos_size to create vos_size.yaml with metadata size information
 [~/daos]$ vos_size
 ```
 
-Finally, execute vos_size.py to get a meta data estimate for the use cases in an input.yaml.
+Finally, execute vos_size.py to get a metadata estimate for the use cases in an input.yaml.
 An example input yaml is installed to /etc.  This file has comments documenting configuration
 options.
 ```
@@ -625,7 +733,7 @@ record.  After local modifications are done, each non-leader replica marks the
 DTX state as 'prepared' and replies to the leader replica.  The leader sets the
 DTX state to 'committable' as soon as it has completed its modifications and
 has received successful replies from all replicas.  If any replica(s) failed to
-execute the modification, it will reply to the leader with failure and the
+execute the modification, it will reply to the leader with failure, and the
 leader will ask remaining replicas to 'abort' the DTX.   Once the DTX is set
 by the leader to 'committable' or 'abort', it replies to the client with the
 appropriate status.
@@ -639,11 +747,11 @@ subsequent modifications.
 
 When an application wants to read something from an object with multiple
 replicas, the client can send the RPC to any replica.  On the server side, if
-the related DTX has been committed, or is committable, the record can be returned to.
+the related DTX has been committed or is committable, the record can be returned to.
 If the DTX state is prepared, and the replica is not the leader, it will reply
 to the client telling it to send the RPC to the leader instead.  If it is the
 leader and is in any state other than 'committed' or 'committable', the entry
-is ignored and the latest committed modification is returned to the client.
+is ignored, and the latest committed modification is returned to the client.
 
 The DTX model is built inside a DAOS container.  Each container maintains its own
 DTX table that is organized as two B+trees in SCM: one for active DTXs and the
@@ -666,7 +774,7 @@ replicas, including:
 sanity checks before dispatching modifications to other replicas.
 
 2. Non-leader replicas tell the client to redirect reads in 'prepared' DTX state to
-the leader replica.  The leader, therefore, may handle a heaver load on reads
+the leader replica.  The leader, therefore, may handle a heavier load on reads
 than non-leaders.
 
 To avoid general load imbalance, the leader selection is done for each object or
