@@ -27,6 +27,7 @@ Usage: vos_size.py input.yaml [alternate vos_size.yaml]
 
 See vos_size_input.yaml sample input
 '''
+from __future__ import print_function
 import yaml
 import random
 
@@ -41,8 +42,8 @@ def convert(stat):
 
 def print_total(name, stat, total):
     "Pretty print"
-    print "\t%-20s: %s (%5.2f%%)" % (name, convert(stat),
-                                     100 * float(stat) / total)
+    print("\t%-20s: %s (%5.2f%%)" % (name, convert(stat),
+                                     100 * float(stat) / total))
 
 def check_key_type(spec):
     """check key type field"""
@@ -110,7 +111,7 @@ class Stats(object):
 
     def pretty_print(self):
         """Pretty print statistics"""
-        print "Metadata totals:"
+        print("Metadata totals:")
         self.stats["scm_total"] = self.stats["total"] - self.stats["nvme_total"]
         self.print_stat("pool")
         self.print_stat("container")
@@ -123,7 +124,7 @@ class Stats(object):
         self.print_stat("user_meta")
         self.print_stat("user_value")
         self.print_stat("scm_total")
-        print "Total bytes with user data: %s" % (convert(self.stats["total"]))
+        print("Total bytes with user data: %s" % (convert(self.stats["total"])))
 
 # pylint: disable=too-many-instance-attributes
 class MetaOverhead(object):
@@ -334,7 +335,7 @@ def run_vos_size():
     overheads = MetaOverhead(args, num_pools, meta_yaml)
 
     if "containers" not in config_yaml:
-        print "No \"containers\" key in %s.  Nothing to do" % args.config[0]
+        print("No \"containers\" key in %s.  Nothing to do" % args.config[0])
         return
 
     for container in config_yaml.get("containers"):
