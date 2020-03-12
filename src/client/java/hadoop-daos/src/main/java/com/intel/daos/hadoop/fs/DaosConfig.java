@@ -33,6 +33,7 @@ import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -67,20 +68,7 @@ public class DaosConfig {
 
   private DaosConfig() {
     defaultConfig = new Configuration(false);
-
-    try {
-      File tempFile = File.createTempFile("daos", "");
-      tempFile.deleteOnExit();
-      try (InputStream is = this.getClass().getResourceAsStream("/daos-site.xml")) {
-        FileUtils.copyInputStreamToFile(is, tempFile);
-        defaultConfig.addResource(tempFile.toURI().toURL(), false);
-      } catch (Exception e) {
-        log.info("no daos-site.xml found. DAOS configuration will be read from command line.");
-      }
-    }catch (IOException ie) {
-      log.error("failed to create temp file when loading daos-site.xml", ie);
-    }
-
+    defaultConfig.addResource("daos-site.xml");
     String exampleFile = "daos-site-example.xml";
     try (InputStream is = this.getClass().getResourceAsStream("/" + exampleFile)) {
       Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is);
