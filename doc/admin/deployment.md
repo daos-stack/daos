@@ -45,7 +45,7 @@ storage nodes before deploying DAOS.
 
 ### Enable IOMMU (Optional)
 
-In order to run DAOS server as a non-root user with NVMe devices, the hardware
+In order to run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
 On Intel® systems, this capability is named Intel® Virtualization Technology for
 Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
