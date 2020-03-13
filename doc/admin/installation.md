@@ -32,7 +32,7 @@ Moreover, the DAOS stack leverages the following open source projects:
     detecting their NUMA node affinity and for CPU binding
 
 -   [*libfabric*](https://github.com/ofiwg/libfabric) for detecting fabric
-    interfaces, providers and connection management.
+    interfaces, providers, and connection management.
 
 The DAOS build system can be configured to download and build any missing
 dependencies automatically.
@@ -115,7 +115,7 @@ The installation path can be modified by adding the PREFIX= option to the above
 command line (e.g., PREFIX=/usr/local).
 
 !!! note
-    Several parameters can be set (e.g. COMPILER=clang or COMPILER=icc) on the
+    Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
     scons command line. Please see `scons --help` for all the possible options.
     Those options are also saved for future compilations.
 
@@ -143,7 +143,7 @@ specified through PREFIX.
 This section describes how to build and run the DAOS service in a Docker
 container. A minimum of 5GB of DRAM and 16GB of disk space will be required.
 On Mac, please make sure that the Docker settings under
-"Preferences/{Disk,Memory}" are configured accordingly.
+"Preferences/{Disk, Memory}" are configured accordingly.
 
 ### Building from GitHub
 
