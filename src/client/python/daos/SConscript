@@ -31,7 +31,7 @@ def build_shim_module(env, lib_prefix, version):
                               SHLINKFLAGS=[],
                               SHLIBPREFIX="",
                               SHLIBSUFFIX='.so')
-    install_path = lib_prefix + "/python" + version + "/site-packages/pydaos"
+    install_path = lib_prefix + "/python" + version + "/site-packages/daos"
     new_env.Install(install_path, base)
     # install new wrappers too
     new_env.Install(install_path, "__init__.py")

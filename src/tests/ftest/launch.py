@@ -114,7 +114,7 @@ def get_temporary_directory(base_dir=None):
     else:
         tmp_dir = os.path.join(base_dir, "tmp")
 
-    # Make sure the temporary directory exists to prevent pydaos import errors
+    # Make sure the temporary directory exists to prevent daos import errors
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
 

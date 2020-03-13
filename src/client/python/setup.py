@@ -1,5 +1,5 @@
 """
-setup.py for packaging pydaos python module.
+setup.py for packaging daos python module.
 
 To use type:
 
@@ -29,7 +29,7 @@ def load_conf():
 
 conf = load_conf()
 
-args = {'sources': ['pydaos/pydaos_shim.c'],
+args = {'sources': ['daos/pydaos_shim.c'],
         'libraries': ['daos', 'duns']}
 
 if conf:
@@ -47,11 +47,11 @@ else:
     shim_name = 'pydaos_shim_3'
     args['define_macros'] = [('__USE_PYTHON3__', 1)]
 
-module1 = Extension('pydaos.{}'.format(shim_name), **args)
+module1 = Extension('daos.{}'.format(shim_name), **args)
 
 setup(
-    name='pydaos',
-    version='0.2',
+    name='daos',
+    version='0.3',
     packages=find_packages(),
     description='DAOS interface',
     ext_modules=[module1]

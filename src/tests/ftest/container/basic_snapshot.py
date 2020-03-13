@@ -24,7 +24,7 @@
 import random
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
+from daos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 
 

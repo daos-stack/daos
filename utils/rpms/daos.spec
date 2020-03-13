@@ -280,33 +280,33 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos
-%{_libdir}/python2.7/site-packages/pydaos/*.py
+%dir  %{_libdir}/python2.7/site-packages/daos
+%{_libdir}/python2.7/site-packages/daos/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/daos/*.pyc
+%{_libdir}/python2.7/site-packages/daos/*.pyo
 %endif
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%{_libdir}/python2.7/site-packages/daos/pydaos_shim_27.so
+%dir  %{_libdir}/python2.7/site-packages/daos/raw
+%{_libdir}/python2.7/site-packages/daos/raw/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
+%{_libdir}/python2.7/site-packages/daos/raw/*.pyc
+%{_libdir}/python2.7/site-packages/daos/raw/*.pyo
 %endif
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
-%dir %{_libdir}/python3/site-packages/pydaos
-%{_libdir}/python3/site-packages/pydaos/*.py
+%dir %{_libdir}/python3/site-packages/daos
+%{_libdir}/python3/site-packages/daos/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/*.pyc
-%{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/daos/*.pyc
+%{_libdir}/python3/site-packages/daos/*.pyo
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%dir %{_libdir}/python3/site-packages/pydaos/raw
-%{_libdir}/python3/site-packages/pydaos/raw/*.py
+%{_libdir}/python3/site-packages/daos/pydaos_shim_3.so
+%dir %{_libdir}/python3/site-packages/daos/raw
+%{_libdir}/python3/site-packages/daos/raw/*.py
 %if (0%{?rhel} >= 7)
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
+%{_libdir}/python3/site-packages/daos/raw/*.pyc
+%{_libdir}/python3/site-packages/daos/raw/*.pyo
 %endif
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
