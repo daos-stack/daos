@@ -30,7 +30,7 @@ from multiprocessing import sharedctypes
 from avocado import fail_on
 from apricot import TestWithServers
 import check_for_pool
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, IOV
+from daos.raw import DaosPool, DaosContainer, DaosApiError, IOV
 
 
 class GlobalHandle(TestWithServers):

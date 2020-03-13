@@ -26,7 +26,7 @@ import traceback
 import random
 import string
 from apricot import TestWithServers
-from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
+from daos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
                         c_uuid_to_str)
 
 

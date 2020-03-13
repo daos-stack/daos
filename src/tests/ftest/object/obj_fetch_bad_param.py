@@ -27,7 +27,7 @@ import time
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
+from daos.raw import DaosContainer, DaosApiError
 
 
 class ObjFetchBadParam(TestWithServers):

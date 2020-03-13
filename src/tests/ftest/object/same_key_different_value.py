@@ -26,7 +26,7 @@ from __future__ import print_function
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
+from daos.raw import DaosContainer, DaosApiError
 
 
 class SameKeyDifferentValue(TestWithServers):

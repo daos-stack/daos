@@ -26,7 +26,7 @@ import time
 import avocado
 import random
 
-from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
+from daos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
 from apricot import TestWithServers
 
 

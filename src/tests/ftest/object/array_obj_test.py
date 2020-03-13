@@ -28,7 +28,7 @@ import traceback
 import logging
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+from daos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
 
 class ArrayObjTest(TestWithServers):

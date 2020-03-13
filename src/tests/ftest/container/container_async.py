@@ -27,7 +27,7 @@ import uuid
 import threading
 
 from apricot import TestWithServers, skipForTicket
-from pydaos.raw import  DaosContainer, DaosApiError
+from daos.raw import  DaosContainer, DaosApiError
 
 
 # pylint: disable=global-variable-not-assigned, global-statement

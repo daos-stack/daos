@@ -39,7 +39,7 @@ import socket
 import threading
 from avocado.utils import process
 from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosSnapshot, DaosApiError
+from daos.raw import DaosSnapshot, DaosApiError
 
 H_LOCK = threading.Lock()
 

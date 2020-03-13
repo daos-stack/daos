@@ -28,7 +28,7 @@ import ctypes
 import avocado
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, IORequest, DaosApiError
+from daos.raw import DaosContainer, IORequest, DaosApiError
 
 
 class CreateManyDkeys(TestWithServers):

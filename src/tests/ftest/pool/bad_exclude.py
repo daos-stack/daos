@@ -27,7 +27,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, RankList
+from daos.raw import DaosApiError, RankList
 
 
 class BadExcludeTest(TestWithServers):

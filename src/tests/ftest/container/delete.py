@@ -26,7 +26,7 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, DaosContainer
+from daos.raw import DaosApiError, DaosContainer
 
 
 class DeleteContainerTest(TestWithServers):

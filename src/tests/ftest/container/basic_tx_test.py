@@ -27,7 +27,7 @@ import time
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+from daos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
 
 class BasicTxTest(TestWithServers):

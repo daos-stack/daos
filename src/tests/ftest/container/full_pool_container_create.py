@@ -21,7 +21,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers, skipForTicket
-from pydaos.raw import DaosContainer, DaosApiError
+from daos.raw import DaosContainer, DaosApiError
 from general_utils import get_random_string
 
 

@@ -26,7 +26,7 @@ import traceback
 import ctypes
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosApiError, RankList
+from daos.raw import DaosPool, DaosApiError, RankList
 
 
 class BadEvictTest(TestWithServers):

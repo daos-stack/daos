@@ -27,7 +27,7 @@ import traceback
 import logging
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
+from daos.raw import DaosContainer, DaosApiError
 
 
 class ObjUpdateBadParam(TestWithServers):

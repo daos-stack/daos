@@ -29,7 +29,7 @@ from avocado.core.exceptions import TestFail
 from test_utils_base import CallbackHandler
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from pydaos.raw import DaosApiError
+from daos.raw import DaosApiError
 import ctypes
 
 

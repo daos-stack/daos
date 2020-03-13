@@ -25,7 +25,7 @@ from logging import getLogger
 from time import sleep
 
 from command_utils import ObjectWithParameters, BasicParameter
-from pydaos.raw import DaosApiError
+from daos.raw import DaosApiError
 
 
 class CallbackHandler(object):

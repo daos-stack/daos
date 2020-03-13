@@ -26,7 +26,7 @@ import traceback
 
 from apricot import TestWithServers
 import check_for_pool
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from daos.raw import DaosPool, DaosContainer, DaosApiError
 from test_utils_pool import TestPool
 
 class GlobalHandle(TestWithServers):

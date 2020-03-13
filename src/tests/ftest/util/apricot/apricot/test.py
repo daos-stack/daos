@@ -41,7 +41,7 @@ import write_host_file
 
 from server_utils import ServerManager, ServerFailed
 from configuration_utils import Configuration
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
+from daos.raw import DaosContext, DaosLog, DaosApiError
 from env_modules import load_mpi
 from distutils.spawn import find_executable
 from dmg_utils import DmgCommand

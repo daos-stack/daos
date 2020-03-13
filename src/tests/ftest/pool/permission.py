@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
+from daos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
 from test_utils_pool import TestPool
 

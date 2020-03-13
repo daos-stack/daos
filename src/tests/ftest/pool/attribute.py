@@ -30,7 +30,7 @@ import random
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
-from pydaos.raw import DaosApiError
+from daos.raw import DaosApiError
 from test_utils_pool import TestPool
 
 # pylint: disable=global-variable-not-assigned, global-statement
