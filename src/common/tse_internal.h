@@ -34,7 +34,7 @@
  */
 
 /* NB: tse_task_private is TSE_PRIV_SIZE = 1016 bytes for now */
-#define TSE_TASK_ARG_LEN		888
+#define TSE_TASK_ARG_LEN		880
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -80,6 +80,10 @@ struct tse_task_private {
 	 * fit in.
 	 */
 	void				*dtp_priv;
+	/**
+	 * DAOS internal task parameter pointer.
+	 */
+	void				*dtp_priv_internal;
 	/**
 	 * reserved buffer for user to assign embedded parameters, it also can
 	 * be used as task stack space that can push/pop parameters to

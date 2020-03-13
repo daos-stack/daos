@@ -5,12 +5,137 @@
 System monitoring and telemetry data will be provided as part of the
 control plane and will be documented in a future revision.
 
+### NVMe SSD Health Monitoring
+
+Useful admin dmg commands to query NVMe SSD health:
+
+- Query Per-Server Metadata (SMD): `dmg storage query smd`
+
+Queries persistently stored device and pool metadata tables. The device table
+maps device UUID to attached VOS target IDs. The pool table maps VOS target IDs
+to attached SPDK blob IDs.
+```bash
+$ dmg -l boro-11 storage query smd --devices --pools
+boro-11:10001: connected
+SMD Device List:
+boro-11:10001:
+        Device:
+                UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+                VOS Target IDs: 0 1 2 3
+SMD Pool List:
+boro-11:10001:
+        Pool:
+                UUID: 01b41f76-a783-462f-bbd2-eb27c2f7e326
+                VOS Target IDs: 0 1 3 2
+                SPDK Blobs: 4294967404 4294967405 4294967407 4294967406
+```
+
+- Query Blobstore Health Data: `dmg storage query blobstore-health`
+
+Queries in-memory health data for the SPDK blobstore (i.e, NVMe SSD). This
+includes a subset of the SPDK device health stats, as well as I/O error and
+checksum counters.
+```bash
+$ dmg -l boro-11 storage query blobstore-health
+  --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 -l=boro-11:10001
+boro-11:10001: connected
+Blobstore Health Data:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        Read errors: 0
+        Write errors: 0
+        Unmap errors: 0
+        Checksum errors: 0
+        Device Health:
+                Error log entries: 0
+                Media errors: 0
+                Temperature: 289
+                Temperature: OK
+                Available Spare: OK
+                Device Reliability: OK
+                Read Only: OK
+                Volatile Memory Backup: OK
+```
+
+- Query Persistent Device State: `dmg storage query device-state`
+
+Queries the current persistently stored device state of the specified NVMe SSD
+(either NORMAL or FAULTY).
+```bash
+$ dmg storage query device-state --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: NORMAL
+```
+
+- Manually Set Device State to FAULTY: `dmg storage set nvme-faulty`
+
+Allows the admin to manually set the device state of the given device to FAULTY,
+which will trigger faulty device reaction (all targets on the SSD will be
+rebuilt and the SSD will remain in an OUT state until reintegration is
+supported).
+```bash
+$ dmg storage set nvme-faulty --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+-l=boro-11:10001
+boro-11:10001: connected
+Device State Info:
+boro-11:10001:
+        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
+        State: FAULTY
+```
+
 ## System Operations
 
 ### Full Shutdown and Restart
 
-Details on how to support proper DAOS server shutdown will be provided
-in a future revision.
+A DAOS system can be restarted after a controlled shutdown providing
+no configurations changes have been made after the initial format.
+
+The DAOS Control Server instance acting as access point records DAOS
+I/O Server instances that join the system in a "membership".
+
+When up and running, the entire system (all I/O Server instances)
+can be shut down with the command:
+`dmg -l <access_point_addr> system stop`, after which DAOS Control
+Servers will continue to operate and listen on the management network.
+
+To start the system again (with no configuration changes) after a
+controlled shutdown, run the command
+`dmg -l <access_point_addr> system start`, DAOS I/O Servers
+managed by DAOS Control Servers will be started.
+
+To query the system membership, run the command
+`dmg -l <access_point_addr> system query`, this lists details
+(rank/uuid/control address/state) of DAOS I/O Servers in the
+system membership.
+
+!!! warning
+    Controlled start/stop has some known limitations.
+    "start" restarts all configured instances on all harnesses that can
+    be located in the system membership, regardless of member state.
+    Moreover, supplying the list of ranks to "start" and "stop" is not yet supported
+
+### Fresh Start
+
+To reset the DAOS metadata across all hosts, the system must be reformatted.
+First, ensure all `daos_server` processes on all hosts have been
+stopped, then for each SCM mount specified in the config file
+(`scm_mount` in the `servers` section) umount and wipe FS signatures.
+
+Example illustration with two IO instances specified in the config file:
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos1`
+
+- `clush -w wolf-[118-121,130-133] umount /mnt/daos0`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem1`
+
+- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem0`
+
+- Then restart DAOS Servers and format.
 
 ### Fault Domain Maintenance and Reintegration
 
@@ -47,7 +172,7 @@ this target will be rejected and re-routed.
 Once detected, the faulty target or servers (effectively a set of
 targets) must be excluded from each pool membership. This process is
 triggered either manually by the administrator or automatically (see
-next section for more information). Upon exclusion from the pool map,
+the next section for more information). Upon exclusion from the pool map,
 each target starts the collective rebuild process automatically to
 restore data redundancy. The rebuild process is designed to operate
 online while servers continue to process incoming I/O operations from
@@ -63,8 +188,8 @@ current logic relies on CPU cycles on the storage nodes. By default, the
 rebuild process is configured to consume up to 30% of the CPU cycles,
 leaving the other 70% for regular I/O operations.
 
-During the rebuild process, the user can set the throttle to guarantee the
-rebuild will not use more resource than the user setting. The user can
+During the rebuild process, the user can set the throttle to guarantee that
+the rebuild will not use more resources than the user setting. The user can
 only set the CPU cycle for now. For example, if the user set the
 throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
 the rebuild job. The default rebuild throttle for CPU cycle is 30. This
