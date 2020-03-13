@@ -85,6 +85,7 @@ struct cont {
 	rdb_path_t		c_prop;		/* container property KVS */
 	rdb_path_t		c_snaps;	/* snapshot KVS */
 	rdb_path_t		c_user;		/* user attribute KVS */
+	rdb_path_t		c_hdls;		/* handle index KVS */
 };
 
 /* OID range for allocator */
