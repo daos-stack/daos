@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
   test_clients:
-    - client-A   #server client same host
+    - server-B   #server client different host
   transport_config:
     - allow_insecure: False
     - ca_cert: ~/.daos/daosCA.crt
@@ -22,7 +22,7 @@ dmg:
   request: pool
   action: create
   create:
-    scm_size: 16000000
+    scm_size: 16777216
 pool_acl:
   user_prefix: daos_ci
   num_user: 5

@@ -80,7 +80,7 @@ class TestPool(TestDaosApiBase):
         # used.
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
         uname = getpass.getuser()
-        gname = grp.getgrnam(uname)[0]
+        gname = grp.getgrgid(self.gid)[0]
         self.username = BasicParameter(uname, uname)
         self.groupname = BasicParameter(gname, gname)
 
@@ -173,6 +173,7 @@ class TestPool(TestDaosApiBase):
             self.dmg.action_command.group.value = self.groupname.value
             self.dmg.action_command.user.value = self.username.value
             self.dmg.action_command.scm_size.value = self.scm_size.value
+            self.dmg.action_command.nvme_size.value = self.nvme_size.value
             self.dmg.action_command.ranks.value = ranks_comma_separated
             self.dmg.action_command.nsvc.value = self.svcn.value
             create_result = self.dmg.run()
@@ -190,12 +191,9 @@ class TestPool(TestDaosApiBase):
                 self.pool.group = None
             else:
                 self.pool.group = ctypes.create_string_buffer(self.name.value)
-            # Modification 1: Use the length of service_replica returned by dmg
-            # to calculate rank_t. Note that we assume we always get a single
-            # number. I'm not sure if we ever get multiple numbers, but in that
-            # case, we need to modify this implementation to create a list out
-            # of the multiple numbers possibly separated by comma
-            service_replicas = [int(service_replica)]
+            # Modification 1: Use the list of service replicas returned from
+            # dmg pool create.
+            service_replicas = [int(num) for num in service_replica.split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
             # Modification 2: Use the service_replicas list to generate rank.
             # In DaosPool, we first use some garbage 999999 values and let DAOS

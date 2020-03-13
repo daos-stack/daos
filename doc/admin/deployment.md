@@ -43,6 +43,31 @@ Before getting started, please make sure to review and complete the
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
+### Enable IOMMU (Optional)
+
+In order to run DAOS server as a non-root user with NVMe devices, the hardware
+must support virtualized device access, and it must be enabled in the system BIOS.
+On Intel® systems, this capability is named Intel® Virtualization Technology for
+Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
+the Linux kernel. Exact details depend on the distribution, but the following
+example should be illustrative:
+
+```bash
+# Enable IOMMU on CentOS 7
+# All commands must be run as root/sudo!
+
+$ sudo vi /etc/default/grub # add the following line:
+GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on"
+
+# after saving the file, run the following to reconfigure
+# the bootloader:
+$ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
+
+# if the command completed with no errors, reboot the system
+# in order to make the changes take effect
+$ sudo reboot
+```
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -178,7 +203,7 @@ take precedence over equivalent configuration file parameter.
 For convenience, active parsed configuration values are written to a temporary
 file for reference, and the location will be written to the log.
 
-#### Configuration File Options
+#### Configuration Options
 
 The example configuration file lists the default empty configuration, listing all the
 options (living documentation of the config file). Live examples are
@@ -195,7 +220,7 @@ for latest information and examples.
 At this point of the process, the servers: and provider: section of the yaml
 file can be left blank and will be populated in the subsequent sections.
 
-#### Certificate Generation And Configuration
+#### Certificate Configuration
 
 The DAOS security framework relies on certificates to authenticate
 components and administrators in addition to encrypting DAOS control plane
@@ -208,7 +233,7 @@ may be invoked in the directory to which the certificates will be written. As pa
 of the generation process, a new local Certificate Authority is created to handle
 certificate signing, and three role certificates are created:
 
-```
+```bash
 # /usr/lib64/daos/certgen/gen_certificates.sh
 Generating Private CA Root Certificate
 Private CA Root Certificate created in ./daosCA
@@ -460,7 +485,9 @@ resetting SCM memory allocations
 A reboot is required to process new memory allocation goals.
 ```
 
-### Storage Detection & Selection
+
+
+### Storage Selection
 
 While the DAOS server auto-detects all the usable storage, the administrator
 will still be provided with the ability through the configuration file
@@ -502,6 +529,30 @@ section of the server configuration file for best performance.
 
 Note that other storage query commands are also available,
 `dmg storage --help` for listings.
+
+SSD health state can be verified via `dmg storage query nvme-health`:
+
+```bash
+$ dmg -l wolf-71 storage query nvme-health
+wolf-71:10001: connected
+wolf-71:10001
+        NVMe controllers and namespaces detail with health statistics:
+                PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750TB
+                Health Stats:
+                        Temperature:288K(15C)
+                        Controller Busy Time:5h26m0s
+                        Power Cycles:4
+                        Power On Duration:16488h0m0s
+                        Unsafe Shutdowns:2
+                        Media Errors:0
+                        Error Log Entries:0
+                        Critical Warnings:
+                                Temperature: OK
+                                Available Spare: OK
+                                Device Reliability: OK
+                                Read Only: OK
+                                Volatile Memory Backup: OK
+```
 
 The next step consists of adjusting in the server configuration the storage
 devices that should be used by DAOS. The `servers` section of the yaml is a
@@ -546,7 +597,7 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 In this situation, the configuration file `servers` section could be
 populated as follows:
 
-```
+```yaml
 <snip>
 port: 10001
 access_points: ["wolf-71"] # <----- updated
@@ -593,11 +644,11 @@ servers:
 <end>
 ```
 
-### Network Interface Detection and Selection
+### Network Configuration
 
 To display the fabric interface, OFI provider and NUMA node
 combinations detected on the DAOS server, use the following command:
-```
+```bash
 $ daos_server network scan --all
 
         fabric_iface: ib0
@@ -758,55 +809,7 @@ the necessary DAOS metadata indicating that the server has been formatted.
 When starting, `daos_server` will skip `maintenance mode` and attempt to start
 IO services if valid DAOS metadata is found in `scm_mount`.
 
-## Stop and Start a Formatted System
-
-A DAOS system can be restarted after a controlled shutdown providing
-no configurations changes have been made after initial format.
-
-The DAOS Control Server instance acting as access point records DAOS
-I/O Server instances that join the system in a "membership".
-
-When up and running, the entire system (all I/O Server instances)
-can be shutdown with the command
-`dmg -l <access_point_addr> system stop`, after which DAOS Control
-Servers will continue to operate and listen on the management network.
-
-To start the system again (with no configuration changes) after a
-controlled shutdown, run the command
-`dmg -l <access_point_addr> system start`, DAOS I/O Servers
-managed by DAOS Control Servers will be started.
-
-To query the system membership, run the command
-`dmg -l <access_point_addr> system query`, this lists details
-(rank/uuid/control address/state) of DAOS I/O Servers in the
-system membership.
-
-### Controlled Start/Stop Limitations (subject to change)
-
-* "start" restarts all configured instances on all harnesses that can
-  be located in the system membership, regardless of member state
-* supplying list of ranks to "start" and "stop" is not yet supported
-
-### Fresh Start
-
-To reset the DAOS metadata across all hosts the system must be reformatted.
-First ensure all `daos_server` processes on all hosts have been
-stopped, then for each SCM mount specified in the config file
-(`scm_mount` in the `servers` section) umount and wipe FS signatures.
-
-Example illustration with two IO instances specified in the config file:
-
-- `clush -w wolf-[118-121,130-133] umount /mnt/daos1`
-
-- `clush -w wolf-[118-121,130-133] umount /mnt/daos0`
-
-- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem1`
-
-- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem0`
-
-- Then restart DAOS Servers and format.
-
-## Agent Configuration and Startup
+## Agent Setup
 
 This section addresses how to configure the DAOS agents on the storage
 nodes before starting it.
@@ -825,7 +828,8 @@ support is to pass the -i flag to daos_agent.
 The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
-(`install/etc/daos_agent.yml`).
+(`install/etc/daos_agent.yml`). If installed from rpms the default location is
+(`/usr/etc/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -856,12 +860,13 @@ DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release.
+incomplete integration of certificate support as of the 0.6 release and
+configured to use a non-default agent configuration file.
 
 To start the DAOS Agent from the command line, run:
 
 ```bash
-$ daos_agent -i
+$ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -870,24 +875,26 @@ If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_agent binary.
 
+ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>
+
 Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
-$ systemctl enable daos-agent
-$ systemctl start daos-agent
+$ sudo systemctl enable daos-agent
+$ sudo systemctl start daos-agent
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-agent
+$ sudo systemctl status daos-agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ journalctl --unit daos-agent
+$ sudo journalctl --unit daos-agent
 ```
 
 ## System Validation
@@ -898,120 +905,11 @@ running daos_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
 environment variables are properly set as described [here](#server-startup).
 
 ```bash
-orterun -np <num_clients> --hostfile <hostfile> ./daos_test
+mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
 
 daos_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
 each storage node.
-
-## NVMe SSD Health Monitoring & Stats
-Useful admin dmg commands to query NVMe SSD health:
-
-- Query NVMe SSD Health Stats: **$dmg storage query nvme-health**
-
-Queries raw SPDK NVMe device health statistics for all NVMe SSDs on all hosts in
-list.
-
-```bash
-$dmg storage query nvme-health -l=boro-11:10001
-boro-11:10001: connected
-boro-11:10001
-        NVMe controllers and namespaces detail with health statistics:
-                PCI:0000:81:00.0 Model:INTEL SSDPEDKE020T7  FW:QDV10130 Socket:1
-Capacity:1.95TB
-                Health Stats:
-                        Temperature:288K(15C)
-                        Controller Busy Time:5h26m0s
-                        Power Cycles:4
-                        Power On Duration:16488h0m0s
-                        Unsafe Shutdowns:2
-                        Media Errors:0
-                        Error Log Entries:0
-                        Critical Warnings:
-                                Temperature: OK
-                                Available Spare: OK
-                                Device Reliability: OK
-                                Read Only: OK
-                                Volatile Memory Backup: OK
-```
-
-- Query Per-Server Metadata (SMD): **$dmg storage query smd**
-
-Queries persistently stored device and pool metadata tables. The device table
-maps device UUID to attached VOS target IDs. The pool table maps VOS target IDs
-to attached SPDK blob IDs.
-```bash
-$dmg storage query smd --devices --pools -l=boro-11:10001
-boro-11:10001: connected
-SMD Device List:
-boro-11:10001:
-        Device:
-                UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-                VOS Target IDs: 0 1 2 3
-SMD Pool List:
-boro-11:10001:
-        Pool:
-                UUID: 01b41f76-a783-462f-bbd2-eb27c2f7e326
-                VOS Target IDs: 0 1 3 2
-                SPDK Blobs: 4294967404 4294967405 4294967407 4294967406
-```
-
-- Query Blobstore Health Data: **$dmg storage query blobstore-health**
-
-Queries in-memory health data for the SPDK blobstore (ie NVMe SSD). This
-includes a subset of the SPDK device health stats, as well as I/O error and
-checksum counters.
-```bash
-$dmg storage query blobstore-health
---devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 -l=boro-11:10001
-boro-11:10001: connected
-Blobstore Health Data:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        Read errors: 0
-        Write errors: 0
-        Unmap errors: 0
-        Checksum errors: 0
-        Device Health:
-                Error log entries: 0
-                Media errors: 0
-                Temperature: 289
-                Temperature: OK
-                Available Spare: OK
-                Device Reliability: OK
-                Read Only: OK
-                Volatile Memory Backup: OK
-```
-
-- Query Persistent Device State: **$dmg storage query device-state**
-
-Queries the current persistently stored device state of the specified NVMe SSD
-(either NORMAL or FAULTY).
-```
-$dmg storage query device-state --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
--l=boro-11:10001
-boro-11:10001: connected
-Device State Info:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        State: NORMAL
-```
-
-- Manually Set Device State to FAULTY: **$dmg storage set nvme-faulty**
-
-Allows the admin to manually set the device state of the given device to FAULTY,
-which will trigger faulty device reaction (all targets on the SSD will be
-rebuilt and the SSD will remain in an OUT state until reintegration is
-supported).
-```bash
-$dmg storage set nvme-faulty --devuuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
--l=boro-11:10001
-boro-11:10001: connected
-Device State Info:
-boro-11:10001:
-        Device UUID: 5bd91603-d3c7-4fb7-9a71-76bc25690c19
-        State: FAULTY
-```
 
 [^1]: https://github.com/intel/ipmctl
 

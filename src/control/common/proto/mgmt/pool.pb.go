@@ -1115,7 +1115,9 @@ func init() {
 	proto.RegisterType((*PoolQueryResp)(nil), "mgmt.PoolQueryResp")
 }
 
-func init() { proto.RegisterFile("pool.proto", fileDescriptor_8a14d8612184524f) }
+func init() {
+	proto.RegisterFile("pool.proto", fileDescriptor_8a14d8612184524f)
+}
 
 var fileDescriptor_8a14d8612184524f = []byte{
 	// 727 bytes of a gzipped FileDescriptorProto

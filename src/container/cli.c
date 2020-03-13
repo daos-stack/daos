@@ -243,9 +243,6 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
@@ -255,8 +252,13 @@ dc_cont_create(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_prop;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -340,9 +342,6 @@ dc_cont_destroy(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	/* TODO: Implement "force". */
-	D_ASSERT(args->force != 0);
-
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err, rc = -DER_INVAL);
 
@@ -350,16 +349,18 @@ dc_cont_destroy(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_pool;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -648,9 +649,6 @@ dc_cont_open(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
 	if (cont == NULL) {
 		cont = dc_cont_alloc(args->uuid);
 		if (cont == NULL)
@@ -666,8 +664,13 @@ dc_cont_open(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -678,7 +681,7 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_op.ci_uuid, args->uuid);
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_capas = args->flags;
+	in->coi_flags = args->flags;
 	/** Determine which container properties need to be retrieved while
 	 * opening the contianer
 	 */
@@ -749,6 +752,12 @@ cont_close_complete(tse_task_t *task, void *data)
 			" pool_hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
+		rc = 0;
+	} else if (rc == -DER_NONEXIST) {
+		/* The container cannot be found on the server. */
+		D_DEBUG(DF_DSMC, DF_CONT": already destroyed: hdl="DF_UUID"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid),
+			DP_UUID(cont->dc_cont_hdl));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("failed to close container: "DF_RC"\n", DP_RC(rc));
@@ -834,8 +843,13 @@ dc_cont_close(tse_task_t *task)
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_pool;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1032,8 +1046,13 @@ dc_cont_query(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1151,8 +1170,13 @@ dc_cont_set_prop(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1269,8 +1293,13 @@ dc_cont_update_acl(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1387,8 +1416,13 @@ dc_cont_delete_acl(tse_task_t *task)
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
+	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
+		goto err_cont;
+	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
@@ -1768,10 +1802,6 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if ((cont_glob->dcg_capas & DAOS_COO_RW) &&
-	    (pool->dp_capas & DAOS_PC_RO))
-		D_GOTO(out_pool, rc = -DER_NO_PERM);
-
 	cont = dc_cont_alloc(cont_glob->dcg_uuid);
 	if (cont == NULL)
 		D_GOTO(out_pool, rc = -DER_NOMEM);
@@ -1944,8 +1974,15 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
-	rsvc_client_choose(&args->cra_pool->dp_client, &ep);
+	rc = rsvc_client_choose(&args->cra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
+			DP_CONT(args->cra_pool->dp_pool,
+				args->cra_cont->dc_uuid), DP_RC(rc));
+		cont_req_cleanup(CLEANUP_POOL, args);
+		goto out;
+	}
 
 	rc = cont_req_create(ctx, &ep, opcode, &args->cra_rpc);
 	if (rc != 0) {

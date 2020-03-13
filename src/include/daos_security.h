@@ -157,6 +157,7 @@ enum daos_acl_perm {
  * Mask of all valid permissions for DAOS pools
  */
 #define DAOS_ACL_PERM_POOL_ALL	(DAOS_ACL_PERM_READ |			\
+				 DAOS_ACL_PERM_GET_PROP |		\
 				 DAOS_ACL_PERM_WRITE |			\
 				 DAOS_ACL_PERM_CREATE_CONT |		\
 				 DAOS_ACL_PERM_DEL_CONT)

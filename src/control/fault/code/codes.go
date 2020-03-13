@@ -20,13 +20,17 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
+// Package code is a central repository for all control plane fault codes.
 package code
 
 // Code represents a stable fault code.
 //
 // NB: All control plane errors should register their codes in the
 // following block in order to avoid conflicts.
+//
+// Also note that new codes should always be added at the bottom of
+// their respective blocks. This ensures stability of fault codes
+// over time.
 type Code int
 
 const (
@@ -81,12 +85,14 @@ const (
 	ServerConfigNoServers
 	ServerScmUnmanaged
 	ServerBdevNotFound
-	ServerBdevFormatSkipped
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerIommuDisabled
+	ServerPoolScmTooSmall
+	ServerPoolNvmeTooSmall
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

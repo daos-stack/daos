@@ -53,6 +53,9 @@ extern "C" {
 #define DAOS_COO_NOSLIP	(1U << 2)
 #define DAOS_COO_FORCE	(1U << 3)
 
+#define DAOS_COO_NBITS	(4)
+#define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
+
 /** Container information */
 typedef struct {
 	/** Container UUID */
@@ -367,6 +370,28 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev);
 int
 daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 		     d_string_t name, daos_event_t *ev);
+
+/**
+ * Update a container's owner user and/or owner group.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
+		    daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.
