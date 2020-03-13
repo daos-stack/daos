@@ -59,8 +59,8 @@ Limitations to the current implementation include:
 
 ## HDF5
 
-A [HDF5 DAOS connector](https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Ffeature%2Fdaos_vol_support)
+A [HDF5 DAOS connector](https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/daos-vol/browse)
 is available. Please refer to the DAOS VOL connector user guide[^3] for
 instructions on how to build and use it.
 
-[^3]: https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Ffeature%2Fdaos_vol_support
+[^3]: https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/daos-vol/browse/docs/users_guide.pdf
