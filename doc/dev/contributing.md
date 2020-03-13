@@ -104,6 +104,7 @@ Signed-off-by: Your Real Name <your_email@domain.name>
 
 The `Signed-off-by:` line asserts that you have permission to contribute the
 code to the project according to the Developer's Certificate of Origin.
+The -s option to `git commit` also adds the `Signed-off-by:` line automatically.
 
 ### Additional commit tags
 

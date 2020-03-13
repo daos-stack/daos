@@ -115,9 +115,9 @@ The installation path can be modified by adding the PREFIX= option to the above
 command line (e.g., PREFIX=/usr/local).
 
 !!! note
-   If you wish to compile DAOS with clang or use the Intel compilers rather than
-   gcc, set COMPILER=clang or COMPILER=icc on the scons command line.
-   This option is also saved for future compilations.
+    Several parameters can be set (e.g. COMPILER=clang or COMPILER=icc) on the
+    scons command line. Please see `scons --help` for all the possible options.
+    Those options are also saved for future compilations.
 
 ### Environment setup
 

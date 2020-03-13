@@ -63,7 +63,7 @@ $ yum copr enable hnakamur/golang-dep
 $ yum install golang-dep
 ```
 
-On Fedora 27 and later:
+On Fedora 30 and later:
 
 ```bash
 $ dnf install dep

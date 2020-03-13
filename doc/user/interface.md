@@ -192,7 +192,7 @@ my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_svc, c_tgt_list, None)
 
 #### Error Handling
 
-The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk 
+The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk
 <b>F</b>orgiveness than get <b>P</b>ermission) idiom. A given function will
 raise a custom exception on error state, `DaosApiError`.
 A user of the API is expected to catch and handle this exception as needed:
