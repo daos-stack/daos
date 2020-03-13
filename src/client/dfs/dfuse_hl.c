@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,6 +157,7 @@ dfuse_access(const char *path, int mask)
 	if (rc)
 		return rc;
 
+	D_ASSERT(dir_name != NULL);
 	if (strcmp(dir_name, "/") != 0) {
 		rc = dfs_lookup(dfs, dir_name, O_RDONLY, &parent, &pmode, NULL);
 		if (rc) {
@@ -178,8 +179,7 @@ dfuse_access(const char *path, int mask)
 out:
 	if (name)
 		free(name);
-	if (dir_name)
-		free(dir_name);
+	free(dir_name);
 	if (parent)
 		dfs_release(parent);
 	return rc;
@@ -210,6 +210,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 	if (rc)
 		return rc;
 
+	D_ASSERT(dir_name != NULL);
 	if (strcmp(dir_name, "/") != 0) {
 		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, &pmode, NULL);
 		if (rc) {
@@ -231,8 +232,7 @@ dfuse_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 out:
 	if (name)
 		free(name);
-	if (dir_name)
-		free(dir_name);
+	free(dir_name);
 	if (parent)
 		dfs_release(parent);
 	return rc;
@@ -324,7 +324,7 @@ dfuse_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	dfs_obj_t	*obj = NULL;
 	bool		 release = false;
 	daos_anchor_t	 anchor = {0};
-	int rc;
+	int rc = 0;
 
 	(void) offset;
 	(void) fi;

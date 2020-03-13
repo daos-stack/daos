@@ -104,6 +104,18 @@ def build_client_libs_static(env, common):
 
     return il_lib + dfuse_lib
 
+def check_struct_member(env, text, struct, member):
+    """scons check for a struct member existing"""
+
+    env.Message('Checking for {} in {} '.format(member, struct))
+
+    rc = env.TryCompile('{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text,
+                                                                               struct,
+                                                                               member),
+                        '.c')
+    env.Result(rc)
+    return rc
+
 def scons():
     """Scons function"""
 
@@ -129,7 +141,6 @@ def scons():
     common = build_common(dfuse_env, COMMON_SRC, False)
     libs += build_client_libs_static(static_env, common)
 
-    # Now build the CNSS application
     cenv = dfuse_env.Clone()
     # Set the define in SConscript so that it's in place for the prereqs.require
     # check which will verify fuse3/fuse.h can be loaded.
@@ -139,6 +150,14 @@ def scons():
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     prereqs.require(cenv, 'fuse')
+
+    check = Configure(cenv, custom_tests={'CheckStructMember': check_struct_member})
+
+    if check.CheckStructMember('#include <fuse3/fuse.h>',
+                               'struct fuse_file_info',
+                               'cache_readdir'):
+        cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
+    check.Finish()
 
     dfuse_obj = []
     for src in DFUSE_SRC:

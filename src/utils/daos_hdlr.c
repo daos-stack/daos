@@ -738,10 +738,23 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 	struct daos_prop_entry	*entry;
 	char			type[10] = {};
 	int			rc = 0;
+	uint32_t		i;
+	uint32_t		entry_type;
 
-	prop_query = daos_prop_alloc(0);
+	/*
+	 * Get all props except the ACL
+	 */
+	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
 	if (prop_query == NULL)
 		return -DER_NOMEM;
+
+	entry_type = DAOS_PROP_CO_MIN + 1;
+	for (i = 0; i < prop_query->dpp_nr; entry_type++) {
+		if (entry_type == DAOS_PROP_CO_ACL)
+			continue; /* skip ACL */
+		prop_query->dpp_entries[i].dpe_type = entry_type;
+		i++;
+	}
 
 	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
 	if (rc) {
@@ -815,15 +828,6 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc = -DER_INVAL);
 	}
 	D_PRINT("max snapshots -> "DF_U64"\n", entry->dpe_val);
-
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(stderr, "acl property not found\n");
-		/* not an error */
-	} else {
-		D_PRINT("acl ->\n");
-		daos_acl_dump(entry->dpe_val_ptr);
-	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_COMPRESS);
 	if (entry == NULL) {
@@ -1462,6 +1466,28 @@ cont_delete_acl_hdlr(struct cmd_args_s *ap)
 	rc = print_acl(stdout, prop_out, false);
 
 	daos_prop_free(prop_out);
+	return rc;
+}
+
+int
+cont_set_owner_hdlr(struct cmd_args_s *ap)
+{
+	int	rc;
+
+	if (!ap->user && !ap->group) {
+		fprintf(stderr,
+			"parameter --user or --group is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
+	if (rc != 0) {
+		fprintf(stderr,
+			"failed to set owner for container: %d\n", rc);
+		return rc;
+	}
+
+	fprintf(stdout, "successfully updated owner for container\n");
 	return rc;
 }
 

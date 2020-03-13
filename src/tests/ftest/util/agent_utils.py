@@ -275,6 +275,8 @@ def include_local_host(hosts):
     if hosts is None:
         hosts = [local_host]
     elif local_host not in hosts:
+        # Take a copy of hosts to avoid modifying-in-place
+        hosts = list(hosts)
         hosts.append(local_host)
     return hosts
 
