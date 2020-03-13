@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ class NvmeFragmentation(TestWithServers):
     """
 
     def setUp(self):
-        """Set up each test case."""
+        """Set up for test case."""
         super(NvmeFragmentation, self).setUp()
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
@@ -63,20 +63,18 @@ class NvmeFragmentation(TestWithServers):
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
-        # Create a pool
         self.pool = None
         self.out_queue = queue.Queue()
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
+        Destroy the container at the end of this thread run
 
         Args:
-            threads (list): list of threads to execute
-            operation (str): IOR operation, e.g. "read" or "write"
+            results (queue): queue for returning thread results
 
         Returns:
-            str: "PASS" if all threads completed successfully; "FAIL" otherwise
-
+            None
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
@@ -138,8 +136,8 @@ class NvmeFragmentation(TestWithServers):
             after doing some IO write/delete operation for ~hour.
 
         Use case:
-        Create object with different transfer size in parallel (IOR)
-
+        Create object with different transfer size in parallel (10 IOR threads)
+        Delete the container created by IOR which will dealloc NVMe block
         Run above code in loop for some time (1 hours) and expected
         not to fail with NO ENOM SPAC.
 
@@ -147,7 +145,7 @@ class NvmeFragmentation(TestWithServers):
         :avocado: tags=nvme_fragmentation
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
-
+        # Create a pool
         self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
