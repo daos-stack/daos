@@ -1,0 +1,30 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-C
+    - client-D
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 120
+server_config:
+  server:
+    scm_size: 32
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 16777216
+macsio:
+  interface: hdf5
+  parallel_file_mode: SIF 1
+  filebase: daos
+  units_prefix_system: decimal
+  part_size: 10M
+  avg_num_parts: 2.5
+  num_dumps: 2
+test_repo:
+  # macsio: /usr/lib64/macsio
+  macsio: /home/pahender/MACSio/install/bin

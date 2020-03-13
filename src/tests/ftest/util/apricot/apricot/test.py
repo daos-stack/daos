@@ -46,6 +46,7 @@ from env_modules import load_mpi
 from distutils.spawn import find_executable
 from dmg_utils import DmgCommand
 from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 # pylint: disable=invalid-name
@@ -554,7 +555,79 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool(create=True, connect=True, index=0)
+
+    def get_pool(self, namespace=None, create=True, connect=True, index=0):
+        """Get a test pool object.
+
+        This method defines the common test pool creation sequence.
+
+        Args:
+            namespace (str, optional): where to find TestPool parameters in the
+                test yaml. Defaults to None.
+            create ((bool, optional): whehter to create the pool. Defaults to
+                True.
+            connect (bool, optional): whehter to connect to the pool. Defaults
+                to True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+
+        Returns:
+            TestPool: the created test pool object.
+
+        """
+        pool = TestPool(self.context, dmg_command=self.get_dmg_command(index))
+        if namespace is not None:
+            pool.namespace = namespace
+        pool.get_params(self)
+        if create:
+            pool.create()
+        if create and connect:
+            pool.connect()
+        return pool
+
+    def add_pool(self, namespace=None, create=True, connect=True, index=0):
+        """Add a pool to the test case.
+
+        This method assigns a commonly created TestPool to self.pool.
+
+        Args:
+            namespace (str, optional): where to find TestPool parameters in the
+                test yaml. Defaults to None.
+            create ((bool, optional): whehter to create the pool. Defaults to
+                True.
+            connect (bool, optional): whehter to connect to the pool. Defaults
+                to True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+        """
+        self.pool = self.get_pool(namespace, create, connect, index)
+
+    def get_container(self, pool, namespace=None, create=True):
+        """Get a test container object.
+
+        Args:
+            pool (TestPool): pool in which to create the container.
+            namespace ([type], optional): [description]. Defaults to None.
+            create (bool, optional): [description]. Defaults to True.
+
+        Returns:
+            TestContainer: the created test container object.
+
+        """
+        container = TestContainer(pool)
+        if namespace is not None:
+            container.namespace = namespace
+        container.get_params(self)
+        if create:
+            container.create()
+        return container
+
+    def add_container(self, pool, namespace=None, create=True):
+        """Add a container to the test case.
+
+        This method assigns a commonly created TestContainer to self.container.
+
+        Args:
+            pool (TestPool): pool in which to create the container.
+            namespace ([type], optional): [description]. Defaults to None.
+        """
+        self.container = self.get_container(pool, namespace, create)
