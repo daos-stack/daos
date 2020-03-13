@@ -566,17 +566,19 @@ class WebRetriever():
 
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-    test_flag = flag
-    werror = "-Werror"
     if compiler in ["icc", "icpc"]:
-        werror = "-diag-error=10006"
+        flags = ["-diag-error=10006", "-diag-error=10148",
+                 "-Werror-all", flag]
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
-    if compiler in ["gcc", "g++"]:
+    elif compiler in ["gcc", "g++"]:
         #remove -no- for test
         test_flag = flag.replace("-Wno-", "-W")
+        flags = ["-Werror", test_flag]
+    else:
+        flags = ["-Werror", flag]
     context.Message("Checking %s %s " % (compiler, flag))
-    context.env.Replace(CCFLAGS=[werror, test_flag])
+    context.env.Replace(CCFLAGS=flags)
     ret = context.TryCompile("""
 int main() {
     return 0;
@@ -686,8 +688,6 @@ class PreReqComponent():
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
         warning_level = GetOption('warning_level')
-        if warning_level == 'error':
-            env.Append(CCFLAGS=['-Werror'])
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -779,7 +779,7 @@ class PreReqComponent():
         self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
 
-        self._setup_compiler()
+        self._setup_compiler(warning_level)
         self.setup_parallel_build()
 
         self.config_file = config_file
@@ -823,7 +823,7 @@ class PreReqComponent():
                                            "-diag-disable=10237"])
 
 
-    def _setup_compiler(self):
+    def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
                         'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
@@ -842,6 +842,14 @@ class PreReqComponent():
         compiler = self.__env.get('COMPILER').lower()
         if compiler == 'icc':
             self._setup_intelc()
+
+        if warning_level == 'ERROR':
+            if compiler == 'icc':
+                warning_flag = '-Werror-all'
+            else:
+                warning_flag = '-Werror'
+            env.AppendUnique(CCFLAGS=warning_flag)
+
         env = self.__env.Clone()
         config = Configure(env)
 
