@@ -12,8 +12,8 @@ open-source software-defined object store designed from the ground up for
 massively distributed Non Volatile Memory (NVM). DAOS takes advantage of next
 generation NVM technology like Storage Class Memory (SCM) and NVM express (NVMe)
 while presenting a key-value storage interface and providing features such as
-transactional non-blocking I/O, advanced data protection with self healing on
-top of commodity hardware, end-to-end data integrity, fine grained data control
+transactional non-blocking I/O, advanced data protection with self-healing on
+top of commodity hardware, end-to-end data integrity, fine-grained data control
 and elastic storage to optimize performance and cost.
 
 ## License
@@ -31,7 +31,7 @@ This includes:
 * [Admin guide](https://daos-stack.github.io/admin/hardware/) to install, manage
   and monitor a DAOS system.
 * [User guide](https://daos-stack.github.io/user/container/) documenting the
-  DAOS native API as well as the integration with HDF5, Spark and POSIX.
+  DAOS native API, as well as the integration with HDF5, Spark, and POSIX.
 * [Developer documentation](https://daos-stack.github.io/dev/development/)
   to learn more about DAOS internals and contribute to the development effort.
 
