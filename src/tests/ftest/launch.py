@@ -901,7 +901,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     spawn_commands(host_list, "; ".join(commands), 900)
 
 
-def send_notification(hosts, subject, msg, attachment, emails):
+def send_notification(hosts, subject, msg, attachment, email_addrs):
     """Send email notification to provided emails with given message.
 
     Args:
@@ -911,7 +911,7 @@ def send_notification(hosts, subject, msg, attachment, emails):
         emails (list): list of email addresses to send message to.
     """
     mail_cmd = "mail -s \"{}\" -a {} {} <<< \"{}\"".format(
-        subject, attachment, ",".join(emails), msg)
+        subject, attachment, ",".join(email_addrs), msg)
     spawn_commands(hosts, mail_cmd, 30)
 
 
@@ -949,24 +949,23 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
     # Check the command output
     for code in sorted(results):
         output_data = list(size_info_out.iter_buffers(results[code]))
-        print("Out data: {}".format(output_data))
         if not output_data:
             err_nodes = NodeSet.fromlist(results[code])
             print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
         else:
             msg = []
+            o_hosts = None
             for output, o_hosts in output_data:
                 for line in str(output).splitlines():
-                    if line.split("\t")[0] and line.split("\t")[0].isdigit():
-                        if int(line.split("\t")[0]) > size_limit:
-                            msg.append("Host: {} \nTest File: {}\n".format(
-                                ",".join(o_hosts), test_file))
-                            break
+                    size = line.split("\t")[0]
+                    if size and size.isdigit() and size > size_limit:
+                        msg.append("Host: {} \nTest File: {}\n".format(
+                            ",".join(o_hosts), test_file))
             if msg:
                 sub = "Test Log Too Long Found"
-                emails = ["amanda.justiniano-pagn@intel.com"]
+                email_addrs = ["amanda.justiniano-pagn@intel.com"]
                 send_notification(
-                    o_hosts, sub, "\n\n".join(msg), log_size_file, emails)
+                    o_hosts, sub, "\n\n".join(msg), log_size_file, email_addrs)
 
 
 def archive_config_files(avocado_logs_dir):
