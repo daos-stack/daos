@@ -140,14 +140,18 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
 		D_ERROR(DF_CONT": permission denied to aggregate\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
-		return -DER_NO_PERM;
+		rc = -DER_NO_PERM;
+		goto out;
 	}
 
-	if (epoch >= DAOS_EPOCH_MAX)
-		return -DER_INVAL;
-	else if (in->cei_epoch == 0)
+	if (epoch >= DAOS_EPOCH_MAX) {
+		rc = -DER_INVAL;
+		goto out;
+	} else if (in->cei_epoch == 0) {
 		epoch = crt_hlc_get();
+	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		epoch, rc);

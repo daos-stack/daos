@@ -28,6 +28,8 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 
+#define TEST_MAX_ATTR_LEN	(128)
+
 /** create/destroy container */
 static void
 co_create(void **state)
@@ -1888,7 +1890,7 @@ expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	int		 rc = 0;
 	const char	*name = "AttrName";
 	const char	*value = "This is the value";
-	const size_t	 size = strnlen(value, 32);
+	const size_t	 size = strnlen(value, TEST_MAX_ATTR_LEN);
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -1918,7 +1920,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	daos_prop_t	*cont_prop;
 	int		 rc = 0;
 	const char	*name = "AttrName";
-	size_t		 val_size = 64;
+	size_t		 val_size = TEST_MAX_ATTR_LEN;
 	char		 value[val_size];
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
@@ -1949,7 +1951,7 @@ expect_co_list_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 {
 	daos_prop_t	*cont_prop;
 	int		 rc = 0;
-	char		 buf[128];
+	char		 buf[TEST_MAX_ATTR_LEN];
 	size_t		 bufsize = sizeof(buf);
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
