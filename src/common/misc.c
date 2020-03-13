@@ -292,7 +292,8 @@ daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	while (requested_bytes > 0 && !end && !rc) {
 		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
 		requested_bytes -= len;
-		rc = process_cb(buf, len, cb_args);
+		if (process_cb != NULL)
+			rc = process_cb(buf, len, cb_args);
 	}
 
 	if (requested_bytes)

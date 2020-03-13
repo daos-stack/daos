@@ -34,6 +34,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/security.h>
 #include <daos_mgmt.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
@@ -1473,6 +1474,8 @@ rebuild_fini_one(void *arg)
 			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
+	ds_pool_child_put(dpc);
+
 	return 0;
 }
 
@@ -1679,7 +1682,8 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	/* Create ds_container locally on main XS */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, 0, NULL);
+				NULL, 0, ds_sec_get_rebuild_cont_capabilities(),
+				NULL);
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 
@@ -1691,6 +1695,9 @@ rebuild_prepare_one(void *data)
 	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID
 		" rebuild eph "DF_U64" rc %d\n", DP_UUID(rpt->rt_pool_uuid),
 		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, rc);
+
+	ds_pool_child_put(dpc);
+
 	return rc;
 }
 

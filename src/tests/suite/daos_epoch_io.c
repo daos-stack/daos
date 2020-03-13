@@ -1187,13 +1187,15 @@ out:
 }
 
 static int
-cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
+cmd_line_parse(test_arg_t *arg, const char *cmd_line,
+	       struct test_op_record **op)
 {
 	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
 	struct test_op_record	*op_rec = NULL;
 	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
+	size_t			 cmd_size;
 	int			 argc = 0;
 	int			 rc = 0;
 
@@ -1201,6 +1203,13 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 #if CMD_LINE_DBG
 	print_message("parsing cmd: %s.\n", cmd);
 #endif
+	cmd_size = strnlen(cmd, CMD_LINE_LEN_MAX);
+	if (cmd_size == 0)
+		return 0;
+	if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+		print_message("bad cmd_line.\n");
+		return -1;
+	}
 	rc = cmd_parse_argv(cmd, &argc, argv);
 	if (rc != 0) {
 		print_message("bad format %s.\n", cmd);
@@ -1461,10 +1470,18 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	}
 
 	do {
+		size_t	cmd_size;
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		if (cmd_size == 0)
+			continue;
+		if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+			print_message("bad cmd_line, exit.\n");
+			break;
+		}
 		rc = cmd_line_parse(arg, cmd_line, &op);
 		if (rc != 0) {
 			print_message("bad cmd_line %s, exit.\n", cmd_line);

@@ -1731,10 +1731,8 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 	case -DER_NOMEM:
 	case -DER_NOSPACE:
 		if (leader) {
-			uint64_t cur_idx = raft_get_current_idx(db->d_raft);
-
-			/* No space / desperation: compact to current index */
-			(void) rdb_raft_compact_to_index(db, cur_idx);
+			/* No space / desperation: compact to committed idx */
+			rdb_raft_compact_to_index(db, committed);
 
 			raft_become_follower(db->d_raft);
 			leader = false;
