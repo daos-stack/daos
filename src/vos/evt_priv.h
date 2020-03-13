@@ -186,7 +186,7 @@ evt_csum_count(const struct evt_context *tcx,
  */
 void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
-		   const struct evt_entry_in *ent);
+		   const struct evt_entry_in *ent, uint8_t **csum_bufp);
 
 /**
  * Fill the entry's checksum from the evt_desc. It is expected that the entry's

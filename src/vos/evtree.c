@@ -1747,7 +1747,8 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 }
 
 static int
-evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
+evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
+	      uint8_t **csum_bufp)
 {
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
@@ -1775,7 +1776,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 
 	dst_desc->dc_ex_addr = ent->ei_addr;
 	dst_desc->dc_ver = ent->ei_ver;
-	evt_desc_csum_fill(tcx, dst_desc, ent);
+	evt_desc_csum_fill(tcx, dst_desc, ent, csum_bufp);
 
 	return 0;
 }
@@ -1786,7 +1787,8 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
+evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
+	   uint8_t **csum_bufp)
 {
 	struct evt_context	*tcx;
 	struct evt_entry_array	 ent_array;
@@ -1838,7 +1840,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		 * No copy for duplicate punch.
 		 */
 		if (entry->ei_inob > 0)
-			rc = evt_desc_copy(tcx, entry);
+			rc = evt_desc_copy(tcx, entry, csum_bufp);
 		goto out;
 	}
 
@@ -2516,7 +2518,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		evt_desc_csum_fill(tcx, desc, ent);
+		evt_desc_csum_fill(tcx, desc, ent, NULL);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;
@@ -3029,7 +3031,7 @@ evt_csum_buf_len(const struct evt_context *tcx,
 
 void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
-		   const struct evt_entry_in *ent)
+		   const struct evt_entry_in *ent, uint8_t **csum_bufp)
 {
 	const struct dcs_csum_info	*csum = &ent->ei_csum;
 	daos_size_t			 csum_buf_len;
@@ -3044,6 +3046,10 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 			csum->cs_buf_len, csum_buf_len);
 	} else {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+		if (csum_bufp != NULL) {
+			D_ASSERT(csum->cs_csum == *csum_bufp);
+			*csum_bufp = desc->pt_csum;
+		}
 	}
 }
 

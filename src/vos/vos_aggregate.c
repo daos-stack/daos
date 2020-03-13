@@ -912,11 +912,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 		i++;
 
-		if (phy_ent->pe_retain) {
-			rc = -DER_CSUM;
-			goto out;
-		}
-
+		D_ASSERT(!phy_ent->pe_retain);
 		D_ASSERT(ext1_covers_ext2(&ent_in->ei_rect.rc_ex, &ext));
 		D_ASSERT(ext1_covers_ext2(&phy_ent->pe_rect.rc_ex, &ext));
 
@@ -1180,7 +1176,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 * in current window, keep it intact.
 		 */
 		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-		    !phy_ent->pe_trunc_head) {
+		    !phy_ent->pe_trunc_head && !phy_ent->pe_retain) {
 			leftovers++;
 			continue;
 		}
@@ -1197,7 +1193,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 
 		/* Physical entry is in window */
-		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi) {
+		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
+						 phy_ent->pe_retain) {
 			d_list_del(&phy_ent->pe_link);
 			D_FREE_PTR(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
@@ -1225,7 +1222,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			continue;
 		ent_in = &io->ic_segs[i].ls_ent_in;
 
-		rc = evt_insert(oiter->it_hdl, ent_in);
+		rc = evt_insert(oiter->it_hdl, ent_in, &ent_in->ei_csum.cs_csum);
 		if (rc) {
 			D_ERROR("Insert segment "DF_RECT" error: "DF_RC"\n",
 				DP_RECT(&ent_in->ei_rect), DP_RC(rc));
