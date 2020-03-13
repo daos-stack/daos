@@ -23,9 +23,17 @@
 """
 
 import time
+import os
 import threading
-from ior_test_base import IorTestBase
-from avocado.core.exceptions import TestFail
+import uuid
+from itertools import product
+
+from apricot import TestWithServers
+from write_host_file import write_host_file
+from test_utils_pool import TestPool
+from ior_utils import IorCommand
+from daos_utils import DaosCommand
+from command_utils import Orterun, CommandFailure
 
 try:
     # python 3.x
@@ -34,7 +42,7 @@ except ImportError:
     # python 2.7
     import Queue as queue
 
-class NvmeFragmentation(IorTestBase):
+class NvmeFragmentation(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test class Description: Verify the drive fragmentation does free
     the space and do not lead to ENOM_SPACE.
@@ -43,44 +51,84 @@ class NvmeFragmentation(IorTestBase):
     """
 
     def setUp(self):
-        """Set up for test case."""
+        """Set up each test case."""
         super(NvmeFragmentation, self).setUp()
+
+        self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        self.ior_transfer_size = self.params.get("transfer_block_size",
+                                                 '/run/ior/iorflags/*')
+        self.ior_daos_oclass = self.params.get("obj_class",
+                                               '/run/ior/iorflags/*')
+        # Recreate the client hostfile without slots defined
+        self.hostfile_clients = write_host_file(
+            self.hostlist_clients, self.workdir, None)
+        # Create a pool
+        self.pool = None
         self.out_queue = queue.Queue()
-        self.write_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
-        self.apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.transfer_block_size = self.params.get("transfer_block_size",
-                                                   '/run/ior/iorflags/*')
-        self.obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
-    def run_ior_parallel(self, results):
-        """
-        IOR Thread function
+    def ior_runner_thread(self, results):
+        """Start threads and wait until all threads are finished.
 
-        results (queue): queue for returning thread results
+        Args:
+            threads (list): list of threads to execute
+            operation (str): IOR operation, e.g. "read" or "write"
+
+        Returns:
+            str: "PASS" if all threads completed successfully; "FAIL" otherwise
+
         """
+        processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
-        # Write IOR data for different transfer size
-        self.ior_cmd.flags.update(self.write_flags[0])
-        for oclass in self.obj_class:
-            self.ior_cmd.daos_oclass.update(oclass)
-            for api in self.apis:
-                self.ior_cmd.api.update(api)
-                for test in self.transfer_block_size:
-                    self.ior_cmd.transfer_size.update(test[0])
-                    self.ior_cmd.block_size.update(test[1])
-                    # run ior
-                    try:
-                        self.run_ior_with_pool()
-                    except  TestFail as error:
-                        print("--- FAIL --- IOR Command Failed {}"
-                              .format(error))
-                        results.put("FAIL")
-                    container_info[test[0]] = self.container.uuid
+        daos_cmd = DaosCommand(os.path.join(self.prefix, "bin"))
+        daos_cmd.request.value = "container"
+
+        #Iterate through IOR different value and run in sequence
+        for oclass, api, test, flags in product(self.ior_daos_oclass,
+                                                self.ior_apis,
+                                                self.ior_transfer_size,
+                                                self.ior_flags):
+            # Define the arguments for the ior_runner_thread method
+            ior_cmd = IorCommand()
+            ior_cmd.get_params(self)
+            ior_cmd.set_daos_params(self.server_group, self.pool)
+            ior_cmd.daos_oclass.update(oclass)
+            ior_cmd.api.update(api)
+            ior_cmd.transfer_size.update(test[0])
+            ior_cmd.block_size.update(test[1])
+            ior_cmd.flags.update(flags)
+            container_info["{}{}{}"
+                           .format(oclass,
+                                   api,
+                                   test[0])] = str(uuid.uuid4())
+
+            # Define the job manager for the IOR command
+            path = os.path.join(self.ompi_prefix, "bin")
+            manager = Orterun(ior_cmd, path)
+            manager.job.daos_cont.update(container_info
+                                         ["{}{}{}".format(oclass,
+                                                          api,
+                                                          test[0])])
+            env = ior_cmd.get_default_env(str(manager), self.tmp)
+            manager.setup_command(env, self.hostfile_clients,
+                                  processes)
+
+            #run IOR Command
+            try:
+                manager.run()
+            except CommandFailure as _error:
+                results.put("FAIL")
 
         #Destroy the container created by thread
         for key in container_info:
-            self.container.uuid = container_info[key]
-            self.container.destroy()
+            daos_cmd.action.value = ("destroy --svc={} --pool={} --cont={}"
+                                     .format(self.pool.svc_ranks,
+                                             self.pool.uuid,
+                                             container_info[key]))
+            try:
+                daos_cmd.run()
+            except CommandFailure as _error:
+                results.put("FAIL")
 
     def test_nvme_fragmentation(self):
         """Jira ID: DAOS-2332.
@@ -90,8 +138,8 @@ class NvmeFragmentation(IorTestBase):
             after doing some IO write/delete operation for ~hour.
 
         Use case:
-        Create object with different transfer size in parallel.
-        Delete the container
+        Create object with different transfer size in parallel (IOR)
+
         Run above code in loop for some time (1 hours) and expected
         not to fail with NO ENOM SPAC.
 
@@ -99,24 +147,32 @@ class NvmeFragmentation(IorTestBase):
         :avocado: tags=nvme_fragmentation
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
-        self.create_pool()
+
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool.get_params(self)
+        self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")
+
         for test_loop in range(4):
             self.log.info("--Test Repeat for loop %s---", test_loop)
-            job_list = []
-            for i in range(no_of_jobs):
-                job_list.append(threading.
-                                Thread(target=self.run_ior_parallel,
-                                       kwargs={"results":self.out_queue}))
-
-            for i in range(no_of_jobs):
-                job_list[i].start()
+            # Create the IOR threads
+            threads = []
+            for thrd in range(no_of_jobs):
+                # Add a thread for these IOR arguments
+                threads.append(threading.Thread(target=self.ior_runner_thread,
+                                                kwargs={"results":
+                                                        self.out_queue}))
+            # Launch the IOR threads
+            for thrd in threads:
+                thrd.start()
                 time.sleep(5)
+            # Wait to finish the threads
+            for thrd in threads:
+                thrd.join()
 
-            for i in range(no_of_jobs):
-                job_list[i].join()
-
+            #Verify the queue and make sure no FAIL for any IOR run
             while not self.out_queue.empty():
                 if self.out_queue.get() == "FAIL":
-                    self.fail("IOR Thread FAIL")
+                    self.fail("FAIL")
+
         self.pool.display_pool_daos_space("Pool space at the End")

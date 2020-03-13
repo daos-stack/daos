@@ -43,9 +43,8 @@ pool:
     control_method: dmg
 ior:
     no_parallel_job: 10
-    client_processes:
-        np_2:
-            np: 2
+    clientslots:
+      slots: 2
     test_file: daos:testFile
     repetitions: 1
     daos_destroy: False
