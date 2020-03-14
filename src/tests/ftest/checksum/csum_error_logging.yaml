@@ -1,0 +1,29 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+    - client-C
+timeout: 600
+server_config:
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0"]
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 1000000000
+    nvme_size: 2000000000
+    control_method: dmg
+# Run only checksum tests
+daos_tests:
+  num_clients:
+    num_clients: 1
+  num_replicas:
+    num_replicas: 1
+  Tests:
+    test_z:
+      daos_test: z
+      test_name: Checksum tests
+      test_timeout: 900
