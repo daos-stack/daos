@@ -64,15 +64,17 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
-	poolUUIDStr := req.UUID
+	poolUUID, err := uuid.Parse(req.UUID)
 
-	if req.UUID == "" {
-		poolUUID, err := uuid.NewRandom()
-		if err != nil {
-			return nil, errors.Wrap(err, "generating pool uuid")
+	if err != nil {
+		if req.UUID == "" {
+			poolUUID, err = uuid.NewRandom()
 		}
-		poolUUIDStr = poolUUID.String()
+		if err != nil {
+			return nil, errors.Wrapf(err, "bad pool UUID: %q", req.UUID)
+		}
 	}
+	poolUUIDStr := poolUUID.String()
 
 	rpcReq := &mgmtpb.PoolCreateReq{
 		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
