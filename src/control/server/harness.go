@@ -249,6 +249,9 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 			if err := instance.SetRank(ctx, ready); err != nil {
 				return err
 			}
+			// update ioserver target count to reflect allocated
+			// number of targets, not number requested when starting
+			instance.SetTargetCount(int(ready.GetNtgts()))
 		}
 
 		if instance.IsMSReplica() {

@@ -883,6 +883,25 @@ obj_singv_ec_rw_filter(struct obj_rw_in *orw, daos_iod_t *iods, uint64_t *offs,
 	}
 }
 
+/* Call internal method to increment CSUM media error. */
+static void
+obj_log_csum_err(void)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+
+	D_ASSERT(info != NULL);
+	bxc = info->dmi_nvme_ctxt;
+
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_log_csum_err(bxc, info->dmi_tgt_id);
+}
+
 static int
 obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	     struct ds_cont_child *cont, daos_iod_t *split_iods,
@@ -927,6 +946,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	rc = csum_verify_keys(cont_hdl->sch_csummer, orw);
 	if (rc != 0) {
 		D_ERROR("csum_verify_keys error: %d", rc);
+		if (rc == -DER_CSUM)
+			obj_log_csum_err();
 		return rc;
 	}
 	dkey = (daos_key_t *)&orw->orw_dkey;
@@ -1027,6 +1048,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	rc = obj_verify_bio_csum(rpc, iods, iod_csums, biod,
 				 cont_hdl->sch_csummer);
+	if (rc == -DER_CSUM)
+		obj_log_csum_err();
 post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
@@ -1055,6 +1078,14 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		if (rc == -DER_NONEXIST)
 			rc = -DER_NO_HDL;
 		return rc;
+	}
+
+	if (!obj_is_modification_opc(opc) &&
+	    !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
+		D_ERROR("cont "DF_UUID" hdl "DF_UUID" sec_capas "DF_U64", "
+			"NO_PERM to read.\n", DP_UUID(cont_uuid),
+			DP_UUID(coh_uuid), coh->sch_sec_capas);
+		D_GOTO(failed, rc = -DER_NO_PERM);
 	}
 
 	if (obj_is_modification_opc(opc) &&
@@ -1335,23 +1366,6 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	/* Handle the object remotely */
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
-}
-
-
-/* Call internal method to increment CSUM media error. */
-static void
-obj_log_csum_err(void)
-{
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc  = info->dmi_nvme_ctxt;
-
-	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-		info->dmi_xs_id, info->dmi_tgt_id);
-		return;
-	}
-
-	bio_log_csum_err(bxc, info->dmi_tgt_id);
 }
 
 void

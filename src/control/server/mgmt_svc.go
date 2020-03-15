@@ -39,6 +39,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -313,12 +314,31 @@ func checkIsMSReplica(mi *IOServerInstance) error {
 }
 
 // PoolCreate implements the method defined for the Management Service.
+//
+// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
+// are per-ioserver so need to be larger than (minimum_target_allocation *
+// target_count).
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
+	}
+
+	targetCount := mi.runner.GetConfig().TargetCount
+	if targetCount == 0 {
+		return nil, errors.New("zero target count")
+	}
+	if req.Scmbytes < ioserver.ScmMinBytesPerTarget*uint64(targetCount) {
+		return nil, FaultPoolScmTooSmall(req.Scmbytes, targetCount)
+	}
+	if req.Nvmebytes != 0 && req.Nvmebytes < ioserver.NvmeMinBytesPerTarget*uint64(targetCount) {
+		return nil, FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
 	}
 
 	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
@@ -338,6 +358,14 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 // PoolDestroy implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.GetUuid() == "" {
+		// TODO: do we want to validate pool exists via ListPools?
+		return nil, errors.New("nil UUID")
+	}
+
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()

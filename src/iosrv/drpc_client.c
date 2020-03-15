@@ -55,6 +55,7 @@ notify_ready(void)
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
+	req.ntgts = dss_tgt_nr;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
