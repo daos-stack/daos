@@ -21,7 +21,7 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
     zypper --non-interactive update; \
     zypper --non-interactive install                                  \
            boost-devel clang cmake cunit-devel curl doxygen flex      \
-           gcc gcc-c++ git go graphviz gzip                           \
+           gcc gcc-c++ git graphviz gzip                              \
            libaio-devel libcmocka-devel libevent-devel libiscsi-devel \
            libltdl7 libnuma-devel libopenssl-devel libtool            \
            libuuid-devel libyaml-devel                                \
