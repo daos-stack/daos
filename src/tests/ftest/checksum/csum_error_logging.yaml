@@ -1,3 +1,4 @@
+# Run test on medium cluster
 hosts:
   test_servers:
     - server-A
