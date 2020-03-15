@@ -3,7 +3,6 @@ hosts:
     - server-A
   test_clients:
     - client-B
-    - client-C
 timeout: 600
 server_config:
     name: daos_server
@@ -23,7 +22,7 @@ daos_tests:
   num_clients:
     num_clients: 1
   num_replicas:
-    num_replicas: 1
+    num_replicas: 0
   Tests:
     test_z:
       daos_test: z
