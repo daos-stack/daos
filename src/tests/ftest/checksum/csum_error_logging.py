@@ -83,12 +83,12 @@ class CSumErrorLog(DaosCoreBase):
                 csum_count = line.split()
         return csum_count
 
-    def test_single_object_with_checksum(self):
+    def test_csum_error_logging(self):
         """
         Test ID: DAOS-3927
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,pr,csum_error_log
+        :avocado: tags=all,full_regression,pr,hw,csum_error_log
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)
