@@ -95,20 +95,30 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             OFI_INTERFACE=eth0 daos_test -m'''
 
-def rpm_scan_daos_test = '''pushd /tmp
-                              wget \
-                              http://rfxn.com/downloads/maldetect-current.tar.gz
-                              rm -rf /tmp/maldet-current
-                              mkdir -p /tmp/maldet-current
-                              tar -C /tmp/maldet-current --strip-components=1 \
-                                -xf maldetect-current.tar.gz
-                              cd maldet-current
+def get_lmd_script = '''set -uex
+                        lmd_tarball='maldetect-current.tar.gz'
+                        lmd_src='maldet-current'
+                        rm -rf ./${lmd_src}
+                        mkdir -p ${lmd_src}
+                        if test -e "${lmd_tarball}"; then
+                          zflag="-z ${lmd_tarball}"
+                        else
+                          zflag=
+                        fi
+                        curl http://rfxn.com/downloads/${tarball} \
+                          ${zflag} --silent --show-error --fail \
+                          -o ${tarball}
+                        tar -C ${lmd_src} --strip-components=1 \
+                          xf ${lmd_tarball}'''
+
+def rpm_scan_daos_test = '''lmd_src=\"${WORKSPACE}/maldet-current\"
+                            pushd ${lmd_src}
                               sudo ./install.sh
                               sudo ln -s /usr/local/maldetect/ /bin/maldet
                             popd
                             sudo freshclam
                             rm -f /tmp/clamscan.out
-                            sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
+                            clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
                               -d /usr/local/maldetect/sigs/rfxn.hdb -r \
                               --exclude-dir=/usr/local/maldetect \
                               --exclude-dir=/usr/share/clamav \
@@ -1510,10 +1520,11 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'environment-modules ' +
                                                   'clamav clamav-devel'
+                        sh script: get_lmd_script,
+                                   label: 'Downloading Linux Malware Detect'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                             "sudo yum -y install daos-client-${daos_packages_version}\n" +
-                                            "sudo yum -y history rollback last-1\n" +
                                             "sudo yum -y install daos-server-${daos_packages_version}\n" +
                                             "sudo yum -y install daos-tests-${daos_packages_version}\n" +
                                             "${rpm_scan_daos_test}" + '"',
