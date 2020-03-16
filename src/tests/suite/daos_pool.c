@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -668,7 +668,7 @@ setup_containers(void **state, daos_size_t nconts)
 	lcarg->tpool.poh = DAOS_HDL_INVAL;
 	lcarg->tpool.svc.rl_nr = svc_nreplicas;
 	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
-	lcarg->tpool.pool_size = 1 << 30;	/* 1GB SCM */
+	lcarg->tpool.pool_size = 1 << 28;	/* 256MB SCM */
 	/* Create the pool */
 	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
 				    NULL /* prop */);
