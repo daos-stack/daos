@@ -28,7 +28,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 
-#define CONT_POOL_SIZE (1 << 28) /* 256 MB SCM */
 /** create/destroy container */
 static void
 co_create(void **state)
@@ -315,7 +314,7 @@ co_properties(void **state)
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
@@ -580,7 +579,7 @@ co_acl(void **state)
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Case 1: initial non-default ACL/ownership\n");
@@ -733,7 +732,7 @@ co_set_prop(void **state)
 
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
@@ -801,7 +800,7 @@ co_create_access_denied(void **state)
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Try to create container on pool with no create perms\n");
@@ -846,7 +845,7 @@ co_destroy_access_denied(void **state)
 	daos_handle_t	coh;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	/*
@@ -921,7 +920,7 @@ co_destroy_allowed_by_pool(void **state)
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	/* pool gives the owner all privs, including delete cont */
@@ -986,7 +985,7 @@ co_open_access(void **state)
 	int		rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("cont ACL gives the user no permissions\n");
@@ -1063,7 +1062,7 @@ co_query_access(void **state)
 	int		rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Not asking for any props\n");
@@ -1239,7 +1238,7 @@ co_get_acl_access(void **state)
 	int		rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("No get-ACL permissions\n");
@@ -1364,7 +1363,7 @@ co_set_prop_access(void **state)
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	/*
@@ -1573,7 +1572,7 @@ co_modify_acl_access(void **state)
 					    DAOS_ACL_PERM_SET_ACL;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Overwrite ACL denied with no set-ACL perm\n");
@@ -1650,7 +1649,7 @@ co_set_owner(void **state)
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	/*
@@ -1742,7 +1741,7 @@ co_set_owner_access(void **state)
 				   ~DAOS_ACL_PERM_SET_OWNER;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			CONT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Set owner user denied with no set-owner perm\n");
@@ -1822,7 +1821,7 @@ co_owner_implicit_access(void **state)
 							     DAOS_PROP_CO_ACL);
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
@@ -1886,7 +1885,7 @@ static int
 co_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, CONT_POOL_SIZE,
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -1894,14 +1893,14 @@ static int
 co_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_CONT_CONNECT, true, CONT_POOL_SIZE,
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CONNECT, true, CONT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
