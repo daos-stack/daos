@@ -1277,7 +1277,8 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  */
 static int
 evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
-		const struct evt_entry_in *ent, bool *mbr_changed)
+		const struct evt_entry_in *ent, bool *mbr_changed,
+		uint8_t ** csum_bufp)
 {
 	int		 rc;
 	bool		 changed = 0;
@@ -1285,7 +1286,7 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"\n",
 		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
+	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed, csum_bufp);
 	if (rc != 0)
 		return rc;
 
@@ -1526,7 +1527,8 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
  * parent is also full.
  */
 static int
-evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
+evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
+		    uint8_t **csum_bufp)
 {
 	struct evt_rect		*mbr	  = NULL;
 	struct evt_node		*nd_tmp   = NULL;
@@ -1583,7 +1585,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			bool	changed;
 
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
-					     &entry, &changed);
+					     &entry, &changed, csum_bufp);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 
@@ -1620,7 +1622,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		 * new created node.
 		 */
 		nd_tmp = evt_select_node(tcx, &entry.ei_rect, nd_cur, nd_new);
-		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL);
+		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL,
+				     csum_bufp);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1654,7 +1657,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			D_GOTO(failed, rc);
 		nd_new = evt_off2node(tcx, nm_new);
 
-		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL);
+		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL,
+				     csum_bufp);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1685,7 +1689,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 
 /** Insert a single entry to evtree */
 static int
-evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
+evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent,
+		 uint8_t **csum_bufp)
 {
 	umem_off_t		nd_off;
 	int			level;
@@ -1743,7 +1748,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 	}
 	D_ASSERT(level == tcx->tc_depth - 1);
 
-	return evt_insert_or_split(tcx, ent);
+	return evt_insert_or_split(tcx, ent, csum_bufp);
 }
 
 static int
@@ -1832,6 +1837,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
 	}
 
+
 	D_ASSERT(ent_array.ea_ent_nr <= 1);
 	if (ent_array.ea_ent_nr == 1) {
 		/*
@@ -1845,7 +1851,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	}
 
 	/* Phase-2: Inserting */
-	rc = evt_insert_entry(tcx, entry);
+	rc = evt_insert_entry(tcx, entry, csum_bufp);
 
 	/* No need for evt_ent_array_fill as there will be no allocations
 	 * with 1 entry in the list
@@ -2402,7 +2408,7 @@ typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		  umem_off_t in_off, const struct evt_entry_in *ent,
-		  bool *changed, cmp_rect_cb cb)
+		  bool *changed, cmp_rect_cb cb, uint8_t **csum_bufp)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
@@ -2518,7 +2524,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		desc->dc_magic = EVT_DESC_MAGIC;
 		desc->dc_ex_addr = ent->ei_addr;
-		evt_desc_csum_fill(tcx, desc, ent, NULL);
+		evt_desc_csum_fill(tcx, desc, ent, csum_bufp);
 		desc->dc_ver = ent->ei_ver;
 	} else {
 		ne->ne_child = in_off;
@@ -2647,10 +2653,10 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, uint8_t **csum_bufp)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect);
+				 evt_ssof_cmp_rect, csum_bufp);
 }
 
 static int
@@ -2750,10 +2756,10 @@ done:
 static int
 evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, uint8_t **csum_bufp)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_sdist_cmp_rect);
+				 evt_sdist_cmp_rect, csum_bufp);
 }
 
 static int

@@ -440,17 +440,20 @@ csum_prepare_ent(struct evt_entry_in *ent_in, unsigned int cs_type,
  */
 static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
-		 void **csum_bufp, unsigned int cur_buf, unsigned int add_len)
+		 void **csum_bufp, unsigned int cur_len, unsigned int new_len)
 {
-	unsigned char	*buffer;
-	unsigned int	 new_len = cur_buf + add_len;
+	unsigned char	*buffer = NULL;
+	unsigned int	 cur_buf = 0;
 	int		 i;
 
-	D_ASSERT(add_len);
-	D_REALLOC(buffer, *csum_bufp, new_len);
-	if (buffer == NULL)
-		return -DER_NOMEM;
-	memset(&buffer[cur_buf], 0, add_len);
+	if (new_len > cur_len) {
+		D_REALLOC(buffer, *csum_bufp, new_len);
+		if (buffer == NULL)
+			return -DER_NOMEM;
+	} else
+		buffer = *csum_bufp;
+
+	memset(buffer, 0, new_len);
 	for (i = 0; i < seg_cnt; i++) {
 		struct dcs_csum_info *csum_info = &segs[i].ls_ent_in.ei_csum;
 
@@ -612,7 +615,8 @@ prepare_segments(struct agg_merge_window *mw)
 			rc = csum_prepare_buf(io->ic_segs, io->ic_seg_cnt,
 					      &io->ic_csum_buf,
 					      io->ic_csum_buf_len, cs_total);
-			io->ic_csum_buf_len += cs_total;
+			if (cs_total > io->ic_csum_buf_len)
+				io->ic_csum_buf_len = cs_total;
 		}
 	}
 	return rc;
@@ -1011,9 +1015,16 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 				 seg_count, seg_size);
 		if (rc == -DER_CSUM) {
 			lgc_seg->ls_has_csum_err = true;
-			for (i = 0; i < seg_count; i++)
+			for (i = 0; i < seg_count; i++) {
+				/*
+				D_PRINT("retain  -- lo: %lu, hi: %lu\n",
+			io->ic_csum_recalcs[i].cr_phy_ent->pe_rect.rc_ex.ex_lo,
+			io->ic_csum_recalcs[i].cr_phy_ent->pe_rect.rc_ex.ex_hi);
+			*/
+
 				io->ic_csum_recalcs[i].cr_phy_ent->pe_retain =
 									true;
+			}
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		} else if (rc)
@@ -1195,6 +1206,12 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		/* Physical entry is in window */
 		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
 						 phy_ent->pe_retain) {
+			/*
+			if (phy_ent->pe_retain)
+				D_PRINT("retaining -- lo: %lu, hi: %lu\n",
+					phy_ent->pe_rect.rc_ex.ex_lo,
+					phy_ent->pe_rect.rc_ex.ex_hi);
+					*/
 			d_list_del(&phy_ent->pe_link);
 			D_FREE_PTR(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
@@ -1204,6 +1221,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		/* Update extent start of truncated physical entry */
 
+		D_ASSERT(!phy_ent->pe_retain);
 		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		phy_ent->pe_off = rect.rc_ex.ex_lo -
 				phy_ent->pe_rect.rc_ex.ex_lo;
@@ -1222,7 +1240,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			continue;
 		ent_in = &io->ic_segs[i].ls_ent_in;
 
-		rc = evt_insert(oiter->it_hdl, ent_in, &ent_in->ei_csum.cs_csum);
+		rc = evt_insert(oiter->it_hdl, ent_in,
+				&ent_in->ei_csum.cs_csum);
 		if (rc) {
 			D_ERROR("Insert segment "DF_RECT" error: "DF_RC"\n",
 				DP_RECT(&ent_in->ei_rect), DP_RC(rc));
@@ -1351,7 +1370,7 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 
 	/* Transfer data from old logical records to reserved new segments */
 	rc = fill_segments(ih, mw, acts);
-	if (rc) {
+	if (rc && rc != -DER_CSUM) {
 		D_ERROR("Fill segments "DF_EXT" error: "DF_RC"\n",
 			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
@@ -1536,6 +1555,11 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 		D_FREE(io->ic_csum_recalcs);
 		io->ic_csum_recalcs = NULL;
 		io->ic_csum_recalc_cnt = 0;
+	}
+	if (io->ic_csum_buf != NULL) {
+		D_FREE(io->ic_csum_buf);
+		io->ic_csum_buf = NULL;
+		io->ic_csum_buf_len = 0;
 	}
 }
 
@@ -1900,9 +1924,6 @@ merge_window_init(struct agg_merge_window *mw, void (*func)(void *))
 	memset(mw, 0, sizeof(*mw));
 	D_INIT_LIST_HEAD(&mw->mw_phy_ents);
 	D_INIT_LIST_HEAD(&io->ic_nvme_exts);
-	mw->mw_csum_support = false;
-	io->ic_csum_buf = NULL;
-	io->ic_csum_buf_len = 0;
 	io->ic_csum_recalc_func = func;
 }
 
