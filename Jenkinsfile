@@ -95,7 +95,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             OFI_INTERFACE=eth0 daos_test -m'''
 
-def get_lmd_script = '''set -uex
+def get_lmd_script = '''set -ex
                         lmd_tarball='maldetect-current.tar.gz'
                         lmd_src='maldet-current'
                         rm -rf ./${lmd_src}
