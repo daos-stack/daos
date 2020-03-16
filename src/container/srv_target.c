@@ -973,6 +973,23 @@ out:
 	return rc;
 }
 
+int
+ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_tgt_destroy_in *in;
+	int rc;
+
+	D_ALLOC_PTR(in);
+	if (in == NULL)
+		return -DER_NOMEM;
+
+	rc = dss_thread_collective(cont_child_destroy_one, in, 0, DSS_ULT_IO);
+
+	D_FREE(in);
+
+	return rc;
+}
+
 void
 ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 {
@@ -983,7 +1000,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_thread_collective(cont_child_destroy_one, in, 0, DSS_ULT_IO);
+	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
