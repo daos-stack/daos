@@ -68,7 +68,7 @@ class NvmeFragmentation(TestWithServers):
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
-        Destroy the container at the end of this thread run
+        Destroy the container at the end of this thread run.
 
         Args:
             results (queue): queue for returning thread results
