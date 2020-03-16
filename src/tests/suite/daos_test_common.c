@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -421,11 +421,59 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 }
 
 int
+test_teardown_cont_hdl(test_arg_t *arg)
+{
+	int	rc = 0;
+	int	rc_reduce = 0;
+
+	rc = daos_cont_close(arg->coh, NULL);
+	if (arg->multi_rank) {
+		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+			      MPI_COMM_WORLD);
+		rc = rc_reduce;
+	}
+	arg->coh = DAOS_HDL_INVAL;
+	arg->setup_state = SETUP_CONT_CREATE;
+	if (rc) {
+		print_message("failed to close container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		return rc;
+	}
+
+	return rc;
+}
+
+int
+test_teardown_cont(test_arg_t *arg)
+{
+	int	rc = 0;
+
+	while (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+				       NULL);
+		if (rc == -DER_BUSY) {
+			print_message("Container is busy, wait\n");
+			sleep(1);
+			continue;
+		}
+		break;
+	}
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		print_message("failed to destroy container "DF_UUIDF
+			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+
+	uuid_clear(arg->co_uuid);
+	arg->setup_state = SETUP_POOL_CONNECT;
+	return rc;
+}
+
+int
 test_teardown(void **state)
 {
 	test_arg_t	*arg = *state;
 	int		 rc = 0;
-	int              rc_reduce = 0;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -437,33 +485,13 @@ test_teardown(void **state)
 		MPI_Barrier(MPI_COMM_WORLD);
 
 	if (!daos_handle_is_inval(arg->coh)) {
-		rc = daos_cont_close(arg->coh, NULL);
-		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-				      MPI_COMM_WORLD);
-			rc = rc_reduce;
-		}
-		arg->coh = DAOS_HDL_INVAL;
-		if (rc) {
-			print_message("failed to close container "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->co_uuid), rc);
+		rc = test_teardown_cont_hdl(arg);
+		if (rc)
 			return rc;
-		}
 	}
 
 	if (!uuid_is_null(arg->co_uuid)) {
-		while (arg->myrank == 0) {
-			rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
-					       NULL);
-			if (rc == -DER_BUSY) {
-				print_message("Container is busy, wait\n");
-				sleep(1);
-				continue;
-			}
-			break;
-		}
-		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		rc = test_teardown_cont(arg);
 		if (rc) {
 			/* The container might be left some reference count
 			 * during rebuild test due to "hacky"exclude triggering
@@ -474,8 +502,6 @@ test_teardown(void **state)
 			 * so let's destory the arg anyway. Though some pool
 			 * might be left here. XXX
 			 */
-			print_message("failed to destroy container "DF_UUIDF
-				      ": %d\n", DP_UUID(arg->co_uuid), rc);
 			goto free;
 		}
 	}
@@ -886,11 +912,9 @@ daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 	daos_exclude_server(pool_uuid, grp, svc, rank);
 }
 
-
-daos_prop_t *
-get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
+struct daos_acl *
+get_daos_acl_with_owner_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
 	struct daos_ace	*owner_ace;
 
@@ -902,10 +926,75 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	acl = daos_acl_create(&owner_ace, 1);
 	assert_non_null(acl);
 
+	daos_ace_free(owner_ace);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
+				 struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	prop->dpp_entries[1].dpe_type = owner_type;
+	D_STRNDUP(prop->dpp_entries[1].dpe_str, owner,
+		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	assert_non_null(prop->dpp_entries[1].dpe_str);
+
+	return prop;
+}
+
+daos_prop_t *
+get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+
+	acl = get_daos_acl_with_owner_perms(perms);
+
 	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
 	prop->dpp_entries[0].dpe_type = type;
 	prop->dpp_entries[0].dpe_val_ptr = acl;
 
-	daos_ace_free(owner_ace);
+	/* No need to free ACL - belongs to prop now */
+	return prop;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace;
+	char		*user = NULL;
+
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_owner_perms(0);
+
+	ace = daos_ace_create(DAOS_ACL_USER, user);
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = perms;
+	assert_true(daos_ace_is_valid(ace));
+
+	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+
+	/* Set effective user up as non-owner */
+	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
+						acl, DAOS_PROP_CO_ACL);
+
+	daos_ace_free(ace);
+	daos_acl_free(acl);
+	D_FREE(user);
 	return prop;
 }

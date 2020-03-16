@@ -27,19 +27,6 @@
 #include <daos/dtx.h>
 #include "vea_internal.h"
 
-void
-free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry)
-{
-	if (entry->ve_in_heap) {
-		D_ASSERTF(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh,
-			  "%u <= %u", entry->ve_ext.vfe_blk_cnt,
-			  vfc->vfc_large_thresh);
-		d_binheap_remove(&vfc->vfc_heap, &entry->ve_node);
-		entry->ve_in_heap = 0;
-	}
-	d_list_del_init(&entry->ve_link);
-}
-
 int
 compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec)
 {
@@ -51,28 +38,29 @@ static int
 compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	       struct vea_entry *entry)
 {
-	struct vea_free_extent remain;
-	d_iov_t key;
-	unsigned int flags = VEA_FL_NO_MERGE | VEA_FL_GEN_AGE;
-	int rc;
+	struct vea_free_extent	*remain;
+	d_iov_t			 key;
+	int			 rc;
 
-	remain = entry->ve_ext;
-	D_ASSERT(remain.vfe_blk_cnt >= vfe->vfe_blk_cnt);
-	D_ASSERT(remain.vfe_blk_off == vfe->vfe_blk_off);
+	remain = &entry->ve_ext;
+	D_ASSERT(remain->vfe_blk_cnt >= vfe->vfe_blk_cnt);
+	D_ASSERT(remain->vfe_blk_off == vfe->vfe_blk_off);
 
 	/* Remove the found free extent from compound index */
 	free_class_remove(&vsi->vsi_class, entry);
 
-	d_iov_set(&key, &remain.vfe_blk_off, sizeof(remain.vfe_blk_off));
-	rc = dbtree_delete(vsi->vsi_free_btr, BTR_PROBE_EQ, &key, NULL);
-	if (rc)
-		return rc;
+	if (remain->vfe_blk_cnt == vfe->vfe_blk_cnt) {
+		d_iov_set(&key, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
+		rc = dbtree_delete(vsi->vsi_free_btr, BTR_PROBE_EQ, &key, NULL);
+	} else {
+		/* Adjust in-tree offset & length */
+		remain->vfe_blk_off += vfe->vfe_blk_cnt;
+		remain->vfe_blk_cnt -= vfe->vfe_blk_cnt;
+		rc = daos_gettime_coarse(&remain->vfe_age);
+		if (rc)
+			return rc;
 
-	/* Add back remaining extent back in compound index */
-	remain.vfe_blk_cnt -= vfe->vfe_blk_cnt;
-	if (remain.vfe_blk_cnt > 0) {
-		remain.vfe_blk_off += vfe->vfe_blk_cnt;
-		rc = compound_free(vsi, &remain, flags);
+		rc = free_class_add(&vsi->vsi_class, entry);
 	}
 
 	return rc;
@@ -166,34 +154,28 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 	} else {
 		uint32_t half_blks, tot_blks;
 		uint64_t blk_off;
-		unsigned int flags = VEA_FL_NO_MERGE;
 
 		blk_off = entry->ve_ext.vfe_blk_off;
 		tot_blks = entry->ve_ext.vfe_blk_cnt;
 		half_blks = tot_blks >> 1;
 		D_ASSERT(tot_blks >= (half_blks + blk_cnt));
 
-		vfe.vfe_blk_off = blk_off;
-		vfe.vfe_blk_cnt = tot_blks;
-
-		/* Remove the original entry from compound index */
-		rc = compound_alloc(vsi, &vfe, entry);
+		/* Shrink the original extent to half size */
+		free_class_remove(&vsi->vsi_class, entry);
+		entry->ve_ext.vfe_blk_cnt = half_blks;
+		rc = free_class_add(&vsi->vsi_class, entry);
 		if (rc)
 			return rc;
 
-		/* Add the first half back in compound index */
-		vfe.vfe_blk_cnt = half_blks;
-		rc = compound_free(vsi, &vfe, flags);
-		if (rc)
-			return rc;
-
-		/* Add back the remaining part of second half */
+		/* Add the remaining part of second half */
 		if (tot_blks > (half_blks + blk_cnt)) {
-			vfe.vfe_blk_off += (half_blks + blk_cnt);
+			vfe.vfe_blk_off = blk_off + half_blks + blk_cnt;
 			vfe.vfe_blk_cnt = tot_blks - half_blks - blk_cnt;
+			rc = daos_gettime_coarse(&vfe.vfe_age);
+			if (rc)
+				return rc;
 
-			flags |= VEA_FL_GEN_AGE;
-			rc = compound_free(vsi, &vfe, flags);
+			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE);
 			if (rc)
 				return rc;
 		}

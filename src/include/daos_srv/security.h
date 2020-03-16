@@ -172,4 +172,104 @@ bool
 ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 		       struct ownership *ownership, struct daos_acl *acl);
 
+/**
+ * Determine if the container properties can be viewed based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_get_props(uint64_t cont_capas);
+
+/**
+ * Determine if the container properties can be modified based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_props(uint64_t cont_capas);
+
+/**
+ * Determine if the container Access Control List can be viewed based on the
+ * container security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_get_acl(uint64_t cont_capas);
+
+/**
+ * Determine if the container Access Control List can be modified based on the
+ * container security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_acl(uint64_t cont_capas);
+
+/**
+ * Determine if the container ownership can be modified based on the container
+ * security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_set_owner(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be written based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_write_data(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be read based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas);
+
+/**
+ * Get the security capabilities for a rebuild container handle created by the
+ * DAOS server.
+ *
+ * @return	Bits representing security capabilities
+ */
+uint64_t
+ds_sec_get_rebuild_cont_capabilities(void);
+
 #endif /* __DAOS_SRV_SECURITY_H__ */
