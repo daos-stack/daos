@@ -22,6 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
+from apricot import get_log_file
 from command_utils import \
     CommandFailure, FormattedParameter, ExecutableCommand, EnvironmentVariables
 from general_utils import pcmd
@@ -44,8 +45,9 @@ class DaosRacerCommand(ExecutableCommand):
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
 
-        # Environment variable names required to be set when running the macsio
-        # command.  The values for these names are populated by the
+        # Environment variable names required to be set when running the
+        # daos_racer command.  The values for these names are populated by the
+        # get_environment() method and added to command line by the
         # set_environment() method.
         self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
 
@@ -68,7 +70,11 @@ class DaosRacerCommand(ExecutableCommand):
         env["OMPI_MCA_oob"] = "tcp"
         env["OMPI_MCA_pml"] = "ob1"
         for name in self._env_names:
-            env[name] = manager.get_environment_value(name)
+            if name == "D_LOG_FILE":
+                value = get_log_file("daos.log")
+            else:
+                value = manager.get_environment_value(name)
+            env[name] = value
 
         return env
 

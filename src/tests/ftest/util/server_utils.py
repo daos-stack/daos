@@ -459,9 +459,11 @@ class DaosServerConfig(ObjectWithParameters):
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
 
+    # Mapping of environment variable names to daos_server config param names
     ENVIRONMENT_VARIABLE_MAPPING = {
-        "OFI_INTERFACE": "fabric_iface",
         "CRT_PHY_ADDR_STR": "provider",
+        "OFI_INTERFACE": "fabric_iface",
+        "OFI_PORT": "fabric_iface_port",
     }
 
     def __init__(self, daosbinpath, runnerpath, timeout=300):
