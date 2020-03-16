@@ -141,7 +141,7 @@ class NvmeFragmentation(TestWithServers):
         Use case:
         Create object with different transfer size in parallel (10 IOR threads)
         Delete the container created by IOR which will dealloc NVMe block
-        Run above code in loop for some time (~1 hours) and expected
+        Run above code in loop for some time (~1 hours) and expect
         not to fail with NO ENOM SPAC.
 
         :avocado: tags=all,hw,medium,nvme,ib2,full_regression
