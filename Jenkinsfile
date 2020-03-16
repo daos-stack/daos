@@ -52,7 +52,6 @@ def skip_stage(String stage) {
     return commitPragma(pragma: 'Skip-' + stage).contains('true')
 }
 
-def daos_target_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -107,8 +106,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     !env.BRANCH_NAME.startsWith("release/") &&
-     env.BRANCH_NAME != "master")) {
+     env.BRANCH_NAME != env.CHANGE_TARGET)) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -226,7 +224,7 @@ pipeline {
                 anyOf {
                     // always build branch landings as we depend on lastSuccessfulBuild
                     // always having RPMs in it
-                    branch daos_target_branch
+                    branch env.CHANGE_TARGET
                     allOf {
                         expression { ! skip_stage('build') }
                         expression { ! doc_only_change() }
@@ -272,7 +270,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
-                                                publish_branch: daos_target_branch,
+                                                publish_branch: env.CHANGE_TARGET,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -349,7 +347,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
-                                                publish_branch: daos_target_branch,
+                                                publish_branch: env.CHANGE_TARGET,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -474,7 +472,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
+                            branch env.CHANGE_TARGET
                             not { environment name: 'QUICKBUILD', value: 'true' }
                         }
                     }
@@ -535,7 +533,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
+                            branch env.CHANGE_TARGET
                             not { environment name: 'QUICKBUILD', value: 'true' }
                         }
                     }
@@ -658,7 +656,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
+                            branch env.CHANGE_TARGET
                             not { environment name: 'QUICKBUILD', value: 'true' }
                         }
                     }
@@ -719,7 +717,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch 'master'
+                            branch env.CHANGE_TARGET
                             not { environment name: 'QUICKBUILD', value: 'true' }
                         }
                     }
@@ -995,7 +993,7 @@ pipeline {
 //                    when {
 //                        beforeAgent true
 //                        anyOf {
-//                            branch 'master'
+//                            branch env.CHANGE_TARGET
 //                            not {
 //                                // expression returns false on grep match
 //                                expression {
@@ -1473,7 +1471,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: daos_target_branch
+            notifyBrokenBranch branches: env.CHANGE_TARGET
         }
     }
 }
