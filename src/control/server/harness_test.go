@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -388,39 +389,83 @@ func TestHarness_StopInstances(t *testing.T) {
 		"harness not started": {
 			harnessNotStarted: true,
 			signal:            syscall.SIGKILL,
-			expSignalsSent:    map[uint32]os.Signal{},
+			expResults: system.MemberResults{
+				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
+				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
+			},
+			expSignalsSent: map[uint32]os.Signal{},
 		},
 		"rank not in list": {
-			ranks:          []*ioserver.Rank{ioserver.NewRankPtr(2), ioserver.NewRankPtr(3)},
-			signal:         syscall.SIGKILL,
+			ranks:  []*ioserver.Rank{ioserver.NewRankPtr(2), ioserver.NewRankPtr(3)},
+			signal: syscall.SIGKILL,
+			expResults: system.MemberResults{
+				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
+			},
 			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
 		},
 		"signal send error": {
 			signal:    syscall.SIGKILL,
 			signalErr: errors.New("sending signal failed"),
-			expErr:    errors.New("scan error(s):\n  sending signal failed\n  sending signal failed\n"),
+			expResults: system.MemberResults{
+				{
+					Rank:    1,
+					Action:  "stop",
+					Errored: true,
+					Msg:     "want Stopped, got Started (sending signal failed)",
+					State:   system.MemberStateStarted,
+				},
+				{
+					Rank:    2,
+					Action:  "stop",
+					Errored: true,
+					Msg:     "want Stopped, got Started (sending signal failed)",
+					State:   system.MemberStateStarted,
+				},
+			},
+			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 		},
 		"context timeout": {
 			signal:     syscall.SIGKILL,
 			ctxTimeout: 1 * time.Nanosecond,
-			expErr:     errors.New("context deadline exceeded"),
-		},
-		"process wait takes too long": {
-			signal:     syscall.SIGKILL,
-			ctxTimeout: testShortTimeout,
-			expErr:     errors.New("context deadline exceeded"),
+			expResults: system.MemberResults{
+				{
+					Rank:    1,
+					Action:  "stop",
+					Errored: true,
+					Msg:     "want Stopped, got Started",
+					State:   system.MemberStateStarted,
+				},
+				{
+					Rank:    2,
+					Action:  "stop",
+					Errored: true,
+					Msg:     "want Stopped, got Started",
+					State:   system.MemberStateStarted,
+				},
+			},
 		},
 		"normal stop single-io": {
-			ioserverCount:  1,
-			signal:         syscall.SIGINT,
+			ioserverCount: 1,
+			signal:        syscall.SIGINT,
+			expResults: system.MemberResults{
+				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
+			},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT},
 		},
 		"normal stop multi-io": {
-			signal:         syscall.SIGTERM,
+			signal: syscall.SIGTERM,
+			expResults: system.MemberResults{
+				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
+				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
+			},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGTERM, 1: syscall.SIGTERM},
 		},
 		"force stop multi-io": {
-			signal:         syscall.SIGKILL,
+			signal: syscall.SIGKILL,
+			expResults: system.MemberResults{
+				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
+				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
+			},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 		},
 	} {
@@ -448,6 +493,10 @@ func TestHarness_StopInstances(t *testing.T) {
 				trc := &ioserver.TestRunnerConfig{}
 				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
 				trc.SignalErr = tc.signalErr
+				if !tc.harnessNotStarted {
+					atomic.StoreUint32(&trc.Running, 1)
+				}
+
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 

@@ -25,12 +25,15 @@ package ioserver
 import (
 	"context"
 	"os"
+	"sync/atomic"
 )
 
 type (
 	TestRunnerConfig struct {
 		StartCb    func()
 		StartErr   error
+		WaitErr    error
+		Running    uint32
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
 		ErrChanCb  func() error
@@ -82,9 +85,16 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 	return tr.runnerCfg.SignalErr
 }
 
-func (tr *TestRunner) Wait() (*os.ProcessState, error) { return nil, nil }
+func (tr *TestRunner) Wait() (*os.ProcessState, error) {
+	if tr.runnerCfg.WaitErr == nil {
+		atomic.StoreUint32(&tr.runnerCfg.Running, 0)
+	}
+	return nil, tr.runnerCfg.WaitErr
+}
 
-func (tr *TestRunner) IsRunning() bool { return true }
+func (tr *TestRunner) IsRunning() bool {
+	return atomic.LoadUint32(&tr.runnerCfg.Running) != 0
+}
 
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg
