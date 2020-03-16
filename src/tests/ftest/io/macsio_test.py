@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from general_utils import convert_list
 from macsio_test_base import MacsioTestBase
 
 
@@ -54,7 +55,7 @@ class MacsioTest(MacsioTestBase):
         self.log.info("Running MACSio")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, ",".join(self.pool.svc_ranks),
+                self.pool.uuid, convert_list(self.pool.svc_ranks),
                 self.container.uuid))
         if status:
             self.log.info("Test passed")

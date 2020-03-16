@@ -264,3 +264,23 @@ def check_pool_files(log, hosts, uuid):
             log.error("%s: %s not found", result[1], filename)
             status = False
     return status
+
+
+def convert_list(value, separator=","):
+    """Convert a list into a separator-separated string of its items.
+
+    Examples:
+        convert_list([1,2,3])        -> '1,2,3'
+        convert_list([1,2,3], " ")   -> '1 2 3'
+        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+
+    Args:
+        value (list): list to convert into a string
+        separator (str, optional): list item separator. Defaults to ",".
+
+    Returns:
+        str: a single string containing all the list items separated by the
+            separator.
+
+    """
+    return separator.join([str(item) for item in value])
