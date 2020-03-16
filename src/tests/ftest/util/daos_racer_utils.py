@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-import os
 
 from command_utils import \
     CommandFailure, FormattedParameter, ExecutableCommand, EnvironmentVariables
@@ -45,6 +44,44 @@ class DaosRacerCommand(ExecutableCommand):
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
 
+        # Environment variable names required to be set when running the macsio
+        # command.  The values for these names are populated by the
+        # set_environment() method.
+        self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+
+    def get_environment(self, manager):
+        """Get the environment variables to export for the daos_racer command.
+
+        Args:
+            manager (ServerManager): the job manager used to start daos_server
+                from which the server config values can be obtained to set the
+                required environment variables.
+
+        Returns:
+            EnvironmentVariables: a dictionary of environment variable names and
+                values to export prior to running daos_racer
+
+        """
+        env = EnvironmentVariables()
+        env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
+        env["OMPI_MCA_btl"] = "tcp,self"
+        env["OMPI_MCA_oob"] = "tcp"
+        env["OMPI_MCA_pml"] = "ob1"
+        for name in self._env_names:
+            env[name] = manager.get_environment_value(name)
+
+        return env
+
+    def set_environment(self, env):
+        """Set the environment variables to export prior to running daos_racer.
+
+        Args:
+            env (EnvironmentVariables): a dictionary of environment variable
+                names and values to export prior to running daos_racer
+        """
+        # Include exports prior to the daos_racer command
+        self._pre_command = env.get_export_str()
+
     def run(self):
         """Run the daos_racer command remotely.
 
@@ -52,16 +89,6 @@ class DaosRacerCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         """
-        # Include exports prior to the daos_racer command
-        env = EnvironmentVariables()
-        env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
-        env["OMPI_MCA_btl"] = "tcp,self"
-        env["OMPI_MCA_oob"] = "tcp"
-        env["OMPI_MCA_pml"] = "ob1"
-        env["OFI_INTERFACE"] = os.getenv("OFI_INTERFACE", "eth0")
-        env["CRT_PHY_ADDR_STR"] = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
-        self._pre_command = env.get_export_str()
-
         # The daos_racer program will run longer than the '-t <seconds>'
         # specified on its command line.  Use a timeout with pcmd to stop
         # testing if daos_racer does not complete in the intended timeframe.

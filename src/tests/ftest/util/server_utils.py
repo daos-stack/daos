@@ -144,6 +144,21 @@ class DaosServer(DaosCommand):
 
         return complete
 
+    def get_config_value(self, name):
+        """Get the value associated with a daos_server configuration value name.
+
+        Args:
+            name (str): configuration value name
+
+        Raises:
+            ServerFailure: if the configuration value name does not exist
+
+        Returns:
+            str: value of the provided configuration name
+
+        """
+        return self.yaml_params.get_value(name)
+
     class ServerStartSubCommand(CommandWithParameters):
         """Defines an object representing a daos_server start sub command."""
 
@@ -407,9 +422,47 @@ class DaosServerConfig(ObjectWithParameters):
                     filename, error))
         return filename
 
+    def get_value(self, name):
+        """Get the value associated with the configuration name.
+
+        Configuration names will first match any general configuration settings,
+        followed by any single server configuration entries.
+
+        Args:
+            name (str): configuration name
+
+        Raises:
+            ServerFailed: a configuration setting matching the specified name
+                was not found.
+
+        Returns:
+            [type]: [description]
+
+        """
+        found = False
+        for obj in [self] + self.server_params:
+            setting = getattr(obj, name, "setting-not-found")
+            if isinstance(setting, BasicParameter):
+                value = setting.value
+                found = True
+                break
+            elif setting != "setting-not-found":
+                value = setting
+                found = True
+                break
+        if not found:
+            raise ServerFailed(
+                "No daos_server configuration value for {}".format(name))
+        return value
+
 
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
+
+    ENVIRONMENT_VARIABLE_MAPPING = {
+        "OFI_INTERFACE": "fabric_iface",
+        "CRT_PHY_ADDR_STR": "provider",
+    }
 
     def __init__(self, daosbinpath, runnerpath, timeout=300):
         """Create a ServerManager object.
@@ -498,6 +551,33 @@ class ServerManager(ExecutableCommand):
             getattr(test, "helper_log"),
             getattr(test, "server_log")
         )
+
+    def get_environment_value(self, name):
+        """Get the server config value associated with the env variable name.
+
+        Args:
+            name (str): environment variable name for which to get a daos_server
+                configuration value
+
+        Raises:
+            ServerFailed: Unable to find a daos_server configuration value for
+                the specified environment variable name
+
+        Returns:
+            str: the daos_server configuration value for the specified
+                environment variable name
+
+        """
+        try:
+            setting = self.ENVIRONMENT_VARIABLE_MAPPING[name]
+            value = self.runner.job.get_config_value(setting)
+
+        except IndexError:
+            raise ServerFailed(
+                "Unknown server config setting mapping for the {} environment "
+                "variable!".format(name))
+
+        return value
 
     def run(self):
         """Execute the runner subprocess."""

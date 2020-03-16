@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-from apricot import TestWithServers
+from apricot import TestWithServers, get_log_file
 from daos_racer_utils import DaosRacerCommand
 
 
@@ -53,4 +53,7 @@ class DaosRacerTest(TestWithServers):
             "This test requires one client: {}".format(self.hostlist_clients))
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0])
         daos_racer.get_params(self)
+        env = daos_racer.get_environment(self.server_managers[0])
+        env["D_LOG_FILE"] = get_log_file("daos.log")
+        daos_racer.set_environment(env)
         daos_racer.run()
