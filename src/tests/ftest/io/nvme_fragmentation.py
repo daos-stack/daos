@@ -78,8 +78,9 @@ class NvmeFragmentation(TestWithServers):
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
-        daos_cmd = DaosCommand(os.path.join(self.prefix, "bin"))
-        daos_cmd.request.value = "container"
+        cmd = DaosCommand(os.path.join(self.prefix, "bin"))
+        cmd.set_sub_command("container")
+        cmd.sub_command_class.set_sub_command("destroy")
 
         #Iterate through IOR different value and run in sequence
         for oclass, api, test, flags in product(self.ior_daos_oclass,
@@ -119,12 +120,14 @@ class NvmeFragmentation(TestWithServers):
 
         #Destroy the container created by thread
         for key in container_info:
-            daos_cmd.action.value = ("destroy --svc={} --pool={} --cont={}"
-                                     .format(self.pool.svc_ranks,
-                                             self.pool.uuid,
-                                             container_info[key]))
+            cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
+            cmd.sub_command_class.sub_command_class.svc.value = \
+            self.pool.svc_ranks
+            cmd.sub_command_class.sub_command_class.cont.value = \
+            container_info[key]
+
             try:
-                daos_cmd.run()
+                cmd._get_result()
             except CommandFailure as _error:
                 results.put("FAIL")
 
