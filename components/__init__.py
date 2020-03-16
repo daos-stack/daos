@@ -301,8 +301,7 @@ def define_components(reqs):
     reqs.define('fio',
                 retriever=GitRepoRetriever(
                     'https://github.com/axboe/fio.git'),
-                commands=['git checkout fio-3.3',
-                          './configure --prefix="$FIO_PREFIX"',
+                commands=['./configure --prefix="$FIO_PREFIX"',
                           'make $JOBS_OPT', 'make install'],
                 progs=['genfio', 'fio'])
 
