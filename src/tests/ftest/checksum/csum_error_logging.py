@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ from avocado.utils import process
 
 class CSumErrorLog(DaosCoreBase):
     """
-    Test Class Description: This test is runs
+    Test Class Description: This test runs
     daos_test -z (Checksum tests) and verifies
     whether Checksum Error Counters are incremented
     in the NVME device due to checksum fault injection.
@@ -59,8 +59,9 @@ class CSumErrorLog(DaosCoreBase):
         uid = None
         for line in result.stdout.splitlines():
             line = line.strip()
-            if re.search("^UUID:",line):
-                uid = line.split()
+            if re.search("^UUID:", line):
+                temp = line.split()
+                uid = temp[1]
         return uid
 
     def get_checksum_error_value(self, device_id=None):
@@ -80,7 +81,8 @@ class CSumErrorLog(DaosCoreBase):
         for line in result.stdout.splitlines():
             line = line.strip()
             if re.search("^Checksum", line):
-                csum_count = line.split()
+                temp = line.split()
+                csum_count = int(temp[2])
         return csum_count
 
     def test_csum_error_logging(self):
@@ -92,12 +94,11 @@ class CSumErrorLog(DaosCoreBase):
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)
-        csum = self.get_checksum_error_value(dev_id[1])
-        self.log.info("Checksum Errors : %s", csum[2])
+        csum = self.get_checksum_error_value(dev_id)
+        self.log.info("Checksum Errors : %d", csum)
         DaosCoreBase.run_subtest(self)
-        csum_latest = self.get_checksum_error_value(dev_id[1])
-        self.log.info("Checksum Errors : %s", csum_latest[2])
-        if int(csum_latest[2]) > int(csum[2]):
-            self.log.info("Checksum Error Logging Test Passed")
-        else:
-            self.fail("Checksum Error Log not incremented")
+        csum_latest = self.get_checksum_error_value(dev_id)
+        self.log.info("Checksum Errors : %d", csum_latest)
+        self.assertTrue(csum_latest > csum,
+                        "Checksum Error Log not incremented")
+        self.log.info("Checksum Error Logging Test Passed")
