@@ -3453,7 +3453,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 			}
 		}
 
-		rc = remove_entry(dfs, th, new_parent->oh, new_name, false,
+		rc = remove_entry(dfs, th, new_parent->oh, new_name, true,
 				  new_entry);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n",
@@ -3467,14 +3467,14 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	/** rename symlink */
 	if (S_ISLNK(entry.mode)) {
-		rc = remove_entry(dfs, th, parent->oh, name, false, entry);
+		rc = remove_entry(dfs, th, parent->oh, name, true, entry);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n",
 				name, rc);
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(parent->oh, th, new_name, false, entry);
+		rc = insert_entry(parent->oh, th, new_name, true, entry);
 		if (rc)
 			D_ERROR("Inserting new entry %s failed (%d)\n",
 				new_name, rc);
@@ -3483,15 +3483,20 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	/** insert old entry in new parent object */
-	rc = insert_entry(new_parent->oh, th, new_name, false, entry);
+	rc = insert_entry(new_parent->oh, th, new_name, true, entry);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
 	}
 
+	uint64_t        cond = 0;
+
+	if (!dfs_no_cond_op)
+		cond = DAOS_COND_DKEY_PUNCH;
+
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, strlen(name));
-	rc = daos_obj_punch_dkeys(parent->oh, th, 0, 1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent->oh, th, cond, 1, &dkey, NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
