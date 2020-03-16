@@ -85,12 +85,13 @@ class DaosAdminPrivTest(TestWithServers):
         except ServerFailed as err:
             self.fail("Failed preparing SCM as non-root user: {}".format(err))
 
+        # Uncomment the below line after DAOS-4287 is resolved
         # Prep server for format, run command under non-root user
-        self.log.info("Performing NVMe storage prepare")
-        try:
-            server.storage_prepare(user, "nvme")
-        except ServerFailed as err:
-            self.fail("Failed preparing nvme as non-root user: {}".format(err))
+        # self.log.info("Performing NVMe storage prepare")
+        # try:
+        #    server.storage_prepare(user, "nvme")
+        # except ServerFailed as err:
+        #    self.fail("Failed preparing nvme as non-root user: {}".format(err))
 
         # Start server
         try:
