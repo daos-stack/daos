@@ -95,6 +95,27 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             OFI_INTERFACE=eth0 daos_test -m'''
 
+def rpm_scan_daos_test = '''pushd /tmp
+                              wget \
+                              http://rfxn.com/downloads/maldetect-current.tar.gz
+                              rm -rf /tmp/maldet-current
+                              mkdir -p /tmp/maldet-current
+                              tar -C /tmp/maldet-current --strip-components=1 \
+                                -xf maldetect-current.tar.gz
+                              cd maldet-current
+                              sudo ./install.sh
+                              sudo ln -s /usr/local/maldetect/ /bin/maldet
+                            popd
+                            sudo freshclam
+                            rm -f /tmp/clamscan.out
+                            sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
+                              -d /usr/local/maldetect/sigs/rfxn.hdb -r \
+                              --exclude-dir=/usr/local/maldetect \
+                              --exclude-dir=/usr/share/clamav \
+                              --infected /etc /usr | \
+                              tee /tmp/clamscan.out
+                            grep 'Infected files: 0$' /tmp/clamscan.out'''
+
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
@@ -1463,7 +1484,44 @@ pipeline {
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
                         }
                     }
-                }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Scan CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            // expression { ! skip_stage('scan-centos-rpms') }
+                        }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
+                                       snapshot: true,
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'environment-modules ' +
+                                                  'clamav clamav-devel'
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: "${rpm_test_pre}" +
+                                            "sudo yum -y install daos-client-${daos_packages_version}\n" +
+                                            "sudo yum -y history rollback last-1\n" +
+                                            "sudo yum -y install daos-server-${daos_packages_version}\n" +
+                                            "sudo yum -y install daos-tests-${daos_packages_version}\n" +
+                                            "${rpm_scan_daos_test}" + '"',
+                                    junit_files: null,
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
+                    }
+                } // stage('Scan CentOS 7 RPMs')
             }
         }
     }
