@@ -2,7 +2,7 @@
 
 DAOS containers are the unit of data management for users.
 
-### Container Creation/Destroy
+## Container Creation/Destroy
 
 Containers can be created and destroyed through the daos_cont_create/destroy()
 functions exported by the DAOS API. A user tool called `daos` is also
@@ -34,58 +34,65 @@ Object Class:   large
 Chunk Size:     4096
 ```
 
-### Container Properties
+## Container Properties
 
 At creation time, a list of container properties can be specified:
 
--   DAOS_PROP_CO_LABEL is a string that a user can associate with a
+-   `DAOS_PROP_CO_LABEL` is a string that a user can associate with a
     container. e.g., "Cat Pics" or "ResNet-50 training data"
 
--   DAOS_PROP_CO_LAYOUT_TYPE is the container type (POSIX, MPI-IO,
+-   `DAOS_PROP_CO_LAYOUT_TYPE` is the container type (POSIX, MPI-IO,
     HDF5, ...)
 
--   DAOS_PROP_CO_LAYOUT_VER is a version of the layout that can be
+-   `DAOS_PROP_CO_LAYOUT_VER` is a version of the layout that can be
     used by I/O middleware and application to handle interoperability.
 
--   DAOS_PROP_CO_CSUM defines whether checksums are enabled or
-    disabled and the checksum type used. Available values are:
-    - DAOS_PROP_CO_CSUM_OFF (Default)
-    - DAOS_PROP_CO_CSUM_CRC16
-    - DAOS_PROP_CO_CSUM_CRC32
-    - DAOS_PROP_CO_CSUM_CRC64
-
--   DAOS_PROP_CO_CSUM_CHUNK_SIZE defines the chunk size used for
-    creating checksums of array types. (default is 32K)
-
--   DAOS_PROP_CO_CSUM_SERVER_VERIFY is used to enable/disable the server
-    verifying data with checksums on an object update. (default is
-    disabled)
-
--   DAOS_PROP_CO_REDUN_FAC is the redundancy factor that drives the
+-   `DAOS_PROP_CO_REDUN_FAC` is the redundancy factor that drives the
     minimal data protection required for objects stored in the
     container. e.g., RF1 means no data protection, RF3 only allows 3-way
     replication or erasure code N+2.
 
--   DAOS_PROP_CO_REDUN_LVL is the fault domain level that should be
+-   `DAOS_PROP_CO_REDUN_LVL` is the fault domain level that should be
     used to place data redundancy information (e.g., storage nodes, racks
     ...). This information will be eventually consumed to determine object
     placement.
 
--   DAOS_PROP_CO_SNAPSHOT_MAX is the maximum number of snapshots to
-    retain. When a new snapshot is taken, and the threshold is reached,
-    the oldest snapshot will be automatically deleted.
-
--   DAOS_PROP_CO_ACL is the list of ACL for the container.
-
--   DAOS_PROP_CO_COMPRESS and DAOS_PROP_CO_ENCRYPT are reserved for configuring
- respectively compression and encryption. These features
-    are currently not on the roadmap.
-
 While those properties are currently stored persistently with container
 metadata, many of them are still under development. The ability to modify some
-of these properties on an existing container will also be provided in a future release.
+of these properties on an existing container will also be provided in a future
+release.
 
-### Container Snapshot
+## Data Integrity
+
+Checksum configuration is done per container and is disabled by default.
+To enable and configure checksums, the following container properties are used
+during container create.
+
+- `DAOS_PROP_CO_CSUM`: Type of checksum algorithm to use. Supported values are
+
+```c
+  DAOS_PROP_CO_CSUM_OFF, // default
+  DAOS_PROP_CO_CSUM_CRC16,
+  DAOS_PROP_CO_CSUM_CRC32,
+  DAOS_PROP_CO_CSUM_CRC64,
+```
+
+- `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: defines the chunk size used for
+  creating checksums of array types. (default is 32K).
+- `DAOS_PROP_CO_CSUM_SERVER_VERIFY`: Because of the probable decrease to
+  IOPS, in most cases, it is not desired to verify checksums on an object
+  update on the server side. It is sufficient for the client to verify on
+  a fetch because any data corruption, whether on the object update,
+  storage, or fetch, will be caught. However, there is an advantage to
+  knowing if corruption happens on an update. The update would fail
+  right away, indicating to the client to retry the RPC or report an
+  error to upper levels.
+
+!!! note
+    Note that currently, once a container is created, its checksum configuration
+    cannot be changed.
+
+## Snapshot & Rollback
 
 Similar to container create/destroy, a container can be snapshotted through the
 DAOS API by calling daos_cont_create_snap(). Additional functions are provided
@@ -98,13 +105,26 @@ operations are not yet fully implemented.
 This section will be updated once support for container snapshot is supported by
 the `daos` tool.
 
-### Container User Attributes
+The `DAOS_PROP_CO_SNAPSHOT_MAX` property is used to limit the maximum number of
+snapshots to retain. When a new snapshot is taken, and the threshold is reached,
+the oldest snapshot will be automatically deleted.
+
+Rolling back the content of a container to a snapshot is planned for future DAOS
+versions.
+
+## User Attributes
 
 Similar to POSIX extended attributes, users can attach some metadata to each
 container through the daos_cont_{list/get/set}_attr() API.
 
-### Container ACLs
+## Container ACLs
 
 Support for per-container ACLs is scheduled for DAOS v1.2. Similar to pool ACLs,
 container ACLs will implement a subset of the NFSv4 ACL standard. This feature
 will be documented here once available.
+
+## Compression & Encryption
+
+The `DAOS_PROP_CO_COMPRESS` and `DAOS_PROP_CO_ENCRYPT` properties are reserved
+for configuring respectively online compression and encryption.
+These features are currently not on the roadmap.
