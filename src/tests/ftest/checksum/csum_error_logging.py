@@ -62,6 +62,7 @@ class CSumErrorLog(DaosCoreBase):
             if re.search("^UUID:", line):
                 temp = line.split()
                 uid = temp[1]
+                break
         return uid
 
     def get_checksum_error_value(self, device_id=None):
@@ -83,6 +84,7 @@ class CSumErrorLog(DaosCoreBase):
             if re.search("^Checksum", line):
                 temp = line.split()
                 csum_count = int(temp[2])
+                break
         return csum_count
 
     def test_csum_error_logging(self):
