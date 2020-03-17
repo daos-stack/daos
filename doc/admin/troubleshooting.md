@@ -36,6 +36,11 @@ server operations:
 |Control Plane|control_log_file|/tmp/daos_control.log|
 |Data Plane|log_file|/tmp/daos_server.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+
+On the agent side; the following log is created as part of normal operations:
+
+|Component|Config Parameter|Example Config Value|
+|-|-|-|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
