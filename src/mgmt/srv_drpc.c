@@ -569,13 +569,15 @@ void
 ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__PoolReintegrateReq	*req = NULL;
-	Mgmt__PoolReintegrateResp	resp = MGMT__POOL_REINTEGRATE_RESP__INIT;
+	Mgmt__PoolReintegrateResp	resp;
 	uuid_t				uuid;
 	struct pool_target_id_list	reint_list;
 	uint32_t			reint_rank;
 	uint8_t				*body;
 	size_t				len;
 	int				rc, i;
+
+	mgmt__pool_reintegrate_resp__init(&resp);
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_reintegrate_req__unpack(
