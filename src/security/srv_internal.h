@@ -45,6 +45,9 @@ extern char *ds_sec_server_socket_path;
 #define POOL_CAPA_DEL_CONT	(1U << 2)
 
 #define POOL_CAPAS_RO_MASK	(POOL_CAPA_READ)
+#define POOL_CAPAS_ALL		(POOL_CAPA_READ |			\
+				 POOL_CAPA_CREATE_CONT |		\
+				 POOL_CAPA_DEL_CONT)
 
 /*
  * Container capabilities bits. Derived from user-requested flags and user's
@@ -57,10 +60,19 @@ extern char *ds_sec_server_socket_path;
 #define CONT_CAPA_GET_ACL	(1U << 4)
 #define CONT_CAPA_SET_ACL	(1U << 5)
 #define CONT_CAPA_SET_OWNER	(1U << 6)
+#define CONT_CAPA_DELETE	(1U << 7)
 
 #define CONT_CAPAS_RO_MASK	(CONT_CAPA_READ_DATA |			\
 				 CONT_CAPA_GET_PROP |			\
 				 CONT_CAPA_GET_ACL)
+#define CONT_CAPAS_ALL		(CONT_CAPA_READ_DATA |			\
+				 CONT_CAPA_WRITE_DATA |			\
+				 CONT_CAPA_GET_PROP |			\
+				 CONT_CAPA_SET_PROP |			\
+				 CONT_CAPA_GET_ACL |			\
+				 CONT_CAPA_SET_ACL |			\
+				 CONT_CAPA_SET_OWNER |			\
+				 CONT_CAPA_DELETE)
 
 int ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token);
 

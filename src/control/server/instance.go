@@ -332,6 +332,11 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 	return nil
 }
 
+// SetTargetCount updates target count in ioserver config.
+func (srv *IOServerInstance) SetTargetCount(numTargets int) {
+	srv.runner.GetConfig().TargetCount = numTargets
+}
+
 // StartManagementService starts the DAOS management service replica associated
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.

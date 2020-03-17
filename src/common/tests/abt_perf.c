@@ -93,7 +93,7 @@ abt_ult_create_rate(void)
 	while (1) {
 		if (!abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 
@@ -167,7 +167,7 @@ abt_sched_rate(void)
 	while (1) {
 		if (then && !abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 
@@ -232,7 +232,7 @@ abt_lock_create_rate(void *arg)
 	while (1) {
 		if (!abt_exiting) {
 			now = abt_current_ms();
-			if (now - then >= opt_secs * 1000)
+			if (now - then >= (uint64_t)opt_secs * 1000)
 				abt_exiting = true;
 		}
 

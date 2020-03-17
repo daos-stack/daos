@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,7 +321,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				rebuild_nr = 0;
 	d_rank_t			myrank;
 	int				i;
-	int				rc;
+	int				rc = 0;
 
 	if (rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");

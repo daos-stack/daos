@@ -34,6 +34,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/security.h>
 #include <daos_mgmt.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
@@ -1021,7 +1022,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint32_t	map_ver;
-	d_iov_t	map_buf_iov = {0};
+	d_iov_t		map_buf_iov = {0};
 	daos_prop_t	*prop = NULL;
 	uint64_t	leader_term;
 	int		rc;
@@ -1043,6 +1044,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		D_GOTO(out, rc);
 	}
 
+re_dist:
 	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
 	if (rc) {
 		D_ERROR("pool map broadcast failed: rc "DF_RC"\n", DP_RC(rc));
@@ -1051,11 +1053,22 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	/* IV bcast the pool map in case for offline rebuild */
 	rc = ds_pool_iv_map_update(pool, map_buf_iov.iov_buf, map_ver);
-	if (rc) {
-		D_ERROR("ds_pool_iv_map_update failed %d.\n", rc);
-		D_GOTO(out, rc);
-	}
 	D_FREE(map_buf_iov.iov_buf);
+	if (rc) {
+		/* If the failure is due to stale group version, then maybe
+		 * the leader upgrade group version during this time, let's
+		 * retry in this case.
+		 */
+		memset(&map_buf_iov, 0, sizeof(map_buf_iov));
+		if (rc == -DER_GRPVER) {
+			D_DEBUG(DB_REBUILD, DF_UUID" redistribute pool map\n",
+				DP_UUID(pool->sp_uuid));
+			goto re_dist;
+		} else {
+			D_ERROR("pool map broadcast failed: rc "DF_RC"\n",
+				DP_RC(rc));
+		}
+	}
 
 	rc = ds_pool_prop_fetch(pool, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc) {
@@ -1567,6 +1580,8 @@ rebuild_fini_one(void *arg)
 			rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
+	ds_pool_child_put(dpc);
+
 	return 0;
 }
 
@@ -1773,7 +1788,8 @@ rebuild_prepare_one(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	/* Create ds_container locally on main XS */
 	rc = ds_cont_local_open(rpt->rt_pool_uuid, rpt->rt_coh_uuid,
-				NULL, 0, 0, NULL);
+				NULL, 0, ds_sec_get_rebuild_cont_capabilities(),
+				NULL);
 	if (rc)
 		pool_tls->rebuild_pool_status = rc;
 
@@ -1785,6 +1801,9 @@ rebuild_prepare_one(void *data)
 	D_DEBUG(DB_REBUILD, "open local container "DF_UUID"/"DF_UUID
 		" rebuild eph "DF_U64" rc %d\n", DP_UUID(rpt->rt_pool_uuid),
 		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, rc);
+
+	ds_pool_child_put(dpc);
+
 	return rc;
 }
 
@@ -1914,6 +1933,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
+	D_ASSERT(pool->sp_iv_ns != NULL);
 	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	D_ALLOC_PTR(prop);

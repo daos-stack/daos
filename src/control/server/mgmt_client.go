@@ -68,7 +68,7 @@ func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
 }
 
 func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
-	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
+	fn func(context.Context, mgmtpb.MgmtSvcClient) error, extraDialOpts ...grpc.DialOption) error {
 
 	var opts []grpc.DialOption
 	authDialOption, err := security.DialOptionForTransportConfig(msc.cfg.TransportConfig)
@@ -77,15 +77,27 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 
 	// Setup Dial Options that will always be included.
-	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(retryDelay),
-		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
-	conn, err := grpc.DialContext(ctx, ap, opts...)
+	opts = append(opts, grpc.WithBlock(), authDialOption)
+	conn, err := grpc.DialContext(ctx, ap, append(opts, extraDialOpts...)...)
 	if err != nil {
-		return errors.Wrapf(err, "dial %s", ap)
+		return err
 	}
 	defer conn.Close()
 
 	return fn(ctx, mgmtpb.NewMgmtSvcClient(conn))
+}
+
+func (msc *mgmtSvcClient) withConnectionRetry(ctx context.Context, ap string,
+	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
+
+	return msc.withConnection(ctx, ap, fn, grpc.WithBackoffMaxDelay(retryDelay),
+		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+}
+
+func (msc *mgmtSvcClient) withConnectionFailOnBadDial(ctx context.Context, ap string,
+	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
+
+	return msc.withConnection(ctx, ap, fn, grpc.FailOnNonTempDialError(true))
 }
 
 func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
@@ -124,7 +136,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 		return nil, err
 	}
 
-	joinErr = msc.withConnection(ctx, ap,
+	joinErr = msc.withConnectionRetry(ctx, ap,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 			if req.Addr == "" {
 				req.Addr = msc.cfg.ControlAddr.String()
@@ -168,7 +180,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 // Shipped function propose ranks for shutdown by sending requests over dRPC
 // to each rank.
 func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, psErr error) {
-	psErr = msc.withConnection(ctx, destAddr,
+	psErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
 			msc.log.Debugf("prep shutdown(%s, %+v)", destAddr, req)
@@ -186,7 +198,7 @@ func (msc *mgmtSvcClient) PrepShutdown(ctx context.Context, destAddr string, req
 // Shipped function terminates ranks directly from the harness at the listening
 // address without requesting over dRPC.
 func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, stopErr error) {
-	stopErr = msc.withConnection(ctx, destAddr,
+	stopErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 
 			prefix := fmt.Sprintf("stop(%s, %+v)", destAddr, req)
@@ -228,14 +240,12 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req mgmtpb.
 //
 // StartRanks will return results for any instances started by the harness.
 func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, startErr error) {
-	startErr = msc.withConnection(ctx, destAddr,
+	startErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
 			prefix := fmt.Sprintf("start(%s, %+v)", destAddr, req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
-
-			ctx, _ = context.WithTimeout(ctx, retryDelay)
 
 			// returns on time out or when all instances are running
 			// don't retry
@@ -254,7 +264,7 @@ func (msc *mgmtSvcClient) Start(ctx context.Context, destAddr string, req mgmtpb
 //
 // PingRanks should return ping results for any instances managed by the harness.
 func (msc *mgmtSvcClient) Status(ctx context.Context, destAddr string, req mgmtpb.RanksReq) (resp *mgmtpb.RanksResp, statusErr error) {
-	statusErr = msc.withConnection(ctx, destAddr,
+	statusErr = msc.withConnectionFailOnBadDial(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) (err error) {
 
 			prefix := fmt.Sprintf("status(%s, %+v)", destAddr, req)

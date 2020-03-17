@@ -67,7 +67,7 @@ cont_aggregate_epr(struct ds_cont_child *cont, daos_epoch_range_t *epr)
 	 */
 	if (cont->sc_abort_vos_aggregating)
 		return 1;
-	return vos_aggregate(cont->sc_hdl, epr);
+	return vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc);
 }
 
 static bool
@@ -122,7 +122,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
-		D_DEBUG(DB_TRACE, "change hlc "DF_U64" > full "DF_U64"\n",
+		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
 		epoch_min = cinfo.ci_hae;
@@ -153,7 +153,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		int	j;
 		int	k;
 
-		D_DEBUG(DB_TRACE, "rebuild fence "DF_U64"\n", rebuild_fence);
+		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
 		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
 			sizeof(daos_epoch_t));
@@ -175,18 +175,17 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		 * always copy here.
 		 */
 		snapshots_nr = cont->sc_snapshots_nr;
-		D_ALLOC(snapshots, snapshots_nr * sizeof(daos_epoch_t));
-		if (snapshots == NULL)
-			return -DER_NOMEM;
+		if (snapshots_nr > 0) {
+			D_ALLOC(snapshots, snapshots_nr * sizeof(daos_epoch_t));
+			if (snapshots == NULL)
+				return -DER_NOMEM;
 
-		memcpy(snapshots, cont->sc_snapshots,
-		       snapshots_nr * sizeof(daos_epoch_t));
+			memcpy(snapshots, cont->sc_snapshots,
+					snapshots_nr * sizeof(daos_epoch_t));
+		}
 	}
 
-	/*
-	 * Find highest snapshot less than last aggregated epoch.
-	 * TODO: Rebuild epoch needs be taken into account as well.
-	 */
+	/* Find highest snapshot less than last aggregated epoch. */
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
 		;
 
@@ -948,15 +947,20 @@ cont_child_destroy_one(void *vin)
 		 * the container has never been opened */
 		rc = 0;
 	}
+
+	/*
+	 * Pause flushing free extents in VEA aging buffer, otherwise,
+	 * there'll be way more fragments to be processed.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_PLUG);
+
 	/* XXX there might be a race between GC and pool destroy, let's do
 	 * synchronous GC for now.
 	 */
 	dss_gc_run(pool->spc_hdl, -1);
-	/*
-	 * Force VEA to expire all the just freed extents and make them
-	 * available for allocation immediately.
-	 */
-	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+
+	/* Unplug and make the freed extents available immediately. */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_UNPLUG);
 	if (rc) {
 		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
@@ -1231,12 +1235,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 csummer:
 		rc = cont_hdl_csummer_init(hdl);
-		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_cont->sc_pool);
-			D_FREE(ddra);
+		if (rc != 0)
 			D_GOTO(err_register, rc);
-		}
-
 	}
 
 	if (cont_hdl != NULL) {
@@ -1252,9 +1252,10 @@ err_register:
 	if (hdl->sch_cont->sc_open == 0)
 		dtx_batched_commit_deregister(hdl->sch_cont);
 err_cont:
-	cont_stop_dtx_reindex_ult(hdl->sch_cont);
-	if (hdl->sch_cont)
+	if (hdl->sch_cont) {
+		cont_stop_dtx_reindex_ult(hdl->sch_cont);
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
+	}
 
 	if (!daos_handle_is_inval(poh)) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
@@ -1704,7 +1705,7 @@ cont_snap_update_one(void *vin)
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
 		cont->sc_snapshot_delete_hlc = crt_hlc_get();
-		D_DEBUG(DF_DSMS, DF_CONT": Reset aggregation lower bound\n",
+		D_DEBUG(DB_EPC, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
 	cont->sc_snapshots_nr = args->snap_count;
@@ -1792,7 +1793,7 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
 	struct cont_snap_args			 args	= { 0 };
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+	D_DEBUG(DB_EPC, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
