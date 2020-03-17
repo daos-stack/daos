@@ -578,7 +578,7 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024 /* used for mixed record overwrite */
+#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -1956,7 +1956,7 @@ next_step:
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
 	assert_int_equal(sgl.sg_nr_out, 2);
-	assert_memory_equal(buf, buf_out, sizeof(buf));
+	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
 	memset(buf_out, 0, buf_len);
