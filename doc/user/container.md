@@ -190,14 +190,13 @@ is replaced with the new one.
 
 #### Removing an entry from the ACL
 
-To delete an entry for a given principal, or identity, in an existing container
-ACL:
+To delete an entry for a given principal in an existing container ACL:
 
 ```bash
 $ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --principal=<principal>
 ```
 
-The principal corresponds to the principal/identity portion of an ACE that was
+The principal corresponds to the principal portion of an ACE that was
 set during container creation or a previous container ACL operation. For the
 delete operation, the principal argument must be formatted as follows:
 
@@ -236,7 +235,7 @@ $ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> --group=<owner
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](/doc/user/acl.md#identity).
+[DAOS ACL user/group principals](/doc/user/acl.md#principal).
 
 #### Changing the ownership
 
@@ -253,7 +252,7 @@ $ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> --group=<owner-gr
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](/doc/user/acl.md#identity).
+[DAOS ACL user/group principals](/doc/user/acl.md#principal).
 
 ## Compression & Encryption
 

@@ -8,7 +8,7 @@ Entries (ACEs). ACEs are the individual rules applied to each access decision.
 
 In the input and output of DAOS tools, an ACE is defined using a colon-separated
 string format:\
-`TYPE:FLAGS:IDENTITY:PERMISSIONS`
+`TYPE:FLAGS:PRINCIPAL:PERMISSIONS`
 
 The contents of all the fields are case-sensitive.
 
@@ -16,22 +16,22 @@ The contents of all the fields are case-sensitive.
 
 The type of entry. Only one type of ACE is supported at this time.
 
-* A (Allow): Allow access to the specified identity for the given permissions.
+* A (Allow): Allow access to the specified principal for the given permissions.
 
 ### Flags
 
 The flags provide additional information about how the ACE should be
 interpreted.
 
-* G (Group): The identity should be interpreted as a group.
+* G (Group): The principal should be interpreted as a group.
 
-### Identity
+### Principal
 
-The identity (also called the principal) is specified in the name@domain format.
+The principal (also called the identity) is specified in the name@domain format.
 The domain should be left off if the name is a UNIX user/group on the local
 domain. Currently, this is the only case supported by DAOS.
 
-There are three special identities, `OWNER@`, `GROUP@` and `EVERYONE@`,
+There are three special principals, `OWNER@`, `GROUP@` and `EVERYONE@`,
 which align with User, Group, and Other from traditional POSIX permission bits.
 When providing them in the ACE string format, they must be spelled exactly as
 written here, in uppercase with no domain appended. The `GROUP@` entry must
@@ -144,7 +144,7 @@ each ACE:
 
 * The base size of an ACE is 256 bytes.
 * If the ACE principal is *not* one of the special principals:
-  * Add the length of the identity string + 1.
+  * Add the length of the principal string + 1.
   * If that value is not 64-byte aligned, round up to the nearest 64 byte 
     boundary.
  

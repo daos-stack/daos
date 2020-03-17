@@ -174,13 +174,13 @@ is replaced with the new one.
 
 #### Removing an entry from the ACL
 
-To delete an entry for a given principal, or identity, in an existing pool ACL:
+To delete an entry for a given principal in an existing pool ACL:
 
 ```bash
 $ dmg pool delete-acl --pool <UUID> --principal <principal>
 ```
 
-The principal corresponds to the principal/identity portion of an ACE that was
+The principal corresponds to the principal portion of an ACE that was
 set during pool creation or a previous pool ACL operation. For the delete
 operation, the principal argument must be formatted as follows:
 
