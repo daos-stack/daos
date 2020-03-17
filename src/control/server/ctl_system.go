@@ -24,6 +24,7 @@
 package server
 
 import (
+	"net"
 	"strings"
 	"time"
 
@@ -74,6 +75,15 @@ func (svc *ControlService) getMSMember() (*system.Member, error) {
 	return msMember, nil
 }
 
+func isUnreachableError(err error) bool {
+	switch ne := errors.Cause(err).(type) {
+	case *net.OpError:
+		return ne.Temporary()
+	}
+
+	return false
+}
+
 // updateMemberStatus requests registered harness to ping their instances (system
 // members) in order to determine IO Server process responsiveness. Update membership
 // appropriately.
@@ -95,7 +105,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
-			if strings.Contains(err.Error(), "connection refused") {
+			if isUnreachableError(err) {
 				for _, rank := range ranks {
 					badRanks[rank] = system.MemberStateStopped
 				}
