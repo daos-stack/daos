@@ -48,7 +48,7 @@ import (
 const instanceUpdateDelay = 500 * time.Millisecond
 
 // NewRankResult returns a reference to a new member result struct.
-func NewRankResult(rank *ioserver.Rank, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
+func NewRankResult(rank ioserver.Rank, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
 	result := mgmtpb.RanksResp_RankResult{
 		Rank: rank.Uint32(), Action: action, State: uint32(state),
 	}
@@ -64,20 +64,20 @@ func NewRankResult(rank *ioserver.Rank, action string, state system.MemberState,
 //
 // RankResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToRankResult(rank *ioserver.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
+func drespToRankResult(rank ioserver.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
 	var outErr error
 	state := system.MemberStateErrored
 
 	if err != nil {
-		outErr = errors.WithMessagef(err, "rank %s dRPC failed", rank)
+		outErr = errors.WithMessagef(err, "rank %s dRPC failed", &rank)
 	} else {
 		resp := &mgmtpb.DaosResp{}
 		if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 			outErr = errors.WithMessagef(err, "rank %s dRPC unmarshal failed",
-				rank)
+				&rank)
 		} else if resp.GetStatus() != 0 {
 			outErr = errors.Errorf("rank %s dRPC returned DER %d",
-				rank, resp.GetStatus())
+				&rank, resp.GetStatus())
 		}
 	}
 
@@ -737,12 +737,12 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 }
 
 // checkRankList checks rank is present in rank list.
-func checkRankList(rank ioserver.Rank, ranks []*ioserver.Rank) bool {
+func checkRankList(rank ioserver.Rank, ranks []ioserver.Rank) bool {
 	if len(ranks) == 0 {
 		return true // empty rank list indicates no filtering
 	}
 	for _, r := range ranks {
-		if rank.Equals(r) {
+		if rank.Equals(&r) {
 			return true
 		}
 	}
@@ -766,7 +766,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 
 	resp := &mgmtpb.RanksResp{}
 
-	var rankList []*ioserver.Rank
+	var rankList []ioserver.Rank
 	if err := convert.Types(req.Ranks, &rankList); err != nil {
 		return nil, errors.Wrap(err, "parsing request rank list")
 	}
@@ -777,7 +777,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			return nil, err
 		}
 
-		if !checkRankList(*rank, rankList) {
+		if !checkRankList(rank, rankList) {
 			continue // filtered out, no result expected
 		}
 
@@ -814,7 +814,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 
 	resp := &mgmtpb.RanksResp{}
 
-	var rankList []*ioserver.Rank
+	var rankList []ioserver.Rank
 	if err := convert.Types(req.Ranks, &rankList); err != nil {
 		return nil, errors.Wrap(err, "parsing request rank list")
 	}
@@ -840,7 +840,7 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	return resp, nil
 }
 
-func ping(i *IOServerInstance, rank *ioserver.Rank, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
+func ping(i *IOServerInstance, rank ioserver.Rank, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -885,7 +885,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 
 	resp := &mgmtpb.RanksResp{}
 
-	var rankList []*ioserver.Rank
+	var rankList []ioserver.Rank
 	if err := convert.Types(req.Ranks, &rankList); err != nil {
 		return nil, errors.Wrap(err, "parsing request rank list")
 	}
@@ -896,7 +896,7 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, err
 		}
 
-		if !checkRankList(*rank, rankList) {
+		if !checkRankList(rank, rankList) {
 			continue // filtered out, no result expected
 		}
 
@@ -952,7 +952,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 	case <-time.After(svc.harness.rankReqTimeout):
 	}
 
-	var rankList []*ioserver.Rank
+	var rankList []ioserver.Rank
 	if err := convert.Types(req.Ranks, &rankList); err != nil {
 		return nil, errors.Wrap(err, "parsing request rank list")
 	}

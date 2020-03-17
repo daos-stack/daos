@@ -370,7 +370,7 @@ func TestHarness_StopInstances(t *testing.T) {
 		ioserverCount     int
 		missingSB         bool
 		signal            os.Signal
-		ranks             []*ioserver.Rank
+		ranks             []ioserver.Rank
 		harnessNotStarted bool
 		signalErr         error
 		ctxTimeout        time.Duration
@@ -396,7 +396,7 @@ func TestHarness_StopInstances(t *testing.T) {
 			expSignalsSent: map[uint32]os.Signal{},
 		},
 		"rank not in list": {
-			ranks:  []*ioserver.Rank{ioserver.NewRankPtr(2), ioserver.NewRankPtr(3)},
+			ranks:  []ioserver.Rank{ioserver.Rank(2), ioserver.Rank(3)},
 			signal: syscall.SIGKILL,
 			expResults: system.MemberResults{
 				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
@@ -478,7 +478,7 @@ func TestHarness_StopInstances(t *testing.T) {
 				tc.ioserverCount = maxIOServers
 			}
 			if tc.ranks == nil {
-				tc.ranks = []*ioserver.Rank{}
+				tc.ranks = []ioserver.Rank{}
 			}
 			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
 			if !tc.harnessNotStarted {

@@ -238,7 +238,7 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 // Iterate over instances and call Stop(sig) on each, return when all instances
 // exit or err context is done. Error map returned for stop attempt failures so
 // can continue to return results and update state.
-func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, rankList ...*ioserver.Rank) (map[*ioserver.Rank]error, error) {
+func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (map[ioserver.Rank]error, error) {
 	if !h.IsStarted() {
 		return nil, nil
 	}
@@ -248,7 +248,7 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 
 	instances := h.Instances()
 	type rankRes struct {
-		rank *ioserver.Rank
+		rank ioserver.Rank
 		ps   *os.ProcessState
 		err  error
 	}
@@ -260,7 +260,7 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 			return nil, err
 		}
 
-		if !checkRankList(*rank, rankList) {
+		if !checkRankList(rank, rankList) {
 			h.log.Debugf("rank %s not in requested list, skipping...", rank)
 			continue // filtered out, no result expected
 		}
@@ -278,7 +278,7 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 		stopping++
 	}
 
-	stopErrors := make(map[*ioserver.Rank]error)
+	stopErrors := make(map[ioserver.Rank]error)
 	for {
 		select {
 		case <-ctx.Done():
@@ -297,7 +297,7 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 	}
 }
 
-func (h *IOServerHarness) getInstanceStartedResults(rankList []*ioserver.Rank, desiredState system.MemberState, action string, stopErrs map[*ioserver.Rank]error) (system.MemberResults, error) {
+func (h *IOServerHarness) getInstanceStartedResults(rankList []ioserver.Rank, desiredState system.MemberState, action string, stopErrs map[ioserver.Rank]error) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, maxIOServers)
 	for _, i := range h.Instances() {
 		rank, err := i.GetRank()
@@ -305,7 +305,7 @@ func (h *IOServerHarness) getInstanceStartedResults(rankList []*ioserver.Rank, d
 			return nil, err
 		}
 
-		if !checkRankList(*rank, rankList) {
+		if !checkRankList(rank, rankList) {
 			continue // filtered out, no result expected
 		}
 
@@ -335,7 +335,7 @@ func (h *IOServerHarness) getInstanceStartedResults(rankList []*ioserver.Rank, d
 
 // StopInstances attempts to stop instances managed by harness and returns
 // members.
-func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...*ioserver.Rank) (system.MemberResults, error) {
+func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (system.MemberResults, error) {
 	h.log.Debug("stopping harness managed instances")
 	stopErrs, err := h.stopInstances(ctx, signal, rankList...)
 	if err != nil && err != context.DeadlineExceeded {

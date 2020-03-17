@@ -340,7 +340,7 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 }
 
 // GetRank returns a valid instance rank or error.
-func (srv *IOServerInstance) GetRank() (*ioserver.Rank, error) {
+func (srv *IOServerInstance) GetRank() (ioserver.Rank, error) {
 	var err error
 	sb := srv.getSuperblock()
 
@@ -349,15 +349,13 @@ func (srv *IOServerInstance) GetRank() (*ioserver.Rank, error) {
 		err = errors.New("nil superblock")
 	case sb.Rank == nil:
 		err = errors.New("nil rank in superblock")
-	case *sb.Rank == ioserver.NilRank:
-		err = errors.New("NilRank in superblock")
 	}
 
 	if err != nil {
-		return nil, err
+		return ioserver.NilRank, err
 	}
 
-	return sb.Rank, nil
+	return *sb.Rank, nil
 }
 
 // SetTargetCount updates target count in ioserver config.
