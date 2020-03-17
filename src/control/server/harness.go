@@ -315,7 +315,7 @@ func (h *IOServerHarness) getInstanceStartedResults(rankList []ioserver.Rank, de
 		}
 
 		var extraErrMsg string
-		if stopErrs != nil {
+		if len(stopErrs) > 0 {
 			if stopErr, exists := stopErrs[rank]; exists {
 				if stopErr == nil {
 					return nil, errors.New("expected non-nil error in error map")
