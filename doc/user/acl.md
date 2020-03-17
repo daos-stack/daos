@@ -40,8 +40,7 @@ also have the `G` (group) flag.
 ### Permissions
 
 The permissions in a resource's ACL permit a certain type of user access to
-the resource. Which types of permissions are valid depends on the resource
-type.
+the resource.
 
 | Permission	| Pool Meaning		| Container Meaning		|
 | ------------- | --------------------- | ----------------------------- |
@@ -58,10 +57,10 @@ type.
 ACLs containing permissions not applicable to the given resource are considered
 invalid.
 
-In general a user/group's permissions must include at least some form of
-read access (for example, read or get-prop) before the user will be allowed to
-connect. A user with read-only *or* write-only permissions will be rejected when
-requesting RW access to a resource.
+To allow a user/group to connect to a resource, that principal's permissions
+must include at least some form of read access (for example, read or get-prop).
+A user with write-only permissions will be rejected when requesting RW access to
+a resource.
 
 ### Denying Access
 
@@ -84,6 +83,9 @@ It is not possible to deny access to a specific group in this way, due to
     create containers.
 * `A::OWNER@:rwdtTaAo`
   * Allow the UNIX user who owns the container to have full control.
+* `A:G:GROUP@:rwdtT`
+  * Allow the UNIX group that owns the container to read and write data, delete
+    the container, and manipulate container properties.
 * `A::EVERYONE@:r`
   * Allow any user not covered by other rules to have read-only access.
 * `A::daos_user@:`
@@ -99,14 +101,22 @@ Access Control Entries (ACEs) will be enforced in the following order:
 * Everyone
 
 In general, enforcement will be based on the first match, ignoring
-lower-priority entries. For example, if the user has an ACE for their user
-identity, they will not receive the permissions for any of their groups, even if
-those group entries have broader permissions than the user entry does. The user
-is expected to match at most one user entry.
+lower-priority entries.
+
+If the user is the owner of the resource, and there is an OWNER@ entry, they
+will receive the owner permissions only. They will not receive any of the
+permissions in the named user/group entries, even if they would match those
+other entries.
+
+If the user isn't the owner, or there is no OWNER@ entry, but there is an ACE
+for their user identity, they will receive the permissions for their user
+identity only. They will not receive the permissions for any of their
+groups, even if those group entries have broader permissions than the user entry
+does. The user is expected to match at most one user entry.
 
 If no matching user entry is found, but entries match one or more of the user's
 groups, enforcement will be based on the union of the permissions of all
-matching groups.
+matching groups, including the owner-group.
 
 If no matching groups are found, the "Everyone" entry's permissions will be
 used, if it exists.
