@@ -915,7 +915,7 @@ def send_notification(hosts, subject, msg, attachment, email_addrs):
     spawn_commands(hosts, mail_cmd, 30)
 
 
-def get_log_size(test_yaml, test_file, args, size_limit=2**33):
+def get_log_size(test_yaml, test_file, args, size_limit=2**30):
     """Get the size of the the directoy of the host test log files in
     the avocado results directory and store the values in a file.
 
@@ -962,6 +962,8 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**33):
                         msg.append("Host: {} \nTest File: {}\n".format(
                             ",".join(o_hosts), test_file))
             if msg:
+                if "BUILD_URL" in os.environ:
+                    msg.append("Build URL: {}".format(os.environ["BUILD_URL"]))
                 sub = "Test Log Too Long Found"
                 email_addrs = ["amanda.justiniano-pagn@intel.com"]
                 send_notification(

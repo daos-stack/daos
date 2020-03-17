@@ -1075,7 +1075,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1162,7 +1162,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1250,7 +1250,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
@@ -1338,7 +1338,7 @@ pipeline {
                                   rm -rf "Functional/"
                                   mkdir "Functional/"
                                   # compress those potentially huge DAOS logs
-                                  if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                  if daos_logs=$(find install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/* -size +1M); then
                                       lbzip2 $daos_logs
                                   fi
                                   arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
