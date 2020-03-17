@@ -958,7 +958,10 @@ def get_log_size(test_yaml, test_file, args, size_limit=2**30):
             for output, o_hosts in output_data:
                 for line in str(output).splitlines():
                     size = line.split("\t")[0]
-                    if size and size.isdigit() and size > size_limit:
+                    if not size or not size.isdigit():
+                        print("  Error in log_size.log contents in: {}".format(
+                            o_hosts))
+                    elif int(size) > size_limit:
                         msg.append("Host: {} \nTest File: {}\n".format(
                             ",".join(o_hosts), test_file))
             if msg:
