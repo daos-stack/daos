@@ -624,6 +624,11 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_user, &attr);
 
+	/* Create the handle index KVS. */
+	attr.dsa_class = RDB_KVS_GENERIC;
+	attr.dsa_order = 16;
+	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_handles, &attr);
+
 out_kvs:
 	daos_prop_free(prop_dup);
 	rdb_path_fini(&kvs);
@@ -673,14 +678,125 @@ out:
 	return rc;
 }
 
+struct recs_buf {
+	struct cont_tgt_close_rec      *rb_recs;
+	size_t				rb_recs_size;
+	int				rb_nrecs;
+};
+
+static int
+recs_buf_init(struct recs_buf *buf)
+{
+	struct cont_tgt_close_rec      *tmp;
+	size_t				tmp_size;
+
+	tmp_size = 4096;
+	D_ALLOC(tmp, tmp_size);
+	if (tmp == NULL)
+		return -DER_NOMEM;
+
+	buf->rb_recs = tmp;
+	buf->rb_recs_size = tmp_size;
+	buf->rb_nrecs = 0;
+	return 0;
+}
+
+static void
+recs_buf_fini(struct recs_buf *buf)
+{
+	D_FREE(buf->rb_recs);
+	buf->rb_recs = NULL;
+	buf->rb_recs_size = 0;
+	buf->rb_nrecs = 0;
+}
+
+/* Make sure buf have enough space for one more element. */
+static int
+recs_buf_grow(struct recs_buf *buf)
+{
+	D_ASSERT(buf->rb_recs != NULL);
+	D_ASSERT(buf->rb_recs_size > sizeof(*buf->rb_recs));
+
+	if (sizeof(*buf->rb_recs) * (buf->rb_nrecs + 1) > buf->rb_recs_size) {
+		struct cont_tgt_close_rec      *recs_tmp;
+		size_t				recs_size_tmp;
+
+		recs_size_tmp = buf->rb_recs_size * 2;
+		D_ALLOC(recs_tmp, recs_size_tmp);
+		if (recs_tmp == NULL)
+			return -DER_NOMEM;
+		memcpy(recs_tmp, buf->rb_recs, buf->rb_recs_size);
+		D_FREE(buf->rb_recs);
+		buf->rb_recs = recs_tmp;
+		buf->rb_recs_size = recs_size_tmp;
+	}
+
+	return 0;
+}
+
+static int
+find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+{
+	struct recs_buf	       *buf = arg;
+	int			rc;
+
+	if (key->iov_len != sizeof(uuid_t) || val->iov_len != sizeof(char)) {
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+			key->iov_len, val->iov_len);
+		return -DER_IO;
+	}
+
+	rc = recs_buf_grow(buf);
+	if (rc != 0)
+		return rc;
+
+	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
+	buf->rb_recs[buf->rb_nrecs].tcr_hce = 0 /* unused */;
+	buf->rb_nrecs++;
+	return 0;
+}
+
+static int cont_close_hdls(struct cont_svc *svc,
+			   struct cont_tgt_close_rec *recs, int nrecs,
+			   crt_context_t ctx);
+
+static int
+evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
+{
+	struct recs_buf	buf;
+	int		rc;
+
+	rc = recs_buf_init(&buf);
+	if (rc != 0)
+		return rc;
+
+	rc = rdb_tx_iterate(tx, &cont->c_hdls, false /* !backward */,
+			    find_hdls_by_cont_cb, &buf);
+	if (rc != 0)
+		goto out;
+
+	if (buf.rb_nrecs == 0)
+		goto out;
+
+	if (!force) {
+		rc = -DER_BUSY;
+		goto out;
+	}
+
+	rc = cont_close_hdls(cont->c_svc, buf.rb_recs, buf.rb_nrecs, ctx);
+
+out:
+	recs_buf_fini(&buf);
+	return rc;
+}
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	     struct cont_svc *svc, crt_rpc_t *rpc)
 {
 	struct cont_destroy_in *in = crt_req_get(rpc);
-	d_iov_t		key;
-	d_iov_t		value;
-	rdb_path_t		kvs;
+	struct cont	       *cont = NULL;
+	d_iov_t			key;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: force=%u\n",
@@ -693,42 +809,43 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Check if the container attribute KVS exists. */
-	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
-	d_iov_set(&value, NULL /* buf */, 0 /* size */);
-	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &value);
+	rc = cont_lookup(tx, svc, in->cdi_op.ci_uuid, &cont);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
-		D_GOTO(out, rc);
+		goto out;
 	}
 
-	/* Create a path to the container attribute KVS. */
-	rc = rdb_path_clone(&svc->cs_conts, &kvs);
+	rc = evict_hdls(tx, cont, in->cdi_force, rpc->cr_ctx);
 	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = rdb_path_push(&kvs, &key);
-	if (rc != 0)
-		D_GOTO(out_kvs, rc);
+		goto out;
 
 	rc = cont_destroy_bcast(rpc->cr_ctx, svc, in->cdi_op.ci_uuid);
 	if (rc != 0)
-		D_GOTO(out_kvs, rc);
+		goto out;
 
-	/* Destroy the user attributes KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_attr_user);
+	/* Destroy the handle index KVS. */
+	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
 	if (rc != 0)
-		D_GOTO(out_kvs, rc);
+		goto out;
+
+	/* Destroy the user attribute KVS. */
+	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_attr_user);
+	if (rc != 0)
+		goto out;
 
 	/* Destroy the snapshot KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &kvs, &ds_cont_prop_snapshots);
+	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_snapshots);
 	if (rc != 0)
-		D_GOTO(out_kvs, rc);
+		goto out;
 
 	/* Destroy the container attribute KVS. */
+	d_iov_set(&key, in->cdi_op.ci_uuid, sizeof(uuid_t));
 	rc = rdb_tx_destroy_kvs(tx, &svc->cs_conts, &key);
-out_kvs:
-	rdb_path_fini(&kvs);
+
 out:
+	if (cont != NULL)
+		cont_put(cont);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cdi_op.ci_uuid), rpc,
 		rc);
@@ -740,8 +857,8 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	    struct cont **cont)
 {
 	struct cont    *p;
-	d_iov_t	key;
-	d_iov_t	tmp;
+	d_iov_t		key;
+	d_iov_t		tmp;
 	int		rc;
 
 	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
@@ -785,9 +902,19 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	if (rc != 0)
 		D_GOTO(err_user, rc);
 
+	/* c_hdls */
+	rc = rdb_path_clone(&p->c_prop, &p->c_hdls);
+	if (rc != 0)
+		D_GOTO(err_user, rc);
+	rc = rdb_path_push(&p->c_hdls, &ds_cont_prop_handles);
+	if (rc != 0)
+		D_GOTO(err_hdls, rc);
+
 	*cont = p;
 	return 0;
 
+err_hdls:
+	rdb_path_fini(&p->c_hdls);
 err_user:
 	rdb_path_fini(&p->c_user);
 err_snaps:
@@ -800,12 +927,13 @@ err:
 	return rc;
 }
 
-static void
+void
 cont_put(struct cont *cont)
 {
-	rdb_path_fini(&cont->c_prop);
-	rdb_path_fini(&cont->c_snaps);
+	rdb_path_fini(&cont->c_hdls);
 	rdb_path_fini(&cont->c_user);
+	rdb_path_fini(&cont->c_snaps);
+	rdb_path_fini(&cont->c_prop);
 	D_FREE(cont);
 }
 
@@ -820,6 +948,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct container_hdl	chdl;
 	struct pool_map		*pmap;
 	struct cont_open_out   *out = crt_reply_get(rpc);
+	char			zero = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" capas="
@@ -903,6 +1032,15 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	/*
+	 * Add the handle to the handle index KVS. The value is unused. (See
+	 * the handle index KVS comment in srv_layout.h.)
+	 */
+	d_iov_set(&value, &zero, sizeof(zero));
+	rc = rdb_tx_update(tx, &cont->c_hdls, &key, &value);
+	if (rc != 0)
+		goto out;
+
 	/**
 	 * Put requested properties in output.
 	 * the allocated prop will be freed after rpc replied in
@@ -969,8 +1107,8 @@ static int
 cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 		   crt_context_t ctx, const uuid_t uuid)
 {
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct container_hdl	chdl;
 	struct cont	       *cont;
 	int			rc;
@@ -987,13 +1125,18 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 		return rc;
 
 	rc = ds_cont_epoch_fini_hdl(tx, cont, ctx, &chdl);
-	cont_put(cont);
-	cont = NULL;
 	if (rc != 0)
-		return rc;
+		goto out;
 
-	/* Delete this handle. */
-	return rdb_tx_delete(tx, &svc->cs_hdls, &key);
+	rc = rdb_tx_delete(tx, &cont->c_hdls, &key);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_tx_delete(tx, &svc->cs_hdls, &key);
+
+out:
+	cont_put(cont);
+	return rc;
 }
 
 /* Close an array of handles, possibly belonging to different containers. */
@@ -1564,11 +1707,9 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 }
 
 struct close_iter_arg {
-	struct cont_tgt_close_rec      *cia_recs;
-	size_t				cia_recs_size;
-	int				cia_nrecs;
-	uuid_t			       *cia_pool_hdls;
-	int				cia_n_pool_hdls;
+	struct recs_buf	cia_buf;
+	uuid_t	       *cia_pool_hdls;
+	int		cia_n_pool_hdls;
 };
 
 static int
@@ -1587,10 +1728,9 @@ static int
 close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
 	struct close_iter_arg  *arg = varg;
+	struct recs_buf	       *buf = &arg->cia_buf;
 	struct container_hdl   *hdl;
-
-	D_ASSERT(arg->cia_recs != NULL);
-	D_ASSERT(arg->cia_recs_size > sizeof(*arg->cia_recs));
+	int			rc;
 
 	if (key->iov_len != sizeof(uuid_t) ||
 	    val->iov_len != sizeof(*hdl)) {
@@ -1605,56 +1745,13 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			 arg->cia_n_pool_hdls))
 		return 0;
 
-	/* Make sure arg->cia_recs[] have enough space for this handle. */
-	if (sizeof(*arg->cia_recs) * (arg->cia_nrecs + 1) >
-	    arg->cia_recs_size) {
-		struct cont_tgt_close_rec      *recs_tmp;
-		size_t				recs_size_tmp;
-
-		recs_size_tmp = arg->cia_recs_size * 2;
-		D_ALLOC(recs_tmp, recs_size_tmp);
-		if (recs_tmp == NULL)
-			return -DER_NOMEM;
-		memcpy(recs_tmp, arg->cia_recs,
-		       arg->cia_recs_size);
-		D_FREE(arg->cia_recs);
-		arg->cia_recs = recs_tmp;
-		arg->cia_recs_size = recs_size_tmp;
-	}
-
-	uuid_copy(arg->cia_recs[arg->cia_nrecs].tcr_hdl, key->iov_buf);
-	arg->cia_recs[arg->cia_nrecs].tcr_hce = hdl->ch_hce;
-	arg->cia_nrecs++;
-	return 0;
-}
-
-/* Callers are responsible for freeing *recs if this function returns zero. */
-static int
-find_hdls_to_close(struct rdb_tx *tx, struct cont_svc *svc, uuid_t *pool_hdls,
-		   int n_pool_hdls, struct cont_tgt_close_rec **recs,
-		   size_t *recs_size, int *nrecs)
-{
-	struct close_iter_arg	arg;
-	int			rc;
-
-	arg.cia_recs_size = 4096;
-	D_ALLOC(arg.cia_recs, arg.cia_recs_size);
-	if (arg.cia_recs == NULL)
-		return -DER_NOMEM;
-	arg.cia_nrecs = 0;
-	arg.cia_pool_hdls = pool_hdls;
-	arg.cia_n_pool_hdls = n_pool_hdls;
-
-	rc = rdb_tx_iterate(tx, &svc->cs_hdls, false /* !backward */,
-			    close_iter_cb, &arg);
-	if (rc != 0) {
-		D_FREE(arg.cia_recs);
+	rc = recs_buf_grow(buf);
+	if (rc != 0)
 		return rc;
-	}
 
-	*recs = arg.cia_recs;
-	*recs_size = arg.cia_recs_size;
-	*nrecs = arg.cia_nrecs;
+	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
+	buf->rb_recs[buf->rb_nrecs].tcr_hce = hdl->ch_hce;
+	buf->rb_nrecs++;
 	return 0;
 }
 
@@ -1668,9 +1765,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 {
 	struct cont_svc		       *svc;
 	struct rdb_tx			tx;
-	struct cont_tgt_close_rec      *recs;
-	size_t				recs_size;
-	int				nrecs;
+	struct close_iter_arg		arg;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": closing by %d pool hdls: pool_hdls[0]="
@@ -1689,15 +1784,24 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	rc = find_hdls_to_close(&tx, svc, pool_hdls, n_pool_hdls, &recs,
-				&recs_size, &nrecs);
+	rc = recs_buf_init(&arg.cia_buf);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		goto out_lock;
+	arg.cia_pool_hdls = pool_hdls;
+	arg.cia_n_pool_hdls = n_pool_hdls;
 
-	if (nrecs > 0)
-		rc = cont_close_hdls(svc, recs, nrecs, ctx);
+	/* Iterate through the handles of all containers in this service. */
+	rc = rdb_tx_iterate(&tx, &svc->cs_hdls, false /* !backward */,
+			    close_iter_cb, &arg);
+	if (rc != 0)
+		goto out_buf;
 
-	D_FREE(recs);
+	if (arg.cia_buf.rb_nrecs > 0)
+		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs,
+				     arg.cia_buf.rb_nrecs, ctx);
+
+out_buf:
+	recs_buf_fini(&arg.cia_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
@@ -1948,6 +2052,10 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
+	/* Propagate new snapshot list by IV */
+	if (rc == 0 && (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY))
+		ds_cont_update_snap_iv(svc, in->ci_uuid);
+
 	return rc;
 }
 

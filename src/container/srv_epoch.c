@@ -109,41 +109,6 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont,
 }
 
 int
-update_snap_iv(struct rdb_tx *tx, struct cont *cont)
-{
-	struct ds_pool	*pool;
-	uint64_t	*snapshots = NULL;
-	int		 snap_count = -1, rc;
-
-	/* Only happens on xstream 0 */
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-
-	rc = read_snap_list(tx, cont, &snapshots, &snap_count);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update snapshots IV: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-		return rc;
-	}
-
-	pool = ds_pool_lookup(cont->c_svc->cs_pool_uuid);
-	if (pool == NULL) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	rc = cont_iv_snapshots_update(pool->sp_iv_ns, cont->c_uuid, snapshots,
-				      snap_count);
-	ds_pool_put(pool);
-out:
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to update snapshots IV: rc %d\n",
-			DP_UUID(cont->c_uuid), rc);
-
-	D_FREE(snapshots);
-	return rc;
-}
-
-int
 ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont, uuid_t c_hdl,
 		       struct container_hdl *hdl)
 {
@@ -297,7 +262,6 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
 	}
 	D_DEBUG(DF_DSMS, DF_CONT": created snapshot "DF_U64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), *epoch);
-	update_snap_iv(tx, cont);
 out_rpc:
 	crt_req_decref(rpc);
 out:
@@ -363,7 +327,6 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": deleted snapshot [%lu]\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		in->cei_epoch);
-	update_snap_iv(tx, cont);
 out:
 	return rc;
 }
@@ -492,6 +455,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 		D_GOTO(out_lock, rc);
 
 	rc = read_snap_list(&tx, cont, snapshots, snap_count);
+	cont_put(cont);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -505,4 +469,53 @@ out_put:
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), *snap_count, rc);
 
 	return rc;
+}
+
+/*
+ * Propagate new snapshot list to all servers through snapshot IV, errors
+ * are ignored.
+ */
+void
+ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct rdb_tx	 tx;
+	struct cont	*cont = NULL;
+	uint64_t	*snapshots = NULL;
+	int		 snap_count = -1, rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to start rdb tx: %d\n",
+			DP_UUID(svc->cs_pool_uuid), rc);
+		return;
+	}
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed to look container: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		goto out_lock;
+	}
+
+	rc = read_snap_list(&tx, cont, &snapshots, &snap_count);
+	cont_put(cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed to read snap list: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		goto out_lock;
+	}
+
+	rc = cont_iv_snapshots_update(svc->cs_pool->sp_iv_ns, cont_uuid,
+				      snapshots, snap_count);
+	if (rc != 0)
+		D_ERROR(DF_CONT": Failed to update snapshots IV: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+
+	D_FREE(snapshots);
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
 }

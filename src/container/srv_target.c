@@ -97,7 +97,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 	uint64_t		hlc = crt_hlc_get();
 	uint64_t		change_hlc;
 	uint64_t		interval;
-	uint64_t		*snapshots;
+	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			i, rc;
@@ -122,7 +122,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
-		D_DEBUG(DB_TRACE, "change hlc "DF_U64" > full "DF_U64"\n",
+		D_DEBUG(DB_EPC, "change hlc "DF_U64" > full "DF_U64"\n",
 			change_hlc, cont->sc_aggregation_full_scan_hlc);
 	} else {
 		epoch_min = cinfo.ci_hae;
@@ -153,7 +153,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		int	j;
 		int	k;
 
-		D_DEBUG(DB_TRACE, "rebuild fence "DF_U64"\n", rebuild_fence);
+		D_DEBUG(DB_EPC, "rebuild fence "DF_U64"\n", rebuild_fence);
 		/* Insert the rebuild_epoch into snapshots */
 		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
 			sizeof(daos_epoch_t));
@@ -171,14 +171,21 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		snapshots[k] = rebuild_fence;
 		snapshots_nr = cont->sc_snapshots_nr + 1;
 	} else {
-		snapshots = cont->sc_snapshots;
+		/* Since sc_snapshots might be freed by other ULT, let's
+		 * always copy here.
+		 */
 		snapshots_nr = cont->sc_snapshots_nr;
+		if (snapshots_nr > 0) {
+			D_ALLOC(snapshots, snapshots_nr * sizeof(daos_epoch_t));
+			if (snapshots == NULL)
+				return -DER_NOMEM;
+
+			memcpy(snapshots, cont->sc_snapshots,
+					snapshots_nr * sizeof(daos_epoch_t));
+		}
 	}
 
-	/*
-	 * Find highest snapshot less than last aggregated epoch.
-	 * TODO: Rebuild epoch needs be taken into account as well.
-	 */
+	/* Find highest snapshot less than last aggregated epoch. */
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
 		;
 
@@ -188,7 +195,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 		epoch_range.epr_lo = snapshots[i - 1] + 1;
 
 	if (epoch_range.epr_lo >= epoch_max)
-		return 0;
+		D_GOTO(free, rc = 0);
 
 	*sleep = 0;
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
@@ -203,7 +210,7 @@ cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 
 		rc = cont_aggregate_epr(cont, &epoch_range);
 		if (rc)
-			return rc;
+			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
 	}
 
@@ -223,6 +230,9 @@ out:
 
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id);
+free:
+	if (snapshots != NULL)
+		D_FREE(snapshots);
 
 	return rc;
 }
@@ -1689,7 +1699,7 @@ cont_snap_update_one(void *vin)
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
 		cont->sc_snapshot_delete_hlc = crt_hlc_get();
-		D_DEBUG(DF_DSMS, DF_CONT": Reset aggregation lower bound\n",
+		D_DEBUG(DB_EPC, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
 	cont->sc_snapshots_nr = args->snap_count;
@@ -1777,7 +1787,7 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
 	struct cont_snap_args			 args	= { 0 };
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+	D_DEBUG(DB_EPC, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
