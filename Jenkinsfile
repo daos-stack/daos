@@ -108,12 +108,12 @@ def rpm_scan_pre = '''set -ex
                       scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
-def rpm_scan_test = '''lmd_src='maldet-current'
-                       rm -rf /tmp/${lmd_src}
-                       mkdir -p /tmp/${lmd_src}
-                       tar -C /tmp/${lmd_src} --strip-components=1 \
-                         -xf ${lmd_tarball}
-                       pushd /tmp/${lmd_src}
+def rpm_scan_test = '''lmd_src=\"maldet-current\"
+                       rm -rf /tmp/\${lmd_src}
+                       mkdir -p /tmp/\${lmd_src}
+                       tar -C /tmp/\${lmd_src} --strip-components=1 \
+                         -xf \${lmd_tarball}
+                       pushd /tmp/\${lmd_src}
                          sudo ./install.sh
                          sudo ln -s /usr/local/maldetect/ /bin/maldet
                        popd
