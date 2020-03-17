@@ -113,7 +113,7 @@ def get_lmd_script = '''set -ex
                           rm -rf ./${lmd_src}
                           mkdir -p ${lmd_src}
                           tar -C ${lmd_src} --strip-components=1 \
-                            xf ${lmd_tarball}
+                            -xf ${lmd_tarball}
                         fi'''
 
 def rpm_scan_daos_test = '''lmd_src=\"${WORKSPACE}/maldet-current\"
