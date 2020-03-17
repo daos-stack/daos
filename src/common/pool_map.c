@@ -1899,7 +1899,7 @@ pool_map_update_failed_cnt(struct pool_map *map)
 	struct pool_domain *root;
 	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
 
-	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(*fail_cnts) * map->po_domain_layers);
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)
