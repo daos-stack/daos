@@ -109,6 +109,7 @@ def rpm_scan_pre = '''set -ex
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
+                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
                        rm -rf /tmp/\\\${lmd_src}
                        mkdir -p /tmp/\\\${lmd_src}
                        tar -C /tmp/\\\${lmd_src} --strip-components=1 \
