@@ -790,8 +790,6 @@ out:
 	return rc;
 }
 
-static void cont_put(struct cont *cont);
-
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	     struct cont_svc *svc, crt_rpc_t *rpc)
