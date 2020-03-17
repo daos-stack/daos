@@ -490,7 +490,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	struct csum_context	ctx = {0};
 	struct daos_sgl_idx	bsgl_idx = {0};
 	int			rc = 0;
-	uint32_t		i;
+	uint32_t		i, j;
 
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
@@ -511,10 +511,12 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 	 */
 
 	/** Verify have correct csums for extents returned.
-	 * Should be 1 biov_csums for each biov in bsgl
+	 * Should be 1 biov_csums for each non-hole biov in bsgl
 	 */
-	for (i = 0; i < bsgl->bs_nr_out; i++) {
-		if (!ci_is_valid(&biov_csums[i])) {
+	for (i = 0, j = 0; i < bsgl->bs_nr_out; i++) {
+		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr)))
+			continue;
+		if (!ci_is_valid(&biov_csums[j++])) {
 			D_ERROR("Invalid csum for biov %d.", i);
 			return -DER_CSUM;
 		}
