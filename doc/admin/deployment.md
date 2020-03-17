@@ -45,7 +45,7 @@ storage nodes before deploying DAOS.
 
 ### Enable IOMMU (Optional)
 
-In order to run DAOS server as a non-root user with NVMe devices, the hardware
+In order to run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
 On Intel® systems, this capability is named Intel® Virtualization Technology for
 Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
@@ -176,9 +176,10 @@ $ sudo ln -s $SL_PREFIX/include \
            /usr/share/spdk/include
 ```
 
-NOTES:
- * The RPM installation is preferred for production scenarios. Manual installation
- is most appropriate for development and predeployment proof-of-concept scenarios.
+!!! note
+    The RPM installation is preferred for production scenarios. Manual
+    installation is most appropriate for development and predeployment
+    proof-of-concept scenarios.
 
 ## DAOS Server Setup
 
@@ -695,7 +696,7 @@ The network scan leverages data from libfabric.  Results are ordered from
 highest performance at the top to lowest performance at the bottom of the list.
 Once the fabric_iface and provider pair has been chosen, those items and the
 pinned_numa_node may be inserted directly into the corresponding sections within
-daos_server.yml.  Note that the provider is currently the same for all DAOS
+daos_server.yml. Note that the provider is currently the same for all DAOS
 IO server instances and is configured once in the server configuration.
 The fabric_iface and pinned_numa_node are configured for each IO server
 instance.
@@ -828,7 +829,8 @@ support is to pass the -i flag to daos_agent.
 The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
-(`install/etc/daos_agent.yml`).
+(`install/etc/daos_agent.yml`). If installed from rpms the default location is
+(`/usr/etc/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -859,12 +861,13 @@ DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release.
+incomplete integration of certificate support as of the 0.6 release and
+configured to use a non-default agent configuration file.
 
 To start the DAOS Agent from the command line, run:
 
 ```bash
-$ daos_agent -i
+$ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -873,24 +876,26 @@ If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_agent binary.
 
+ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>
+
 Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
-$ systemctl enable daos-agent
-$ systemctl start daos-agent
+$ sudo systemctl enable daos-agent
+$ sudo systemctl start daos-agent
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-agent
+$ sudo systemctl status daos-agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ journalctl --unit daos-agent
+$ sudo journalctl --unit daos-agent
 ```
 
 ## System Validation

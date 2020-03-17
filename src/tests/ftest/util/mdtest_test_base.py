@@ -67,10 +67,14 @@ class MdtestBase(TestWithServers):
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.mdtest_cmd.api.value == "POSIX":
+            self.log.info("Restricting mdtest to one node")
             self.hostlist_clients = [self.hostlist_clients[0]]
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
+
+        self.log.info('Clients %s', self.hostlist_clients)
+        self.log.info('Servers %s', self.hostlist_servers)
 
     def tearDown(self):
         """Tear down each test case."""
@@ -117,7 +121,10 @@ class MdtestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+        self.dfuse = Dfuse(self.hostlist_clients,
+                           self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=True)
         self.dfuse.get_params(self)
 
         # update dfuse params
