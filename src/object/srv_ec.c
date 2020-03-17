@@ -246,7 +246,8 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 							 true, sl_idx++,
 							 &skip_list[i]);
 				}
-			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
+			} else if ((uint64_t)(dtgt_idx + 1) * oca->u.ec.e_len
+					<= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
 				 */
