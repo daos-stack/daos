@@ -1187,7 +1187,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
 
-		buf[0] += 1;
+		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(dkey);
 	}
 
