@@ -287,6 +287,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	struct dc_mgmt_psr      *p;
 	int			 i;
 	int			 rc;
+	int			size;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
@@ -367,17 +368,17 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	*npsrs = resp->n_psrs;
 	*psrs = p;
 
-	strncpy(sy_info->provider, resp->crt_phy_addr_str,
-		sizeof(sy_info->provider));
-	sy_info->provider[sizeof(sy_info->provider)-1] = '\0';
+	size = sizeof(sy_info->provider);
+	strncpy(sy_info->provider, resp->crt_phy_addr_str, size);
+	sy_info->provider[size-1] = '\0';
 
-	strncpy(sy_info->crt_ctx_share_addr, resp->crt_ctx_share_addr,
-		sizeof(sy_info->crt_ctx_share_addr));
-	sy_info->crt_ctx_share_addr[sizeof(sy_info->crt_ctx_share_addr)-1]='\0';
+	size = sizeof(sy_info->crt_ctx_share_addr);
+	strncpy(sy_info->crt_ctx_share_addr, resp->crt_ctx_share_addr, size);
+	sy_info->crt_ctx_share_addr[size-1] = '\0';
 
-	strncpy(sy_info->crt_timeout, resp->crt_timeout,
-		sizeof(sy_info->crt_timeout));
-	sy_info->crt_timeout[sizeof(sy_info->crt_timeout)-1] = '\0';
+	size = sizeof(sy_info->crt_timeout);
+	strncpy(sy_info->crt_timeout, resp->crt_timeout, size);
+	sy_info->crt_timeout[size-1] = '\0';
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
