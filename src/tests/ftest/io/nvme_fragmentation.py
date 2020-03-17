@@ -33,7 +33,7 @@ from write_host_file import write_host_file
 from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
-from command_utils import Orterun, CommandFailure
+from command_utils import Mpirun, CommandFailure
 
 try:
     # python 3.x
@@ -103,7 +103,7 @@ class NvmeFragmentation(TestWithServers):
 
             # Define the job manager for the IOR command
             path = os.path.join(self.ompi_prefix, "bin")
-            manager = Orterun(ior_cmd, path)
+            manager = Mpirun(ior_cmd, path, mpitype="mpich")
             manager.job.daos_cont.update(container_info
                                          ["{}{}{}".format(oclass,
                                                           api,
