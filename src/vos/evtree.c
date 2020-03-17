@@ -1278,7 +1278,7 @@ evt_node_split(struct evt_context *tcx, bool leaf,
 static int
 evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 		const struct evt_entry_in *ent, bool *mbr_changed,
-		uint8_t ** csum_bufp)
+		uint8_t **csum_bufp)
 {
 	int		 rc;
 	bool		 changed = 0;
