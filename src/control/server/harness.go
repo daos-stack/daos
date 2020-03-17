@@ -454,9 +454,9 @@ func (h *IOServerHarness) Start(parent context.Context, membership *system.Membe
 	}
 }
 
-// Reload will signal the harness to start configured instances once
+// RestartInstances will signal the harness to start configured instances once
 // stopped.
-func (h *IOServerHarness) Reload() error {
+func (h *IOServerHarness) RestartInstances() error {
 	h.RLock()
 	defer h.RUnlock()
 

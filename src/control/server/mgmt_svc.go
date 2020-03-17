@@ -930,7 +930,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 
 	resp := &mgmtpb.RanksResp{}
 
-	if err := svc.harness.Reload(); err != nil {
+	if err := svc.harness.RestartInstances(); err != nil {
 		return nil, err
 	}
 

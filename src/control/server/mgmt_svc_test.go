@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1959,10 +1960,13 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2101,10 +2105,13 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2254,10 +2261,13 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2358,10 +2368,13 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
