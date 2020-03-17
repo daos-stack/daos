@@ -160,6 +160,8 @@ struct bio_rsrvd_region {
 	uint64_t		 brr_off;
 	/* End (not included) in bytes */
 	uint64_t		 brr_end;
+	/* Media type */
+	uint16_t		 brr_media;
 };
 
 /* Reserved DMA buffer for certain io descriptor */
@@ -192,7 +194,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_update:1,
 				 bd_dma_issued:1,
-				 bd_retry:1;
+				 bd_retry:1,
+				 bd_bulk:1;
 	/* SG lists involved in this io descriptor */
 	unsigned int		 bd_sgl_cnt;
 	struct bio_sglist	 bd_sgls[0];
@@ -235,6 +238,7 @@ extern unsigned int	bio_chk_cnt_max;
 extern uint64_t		io_stat_period;
 void xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights);
 int get_bdev_type(struct spdk_bdev *bdev);
+extern bool bio_buffered_scm_rdma;
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);

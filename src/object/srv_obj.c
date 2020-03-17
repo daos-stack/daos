@@ -1130,6 +1130,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	}
 
 	biod = vos_ioh2desc(ioh);
+	bio_iod_set_bulk(biod, rma);
 	rc = bio_iod_prep(biod);
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",

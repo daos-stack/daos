@@ -61,6 +61,8 @@ unsigned int bio_chk_sz;
 unsigned int bio_chk_cnt_max;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
+/* When enabled, SCM RDMA update will go through DRAM buffer */
+bool bio_buffered_scm_rdma;
 
 struct bio_bdev {
 	d_list_t		 bb_link;
@@ -229,6 +231,12 @@ bio_spdk_env_init(void)
 	return rc;
 }
 
+bool
+bio_is_nvme_configured(void)
+{
+	return nvme_glb.bd_nvme_conf != NULL;
+}
+
 int
 bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	      int mem_size)
@@ -259,6 +267,18 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 		goto free_mutex;
 	}
 
+	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
+	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
+	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+
+	env = getenv("BIO_BUFFERED_SCM_RDMA");
+	if (env) {
+		D_WARN("Temp buffer will be used for SCM RDMA update\n");
+		bio_buffered_scm_rdma = true;
+	} else {
+		bio_buffered_scm_rdma = false;
+	}
+
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		D_WARN("Open %s failed("DF_RC"), skip DAOS NVMe setup.\n",
@@ -286,9 +306,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
-
-	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
-	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "MALLOC") == 0) {
@@ -375,9 +392,10 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	int rc;
 
 	/* NVMe context setup was skipped */
-	if (ctxt == NULL)
+	if (!bio_is_nvme_configured())
 		return 0;
 
+	D_ASSERT(ctxt != NULL && ctxt->bxc_thread != NULL);
 	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 	/* Print SPDK I/O stats for each xstream */
@@ -974,7 +992,9 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
-	nvme_glb.bd_xstream_cnt--;
+
+	if (nvme_glb.bd_xstream_cnt > 0)
+		nvme_glb.bd_xstream_cnt--;
 
 	if (nvme_glb.bd_init_thread != NULL) {
 		if (nvme_glb.bd_init_thread == ctxt->bxc_thread) {
@@ -1028,18 +1048,24 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	char			 th_name[32];
 	int			 rc;
 
-	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (nvme_glb.bd_nvme_conf == NULL) {
-		*pctxt = NULL;
-		return 0;
-	}
-
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+
+	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
+	if (!bio_is_nvme_configured()) {
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		if (ctxt->bxc_dma_buf == NULL) {
+			D_FREE(ctxt);
+			*pctxt = NULL;
+			return -DER_NOMEM;
+		}
+		*pctxt = ctxt;
+		return 0;
+	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
 

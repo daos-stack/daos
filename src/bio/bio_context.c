@@ -514,7 +514,7 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 
 int
 bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		struct umem_instance *umem, uuid_t uuid)
+		struct umem_instance *umem, uuid_t uuid, bool skip_blob)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
@@ -528,8 +528,8 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	ctxt->bic_pmempool_uuid = umem_get_uuid(umem);
 	ctxt->bic_xs_ctxt = xs_ctxt;
 
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_is_nvme_configured() || skip_blob) {
 		*pctxt = ctxt;
 		return 0;
 	}
@@ -612,14 +612,14 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 }
 
 int
-bio_ioctxt_close(struct bio_io_context *ctxt)
+bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob)
 {
 	struct bio_xs_context	*xs_ctxt;
 	int			 rc;
 
 	xs_ctxt = ctxt->bic_xs_ctxt;
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_is_nvme_configured() || skip_blob) {
 		d_list_del_init(&ctxt->bic_link);
 		D_FREE(ctxt);
 		return 0;

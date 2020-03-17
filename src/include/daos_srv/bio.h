@@ -357,6 +357,11 @@ int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
  */
 void bio_nvme_fini(void);
 
+/**
+ * Check if NVMe is configured
+ */
+bool bio_is_nvme_configured(void);
+
 /*
  * Initialize SPDK env and per-xstream NVMe context.
  *
@@ -416,21 +421,23 @@ int bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt);
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
+ * \param[IN] skip_blob	Skip blob open since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_open(struct bio_io_context **pctxt,
 		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid);
+		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
 
 /*
  * Finalize per VOS instance I/O context.
  *
  * \param[IN] ctxt	I/O context
+ * \param[IN] skip_blob	Skip blob close since no NVMe partition
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt);
+int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
 
 /*
  * Unmap (TRIM) the extent being freed.
@@ -577,6 +584,14 @@ void bio_iod_flush(struct bio_desc *biod);
  * \return			SG list, or NULL on error
  */
 struct bio_sglist *bio_iod_sgl(struct bio_desc *biod, unsigned int idx);
+
+/*
+ * Mark the iod needing bulk transfer.
+ *
+ * \param biod       [IN]	io descriptor
+ * \param bulk       [IN]	true for false
+ */
+void bio_iod_set_bulk(struct bio_desc *biod, bool bulk);
 
 /*
  * Wrapper of ABT_thread_yield()
