@@ -344,8 +344,8 @@ class DmgCommand(CommandWithSubCommand):
                         DmgCommand.StorageSubCommand.QuerySubCommand.
                         SmdSubCommand,
                         self).__init__(
-                            "/run/dmg/storage/query/nvme-health/*",
-                            "nvme-health")
+                            "/run/dmg/storage/query/smd/*",
+                            "smd")
                     self.devices = FormattedParameter("-d", False)
                     self.pools = FormattedParameter("-p", False)
 
