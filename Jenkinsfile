@@ -98,18 +98,23 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 def get_lmd_script = '''set -ex
                         lmd_tarball='maldetect-current.tar.gz'
                         lmd_src='maldet-current'
-                        rm -rf ./${lmd_src}
-                        mkdir -p ${lmd_src}
                         if test -e "${lmd_tarball}"; then
                           zflag="-z ${lmd_tarball}"
                         else
+                          echo "0" > lmd_md5sum_old
                           zflag=
                         fi
-                        curl http://rfxn.com/downloads/${tarball} \
+                        curl http://rfxn.com/downloads/${lmd_tarball} \
                           ${zflag} --silent --show-error --fail \
-                          -o ${tarball}
-                        tar -C ${lmd_src} --strip-components=1 \
-                          xf ${lmd_tarball}'''
+                          -o ${lmd_tarball}
+                        md5sum > lmd_md5sum_new
+                        if ! cmp lmd_md5sum_old lmd_md5sum_new; then
+                          mv lmd_md5sum_new lmd_md5sum_old
+                          rm -rf ./${lmd_src}
+                          mkdir -p ${lmd_src}
+                          tar -C ${lmd_src} --strip-components=1 \
+                            xf ${lmd_tarball}
+                        fi'''
 
 def rpm_scan_daos_test = '''lmd_src=\"${WORKSPACE}/maldet-current\"
                             pushd ${lmd_src}
@@ -1524,9 +1529,10 @@ pipeline {
                                    label: 'Downloading Linux Malware Detect'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
-                                            "sudo yum -y install daos-client-${daos_packages_version}\n" +
-                                            "sudo yum -y install daos-server-${daos_packages_version}\n" +
-                                            "sudo yum -y install daos-tests-${daos_packages_version}\n" +
+                                            "sudo yum -y install " +
+                                            "daos-client-${daos_packages_version} " +
+                                            "daos-server-${daos_packages_version} " +
+                                            "daos-tests-${daos_packages_version}\n" +
                                             "${rpm_scan_daos_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
