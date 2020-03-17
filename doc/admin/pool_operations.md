@@ -120,6 +120,9 @@ Access-controlled client pool accesses include:
 This is reflected in the set of supported 
 [pool permissions](/doc/user/acl.md#permissions).
 
+A user must be able to connect to the pool in order to access any containers
+inside, regardless of their permissions on those containers.
+
 ### Creating a pool with a custom ACL
 
 To create a pool with a custom ACL:

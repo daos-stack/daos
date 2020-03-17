@@ -136,6 +136,25 @@ Access-controlled container accesses include:
 This is reflected in the set of supported 
 [container permissions](/doc/user/acl.md#permissions).
 
+### Pool Permissions vs. Container Permissions
+
+In general, pool permissions are separate from container permissions, and access
+to one does not guarantee access to the other. However, a user must have
+permission to connect to a container's pool before they can access the
+container in any way, regardless of their permissions on that container.
+Once the user has connected to a pool, container access decisions are based on
+the individual container ACL. A user need not have read/write access to a pool
+in order to open a container with read/write access, for example.
+
+There is one situation in which the pool can grant a container-level permission:
+Container deletion. If a user has Delete permission on a pool, this grants them
+the ability to delete *any* container in the pool, regardless of their
+permissions on that container.
+
+If the user does not have Delete permission on the pool, they will only be able
+to delete containers for which they have been explicitly granted Delete
+permission in the container's ACL.
+
 ### Creating a container with a custom ACL
 
 To create a container with a custom ACL:
