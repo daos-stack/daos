@@ -3061,7 +3061,7 @@ rechoose:
 		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
 			DP_UUID(pool_uuid), rc);
 		crt_req_decref(rpc);
-		D_GOTO(out_client, rc);
+		D_GOTO(out_rpc, rc);
 	}
 
 	/* pool_update rpc requires an addr list. */
@@ -3087,8 +3087,9 @@ rechoose:
 
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to set rank targets up: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": Failed to set targets to UP state for "
+				"reintegration: "DF_RC"\n", DP_UUID(pool_uuid),
+				DP_RC(rc));
 		D_GOTO(out_rpc, rc);
 	}
 
@@ -3834,7 +3835,7 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	char				*env;
 
 	rc = pool_find_all_targets_by_addr(pool_uuid, list, &target_list,
-			out_list, hint);
+					   out_list, hint);
 	if (rc)
 		D_GOTO(out, rc);
 

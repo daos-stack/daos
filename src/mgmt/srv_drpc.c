@@ -585,7 +585,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		D_ERROR("Failed to unpack req (set up pool target)\n");
+		D_ERROR("Failed to unpack req (Reintegrate target)\n");
 		return;
 	}
 
@@ -593,6 +593,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
+		rc = -DER_INVAL;
 		goto out;
 	}
 
@@ -608,7 +609,6 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up %s: "DF_RC"\n", req->uuid,
 			DP_RC(rc));
-		goto out;
 	}
 
 	pool_target_id_list_free(&reint_list);

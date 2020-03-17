@@ -136,9 +136,9 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 
 // PoolReintegrateReq struct contains request
 type PoolReintegrateReq struct {
-	UUID    string
-	Rank    uint32
-	Targets []uint32
+	UUID string
+	Rank uint32
+	Idx  []uint32
 }
 
 // ReintegrateResp as no other parameters other than success/failure for now.
@@ -154,7 +154,7 @@ func (c *connList) PoolReintegrate(req *PoolReintegrateReq) error {
 		return err
 	}
 
-	rpcReq := &mgmtpb.PoolReintegrateReq{Uuid: req.UUID, Rank: req.Rank, Targets: req.Targets}
+	rpcReq := &mgmtpb.PoolReintegrateReq{Uuid: req.UUID, Rank: req.Rank, Idx: req.Idx}
 
 	c.log.Debugf("Reintegrate DAOS pool target request: %s\n", rpcReq)
 

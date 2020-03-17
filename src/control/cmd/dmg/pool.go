@@ -184,38 +184,28 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolReintegrateCmd struct {
 	logCmd
 	connectedCmd
-	UUID    string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
-	Rank    uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
-	Targets string `long:"idx" required:"1" description:"list of idx(s) to be reintegrated into the rank"`
+	UUID string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
+	Rank uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Idx  string `long:"idx" required:"1" description:"list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
 func (r *PoolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	targetlist := make([]uint32, 0)
-	if len(r.Targets) > 0 {
-		targetStr := strings.Split(r.Targets, ",")
-		for _, rank := range targetStr {
-			t, err := strconv.Atoi(rank)
-			if err != nil {
-				return errors.WithMessage(err, "parsing rank list")
-			}
-			if t < 0 {
-				return errors.Errorf("invalid rank: %d", t)
-			}
-			targetlist = append(targetlist, uint32(t))
-		}
+	idxlist, err := common.ParseInts(r.Idx)
+	if err != nil {
+		return errors.WithMessage(err, "parsing rank list")
 	}
 
-	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targets: targetlist}
+	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Idx: idxlist}
 
-	err := r.conns.PoolReintegrate(req)
+	err = r.conns.PoolReintegrate(req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	r.log.Infof("Target reintegration command %s\n", msg)
+	r.log.Infof("Reintegration command %s\n", msg)
 
 	return err
 }
