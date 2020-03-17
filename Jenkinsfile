@@ -112,7 +112,7 @@ def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
                        rm -rf /tmp/\\\${lmd_src}
                        mkdir -p /tmp/\\\${lmd_src}
                        tar -C /tmp/\\\${lmd_src} --strip-components=1 \
-                         -xf \\\${lmd_tarball}
+                         -xf /tmp/\\\${lmd_tarball}
                        pushd /tmp/\\\${lmd_src}
                          sudo ./install.sh
                          sudo ln -s /usr/local/maldetect/ /bin/maldet
