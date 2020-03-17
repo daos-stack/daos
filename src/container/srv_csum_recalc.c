@@ -147,6 +147,20 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * j on each checksum boundary until the offset associated with j
 	 * matches the offset of the (csum-extended) output segment.
 	 */
+	/*
+	D_PRINT("lo: %lu, hi: %lu, off: %lu\n",
+			recalc->cr_phy_ext->ex_lo,
+			recalc->cr_phy_ext->ex_hi,
+			 recalc->cr_phy_off);
+
+	if (recalc->cr_phy_off) {
+		D_PRINT(" In: ");
+		for (i = 0; i < recalc->cr_phy_csum->cs_nr *
+					recalc->cr_phy_csum->cs_len; i++)
+			D_PRINT("%u ", recalc->cr_phy_csum->cs_csum[i]);
+		D_PRINT("\n");
+	}
+	*/
 	if (new_csum->cs_nr != recalc->cr_phy_csum->cs_nr) {
 		unsigned int chunksize = new_csum->cs_chunksize;
 		unsigned int orig_offset =
@@ -275,6 +289,12 @@ ds_csum_agg_recalc(void *recalc_args)
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
 				   ent_in->ei_rect.rc_ex.ex_lo);
+	/*
+	D_PRINT("Out: ");
+	for (i = 0; i < ent_in->ei_csum.cs_nr * ent_in->ei_csum.cs_len; i++)
+		D_PRINT("%u ", ent_in->ei_csum.cs_csum[i]);
+	D_PRINT("\n");
+	*/
 out:
 	/* Eventual set okay, even with no offload (unit test). */
 	ABT_eventual_set(args->csum_eventual, NULL, 0);

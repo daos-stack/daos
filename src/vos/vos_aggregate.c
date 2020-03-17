@@ -916,7 +916,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 		i++;
 
-		D_ASSERT(!phy_ent->pe_retain);
+		if (phy_ent->pe_retain) {
+			rc = -DER_CSUM;
+			goto out;
+		}
 		D_ASSERT(ext1_covers_ext2(&ent_in->ei_rect.rc_ex, &ext));
 		D_ASSERT(ext1_covers_ext2(&phy_ent->pe_rect.rc_ex, &ext));
 
@@ -1016,12 +1019,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		if (rc == -DER_CSUM) {
 			lgc_seg->ls_has_csum_err = true;
 			for (i = 0; i < seg_count; i++) {
-				/*
-				D_PRINT("retain  -- lo: %lu, hi: %lu\n",
-			io->ic_csum_recalcs[i].cr_phy_ent->pe_rect.rc_ex.ex_lo,
-			io->ic_csum_recalcs[i].cr_phy_ent->pe_rect.rc_ex.ex_hi);
-			*/
-
 				io->ic_csum_recalcs[i].cr_phy_ent->pe_retain =
 									true;
 			}
@@ -1098,7 +1095,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 				lgc_seg->ls_phy_ent,
 				DP_RECT(&lgc_seg->ls_ent_in.ei_rect),
 					DP_RC(rc));
-			/* continue if -DER_CSUM */
+		/* continue if -DER_CSUM */
 			if (rc == -DER_CSUM)
 				rc = 0;
 			else
@@ -1153,22 +1150,6 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	mw->mw_lgc_cnt = 0;
 
-	/* Adjust payload address of truncated physical entries */
-	for (i = 0; i < io->ic_seg_cnt; i++) {
-		lgc_seg = &io->ic_segs[i];
-		ent_in = &io->ic_segs[i].ls_ent_in;
-		phy_ent = lgc_seg->ls_phy_ent;
-
-		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr) &&
-					!lgc_seg->ls_has_csum_err) {
-			phy_ent->pe_addr = ent_in->ei_addr;
-			/* Checksum from ent_in is assigned to truncated
-			 * physical entry, in additon to re-assigning address.
-			 */
-			phy_ent->pe_csum_info = ent_in->ei_csum;
-		}
-	}
-
 	/* Remove old physical entries from EV tree */
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		rect = phy_ent->pe_rect;
@@ -1206,12 +1187,6 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		/* Physical entry is in window */
 		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
 						 phy_ent->pe_retain) {
-			/*
-			if (phy_ent->pe_retain)
-				D_PRINT("retaining -- lo: %lu, hi: %lu\n",
-					phy_ent->pe_rect.rc_ex.ex_lo,
-					phy_ent->pe_rect.rc_ex.ex_hi);
-					*/
 			d_list_del(&phy_ent->pe_link);
 			D_FREE_PTR(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
@@ -1230,10 +1205,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
 
-	/* Clear window size */
-	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
-
 	/* Insert new segments into EV tree */
+
 	for (i = 0; i < io->ic_seg_cnt; i++) {
 		/* Don't insert new segments with component csum errors. */
 		if (io->ic_segs[i].ls_has_csum_err)
@@ -1248,6 +1221,26 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			goto abort;
 		}
 	}
+
+	/* Adjust payload address of truncated physical entries */
+	for (i = 0; i < io->ic_seg_cnt; i++) {
+		lgc_seg = &io->ic_segs[i];
+		ent_in = &io->ic_segs[i].ls_ent_in;
+		phy_ent = lgc_seg->ls_phy_ent;
+
+		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr) &&
+					!lgc_seg->ls_has_csum_err) {
+			phy_ent->pe_addr = ent_in->ei_addr;
+			/* Checksum from ent_in is assigned to truncated
+			 * physical entry, in additon to re-assigning address.
+			 */
+			phy_ent->pe_csum_info = ent_in->ei_csum;
+		}
+	}
+
+
+	/* Clear window size */
+	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
 
 	/* Publish NVMe reservations */
 	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
