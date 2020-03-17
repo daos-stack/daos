@@ -95,29 +95,25 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             OFI_INTERFACE=eth0 daos_test -m'''
 
-def get_lmd_script = '''set -ex
-                        lmd_tarball='maldetect-current.tar.gz'
-                        lmd_src='maldet-current'
-                        if test -e "${lmd_tarball}"; then
-                          zflag="-z ${lmd_tarball}"
-                        else
-                          echo "0" > lmd_md5sum_old
-                          zflag=
-                        fi
-                        curl http://rfxn.com/downloads/${lmd_tarball} \
-                          ${zflag} --silent --show-error --fail \
-                          -o ${lmd_tarball}
-                        md5sum > lmd_md5sum_new
-                        if ! cmp lmd_md5sum_old lmd_md5sum_new; then
-                          mv lmd_md5sum_new lmd_md5sum_old
-                          rm -rf ./${lmd_src}
-                          mkdir -p ${lmd_src}
-                          tar -C ${lmd_src} --strip-components=1 \
-                            -xf ${lmd_tarball}
-                        fi'''
+def rpm_scan_pre = '''set -ex
+                      lmd_tarball='maldetect-current.tar.gz'
+                      if test -e "${lmd_tarball}"; then
+                        zflag="-z ${lmd_tarball}"
+                      else
+                        zflag=
+                      fi
+                      curl http://rfxn.com/downloads/${lmd_tarball} \
+                        ${zflag} --silent --show-error --fail -o ${lmd_tarball}
+                      nodelist=(${NODELIST//,/ })
+                      lmd_src='maldet-current'
+                      scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
+                      rm -rf /tmp/${lmd_src}
+                      mkdir -p /tmp/${lmd_src}
+                      tar -C /tmp/${lmd_src} --strip-components=1 \
+                        -xf ${lmd_tarball}
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
-def rpm_scan_daos_test = '''lmd_src=\"${WORKSPACE}/maldet-current\"
-                            pushd ${lmd_src}
+def rpm_scan_daos_test = '''pushd /tmp/${lmd_src}
                               sudo ./install.sh
                               sudo ln -s /usr/local/maldetect/ /bin/maldet
                             popd
@@ -1525,10 +1521,8 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'environment-modules ' +
                                                   'clamav clamav-devel'
-                        sh script: get_lmd_script,
-                                   label: 'Downloading Linux Malware Detect'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_test_pre}" +
+                            runTest script: "${rpm_scan_pre}" +
                                             "sudo yum -y install " +
                                             "daos-client-${daos_packages_version} " +
                                             "daos-server-${daos_packages_version} " +
