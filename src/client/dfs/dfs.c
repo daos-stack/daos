@@ -1528,14 +1528,14 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (rc)
 		return rc;
 
+	D_ASSERT(parent != NULL);
 	rc = check_access(dfs, geteuid(), getegid(), parent->mode, W_OK | X_OK);
 	if (rc)
 		return rc;
 
 	strncpy(new_dir.name, name, DFS_MAX_PATH);
 	new_dir.name[DFS_MAX_PATH] = '\0';
-	rc = create_dir(dfs, th, (parent ? parent->oh : DAOS_HDL_INVAL), cid,
-			&new_dir);
+	rc = create_dir(dfs, th, parent->oh, cid, &new_dir);
 	if (rc)
 		D_GOTO(out, rc);
 

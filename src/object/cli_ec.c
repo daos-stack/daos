@@ -346,6 +346,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 				return rc;
 			ec_recx = ec_recx_array->oer_recxs;
 		}
+		D_ASSERT(ec_recx != NULL);
 		ec_recx[idx].oer_idx = i;
 		rec_nr = end - start;
 		ec_recx[idx].oer_stripe_nr = rec_nr / stripe_rec_nr;

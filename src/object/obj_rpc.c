@@ -283,6 +283,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
+		D_ASSERT(dvi->iod_recxs != NULL || nr == 0);
 		for (i = start; i < start + nr; i++) {
 			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
 			if (rc != 0) {
@@ -347,6 +348,7 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			 iod_array->oia_iod_nr : 0;
 		if (crt_proc_uint32_t(proc, &off_nr) != 0)
 			return -DER_HG;
+		D_ASSERT(iod_array->oia_offs != NULL || off_nr == 0);
 		for (i = 0; i < off_nr; i++) {
 			if (crt_proc_uint64_t(proc, &iod_array->oia_offs[i]))
 				return -DER_HG;

@@ -1120,6 +1120,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 				if (!existed)
 					return -DER_INVAL;
 
+				D_ASSERT(parent != NULL);
 				if (parent->do_comp.co_status == PO_COMP_ST_NEW)
 					return -DER_INVAL;
 
@@ -1147,7 +1148,8 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 			}
 
 			nr++;
-			if (parent != NULL && parent->do_child_nr == nr) {
+			D_ASSERT(parent != NULL);
+			if (parent->do_child_nr == nr) {
 				parent++;
 				nr = 0;
 			}
