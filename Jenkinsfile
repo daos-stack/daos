@@ -105,27 +105,27 @@ def rpm_scan_pre = '''set -ex
                       curl http://rfxn.com/downloads/${lmd_tarball} \
                         ${zflag} --silent --show-error --fail -o ${lmd_tarball}
                       nodelist=(${NODELIST//,/ })
-                      lmd_src='maldet-current'
                       scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
-                      rm -rf /tmp/${lmd_src}
-                      mkdir -p /tmp/${lmd_src}
-                      tar -C /tmp/${lmd_src} --strip-components=1 \
-                        -xf ${lmd_tarball}
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
-def rpm_scan_daos_test = '''pushd /tmp/${lmd_src}
-                              sudo ./install.sh
-                              sudo ln -s /usr/local/maldetect/ /bin/maldet
-                            popd
-                            sudo freshclam
-                            rm -f /tmp/clamscan.out
-                            clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
-                              -d /usr/local/maldetect/sigs/rfxn.hdb -r \
-                              --exclude-dir=/usr/local/maldetect \
-                              --exclude-dir=/usr/share/clamav \
-                              --infected /etc /usr | \
-                              tee /tmp/clamscan.out
-                            grep 'Infected files: 0$' /tmp/clamscan.out'''
+def rpm_scan_test = '''lmd_src='maldet-current'
+                       rm -rf /tmp/${lmd_src}
+                       mkdir -p /tmp/${lmd_src}
+                       tar -C /tmp/${lmd_src} --strip-components=1 \
+                         -xf ${lmd_tarball}
+                       pushd /tmp/${lmd_src}
+                         sudo ./install.sh
+                         sudo ln -s /usr/local/maldetect/ /bin/maldet
+                       popd
+                       sudo freshclam
+                       rm -f /tmp/clamscan.out
+                       clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
+                                -d /usr/local/maldetect/sigs/rfxn.hdb -r \
+                                --exclude-dir=/usr/local/maldetect \
+                                --exclude-dir=/usr/share/clamav \
+                                --infected /etc /usr | \
+                         tee /tmp/clamscan.out
+                       grep 'Infected files: 0$' /tmp/clamscan.out'''
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -1527,7 +1527,7 @@ pipeline {
                                             "daos-client-${daos_packages_version} " +
                                             "daos-server-${daos_packages_version} " +
                                             "daos-tests-${daos_packages_version}\n" +
-                                            "${rpm_scan_daos_test}" + '"',
+                                            "${rpm_scan_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
                         }
