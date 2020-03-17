@@ -34,6 +34,7 @@ from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
 from command_utils import Mpirun, CommandFailure
+from mpio_utils import MpioUtils
 
 try:
     # python 3.x
@@ -81,6 +82,9 @@ class NvmeFragmentation(TestWithServers):
         cmd = DaosCommand(os.path.join(self.prefix, "bin"))
         cmd.set_sub_command("container")
         cmd.sub_command_class.set_sub_command("destroy")
+        mpio_util = MpioUtils()
+        if mpio_util.mpich_installed(self.hostlist_clients) is False:
+            self.fail("Exiting Test: Mpich not installed")
 
         #Iterate through IOR different value and run in sequence
         for oclass, api, test, flags in product(self.ior_daos_oclass,
@@ -96,14 +100,16 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd.transfer_size.update(test[0])
             ior_cmd.block_size.update(test[1])
             ior_cmd.flags.update(flags)
+
             container_info["{}{}{}"
                            .format(oclass,
                                    api,
                                    test[0])] = str(uuid.uuid4())
 
             # Define the job manager for the IOR command
-            path = os.path.join(self.ompi_prefix, "bin")
-            manager = Mpirun(ior_cmd, path, mpitype="mpich")
+            manager = Mpirun(ior_cmd,
+                             os.path.join(mpio_util.mpichinstall, "bin"),
+                             mpitype="mpich")
             manager.job.daos_cont.update(container_info
                                          ["{}{}{}".format(oclass,
                                                           api,
