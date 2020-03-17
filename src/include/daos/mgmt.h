@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,13 @@ int dc_mgmt_list_pools(tse_task_t *task);
 int dc_mgmt_profile(uint64_t modules, char *path, bool start);
 int dc_mgmt_add_mark(const char *mark);
 
+/** GetAttachInfo system info */
+struct sys_info {
+	char	provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	char	crt_ctx_share_addr[DAOS_SYS_INFO_STRING_MAX + 1];
+	char	crt_timeout[DAOS_SYS_INFO_STRING_MAX + 1];
+};
+
 /** Client system handle */
 struct dc_mgmt_sys {
 	d_list_t		sy_link;
@@ -54,6 +61,7 @@ struct dc_mgmt_sys {
 	int			sy_npsrs;
 	struct dc_mgmt_psr     *sy_psrs;
 	crt_group_t	       *sy_group;
+	struct sys_info		sy_info;
 };
 
 int dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp);

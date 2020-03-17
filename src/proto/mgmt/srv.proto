@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,6 +70,9 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
+	string CRT_PHY_ADDR_STR = 3;
+	string CRT_CTX_SHARE_ADDR = 4;
+	string CRT_TIMEOUT = 5;
 }
 
 message PrepShutdownReq {

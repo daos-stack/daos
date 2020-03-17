@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -274,7 +274,8 @@ struct dc_mgmt_psr {
  * Callers are responsible for freeing psrs using put_attach_info.
  */
 static int
-get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
+get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
+		struct sys_info *sy_info)
 {
 	struct drpc		*ctx;
 	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
@@ -365,6 +366,18 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	}
 	*npsrs = resp->n_psrs;
 	*psrs = p;
+
+	strncpy(sy_info->provider, resp->crt_phy_addr_str,
+		sizeof(sy_info->provider));
+	sy_info->provider[sizeof(sy_info->provider)-1] = '\0';
+
+	strncpy(sy_info->crt_ctx_share_addr, resp->crt_ctx_share_addr,
+		sizeof(sy_info->crt_ctx_share_addr));
+	sy_info->crt_ctx_share_addr[sizeof(sy_info->crt_ctx_share_addr)-1]='\0';
+
+	strncpy(sy_info->crt_timeout, resp->crt_timeout,
+		sizeof(sy_info->crt_timeout));
+	sy_info->crt_timeout[sizeof(sy_info->crt_timeout)-1] = '\0';
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);
@@ -523,7 +536,8 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 
 	if (psrbs == NULL)
-		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs);
+		rc = get_attach_info(name, &sys->sy_npsrs, &sys->sy_psrs,
+				     &sys->sy_info);
 	else
 		rc = get_attach_info_from_buf(npsrbs, psrbs, &sys->sy_npsrs,
 					      &sys->sy_psrs);

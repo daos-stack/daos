@@ -60,6 +60,13 @@ const (
 	iommuPath = "/sys/class/iommu"
 )
 
+// Configuration information shared with the Agent
+type AgentCfg struct {
+	CRT_PHY_ADDR_STR string
+	CRT_CTX_SHARE_ADDR string
+	CRT_TIMEOUT string
+}
+
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
 		if len(srvCfg.Storage.Bdev.DeviceList) > 0 {
@@ -253,7 +260,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
+	agentConfig := AgentCfg{
+		CRT_PHY_ADDR_STR:cfg.Fabric.Provider,
+		CRT_CTX_SHARE_ADDR:cfg.Servers[0].GetEnvVar("CRT_CTX_SHARE_ADDR"),
+		CRT_TIMEOUT:cfg.Servers[0].GetEnvVar("CRT_TIMEOUT"),
+	}
+	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &agentConfig))
 
 	go func() {
 		_ = grpcServer.Serve(lis)

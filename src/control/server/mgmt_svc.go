@@ -191,13 +191,15 @@ type mgmtSvc struct {
 	log        logging.Logger
 	harness    *IOServerHarness
 	membership *system.Membership // if MS leader, system membership list
+	cfg        *AgentCfg
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *AgentCfg) *mgmtSvc {
 	return &mgmtSvc{
 		log:        h.log,
 		harness:    h,
 		membership: m,
+		cfg:        c,
 	}
 }
 
@@ -216,6 +218,10 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
 	}
+
+	resp.CRT_PHY_ADDR_STR = svc.cfg.CRT_PHY_ADDR_STR
+	resp.CRT_CTX_SHARE_ADDR  = svc.cfg.CRT_CTX_SHARE_ADDR
+	resp.CRT_TIMEOUT  = svc.cfg.CRT_TIMEOUT
 
 	return resp, nil
 }

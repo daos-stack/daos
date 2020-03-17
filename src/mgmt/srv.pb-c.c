@@ -906,7 +906,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__psr__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__psr__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[5] =
 {
   {
     "status",
@@ -932,15 +932,54 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "CRT_PHY_ADDR_STR",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, crt_phy_addr_str),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "CRT_CTX_SHARE_ADDR",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, crt_ctx_share_addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "CRT_TIMEOUT",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, crt_timeout),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
+  3,   /* field[3] = CRT_CTX_SHARE_ADDR */
+  2,   /* field[2] = CRT_PHY_ADDR_STR */
+  4,   /* field[4] = CRT_TIMEOUT */
   1,   /* field[1] = psrs */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
 {
@@ -950,7 +989,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   "Mgmt__GetAttachInfoResp",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoResp),
-  2,
+  5,
   mgmt__get_attach_info_resp__field_descriptors,
   mgmt__get_attach_info_resp__field_indices_by_name,
   1,  mgmt__get_attach_info_resp__number_ranges,

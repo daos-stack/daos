@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,9 @@ type mgmtModule struct {
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
+	cachedAttachInfo bool
+	GetAttachInfoResp *mgmtpb.GetAttachInfoResp
+	resmgmtpb []uint8
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -60,12 +63,21 @@ func (mod *mgmtModule) ID() int32 {
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
+	if mod.cachedAttachInfo {
+		mod.log.Info("\n\nCached attach info available\n")
+		mod.log.Infof("Done with GetAttachInfo gRPC: [%v], [%v]\n", mod.GetAttachInfoResp, mod.resmgmtpb)
+		mod.log.Infof("Provider is: %s\n", mod.GetAttachInfoResp.CRT_PHY_ADDR_STR)
+		return mod.resmgmtpb, nil
+	} else {
+		mod.log.Info("No cached attach info available.  Performing query...\n")
+	}
+
 	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+	mod.log.Infof("GetAttachInfo %s %v", mod.ap, *req)
 
 	if req.Sys != mod.sys {
 		return nil, errors.Errorf("unknown system name %s", req.Sys)
@@ -85,15 +97,18 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
-	resp, err := client.GetAttachInfo(context.Background(), req)
+	mod.GetAttachInfoResp, err = client.GetAttachInfo(context.Background(), req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	resmgmtpb, err := proto.Marshal(resp)
+	mod.resmgmtpb, err = proto.Marshal(mod.GetAttachInfoResp)
 	if err != nil {
 		return nil, drpc.MarshalingFailure()
 	}
 
-	return resmgmtpb, nil
+	mod.cachedAttachInfo = true
+	mod.log.Infof("Done with GetAttachInfo gRPC: [%v], [%v]\n", mod.GetAttachInfoResp, mod.resmgmtpb)
+	mod.log.Infof("Provider is: %s\n", mod.GetAttachInfoResp.CRT_PHY_ADDR_STR)
+	return mod.resmgmtpb, nil
 }

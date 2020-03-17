@@ -195,6 +195,16 @@ func (c *Config) HasEnvVar(name string) bool {
 	return false
 }
 
+// GetEnvVar returns the data associated with an environment variable key pair
+func (c *Config) GetEnvVar(name string) string {
+	for _, keyPair := range(c.EnvVars) {
+		if strings.HasPrefix(keyPair, name+"=") {
+			return strings.TrimPrefix(keyPair, name+"=")
+		}
+	}
+	return ""
+}
+
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
