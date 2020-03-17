@@ -220,8 +220,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 
 	resp.CRT_PHY_ADDR_STR = svc.cfg.CRT_PHY_ADDR_STR
-	resp.CRT_CTX_SHARE_ADDR  = svc.cfg.CRT_CTX_SHARE_ADDR
-	resp.CRT_TIMEOUT  = svc.cfg.CRT_TIMEOUT
+	resp.CRT_CTX_SHARE_ADDR = svc.cfg.CRT_CTX_SHARE_ADDR
+	resp.CRT_TIMEOUT = svc.cfg.CRT_TIMEOUT
 
 	return resp, nil
 }

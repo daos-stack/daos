@@ -62,9 +62,9 @@ const (
 
 // Configuration information shared with the Agent
 type AgentCfg struct {
-	CRT_PHY_ADDR_STR string
+	CRT_PHY_ADDR_STR   string
 	CRT_CTX_SHARE_ADDR string
-	CRT_TIMEOUT string
+	CRT_TIMEOUT        string
 }
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -261,9 +261,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 	agentConfig := AgentCfg{
-		CRT_PHY_ADDR_STR:cfg.Fabric.Provider,
-		CRT_CTX_SHARE_ADDR:cfg.Servers[0].GetEnvVar("CRT_CTX_SHARE_ADDR"),
-		CRT_TIMEOUT:cfg.Servers[0].GetEnvVar("CRT_TIMEOUT"),
+		CRT_PHY_ADDR_STR:   cfg.Fabric.Provider,
+		CRT_CTX_SHARE_ADDR: cfg.Servers[0].GetEnvVar("CRT_CTX_SHARE_ADDR"),
+		CRT_TIMEOUT:        cfg.Servers[0].GetEnvVar("CRT_TIMEOUT"),
 	}
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &agentConfig))
 

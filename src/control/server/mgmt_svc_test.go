@@ -257,7 +257,7 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 					panic(err)
 				}
 
-				tc.mgmtSvc = newMgmtSvc(harness, nil)
+				tc.mgmtSvc = newMgmtSvc(harness, nil, nil)
 			}
 			tc.mgmtSvc.log = log
 
@@ -377,7 +377,7 @@ func TestListPools_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
 
@@ -460,7 +460,7 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.ListContainers(context.TODO(), newTestListContReq())
 
@@ -566,7 +566,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
 
@@ -650,7 +650,7 @@ func TestPoolOverwriteACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
 
@@ -725,7 +725,7 @@ func TestPoolUpdateACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
 
@@ -807,7 +807,7 @@ func TestPoolDeleteACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
 
 	resp, err := svc.PoolDeleteACL(context.TODO(), newTestDeleteACLReq())
 
@@ -900,7 +900,7 @@ func TestMgmtSvc_LeaderQuery(t *testing.T) {
 			expErr: errors.New("wrong system"),
 		},
 		"no i/o servers": {
-			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil),
+			mgmtSvc: newMgmtSvc(NewIOServerHarness(nil), nil, nil),
 			req:     &mgmtpb.LeaderQueryReq{},
 			expErr:  errors.New("no I/O servers"),
 		},
