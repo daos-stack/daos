@@ -160,7 +160,8 @@ class NvmeFragmentation(TestWithServers):
         self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
-        for test_loop in range(4):
+        #Repeat the test for 30 times which will take ~1 hour
+        for test_loop in range(30):
             self.log.info("--Test Repeat for loop %s---", test_loop)
             # Create the IOR threads
             threads = []
