@@ -1996,6 +1996,14 @@ cont_attr_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->casi_op.ci_uuid),
 		rpc, DP_UUID(in->casi_op.ci_hdl));
+
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to set container attr\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->casi_op.ci_uuid));
+		return -DER_NO_PERM;
+	}
+
 	return ds_rsvc_set_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
 				in->casi_bulk, rpc, in->casi_count);
 }
@@ -2009,6 +2017,14 @@ cont_attr_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cagi_op.ci_uuid),
 		rpc, DP_UUID(in->cagi_op.ci_hdl));
+
+	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to get container attr\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cagi_op.ci_uuid));
+		return -DER_NO_PERM;
+	}
+
 	return ds_rsvc_get_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
 				in->cagi_bulk, rpc, in->cagi_count,
 				in->cagi_key_length);
@@ -2024,6 +2040,14 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cali_op.ci_uuid),
 		rpc, DP_UUID(in->cali_op.ci_hdl));
+
+	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to list container attr\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cali_op.ci_uuid));
+		return -DER_NO_PERM;
+	}
+
 	return ds_rsvc_list_attr(cont->c_svc->cs_rsvc, tx, &cont->c_user,
 				 in->cali_bulk, rpc, &out->calo_size);
 }
