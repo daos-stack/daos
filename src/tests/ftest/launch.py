@@ -908,7 +908,7 @@ def send_notification(hosts, subject, msg, attachment, email_addrs):
         host (list): hosts to perform command in.
         msg (str): message to be sent.
         attachment (str): attachment to send on the email.
-        emails (list): list of email addresses to send message to.
+        email_addrs (list): list of email addresses to send message to.
     """
     mail_cmd = "mail -s \"{}\" -a {} {} <<< \"{}\"".format(
         subject, attachment, ",".join(email_addrs), msg)
