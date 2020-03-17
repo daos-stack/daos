@@ -456,7 +456,7 @@ class MacsioCommand(ExecutableCommand):
         """
         env = EnvironmentVariables()
         env["D_LOG_FILE"] = get_log_file("daos.log")
-        for index, value in enumerate(pool_uuid, pool_svcl, cont_uuid):
+        for index, value in enumerate([pool_uuid, pool_svcl, cont_uuid]):
             if value:
                 env[self._env_names[index]] = value
         return env

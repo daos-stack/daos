@@ -11,9 +11,10 @@ hosts:
     - client-H
 timeout: 120
 server_config:
-  server:
+  servers:
     scm_size: 32
 pool:
+  control_method: dmg
   mode: 511
   name: daos_server
   scm_size: 16777216
