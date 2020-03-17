@@ -24,7 +24,8 @@
 
 from apricot import get_log_file
 from command_utils import \
-    CommandFailure, FormattedParameter, ExecutableCommand, EnvironmentVariables
+    CommandFailure, BasicParameter, FormattedParameter, ExecutableCommand, \
+    EnvironmentVariables
 from general_utils import pcmd
 
 
@@ -45,11 +46,30 @@ class DaosRacerCommand(ExecutableCommand):
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
 
+        # Optional timeout for the clush command running the daos_racer command.
+        # This should be set greater than the 'runtime' value but less than the
+        # avocado test timeout value to allow for proper cleanup.  Using a value
+        # of None will result in no timeout being used.
+        self.clush_timeout = BasicParameter(None)
+
         # Environment variable names required to be set when running the
         # daos_racer command.  The values for these names are populated by the
         # get_environment() method and added to command line by the
         # set_environment() method.
         self._env_names = ["OFI_INTERFACE", "CRT_PHY_ADDR_STR", "D_LOG_FILE"]
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Only include FormattedParameter class parameter values when building the
+        command string, e.g. 'runtime'.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        return self.get_attribute_names(FormattedParameter)
 
     def get_environment(self, manager):
         """Get the environment variables to export for the daos_racer command.
@@ -95,17 +115,14 @@ class DaosRacerCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         """
-        # The daos_racer program will run longer than the '-t <seconds>'
-        # specified on its command line.  Use a timeout with pcmd to stop
-        # testing if daos_racer does not complete in the intended timeframe.
-        # Add a 30s buffer to this timeout to hopefully avoid timing issues.
-        timeout = self.runtime.value + 30
-
         # Run daos_racer on the specified host
         self.log.info(
-            "Running %s on %s with a %ss timeout",
-            self.__str__(), self.host, timeout)
-        return_codes = pcmd([self.host], self.__str__(), True, timeout)
+            "Running %s on %s with %s timeout",
+            self.__str__(), self.host,
+            "no" if self.clush_timeout.value is None else
+            "a {}s".format(self.clush_timeout.value))
+        return_codes = pcmd(
+            [self.host], self.__str__(), True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
