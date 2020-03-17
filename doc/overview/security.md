@@ -34,9 +34,10 @@ mutually-authenticated TLS.
 ## Authorization
 
 Client authorization for resources is controlled by the Access Control List
-(ACL) on the resource, while authorization on the mamagement network is
-achieved by settings on the certificates generated while setting up the DAOS
-system.
+(ACL) on the resource, while authorization on the management network is
+achieved by settings on the
+[certificates](/doc/admin/deployment.md#certificate-configuration]
+generated while setting up the DAOS system.
 
 ### Access Control Lists
 
@@ -55,7 +56,6 @@ an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
 ### Component Certificates
 
-Authorization of RPCs on the DAOS management network is based on the
-certificates configured for each management component. A subset of management
-RPCs is available to each of the trusted component types. The component type
-is indicated in the CommonName (CN) field of the certificate.
+Access to DAOS management RPCs is controlled via the CommonName (CN) set in
+each management component certificate. A given management RPC may only be
+invoked by a component which connects with the correct certificate.
