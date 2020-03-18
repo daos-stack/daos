@@ -1,7 +1,5 @@
 """Build FUSE client"""
 import daos_build
-import os.path
-from os import path
 
 def scons():
     """Execute build"""
@@ -9,92 +7,24 @@ def scons():
 
     denv = env.Clone()
 
-    """If Lustre installed use its headers to build a Lustre-aware libduns """
-    try:
-        import re
-
-        gotdistro = False
-        gotpkg = False
-        gotversion = False
-        with open('/etc/os-release') as f:
-            for line in f:
-                if re.search('^ID=', line):
-                    line = line.strip()
-                    _, distro = line.strip().split('=')
-                    distro = distro.strip('"')
-                    break
-        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
-            import rpm
-
-            gotdistro = True
-            ts = rpm.TransactionSet()
-            headers = ts.dbMatch('name', 'lustre')
-            if not headers:
-                headers = ts.dbMatch('name', 'lustre-client')
-            if headers:
-                from pkg_resources import parse_version
-
-                gotpkg = True
-                for header in headers:
-                    if parse_version(header['version']) >= parse_version('2.12.57'):
-                        gotversion = True
-        elif distro in ('debian', 'ubuntu'):
-            import apt
-            from pkg_resources import parse_version
-
-            gotdistro = True
-            cache = apt.Cache()
-            cache.open()
-            if "lustre" in cache:
-                if cache["lustre"].is_installed:
-                    gotpkg = True
-                    instver = cache["lustre"].installed
-            else:
-                if "lustre-client" in cache:
-                    if cache["lustre-client"].is_installed:
-                        gotpkg = True
-                        instver = cache["lustre-client"].installed
-            if gotpkg is True:
-                if parse_version(instver.version) >= parse_version('2.12.57'):
-                    """ Lustre version is compatible """
-                    gotversion = True
-        if gotdistro is False:
-            print("Unable to identify distro.")
-            raise ImportError('fallback')
+    """ If Lustre installed build a Lustre-aware libduns """
+    conf = Configure(denv)
+    gotversion = False
+    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h', 'c'):
+        print("No installed Lustre version detected")
+    else:
+        print("Installed Lustre version detected")
+        if not conf.CheckFunc('llapi_unlink_foreign'):
+            print("Lustre version is not compatible")
         else:
-            if gotpkg is False:
-                print("Unable to find lustre nor lustre-client package.")
-                raise ImportError('fallback')
-            else:
-                if gotversion is False:
-                    print("Installed Lustre version is not compatible.")
-                else:
-                    print("Installed Lustre version is compatible.")
-    except ImportError as error:
-        print(error.message +
-              ", trying to find Lustre headers in usual locations.")
-        """ Try the empirical way, by just trying to check both required header files are present ... """
-        if path.exists("/usr/include/lustre/lustreapi.h"):
-            if path.exists("/usr/include/linux/lustre/lustre_user.h"):
-                gotpkg = True
-                with open('/usr/include/linux/lustre/lustre_user.h', 'r') as file:
-                    for line in file:
-                        """ if definition present Lustre version is compatible """
-                        if 'LU_FOREIGN_TYPE_SYMLINK' in line:
-                            gotversion = True
-                            break
-        if gotpkg is False:
-            print("Unable to find Lustre headers.")
-        else:
-            if gotversion is False:
-                print("Installed Lustre version is not compatible.")
-            else:
-                print("Installed Lustre version is compatible.")
+            print("Lustre version is compatible")
+            gotversion = True
     if gotversion is True:
         print("Building with Lustre bindings.")
         denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
         print("Not building with Lustre bindings.")
+    denv = conf.Finish()
 
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
 
