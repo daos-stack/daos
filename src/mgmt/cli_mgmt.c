@@ -376,9 +376,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	strncpy(sy_info->crt_ctx_share_addr, resp->crt_ctx_share_addr, size);
 	sy_info->crt_ctx_share_addr[size-1] = '\0';
 
-	size = sizeof(sy_info->crt_timeout);
-	strncpy(sy_info->crt_timeout, resp->crt_timeout, size);
-	sy_info->crt_timeout[size-1] = '\0';
+	sy_info->crt_timeout = resp->crt_timeout;
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);

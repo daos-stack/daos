@@ -53,6 +53,13 @@ const (
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
 
+// Configuration information shared with the Agent
+type AgentCfg struct {
+	CRT_PHY_ADDR_STR   string
+	CRT_CTX_SHARE_ADDR string
+	CRT_TIMEOUT        uint32
+}
+
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Configuration struct {
@@ -69,6 +76,9 @@ type Configuration struct {
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
+	Provider            string                    `yaml:"client_provider"`
+	CrtCtxShareAddr     string                    `yaml:"client_crt_ctx_share_addr"`
+	CrtTimeout          uint32                    `yaml:"client_crt_timeout"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`

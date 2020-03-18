@@ -38,7 +38,7 @@ func (x JoinResp_State) String() string {
 	return proto.EnumName(JoinResp_State_name, int32(x))
 }
 func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{2, 0}
+	return fileDescriptor_srv_161f0313d6921f14, []int{2, 0}
 }
 
 // Generic response just containing DER from IO server.
@@ -53,7 +53,7 @@ func (m *DaosResp) Reset()         { *m = DaosResp{} }
 func (m *DaosResp) String() string { return proto.CompactTextString(m) }
 func (*DaosResp) ProtoMessage()    {}
 func (*DaosResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{0}
+	return fileDescriptor_srv_161f0313d6921f14, []int{0}
 }
 func (m *DaosResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosResp.Unmarshal(m, b)
@@ -95,7 +95,7 @@ func (m *JoinReq) Reset()         { *m = JoinReq{} }
 func (m *JoinReq) String() string { return proto.CompactTextString(m) }
 func (*JoinReq) ProtoMessage()    {}
 func (*JoinReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{1}
+	return fileDescriptor_srv_161f0313d6921f14, []int{1}
 }
 func (m *JoinReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinReq.Unmarshal(m, b)
@@ -163,7 +163,7 @@ func (m *JoinResp) Reset()         { *m = JoinResp{} }
 func (m *JoinResp) String() string { return proto.CompactTextString(m) }
 func (*JoinResp) ProtoMessage()    {}
 func (*JoinResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{2}
+	return fileDescriptor_srv_161f0313d6921f14, []int{2}
 }
 func (m *JoinResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinResp.Unmarshal(m, b)
@@ -215,7 +215,7 @@ func (m *LeaderQueryReq) Reset()         { *m = LeaderQueryReq{} }
 func (m *LeaderQueryReq) String() string { return proto.CompactTextString(m) }
 func (*LeaderQueryReq) ProtoMessage()    {}
 func (*LeaderQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{3}
+	return fileDescriptor_srv_161f0313d6921f14, []int{3}
 }
 func (m *LeaderQueryReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LeaderQueryReq.Unmarshal(m, b)
@@ -254,7 +254,7 @@ func (m *LeaderQueryResp) Reset()         { *m = LeaderQueryResp{} }
 func (m *LeaderQueryResp) String() string { return proto.CompactTextString(m) }
 func (*LeaderQueryResp) ProtoMessage()    {}
 func (*LeaderQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{4}
+	return fileDescriptor_srv_161f0313d6921f14, []int{4}
 }
 func (m *LeaderQueryResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LeaderQueryResp.Unmarshal(m, b)
@@ -299,7 +299,7 @@ func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
 func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoReq) ProtoMessage()    {}
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{5}
+	return fileDescriptor_srv_161f0313d6921f14, []int{5}
 }
 func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoReq.Unmarshal(m, b)
@@ -331,7 +331,7 @@ type GetAttachInfoResp struct {
 	Psrs                 []*GetAttachInfoResp_Psr `protobuf:"bytes,2,rep,name=psrs,proto3" json:"psrs,omitempty"`
 	CRT_PHY_ADDR_STR     string                   `protobuf:"bytes,3,opt,name=CRT_PHY_ADDR_STR,json=CRTPHYADDRSTR,proto3" json:"CRT_PHY_ADDR_STR,omitempty"`
 	CRT_CTX_SHARE_ADDR   string                   `protobuf:"bytes,4,opt,name=CRT_CTX_SHARE_ADDR,json=CRTCTXSHAREADDR,proto3" json:"CRT_CTX_SHARE_ADDR,omitempty"`
-	CRT_TIMEOUT          string                   `protobuf:"bytes,5,opt,name=CRT_TIMEOUT,json=CRTTIMEOUT,proto3" json:"CRT_TIMEOUT,omitempty"`
+	CRT_TIMEOUT          uint32                   `protobuf:"varint,5,opt,name=CRT_TIMEOUT,json=CRTTIMEOUT,proto3" json:"CRT_TIMEOUT,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -341,7 +341,7 @@ func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
 func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp) ProtoMessage()    {}
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{6}
+	return fileDescriptor_srv_161f0313d6921f14, []int{6}
 }
 func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp.Unmarshal(m, b)
@@ -389,11 +389,11 @@ func (m *GetAttachInfoResp) GetCRT_CTX_SHARE_ADDR() string {
 	return ""
 }
 
-func (m *GetAttachInfoResp) GetCRT_TIMEOUT() string {
+func (m *GetAttachInfoResp) GetCRT_TIMEOUT() uint32 {
 	if m != nil {
 		return m.CRT_TIMEOUT
 	}
-	return ""
+	return 0
 }
 
 type GetAttachInfoResp_Psr struct {
@@ -408,7 +408,7 @@ func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
 func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
 func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{6, 0}
+	return fileDescriptor_srv_161f0313d6921f14, []int{6, 0}
 }
 func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp_Psr.Unmarshal(m, b)
@@ -453,7 +453,7 @@ func (m *PrepShutdownReq) Reset()         { *m = PrepShutdownReq{} }
 func (m *PrepShutdownReq) String() string { return proto.CompactTextString(m) }
 func (*PrepShutdownReq) ProtoMessage()    {}
 func (*PrepShutdownReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{7}
+	return fileDescriptor_srv_161f0313d6921f14, []int{7}
 }
 func (m *PrepShutdownReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepShutdownReq.Unmarshal(m, b)
@@ -491,7 +491,7 @@ func (m *PingRankReq) Reset()         { *m = PingRankReq{} }
 func (m *PingRankReq) String() string { return proto.CompactTextString(m) }
 func (*PingRankReq) ProtoMessage()    {}
 func (*PingRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{8}
+	return fileDescriptor_srv_161f0313d6921f14, []int{8}
 }
 func (m *PingRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingRankReq.Unmarshal(m, b)
@@ -529,7 +529,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{9}
+	return fileDescriptor_srv_161f0313d6921f14, []int{9}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -569,7 +569,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_2ae093720c86362d, []int{10}
+	return fileDescriptor_srv_161f0313d6921f14, []int{10}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -626,10 +626,10 @@ func init() {
 	proto.RegisterEnum("mgmt.JoinResp_State", JoinResp_State_name, JoinResp_State_value)
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_2ae093720c86362d) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_161f0313d6921f14) }
 
-var fileDescriptor_srv_2ae093720c86362d = []byte{
-	// 493 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_srv_161f0313d6921f14 = []byte{
+	// 494 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x93, 0x61, 0x6f, 0xd3, 0x3c,
 	0x10, 0xc7, 0x9f, 0x26, 0x6d, 0xd7, 0x5c, 0xd5, 0x35, 0x8f, 0x35, 0xa1, 0x68, 0x20, 0x51, 0xac,
 	0x21, 0x2a, 0x26, 0x05, 0x69, 0x7c, 0x82, 0x2a, 0x9d, 0x68, 0x11, 0x63, 0xe1, 0xe2, 0x49, 0xdb,
@@ -654,11 +654,11 @@ var fileDescriptor_srv_2ae093720c86362d = []byte{
 	0x32, 0x9d, 0xe2, 0x22, 0x61, 0xd8, 0xb4, 0x72, 0x10, 0x21, 0x8b, 0x67, 0x17, 0x46, 0x4d, 0x18,
 	0x92, 0x43, 0x20, 0x06, 0x8c, 0xd8, 0xf9, 0x22, 0x99, 0x4d, 0xf0, 0xd8, 0xe2, 0xb6, 0xc3, 0x1e,
 	0x0e, 0x23, 0x64, 0x11, 0x3b, 0xb7, 0xba, 0x91, 0xc9, 0x4b, 0xe8, 0x1b, 0x98, 0xcd, 0x4f, 0x8e,
-	0x4f, 0xcf, 0x58, 0xd3, 0x72, 0x88, 0x90, 0x35, 0xca, 0xfe, 0x21, 0xb8, 0xb1, 0x92, 0x9b, 0xde,
-	0xb6, 0x1e, 0xce, 0x93, 0xb3, 0x99, 0x27, 0xfa, 0x1a, 0x86, 0xb1, 0x14, 0x65, 0x72, 0x5d, 0xe9,
-	0xb4, 0xf8, 0x79, 0x3b, 0x9c, 0xf7, 0x03, 0xe9, 0x2b, 0xe8, 0xc7, 0x59, 0x7e, 0x85, 0x3c, 0xbf,
-	0x79, 0x0c, 0x19, 0x01, 0x24, 0x42, 0x3f, 0x45, 0x24, 0xd0, 0x8f, 0xa4, 0xe0, 0x5a, 0x9c, 0x28,
-	0x83, 0xbc, 0x00, 0xef, 0xb2, 0x28, 0xb4, 0xd2, 0x92, 0x97, 0x96, 0xeb, 0xe1, 0x9d, 0xb0, 0x59,
-	0x11, 0x67, 0x7b, 0x45, 0xec, 0x98, 0xbb, 0x77, 0x63, 0x7e, 0xd9, 0xb5, 0x6b, 0xf8, 0xfe, 0x6f,
-	0x00, 0x00, 0x00, 0xff, 0xff, 0x04, 0x8d, 0xa2, 0x9c, 0x93, 0x03, 0x00, 0x00,
+	0x4f, 0xcf, 0x98, 0x6d, 0xf9, 0x00, 0x21, 0x42, 0xd6, 0x28, 0xfb, 0x87, 0xe0, 0xc6, 0x4a, 0x6e,
+	0x7a, 0xdb, 0x7a, 0x38, 0x4f, 0xce, 0x66, 0x9e, 0xe8, 0x6b, 0x18, 0xc6, 0x52, 0x94, 0xc9, 0x75,
+	0xa5, 0xd3, 0xe2, 0xe7, 0xed, 0x70, 0xde, 0x0f, 0xa4, 0xaf, 0xa0, 0x1f, 0x67, 0xf9, 0x15, 0xf2,
+	0xfc, 0xe6, 0x31, 0x64, 0x04, 0x90, 0x08, 0xfd, 0x14, 0x91, 0x40, 0x3f, 0x92, 0x82, 0x6b, 0x71,
+	0xa2, 0x0c, 0xf2, 0x02, 0xbc, 0xcb, 0xa2, 0xd0, 0x4a, 0x4b, 0x5e, 0x5a, 0xae, 0x87, 0x77, 0xc2,
+	0x66, 0x45, 0x9c, 0xed, 0x15, 0xb1, 0x63, 0xee, 0xde, 0x8d, 0xf9, 0x65, 0xd7, 0xae, 0xe1, 0xfb,
+	0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x3c, 0xce, 0x9b, 0xcc, 0x93, 0x03, 0x00, 0x00,
 }

@@ -49,7 +49,7 @@ int dc_mgmt_add_mark(const char *mark);
 struct sys_info {
 	char	provider[DAOS_SYS_INFO_STRING_MAX + 1];
 	char	crt_ctx_share_addr[DAOS_SYS_INFO_STRING_MAX + 1];
-	char	crt_timeout[DAOS_SYS_INFO_STRING_MAX + 1];
+	uint	crt_timeout;
 };
 
 /** Client system handle */
