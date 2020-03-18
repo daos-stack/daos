@@ -108,13 +108,13 @@ def rpm_scan_pre = '''set -ex
                       scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
-def rpm_scan_test = '''lmd_src=\"maldet-current\"
-                       lmd_tarball=\"maldetect-current.tar.gz\"
-                       rm -rf /var/tmp/\${lmd_src}
-                       mkdir -p /var/tmp/\${lmd_src}
-                       tar -C /var/tmp/\${lmd_src} --strip-components=1 \
-                         -xf /var/tmp/\${lmd_tarball}
-                       pushd /var/tmp/\${lmd_src}
+def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
+                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
+                       rm -rf /var/tmp/\\\${lmd_src}
+                       mkdir -p /var/tmp/\\\${lmd_src}
+                       tar -C /var/tmp/\\\${lmd_src} --strip-components=1 \
+                         -xf /var/tmp/\\\${lmd_tarball}
+                       pushd /var/tmp/\\\${lmd_src}
                          sudo ./install.sh
                          sudo ln -s /usr/local/maldetect/ /bin/maldet
                        popd
@@ -129,16 +129,16 @@ def rpm_scan_test = '''lmd_src=\"maldet-current\"
                        rm -f /var/tmp/maldetect.xml
                        if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
                          cat << EOF_GOOD > /var/tmp/maldetect.xml
-<testsuite skip="0" failures="0" errors="0" tests="1" name="Malware_Scan">
-  <testcase name="testcase1" classname="ClamAV">
+<testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
 </testsuite>
 EOF_GOOD
                        else
                          cat << EOF_BAD > /var/tmp/maldetect.xml
-<testsuite skip="0" failures="1" errors="0" tests="1" name="Malware_Scan">
-  <testcase name="testcase1" classname="ClamAV">
-    <failure message="Malware Detected" type="error">
-      <![CDATA[ "\$(cat var/tmp/clamscan.out)" ]]>
+<testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name="\\\Malware_scan\\\" classname=\\\"ClamAV\\\">
+    <failure message="\\\Malware Detected\\\" type=\\\"error\\\">
+      <![CDATA[ \\\"\\\$(cat var/tmp/clamscan.out)\\\" ]]>
     </failure>
   </testcase>
 </testsuite>
