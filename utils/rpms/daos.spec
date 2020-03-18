@@ -81,8 +81,6 @@ BuildRequires: libpsm_infinipath1
 BuildRequires: libpmemblk1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
-# allow src/client/dfs/SConscript to query Lustre rpms
-BuildRequires: rpm-python
 %if (0%{?suse_version} >= 1500)
 Requires: libpmem1, libpmemobj1
 %endif
