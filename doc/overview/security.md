@@ -36,7 +36,7 @@ mutually-authenticated TLS.
 Client authorization for resources is controlled by the Access Control List
 (ACL) on the resource, while authorization on the management network is
 achieved by settings on the
-[certificates](/doc/admin/deployment.md#certificate-configuration]
+[certificates](/doc/admin/deployment.md#certificate-configuration)
 generated while setting up the DAOS system.
 
 ### Access Control Lists
