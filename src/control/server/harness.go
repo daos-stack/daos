@@ -236,9 +236,8 @@ func (h *IOServerHarness) startInstances(ctx context.Context, membership *system
 // StopInstances will signal harness-managed instances.
 //
 // Iterate over instances and call Stop(sig) on each, return when all instances
-// exit or err context is done. Error map returned for stop attempt failures so
-// can continue to return results and update state.
-func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (map[ioserver.Rank]error, error) {
+// exit or err context is done. Error map returned for each rank stop attempt failure.
+func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (map[ioserver.Rank]error, error) {
 	if !h.IsStarted() {
 		return nil, nil
 	}
@@ -299,64 +298,6 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 			}
 		}
 	}
-}
-
-func (h *IOServerHarness) getInstanceStartedResults(rankList []ioserver.Rank, desiredState system.MemberState, action string, stopErrs map[ioserver.Rank]error) (system.MemberResults, error) {
-	results := make(system.MemberResults, 0, maxIOServers)
-	for _, i := range h.Instances() {
-		rank, err := i.GetRank()
-		if err != nil {
-			return nil, err
-		}
-
-		if !checkRankList(rank, rankList) {
-			continue // filtered out, no result expected
-		}
-
-		state := system.MemberStateStarted
-		if !i.IsStarted() {
-			state = system.MemberStateStopped
-		}
-
-		var extraErrMsg string
-		if len(stopErrs) > 0 {
-			if stopErr, exists := stopErrs[rank]; exists {
-				if stopErr == nil {
-					return nil, errors.New("expected non-nil error in error map")
-				}
-				extraErrMsg = fmt.Sprintf(" (%s)", stopErr.Error())
-			}
-		}
-		if state != desiredState {
-			err = errors.Errorf("want %s, got %s%s", desiredState, state, extraErrMsg)
-		}
-
-		results = append(results, system.NewMemberResult(rank.Uint32(), action, err, state))
-	}
-
-	return results, nil
-}
-
-// StopInstances attempts to stop instances managed by harness and returns
-// members.
-func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (system.MemberResults, error) {
-	h.log.Debug("stopping harness managed instances")
-
-	stopErrs, err := h.stopInstances(ctx, signal, rankList...)
-	if err != nil {
-		if err != context.DeadlineExceeded {
-			// unexpected error, fail without collecting rank results
-			return nil, err
-		}
-		h.log.Debug("deadline exceeded when stopping instances")
-	}
-
-	results, err := h.getInstanceStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
 }
 
 // waitInstancesReady awaits ready signal from I/O server before starting

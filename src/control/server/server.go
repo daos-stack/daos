@@ -268,16 +268,22 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
+		var err error
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
 
-		defer shutdown() // Kill I/O servers if running after graceful shutdown.
+		defer func() {
+			if errors.Cause(err) == context.DeadlineExceeded {
+				log.Debug("resorting to kill signal")
+			}
+			shutdown() // Kill I/O servers if running after graceful shutdown.
+		}()
 
 		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
 		defer cancel()
 
 		// Attampt graceful shutdown of I/O servers.
-		if _, err := harness.StopInstances(stopCtx, sig); err != nil {
+		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
 			log.Error(errors.Wrap(err, "graceful shutdown").Error())
 		}
 	}()

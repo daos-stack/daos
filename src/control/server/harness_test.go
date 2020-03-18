@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -46,7 +47,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const testShortTimeout = 50 * time.Millisecond
@@ -374,7 +374,7 @@ func TestHarness_StopInstances(t *testing.T) {
 		harnessNotStarted bool
 		signalErr         error
 		ctxTimeout        time.Duration
-		expResults        system.MemberResults
+		expRankErrs       map[ioserver.Rank]error
 		expSignalsSent    map[uint32]os.Signal
 		expErr            error
 	}{
@@ -389,83 +389,39 @@ func TestHarness_StopInstances(t *testing.T) {
 		"harness not started": {
 			harnessNotStarted: true,
 			signal:            syscall.SIGKILL,
-			expResults: system.MemberResults{
-				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
-				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
-			},
-			expSignalsSent: map[uint32]os.Signal{},
+			expSignalsSent:    map[uint32]os.Signal{},
 		},
 		"rank not in list": {
-			ranks:  []ioserver.Rank{ioserver.Rank(2), ioserver.Rank(3)},
-			signal: syscall.SIGKILL,
-			expResults: system.MemberResults{
-				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
-			},
+			ranks:          []ioserver.Rank{ioserver.Rank(2), ioserver.Rank(3)},
+			signal:         syscall.SIGKILL,
+			expRankErrs:    map[ioserver.Rank]error{},
 			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
 		},
 		"signal send error": {
 			signal:    syscall.SIGKILL,
 			signalErr: errors.New("sending signal failed"),
-			expResults: system.MemberResults{
-				{
-					Rank:    1,
-					Action:  "stop",
-					Errored: true,
-					Msg:     "want Stopped, got Started (sending signal failed)",
-					State:   system.MemberStateStarted,
-				},
-				{
-					Rank:    2,
-					Action:  "stop",
-					Errored: true,
-					Msg:     "want Stopped, got Started (sending signal failed)",
-					State:   system.MemberStateStarted,
-				},
+			expRankErrs: map[ioserver.Rank]error{
+				1: errors.New("sending signal failed"),
+				2: errors.New("sending signal failed"),
 			},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 		},
 		"context timeout": {
 			signal:     syscall.SIGKILL,
 			ctxTimeout: 1 * time.Nanosecond,
-			expResults: system.MemberResults{
-				{
-					Rank:    1,
-					Action:  "stop",
-					Errored: true,
-					Msg:     "want Stopped, got Started",
-					State:   system.MemberStateStarted,
-				},
-				{
-					Rank:    2,
-					Action:  "stop",
-					Errored: true,
-					Msg:     "want Stopped, got Started",
-					State:   system.MemberStateStarted,
-				},
-			},
+			expErr:     context.DeadlineExceeded,
 		},
 		"normal stop single-io": {
-			ioserverCount: 1,
-			signal:        syscall.SIGINT,
-			expResults: system.MemberResults{
-				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
-			},
+			ioserverCount:  1,
+			signal:         syscall.SIGINT,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT},
 		},
 		"normal stop multi-io": {
-			signal: syscall.SIGTERM,
-			expResults: system.MemberResults{
-				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
-				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
-			},
+			signal:         syscall.SIGTERM,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGTERM, 1: syscall.SIGTERM},
 		},
 		"force stop multi-io": {
-			signal: syscall.SIGKILL,
-			expResults: system.MemberResults{
-				{Rank: 1, Action: "stop", State: system.MemberStateStopped},
-				{Rank: 2, Action: "stop", State: system.MemberStateStopped},
-			},
+			signal:         syscall.SIGKILL,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 		},
 	} {
@@ -509,13 +465,14 @@ func TestHarness_StopInstances(t *testing.T) {
 			}
 			ctx, shutdown := context.WithTimeout(context.Background(), tc.ctxTimeout)
 			defer shutdown()
-			gotResults, gotErr := svc.harness.StopInstances(ctx, tc.signal, tc.ranks...)
+			gotRankErrs, gotErr := svc.harness.StopInstances(ctx, tc.signal, tc.ranks...)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-			if diff := cmp.Diff(tc.expResults, gotResults); diff != "" {
-				t.Fatalf("unexpected member results (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(
+				fmt.Sprintf("%v", tc.expRankErrs), fmt.Sprintf("%v", gotRankErrs)); diff != "" {
+				t.Fatalf("unexpexted rank errors (-want, +got):\n%s\n", diff)
 			}
 
 			var numSignalsSent int

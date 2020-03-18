@@ -24,6 +24,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"os/exec"
 	"strconv"
@@ -800,6 +801,42 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 	return resp, nil
 }
 
+func (svc *mgmtSvc) getStartedResults(rankList []ioserver.Rank, desiredState system.MemberState, action string, stopErrs map[ioserver.Rank]error) (system.MemberResults, error) {
+	results := make(system.MemberResults, 0, maxIOServers)
+	for _, i := range svc.harness.Instances() {
+		rank, err := i.GetRank()
+		if err != nil {
+			return nil, err
+		}
+
+		if !checkRankList(rank, rankList) {
+			continue // filtered out, no result expected
+		}
+
+		state := system.MemberStateStarted
+		if !i.IsStarted() {
+			state = system.MemberStateStopped
+		}
+
+		var extraErrMsg string
+		if len(stopErrs) > 0 {
+			if stopErr, exists := stopErrs[rank]; exists {
+				if stopErr == nil {
+					return nil, errors.New("expected non-nil error in error map")
+				}
+				extraErrMsg = fmt.Sprintf(" (%s)", stopErr.Error())
+			}
+		}
+		if state != desiredState {
+			err = errors.Errorf("want %s, got %s%s", desiredState, state, extraErrMsg)
+		}
+
+		results = append(results, system.NewMemberResult(rank.Uint32(), action, err, state))
+	}
+
+	return results, nil
+}
+
 // StopRanks implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
@@ -827,10 +864,20 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 	ctx, cancel := context.WithTimeout(parent, ioserverShutdownTimeout)
 	defer cancel()
 
-	results, err := svc.harness.StopInstances(ctx, signal, rankList...)
-	if err != nil && err != context.DeadlineExceeded {
+	stopErrs, err := svc.harness.StopInstances(ctx, signal, rankList...)
+	if err != nil {
+		if err != context.DeadlineExceeded {
+			// unexpected error, fail without collecting rank results
+			return nil, err
+		}
+		svc.log.Debug("deadline exceeded when stopping instances")
+	}
+
+	results, err := svc.getStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
+	if err != nil {
 		return nil, err
 	}
+
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
@@ -852,11 +899,9 @@ func ping(i *IOServerInstance, rank ioserver.Rank, timeout time.Duration) *mgmtp
 		select {
 		default:
 			dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
+			resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted)
 		case <-ctx.Done():
-			return
 		}
-
-		resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted)
 	}()
 
 	select {
@@ -957,7 +1002,7 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 		return nil, errors.Wrap(err, "parsing request rank list")
 	}
 
-	results, err := svc.harness.getInstanceStartedResults(rankList, system.MemberStateStarted, "start", nil)
+	results, err := svc.getStartedResults(rankList, system.MemberStateStarted, "start", nil)
 	if err != nil {
 		return nil, err
 	}
