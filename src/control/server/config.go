@@ -56,7 +56,7 @@ type networkNUMAValidation func(string, uint) error
 // Configuration information shared with the Agent
 type AgentCfg struct {
 	CRT_PHY_ADDR_STR   string
-	CRT_CTX_SHARE_ADDR string
+	CRT_CTX_SHARE_ADDR uint32
 	CRT_TIMEOUT        uint32
 }
 
@@ -76,7 +76,7 @@ type Configuration struct {
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
-	CrtCtxShareAddr     string                    `yaml:"client_crt_ctx_share_addr"`
+	CrtCtxShareAddr     uint32                    `yaml:"client_crt_ctx_share_addr"`
 	CrtTimeout          uint32                    `yaml:"client_crt_timeout"`
 
 	// duplicated in ioserver.Config
@@ -106,6 +106,18 @@ type Configuration struct {
 // an error. The server will create new superblocks as necessary.
 func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 	c.RecreateSuperblocks = true
+	return c
+}
+
+// WithCrtCtxShareAddr defines the global CRT_CTX_SHARE_ADDR shared with the client
+func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+	c.CrtCtxShareAddr = addr
+	return c
+}
+
+// WithCrtTimeout defines the global CRT_TIMEOUT shared with the client
+func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+	c.CrtTimeout = timeout
 	return c
 }
 

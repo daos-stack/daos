@@ -147,6 +147,14 @@
 #helper_log_file: /tmp/daos_admin.log
 #
 #
+## global CRT_CTX_SHARE_ADDR shared with client
+#client_crt_ctx_share_addr: 1
+#
+#
+## global CRT_TIMEOUT shared with client
+#client_crt_timeout: 30
+#
+#
 ## When per-server definitions exist, auto-allocation of resources is not
 ## performed. Without per-server definitions, node resources will
 ## automatically be assigned to servers based on NUMA ratings, there will

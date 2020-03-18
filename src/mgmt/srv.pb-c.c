@@ -948,11 +948,11 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     "CRT_CTX_SHARE_ADDR",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Mgmt__GetAttachInfoResp, crt_ctx_share_addr),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
