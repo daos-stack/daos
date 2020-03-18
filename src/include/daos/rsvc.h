@@ -61,7 +61,7 @@ enum rsvc_client_complete_rpc_rc {
 
 int rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks);
 void rsvc_client_fini(struct rsvc_client *client);
-void rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
+int rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
 int rsvc_client_complete_rpc(struct rsvc_client *client,
 			     const crt_endpoint_t *ep, int rc_crt, int rc_svc,
 			     const struct rsvc_hint *hint);

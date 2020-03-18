@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -328,10 +328,11 @@ ilog_init(void)
 #define ILOG_VERSION_MASK	~(ILOG_MAGIC_MASK)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
-static inline int
+static inline uint32_t
 ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
-		return -DER_INVAL;
+		return 0;
+
 	return (magic & ILOG_VERSION_MASK);
 }
 
@@ -813,6 +814,10 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 		 bool is_punch)
 {
 	int			 rc = 0;
+
+	rc = ilog_tx_begin(lctx);
+	if (rc != 0)
+		return rc;
 
 	D_ASSERT(opc == ILOG_OP_ABORT);
 
@@ -1646,3 +1651,16 @@ done:
 	return empty;
 }
 
+uint32_t
+ilog_version_get(daos_handle_t loh)
+{
+	struct ilog_context	*lctx;
+
+	lctx = ilog_hdl2lctx(loh);
+	if (lctx == NULL) {
+		D_ERROR("Invalid log handle\n");
+		return 0;
+	}
+
+	return ilog_mag2ver(lctx->ic_root->lr_magic);
+}

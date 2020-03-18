@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -50,7 +50,7 @@ BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin
+BuildRequires: golang-bin >= 1.12
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
@@ -61,7 +61,7 @@ BuildRequires: python-devel python36-devel
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-BuildRequires: go1.10
+BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
@@ -279,9 +279,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
-%if (0%{?suse_version} >= 1500)
-/lib64/libdfs.so
-%endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
@@ -325,7 +322,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
-%{_bindir}/daosbench
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
@@ -342,6 +338,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
+- bump up go minimum version to 1.12
+
 * Thu Feb 20 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-2
 - daos-server requires daos-client (same version)
 
