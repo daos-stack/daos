@@ -400,3 +400,4 @@ def scons(): # pylint: disable=too-many-locals
         Help(opts.GenerateHelpText(env))
 
 if __name__ == "SCons.Script":
+    scons()
