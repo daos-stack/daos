@@ -49,7 +49,7 @@ type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
 	Signal(os.Signal) error
-	Wait() (*os.ProcessState, error)
+	Wait() error
 	GetConfig() *ioserver.Config
 }
 
@@ -224,13 +224,13 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
-// Stop sends signal to stop IOServerInstance runner and waits for exit.
-func (srv *IOServerInstance) Stop(signal os.Signal) (*os.ProcessState, error) {
+// Stop sends signal to stop IOServerInstance runner.
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
 	if err := srv.runner.Signal(signal); err != nil {
-		return nil, err
+		return err
 	}
 
-	return srv.runner.Wait()
+	return nil
 }
 
 // IsStarted indicates whether IOServerInstance is in a running state.

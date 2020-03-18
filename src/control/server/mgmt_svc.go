@@ -873,6 +873,24 @@ func (svc *mgmtSvc) StopRanks(parent context.Context, req *mgmtpb.RanksReq) (*mg
 		svc.log.Debug("deadline exceeded when stopping instances")
 	}
 
+	stopped := make(chan struct{})
+	go func() {
+		for {
+			if len(svc.harness.StartedRanks()) != 0 {
+				time.Sleep(instanceUpdateDelay)
+				continue
+			}
+			close(stopped)
+			break
+		}
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(svc.harness.rankReqTimeout):
+		svc.log.Debug("deadline exceeded when waiting for instances to stop")
+	}
+
 	results, err := svc.getStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
 	if err != nil {
 		return nil, err
