@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,11 @@
 
 package common
 
-import "unicode"
+import (
+	"encoding/json"
+	"fmt"
+	"unicode"
+)
 
 // Includes returns true if string target in slice.
 func Includes(ss []string, target string) bool {
@@ -96,4 +100,10 @@ func Pluralise(s string, n int) string {
 		return s
 	}
 	return s + "s"
+}
+
+// ParseInts converts string of uint32s to uint32 array.
+func ParseInts(in string) (ints []uint32, err error) {
+	str := fmt.Sprintf("[%s]", in)
+	return ints, json.Unmarshal([]byte(str), &ints)
 }
