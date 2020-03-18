@@ -325,9 +325,11 @@ ilog_init(void)
 
 /* 4 bit magic number + version */
 #define ILOG_MAGIC		0x00000006
-#define ILOG_MAGIC_MASK		0x0000000f
-#define ILOG_PUNCH_MASK		0x00000010
-#define ILOG_VERSION_INC	0x00000020
+#define ILOG_MAGIC_BITS		4
+#define ILOG_PUNCH_MASK		(1 << ILOG_MAGIC_BITS)
+#define ILOG_MAGIC_MASK		(ILOG_PUNCH_MASK - 1)
+#define ILOG_VERSION_SHIFT	(ILOG_MAGIC_BITS + 1)
+#define ILOG_VERSION_INC	(1 << ILOG_VERSION_SHIFT)
 #define ILOG_VERSION_MASK	~(ILOG_VERSION_INC - 1)
 #define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
 
@@ -336,7 +338,7 @@ ilog_mag2ver(uint32_t magic) {
 	if (!ILOG_MAGIC_VALID(magic))
 		return 0;
 
-	return (magic & ILOG_VERSION_MASK);
+	return (magic & ILOG_VERSION_MASK) >> ILOG_VERSION_SHIFT;
 }
 
 static inline bool

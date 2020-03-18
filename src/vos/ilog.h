@@ -261,7 +261,7 @@ ilog_fetch_finish(struct ilog_entries *entries);
 	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
 	     entry != &(ents)->ie_entries[-1]; entry--)
 
-/** Fetch the address of the timestamp index from the ilog entry
+/** Fetch the address of the timestamp index from the ilog
  *
  * \param	entries[in]	The incarnation log
  *
