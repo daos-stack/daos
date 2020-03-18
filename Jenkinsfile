@@ -108,25 +108,48 @@ def rpm_scan_pre = '''set -ex
                       scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
-def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
-                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
-                       rm -rf /tmp/\\\${lmd_src}
-                       mkdir -p /tmp/\\\${lmd_src}
-                       tar -C /tmp/\\\${lmd_src} --strip-components=1 \
-                         -xf /tmp/\\\${lmd_tarball}
-                       pushd /tmp/\\\${lmd_src}
+def rpm_scan_test = '''lmd_src=\"maldet-current\"
+                       lmd_tarball=\"maldetect-current.tar.gz\"
+                       rm -rf /var/tmp/\${lmd_src}
+                       mkdir -p /var/tmp/\${lmd_src}
+                       tar -C /var/tmp/\${lmd_src} --strip-components=1 \
+                         -xf /var/tmp/\${lmd_tarball}
+                       pushd /var/tmp/\${lmd_src}
                          sudo ./install.sh
                          sudo ln -s /usr/local/maldetect/ /bin/maldet
                        popd
                        sudo freshclam
-                       rm -f /tmp/clamscan.out
+                       rm -f /var/tmp/clamscan.out
                        clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
                                 -d /usr/local/maldetect/sigs/rfxn.hdb -r \
                                 --exclude-dir=/usr/local/maldetect \
                                 --exclude-dir=/usr/share/clamav \
                                 --infected /etc /usr | \
-                         tee /tmp/clamscan.out
-                       grep 'Infected files: 0$' /tmp/clamscan.out'''
+                         tee /var/tmp/clamscan.out
+                       rm -f /var/tmp/maldetect.xml
+                       if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+                         cat << EOF_GOOD > /var/tmp/maldetect.xml
+<testsuite skip="0" failures="0" errors="0" tests="1" name="Malware_Scan">
+  <testcase name="testcase1" classname="ClamAV">
+</testsuite>
+EOF_GOOD
+                       else
+                         cat << EOF_BAD > /var/tmp/maldetect.xml
+<testsuite skip="0" failures="1" errors="0" tests="1" name="Malware_Scan">
+  <testcase name="testcase1" classname="ClamAV">
+    <failure message="Malware Detected" type="error">
+      <![CDATA[ "\$(cat var/tmp/clamscan.out)" ]]>
+    </failure>
+  </testcase>
+</testsuite>
+EOF_BAD
+                       fi'''
+
+def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
+                       scp -i ci_key \
+                         jenkins@${nodelist[0]}:/var/tmp/maldetect.xml \
+                         ${WORKPACE}/maldetect.xml'''
+
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -1523,13 +1546,14 @@ pipeline {
                                        inst_rpms: 'environment-modules ' +
                                                   'clamav clamav-devel'
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_scan_pre}" +
+                            runTest script: rpm_scan_pre +
                                             "sudo yum -y install " +
                                             "daos-client-${daos_packages_version} " +
                                             "daos-server-${daos_packages_version} " +
                                             "daos-tests-${daos_packages_version}\n" +
-                                            "${rpm_scan_test}" + '"',
-                                    junit_files: null,
+                                            rpm_scan_test + '"\n' +
+                                            rpm_scan_post,
+                                    junit_files: 'maldetect.xml',
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
                         }
                     }
