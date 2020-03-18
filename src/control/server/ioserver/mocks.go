@@ -85,11 +85,11 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 	return tr.runnerCfg.SignalErr
 }
 
-func (tr *TestRunner) Wait() (*os.ProcessState, error) {
+func (tr *TestRunner) Wait() error {
 	if tr.runnerCfg.WaitErr == nil {
 		atomic.StoreUint32(&tr.runnerCfg.Running, 0)
 	}
-	return nil, tr.runnerCfg.WaitErr
+	return tr.runnerCfg.WaitErr
 }
 
 func (tr *TestRunner) IsRunning() bool {

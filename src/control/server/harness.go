@@ -38,6 +38,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const defaultRequestTimeout = 3 * time.Second
+
 // IOServerHarness is responsible for managing IOServer instances.
 type IOServerHarness struct {
 	sync.RWMutex
@@ -57,7 +59,7 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		instances:      make([]*IOServerInstance, 0, maxIOServers),
 		restart:        make(chan struct{}, 1),
 		errChan:        make(chan error, maxIOServers),
-		rankReqTimeout: 3 * time.Second,
+		rankReqTimeout: defaultRequestTimeout,
 	}
 }
 
@@ -248,7 +250,6 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	instances := h.Instances()
 	type rankRes struct {
 		rank ioserver.Rank
-		ps   *os.ProcessState
 		err  error
 	}
 	resChan := make(chan rankRes, len(instances))
@@ -269,19 +270,21 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 		}
 
 		go func(i *IOServerInstance) {
-			h.log.Debugf("%s rank %d", signal, rank.Uint32())
+			err := i.Stop(signal)
 
 			select {
-			default:
-				ps, err := i.Stop(signal) // blocks until process.Wait() returns
-				resChan <- rankRes{rank: rank, ps: ps, err: err}
 			case <-ctx.Done():
+			case resChan <- rankRes{rank: rank, err: err}:
 			}
 		}(instance)
 		stopping++
 	}
 
 	stopErrors := make(map[ioserver.Rank]error)
+	if stopping == 0 {
+		return stopErrors, nil
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -290,8 +293,6 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 			stopping--
 			if result.err != nil {
 				stopErrors[result.rank] = result.err
-			} else {
-				h.log.Debugf("process state on exit: %s", result.ps)
 			}
 			if stopping == 0 {
 				return stopErrors, nil

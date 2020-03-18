@@ -24,7 +24,6 @@
 package server
 
 import (
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -41,8 +40,8 @@ const systemReqTimeout = 30 * time.Second
 func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
 	results := make(system.MemberResults, 0, len(ranks))
 	for _, rank := range ranks {
-		results = append(results,
-			system.NewMemberResult(rank, action, err, system.MemberStateStopped))
+		results = append(results, system.NewMemberResult(rank, action, err,
+			system.MemberStateStopped))
 	}
 
 	return results
@@ -74,6 +73,19 @@ func (svc *ControlService) getMSMember() (*system.Member, error) {
 	return msMember, nil
 }
 
+type temporary interface {
+	Temporary() bool
+}
+
+func isUnreachableError(err error) bool {
+	te, ok := err.(temporary)
+	if ok {
+		return !te.Temporary()
+	}
+
+	return false
+}
+
 // updateMemberStatus requests registered harness to ping their instances (system
 // members) in order to determine IO Server process responsiveness. Update membership
 // appropriately.
@@ -95,15 +107,15 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
-			if strings.Contains(err.Error(), "connection refused") {
-				for _, rank := range ranks {
-					badRanks[rank] = system.MemberStateStopped
-				}
-				svc.log.Debugf("harness at %s is unreachable", addr)
-				continue
+			if !isUnreachableError(err) {
+				return err
 			}
 
-			return err
+			for _, rank := range ranks {
+				badRanks[rank] = system.MemberStateStopped
+			}
+			svc.log.Debugf("harness at %s is unreachable", addr)
+			continue
 		}
 
 		for _, result := range hResults {
@@ -219,7 +231,7 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 
 		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr, rankList...)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s prep shutdown", addr)
 			}
 
@@ -277,7 +289,7 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 
 		hResults, err := svc.harnessClient.Stop(ctx, addr, force, rankList...)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s stop", addr)
 			}
 			hResults = svc.reportStoppedRanks("stop", ranks, nil)
@@ -384,7 +396,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 
 		hResults, err := svc.harnessClient.Start(ctx, addr)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s start", addr)
 			}
 			hResults = svc.reportStoppedRanks("start", ranks,
