@@ -76,7 +76,6 @@ type Configuration struct {
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
-	Provider            string                    `yaml:"client_provider"`
 	CrtCtxShareAddr     string                    `yaml:"client_crt_ctx_share_addr"`
 	CrtTimeout          uint32                    `yaml:"client_crt_timeout"`
 

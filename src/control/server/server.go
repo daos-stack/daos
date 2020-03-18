@@ -254,7 +254,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 	agentConfig := AgentCfg{
-		CRT_PHY_ADDR_STR:   cfg.Provider,
+		CRT_PHY_ADDR_STR:   cfg.Fabric.Provider,
 		CRT_CTX_SHARE_ADDR: cfg.CrtCtxShareAddr,
 		CRT_TIMEOUT:        cfg.CrtTimeout,
 	}
