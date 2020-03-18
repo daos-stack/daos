@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -49,8 +50,14 @@ import (
 )
 
 const (
+	// ControlPlaneName defines a consistent name for the control plane server.
 	ControlPlaneName = "DAOS Control Server"
-	DataPlaneName    = "DAOS I/O Server"
+	// DataPlaneName defines a consistent name for the ioserver.
+	DataPlaneName = "DAOS I/O Server"
+	// define supported maximum number of I/O servers
+	maxIOServers = 2
+
+	iommuPath = "/sys/class/iommu"
 )
 
 func cfgHasBdev(cfg *Configuration) bool {
@@ -67,8 +74,16 @@ func instanceShmID(idx int) int {
 	return os.Getpid() + idx + 1
 }
 
-// define supported maximum number of I/O servers
-const maxIoServers = 2
+func iommuDetected() bool {
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(iommuPath)
+	if err != nil {
+		return false
+	}
+
+	return len(dmars) > 0
+}
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
@@ -104,9 +119,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	if !cfgHasBdev(cfg) {
-		// If there are no bdevs in the config, don't waste memory on configuring
-		// hugepages (1 is minimum to avoid default).
-		cfg.NrHugepages = 1
+		// If there are no bdevs in the config, use a minimal amount of hugepages.
+		cfg.NrHugepages = 128
 	}
 
 	// Perform an automatic prepare based on the values in the config file.
@@ -138,6 +152,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			// Is this appropriate? Or should we bomb out?
 			log.Error("no free hugepages -- NVMe performance may suffer")
 		}
+
+		if runningUser.Uid != "0" && !iommuDetected() {
+			return FaultServerIommuDisabled
+		}
 	}
 
 	// If this daos_server instance ends up being the MS leader,
@@ -146,7 +164,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIoServers {
+		if i+1 > maxIOServers {
 			break
 		}
 

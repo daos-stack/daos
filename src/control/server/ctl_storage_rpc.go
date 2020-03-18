@@ -39,7 +39,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-const msgFormatErr = "failure formatting storage, check RPC response for details"
+const (
+	msgFormatErr      = "failure formatting storage, check RPC response for details"
+	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
+)
 
 // newState creates, populates and returns ResponseState in addition
 // to logging any err.
@@ -241,10 +244,8 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
 	needsSuperblock := true
 	needsScmFormat := reformat
-	// indicate that NVMe not yet formatted
-	skipErr := FaultBdevFormatSkipped(i.Index())
-	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME,
-		skipErr.Error(), skipErr.Resolution)
+	skipNvmeResult := newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_SUCCESS, "",
+		fmt.Sprintf(msgNvmeFormatSkip, i.Index()))
 
 	c.log.Infof("formatting storage for %s instance %d (reformat: %t)",
 		DataPlaneName, i.Index(), reformat)
@@ -264,7 +265,10 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 				newMntRet(c.log, "format", scmConfig.MountPoint,
 					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
 					fault.ShowResolutionFor(err)))
-			resp.Crets = append(resp.Crets, skipNvmeResult)
+
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
 
 			return nil // don't continue if formatted and no reformat opt
 		}
@@ -280,7 +284,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 		if result.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
 			c.log.Error(msgFormatErr)
-			resp.Crets = append(resp.Crets, skipNvmeResult)
+			if len(i.bdevConfig().DeviceList) > 0 {
+				resp.Crets = append(resp.Crets, skipNvmeResult)
+			}
 
 			return nil // don't continue if we can't format SCM
 		}

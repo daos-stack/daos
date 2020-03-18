@@ -23,9 +23,6 @@ def scons():
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
-    daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
-    denv.Install('$PREFIX/bin/', daosbench)
-
     libs += ['vos', 'bio', 'pthread', 'abt', 'daos_tests']
 
     dts_common = denv.Object('dts_common.c')
@@ -55,6 +52,9 @@ def scons():
 
     # ftest
     SConscript('ftest/SConscript')
+
+    # dfio
+    SConscript('dfio/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

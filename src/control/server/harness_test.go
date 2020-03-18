@@ -243,7 +243,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 	}{
 		"normal startup/shutdown": {
 			expStartErr:   context.Canceled,
-			expStartCount: maxIoServers,
+			expStartCount: maxIOServers,
 		},
 		"fails to start": {
 			trc:           &ioserver.TestRunnerConfig{StartErr: errors.New("no")},
@@ -258,7 +258,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 				},
 			},
 			expStartErr:   errors.New("oops"),
-			expStartCount: maxIoServers,
+			expStartCount: maxIOServers,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -271,8 +271,8 @@ func TestHarnessIOServerStart(t *testing.T) {
 			}
 			defer os.RemoveAll(testDir)
 
-			srvCfgs := make([]*ioserver.Config, maxIoServers)
-			for i := 0; i < maxIoServers; i++ {
+			srvCfgs := make([]*ioserver.Config, maxIOServers)
+			for i := 0; i < maxIOServers; i++ {
 				srvCfgs[i] = ioserver.NewConfig().
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).

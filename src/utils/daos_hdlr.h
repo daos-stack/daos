@@ -40,6 +40,8 @@ enum cont_op {
 	CONT_GET_ACL,
 	CONT_OVERWRITE_ACL,
 	CONT_UPDATE_ACL,
+	CONT_DELETE_ACL,
+	CONT_SET_OWNER,
 };
 
 enum pool_op {
@@ -99,6 +101,7 @@ struct cmd_args_s {
 	char			*group;		/* --group name */
 	bool			verbose;	/* --verbose mode */
 	char			*entry;		/* --entry for ACL */
+	char			*principal;	/* --principal for ACL */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
@@ -202,6 +205,8 @@ int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 int cont_update_acl_hdlr(struct cmd_args_s *ap);
+int cont_delete_acl_hdlr(struct cmd_args_s *ap);
+int cont_set_owner_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:

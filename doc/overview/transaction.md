@@ -6,7 +6,7 @@ The DAOS API supports distributed transactions that allow any update operations 
 The DAOS versioning mechanism allows creating persistent container snapshots which provide point-in-time distributed consistent views of a container which can be used to build producer-consumer pipeline.
 
 <a id="4.2.1"></a>
-## Epoch & Timestamp Ordering
+## Epoch and Timestamp Ordering
 
 Each DAOS I/O operation is tagged with a timestamp called epoch. An epoch is a 64-bit integer that integrates both logical and physical clocks (see [HLC paper](https://cse.buffalo.edu/tech-reports/2014-04.pdf)). The DAOS API provides helper functions to convert an epoch to traditional POSIX time (i.e., struct timespec, see clock_gettime(3)).
 

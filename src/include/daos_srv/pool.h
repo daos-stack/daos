@@ -69,9 +69,11 @@ void ds_pool_put(struct ds_pool *pool);
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
-	uint64_t		sph_capas;
+	uint64_t		sph_flags;	/* user-provided flags */
+	uint64_t		sph_sec_capas;	/* access capabilities */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
+	d_iov_t			sph_cred;
 };
 
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
@@ -98,26 +100,11 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_fence;
 
 	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the 
+	 * with the aggregation full scan start HLC to know whether the
 	 * aggregation needs to be restarted from 0. */
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
-};
-
-/*
- * Pool properties uid/gid/mode
- *
- * Stores per-pool access control information
- *
- * This is only being exposed until the access control attributes are
- * proper encapsulated in the security module.
- */
-
-struct pool_prop_ugm {
-	uint32_t	pp_uid;
-	uint32_t	pp_gid;
-	uint32_t	pp_mode;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
