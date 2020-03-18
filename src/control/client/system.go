@@ -111,7 +111,7 @@ func (c *connList) SystemStart(req SystemStartReq) (*SystemStartResp, error) {
 
 // SystemQueryReq contains the inputs for the system query request.
 type SystemQueryReq struct {
-	Rank int32 // negative integer represents a NilRank
+	Ranks []uint32
 }
 
 // SystemQueryResp contains the request response.
@@ -126,9 +126,7 @@ func (c *connList) SystemQuery(req SystemQueryReq) (*SystemQueryResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &ctlpb.SystemQueryReq{
-		Rank: req.Rank,
-	}
+	rpcReq := &ctlpb.SystemQueryReq{Ranks: req.Ranks}
 
 	c.log.Debugf("DAOS system query request: %+v", rpcReq)
 

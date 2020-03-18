@@ -537,7 +537,7 @@ ev_progress_cb(void *arg)
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D_ASSERT(d_list_empty(&evx->evx_link));
-		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		return 1;
 	}
 
