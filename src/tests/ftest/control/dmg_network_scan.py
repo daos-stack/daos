@@ -75,7 +75,7 @@ class DmgNetworkScanTest(TestWithServers):
         Args:
             device (str): network device name
         """
-        fi_info_dir = os.path.join(self.prefix, 'opt', 'ofi', 'bin')
+        fi_info_dir = os.path.join(self.prefix, 'bin')
         fi_info = os.path.join(fi_info_dir, "fi_info -d {}".format(device))
         try:
             output = process.run(fi_info)
