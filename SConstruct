@@ -371,7 +371,6 @@ def scons(): # pylint: disable=too-many-locals
     VariantDir(build_prefix, '.', duplicate=0)
     SConscript('{}/src/SConscript'.format(build_prefix))
 
-
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
