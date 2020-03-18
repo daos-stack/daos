@@ -1,12 +1,6 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
-%{!?systemd_requires: %define systemd_requires \
-Requires(post): systemd \
-Requires(preun): systemd \
-Requires(postun): systemd \
-%{nil} \
-}
 
 # Unlimited maximum version
 %global spdk_max_version 1000
@@ -73,6 +67,7 @@ BuildRequires: go >= 1.12
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
+BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
 # have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
 BuildRequires: boost-devel
@@ -221,33 +216,19 @@ install -m 644 utils/systemd/%{agent_svc_name} %{?buildroot}/%{_unitdir}
 getent group daos_admins >/dev/null || groupadd -r daos_admins
 %post server
 /sbin/ldconfig
-if [ $1 -eq 1 ]; then
-  systemctl preset %{server_svc_name} >/dev/null 2>&1
-fi
+%systemd_post %{server_svc_name}
 %preun server
-if [ $1 -eq 0 ]; then
-  systemctl --no-reload disable %{server_svc_name} >/dev/null 2>&1
-  systemctl stop %{server_svc_name} >/dev/null 2>&1
-fi
+%systemd_preun %{server_svc_name}
 %postun server
 /sbin/ldconfig
-if [ $1 -eq 0 ]; then
-  systemctl daemon-reload >/dev/null 2>&1
-fi
+%systemd_postun %{server_svc_name}
 
 %post client
-if [ $1 -eq 1 ]; then
-  systemctl preset %{agent_svc_name} >/dev/null 2>&1
-fi
+%systemd_post %{agent_svc_name}
 %preun client
-if [ $1 -eq 0 ]; then
-  systemctl --no-reload disable %{agent_svc_name} >/dev/null 2>&1
-  systemctl stop %{agent_svc_name} >/dev/null 2>&1
-fi
+%systemd_preun %{agent_svc_name}
 %postun client
-if [ $1 -eq 0 ]; then
-  systemctl daemon-reload >/dev/null 2>&1
-fi
+%systemd_postun %{agent_svc_name}
 
 %files
 %defattr(-, root, root, -)
@@ -373,6 +354,9 @@ fi
 %{_libdir}/*.a
 
 %changelog
+* Wed Mar 18 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-4
+- Add systemd scriptlets for managing daos_server/daos_admin services
+
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12
 
