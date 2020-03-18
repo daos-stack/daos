@@ -313,6 +313,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		while (idx < sgl->sg_nr_out) {
 			d_sg_list_t	sgl_sent;
 			daos_size_t	length = 0;
+			size_t		remote_bulk_size;
 			unsigned int	start;
 
 			/**
@@ -337,6 +338,17 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				idx++;
 			}
 
+			rc = crt_bulk_get_len(remote_bulks[i],
+						&remote_bulk_size);
+			if (rc)
+				break;
+
+			if (length > remote_bulk_size) {
+				D_ERROR(DF_U64 "> %zu : %d\n", length,
+					remote_bulk_size, -DER_OVERFLOW);
+				rc = -DER_OVERFLOW;
+				break;
+			}
 			sgl_sent.sg_nr = idx - start;
 			sgl_sent.sg_nr_out = idx - start;
 
@@ -971,11 +983,13 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
-	if (rc == -DER_OVERFLOW) {
-		rc = -DER_REC2BIG;
-		D_ERROR(DF_UOID" bio_iod_copy failed, rc "DF_RC"",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
-		goto post;
+	if (rc) {
+		if (rc == -DER_OVERFLOW)
+			rc = -DER_REC2BIG;
+
+		D_ERROR(DF_UOID" data transfer failed, dma %d rc "DF_RC"",
+			DP_UOID(orw->orw_oid), rma, DP_RC(rc));
+		D_GOTO(post, rc);
 	}
 
 	rc = obj_verify_bio_csum(rpc, biod, cont_hdl->sch_csummer);
