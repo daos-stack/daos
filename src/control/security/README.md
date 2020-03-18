@@ -76,7 +76,7 @@ used to protect the gRPC channel between the administrative node and the server,
 second, it protects the channel between DAOS servers, and finally, it provides
 signing functionality for data transfers between the server and compute nodes.
 
-DAOS provides a script and openssh configuration files for generating the
+DAOS provides a script and openssl configuration files for generating the
 various certificates needed by a DAOS installation. The script will craft a CA
 root certificate using the various configuration files found
 [in the DAOS source tree](/utils/certs).
@@ -99,7 +99,7 @@ Administration of a DAOS cluster will be performed by an administrator using the
 dmg utility and interfacing with the control plane service for the cluster. The
 control plane service is a distributed service provided by the DAOS cluster and
 resides on each node acting as a storage node. Even though the control plane
-service is present on every node, a subset of them is relegated as the
+service is present on every node, a subset of them is designated as the
 management nodes, and if you attempt to connect to a non-management node, it
 will attempt to redirect you to the entry point node for the cluster. The
 connections between dmg and the control plane processes are performed using
