@@ -9,6 +9,7 @@ server_config:
   port: 10001
   control_log_mask: INFO
 dmg:
-  request: network
-  action: scan
+  dmg_sub_command: network
+  network:
+    network_sub_command: scan
   insecure: True
