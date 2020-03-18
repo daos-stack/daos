@@ -38,6 +38,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const defaultRequestTimeout = 3 * time.Second
+
 // IOServerHarness is responsible for managing IOServer instances.
 type IOServerHarness struct {
 	sync.RWMutex
@@ -57,7 +59,7 @@ func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 		instances:      make([]*IOServerInstance, 0, maxIOServers),
 		restart:        make(chan struct{}, 1),
 		errChan:        make(chan error, maxIOServers),
-		rankReqTimeout: 3 * time.Second,
+		rankReqTimeout: defaultRequestTimeout,
 	}
 }
 

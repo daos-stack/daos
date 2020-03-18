@@ -41,9 +41,9 @@ const systemReqTimeout = 30 * time.Second
 // reportStoppedRanks populates relevant rank results indicating stopped state.
 func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
 	results := make(system.MemberResults, 0, len(ranks))
-	for _, rank := range ranks {
-		results = append(results,
-			system.NewMemberResult(rank, action, err, system.MemberStateStopped))
+	for idx, rank := range ranks {
+		results[idx] = system.NewMemberResult(rank, action, err,
+			system.MemberStateStopped)
 	}
 
 	return results
@@ -78,7 +78,7 @@ func (svc *ControlService) getMSMember() (*system.Member, error) {
 func isUnreachableError(err error) bool {
 	switch ne := errors.Cause(err).(type) {
 	case *net.OpError:
-		return ne.Temporary()
+		return !ne.Temporary()
 	}
 
 	return false

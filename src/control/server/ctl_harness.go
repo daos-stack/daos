@@ -79,8 +79,12 @@ func (hc *harnessClient) call(ctx context.Context, addr string, rpcReq *mgmtpb.R
 	var rpcResp *mgmtpb.RanksResp
 	go func() {
 		var innerErr error
-		rpcResp, innerErr = f(ctx, addr, *rpcReq)
-		errChan <- innerErr
+		select {
+		default:
+			rpcResp, innerErr = f(ctx, addr, *rpcReq)
+			errChan <- innerErr
+		case <-ctx.Done():
+		}
 	}()
 
 	select {
