@@ -265,6 +265,23 @@ The generated keys and certificates must then be securely distributed to all nod
 in the DAOS system (servers, clients, and admin nodes). Permissions for these files should
 be set to prevent unauthorized access to the keys and certificates.
 
+Client nodes require:
+- CA root cert
+- Agent cert
+- Agent key
+
+Administrative nodes require:
+- CA root cert
+- Admin cert
+- Admin key
+
+Server nodes require:
+- CA root cert
+- Server cert
+- Server key
+- All valid agent certs in the DAOS system (in the client cert directory, see
+  config file below)
+
 After the certificates have been securely distributed, the DAOS configuration files must be
 updated in order to enable authentication and secure communications. These examples assume
 that the configuration files have been installed under `/etc/daos`:
