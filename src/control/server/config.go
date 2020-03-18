@@ -76,8 +76,6 @@ type Configuration struct {
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string                    `yaml:"helper_log_file"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
-	CrtCtxShareAddr     uint32                    `yaml:"client_crt_ctx_share_addr"`
-	CrtTimeout          uint32                    `yaml:"client_crt_timeout"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`
@@ -106,18 +104,6 @@ type Configuration struct {
 // an error. The server will create new superblocks as necessary.
 func (c *Configuration) WithRecreateSuperblocks() *Configuration {
 	c.RecreateSuperblocks = true
-	return c
-}
-
-// WithCrtCtxShareAddr defines the global CRT_CTX_SHARE_ADDR shared with the client
-func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
-	c.CrtCtxShareAddr = addr
-	return c
-}
-
-// WithCrtTimeout defines the global CRT_TIMEOUT shared with the client
-func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
-	c.CrtTimeout = timeout
 	return c
 }
 
@@ -169,6 +155,24 @@ func (c *Configuration) WithModules(mList string) *Configuration {
 // WithFabricProvider sets the top-level fabric provider.
 func (c *Configuration) WithFabricProvider(provider string) *Configuration {
 	c.Fabric.Provider = provider
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
+func (c *Configuration) WithCrtCtxShareAddr(addr uint32) *Configuration {
+	c.Fabric.CrtCtxShareAddr = addr
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (c *Configuration) WithCrtTimeout(timeout uint32) *Configuration {
+	c.Fabric.CrtTimeout = timeout
 	for _, srv := range c.Servers {
 		srv.Fabric.Update(c.Fabric)
 	}

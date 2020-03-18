@@ -287,7 +287,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	struct dc_mgmt_psr      *p;
 	int			 i;
 	int			 rc;
-	int			size;
+	int			 size;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
