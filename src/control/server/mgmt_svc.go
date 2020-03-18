@@ -896,11 +896,11 @@ func ping(i *IOServerInstance, rank ioserver.Rank, timeout time.Duration) *mgmtp
 		var err error
 		var dresp *drpc.Response
 
+		dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
+
 		select {
-		default:
-			dresp, err = i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPingRank, nil)
-			resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted)
 		case <-ctx.Done():
+		case resChan <- drespToRankResult(rank, "ping", dresp, err, system.MemberStateStarted):
 		}
 	}()
 

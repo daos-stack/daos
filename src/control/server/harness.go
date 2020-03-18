@@ -273,11 +273,11 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 		go func(i *IOServerInstance) {
 			h.log.Debugf("%s rank %d", signal, rank.Uint32())
 
+			ps, err := i.Stop(signal) // blocks until process.Wait() returns
+
 			select {
-			default:
-				ps, err := i.Stop(signal) // blocks until process.Wait() returns
-				resChan <- rankRes{rank: rank, ps: ps, err: err}
 			case <-ctx.Done():
+			case resChan <- rankRes{rank: rank, ps: ps, err: err}:
 			}
 		}(instance)
 		stopping++
