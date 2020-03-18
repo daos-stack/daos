@@ -261,7 +261,7 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 		}
 
 		if !checkRankList(rank, rankList) {
-			h.log.Debugf("rank %s not in requested list, skipping...", rank)
+			h.log.Debugf("rank %d not in requested list, skipping...", rank.Uint32())
 			continue // filtered out, no result expected
 		}
 
@@ -270,10 +270,14 @@ func (h *IOServerHarness) stopInstances(ctx context.Context, signal os.Signal, r
 		}
 
 		go func(i *IOServerInstance) {
-			h.log.Debugf("%s rank %s", signal, rank)
+			h.log.Debugf("%s rank %d", signal, rank.Uint32())
 
-			ps, err := i.Stop(signal) // blocks until process.Wait() returns
-			resChan <- rankRes{rank: rank, ps: ps, err: err}
+			select {
+			default:
+				ps, err := i.Stop(signal) // blocks until process.Wait() returns
+				resChan <- rankRes{rank: rank, ps: ps, err: err}
+			case <-ctx.Done():
+			}
 		}(instance)
 		stopping++
 	}
@@ -337,10 +341,14 @@ func (h *IOServerHarness) getInstanceStartedResults(rankList []ioserver.Rank, de
 // members.
 func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, rankList ...ioserver.Rank) (system.MemberResults, error) {
 	h.log.Debug("stopping harness managed instances")
+
 	stopErrs, err := h.stopInstances(ctx, signal, rankList...)
-	if err != nil && err != context.DeadlineExceeded {
-		// unexpected error, fail without collecting rank results
-		return nil, err
+	if err != nil {
+		if err != context.DeadlineExceeded {
+			// unexpected error, fail without collecting rank results
+			return nil, err
+		}
+		h.log.Debug("deadline exceeded when stopping instances")
 	}
 
 	results, err := h.getInstanceStartedResults(rankList, system.MemberStateStopped, "stop", stopErrs)
