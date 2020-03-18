@@ -3364,7 +3364,7 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	daos_handle_t		th = DAOS_TX_NONE;
 	bool			exists;
 	daos_key_t		dkey;
-	uint64_t        	cond = 0;
+	uint64_t		cond = 0;
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
