@@ -40,10 +40,10 @@ import (
 // Results will be provided for each rank (member) managed by harness.
 // Single gRPC sent over management network per harness (not per rank).
 type HarnessClient interface {
-	Query(context.Context, string, ...uint32) (system.MemberResults, error)
-	PrepShutdown(context.Context, string, ...uint32) (system.MemberResults, error)
-	Stop(context.Context, string, bool, ...uint32) (system.MemberResults, error)
-	Start(context.Context, string, ...uint32) (system.MemberResults, error)
+	Query(context.Context, string, ...system.Rank) (system.MemberResults, error)
+	PrepShutdown(context.Context, string, ...system.Rank) (system.MemberResults, error)
+	Stop(context.Context, string, bool, ...system.Rank) (system.MemberResults, error)
+	Start(context.Context, string, ...system.Rank) (system.MemberResults, error)
 }
 
 // harnessClient implements the HarnessClient interface.
@@ -56,7 +56,7 @@ type harnessClient struct {
 type harnessCall func(context.Context, string, mgmtpb.RanksReq) (*mgmtpb.RanksResp, error)
 
 // prepareRequest will populate an MgmtSvcClient if missing and return RanksReq.
-func (hc *harnessClient) prepareRequest(ranks []uint32, force bool) (*mgmtpb.RanksReq, error) {
+func (hc *harnessClient) prepareRequest(ranks []system.Rank, force bool) (*mgmtpb.RanksReq, error) {
 	if hc.client == nil {
 		mi, err := hc.localHarness.GetMSLeaderInstance()
 		if err != nil {
@@ -69,7 +69,8 @@ func (hc *harnessClient) prepareRequest(ranks []uint32, force bool) (*mgmtpb.Ran
 		return nil, errors.New("number of of ranks exceeds maximum")
 	}
 
-	return &mgmtpb.RanksReq{Ranks: ranks, Force: force}, nil
+	req := &mgmtpb.RanksReq{Force: force}
+	return req, req.SetSystemRanks(ranks)
 }
 
 // call issues gRPC to remote harness using a supplied client function to the
@@ -105,7 +106,7 @@ func (hc *harnessClient) call(ctx context.Context, addr string, rpcReq *mgmtpb.R
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...system.Rank) (system.MemberResults, error) {
 	rpcReq, err := hc.prepareRequest(ranks, false)
 	if err != nil {
 		return nil, err
@@ -120,7 +121,7 @@ func (hc *harnessClient) Query(ctx context.Context, addr string, ranks ...uint32
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ...system.Rank) (system.MemberResults, error) {
 	rpcReq, err := hc.prepareRequest(ranks, false)
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ func (hc *harnessClient) PrepShutdown(ctx context.Context, addr string, ranks ..
 // if they are being managed by the remote control server.
 //
 // Ranks will be forcefully stopped if the force parameter is specified.
-func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, ranks ...system.Rank) (system.MemberResults, error) {
 	rpcReq, err := hc.prepareRequest(ranks, force)
 	if err != nil {
 		return nil, err
@@ -150,7 +151,7 @@ func (hc *harnessClient) Stop(ctx context.Context, addr string, force bool, rank
 //
 // Results are returned for the ranks specified in the input parameter
 // if they are being managed by the remote control server.
-func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...uint32) (system.MemberResults, error) {
+func (hc *harnessClient) Start(ctx context.Context, addr string, ranks ...system.Rank) (system.MemberResults, error) {
 	rpcReq, err := hc.prepareRequest(ranks, false)
 	if err != nil {
 		return nil, err

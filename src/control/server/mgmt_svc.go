@@ -46,9 +46,9 @@ import (
 const instanceUpdateDelay = 500 * time.Millisecond
 
 // NewRankResult returns a reference to a new member result struct.
-func NewRankResult(rank uint32, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
+func NewRankResult(rank system.Rank, action string, state system.MemberState, err error) *mgmtpb.RanksResp_RankResult {
 	result := mgmtpb.RanksResp_RankResult{
-		Rank: rank, Action: action, State: uint32(state),
+		Rank: rank.Uint32(), Action: action, State: uint32(state),
 	}
 	if err != nil {
 		result.Errored = true
@@ -62,7 +62,7 @@ func NewRankResult(rank uint32, action string, state system.MemberState, err err
 //
 // RankResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToRankResult(rank uint32, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
+func drespToRankResult(rank system.Rank, action string, dresp *drpc.Response, err error, tState system.MemberState) *mgmtpb.RanksResp_RankResult {
 	var outErr error
 	state := system.MemberStateErrored
 
@@ -274,7 +274,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			newState = system.MemberStateStarted
 		}
 
-		member := system.NewMember(resp.GetRank(), req.GetUuid(), replyAddr, newState)
+		member := system.NewMember(system.Rank(resp.GetRank()), req.GetUuid(), replyAddr, newState)
 
 		created, oldState := svc.membership.AddOrUpdate(member)
 		if created {
@@ -735,21 +735,24 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 }
 
 // validateInstanceRank checks instance rank in superblock matches supplied list.
-func validateInstanceRank(log logging.Logger, i *IOServerInstance, ranks []uint32) (*uint32, bool) {
-	rank := i.getSuperblock().Rank.Uint32()
+func validateInstanceRank(log logging.Logger, i *IOServerInstance, ranks []system.Rank) (system.Rank, bool) {
+	rank, err := i.GetRank()
+	if err != nil {
+		return system.NilRank, false
+	}
 
 	if len(ranks) == 0 {
-		return &rank, true // no ranks to filter, allow all
+		return rank, true // no ranks to filter, allow all
 	}
 	for _, r := range ranks {
-		if r == rank {
-			return &rank, true
+		if r.Equals(rank) {
+			return rank, true
 		}
 	}
 
 	log.Debugf("validateInstanceRank() skipping rank %d", rank)
 
-	return &rank, false
+	return rank, false
 }
 
 // PrepShutdown implements the method defined for the Management Service.
@@ -773,14 +776,14 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 			return nil, errors.Errorf("instance %d has no superblock", i.Index())
 		}
 
-		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
+		rank, ok := validateInstanceRank(svc.log, i, req.GetSystemRanks())
 		if !ok { // filtered out, no result expected
 			continue
 		}
 
 		if !i.IsStarted() {
 			resp.Results = append(resp.Results,
-				NewRankResult(*rank, "prep shutdown",
+				NewRankResult(rank, "prep shutdown",
 					system.MemberStateStopped, nil))
 			continue
 		}
@@ -788,7 +791,7 @@ func (svc *mgmtSvc) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq)
 		dresp, err := i.CallDrpc(drpc.ModuleMgmt, drpc.MethodPrepShutdown, nil)
 
 		resp.Results = append(resp.Results,
-			drespToRankResult(*rank, "prep shutdown", dresp, err,
+			drespToRankResult(rank, "prep shutdown", dresp, err,
 				system.MemberStateStopping))
 	}
 
@@ -820,13 +823,13 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, errors.Errorf("instance %d has no superblock", i.Index())
 		}
 
-		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
+		rank, ok := validateInstanceRank(svc.log, i, req.GetSystemRanks())
 		if !ok { // filtered out, no result expected
 			continue
 		}
 
 		if !i.IsStarted() { // skip as already stopped
-			svc.log.Debugf("rank %d already stopped", *rank)
+			svc.log.Debugf("rank %d already stopped", rank)
 			continue
 		}
 
@@ -836,7 +839,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 				msg = " (forced)"
 			}
 			svc.log.Error(errors.Wrapf(err,
-				"rank %d stop%s", *rank, msg).Error())
+				"rank %d stop%s", rank, msg).Error())
 		}
 	}
 
@@ -863,16 +866,17 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 		state := system.MemberStateStarted
 		rrErr := errors.Errorf("want %s, got %s", system.MemberStateStopped, state)
 
-		if !i.hasSuperblock() {
-			return nil, errors.Errorf("instance %d has no superblock", i.Index())
-		}
-
 		if !i.IsStarted() {
 			state = system.MemberStateStopped
 			rrErr = nil
 		}
+
+		rank, err := i.GetRank()
+		if err != nil {
+			return nil, err
+		}
 		resp.Results = append(resp.Results,
-			NewRankResult(i.getSuperblock().Rank.Uint32(), "stop", state, rrErr))
+			NewRankResult(rank, "stop", state, rrErr))
 	}
 
 	svc.log.Debugf("MgmtSvc.StopRanks dispatch, resp:%+v\n", *resp)
@@ -880,7 +884,7 @@ func (svc *mgmtSvc) StopRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 	return resp, nil
 }
 
-func ping(i *IOServerInstance, rank uint32, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
+func ping(i *IOServerInstance, rank system.Rank, timeout time.Duration) *mgmtpb.RanksResp_RankResult {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -932,18 +936,18 @@ func (svc *mgmtSvc) PingRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmtp
 			return nil, errors.Errorf("instance %d has no superblock", i.Index())
 		}
 
-		rank, ok := validateInstanceRank(svc.log, i, req.Ranks)
+		rank, ok := validateInstanceRank(svc.log, i, req.GetSystemRanks())
 		if !ok { // filtered out, no result expected
 			continue
 		}
 
 		if !i.IsStarted() {
 			resp.Results = append(resp.Results,
-				NewRankResult(*rank, "ping", system.MemberStateStopped, nil))
+				NewRankResult(rank, "ping", system.MemberStateStopped, nil))
 			continue
 		}
 
-		resp.Results = append(resp.Results, ping(i, *rank, svc.harness.rankReqTimeout))
+		resp.Results = append(resp.Results, ping(i, rank, svc.harness.rankReqTimeout))
 	}
 
 	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
@@ -995,17 +999,16 @@ func (svc *mgmtSvc) StartRanks(ctx context.Context, req *mgmtpb.RanksReq) (*mgmt
 		state := system.MemberStateStopped
 		rrErr := errors.Errorf("want %s, got %s", system.MemberStateStarted, state)
 
-		if !i.hasSuperblock() {
-			return nil, errors.Errorf("instance %d has no superblock", i.Index())
-		}
-
 		if i.IsStarted() {
 			state = system.MemberStateStarted
 			rrErr = nil
 		}
-		resp.Results = append(resp.Results,
-			NewRankResult(i.getSuperblock().Rank.Uint32(), "start",
-				state, rrErr))
+
+		rank, err := i.GetRank()
+		if err != nil {
+			return nil, err
+		}
+		resp.Results = append(resp.Results, NewRankResult(rank, "start", state, rrErr))
 	}
 
 	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)

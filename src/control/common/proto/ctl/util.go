@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package mgmt
+package ctl
 
 import (
 	"errors"
@@ -29,42 +29,14 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// SetPropertyName sets the Property field to a string-based name.
-func (r *PoolSetPropReq) SetPropertyName(name string) {
-	r.Property = &PoolSetPropReq_Name{
-		Name: name,
-	}
-}
-
-// SetPropertyNumber sets the Property field to a uint32-based number.
-func (r *PoolSetPropReq) SetPropertyNumber(number uint32) {
-	r.Property = &PoolSetPropReq_Number{
-		Number: number,
-	}
-}
-
-// SetValueString sets the Value field to a string.
-func (r *PoolSetPropReq) SetValueString(strVal string) {
-	r.Value = &PoolSetPropReq_Strval{
-		Strval: strVal,
-	}
-}
-
-// SetValueNumber sets the Value field to a uint64.
-func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
-	r.Value = &PoolSetPropReq_Numval{
-		Numval: numVal,
-	}
-}
-
-func (m *RanksReq) SetSystemRanks(sysRanks []system.Rank) error {
+func (m *SystemQueryReq) SetSystemRanks(sysRanks []system.Rank) error {
 	if m == nil {
 		return errors.New("nil request")
 	}
 	return convert.Types(sysRanks, &m.Ranks)
 }
 
-func (m *RanksReq) GetSystemRanks() []system.Rank {
+func (m *SystemQueryReq) GetSystemRanks() []system.Rank {
 	if m != nil {
 		var sysRanks []system.Rank
 		if err := convert.Types(m.GetRanks(), &sysRanks); err == nil {

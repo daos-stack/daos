@@ -33,7 +33,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -398,11 +397,11 @@ func (h *IOServerHarness) IsStarted() bool {
 
 // StartedRanks returns rank assignment of configured harness instances that are
 // in a running state. Rank assignments can be nil.
-func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
+func (h *IOServerHarness) StartedRanks() []*system.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*ioserver.Rank, 0, maxIOServers)
+	ranks := make([]*system.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
 		if i.hasSuperblock() && i.IsStarted() {
 			ranks = append(ranks, i.getSuperblock().Rank)

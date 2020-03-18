@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -269,6 +269,20 @@ func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	}
 }
 
+// GetRank returns a non-nil rank if set in the superblock, or an error.
+func (srv *IOServerInstance) GetRank() (system.Rank, error) {
+	sb := srv.getSuperblock()
+	if sb == nil {
+		return system.NilRank, errors.New("nil superblock in GetRank()")
+	}
+
+	if sb.Rank.Equals(system.NilRank) {
+		return system.NilRank, errors.New("nil rank in GetRank()")
+	}
+
+	return *sb.Rank, nil
+}
+
 // SetRank determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
 func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
@@ -277,7 +291,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		return errors.New("nil superblock in SetRank()")
 	}
 
-	r := ioserver.NilRank
+	r := system.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
 	}
@@ -295,10 +309,10 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		} else if resp.State == mgmtpb.JoinResp_OUT {
 			return errors.Errorf("rank %d excluded", resp.Rank)
 		}
-		r = ioserver.Rank(resp.Rank)
+		r = system.Rank(resp.Rank)
 
 		if !superblock.ValidRank {
-			superblock.Rank = new(ioserver.Rank)
+			superblock.Rank = new(system.Rank)
 			*superblock.Rank = r
 			superblock.ValidRank = true
 			srv.setSuperblock(superblock)
@@ -315,7 +329,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
+func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
 	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
@@ -489,6 +503,10 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(sb.Rank.Uint32(), sb.UUID, addr,
-		system.MemberStateStarted), nil
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil, err
+	}
+
+	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
 }

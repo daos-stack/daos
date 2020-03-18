@@ -38,7 +38,7 @@ import (
 const systemReqTimeout = 30 * time.Second
 
 // reportStoppedRanks populates relevant rank results indicating stopped state.
-func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
+func (svc *ControlService) reportStoppedRanks(action string, ranks []system.Rank, err error) system.MemberResults {
 	results := make(system.MemberResults, 0, len(ranks))
 	for _, rank := range ranks {
 		results = append(results,
@@ -61,11 +61,12 @@ func (svc *ControlService) getMSMemberAddress() (string, error) {
 		return "", errors.New("MS instance not found")
 	}
 
-	if !msInstance.hasSuperblock() {
-		return "", errors.New("MS instance has no superblock")
+	msRank, err := msInstance.GetRank()
+	if err != nil {
+		return "", errors.Wrap(err, "MS instance has bad rank")
 	}
 
-	msMember, err := svc.membership.Get(msInstance.getSuperblock().Rank.Uint32())
+	msMember, err := svc.membership.Get(msRank)
 	if err != nil {
 		return "", errors.WithMessage(err, "retrieving MS member")
 	}
@@ -90,7 +91,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	// - members unresponsive to ping
 	// - members with stopped processes
 	// TODO: update members with ping errors
-	badRanks := make(map[uint32]system.MemberState)
+	badRanks := make(map[system.Rank]system.MemberState)
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
@@ -153,7 +154,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	}
 
 	members := svc.membership.Members()
-	ranks := req.GetRanks()
+	ranks := req.GetSystemRanks()
 	if len(ranks) != 0 {
 		members = make(system.Members, 0, len(ranks))
 		for _, rank := range ranks {

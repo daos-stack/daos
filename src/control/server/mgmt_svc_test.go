@@ -1800,7 +1800,7 @@ func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
 }
 
 func TestMgmtSvc_DrespToRankResult(t *testing.T) {
-	dRank := uint32(1)
+	dRank := system.Rank(1)
 	dStateGood := system.MemberStateStarted
 	dStateBad := system.MemberStateErrored
 
@@ -1813,27 +1813,27 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 	}{
 		"rank success": {
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateGood),
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateGood),
 			},
 		},
 		"rank failure": {
 			daosResp: &mgmtpb.DaosResp{Status: -1},
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRpc: true,
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
 			},
 		},
@@ -1964,8 +1964,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 						ioserver.NewConfig())
 				}
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2106,8 +2106,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 						ioserver.NewConfig())
 				}
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2259,8 +2259,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 						ioserver.NewConfig())
 				}
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2319,7 +2319,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			missingSB:        true,
 			instancesStopped: true,
 			req:              &mgmtpb.RanksReq{},
-			expErr:           errors.New("instance 0 has no superblock"),
+			expErr:           errors.New("nil superblock"),
 		},
 		"instances started": {
 			req:    &mgmtpb.RanksReq{},
@@ -2363,8 +2363,8 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 						ioserver.NewConfig())
 				}
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond
