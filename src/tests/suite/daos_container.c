@@ -28,6 +28,8 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_test.h"
 
+#define TEST_MAX_ATTR_LEN	(128)
+
 /** create/destroy container */
 static void
 co_create(void **state)
@@ -1881,6 +1883,157 @@ co_owner_implicit_access(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	const char	*name = "AttrName";
+	const char	*value = "This is the value";
+	const size_t	 size = strnlen(value, TEST_MAX_ATTR_LEN);
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		/* Trivial case - just to see if we have access */
+		rc = daos_cont_set_attr(arg->coh, 1, &name,
+					(const void * const*)&value,
+					&size,
+					NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	const char	*name = "AttrName";
+	size_t		 val_size = TEST_MAX_ATTR_LEN;
+	char		 value[val_size];
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		/* Trivial case - just to see if we have access */
+		rc = daos_cont_get_attr(arg->coh, 1, &name,
+					(void * const*)&value,
+					&val_size,
+					NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+expect_co_list_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
+{
+	daos_prop_t	*cont_prop;
+	int		 rc = 0;
+	char		 buf[TEST_MAX_ATTR_LEN];
+	size_t		 bufsize = sizeof(buf);
+
+	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
+						       DAOS_PROP_CO_ACL);
+
+	arg->cont_open_flags = DAOS_COO_RO;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL,
+					  cont_prop);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_list_attr(arg->coh, buf, &bufsize, NULL);
+		assert_int_equal(rc, exp_result);
+	}
+
+	daos_prop_free(cont_prop);
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_attribute_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			DEFAULT_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Set attr denied with no write-data perms\n");
+	expect_co_set_attr_access(arg,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_WRITE,
+				  -DER_NO_PERM);
+
+	print_message("Set attr allowed with RW data access\n");
+	expect_co_set_attr_access(arg, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				  0);
+
+	print_message("Set attr allowed with write-data access\n");
+	expect_co_set_attr_access(arg, DAOS_ACL_PERM_GET_PROP |
+				  DAOS_ACL_PERM_WRITE,
+				  0);
+
+	print_message("Get attr denied with no read-data perms\n");
+	expect_co_get_attr_access(arg,
+				  DAOS_ACL_PERM_CONT_ALL &
+				  ~DAOS_ACL_PERM_READ,
+				  -DER_NO_PERM);
+
+	print_message("Get attr allowed with RW access\n");
+	/* Attr isn't set, but we get past the permissions check */
+	expect_co_get_attr_access(arg,
+				  DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				  -DER_NONEXIST);
+
+	print_message("Get attr allowed with RO data access\n");
+	/* Attr isn't set, but we get past the permissions check */
+	expect_co_get_attr_access(arg, DAOS_ACL_PERM_READ,
+				  -DER_NONEXIST);
+
+	print_message("List attr denied with no read-data perms\n");
+	expect_co_list_attr_access(arg,
+				   DAOS_ACL_PERM_CONT_ALL &
+				   ~DAOS_ACL_PERM_READ,
+				   -DER_NO_PERM);
+
+	print_message("List attr allowed with RW access\n");
+	expect_co_list_attr_access(arg,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   0);
+
+	print_message("List attr allowed with RO data access\n");
+	expect_co_list_attr_access(arg, DAOS_ACL_PERM_READ,
+				   0);
+
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -1947,6 +2100,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_destroy_force, NULL, test_case_teardown},
 	{ "CONT21: container owner has implicit ACL access",
 	  co_owner_implicit_access, NULL, test_case_teardown},
+	{ "CONT22: container get/set attribute access by ACL",
+	  co_attribute_access, NULL, test_case_teardown},
 };
 
 int
