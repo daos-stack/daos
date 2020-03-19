@@ -68,6 +68,10 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
+!!! warning
+    VFIO support is currently planned for DAOS 1.2 and won't work until
+    we move to SPDK 20.01.1
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -264,6 +268,23 @@ preserved for future use.
 The generated keys and certificates must then be securely distributed to all nodes participating
 in the DAOS system (servers, clients, and admin nodes). Permissions for these files should
 be set to prevent unauthorized access to the keys and certificates.
+
+Client nodes require:
+- CA root cert
+- Agent cert
+- Agent key
+
+Administrative nodes require:
+- CA root cert
+- Admin cert
+- Admin key
+
+Server nodes require:
+- CA root cert
+- Server cert
+- Server key
+- All valid agent certs in the DAOS system (in the client cert directory, see
+  config file below)
 
 After the certificates have been securely distributed, the DAOS configuration files must be
 updated in order to enable authentication and secure communications. These examples assume
