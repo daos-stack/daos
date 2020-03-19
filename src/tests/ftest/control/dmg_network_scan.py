@@ -97,7 +97,7 @@ class DmgNetworkScanTest(TestWithServers):
                 if prov not in providers:
                     providers.append(prov)
 
-        return providers[0]
+        return providers
 
     def test_dmg_network_scan_basic(self):
         """
