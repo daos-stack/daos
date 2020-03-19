@@ -45,7 +45,7 @@ from server_utils import run_server, stop_server
 from write_host_file import write_host_file
 from test_utils_pool import TestPool
 
-NO_OF_MAX_CONTAINER = 14286
+NO_OF_MAX_CONTAINER = 13034
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.

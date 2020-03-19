@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -458,7 +458,9 @@ dfs_test_short_read(void **state)
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	rc = dfs_release(obj);
-	dfs_test_file_del(name);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		dfs_test_file_del(name);
 
 	D_FREE(wbuf);
 	for (i = 0; i < NUM_SEGS; i++)
@@ -476,11 +478,10 @@ check_one_success(int rc, int err, MPI_Comm comm)
 	MPI_Comm_size(comm, &mpi_size);
 	MPI_Comm_rank(comm, &mpi_rank);
 
-	rc_arr = calloc(sizeof(int), mpi_size);
+	D_ALLOC_ARRAY(rc_arr, mpi_size);
 	assert_non_null(rc_arr);
 
-	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, mpi_size, MPI_INT, comm);
-
+	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, 1, MPI_INT, comm);
 	passed = expect_fail = failed = 0;
 	for (i = 0; i < mpi_size; i++) {
 		if (rc_arr[i] == 0)
@@ -495,7 +496,8 @@ check_one_success(int rc, int err, MPI_Comm comm)
 
 	if (failed || passed != 1)
 		return -1;
-	assert_int_equal(expect_fail + passed, mpi_size);
+	if ((expect_fail + passed) != mpi_size)
+		return -1;
 	return 0;
 }
 
@@ -506,19 +508,19 @@ dfs_test_cond(void **state)
 	dfs_obj_t		*file;
 	char			*filename = "cond_testfile";
 	char			*dirname = "cond_testdir";
-	int			rc;
+	int			rc, op_rc;
 
 	if (arg->myrank == 0)
 		print_message("All ranks create the same file with O_EXCL\n");
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+	op_rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
-	rc = check_one_success(rc, EEXIST, MPI_COMM_WORLD);
-	if (rc)
-		print_error("Failed concurrent file creation\n");
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
-	rc = dfs_release(file);
-	assert_int_equal(rc, 0);
+	if (op_rc == 0) {
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0)

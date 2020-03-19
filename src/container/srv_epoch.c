@@ -136,11 +136,22 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	if (epoch >= DAOS_EPOCH_MAX)
-		return -DER_INVAL;
-	else if (in->cei_epoch == 0)
-		epoch = crt_hlc_get();
+	/* Verify handle has write access */
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to aggregate\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
+	if (epoch >= DAOS_EPOCH_MAX) {
+		rc = -DER_INVAL;
+		goto out;
+	} else if (in->cei_epoch == 0) {
+		epoch = crt_hlc_get();
+	}
+
+out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		epoch, rc);
@@ -283,8 +294,10 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
-	/* Verify the container handle capabilities. */
+	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to create snapshot\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		rc = -DER_NO_PERM;
 		goto out;
 	}
@@ -316,6 +329,14 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		rpc, in->cei_epoch);
+
+	/* Verify the handle has write access */
+	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to delete snapshot\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
 	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
 	rc = rdb_tx_delete(tx, &cont->c_snaps, &key);
@@ -357,6 +378,15 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid),
 		rpc, DP_UUID(in->sli_op.ci_hdl));
+
+	/* Verify the handle has read access */
+	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
+		D_ERROR(DF_CONT": permission denied to list snapshots\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
 	/*
 	 * If remote bulk handle does not exist, only aggregate size is sent.
 	 */
