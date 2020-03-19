@@ -1562,6 +1562,7 @@ pipeline {
                         always {
                             junit 'maldetect.xml'
                         }
+                    }
                 } // stage('Scan CentOS 7 RPMs')
             }
         }
