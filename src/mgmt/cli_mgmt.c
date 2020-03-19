@@ -375,6 +375,10 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
+		D_DEBUG(DB_MGMT,
+			"GetAttachInfo Provider: %s, CRT_CTX_SHARE_ADDR: %d,\
+			CRT_TIMEOUT: %d\n", sy_info->provider,
+			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
 	}
 
 out_resp:
