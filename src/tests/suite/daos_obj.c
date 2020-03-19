@@ -3306,15 +3306,15 @@ punch_then_lookup(void **state)
 static void
 punch_enum_then_verify_record_count(void **state)
 {
-	daos_obj_id_t	 oid;
-	test_arg_t		*arg = *state;
+	daos_obj_id_t	oid;
+	test_arg_t	*arg = *state;
 	struct ioreq	req;
 	daos_anchor_t	anchor;
-	char			data_buf[100];
-	char			fetch_buf[100] = { 0 };
-	int				i;
-	int				total_rec = 0;
-	uint32_t		number;
+	char		data_buf[100];
+	char		fetch_buf[100] = { 0 };
+	int		i;
+	int		total_rec = 0;
+	uint32_t	number;
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -3362,7 +3362,6 @@ punch_enum_then_verify_record_count(void **state)
 	/** Record count should be 2**/
 	assert_int_equal(total_rec, 2);
 	print_message("Number of record after Enumeration = %d\n", total_rec);
-
 }
 
 static void
