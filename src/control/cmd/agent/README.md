@@ -37,7 +37,7 @@ to communicate with the agent.
 
 The protocol used to communicate between the client and the agent is
 [dRPC](/src/control/drpc/README.md). The required dRPC communications are baked
-into the client library and should be invisible to client API users. 
+into the client library and should be invisible to client API users.
 
 The agent acts as a dRPC server exclusively, while the client API acts as a
 dRPC client. The agent does not query the client library. The agent's dRPC
