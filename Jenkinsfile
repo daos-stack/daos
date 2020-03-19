@@ -136,8 +136,8 @@ EOF_GOOD
                        else
                          cat << EOF_BAD > /var/tmp/maldetect.xml
 <testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
-  <testcase name="\\\Malware_scan\\\" classname=\\\"ClamAV\\\">
-    <failure message="\\\Malware Detected\\\" type=\\\"error\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
+    <failure message=\\\"Malware Detected\\\" type=\\\"error\\\">
       <![CDATA[ \\\"\\\$(cat var/tmp/clamscan.out)\\\" ]]>
     </failure>
   </testcase>
