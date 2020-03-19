@@ -20,19 +20,26 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
+// Package code is a central repository for all control plane fault codes.
 package code
 
 // Code represents a stable fault code.
 //
 // NB: All control plane errors should register their codes in the
 // following block in order to avoid conflicts.
+//
+// Also note that new codes should always be added at the bottom of
+// their respective blocks. This ensures stability of fault codes
+// over time.
 type Code int
 
 const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	PrivilegedHelperNotPrivileged
+	PrivilegedHelperNotAvailable
+	PrivilegedHelperRequestFailed
 
 	// generic storage fault codes
 	StorageUnknown Code = iota + 100
@@ -63,12 +70,12 @@ const (
 	SystemMemberMissing
 	SystemMemberChanged
 
-	// Client fault codes
+	// client fault codes
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
 
-	// Server fault codes
+	// server fault codes
 	ServerUnknown Code = iota + 600
 	ServerBadConfig
 	ServerNoConfigPath
@@ -76,6 +83,23 @@ const (
 	ServerConfigBadAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoServers
+	ServerScmUnmanaged
+	ServerBdevNotFound
+	ServerConfigDuplicateFabric
+	ServerConfigDuplicateLogFile
+	ServerConfigDuplicateScmMount
+	ServerConfigDuplicateScmDeviceList
+	ServerConfigOverlappingBdevDeviceList
+	ServerIommuDisabled
+	ServerPoolScmTooSmall
+	ServerPoolNvmeTooSmall
+	ServerInsufficientFreeHugePages
+
+	// spdk library bindings codes
+	SpdkUnknown Code = iota + 700
+	SpdkCtrlrNoHealth
+	SpdkBindingRetNull
+	SpdkBindingFailed
 
 	// security fault codes
 	SecurityUnknown Code = iota + 900

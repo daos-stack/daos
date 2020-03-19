@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -51,7 +52,7 @@ func parseResponse(t *testing.T, buf *bytes.Buffer) *pbin.Response {
 	return &res
 }
 
-func TestHandler(t *testing.T) {
+func TestDaosAdmin_Handler(t *testing.T) {
 	testTarget, err := ioutil.TempDir("", t.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestHandler(t *testing.T) {
 	defer os.RemoveAll(testTarget)
 
 	nilPayloadResp := &pbin.Response{
-		Error: &pbin.RequestFailure{Message: "unexpected end of JSON input"},
+		Error: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
 	}
 	successResp := &pbin.Response{}
 	mountReqPayload, err := json.Marshal(scm.MountRequest{
@@ -142,8 +143,14 @@ func TestHandler(t *testing.T) {
 				Method: "OopsKaboom",
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: `unhandled method "OopsKaboom"`},
+				Error: pbin.PrivilegedHelperRequestFailed(`unhandled method "OopsKaboom"`),
 			},
+		},
+		"Ping": {
+			req: &pbin.Request{
+				Method: "Ping",
+			},
+			expRes: successResp,
 		},
 		"ScmMount nil payload": {
 			req: &pbin.Request{
@@ -167,7 +174,7 @@ func TestHandler(t *testing.T) {
 				MountErr: errors.New("mount failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "mount failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("mount failed"),
 			},
 		},
 		"ScmUnmount nil payload": {
@@ -192,7 +199,7 @@ func TestHandler(t *testing.T) {
 				UnmountErr: errors.New("unmount failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "unmount failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("unmount failed"),
 			},
 		},
 		"ScmFormat nil payload": {
@@ -217,7 +224,7 @@ func TestHandler(t *testing.T) {
 				MountErr: errors.New("mount failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "mount failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("mount failed"),
 			},
 		},
 		"ScmCheckFormat nil payload": {
@@ -242,7 +249,7 @@ func TestHandler(t *testing.T) {
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "scan failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
 			},
 		},
 		"ScmPrepare nil payload": {
@@ -267,7 +274,7 @@ func TestHandler(t *testing.T) {
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "scan failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
 			},
 		},
 		"ScmScan nil payload": {
@@ -292,7 +299,7 @@ func TestHandler(t *testing.T) {
 				DiscoverErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "scan failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
 			},
 		},
 		"BdevInit nil payload": {
@@ -317,7 +324,7 @@ func TestHandler(t *testing.T) {
 				InitErr: errors.New("init failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "init failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("init failed"),
 			},
 		},
 		"BdevScan nil payload": {
@@ -342,7 +349,7 @@ func TestHandler(t *testing.T) {
 				ScanErr: errors.New("scan failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "scan failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("scan failed"),
 			},
 		},
 		"BdevPrepare nil payload": {
@@ -367,7 +374,7 @@ func TestHandler(t *testing.T) {
 				PrepareErr: errors.New("prepare failed"),
 			},
 			expRes: &pbin.Response{
-				Error: &pbin.RequestFailure{Message: "prepare failed"},
+				Error: pbin.PrivilegedHelperRequestFailed("prepare failed"),
 			},
 		},
 		"BdevFormat nil payload": {
@@ -411,15 +418,23 @@ func TestHandler(t *testing.T) {
 				// We don't need to check the payload details here; we just
 				// want to check that a response came back and that the Error
 				// field was what we expected.
-				common.CmpErr(t, tc.expRes.Error, gotRes.Error)
+				wantErr := tc.expRes.Error
+				gotErr := gotRes.Error
+				if gotErr == wantErr {
+					return
+				}
+				if (gotErr == nil || wantErr == nil) ||
+					!strings.Contains(gotErr.Description, wantErr.Description) {
+					t.Fatalf("unexpected error: wanted %s, got %s", wantErr, gotErr)
+				}
 			}
 		})
 	}
 }
 
-func TestReadRequest(t *testing.T) {
+func TestDaosAdmin_ReadRequest(t *testing.T) {
 	alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	giantPayload := make([]byte, pbin.MaxMessageSize)
+	giantPayload := make([]byte, (pbin.MessageBufferSize*5)+1)
 	for i := 0; i < len(giantPayload); i++ {
 		giantPayload[i] = alnum[rand.Intn(len(alnum))]
 	}
@@ -439,19 +454,15 @@ func TestReadRequest(t *testing.T) {
 				Method:  "too big to fail",
 				Payload: append(append([]byte(`{"foo":"`), giantPayload...), []byte(`"}`)...),
 			},
-			expErr: errors.New("unexpected end of JSON input"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
 			data, err := json.Marshal(tc.req)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			gotReq, gotErr := readRequest(log, bytes.NewBuffer(data))
+			gotReq, gotErr := readRequest(bytes.NewBuffer(data))
 			common.CmpErr(t, tc.expErr, gotErr)
 
 			if diff := cmp.Diff(tc.req, gotReq); gotErr == nil && diff != "" {

@@ -9,7 +9,7 @@ timeout: 700
 pool:
   control_method: dmg
   mode: 511
-  size: 1073741824
+  scm_size: 1073741824
   name: daos_server
 connecttests:
    connectmode: !mux

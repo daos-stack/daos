@@ -57,6 +57,34 @@ daos_prop_alloc(uint32_t entries_nr)
 	return prop;
 }
 
+static void
+daos_prop_entry_free_value(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
+	case DAOS_PROP_PO_LABEL:
+	case DAOS_PROP_CO_LABEL:
+	case DAOS_PROP_PO_OWNER:
+	case DAOS_PROP_CO_OWNER:
+	case DAOS_PROP_PO_OWNER_GROUP:
+	case DAOS_PROP_CO_OWNER_GROUP:
+		if (entry->dpe_str)
+			D_FREE(entry->dpe_str);
+		break;
+	case DAOS_PROP_PO_ACL:
+	case DAOS_PROP_CO_ACL:
+		if (entry->dpe_val_ptr)
+			D_FREE(entry->dpe_val_ptr);
+		break;
+	case DAOS_PROP_PO_SVC_LIST:
+		if (entry->dpe_val_ptr)
+			d_rank_list_free(
+				(d_rank_list_t *)entry->dpe_val_ptr);
+		break;
+	default:
+		break;
+	};
+}
+
 void
 daos_prop_free(daos_prop_t *prop)
 {
@@ -73,28 +101,75 @@ daos_prop_free(daos_prop_t *prop)
 		struct daos_prop_entry *entry;
 
 		entry = &prop->dpp_entries[i];
-		switch (entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-		case DAOS_PROP_CO_LABEL:
-		case DAOS_PROP_PO_OWNER:
-		case DAOS_PROP_CO_OWNER:
-		case DAOS_PROP_PO_OWNER_GROUP:
-		case DAOS_PROP_CO_OWNER_GROUP:
-			if (entry->dpe_str)
-				D_FREE(entry->dpe_str);
-			break;
-		case DAOS_PROP_PO_ACL:
-		case DAOS_PROP_CO_ACL:
-			if (entry->dpe_val_ptr)
-				D_FREE(entry->dpe_val_ptr);
-			break;
-		default:
-			break;
-		};
+		daos_prop_entry_free_value(entry);
 	}
 
 	D_FREE(prop->dpp_entries);
 	D_FREE_PTR(prop);
+}
+
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+{
+	daos_prop_t		*result;
+	int			rc;
+	uint32_t		result_nr;
+	uint32_t		i, result_i;
+	struct daos_prop_entry	*entry;
+
+	if (old_prop == NULL || new_prop == NULL) {
+		D_ERROR("NULL input\n");
+		return NULL;
+	}
+
+	/*
+	 * We might override some values in the old prop. Need to account for
+	 * that in the final prop count.
+	 */
+	result_nr = old_prop->dpp_nr;
+	for (i = 0; i < new_prop->dpp_nr; i++) {
+		entry = daos_prop_entry_get(old_prop,
+					    new_prop->dpp_entries[i].dpe_type);
+		if (entry == NULL) /* New entry isn't a duplicate of old */
+			result_nr++;
+	}
+
+	result = daos_prop_alloc(result_nr);
+	if (result == NULL)
+		return NULL;
+
+	if (result->dpp_nr == 0) /* Nothing more to do */
+		return result;
+
+	result_i = 0;
+	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
+		rc = daos_prop_entry_copy(&old_prop->dpp_entries[i],
+					  &result->dpp_entries[result_i]);
+		if (rc != 0)
+			goto err;
+	}
+
+	/*
+	 * Either add or update based on the values of the new prop entries
+	 */
+	for (i = 0; i < new_prop->dpp_nr; i++) {
+		entry = daos_prop_entry_get(result,
+					    new_prop->dpp_entries[i].dpe_type);
+		if (entry == NULL) {
+			D_ASSERT(result_i < result_nr);
+			entry = &result->dpp_entries[result_i];
+			result_i++;
+		}
+		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
+		if (rc != 0)
+			goto err;
+	}
+
+	return result;
+
+err:
+	daos_prop_free(result);
+	return NULL;
 }
 
 static bool
@@ -238,6 +313,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			break;
 		/* container-only properties */
+		case DAOS_PROP_PO_SVC_LIST:
+			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
@@ -302,6 +379,70 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	return true;
 }
 
+int
+daos_prop_entry_copy(struct daos_prop_entry *entry,
+		     struct daos_prop_entry *entry_dup)
+{
+	struct daos_acl		*acl_ptr;
+	const d_rank_list_t	*svc_list;
+	d_rank_list_t		*dst_list;
+	int			rc;
+
+	D_ASSERT(entry != NULL);
+	D_ASSERT(entry_dup != NULL);
+
+	/* Clean up the entry we're copying to, first */
+	daos_prop_entry_free_value(entry_dup);
+
+	entry_dup->dpe_type = entry->dpe_type;
+	switch (entry->dpe_type) {
+	case DAOS_PROP_PO_LABEL:
+	case DAOS_PROP_CO_LABEL:
+		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (entry_dup->dpe_str == NULL) {
+			D_ERROR("failed to dup label.\n");
+			return -DER_NOMEM;
+		}
+		break;
+	case DAOS_PROP_PO_ACL:
+	case DAOS_PROP_CO_ACL:
+		acl_ptr = entry->dpe_val_ptr;
+		entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
+		if (entry_dup->dpe_val_ptr == NULL) {
+			D_ERROR("failed to dup ACL\n");
+			return -DER_NOMEM;
+		}
+		break;
+	case DAOS_PROP_PO_OWNER:
+	case DAOS_PROP_CO_OWNER:
+	case DAOS_PROP_PO_OWNER_GROUP:
+	case DAOS_PROP_CO_OWNER_GROUP:
+		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		if (entry_dup->dpe_str == NULL) {
+			D_ERROR("failed to dup ownership info.\n");
+			return -DER_NOMEM;
+		}
+		break;
+	case DAOS_PROP_PO_SVC_LIST:
+		svc_list = entry->dpe_val_ptr;
+
+		rc = d_rank_list_dup(&dst_list, svc_list);
+		if (rc) {
+			D_ERROR("failed dup rank list\n");
+			return rc;
+		}
+		entry_dup->dpe_val_ptr = dst_list;
+		break;
+	default:
+		entry_dup->dpe_val = entry->dpe_val;
+		break;
+	}
+
+	return 0;
+}
+
 /**
  * duplicate the properties
  * \a pool true for pool properties, false for container properties.
@@ -312,7 +453,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
-	struct daos_acl		*acl_ptr;
+	int			 rc;
 
 	if (!daos_prop_valid(prop, pool, true))
 		return NULL;
@@ -324,43 +465,10 @@ daos_prop_dup(daos_prop_t *prop, bool pool)
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
 		entry_dup = &prop_dup->dpp_entries[i];
-		entry_dup->dpe_type = entry->dpe_type;
-		switch (entry->dpe_type) {
-		case DAOS_PROP_PO_LABEL:
-		case DAOS_PROP_CO_LABEL:
-			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
-				  DAOS_PROP_LABEL_MAX_LEN);
-			if (entry_dup->dpe_str == NULL) {
-				D_ERROR("failed to dup label.\n");
-				daos_prop_free(prop_dup);
-				return NULL;
-			}
-			break;
-		case DAOS_PROP_PO_ACL:
-		case DAOS_PROP_CO_ACL:
-			acl_ptr = entry->dpe_val_ptr;
-			entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
-			if (entry_dup->dpe_val_ptr == NULL) {
-				D_ERROR("failed to dup ACL\n");
-				daos_prop_free(prop_dup);
-				return NULL;
-			}
-			break;
-		case DAOS_PROP_PO_OWNER:
-		case DAOS_PROP_CO_OWNER:
-		case DAOS_PROP_PO_OWNER_GROUP:
-		case DAOS_PROP_CO_OWNER_GROUP:
-			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
-				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (entry_dup->dpe_str == NULL) {
-				D_ERROR("failed to dup ownership info.\n");
-				daos_prop_free(prop_dup);
-				return NULL;
-			}
-			break;
-		default:
-			entry_dup->dpe_val = entry->dpe_val;
-			break;
+		rc = daos_prop_entry_copy(entry, entry_dup);
+		if (rc != 0) {
+			daos_prop_free(prop_dup);
+			return NULL;
 		}
 	}
 
@@ -422,7 +530,9 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 acl_alloc = false;
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
+	bool			 svc_list_alloc = false;
 	struct daos_acl		*acl;
+	d_rank_list_t		*dst_list;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
@@ -482,6 +592,14 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			if (entry_req->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			group_alloc = true;
+		} else if (type == DAOS_PROP_PO_SVC_LIST) {
+			d_rank_list_t *svc_list = entry_reply->dpe_val_ptr;
+
+			rc = d_rank_list_dup(&dst_list, svc_list);
+			if (rc)
+				D_GOTO(out, rc);
+			svc_list_alloc = true;
+			entry_req->dpe_val_ptr = dst_list;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -505,9 +623,14 @@ out:
 			free_str_prop_entry(prop_req, DAOS_PROP_PO_OWNER_GROUP);
 			free_str_prop_entry(prop_req, DAOS_PROP_CO_OWNER_GROUP);
 		}
-		if (entries_alloc) {
-			D_FREE(prop_req->dpp_entries);
+		if (svc_list_alloc) {
+			entry_req = daos_prop_entry_get(prop_req,
+						DAOS_PROP_PO_SVC_LIST);
+			d_rank_list_free(entry_req->dpe_val_ptr);
 		}
+
+		if (entries_alloc)
+			D_FREE(prop_req->dpp_entries);
 	}
 	return rc;
 }

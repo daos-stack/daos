@@ -18,6 +18,10 @@ $ dmg pool create --scm-size=xxG --nvme-size=yyT
 
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
+The actual space allocated will be a base-2 representation for SCM
+(i.e. 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
+representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
+bytes) following convention of units for memory and storage capacity.
 The UUID allocated to the newly created pool is printed to stdout
 (referred as ${puuid}) as well as the rank where the pool service is
 located (referred as ${svcl}).
@@ -102,77 +106,22 @@ be provided in a future release.
 
 ## Pool Access Control Lists
 
-User and group access for pools is controlled by Access Control Lists (ACLs).
-A DAOS ACL is a list of zero or more Access Control Entries (ACEs). ACEs are
-the individual rules applied to each access decision.
+Client user and group access for pools is controlled by 
+[Access Control Lists (ACLs)](/doc/user/acl.md). Most pool-related tasks are
+performed using the DMG administrative tool, which is authenticated by the
+administrative certificate rather than user-specific credentials.
 
-If no ACL is provided when creating the pool, the default ACL grants read and
-write access to the pool's owner-user and owner-group.
+Access-controlled client pool accesses include:
+* Connecting to the pool.
+* Querying the pool.
+* Creating containers in the pool.
+* Deleting containers in the pool.
 
-### Access Control Entries
+This is reflected in the set of supported 
+[pool permissions](/doc/user/acl.md#permissions).
 
-ACEs are designated by a colon-separated string format:
-`TYPE:FLAGS:IDENTITY:PERMISSIONS`
-
-Available values for these fields:
-
-* TYPE: Allow (A)
-* FLAGS: Group (G)
-* IDENTITY: See below
-* PERMISSIONS: Read (r), Write (w)
-
-#### Identity
-
-The identity (also called the principal) is specified in the name@domain format.
-The domain should be left off if the name is a user/group on the local domain.
-Currently, this is the only case supported by DAOS.
-
-There are three special identities, `OWNER@`, `GROUP@` and `EVERYONE@`,
-which align with User, Group, and Other from traditional POSIX permission bits.
-When providing them in the ACE string format, they must be spelled exactly as
-written here, in uppercase with no domain appended.
-
-#### Examples
-
-* `A::daos_user@:rw`
-  * Allow the UNIX user named daos_user to have read-write access
-* `A:G:project_users@:r`
-  * Allow anyone in the UNIX group project_users to have read-only access
-* `A::EVERYONE@:r`
-  * Allow any user not covered by other rules to have read-only access
-
-### Enforcement
-
-Access Control Entries (ACEs) will be enforced in the following order:
-
-* Owner-User
-* Named users
-* Owner-Group and named groups
-* Everyone
-
-In general, enforcement will be based on the first match, ignoring
-lower-priority entries. For example, if the user has an ACE for their user
-identity, they will not receive the permissions for any of their groups, even if
-those group entries have broader permissions than the user entry does. The user
-is expected to match at most one user entry.
-
-If no matching user entry is found, but entries match one or more of the user's
-groups, enforcement will be based on the union of the permissions of all
-matching groups.
-
-By default, if a user matches no ACEs in the list, access will be denied.
-
-### Limitations
-
-The maximum length of the ACE list in a DAOS ACL structure is 64KiB.
-
-To calculate the actual length of an ACL, use the following formula for each
-ACE:
-
-* The base size of an ACE is 256B.
-* If the ACE principal is *not* one of the special principals:
-  * Add the length of the identity string + 1.
-  * If that value is not 64B aligned, round up to the nearest 64B boundary.
+A user must be able to connect to the pool in order to access any containers
+inside, regardless of their permissions on those containers.
 
 ### Creating a pool with a custom ACL
 
@@ -182,18 +131,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
-The ACL file is expected to be a text file with one ACE listed on each line. For
-example:
-
-```bash
-# Entries:
-A::OWNER@:rw
-A:G:GROUP@:rw
-# Everyone should be allowed to read
-A::EVERYONE@:r
-```
-
-You may add comments to the ACL file by starting the line with `#`.
+The ACL file format is detailed in the [User Guide](/doc/user/acl.md#acl-file).
 
 ### Displaying a pool's ACL
 
@@ -239,13 +177,13 @@ is replaced with the new one.
 
 #### Removing an entry from the ACL
 
-To delete an entry for a given principal, or identity, in an existing pool ACL:
+To delete an entry for a given principal in an existing pool ACL:
 
 ```bash
 $ dmg pool delete-acl --pool <UUID> --principal <principal>
 ```
 
-The principal corresponds to the principal/identity portion of an ACE that was
+The principal corresponds to the principal portion of an ACE that was
 set during pool creation or a previous pool ACL operation. For the delete
 operation, the principal argument must be formatted as follows:
 
@@ -278,8 +216,8 @@ Below is the output for a pool created with SCM space only.
     Pool space info:
     - Target(VOS) count:56
     - SCM:
-        Total size: 30064771072
-        Free: 30044570496, min:530139584, max:536869696, mean:536510187
+        Total size: 28GB
+        Free: 28GB, min:505MB, max:512MB, mean:512MB
     - NVMe:
         Total size: 0
         Free: 0, min:0, max:0, mean:0
@@ -296,11 +234,11 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Pool space info:
     - Target(VOS) count:56
     - SCM:
-        Total size: 30064771072
-        Free: 29885237632, min:493096384, max:536869696, mean:533664957
+        Total size: 28GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
     - NVMe:
-        Total size: 60129542144
-        Free: 29885237632, min:493096384, max:536869696, mean:533664957
+        Total size: 56GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
 
 Additional status and telemetry data are planned to be exported through

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 from __future__ import print_function
-import os
+
 import time
 import traceback
+
 from apricot import TestWithServers
+from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
-
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class BasicTxTest(TestWithServers):
     """
@@ -49,29 +49,14 @@ class BasicTxTest(TestWithServers):
 
         :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
-        self.pool = None
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to the pool
+        self.prepare_pool()
 
         try:
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = os.geteuid()
-            creategid = os.getegid()
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-
-            # need a connection to create container
-            self.pool.connect(1 << 1)
-
             # create a container
             container = DaosContainer(self.context)
-            container.create(self.pool.handle)
+            container.create(self.pool.pool.handle)
 
             # now open it
             container.open()

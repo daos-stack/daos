@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,17 +35,17 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var daosVersion string
-
 const (
 	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
+	defaultConfigFile    = "daos_agent.yml"
 )
 
 type cliOptions struct {
@@ -62,7 +62,7 @@ type cliOptions struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos_agent version %s\n", daosVersion)
+	fmt.Printf("daos_agent version %s\n", build.DaosVersion)
 	os.Exit(0)
 	return nil
 }
@@ -126,6 +126,13 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	if opts.ConfigPath == "" {
+		defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+		if _, err := os.Stat(defaultConfigPath); err == nil {
+			opts.ConfigPath = defaultConfigPath
+		}
+	}
 
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.

@@ -36,8 +36,10 @@ import yaml
 from general_utils import pcmd, check_file_exists
 from command_utils import ObjectWithParameters, BasicParameter
 
+
 class AgentFailed(Exception):
     """Agent didn't start/stop properly."""
+
 
 class DaosAgentConfig(ObjectWithParameters):
     """Defines the daos_agent configuration yaml parameters."""
@@ -49,12 +51,12 @@ class DaosAgentConfig(ObjectWithParameters):
             """Create a AgentSecurityConfig object."""
             super(DaosAgentConfig.AgentSecurityConfig, self).__init__(
                 "/run/agent_config/transport_config/*")
-            #transport_config:
-            #  allow_insecure: true
-            #  ca_cert:        .daos/daosCA.crt
-            #  cert:           .daos/daos_agent.crt
-            #  key:            .daos/daos_agent.key
-            #  server_name:    server
+            # transport_config:
+            #   allow_insecure: true
+            #   ca_cert:        .daos/daosCA.crt
+            #   cert:           .daos/daos_agent.crt
+            #   key:            .daos/daos_agent.key
+            #   server_name:    server
             self.allow_insecure = BasicParameter(None, True)
             self.ca_cert = BasicParameter(None, ".daos/daosCA.crt")
             self.cert = BasicParameter(None, ".daos/daos_agent.crt")
@@ -77,7 +79,7 @@ class DaosAgentConfig(ObjectWithParameters):
         self.port = BasicParameter(None, 10001)
         self.hostlist = BasicParameter(None)
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
-        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+        self.log_file = BasicParameter(None, "daos_agent.log")
 
         # Agent transport_config parameters
         self.transport_params = self.AgentSecurityConfig()
@@ -94,18 +96,35 @@ class DaosAgentConfig(ObjectWithParameters):
         super(DaosAgentConfig, self).get_params(test)
         self.transport_params.get_params(test)
 
+    def update_log_file(self, name):
+        """Update the log file name for the daos agent.
+
+        If the log file name is set to None the log file parameter value will
+        not be updated.
+
+        Args:
+            name (str): log file name
+        """
+        if name is not None:
+            self.log_file.update(name, "agent_config.log_file")
+
     def create_yaml(self, filename):
         """Create a yaml file from the parameter values.
 
         Args:
             filename (str): the yaml file to create
         """
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+
         # Convert the parameters into a dictionary to write a yaml file
         yaml_data = {"transport_config": []}
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None and value is not False:
-                yaml_data[name] = getattr(self, name).value
+                if name.endswith("log_file"):
+                    yaml_data[name] = os.path.join(log_dir, value)
+                else:
+                    yaml_data[name] = value
 
         # transport_config
         yaml_data["transport_config"] = {}
@@ -125,6 +144,7 @@ class DaosAgentConfig(ObjectWithParameters):
             raise AgentFailed(
                 "Error writing daos_agent command yaml file {}: {}".format(
                     filename, error))
+
 
 def run_agent(test, server_list, client_list=None):
     """Start daos agents on the specified hosts.
@@ -157,14 +177,14 @@ def run_agent(test, server_list, client_list=None):
 
     # Create the DAOS Agent configuration yaml file to pass
     # with daos_agent -o <FILE_NAME>
-    agent_yaml = os.path.join(test.tmp, "daos_agent.yml")
+    agent_yaml = os.path.join(test.tmp, "daos_agent.yaml")
     agent_config = DaosAgentConfig()
     agent_config.get_params(test)
     agent_config.hostlist.value = client_list
 
     access_point = ":".join((server_list[0], str(agent_config.port)))
     agent_config.access_points.value = access_point.split()
-
+    agent_config.update_log_file(getattr(test, "agent_log"))
     agent_config.create_yaml(agent_yaml)
 
     # Verify the domain socket directory is present and owned by this user
@@ -180,7 +200,7 @@ def run_agent(test, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    export_log_mask = "export D_LOG_MASK=DEBUG;"
+    export_log_mask = "export D_LOG_MASK=DEBUG,RPC=ERR;"
     export_cmd = export_log_mask + "export DD_MASK=mgmt,io,md,epc,rebuild;"
     daos_agent_bin = os.path.join(test.prefix, "bin", "daos_agent")
     daos_agent_cmd = " ".join((export_cmd, daos_agent_bin, "-o", agent_yaml))
@@ -255,6 +275,8 @@ def include_local_host(hosts):
     if hosts is None:
         hosts = [local_host]
     elif local_host not in hosts:
+        # Take a copy of hosts to avoid modifying-in-place
+        hosts = list(hosts)
         hosts.append(local_host)
     return hosts
 

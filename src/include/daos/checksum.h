@@ -28,6 +28,8 @@
 #include <daos_obj.h>
 #include <daos_prop.h>
 
+#define	CSUM_NO_CHUNK -1
+
 /**
  * -----------------------------------------------------------
  * Container Property Knowledge
@@ -69,7 +71,7 @@ enum DAOS_CSUM_TYPE {
 struct dcs_csum_info {
 	/** buffer to store the checksums */
 	uint8_t		*cs_csum;
-	/** number of checksums stored in buffer. Only 1 for SV */
+	/** number of checksums stored in buffer */
 	uint32_t	 cs_nr;
 	/** type of checksum */
 	uint16_t	 cs_type;
@@ -91,6 +93,16 @@ struct dcs_iod_csums {
 	struct dcs_csum_info	*ic_data;
 	/** number of dcs_csum_info in ic_data. should be 1 for SV */
 	uint32_t		 ic_nr;
+};
+
+/** Single value layout info for checksum */
+struct dcs_singv_layout {
+	/** #bytes on evenly distributed targets */
+	uint64_t	cs_bytes;
+	/** targets number */
+	uint32_t	cs_nr;
+	/** even distribution flag */
+	uint32_t	cs_even_dist:1;
 };
 
 /** Lookup the appropriate CSUM_TYPE given daos container property */
@@ -219,6 +231,11 @@ bool
 daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 			  uint8_t *b, uint32_t csum_len);
 
+int
+daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
+		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
+		       size_t idx);
+
 /**
  * Using the data from the sgl, calculates the checksums
  * for each extent. Will allocate memory for the struct daos_csum_info
@@ -234,17 +251,44 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
  *				sum of the lengths of all recxs. There should
  *				be 1 sgl for each iod.
  * @param[in]	iods		I/O descriptors describing the data in sgls.
- * @param[in]iodsnr		Number of iods and sgls as well as number of
+ * @param[in]	nr		Number of iods and sgls as well as number of
  *				daos_iod_csums that will be created.
+ * @param[in]	akey_only	Only calcualte the checksum for the iod name
+ * @param[in]	singv_los	Optional layout description for single values,
+ *				as for erasure-coding single value possibly
+ *				distributed to multiple targets. When it is NULL
+ *				it means replica object, or EC object located
+ *				in single target.
+ * @param[in]	singv_idx	single value target index, valid when singv_los
+ *				is non-NULL. -1 means calculating csum for all
+ *				shards.
  * @param[out]	p_iods_csums	Pointer that will reference the structures
- *				to hold the csums described by the iods.
+ *				to hold the csums described by the iods. In case
+ *				of error, memory will be freed internally to
+ *				this function.
  *
  * @return			0 for success, or an error code
  */
 int
 daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
-		       daos_iod_t *iods, uint32_t nr,
+		       daos_iod_t *iods, uint32_t nr, bool akey_only,
+		       struct dcs_singv_layout *singv_los, int singv_idx,
 		       struct dcs_iod_csums **p_iods_csums);
+
+/**
+ * Calculate a checksum for a daos key. Memory will be allocated for the
+ * checksum info which must be freed by calling free_cis.
+ *
+ * @param[in]	csummer		the daos_csummer object
+ * @param[in]	key		Key from which the checksum is derived
+ * @param[out]	p_dcb		checksum buffer created. In case of error,
+ *				memory will be freed internally to this function
+ *
+ * @return			0 for success, or an error code.
+ */
+int
+daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
+		      struct dcs_csum_info **p_csum);
 
 /**
  * Using the data from the sgl, calculates the checksums for each extent and
@@ -258,26 +302,57 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
  *			for the extents \a recxs. The total data
  *			length of the sgl should be the same as the sum
  *			of the lengths of all recxs
+ * @param singv_lo	Optional layout description for single value,
+ *			as for erasure-coding single value possibly
+ *			distributed to multiple targets. When it is NULL
+ *			it means replica object, or EC object located
+ *			in single target.
+ * @param singv_idx	single value target index, valid when singv_los
+ *			is non-NULL. -1 means verifing csum for all shards.
+ * @param iod_csum	checksum of the iod
  *
  * @return		0 for success, -DER_CSUM if corruption is detected
  */
 int
-daos_csummer_verify(struct daos_csummer *obj, daos_iod_t *iod, d_sg_list_t *sgl,
-		    struct dcs_iod_csums *iod_csums);
+daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
+			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
+			struct dcs_singv_layout *singv_lo, int singv_idx);
 
 /**
- * Calulate the needed memory for all the structures that will
+ * Verify a single buffer to a checksum
+ *
+ * @param obj		the daos_csummer obj
+ * @param key		I/O vector of the key
+ * @param dcb		The dcs_csum_info that describes the checksum
+ *
+ * @return		0 for success, -DER_CSUM if corruption is detected
+ */
+int
+daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
+			struct dcs_csum_info *csum);
+
+/**
+ * Calculate the needed memory for all the structures that will
  * store the checksums for the iods.
  *
  * @param[in]	obj		the daos_csummer object
  * @param[in]	iods		list of iods
  * @param[in]	nr		number of iods
+ * @param[in]	akey_only	if true, don't include the csums for the data
+ *				(useful on client side fetch when only akey
+ *				csum is needed)
+ * @param[in]	singv_los	Optional layout description for single values,
+ *				as for erasure-coding single value possibly
+ *				distributed to multiple targets. When it is NULL
+ *				it means replica object, or EC object located
+ *				in single target.
  *
-  * @return			0 for success, or an error code
+ * @return			0 for success, or an error code
  */
 uint64_t
 daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
-			     uint32_t nr);
+			     uint32_t nr, bool akey_only,
+			     struct dcs_singv_layout *singv_los);
 
 /**
  * Allocate the checksum structures needed for the iods. This will also
@@ -287,20 +362,32 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  * @param[in]	obj		the daos_csummer obj
  * @param[in]	iods		list of iods
  * @param[in]	nr		number of iods
+ * @param[in]	akey_only	Only calcualte the checksum for the iod name
+ * @param[in]	singv_los	Optional layout description for single values,
+ *				as for erasure-coding single value possibly
+ *				distributed to multiple targets. When it is NULL
+ *				it means replica object, or EC object located
+ *				in single target.
  * @param[in]	p_iods_csums	pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
  */
 int
-daos_csummer_alloc_iods_csums(struct daos_csummer *obj,
-			      daos_iod_t *iods, uint32_t nr,
+daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
+			      uint32_t nr, bool akey_only,
+			      struct dcs_singv_layout *singv_los,
 			      struct dcs_iod_csums **p_iods_csums);
 
-/** Destroy the csum buf and memory allocated for checksums */
+/** Destroy the iods csums */
 void
 daos_csummer_free_ic(struct daos_csummer *obj,
 		     struct dcs_iod_csums **p_cds);
+
+/** Destroy the csum infos allocated by daos_csummer_calc_key */
+void
+daos_csummer_free_ci(struct daos_csummer *obj,
+		     struct dcs_csum_info **p_cis);
 
 /**
  * -----------------------------------------------------------------------------
@@ -376,10 +463,13 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 static inline bool
 csum_iod_is_supported(uint64_t chunksize, daos_iod_t *iod)
 {
-	/** Only support ARRAY Type currently */
-	return iod->iod_type == DAOS_IOD_ARRAY &&
-	       iod->iod_size > 0 &&
-	       iod->iod_size <= chunksize;
+	/**
+	 * iod_size must be greater than 1 and chunksize must be larger
+	 * than iod size if it's an array type. Doesn't support very large
+	 * record size yet for array types
+	 */
+	return iod->iod_size > 0 &&
+	       (iod->iod_type == DAOS_IOD_SINGLE || iod->iod_size <= chunksize);
 }
 
 /**

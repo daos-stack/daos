@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,11 @@
 //
 package storage
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 func concat(base string, idx int32) string {
 	return fmt.Sprintf("%s-%d", base, idx)
@@ -51,8 +55,8 @@ func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := getIndex(varIdx...)
 	return &NvmeNamespace{
-		ID:   idx,
-		Size: idx,
+		ID:   uint32(idx),
+		Size: uint64(idx),
 	}
 }
 
@@ -68,4 +72,42 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		HealthStats: MockNvmeDeviceHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
 	}
+}
+
+func MockScmModule(varIdx ...int32) *ScmModule {
+	idx := uint32(getIndex(varIdx...))
+
+	return &ScmModule{
+		ChannelID:       idx,
+		ChannelPosition: idx,
+		ControllerID:    idx,
+		SocketID:        idx,
+		PhysicalID:      idx,
+		Capacity:        uint64(idx),
+	}
+}
+
+func MockScmNamespace(varIdx ...int32) *ScmNamespace {
+	idx := getIndex(varIdx...)
+
+	return &ScmNamespace{
+		UUID:        MockUUID(varIdx...),
+		BlockDevice: fmt.Sprintf("/dev/pmem%d", idx),
+		Name:        fmt.Sprintf("pmem%d", idx),
+		NumaNode:    uint32(idx),
+		Size:        uint64(idx),
+	}
+}
+
+func MockUUID(varIdx ...int32) string {
+	idx := getIndex(varIdx...)
+	idxStr := strconv.Itoa(int(idx))
+
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		strings.Repeat(idxStr, 8),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 4),
+		strings.Repeat(idxStr, 12),
+	)
 }

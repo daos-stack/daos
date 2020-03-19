@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -386,7 +386,7 @@ init_fini_conn(void **state)
 }
 
 static bool
-ace_has_default_permissions(struct daos_ace *ace)
+ace_has_permissions(struct daos_ace *ace, uint64_t perms)
 {
 	if (ace->dae_access_types != DAOS_ACL_ACCESS_ALLOW) {
 		print_message("Expected access type allow for ACE\n");
@@ -394,9 +394,8 @@ ace_has_default_permissions(struct daos_ace *ace)
 		return false;
 	}
 
-	if (ace->dae_allow_perms != (uint64_t)(DAOS_ACL_PERM_READ |
-					       DAOS_ACL_PERM_WRITE)) {
-		print_message("Expected allow RW perms for ACE\n");
+	if (ace->dae_allow_perms != perms) {
+		print_message("Expected allow perms 0x%lx for ACE\n", perms);
 		daos_ace_dump(ace, 0);
 		return false;
 	}
@@ -424,7 +423,8 @@ is_acl_prop_default(struct daos_acl *prop)
 
 	acl_expected_len += daos_ace_get_size(ace);
 
-	if (!ace_has_default_permissions(ace)) {
+	if (!ace_has_permissions(ace, DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_WRITE)) {
 		print_message("Owner ACE was wrong\n");
 		return false;
 	}
@@ -437,7 +437,8 @@ is_acl_prop_default(struct daos_acl *prop)
 
 	acl_expected_len += daos_ace_get_size(ace);
 
-	if (!ace_has_default_permissions(ace)) {
+	if (!ace_has_permissions(ace, DAOS_ACL_PERM_READ |
+				      DAOS_ACL_PERM_WRITE)) {
 		print_message("Owner Group ACE was wrong\n");
 		return false;
 	}
@@ -471,7 +472,7 @@ pool_properties(void **state)
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
@@ -623,7 +624,7 @@ static int
 pool_setup_sync(void **state)
 {
 	async_disable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -631,14 +632,14 @@ static int
 pool_setup_async(void **state)
 {
 	async_enable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE,
+	return test_setup(state, SETUP_POOL_CREATE, true, SMALL_POOL_SIZE,
 			  NULL);
 }
 
@@ -667,7 +668,7 @@ setup_containers(void **state, daos_size_t nconts)
 	lcarg->tpool.poh = DAOS_HDL_INVAL;
 	lcarg->tpool.svc.rl_nr = svc_nreplicas;
 	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
-	lcarg->tpool.pool_size = 1 << 30;	/* 1GB SCM */
+	lcarg->tpool.pool_size = 1 << 28;	/* 256MB SCM */
 	/* Create the pool */
 	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
 				    NULL /* prop */);
@@ -767,7 +768,7 @@ teardown_containers(void **state)
 	test_arg_t		*arg = *state;
 	struct test_list_cont	*lcarg = arg->pool_lc_args;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lcarg == NULL)
 		return 0;
@@ -1005,6 +1006,62 @@ list_containers_test(void **state)
 	print_message("success\n");
 }
 
+static void
+expect_pool_connect_access(test_arg_t *arg0, uint64_t perms,
+			   uint64_t flags, int exp_result)
+{
+	test_arg_t	*arg = NULL;
+	daos_prop_t	*prop;
+	int		 rc;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
+			SMALL_POOL_SIZE, NULL);
+	assert_int_equal(rc, 0);
+
+	arg->pool.pool_connect_flags = flags;
+	prop = get_daos_prop_with_owner_acl_perms(perms,
+						  DAOS_PROP_PO_ACL);
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
+
+	/* Make sure we actually got to pool connect */
+	assert_int_equal(arg->setup_state, SETUP_POOL_CONNECT);
+	assert_int_equal(rc, exp_result);
+
+	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+pool_connect_access(void **state)
+{
+	test_arg_t	*arg0 = *state;
+
+	print_message("pool ACL gives the owner no permissions\n");
+	expect_pool_connect_access(arg0, 0, DAOS_PC_RO, -DER_NO_PERM);
+
+	print_message("pool ACL gives the owner RO, they want RW\n");
+	expect_pool_connect_access(arg0, DAOS_ACL_PERM_READ, DAOS_PC_RW,
+				   -DER_NO_PERM);
+
+	print_message("pool ACL gives the owner RO, they want RO\n");
+	expect_pool_connect_access(arg0, DAOS_ACL_PERM_READ, DAOS_PC_RO,
+				   0);
+
+	print_message("pool ACL gives the owner RW, they want RO\n");
+	expect_pool_connect_access(arg0,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_PC_RO,
+				   0);
+
+	print_message("pool ACL gives the owner RW, they want RW\n");
+	expect_pool_connect_access(arg0,
+				   DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE,
+				   DAOS_PC_RW,
+				   0);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
@@ -1032,7 +1089,9 @@ static const struct CMUnitTest pool_tests[] = {
 	{ "POOL12: pool list containers (many)",
 	  list_containers_test, setup_manycontainers, teardown_containers},
 	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
-	  pool_op_retry, NULL, test_case_teardown}
+	  pool_op_retry, NULL, test_case_teardown},
+	{ "POOL14: pool connect access based on ACL",
+	  pool_connect_access, NULL, test_case_teardown},
 };
 
 int

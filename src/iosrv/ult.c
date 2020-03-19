@@ -363,12 +363,35 @@ sched_ult2xs(int ult_type, int tgt_id)
 	switch (ult_type) {
 	case DSS_ULT_IOFW:
 	case DSS_ULT_MISC:
-		return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
+		if (!dss_helper_pool)
+			return (DSS_MAIN_XS_ID(tgt_id) + 1) % DSS_XS_NR_TOTAL;
+
+		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
+			return (dss_sys_xs_nr + dss_tgt_nr + tgt_id);
+		if (dss_tgt_offload_xs_nr > 0)
+			return (dss_sys_xs_nr + dss_tgt_nr +
+				tgt_id % dss_tgt_offload_xs_nr);
+		else
+			return ((DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
+				dss_sys_xs_nr);
 	case DSS_ULT_EC:
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 	case DSS_ULT_IO:
-		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
+		if (!dss_helper_pool)
+			return DSS_MAIN_XS_ID(tgt_id) +
+			       dss_tgt_offload_xs_nr / dss_tgt_nr;
+
+		if (dss_tgt_offload_xs_nr > dss_tgt_nr)
+			return (dss_sys_xs_nr + 2 * dss_tgt_nr +
+				(tgt_id % (dss_tgt_offload_xs_nr -
+					   dss_tgt_nr)));
+		if (dss_tgt_offload_xs_nr > 0)
+			return (dss_sys_xs_nr + dss_tgt_nr +
+				tgt_id % dss_tgt_offload_xs_nr);
+		else
+			return (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
+			       dss_sys_xs_nr;
 	case DSS_ULT_POOL_SRV:
 	case DSS_ULT_RDB:
 	case DSS_ULT_DRPC_HANDLER:
@@ -429,8 +452,18 @@ dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 free:
 	if (attr != ABT_THREAD_ATTR_NULL) {
 		rc1 = ABT_thread_attr_free(&attr);
-		if (rc == ABT_SUCCESS)
-			rc = rc1;
+		if (rc1 != ABT_SUCCESS)
+			/* The child ULT has already been created,
+			 * we should not return the error for the
+			 * ABT_thread_attr_free() failure; otherwise,
+			 * the caller will free the parameters ("arg")
+			 * that is being used by the child ULT.
+			 *
+			 * So let's ignore the failure, the worse case
+			 * is that we may leak some DRAM.
+			 */
+			D_ERROR("ABT_thread_attr_free failed: %d\n",
+				dss_abterr2der(rc1));
 	}
 
 	return dss_abterr2der(rc);

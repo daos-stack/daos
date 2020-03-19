@@ -40,7 +40,8 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
-        >>> env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
+        >>> log = get_log_file(self.client_log)
+        >>> env = self.ior_cmd.get_default_env(self.tmp, log)
         >>> processes = len(self.hostlist_clients)
         >>> mpirun.setup_command(env, self.hostfile_clients, processes)
         >>> mpirun.run()
@@ -275,8 +276,8 @@ class IorCommand(ExecutableCommand):
         """
         logger.info("\n")
         logger.info(message)
-        logger.info(metrics[0])
-        logger.info(metrics[1])
+        for m in metrics:
+            logger.info(m)
         logger.info("\n")
 
 

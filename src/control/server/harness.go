@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -39,21 +40,23 @@ import (
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex
-	log         logging.Logger
-	instances   []*IOServerInstance
-	started     uint32
-	restartable uint32
-	restart     chan struct{}
-	errChan     chan error
+	log            logging.Logger
+	instances      []*IOServerInstance
+	started        uint32
+	restartable    uint32
+	restart        chan struct{}
+	errChan        chan error
+	rankReqTimeout time.Duration
 }
 
 // NewHarness returns an initialized *IOServerHarness
 func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		log:       log,
-		instances: make([]*IOServerInstance, 0, maxIoServers),
-		restart:   make(chan struct{}, 1),
-		errChan:   make(chan error, maxIoServers),
+		log:            log,
+		instances:      make([]*IOServerInstance, 0, maxIOServers),
+		restart:        make(chan struct{}, 1),
+		errChan:        make(chan error, maxIOServers),
+		rankReqTimeout: 3 * time.Second,
 	}
 }
 
@@ -173,7 +176,12 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 				continue
 			}
 		}
-		h.log.Info("SCM format required")
+
+		if skipMissingSuperblock {
+			return FaultScmUnmanaged(instance.scmConfig().MountPoint)
+		}
+
+		h.log.Infof("SCM format required on instance %d", instance.Index())
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
@@ -241,6 +249,9 @@ func (h *IOServerHarness) waitInstancesReady(ctx context.Context) error {
 			if err := instance.SetRank(ctx, ready); err != nil {
 				return err
 			}
+			// update ioserver target count to reflect allocated
+			// number of targets, not number requested when starting
+			instance.SetTargetCount(int(ready.GetNtgts()))
 		}
 
 		if instance.IsMSReplica() {
@@ -391,7 +402,7 @@ func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]*ioserver.Rank, 0, maxIoServers)
+	ranks := make([]*ioserver.Rank, 0, maxIOServers)
 	for _, i := range h.instances {
 		if i.hasSuperblock() && i.IsStarted() {
 			ranks = append(ranks, i.getSuperblock().Rank)
@@ -403,10 +414,6 @@ func (h *IOServerHarness) StartedRanks() []*ioserver.Rank {
 
 func (h *IOServerHarness) setRestartable() {
 	atomic.StoreUint32(&h.restartable, 1)
-}
-
-func (h *IOServerHarness) setNotRestartable() {
-	atomic.StoreUint32(&h.restartable, 0)
 }
 
 func (h *IOServerHarness) IsRestartable() bool {

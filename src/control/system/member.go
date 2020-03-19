@@ -32,7 +32,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -309,24 +308,23 @@ func mapMemberStates(states ...MemberState) map[MemberState]struct{} {
 	return stateMap
 }
 
-// Hosts returns slice of ordered member control addresses filtering any
-// addresses that only manage members with excluded states.
-func (m *Membership) Hosts(excludedStates ...MemberState) (addresses []string) {
+// HostRanks returns mapping of control addresses to ranks managed by harness at
+// that address.
+func (m *Membership) HostRanks() map[string][]uint32 {
 	m.RLock()
 	defer m.RUnlock()
 
-	es := mapMemberStates(excludedStates...)
+	hostRanks := make(map[string][]uint32)
 	for _, member := range m.members {
-		_, exclude := es[member.State()]
-		if exclude || common.Includes(addresses, member.Addr.String()) {
+		addr := member.Addr.String()
+		if _, exists := hostRanks[addr]; exists {
+			hostRanks[addr] = append(hostRanks[addr], member.Rank)
 			continue
 		}
-		addresses = append(addresses, member.Addr.String())
+		hostRanks[addr] = []uint32{member.Rank}
 	}
 
-	sort.Strings(addresses)
-
-	return
+	return hostRanks
 }
 
 // Members returns slice of references to all system members filtering members
