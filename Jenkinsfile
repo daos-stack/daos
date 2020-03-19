@@ -105,7 +105,8 @@ def rpm_scan_pre = '''set -ex
                       curl http://rfxn.com/downloads/${lmd_tarball} \
                         ${zflag} --silent --show-error --fail -o ${lmd_tarball}
                       nodelist=(${NODELIST//,/ })
-                      scp -i ci_key ${lmd_tarball} jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key ${lmd_tarball} \
+                        jenkins@${nodelist[0]}:/var/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
