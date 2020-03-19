@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1899,7 +1899,7 @@ pool_map_update_failed_cnt(struct pool_map *map)
 	struct pool_domain *root;
 	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
 
-	memset(fail_cnts, 0, sizeof(fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(*fail_cnts) * map->po_domain_layers);
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)

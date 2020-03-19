@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,11 +182,12 @@ enum {
 	SETUP_CONT_CONNECT,
 };
 
-#define DEFAULT_POOL_SIZE	(4ULL << 30)
+#define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
+#define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
 
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
-		int _rc;					\
+		int _rc;				\
 		daos_event_t *evp;			\
 							\
 		if (!arg->async)			\
@@ -302,6 +303,10 @@ void daos_kill_exclude_server(test_arg_t *arg, const uuid_t pool_uuid,
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
+daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
+daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
+					      struct daos_acl *acl,
+					      uint32_t acl_type);
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 

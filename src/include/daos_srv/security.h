@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,5 +249,27 @@ ds_sec_cont_can_set_owner(uint64_t cont_capas);
  */
 bool
 ds_sec_cont_can_write_data(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be read based on the container security
+ * capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_read_data(uint64_t cont_capas);
+
+/**
+ * Get the security capabilities for a rebuild container handle created by the
+ * DAOS server.
+ *
+ * @return	Bits representing security capabilities
+ */
+uint64_t
+ds_sec_get_rebuild_cont_capabilities(void);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

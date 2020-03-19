@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -510,8 +510,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	}
 
 	D_PRINT("Container's snapshots :\n");
-	if (daos_anchor_is_eof < 0) {
-		fprintf(stderr, "invalid number of snapshots returned\n");
+	if (!daos_anchor_is_eof(&anchor)) {
+		fprintf(stderr, "too many snapshots returned\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (snaps_count == 0) {

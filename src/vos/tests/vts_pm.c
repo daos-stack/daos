@@ -865,7 +865,7 @@ object_punch_and_fetch(void **state)
 
 		iod.iod_type = DAOS_IOD_SINGLE;
 		iod.iod_size = 0;
-		d_iov_set(&sgl.sg_iovs[0], (void *)value, sizeof(value));
+		d_iov_set(&sgl.sg_iovs[0], (void *)value, strlen(value) + 1);
 		iod.iod_nr = 1;
 		iod.iod_recxs = NULL;
 

@@ -150,7 +150,8 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	for (i = 0; i < update_recx_nr; i++) {
 		uint64_t csum_buf_len;
 
-		csum_buf_len = csum_size * test.update_recxs[i].csum_count;
+		csum_buf_len = (uint64_t)csum_size *
+				test.update_recxs[i].csum_count;
 		csum_infos[i].cs_type = 1;
 		csum_infos[i].cs_nr = test.update_recxs[i].csum_count;
 		csum_infos[i].cs_chunksize = test.chunksize;

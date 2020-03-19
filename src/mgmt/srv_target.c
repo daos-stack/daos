@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -856,7 +856,7 @@ tgt_profile_task(void *arg)
 	int rc = 0;
 
 	for (mod_id = 0; mod_id < (sizeof(uint64_t) * NBBY); mod_id++) {
-		uint64_t mask = 1 << mod_id;
+		uint64_t mask = 1ULL << mod_id;
 		struct dss_module *module;
 
 		if (!(in->p_module & mask))

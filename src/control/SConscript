@@ -11,6 +11,7 @@ Import('env', 'prereqs', 'DAOS_VERSION', 'CONF_DIR')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
+GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
 def check_dir_exists(path):
     """
@@ -68,8 +69,8 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
     denv.Command(build_bin, src,
-                 'cd %s; go build -mod vendor -v %s -o %s %s' %
-                 (gosrc, go_ldflags(), build_bin, install_src))
+                 'cd %s; %s build -mod vendor -v %s -o %s %s' %
+                 (gosrc, GO_BIN, go_ldflags(), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     denv.InstallAs(install_bin, build_bin)
@@ -104,15 +105,14 @@ def scons():
     def check_go_version(context):
         """Check GO Version"""
         context.Display('Checking for Go compiler in $PATH... ')
-        go_path = context.env.WhereIs(GO_COMPILER)
-        if go_path:
-            context.Display(go_path + '\n')
+        if GO_BIN:
+            context.Display(GO_BIN + '\n')
         else:
             context.Result(0)
             return 0
 
-        context.Display('Checking %s version... ' % go_path)
-        out = os.popen('%s version' % go_path).read()
+        context.Display('Checking %s version... ' % GO_BIN)
+        out = os.popen('%s version' % GO_BIN).read()
         if len(out.split(' ')) < 3:
             context.Result('failed to get version from "%s"' % out)
             return 0
