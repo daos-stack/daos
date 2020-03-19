@@ -255,6 +255,10 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 	resChan := make(chan rankRes, len(instances))
 	stopping := 0
 	for _, instance := range instances {
+		if !instance.IsStarted() {
+			continue
+		}
+
 		rank, err := instance.GetRank()
 		if err != nil {
 			return nil, err
@@ -263,10 +267,6 @@ func (h *IOServerHarness) StopInstances(ctx context.Context, signal os.Signal, r
 		if !checkRankList(rank, rankList) {
 			h.log.Debugf("rank %d not in requested list, skipping...", rank.Uint32())
 			continue // filtered out, no result expected
-		}
-
-		if !instance.IsStarted() {
-			continue
 		}
 
 		go func(i *IOServerInstance) {

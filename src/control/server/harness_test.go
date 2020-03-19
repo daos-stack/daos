@@ -441,11 +441,6 @@ func TestHarness_StopInstances(t *testing.T) {
 				svc.harness.setStarted()
 			}
 			for i, srv := range svc.harness.Instances() {
-				if tc.missingSB {
-					srv._superblock = nil
-					continue
-				}
-
 				trc := &ioserver.TestRunnerConfig{}
 				trc.SignalCb = func(idx uint32, sig os.Signal) { signalsSent.Store(idx, sig) }
 				trc.SignalErr = tc.signalErr
@@ -455,6 +450,11 @@ func TestHarness_StopInstances(t *testing.T) {
 
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
+
+				if tc.missingSB {
+					srv._superblock = nil
+					continue
+				}
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
