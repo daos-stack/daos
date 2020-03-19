@@ -869,7 +869,8 @@ tgt_profile_task(void *arg)
 		}
 
 		if (in->p_op == MGMT_PROFILE_START)
-			rc = module->sm_mod_ops->dms_profile_start(in->p_path);
+			rc = module->sm_mod_ops->dms_profile_start(in->p_path,
+								   in->p_avg);
 		else
 			rc = module->sm_mod_ops->dms_profile_stop();
 		if (rc)
