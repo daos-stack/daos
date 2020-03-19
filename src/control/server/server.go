@@ -250,9 +250,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 	agentConfig := AgentCfg{
-		CRT_PHY_ADDR_STR:   cfg.Fabric.Provider,
-		CRT_CTX_SHARE_ADDR: cfg.Fabric.CrtCtxShareAddr,
-		CRT_TIMEOUT:        cfg.Fabric.CrtTimeout,
+		Provider:        cfg.Fabric.Provider,
+		CrtCtxShareAddr: cfg.Fabric.CrtCtxShareAddr,
+		CrtTimeout:      cfg.Fabric.CrtTimeout,
 	}
 	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership, &agentConfig))
 

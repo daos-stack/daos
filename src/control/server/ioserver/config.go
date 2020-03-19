@@ -58,8 +58,8 @@ type FabricConfig struct {
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr" cmdEnv:"CRT_CTX_SHARE_ADDR"`
-	CrtTimeout      uint32 `yaml:"crt_timeout" cmdEnv:"CRT_TIMEOUT"`
+	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.

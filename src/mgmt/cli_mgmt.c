@@ -368,12 +368,14 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 	*npsrs = resp->n_psrs;
 	*psrs = p;
 
-	size = sizeof(sy_info->provider);
-	strncpy(sy_info->provider, resp->crt_phy_addr_str, size);
-	sy_info->provider[size-1] = '\0';
+	if (sy_info) {
+		size = sizeof(sy_info->provider);
+		strncpy(sy_info->provider, resp->provider, size);
+		sy_info->provider[size-1] = '\0';
 
-	sy_info->crt_ctx_share_addr = resp->crt_ctx_share_addr;
-	sy_info->crt_timeout = resp->crt_timeout;
+		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
+		sy_info->crt_timeout = resp->crttimeout;
+	}
 
 out_resp:
 	mgmt__get_attach_info_resp__free_unpacked(resp, NULL);

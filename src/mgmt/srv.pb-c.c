@@ -933,36 +933,36 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "CRT_PHY_ADDR_STR",
+    "Provider",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, crt_phy_addr_str),
+    offsetof(Mgmt__GetAttachInfoResp, provider),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "CRT_CTX_SHARE_ADDR",
+    "CrtCtxShareAddr",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, crt_ctx_share_addr),
+    offsetof(Mgmt__GetAttachInfoResp, crtctxshareaddr),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "CRT_TIMEOUT",
+    "CrtTimeout",
     5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, crt_timeout),
+    offsetof(Mgmt__GetAttachInfoResp, crttimeout),
     NULL,
     NULL,
     0,             /* flags */
@@ -970,9 +970,9 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
   },
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
-  3,   /* field[3] = CRT_CTX_SHARE_ADDR */
-  2,   /* field[2] = CRT_PHY_ADDR_STR */
-  4,   /* field[4] = CRT_TIMEOUT */
+  3,   /* field[3] = CrtCtxShareAddr */
+  4,   /* field[4] = CrtTimeout */
+  2,   /* field[2] = Provider */
   1,   /* field[1] = psrs */
   0,   /* field[0] = status */
 };

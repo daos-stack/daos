@@ -47,9 +47,9 @@ int dc_mgmt_add_mark(const char *mark);
 
 /** GetAttachInfo system info */
 struct sys_info {
-	char	provider[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint	crt_ctx_share_addr;
-	uint	crt_timeout;
+	char		provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	uint32_t	crt_ctx_share_addr;
+	uint32_t	crt_timeout;
 };
 
 /** Client system handle */

@@ -70,9 +70,9 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
-	string CRT_PHY_ADDR_STR = 3;
-	uint32 CRT_CTX_SHARE_ADDR = 4;
-	uint32 CRT_TIMEOUT = 5;
+	string Provider = 3;
+	uint32 CrtCtxShareAddr = 4;
+	uint32 CrtTimeout = 5;
 }
 
 message PrepShutdownReq {

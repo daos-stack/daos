@@ -191,7 +191,7 @@ type mgmtSvc struct {
 	log        logging.Logger
 	harness    *IOServerHarness
 	membership *system.Membership // if MS leader, system membership list
-	cfg        *AgentCfg
+	agentCfg   *AgentCfg
 }
 
 func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *AgentCfg) *mgmtSvc {
@@ -199,7 +199,7 @@ func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *AgentCfg) *mgmtSvc 
 		log:        h.log,
 		harness:    h,
 		membership: m,
-		cfg:        c,
+		agentCfg:   c,
 	}
 }
 
@@ -219,9 +219,13 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
 	}
 
-	resp.CRT_PHY_ADDR_STR = svc.cfg.CRT_PHY_ADDR_STR
-	resp.CRT_CTX_SHARE_ADDR = svc.cfg.CRT_CTX_SHARE_ADDR
-	resp.CRT_TIMEOUT = svc.cfg.CRT_TIMEOUT
+	if svc.agentCfg == nil {
+		return nil, errors.New("agentCfg in GetAttachInfo response was empty")
+	}
+
+	resp.Provider = svc.agentCfg.Provider
+	resp.CrtCtxShareAddr = svc.agentCfg.CrtCtxShareAddr
+	resp.CrtTimeout = svc.agentCfg.CrtTimeout
 
 	return resp, nil
 }

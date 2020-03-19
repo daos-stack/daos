@@ -172,9 +172,9 @@ struct  _Mgmt__GetAttachInfoResp
    */
   size_t n_psrs;
   Mgmt__GetAttachInfoResp__Psr **psrs;
-  char *crt_phy_addr_str;
-  uint32_t crt_ctx_share_addr;
-  uint32_t crt_timeout;
+  char *provider;
+  uint32_t crtctxshareaddr;
+  uint32_t crttimeout;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
