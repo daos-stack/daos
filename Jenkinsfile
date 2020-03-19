@@ -149,7 +149,7 @@ EOF_BAD
 def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
                        scp -i ci_key \
                          jenkins@${nodelist[0]}:/var/tmp/maldetect.xml \
-                         ${WORKPACE}/maldetect.xml'''
+                         ${WORKSPACE}/maldetect.xml'''
 
 
 // bail out of branch builds that are not on a whitelist
