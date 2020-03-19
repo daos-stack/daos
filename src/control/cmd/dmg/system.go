@@ -214,7 +214,8 @@ type systemStopCmd struct {
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
+	// always force stop while daos_io_server shutdown is broken.
+	req := client.SystemStopReq{Prep: true, Kill: true, Force: true}
 	resp, err := cmd.conns.SystemStop(req)
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")
