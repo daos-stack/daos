@@ -103,8 +103,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	ranks, err := common.ParseInts(c.RankList)
-	if err != nil {
+	var ranks []uint32
+	if err := common.ParseNumberList(c.RankList, &ranks); err != nil {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
