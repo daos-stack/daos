@@ -45,7 +45,7 @@ storage nodes before deploying DAOS.
 
 ### Enable IOMMU (Optional)
 
-In order to run DAOS server as a non-root user with NVMe devices, the hardware
+In order to run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
 On Intel® systems, this capability is named Intel® Virtualization Technology for
 Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
@@ -67,6 +67,10 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 # in order to make the changes take effect
 $ sudo reboot
 ```
+
+!!! warning
+    VFIO support is currently planned for DAOS 1.2 and won't work until
+    we move to SPDK 20.01.1
 
 ### Time Synchronization
 
@@ -176,9 +180,10 @@ $ sudo ln -s $SL_PREFIX/include \
            /usr/share/spdk/include
 ```
 
-NOTES:
- * The RPM installation is preferred for production scenarios. Manual installation
- is most appropriate for development and predeployment proof-of-concept scenarios.
+!!! note
+    The RPM installation is preferred for production scenarios. Manual
+    installation is most appropriate for development and predeployment
+    proof-of-concept scenarios.
 
 ## DAOS Server Setup
 
@@ -695,7 +700,7 @@ The network scan leverages data from libfabric.  Results are ordered from
 highest performance at the top to lowest performance at the bottom of the list.
 Once the fabric_iface and provider pair has been chosen, those items and the
 pinned_numa_node may be inserted directly into the corresponding sections within
-daos_server.yml.  Note that the provider is currently the same for all DAOS
+daos_server.yml. Note that the provider is currently the same for all DAOS
 IO server instances and is configured once in the server configuration.
 The fabric_iface and pinned_numa_node are configured for each IO server
 instance.
