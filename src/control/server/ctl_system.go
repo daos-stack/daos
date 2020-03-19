@@ -78,7 +78,7 @@ type temporary interface {
 }
 
 func isUnreachableError(err error) bool {
-	te, ok := err.(temporary)
+	te, ok := errors.Cause(err).(temporary)
 	if ok {
 		return !te.Temporary()
 	}
