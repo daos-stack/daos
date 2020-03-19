@@ -1981,7 +1981,7 @@ co_attribute_access(void **state)
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
-			DEFAULT_POOL_SIZE, NULL);
+			SMALL_POOL_SIZE, NULL);
 	assert_int_equal(rc, 0);
 
 	print_message("Set attr denied with no write-data perms\n");
