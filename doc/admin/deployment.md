@@ -68,6 +68,10 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
+!!! warning
+    VFIO support is currently planned for DAOS 1.2 and won't work until
+    we move to SPDK 20.01.1
+
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
