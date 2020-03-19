@@ -1558,6 +1558,10 @@ pipeline {
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
                         }
                     }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
                 } // stage('Scan CentOS 7 RPMs')
             }
         }
