@@ -243,8 +243,11 @@ func TestMember_RanksHostsMembers(t *testing.T) {
 	}
 
 	AssertEqual(t, []uint32{1, 2, 3}, ms.Ranks(), "ranks")
-	AssertEqual(t, []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
-		ms.Hosts(), "hosts")
+	AssertEqual(t, map[string][]uint32{
+		"127.0.0.1:10001": {1},
+		"127.0.0.2:10001": {2},
+		"127.0.0.3:10001": {3},
+	}, ms.HostRanks(), "host ranks")
 	AssertEqual(t, members, ms.Members(), "members")
 }
 

@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 const (
@@ -102,19 +103,9 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	ranks := make([]uint32, 0)
-	if len(c.RankList) > 0 {
-		rankStr := strings.Split(c.RankList, ",")
-		for _, rank := range rankStr {
-			r, err := strconv.Atoi(rank)
-			if err != nil {
-				return errors.WithMessage(err, "parsing rank list")
-			}
-			if r < 0 {
-				return errors.Errorf("invalid rank: %d", r)
-			}
-			ranks = append(ranks, uint32(r))
-		}
+	var ranks []uint32
+	if err := common.ParseNumberList(c.RankList, &ranks); err != nil {
+		return errors.WithMessage(err, "parsing rank list")
 	}
 
 	req := &client.PoolCreateReq{

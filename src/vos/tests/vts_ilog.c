@@ -409,7 +409,7 @@ static void
 version_cache_init(struct version_cache *vcache)
 {
 	memset(vcache, 0, sizeof(*vcache));
-	vcache->vc_ver[1] = 1;
+	vcache->vc_ver[1] = 0;
 }
 
 static bool
@@ -479,7 +479,7 @@ ilog_test_update(void **state)
 		assert(0);
 	}
 
-	version_cache_fetch(&version_cache, loh, false);
+	version_cache_fetch(&version_cache, loh, true);
 
 	epoch = 1;
 	current_status = COMMITTABLE;
@@ -630,7 +630,7 @@ ilog_test_abort(void **state)
 			      d_errstr(rc));
 		assert(0);
 	}
-	version_cache_fetch(&version_cache, loh, false);
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 1;
 	current_status = PREPARED;
@@ -772,7 +772,7 @@ ilog_test_persist(void **state)
 			      d_errstr(rc));
 		assert(0);
 	}
-	version_cache_fetch(&version_cache, loh, false);
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 1;
 	current_status = PREPARED;

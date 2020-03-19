@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 */
 	rc = vos_obj_hold(vos_obj_cache_current(),
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc == 0)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
