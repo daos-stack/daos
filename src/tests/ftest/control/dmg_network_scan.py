@@ -77,15 +77,20 @@ class DmgNetworkScanTest(TestWithServers):
         """
         fi_info_dir = os.path.join(self.prefix, 'bin')
         fi_info = os.path.join(fi_info_dir, "fi_info -d {}".format(device))
-        try:
-            output = process.run(fi_info)
-        except process.CmdError as error:
-            # Command failed or possibly timed out
-            msg = "Error occurred running '{}': {}".format(fi_info, error)
+
+        # Run the command
+        output = process.run(fi_info, ignore_status=True)
+
+        # Command failed or possibly timed out
+        if output.exit_status != 0 or output.exit_status != 61:
+            msg = "Error occurred running '{}': {}".format(
+                fi_info, output.exit_status)
             self.fail(msg)
 
         # Clean up string
         providers = []
+        if output.exit_status == 61:
+            return providers
         for line in output.stdout.splitlines():
             if "provider" in line:
                 prov = line.strip().split()[-1]
