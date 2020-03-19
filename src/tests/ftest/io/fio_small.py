@@ -46,6 +46,6 @@ class FioSmall(FioBase):
             read_write: rw|randrw
             numjobs: 1
 
-        :avocado: tags=all,pr,hw,fio,fiosmall
+        :avocado: tags=all,fio,fiosmall
         """
         self.execute_fio()
