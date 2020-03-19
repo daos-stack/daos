@@ -136,7 +136,9 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       rpt->rt_coh_uuid, arg->cont_uuid,
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
-				       arg->ephs, arg->shards, arg->count);
+				       arg->ephs, arg->shards, arg->count,
+				       /* Clear containers for add/reint */
+				       rpt->rt_rebuild_op == RB_OP_ADD);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -472,68 +474,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-/*
- * TODO: This is a temporary feature to enable reintegration
- * of targets with existing data. This will be removed when
- * reintegration is able to make use of existing data
- * (AKA Incremental Reintegration)
- */
-static int
-reint_cont_destroy_cb(daos_handle_t ih, vos_iter_entry_t *entry,
-			  vos_iter_type_t type, vos_iter_param_t *iter_param,
-			  void *data, unsigned *acts) {
-	struct rebuild_scan_arg		*arg = data;
-	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
-	struct ds_cont_child		*ds_cont_child;
-	int				rc;
-
-	/* resync DTXs' status firstly. */
-	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
-		D_DEBUG(DB_REBUILD, DF_UUID" already scan\n",
-			DP_UUID(arg->co_uuid));
-		return 0;
-	}
-
-	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid,
-			&ds_cont_child);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"Reintegration failed to lookup container child."
-				" rc: %d", DP_UUID(entry->ie_couuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = vos_cont_close(ds_cont_child->sc_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"Reintegration failed to close container."
-				" rc: %d", DP_UUID(entry->ie_couuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = vos_cont_destroy(iter_param->ip_hdl, entry->ie_couuid);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"Reintegration failed to destroy container."
-				" rc: %d", DP_UUID(entry->ie_couuid), rc);
-		D_GOTO(open, rc);
-	}
-
-	rc = vos_cont_create(iter_param->ip_hdl, entry->ie_couuid);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"Reintegration failed to create container."
-				" rc: %d", DP_UUID(entry->ie_couuid), rc);
-		D_GOTO(out, rc);
-	}
-open:
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid,
-			&ds_cont_child->sc_hdl);
-	if (rc != 0) {
-		D_ERROR(DF_UUID"Reintegration failed to reopen container."
-				" rc: %d", DP_UUID(entry->ie_couuid), rc);
-	}
-out:
-	return rc;
-
-}
-
 int
 rebuild_scanner(void *data)
 {
@@ -586,16 +526,7 @@ rebuild_scanner(void *data)
 	param.ip_flags = VOS_IT_FOR_REBUILD;
 	arg.rpt = rpt;
 	arg.yield_freq = DEFAULT_YIELD_FREQ;
-	if (rebuild_status_match(rpt, PO_COMP_ST_UP)) {
-		/*
-		 * TODO: This is a temporary feature to enable reintegration
-		 * of targets with existing data. This will be removed when
-		 * reintegration is able to make use of existing data
-		 * (AKA Incremental Reintegration)
-		 */
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 reint_cont_destroy_cb, NULL, &arg);
-	} else {
+	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 				 rebuild_container_scan_cb, NULL, &arg);
 	}

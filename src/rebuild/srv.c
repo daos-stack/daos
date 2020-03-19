@@ -748,7 +748,8 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 			if (ret <= 0)
 				continue;
 
-			if (target && target->ta_comp.co_status == match_status)
+			D_ASSERT(target != NULL);
+			if (target->ta_comp.co_status == match_status)
 				changed = true;
 
 			dom = pool_map_find_node_by_rank(pool->sp_map,

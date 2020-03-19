@@ -200,6 +200,7 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 /**
  * srv_target.c
  */
+int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 void ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
