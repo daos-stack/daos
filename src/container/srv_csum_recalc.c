@@ -147,7 +147,6 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * j on each checksum boundary until the offset associated with j
 	 * matches the offset of the (csum-extended) output segment.
 	 */
-
 	if (new_csum->cs_nr != recalc->cr_phy_csum->cs_nr) {
 		unsigned int chunksize = new_csum->cs_chunksize;
 		unsigned int orig_offset =
