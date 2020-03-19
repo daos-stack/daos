@@ -131,7 +131,7 @@ def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
                        if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
                          cat << EOF_GOOD > /var/tmp/maldetect.xml
 <testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
-  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\"/>
 </testsuite>
 EOF_GOOD
                        else
