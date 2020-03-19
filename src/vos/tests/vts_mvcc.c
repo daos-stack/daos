@@ -647,6 +647,10 @@ teardown_mvcc(void **state)
 int
 run_mvcc_tests(void)
 {
+	if (getenv("DAOS_IO_BYPASS")) {
+		print_message("Skipping MVCC tests: DAOS_IO_BYPASS is set\n");
+		return 0;
+	}
 	return cmocka_run_group_tests_name("VOS MVCC Tests", mvcc_tests,
 					   setup_mvcc, teardown_mvcc);
 }
