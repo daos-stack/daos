@@ -631,8 +631,11 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				id_target = ctx->sc_target;
 				id_sendto = ctx->sc_target;
 				send_updates = true;
-				SWIM_INFO("%lu: dping %lu => %lu\n",
-					 ctx->sc_self, ctx->sc_self, id_sendto);
+				SWIM_INFO("%lu: dping %lu => {%lu %c %lu}\n",
+					  ctx->sc_self, ctx->sc_self, id_sendto,
+					  SWIM_STATUS_CHARS[
+						       target_state.sms_status],
+					  target_state.sms_incarnation);
 
 				ctx->sc_dping_deadline = now
 							+ swim_ping_timeout;
@@ -669,9 +672,11 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				/* no response from indirect pings,
 				 * dead this member
 				 */
-				SWIM_INFO("%lu: iping timeout %lu\n",
-					  ctx->sc_self, ctx->sc_target);
-
+				SWIM_ERROR("%lu: iping timeout {%lu %c %lu}\n",
+					   ctx->sc_self, ctx->sc_target,
+					   SWIM_STATUS_CHARS[
+						       target_state.sms_status],
+					   target_state.sms_incarnation);
 				swim_member_dead(ctx, ctx->sc_self,
 						 ctx->sc_target,
 						 target_state.sms_incarnation);
@@ -700,8 +705,11 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				id_sendto = item->si_id;
 				send_updates = true;
 
-				SWIM_INFO("%lu: ireq  %lu => %lu\n",
-					  ctx->sc_self, id_sendto, id_target);
+				SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu}\n",
+					  ctx->sc_self, id_sendto, id_target,
+					  SWIM_STATUS_CHARS[
+						       target_state.sms_status],
+					  target_state.sms_incarnation);
 
 				TAILQ_REMOVE(&ctx->sc_subgroup,
 					     item, si_link);
@@ -721,6 +729,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
 				swim_ctx_unlock(ctx);
+				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
 
@@ -797,9 +806,8 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				/* increment our incarnation number if we are
 				 * suspected in the current incarnation
 				 */
-				rc = ctx->sc_ops->get_member_state(ctx,
-								upds[i].smu_id,
-								&self_state);
+				rc = ctx->sc_ops->get_member_state(ctx, self_id,
+								   &self_state);
 				if (rc) {
 					swim_ctx_unlock(ctx);
 					SWIM_ERROR("get_member_state() failed "
@@ -811,10 +819,17 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				    upds[i].smu_state.sms_incarnation)
 					break; /* already incremented */
 
+				SWIM_ERROR("{%lu %c %lu} self SUSPECT received "
+					   "{%lu %c %lu} from %lu\n", self_id,
+					   SWIM_STATUS_CHARS[
+							 self_state.sms_status],
+					   self_state.sms_incarnation, self_id,
+					   SWIM_STATUS_CHARS[
+						  upds[i].smu_state.sms_status],
+					   upds[i].smu_state.sms_incarnation,
+					   from);
+
 				self_state.sms_incarnation++;
-				SWIM_INFO("%lu: self SUSPECT received "
-					  "(new incarnation=%lu)\n", self_id,
-					  self_state.sms_incarnation);
 				rc = swim_updates_notify(ctx, self_id, self_id,
 							 &self_state);
 				if (rc) {
@@ -835,11 +850,20 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 			 */
 			if (upds[i].smu_id == self_id) {
 				swim_ctx_unlock(ctx);
-				SWIM_INFO("%lu: self confirmed DEAD "
-					  "(incarnation=%lu)\n", self_id,
-					  upds[i].smu_state.sms_incarnation);
+				SWIM_ERROR("%lu: self confirmed DEAD received "
+					   "{%lu %c %lu} from %lu\n", self_id,
+					   self_id, SWIM_STATUS_CHARS[
+						  upds[i].smu_state.sms_status],
+					   upds[i].smu_state.sms_incarnation,
+					   from);
+				SWIM_ERROR("SWIM shutdown\n");
 				D_GOTO(out, rc = -ESHUTDOWN);
 			}
+
+			SWIM_ERROR("%lu: DEAD received {%lu %c %lu} from %lu\n",
+				   self_id, upds[i].smu_id, SWIM_STATUS_CHARS[
+						  upds[i].smu_state.sms_status],
+				   upds[i].smu_state.sms_incarnation, from);
 
 			swim_member_dead(ctx, from, upds[i].smu_id,
 					 upds[i].smu_state.sms_incarnation);
@@ -864,8 +888,7 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 				SWIM_INFO("%lu: iresp %lu => %lu\n",
 					  self_id, id_target, id_sendto);
 
-				TAILQ_REMOVE(&ctx->sc_ipings, item,
-					     si_link);
+				TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
 				D_FREE(item);
 				break;
 			}
