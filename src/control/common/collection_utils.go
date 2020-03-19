@@ -27,6 +27,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"unicode"
+
+	"github.com/pkg/errors"
 )
 
 // Includes returns true if string target in slice.
@@ -102,8 +104,34 @@ func Pluralise(s string, n int) string {
 	return s + "s"
 }
 
-// ParseInts converts string of uint32s to uint32 array.
-func ParseInts(in string) (ints []uint32, err error) {
-	str := fmt.Sprintf("[%s]", in)
-	return ints, json.Unmarshal([]byte(str), &ints)
+// ConcatErrors builds single error from error slice.
+func ConcatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
+}
+
+// ParseNumberList converts a comma-separated string of numbers to a slice.
+func ParseNumberList(stringList string, output interface{}) error {
+	str := fmt.Sprintf("[%s]", stringList)
+	if err := json.Unmarshal([]byte(str), output); err != nil {
+		// return more user-friendly errors for malformed inputs
+		switch je := err.(type) {
+		case *json.SyntaxError:
+			return errors.Errorf("unable to parse %q: must be a comma-separated list of numbers", stringList)
+		case *json.UnmarshalTypeError:
+			return errors.Errorf("invalid input: %s can not be stored in %s", je.Value, je.Type)
+		default:
+			// other errors are more likely to be programmer-caused
+			return err
+		}
+	}
+	return nil
 }

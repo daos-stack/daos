@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,19 +158,24 @@ func (r *Runner) IsRunning() bool {
 	return atomic.LoadUint32(&r.running) != 0
 }
 
-// Stop sends relevant shutdown signal to the Runner process (idempotent).
-func (r *Runner) Stop(force bool) error {
+// Signal sends relevant signal to the Runner process (idempotent).
+func (r *Runner) Signal(signal os.Signal) error {
 	if !r.IsRunning() {
 		return nil
 	}
 
-	signal := syscall.SIGTERM
-	if force {
-		signal = syscall.SIGKILL
-	}
-	r.log.Debugf("Stopping I/O server instance %d (%s)", r.Config.Index, signal)
+	r.log.Debugf("Signalling I/O server instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
+}
+
+// Wait waits for the process to exit.
+func (r *Runner) Wait() error {
+	if !r.IsRunning() {
+		return nil
+	}
+
+	return r.cmd.Wait()
 }
 
 // GetConfig returns the runner's configuration

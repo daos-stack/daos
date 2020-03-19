@@ -80,16 +80,20 @@ func (hc *harnessClient) call(ctx context.Context, addr string, rpcReq *mgmtpb.R
 	go func() {
 		var innerErr error
 		rpcResp, innerErr = f(ctx, addr, *rpcReq)
-		errChan <- innerErr
+
+		select {
+		case <-ctx.Done():
+		case errChan <- innerErr:
+		}
 	}()
 
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case err := <-errChan:
 		if err != nil {
 			return nil, err
 		}
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 
 	memberResults := make(system.MemberResults, 0, maxIOServers)
