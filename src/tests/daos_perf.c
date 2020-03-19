@@ -98,11 +98,11 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoid, epoch, 0,
-					    &cred->tc_dkey, 1, &cred->tc_iod,
+					    0, &cred->tc_dkey, 1, &cred->tc_iod,
 					    NULL, &cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoid, epoch,
-					   &cred->tc_dkey, 1,
+					   0, &cred->tc_dkey, 1,
 					   &cred->tc_iod,
 					   &cred->tc_sgl);
 	} else { /* zero-copy */
@@ -111,10 +111,12 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
+					      VOS_OF_USE_TIMESTAMPS,
 					      &cred->tc_dkey, 1, &cred->tc_iod,
 					      NULL, &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoid, epoch,
+					     VOS_OF_USE_TIMESTAMPS,
 					     &cred->tc_dkey, 1, &cred->tc_iod,
 					     false, &ioh);
 		if (rc)
@@ -419,11 +421,11 @@ objects_fetch(d_rank_t rank)
 	int		i;
 	int		j;
 	int		rc = 0;
-	daos_epoch_t	epoch = 0;
+	daos_epoch_t	epoch = crt_hlc_get();
 
 	dts_reset_key();
 	if (!ts_overwrite)
-		++epoch;
+		epoch = crt_hlc_get();
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		for (j = 0; j < ts_dkey_p_obj; j++) {
