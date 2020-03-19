@@ -241,6 +241,11 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'C':
+			if (getenv("DAOS_IO_BYPASS")) {
+				print_message("Skipping MVCC tests: "
+					      "DAOS_IO_BYPASS is set\n");
+				break;
+			}
 			nr_failed += run_mvcc_tests();
 			test_run = true;
 			break;

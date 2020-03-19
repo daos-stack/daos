@@ -347,12 +347,6 @@ ilog_root2punch(struct ilog_context *lctx)
 	return (lctx->ic_root->lr_magic & ILOG_PUNCH_MASK) ? true : false;
 }
 
-static inline bool
-ilog_root2punch(struct ilog_context *lctx)
-{
-	return (lctx->ic_root->lr_magic & ILOG_PUNCH_MASK) ? true : false;
-}
-
 /** Increment the version of the log.   The object tree in particular can
  *  benefit from cached state of the tree.  In order to detect when to
  *  update the case, we keep a version.
