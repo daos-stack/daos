@@ -100,6 +100,11 @@ struct test_arg {
 	char			*ta_pool_name;
 };
 
+/* variables for test group */
+char		**test_group_args;
+int 		test_group_start;
+int		test_group_stop;
+
 static int
 ts_evt_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 		daos_size_t nob, void *args)
@@ -2402,6 +2407,82 @@ ts_cmd_run(char opc, char *args)
 	return rc;
 }
 
+static void
+ts_group(void ** state){
+	int	opc = 0;
+	while((opc = getopt_long(test_group_stop-test_group_start+1,
+				 test_group_args+2,
+				 "C:a:m:e:f:g:d:b:Docl::ts",
+				 ts_ops, NULL)) != -1){
+		tst_fn_val.optval = optarg;
+		tst_fn_val.input = true;
+		void ** st=NULL;
+		switch (opc) {
+		case 'C':
+			ts_open_create(st);
+			break;
+		case 'D':
+			ts_close_destroy(st);
+			break;
+		case 'o':
+			tst_fn_val.input = false;
+			tst_fn_val.optval = NULL;
+			ts_open_create(st);
+			break;
+		case 'c':
+			tst_fn_val.input = false;
+			ts_close_destroy(st);
+			break;
+		case 'a':
+			ts_add_rect(st);
+			break;
+		case 'm':
+			ts_many_add(st);
+			break;
+		case 'e':
+			ts_drain(st);
+			break;
+		case 'f':
+			ts_find_rect(st);
+			break;
+		case 'l':
+			ts_list_rect(st);
+			break;
+		case 'd':
+			ts_delete_rect(st);
+			break;
+		case 'b':
+			ts_tree_debug(st);
+			break;
+		case 't':
+			break;
+		case 's':
+			if (strcasecmp(optarg, "soff") == 0)
+				ts_feats = EVT_FEAT_SORT_SOFF;
+			else if (strcasecmp(optarg, "dist_even") == 0)
+				ts_feats = EVT_FEAT_SORT_DIST_EVEN;
+			break;
+		default:
+			D_PRINT("Unsupported command %c\n", opc);
+			break;
+		}
+
+	}
+}
+
+static int
+run_cmd_line_test(char* test_name, char** args, int start_idx, int stop_idx)
+{
+	test_group_args = args;
+	test_group_start = start_idx;
+	test_group_stop = stop_idx;
+
+	const struct CMUnitTest evt_test[] = {
+		{ test_name, ts_group, NULL, NULL},
+	};
+	return cmocka_run_group_tests_name("Group of tests", evt_test, NULL, NULL);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2439,13 +2520,31 @@ main(int argc, char **argv)
 		goto out;
 	}
 
-	while ((rc = getopt_long(argc, argv, "C:a:m:e:f:g:d:b:Docl::ts:",
-				 ts_ops, NULL)) != -1) {
-		rc = ts_cmd_run(rc, optarg);
-		if (rc != 0)
-			goto out;
+	if(strcmp(argv[1], "--start-test") != 0) {
+		/* It does not have this format: evt_ctl --start-test <test-name> [options]
+		 * So it will execute one cmocka test per parameter */
+		while ((rc = getopt_long(argc, argv, "C:a:m:e:f:g:d:b:Docl::ts:",
+					 ts_ops, NULL)) != -1) {
+			rc = ts_cmd_run(rc, optarg);
+			if (rc != 0)
+				goto out;
+		}
+		rc = 0;
+	} else {
+		int j;
+		for(j=0; j<argc;j++){
+			if(strcmp(argv[j],"-t") == 0 ) {
+				rc = run_internal_tests();
+				if (rc != 0)
+					D_PRINT("Internal tests failed with rc="DF_RC"\n", DP_RC(rc));
+			}
+		}
+		int start_idx = 2;
+		char * test_name = argv[start_idx];
+		int stop_idx = argc-1;
+		rc = run_cmd_line_test(test_name, argv, start_idx, stop_idx);
+
 	}
-	rc = 0;
  out:
 	daos_debug_fini();
 	rc += utest_utx_destroy(ts_utx);
