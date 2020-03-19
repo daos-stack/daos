@@ -915,7 +915,7 @@ def send_notification(hosts, subject, msg, attachment, email_addrs):
     spawn_commands(hosts, mail_cmd, 30)
 
 
-def get_log_size(test_yaml, test_file, args, size_limit=2**30):
+def get_log_size(test_yaml, test_file, args):
     """Get the size of the the directoy of the host test log files in
     the avocado results directory and store the values in a file.
 
@@ -1300,8 +1300,11 @@ def main():
         action="store_true",
         help="process core files from tests")
     parser.add_argument(
-        "-ls", "--log_size",
-        action="store_true",
+        "-ls", "--log-size",
+        action="store",
+        dest="size_limit",
+        nargs=1,
+        type=str,
         help="get log file sizes")
     parser.add_argument(
         "-s", "--sparse",
