@@ -24,7 +24,6 @@
 package server
 
 import (
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -41,36 +40,50 @@ const systemReqTimeout = 30 * time.Second
 func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
 	results := make(system.MemberResults, 0, len(ranks))
 	for _, rank := range ranks {
-		results = append(results,
-			system.NewMemberResult(rank, action, err, system.MemberStateStopped))
+		results = append(results, system.NewMemberResult(rank, action, err,
+			system.MemberStateStopped))
 	}
 
 	return results
 }
 
-func (svc *ControlService) getMSMemberAddress() (string, error) {
+func (svc *ControlService) getMSMember() (*system.Member, error) {
 	if svc.membership == nil || svc.harnessClient == nil {
-		return "", errors.New("host not an access point")
+		return nil, errors.New("host not an access point")
 	}
 
 	msInstance, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
-		return "", errors.Wrap(err, "get MS instance")
+		return nil, errors.Wrap(err, "get MS instance")
 	}
 	if msInstance == nil {
-		return "", errors.New("MS instance not found")
+		return nil, errors.New("MS instance not found")
 	}
 
-	if !msInstance.hasSuperblock() {
-		return "", errors.New("MS instance has no superblock")
-	}
-
-	msMember, err := svc.membership.Get(msInstance.getSuperblock().Rank.Uint32())
+	rank, err := msInstance.GetRank()
 	if err != nil {
-		return "", errors.WithMessage(err, "retrieving MS member")
+		return nil, err
 	}
 
-	return msMember.Addr.String(), nil
+	msMember, err := svc.membership.Get(rank.Uint32())
+	if err != nil {
+		return nil, errors.WithMessage(err, "retrieving MS member")
+	}
+
+	return msMember, nil
+}
+
+type temporary interface {
+	Temporary() bool
+}
+
+func isUnreachableError(err error) bool {
+	te, ok := errors.Cause(err).(temporary)
+	if ok {
+		return !te.Temporary()
+	}
+
+	return false
 }
 
 // updateMemberStatus requests registered harness to ping their instances (system
@@ -89,20 +102,20 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	// Update either:
 	// - members unresponsive to ping
 	// - members with stopped processes
-	// TODO: update members with ping errors
+	// - members returning error from dRPC ping
 	badRanks := make(map[uint32]system.MemberState)
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
-			if strings.Contains(err.Error(), "connection refused") {
-				for _, rank := range ranks {
-					badRanks[rank] = system.MemberStateStopped
-				}
-				svc.log.Debugf("harness at %s is unreachable", addr)
-				continue
+			if !isUnreachableError(err) {
+				return err
 			}
 
-			return err
+			for _, rank := range ranks {
+				badRanks[rank] = system.MemberStateStopped
+			}
+			svc.log.Debugf("harness at %s is unreachable", addr)
+			continue
 		}
 
 		for _, result := range hResults {
@@ -175,6 +188,18 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	return resp, nil
 }
 
+func removeMSRankFromList(ranks []uint32, msRank uint32) []uint32 {
+	rankList := make([]uint32, 0, maxIOServers)
+	for _, r := range ranks {
+		if r == msRank {
+			continue // skip MS access point
+		}
+		rankList = append(rankList, r)
+	}
+
+	return rankList
+}
+
 // prepShutdown requests registered harness to prepare their instances (system members)
 // for system shutdown.
 //
@@ -188,19 +213,25 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 
 	svc.log.Debugf("preparing ranks for shutdown on hosts: %v", hostRanks)
 
-	msAddr, err := svc.getMSMemberAddress()
+	msMember, err := svc.getMSMember()
 	if err != nil {
-		return nil, errors.WithMessage(err, "retrieving MS address")
+		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
+	msAddr := msMember.Addr.String()
+	msRank := msMember.Rank
 
 	for addr, ranks := range hostRanks {
+		rankList := ranks
 		if addr == msAddr {
-			continue // leave MS harness until last
+			rankList = removeMSRankFromList(ranks, msRank)
+		}
+		if len(rankList) == 0 {
+			continue
 		}
 
-		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr)
+		hResults, err := svc.harnessClient.PrepShutdown(ctx, addr, rankList...)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s prep shutdown", addr)
 			}
 
@@ -212,7 +243,8 @@ func (svc *ControlService) prepShutdown(ctx context.Context) (system.MemberResul
 		results = append(results, hResults...)
 	}
 
-	hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr)
+	// prep MS access point last
+	hResults, err := svc.harnessClient.PrepShutdown(ctx, msAddr, msRank)
 	if err != nil {
 		return nil, err
 	}
@@ -239,19 +271,25 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 
 	svc.log.Debugf("stopping ranks on hosts: %v", hostRanks)
 
-	msAddr, err := svc.getMSMemberAddress()
+	msMember, err := svc.getMSMember()
 	if err != nil {
-		return nil, errors.WithMessage(err, "retrieving MS address")
+		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
+	msAddr := msMember.Addr.String()
+	msRank := msMember.Rank
 
 	for addr, ranks := range hostRanks {
+		rankList := ranks
 		if addr == msAddr {
-			continue // leave MS harness until last
+			rankList = removeMSRankFromList(ranks, msRank)
+		}
+		if len(rankList) == 0 {
+			continue
 		}
 
-		hResults, err := svc.harnessClient.Stop(ctx, addr, force)
+		hResults, err := svc.harnessClient.Stop(ctx, addr, force, rankList...)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s stop", addr)
 			}
 			hResults = svc.reportStoppedRanks("stop", ranks, nil)
@@ -261,7 +299,7 @@ func (svc *ControlService) shutdown(ctx context.Context, force bool) (system.Mem
 		results = append(results, hResults...)
 	}
 
-	hResults, err := svc.harnessClient.Stop(ctx, msAddr, force)
+	hResults, err := svc.harnessClient.Stop(ctx, msAddr, force, msRank)
 	if err != nil {
 		return nil, err
 	}
@@ -337,10 +375,11 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 
 	svc.log.Debugf("starting ranks on hosts: %v", hostRanks)
 
-	msAddr, err := svc.getMSMemberAddress()
+	msMember, err := svc.getMSMember()
 	if err != nil {
-		return nil, errors.WithMessage(err, "retrieving MS address")
+		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
+	msAddr := msMember.Addr.String()
 
 	// first start harness managing MS member
 	hResults, err := svc.harnessClient.Start(ctx, msAddr)
@@ -357,7 +396,7 @@ func (svc *ControlService) start(ctx context.Context) (system.MemberResults, err
 
 		hResults, err := svc.harnessClient.Start(ctx, addr)
 		if err != nil {
-			if !strings.Contains(err.Error(), "connection refused") {
+			if !isUnreachableError(err) {
 				return nil, errors.Wrapf(err, "harness %s start", addr)
 			}
 			hResults = svc.reportStoppedRanks("start", ranks,
