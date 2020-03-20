@@ -182,6 +182,43 @@ def set_test_environment(args):
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
+    # Update the default provider,domain based on the OFI_INTEFACE
+    print("Before Environment:")
+    for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
+        print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
+
+    print("fi_info : ")
+    out = get_output("command -v fi_info")
+    print(out)
+
+    print("fi_info : ")
+    out = get_output("fi_info")
+    print(out)
+
+    default_provider = "ofi+sockets"
+    if os.environ["OFI_INTERFACE"].startswith("ib"):
+        default_provider = "ofi+verbs;ofi_rxm"
+    # os.environ["CRT_PHY_ADDR_STR"] = os.environ.get("CRT_PHY_ADDR_STR",
+    #                                                default_provider)
+    # Remove the above comments later after ofi+verbs testing.
+        os.environ["CRT_PHY_ADDR_STR"] = default_provider
+    default_domain = os.environ.get("OFI_INTERFACE")
+    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if (os.environ["OFI_INTERFACE"].startswith("ib") and
+            provider == "ofi+verbs;ofi_rxm"):
+        default_domain = "hfi1_0"
+    os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", default_domain)
+    print("After Environment:")
+    for name in ("OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR"):
+        print(" {0:>20}: {1}".format(name, os.environ.get(name, "No env")))
+    print("Daos Server : ")
+    out = get_output("command -v daos_server")
+    print(out)
+
+    print("fi_info : ")
+    out = get_output("command -v fi_info")
+    print(out)
+
     # Set the default location for daos log files written during testing if not
     # already defined.
     if "DAOS_TEST_LOG_DIR" not in os.environ:
