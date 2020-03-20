@@ -128,7 +128,7 @@ def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
                                 --infected /etc /usr | \
                          tee /var/tmp/clamscan.out
                        rm -f /var/tmp/maldetect.xml
-                       if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+                       if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
                          cat << EOF_GOOD > /var/tmp/maldetect.xml
 <testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
   <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\"/>
