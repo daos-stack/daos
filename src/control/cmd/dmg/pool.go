@@ -186,21 +186,21 @@ type PoolReintegrateCmd struct {
 	connectedCmd
 	UUID      string `long:"pool" required:"1" description:"UUID of the DAOS pool to start reintegration in"`
 	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
-	Targetidx string `long:"target-idx" required:"1" description:"list of target idx(s) to be reintegrated into the rank"`
+	Targetidx string `long:"target-idx" required:"1" description:"Comma-seperated list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
 func (r *PoolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	idxlist, err := common.ParseInts(r.Targetidx)
-	if err != nil {
+	var idxlist []uint32
+	if err := common.ParseNumberList(r.Targetidx, &idxlist); err != nil {
 		return errors.WithMessage(err, "parsing rank list")
 	}
 
 	req := &client.PoolReintegrateReq{UUID: r.UUID, Rank: r.Rank, Targetidx: idxlist}
 
-	err = r.conns.PoolReintegrate(req)
+	err := r.conns.PoolReintegrate(req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
