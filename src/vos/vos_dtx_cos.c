@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -418,7 +418,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	 * use DAOS_INTENT_COS to bypass DTX conflict check.
 	 */
 	rc = vos_obj_hold(occ, cont, *oid, &epr, true,
-			  DAOS_INTENT_COS, true, &obj);
+			  DAOS_INTENT_COS, true, &obj, 0);
 	if (rc != 0)
 		return rc;
 

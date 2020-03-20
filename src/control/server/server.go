@@ -33,6 +33,7 @@ import (
 	"os/user"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -57,8 +58,11 @@ const (
 	// define supported maximum number of I/O servers
 	maxIOServers = 2
 
-	iommuPath = "/sys/class/iommu"
+	iommuPath        = "/sys/class/iommu"
+	minHugePageCount = 128
 )
+
+var ioserverShutdownTimeout = 15 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -118,17 +122,20 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
-	if !cfgHasBdev(cfg) {
-		// If there are no bdevs in the config, use a minimal amount of hugepages.
-		cfg.NrHugepages = 128
-	}
-
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
-		HugePageCount: cfg.NrHugepages,
+		// Default to minimum necessary for scan to work correctly.
+		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
 	}
+
+	if cfgHasBdev(cfg) {
+		// The config value is intended to be per-ioserver, so we need to adjust
+		// based on the number of ioservers.
+		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+	}
+
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 	if _, err := bdevProvider.Prepare(prepReq); err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
@@ -141,20 +148,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// Don't bother with these checks if there aren't any block devices configured.
 	if cfgHasBdev(cfg) {
-		if hugePages.Free != hugePages.Total {
-			// Not sure if this should be an error, per se, but I think we want to display it
-			// on the console to let the admin know that there might be something that needs
-			// to be cleaned up?
-			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
-		}
-
-		if hugePages.FreeMB() == 0 {
-			// Is this appropriate? Or should we bomb out?
-			log.Error("no free hugepages -- NVMe performance may suffer")
+		if hugePages.Free < prepReq.HugePageCount {
+			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 		}
 
 		if runningUser.Uid != "0" && !iommuDetected() {
-			return FaultServerIommuDisabled
+			return FaultIommuDisabled
 		}
 	}
 
@@ -265,12 +264,24 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
+		var err error
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
-			log.Errorf("error during dRPC cleanup: %s", err)
+
+		defer func() {
+			if errors.Cause(err) == context.DeadlineExceeded {
+				log.Debug("resorting to kill signal")
+			}
+			shutdown() // Kill I/O servers if running after graceful shutdown.
+		}()
+
+		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
+		defer cancel()
+
+		// Attampt graceful shutdown of I/O servers.
+		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
+			log.Error(errors.Wrap(err, "graceful shutdown").Error())
 		}
-		shutdown()
 	}()
 
 	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
