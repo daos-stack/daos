@@ -28,6 +28,7 @@ import os
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
 from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class LlnlMpi4pyHdf5(TestWithServers):
@@ -41,15 +42,29 @@ class LlnlMpi4pyHdf5(TestWithServers):
         super(LlnlMpi4pyHdf5, self).__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
         self.mpio = None
+        self.co_prop = None
 
     def setUp(self):
         super(LlnlMpi4pyHdf5, self).setUp()
 
+        # Get params
+        self.co_prop = self.params.get("container_properties",
+                                       "/run/container/*")
         # initialize a python pool object then create the underlying
         self.pool = TestPool(
             self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
+
+        # connect pool
+        self.pool.connect()
+
+        # Enable container using TestContainer object,
+        # Get Container params
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+        # create container
+        self.container.create(con_in=self.co_prop)
 
     def run_test(self, test_repo, test_name):
         """
@@ -69,7 +84,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
             # running tests
             self.mpio.run_llnl_mpi4py_hdf5(
                 self.hostfile_clients, self.pool.uuid, test_repo, test_name,
-                client_processes)
+                client_processes, self.container.uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 

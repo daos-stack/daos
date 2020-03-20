@@ -17,6 +17,9 @@ pool:
     control_method: dmg
 client_processes:
     np: 8
+container:
+#                         [type: enable_chksum: srv_verify: chksum_type: chunk_size]
+    container_properties: [POSIX, False, False, 0, 1048576]
 test_repo:
     llnl: "/usr/lib64/testmpio"
     mpi4py: "/usr/lib64/python2.7/site-packages/mpi4py/tests"

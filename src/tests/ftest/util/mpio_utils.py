@@ -95,7 +95,7 @@ class MpioUtils():
                              .format(str(excep)))
     # pylint: disable=R0913
     def run_llnl_mpi4py_hdf5(self, hostfile, pool_uuid, test_repo,
-                             test_name, client_processes):
+                             test_name, client_processes, cont_uuid):
         """
             Running LLNL, MPI4PY and HDF5 testsuites
             Function Arguments:
@@ -103,6 +103,7 @@ class MpioUtils():
                 pool_uuid         --Pool UUID
                 test_repo         --test repo location
                 test_name         --name of test to be tested
+                cont_uuid         --Container UUID
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
@@ -126,6 +127,7 @@ class MpioUtils():
             cmd = " ".join(test_cmd)
         elif test_name == "mpi4py" and \
              os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
+            env["DAOS_CONT"] = "{}".format(cont_uuid)
             test_cmd = [env.get_export_str(),
                         mpirun,
                         '-np',
