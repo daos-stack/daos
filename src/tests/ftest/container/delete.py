@@ -79,6 +79,7 @@ class DeleteContainerTest(TestWithServers):
         # daos storage and connect to it
         self.prepare_pool()
 
+        passed = False
         try:
             self.container = DaosContainer(self.context)
 
@@ -106,6 +107,13 @@ class DeleteContainerTest(TestWithServers):
 
             self.container.destroy(force=force, poh=poh, con_uuid=cont_uuid)
 
+            passed = True
+
+        except DaosApiError as excep:
+            self.log.info(excep, traceback.format_exc())
+            self.container.destroy(force=1, poh=self.pool.pool.handle, con_uuid=save_cont_uuid)
+
+        finally:
             # close container handle, release a reference on pool in client lib
             # Otherwise test will ERROR in tearDown (pool disconnect -DER_BUSY)
             if opened:
@@ -113,16 +121,7 @@ class DeleteContainerTest(TestWithServers):
 
             self.container = None
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
-
-        except DaosApiError as excep:
-            print(excep, traceback.format_exc())
-            if expected_result == 'PASS':
+            if expected_result == 'PASS' and not passed:
                 self.fail("Test was expected to pass but it failed.\n")
-
-            if opened:
-                self.container.close()
-
-            self.container.destroy(force=1, poh=self.pool.pool.handle, con_uuid=save_cont_uuid)
-            self.container = None
+            if expected_result == 'FAIL' and passed:
+                self.fail("Test was expected to fail but it passed.\n")
