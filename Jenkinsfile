@@ -139,7 +139,7 @@ EOF_GOOD
 <testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
   <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
     <failure message=\\\"Malware Detected\\\" type=\\\"error\\\">
-      <![CDATA[ \\\"\\\$(cat var/tmp/clamscan.out)\\\" ]]>
+      <![CDATA[ \\\"\\\$(cat /var/tmp/clamscan.out)\\\" ]]>
     </failure>
   </testcase>
 </testsuite>
