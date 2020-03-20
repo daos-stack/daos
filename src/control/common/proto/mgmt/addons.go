@@ -57,6 +57,8 @@ func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
 	}
 }
 
+// SetSystemRanks is a convenience method to convert a slice of
+// system ranks to a slice of uint32 ranks for this request.
 func (m *RanksReq) SetSystemRanks(sysRanks []system.Rank) error {
 	if m == nil {
 		return errors.New("nil request")
@@ -64,6 +66,8 @@ func (m *RanksReq) SetSystemRanks(sysRanks []system.Rank) error {
 	return convert.Types(sysRanks, &m.Ranks)
 }
 
+// GetSystemRanks is a convenience method to convert this request's
+// slice of uint32 ranks to a slice of system ranks.
 func (m *RanksReq) GetSystemRanks() []system.Rank {
 	if m != nil {
 		var sysRanks []system.Rank
