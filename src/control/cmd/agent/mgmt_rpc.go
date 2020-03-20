@@ -24,6 +24,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -42,11 +44,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap                string
-	tcfg              *security.TransportConfig
-	cachedAttachInfo  bool
-	GetAttachInfoResp *mgmtpb.GetAttachInfoResp
-	resmgmtpb         []uint8
+	ap               string
+	tcfg             *security.TransportConfig
+	cachedAttachInfo bool
+	resmgmtpb        []byte
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -63,6 +64,11 @@ func (mod *mgmtModule) ID() int32 {
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
+	if os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true" {
+		mod.cachedAttachInfo = false
+		mod.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
 	if mod.cachedAttachInfo {
 		return mod.resmgmtpb, nil
 	}
@@ -92,12 +98,12 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
-	mod.GetAttachInfoResp, err = client.GetAttachInfo(context.Background(), req)
+	resp, err := client.GetAttachInfo(context.Background(), req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	mod.resmgmtpb, err = proto.Marshal(mod.GetAttachInfoResp)
+	mod.resmgmtpb, err = proto.Marshal(resp)
 	if err != nil {
 		return nil, drpc.MarshalingFailure()
 	}
