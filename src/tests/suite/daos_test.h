@@ -182,11 +182,12 @@ enum {
 	SETUP_CONT_CONNECT,
 };
 
-#define DEFAULT_POOL_SIZE	(4ULL << 30)
+#define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
+#define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
 
 #define WAIT_ON_ASYNC_ERR(arg, ev, err)			\
 	do {						\
-		int _rc;					\
+		int _rc;				\
 		daos_event_t *evp;			\
 							\
 		if (!arg->async)			\

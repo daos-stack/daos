@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,18 +63,18 @@ static inline int
 dtx_inprogress(struct dtx_handle *dth, struct vos_dtx_act_ent *dae, int pos)
 {
 	if (dae != NULL) {
-		D_DEBUG(DB_TRACE, "Hit uncommitted DTX "DF_DTI" at %d\n",
+		D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" at %d\n",
 			DP_DTI(&DAE_XID(dae)), pos);
 
 		if (dth != NULL && dth->dth_conflict != NULL) {
-			D_DEBUG(DB_TRACE, "Record conflict DTX "DF_DTI"\n",
+			D_DEBUG(DB_IO, "Record conflict DTX "DF_DTI"\n",
 				DP_DTI(&DAE_XID(dae)));
 			daos_dti_copy(&dth->dth_conflict->dce_xid,
 				      &DAE_XID(dae));
 			dth->dth_conflict->dce_dkey = DAE_DKEY_HASH(dae);
 		}
 	} else {
-		D_DEBUG(DB_TRACE, "Hit uncommitted (unknown) DTX at %d\n", pos);
+		D_DEBUG(DB_IO, "Hit uncommitted (unknown) DTX at %d\n", pos);
 	}
 
 	return -DER_INPROGRESS;
@@ -551,7 +551,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+	D_DEBUG(DB_IO, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
 		DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
@@ -590,7 +590,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		dtx_rec_release(cont, dae, true, NULL);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
+	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
 		DP_RC(rc));
 
 	return rc;
@@ -952,7 +952,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			dth->dth_has_ilog = 1;
 	}
 
-	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
+	D_DEBUG(DB_IO, "Register DTX record for "DF_DTI
 		": entry %p, type %d, %s ilog entry, rc %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ent, type,
 		dth->dth_has_ilog ? "has" : "has not", rc);
@@ -1521,7 +1521,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));

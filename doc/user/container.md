@@ -117,11 +117,161 @@ versions.
 Similar to POSIX extended attributes, users can attach some metadata to each
 container through the daos_cont_{list/get/set}_attr() API.
 
-## Container ACLs
+## Container Access Control Lists
 
-Support for per-container ACLs is scheduled for DAOS v1.2. Similar to pool ACLs,
-container ACLs will implement a subset of the NFSv4 ACL standard. This feature
-will be documented here once available.
+Client user and group access for containers is controlled by 
+[Access Control Lists (ACLs)](/doc/user/acl.md).
+
+Access-controlled container accesses include:
+* Opening the container for access.
+* Reading and writing data in the container.
+  * Reading and writing objects.
+  * Getting, setting, and listing user attributes.
+  * Getting, setting, and listing snapshots.
+* Deleting the container (if the pool does not grant the user permission).
+* Getting and setting container properties.
+* Getting and modifying the container ACL.
+* Modifying the container's owner.
+
+This is reflected in the set of supported 
+[container permissions](/doc/user/acl.md#permissions).
+
+### Pool Permissions vs. Container Permissions
+
+In general, pool permissions are separate from container permissions, and access
+to one does not guarantee access to the other. However, a user must have
+permission to connect to a container's pool before they can access the
+container in any way, regardless of their permissions on that container.
+Once the user has connected to a pool, container access decisions are based on
+the individual container ACL. A user need not have read/write access to a pool
+in order to open a container with read/write access, for example.
+
+There is one situation in which the pool can grant a container-level permission:
+Container deletion. If a user has Delete permission on a pool, this grants them
+the ability to delete *any* container in the pool, regardless of their
+permissions on that container.
+
+If the user does not have Delete permission on the pool, they will only be able
+to delete containers for which they have been explicitly granted Delete
+permission in the container's ACL.
+
+### Creating a container with a custom ACL
+
+To create a container with a custom ACL:
+
+```bash
+$ daos cont create --pool=<UUID> --svc=<rank> --acl-file=<path>
+```
+
+The ACL file format is detailed in the [ACL section](/doc/user/acl.md#acl-file).
+
+### Displaying a container's ACL
+
+To view a container's ACL:
+
+```bash
+$ daos cont get-acl --pool=<UUID> --svc=<rank> --cont=<UUID>
+```
+
+The output is in the same string format used in the ACL file during creation,
+with one ACE per line.
+
+### Modifying a container's ACL
+
+For all of these commands using an ACL file, the ACL file must be in the format
+noted above for container creation.
+
+#### Overwriting the ACL
+
+To replace a container's ACL with a new ACL:
+
+```bash
+$ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --acl-file=<path>
+```
+
+#### Updating entries in an existing ACL
+
+To add or update multiple entries in an existing container ACL:
+
+```bash
+$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --acl-file=<path>
+```
+
+To add or update a single entry in an existing container ACL:
+
+```bash
+$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --entry <ACE>
+```
+
+If there is no existing entry for the principal in the ACL, the new entry is
+added to the ACL. If there is already an entry for the principal, that entry
+is replaced with the new one.
+
+#### Removing an entry from the ACL
+
+To delete an entry for a given principal in an existing container ACL:
+
+```bash
+$ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --principal=<principal>
+```
+
+The principal corresponds to the principal portion of an ACE that was
+set during container creation or a previous container ACL operation. For the
+delete operation, the principal argument must be formatted as follows:
+
+* Named user: `u:username@`
+* Named group: `g:groupname@`
+* Special principals:
+  * `OWNER@`
+  * `GROUP@`
+  * `EVERYONE@`
+
+The entry for that principal will be completely removed. This does not always
+mean that the principal will have no access. Rather, their access to the
+container will be decided based on the remaining ACL rules.
+
+### Ownership
+
+The ownership of the container corresponds to the special principals `OWNER@`
+and `GROUP@` in the ACL. These values are a part of the container properties.
+They may be set on container creation and changed later.
+
+The owner-user (`OWNER@`) always has set-ACL and get-ACL permissions, even if
+they are not explicitly granted by the ACL. This applies regardless of the other
+permissions they are granted by ACE(s) in the ACL.
+
+The owner-group (`GROUP@`) has no special permissions outside what they are
+granted by the ACL.
+
+#### Creating a container with a specific ownership
+
+The default owner user and group are the effective user and group of the user
+creating the container. However, a specific user and/or group may be specified
+at container creation time.
+
+```bash
+$ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> --group=<owner-group>
+```
+
+The user and group names are case sensitive and must be formatted as
+[DAOS ACL user/group principals](/doc/user/acl.md#principal).
+
+#### Changing the ownership
+
+To change the owner user:
+
+```bash
+$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> --user=<owner-user>
+```
+
+To change the owner group:
+
+```bash
+$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> --group=<owner-group>
+```
+
+The user and group names are case sensitive and must be formatted as
+[DAOS ACL user/group principals](/doc/user/acl.md#principal).
 
 ## Compression & Encryption
 
