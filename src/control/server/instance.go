@@ -48,7 +48,8 @@ import (
 type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
-	Stop(bool) error
+	Signal(os.Signal) error
+	Wait() error
 	GetConfig() *ioserver.Config
 }
 
@@ -223,10 +224,16 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
-func (srv *IOServerInstance) Stop(force bool) error {
-	return srv.runner.Stop(force)
+// Stop sends signal to stop IOServerInstance runner.
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
+	if err := srv.runner.Signal(signal); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// IsStarted indicates whether IOServerInstance is in a running state.
 func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
@@ -267,20 +274,6 @@ func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	case <-srv.storageReady:
 		srv.log.Infof("%s instance %d storage ready", DataPlaneName, srv.Index())
 	}
-}
-
-// GetRank returns a non-nil rank if set in the superblock, or an error.
-func (srv *IOServerInstance) GetRank() (system.Rank, error) {
-	sb := srv.getSuperblock()
-	if sb == nil {
-		return system.NilRank, errors.New("nil superblock in GetRank()")
-	}
-
-	if sb.Rank.Equals(system.NilRank) {
-		return system.NilRank, errors.New("nil rank in GetRank()")
-	}
-
-	return *sb.Rank, nil
 }
 
 // SetRank determines the instance rank and sends a SetRank dRPC request
@@ -344,6 +337,25 @@ func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
 	}
 
 	return nil
+}
+
+// GetRank returns a valid instance rank or error.
+func (srv *IOServerInstance) GetRank() (system.Rank, error) {
+	var err error
+	sb := srv.getSuperblock()
+
+	switch {
+	case sb == nil:
+		err = errors.New("nil superblock")
+	case sb.Rank == nil:
+		err = errors.New("nil rank in superblock")
+	}
+
+	if err != nil {
+		return system.NilRank, err
+	}
+
+	return *sb.Rank, nil
 }
 
 // SetTargetCount updates target count in ioserver config.
@@ -479,6 +491,7 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
+// BioErrorNotify logs a blob I/O error.
 func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
