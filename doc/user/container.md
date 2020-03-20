@@ -10,7 +10,7 @@ provided to manage containers.
 
 To create a container:
 ```bash
-$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
@@ -21,8 +21,11 @@ Then subsequent invocations of the daos tools need to reference the path
 to the POSIX file or directory.
 
 ```bash
-$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
+$ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 \
+      --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large \
+      --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
+
 $ daos container query --svc=0 --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
 Container UUID: 419b7562-5bb8-453f-bd52-917c8f5d80d1
@@ -117,26 +120,36 @@ versions.
 Similar to POSIX extended attributes, users can attach some metadata to each
 container through the daos_cont_{list/get/set}_attr() API.
 
-## Container Access Control Lists
+## Access Control Lists
 
-Client user and group access for containers is controlled by 
-[Access Control Lists (ACLs)](/doc/user/acl.md).
+Client user and group access for containers is controlled by
+[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
 
 Access-controlled container accesses include:
+
 * Opening the container for access.
+
 * Reading and writing data in the container.
+
   * Reading and writing objects.
+
   * Getting, setting, and listing user attributes.
+
   * Getting, setting, and listing snapshots.
+
 * Deleting the container (if the pool does not grant the user permission).
+
 * Getting and setting container properties.
+
 * Getting and modifying the container ACL.
+
 * Modifying the container's owner.
 
-This is reflected in the set of supported 
-[container permissions](/doc/user/acl.md#permissions).
 
-### Pool Permissions vs. Container Permissions
+This is reflected in the set of supported
+[container permissions](https://daos-stack.github.io/overview/security/#permissions).
+
+### Pool vs. Container Permissions
 
 In general, pool permissions are separate from container permissions, and access
 to one does not guarantee access to the other. However, a user must have
@@ -155,7 +168,7 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
-### Creating a container with a custom ACL
+### Creating Containers with Custom ACL
 
 To create a container with a custom ACL:
 
@@ -163,9 +176,9 @@ To create a container with a custom ACL:
 $ daos cont create --pool=<UUID> --svc=<rank> --acl-file=<path>
 ```
 
-The ACL file format is detailed in the [ACL section](/doc/user/acl.md#acl-file).
+The ACL file format is detailed in the [ACL section](https://daos-stack.github.io/overview/security/#acl-file).
 
-### Displaying a container's ACL
+### Displaying a Container's ACL
 
 To view a container's ACL:
 
@@ -176,7 +189,7 @@ $ daos cont get-acl --pool=<UUID> --svc=<rank> --cont=<UUID>
 The output is in the same string format used in the ACL file during creation,
 with one ACE per line.
 
-### Modifying a container's ACL
+### Modifying a Container's ACL
 
 For all of these commands using an ACL file, the ACL file must be in the format
 noted above for container creation.
@@ -186,15 +199,17 @@ noted above for container creation.
 To replace a container's ACL with a new ACL:
 
 ```bash
-$ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --acl-file=<path>
+$ daos cont overwrite-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+      --acl-file=<path>
 ```
 
-#### Updating entries in an existing ACL
+#### Updating Entries in an existing ACL
 
 To add or update multiple entries in an existing container ACL:
 
 ```bash
-$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --acl-file=<path>
+$ daos cont update-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+      --acl-file=<path>
 ```
 
 To add or update a single entry in an existing container ACL:
@@ -207,12 +222,13 @@ If there is no existing entry for the principal in the ACL, the new entry is
 added to the ACL. If there is already an entry for the principal, that entry
 is replaced with the new one.
 
-#### Removing an entry from the ACL
+#### Removing an Entry from the ACL
 
 To delete an entry for a given principal in an existing container ACL:
 
 ```bash
-$ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> --principal=<principal>
+$ daos cont delete-acl --pool=<UUID> --svc=<rank> --cont=<UUID> \
+      --principal=<principal>
 ```
 
 The principal corresponds to the principal portion of an ACE that was
@@ -243,35 +259,38 @@ permissions they are granted by ACE(s) in the ACL.
 The owner-group (`GROUP@`) has no special permissions outside what they are
 granted by the ACL.
 
-#### Creating a container with a specific ownership
+#### Creating Containers with Specific Ownership
 
 The default owner user and group are the effective user and group of the user
 creating the container. However, a specific user and/or group may be specified
 at container creation time.
 
 ```bash
-$ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> --group=<owner-group>
+$ daos cont create --pool=<UUID> --svc=<rank> --user=<owner-user> \
+      --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](/doc/user/acl.md#principal).
+[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
 
-#### Changing the ownership
+#### Changing Ownership
 
 To change the owner user:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> --user=<owner-user>
+$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+      --user=<owner-user>
 ```
 
 To change the owner group:
 
 ```bash
-$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> --group=<owner-group>
+$ daos cont set-owner --pool=<UUID> --svc=<rank> --cont=<UUID> \
+      --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](/doc/user/acl.md#principal).
+[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
 
 ## Compression & Encryption
 
