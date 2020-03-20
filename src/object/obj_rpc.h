@@ -157,6 +157,7 @@ struct obj_iod_array {
 	((uuid_t)		(orw_co_hdl)		CRT_VAR) \
 	((uuid_t)		(orw_co_uuid)		CRT_VAR) \
 	((uint64_t)		(orw_epoch)		CRT_VAR) \
+	((uint64_t)		(orw_api_flags)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(orw_map_ver)		CRT_VAR) \
 	((uint32_t)		(orw_nr)		CRT_VAR) \
@@ -229,6 +230,7 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((uuid_t)		(opi_co_uuid)		CRT_VAR) \
 	((daos_unit_oid_t)	(opi_oid)		CRT_VAR) \
 	((uint64_t)		(opi_epoch)		CRT_VAR) \
+	((uint64_t)		(opi_api_flags)		CRT_VAR) \
 	((uint64_t)		(opi_dkey_hash)		CRT_VAR) \
 	((uint32_t)		(opi_map_ver)		CRT_VAR) \
 	((uint32_t)		(opi_flags)		CRT_VAR) \
