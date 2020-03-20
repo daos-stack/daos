@@ -353,7 +353,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		struct dc_obj_shard *obj_shard;
 
 		obj_shard = &obj->cob_shards->do_shards[i];
-		obj_shard->do_shard = i;
+		obj_shard->do_shard = layout->ol_shards[i].po_shard;
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;

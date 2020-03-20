@@ -24,40 +24,236 @@
 
 #include <daos/common.h>
 #include <daos/placement.h>
+#include "daos_api.h"
 #include <daos.h>
 #include "place_obj_common.h"
 
-#define DOM_NR		8
+#define DOM_NR		18
 #define	NODE_PER_DOM	1
 #define VOS_PER_TARGET	4
 #define SPARE_MAX_NUM	(DOM_NR * 3)
-
 #define COMPONENT_NR	(DOM_NR + DOM_NR * NODE_PER_DOM + \
 			 DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
+#define NUM_TARGETS	(DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
+
+#define TEST_PER_OC 1000
 
 static bool			 pl_debug_msg;
+
+void
+placement_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	struct pl_obj_layout	*layout;
+	daos_obj_id_t		oid;
+	int			test_num;
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	srand(time(NULL));
+	oid.hi = 5;
+
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+
+		plt_obj_place(oid, &layout, pl_map, false);
+		plt_obj_layout_check(layout, COMPONENT_NR, 0);
+
+		pl_obj_layout_free(layout);
+	}
+
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tPlacement: OK\n");
+}
+
+void
+rebuild_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	*layout;
+	uint32_t		po_ver;
+	int			test_num;
+	int			num_new_spares;
+	int			fail_tgt;
+	int			rc, i;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+
+		/* Fail target and update the pool map */
+		plt_fail_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			num_new_spares = pl_obj_find_rebuild(pl_map,
+					&md_arr[test_num], NULL, po_ver,
+					spare_tgt_ranks, shard_ids,
+					SPARE_MAX_NUM, -1);
+
+			D_ASSERT(num_new_spares >= 0 && num_new_spares < 2);
+		}
+
+
+		plt_fail_tgt_out(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			md_arr[test_num].omd_ver = po_ver;
+
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout);
+			D_ASSERT(rc == 0);
+
+			plt_obj_layout_check(layout, COMPONENT_NR,
+					layout->ol_nr);
+			pl_obj_layout_free(layout);
+		}
+
+	}
+
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tRebuild: OK\n");
+}
+
+void
+reint_object_class(daos_oclass_id_t cid)
+{
+	struct pool_map		*po_map;
+	struct pl_map		*pl_map;
+	uint32_t		spare_tgt_ranks[SPARE_MAX_NUM];
+	uint32_t		shard_ids[SPARE_MAX_NUM];
+	daos_obj_id_t		oid;
+	uuid_t			pl_uuid;
+	struct daos_obj_md	*md_arr;
+	struct daos_obj_md	md = { 0 };
+	struct pl_obj_layout	**layout;
+	struct pl_obj_layout    *temp_layout;
+	uint32_t		po_ver;
+	int			test_num;
+	int			num_reint;
+	int			fail_tgt;
+	int			rc, i;
+
+	uuid_generate(pl_uuid);
+	srand(time(NULL));
+	oid.hi = 5;
+	po_ver = 1;
+
+	D_ALLOC_ARRAY(md_arr, TEST_PER_OC);
+	D_ASSERT(md_arr != NULL);
+	D_ALLOC_ARRAY(layout, TEST_PER_OC);
+	D_ASSERT(layout != NULL);
+
+	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
+				   &po_map, &pl_map);
+	D_ASSERT(po_map != NULL);
+	D_ASSERT(pl_map != NULL);
+
+	for (i = 0; i < TEST_PER_OC; ++i) {
+		oid.lo = rand();
+		daos_obj_generate_id(&oid, 0, cid, 0);
+		dc_obj_fetch_md(oid, &md);
+		md.omd_ver = po_ver;
+		md_arr[i] = md;
+	}
+
+	/* Generate layouts for later comparison*/
+	for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+		md_arr[test_num].omd_ver = po_ver;
+
+		rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&layout[test_num]);
+		D_ASSERT(rc == 0);
+		plt_obj_layout_check(layout[test_num], COMPONENT_NR, 0);
+	}
+
+	/* fail all the targets */
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+
+		plt_fail_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+
+		plt_fail_tgt_out(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+
+	}
+
+	for (fail_tgt = 0; fail_tgt < NUM_TARGETS; ++fail_tgt) {
+		plt_reint_tgt(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+		pl_map = pl_map_find(pl_uuid, oid);
+
+		for (test_num = 0; test_num < TEST_PER_OC; ++test_num) {
+			rc = pl_obj_place(pl_map, &md_arr[test_num], NULL,
+					&temp_layout);
+			D_ASSERT(rc == 0);
+
+			num_reint = pl_obj_find_reint(pl_map, &md_arr[test_num],
+					NULL, po_ver,  spare_tgt_ranks,
+					shard_ids, SPARE_MAX_NUM, -1);
+
+			reint_check(layout[test_num], temp_layout,
+					spare_tgt_ranks, shard_ids, num_reint,
+					fail_tgt);
+		}
+
+		plt_reint_tgt_up(fail_tgt, &po_ver, po_map,  pl_debug_msg);
+		pl_map_update(pl_uuid, po_map, false, PL_TYPE_JUMP_MAP);
+	}
+
+
+	free_pool_and_placement_map(po_map, pl_map);
+	D_PRINT("\tReintegration: OK\n");
+}
 
 int
 main(int argc, char **argv)
 {
-	int			 i;
-	struct pool_map		*po_map;
-	struct pl_obj_layout	*lo_1;
-	struct pl_obj_layout	*lo_2;
-	struct pl_obj_layout	*lo_3;
-	struct pl_map		*pl_map;
-	uuid_t			 pl_uuid;
-	daos_obj_id_t		 oid;
-	uint32_t		 spare_tgt_candidate[SPARE_MAX_NUM];
-	uint32_t		 spare_tgt_ranks[SPARE_MAX_NUM];
-	uint32_t		 shard_ids[SPARE_MAX_NUM];
-	uint32_t		 failed_tgts[SPARE_MAX_NUM];
-	uint32_t		 reint_tgts[SPARE_MAX_NUM];
-	static uint32_t		 po_ver;
-	unsigned int		 spare_cnt;
+	daos_oclass_id_t	*test_classes;
+	uint32_t		 num_test_oc;
+	char			 oclass_name[50];
+	int			 oc_index;
 	int			 rc;
 
-	po_ver = 1;
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
 		return rc;
@@ -68,131 +264,22 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
-				   VOS_PER_TARGET, PL_TYPE_JUMP_MAP,
-				   &po_map, &pl_map);
-	D_ASSERT(po_map != NULL);
-	D_ASSERT(pl_map != NULL);
-	pool_map_print(po_map);
-	pl_map_print(pl_map);
+	num_test_oc = getObjectClasses(&test_classes);
 
-	uuid_generate(pl_uuid);
-	srand(time(NULL));
-	oid.lo = rand();
-	oid.hi = 5;
+	for (oc_index = 0; oc_index < num_test_oc; ++oc_index) {
 
-	/* initial placement when all nodes alive */
-	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
-	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	plt_obj_place(oid, &lo_1, pl_map);
-	plt_obj_layout_check(lo_1, COMPONENT_NR);
+		daos_oclass_id2name(test_classes[oc_index],  oclass_name);
+		D_PRINT("Running oclass test: %s\n", oclass_name);
 
-	/* test plt_obj_place when some/all shards failed */
-	D_PRINT("\ntest to fail all shards  and new placement ...\n");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_2, pl_map);
-	plt_obj_layout_check(lo_2, COMPONENT_NR);
-	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2, DOM_NR));
-	D_PRINT("spare target candidate:");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++) {
-		spare_tgt_candidate[i] = lo_2->ol_shards[i].po_target;
-		D_PRINT(" %d", spare_tgt_candidate[i]);
+		placement_object_class(test_classes[oc_index]);
+		rebuild_object_class(test_classes[oc_index]);
+		reint_object_class(test_classes[oc_index]);
+
 	}
-	D_PRINT("\n");
 
-	D_PRINT("\ntest to add back all failed shards and new placement ...\n");
-	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_add_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_3, pl_map);
-	plt_obj_layout_check(lo_3, COMPONENT_NR);
-	D_ASSERT(pt_obj_layout_match(lo_1, lo_3, DOM_NR));
+	D_FREE(test_classes);
+	D_PRINT("all tests passed!\n");
 
-	/* test pl_obj_find_rebuild */
-	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare tagets ...\n");
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = lo_3->ol_shards[1].po_target;
-	D_PRINT("failed target %d[0], %d[1]\n, expected %d[0], %d[1]\n",
-		failed_tgts[0], failed_tgts[1], spare_tgt_candidate[0],
-		spare_tgt_candidate[1]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 2, spare_tgt_ranks,
-			pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
-	D_ASSERT(spare_cnt == 2);
-	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[0]);
-	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[1]);
-
-	/* test pl_obj_find_reint */
-	D_PRINT("\ntest pl_obj_find_reint to get correct reintegration "
-			"tagets ...\n");
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = lo_3->ol_shards[1].po_target;
-	reint_tgts[0] = lo_3->ol_shards[0].po_target;
-	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 2, reint_tgts, 1,
-		spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
-		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
-	D_PRINT("reintegrated target %d. expected target %d\n",
-			reint_tgts[0], lo_3->ol_shards[0].po_target);
-
-	D_ASSERT(spare_cnt == 1);
-	D_ASSERT(shard_ids[0] == 0);
-	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
-
-	/* fail the to-be-spare target and select correct next spare */
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = lo_3->ol_shards[1].po_target;
-	failed_tgts[2] = spare_tgt_candidate[0];
-	D_PRINT("\nfailed targets %d[1] %d %d[0], expected spare %d[1]\n",
-		failed_tgts[0], failed_tgts[1], failed_tgts[2],
-		spare_tgt_candidate[1]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 3, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
-	D_ASSERT(spare_cnt == 2);
-	D_ASSERT(shard_ids[0] == 1);
-	D_ASSERT(shard_ids[1] == 0);
-	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[1]);
-
-	/* test pl_obj_find_reint */
-	D_PRINT("\ntest pl_obj_find_reint to get correct reintregation "
-			"tagets ...\n");
-	failed_tgts[0] = lo_3->ol_shards[0].po_target;
-	failed_tgts[1] = spare_tgt_candidate[0];
-	failed_tgts[2] = lo_3->ol_shards[1].po_target;
-	reint_tgts[0] = lo_3->ol_shards[0].po_target;
-	reint_tgts[1] = spare_tgt_candidate[0];
-	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 3, reint_tgts, 2,
-		spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
-		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
-	D_PRINT("\n");
-	D_ASSERT(spare_cnt >= 1);
-	D_ASSERT(shard_ids[spare_cnt-1] == 0);
-	D_ASSERT(spare_tgt_ranks[spare_cnt-1] == lo_3->ol_shards[0].po_target);
-
-	failed_tgts[0] = spare_tgt_candidate[0];
-	failed_tgts[1] = spare_tgt_candidate[1];
-	failed_tgts[2] = lo_3->ol_shards[3].po_target;
-	failed_tgts[3] = lo_3->ol_shards[0].po_target;
-	failed_tgts[4] = lo_3->ol_shards[1].po_target;
-	D_PRINT("\nfailed targets %d %d %d[3] %d[0] %d[1]\n",
-		failed_tgts[0], failed_tgts[1], failed_tgts[2], failed_tgts[3],
-		failed_tgts[4]);
-	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 5, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_JUMP_MAP, SPARE_MAX_NUM, po_map, pl_map);
-	plt_obj_rebuild_unique_check(shard_ids, spare_cnt, COMPONENT_NR);
-	D_ASSERT(spare_cnt == 3);
-
-	pl_obj_layout_free(lo_1);
-	pl_obj_layout_free(lo_2);
-	pl_obj_layout_free(lo_3);
-
-	free_pool_and_placement_map(po_map, pl_map);
 	daos_debug_fini();
-	D_PRINT("\nall tests passed!\n");
 	return 0;
 }
