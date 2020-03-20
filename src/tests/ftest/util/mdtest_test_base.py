@@ -182,7 +182,7 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(
-            str(manager), self.tmp, get_log_file(self.client_log))
+            str(manager), get_log_file(self.client_log))
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             manager.run()

@@ -906,8 +906,7 @@ $ sudo journalctl --unit daos_agent
 
 To validate that the DAOS system is properly installed, the daos_test
 suite can be executed. Ensure the DAOS Agent is configured and running before
-running daos_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
-environment variables are properly set as described [here](#server-startup).
+running daos_test.
 
 ```bash
 orterun -np <num_clients> --hostfile <hostfile> ./daos_test
