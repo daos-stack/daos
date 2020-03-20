@@ -204,11 +204,14 @@ class IorTestBase(TestWithServers):
             env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
+            self.pool.display_pool_daos_space()
             out = manager.run()
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()
 
     def run_multiple_ior_with_pool(self, results, intercept=None):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -287,6 +290,7 @@ class IorTestBase(TestWithServers):
         manager.setup_command(env, hostfile, procs)
         self.lock.release()
         try:
+            self.pool.display_pool_daos_space()
             out = manager.run()
             self.lock.acquire(True)
             results[job_num] = IorCommand.get_ior_metrics(out)
@@ -294,6 +298,8 @@ class IorTestBase(TestWithServers):
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
