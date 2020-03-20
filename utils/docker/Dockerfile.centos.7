@@ -67,13 +67,11 @@ RUN yum -y install epel-release; \
 RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
-           yum-plugin-copr python-pathlib                      \
+           python-pathlib                                      \
            ndctl ipmctl e2fsprogs                              \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
            python36-numpy python36-jira python3-pip;           \
-    yum -y copr enable jhli/ipmctl;                            \
-    yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel openmpi3-devel hwloc-devel
 
 # DAOS python 3 packages required for pylint
