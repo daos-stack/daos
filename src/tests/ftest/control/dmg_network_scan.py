@@ -82,7 +82,7 @@ class DmgNetworkScanTest(TestWithServers):
         output = process.run(fi_info, ignore_status=True)
 
         # Command failed or possibly timed out
-        if output.exit_status != 0 or output.exit_status != 61:
+        if output.exit_status != 0 and output.exit_status != 61:
             msg = "Error occurred running '{}': {}".format(
                 fi_info, output.exit_status)
             self.fail(msg)
