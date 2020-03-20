@@ -579,15 +579,22 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	/* validate input parameters */
 	if (ctx == NULL) {
 		SWIM_ERROR("invalid parameter (ctx is NULL)\n");
-		D_GOTO(out, rc = -EINVAL);
+		D_GOTO(out_err, rc = -EINVAL);
 	}
 
 	if (ctx->sc_self == SWIM_ID_INVALID) /* not initialized yet */
-		D_GOTO(out, rc = 0); /* Ignore this update */
+		D_GOTO(out_err, rc = 0); /* Ignore this update */
 
 	now = swim_now_ms();
 	if (timeout > 0)
 		end = now + timeout;
+
+	if (now > ctx->sc_expect_progress_time &&
+	    0  != ctx->sc_expect_progress_time) {
+		SWIM_ERROR("The progress callback was not called for too long: "
+			   "%lu ms after expected.\n",
+			   now - ctx->sc_expect_progress_time);
+	}
 
 	for (; now <= end || ctx_state == SCS_TIMEDOUT; now = swim_now_ms()) {
 		rc = swim_member_update_suspected(ctx, now);
@@ -752,6 +759,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	}
 	rc = (now > end) ? -ETIMEDOUT : -EINTR;
 out:
+	ctx->sc_expect_progress_time = now + SWIM_PROTOCOL_PERIOD_LEN / 2;
+out_err:
 	return rc;
 }
 

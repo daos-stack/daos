@@ -58,8 +58,8 @@
 #include <gurt/common.h>
 
 /* Use debug capability from CaRT */
-#define SWIM_INFO(fmt, ...)	D_DEBUG(DLOG_INFO, fmt, ##__VA_ARGS__)
-#define SWIM_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR,  fmt, ##__VA_ARGS__)
+#define SWIM_INFO(fmt, ...)	D_DEBUG(DLOG_DBG, fmt, ##__VA_ARGS__)
+#define SWIM_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ##__VA_ARGS__)
 
 #ifdef _USE_ABT_SYNC_
 #define SWIM_MUTEX_T		ABT_mutex
@@ -137,6 +137,7 @@ struct swim_context {
 	swim_id_t		 sc_target;
 	swim_id_t		 sc_self;
 
+	uint64_t		 sc_expect_progress_time;
 	uint64_t		 sc_next_tick_time;
 	uint64_t		 sc_dping_deadline;
 	uint64_t		 sc_iping_deadline;
