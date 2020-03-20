@@ -4,9 +4,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.net.InetAddress;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.*;
 
 import com.intel.daos.hadoop.fs.Constants;
@@ -87,6 +87,7 @@ public class Main {
     protected String path;
     protected int parallel;
     protected String seq;
+    protected int jvmThreads;
 
     protected Runner(FileSystem fs){
       this.fs = fs;
@@ -99,6 +100,8 @@ public class Main {
       String hostname = InetAddress.getLocalHost().getHostName();
       path = path + "/" + hostname + "/" + (seq==null?"":seq);
       System.out.println("write path: " + path);
+      jvmThreads = Integer.valueOf(System.getProperty("jvmThreads", "1"));
+      System.out.println("JVM threads: " + jvmThreads);
     }
 
     public abstract void run() throws Exception;
@@ -114,8 +117,9 @@ public class Main {
 
     protected void prepare() throws Exception {
       super.prepare();
-      writeSize = Integer.parseInt(System.getProperty("writeSize", String.valueOf(8*1024*1024)));
-      System.out.println("write size: " + writeSize);
+      writeSize = Integer.parseInt(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
+              String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
+      System.out.println("write buffer size: " + writeSize);
       fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
       System.out.println("file size: " + fileSize);
     }
@@ -189,7 +193,7 @@ public class Main {
         list.add("-DwriteSize=" + writeSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
-        list.add("-Dthreads=1");
+        list.add("-Dthreads=" + jvmThreads);
         list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
         executors.add(new ShellExecutor(i, list, out, err, WRITE_PERF_PREFIX, FINAL_WRITE_PERF_PREFIX));
@@ -266,6 +270,8 @@ public class Main {
 
   static abstract class ReadRunner extends Runner {
     protected int readSize;
+    protected boolean random;
+    protected long fileSize;
 
     protected ReadRunner(FileSystem fs){
       super(fs);
@@ -276,7 +282,11 @@ public class Main {
       super.prepare();
       readSize = Integer.valueOf(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
               String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
-      System.out.println("read size: " + readSize);
+      System.out.println("read buffer size: " + readSize);
+      random = "true".equalsIgnoreCase(System.getProperty("random"));
+      System.out.println("random: " + random);
+      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
+      System.out.println("file size: " + fileSize);
     }
   }
 
@@ -300,7 +310,8 @@ public class Main {
       ExecutorService executor = Executors.newFixedThreadPool(parallel);
       List<Future<Double>> futures = new ArrayList<>();
       for (int i=0; i<parallel; i++) {
-        Future<Double> future = executor.submit(new ReadTask(i, fs, path+"/thread"+i, readSize));
+        Future<Double> future = executor.submit(
+                new ReadTask(i, fs, path+"/thread"+i, readSize, random, fileSize));
         futures.add(future);
       }
 
@@ -347,8 +358,9 @@ public class Main {
         list.add("-DreadSize=" + readSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
-        list.add("-Dthreads=1");
+        list.add("-Dthreads=" + jvmThreads);
         list.add("-Dseq=" + i);
+        list.add("-Drandom=" + (random?"true":"false"));
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -418,11 +430,15 @@ public class Main {
     FileSystem fs;
     String readPath;
     int readSize;
-    ReadTask(int id, FileSystem fs, String readPath, int readSize) {
+    boolean random;
+    long fileSize;
+    ReadTask(int id, FileSystem fs, String readPath, int readSize, boolean random, long fileSize) {
       this.id = id;
       this.fs = fs;
       this.readPath = readPath;
       this.readSize = readSize;
+      this.random = random;
+      this.fileSize = fileSize;
     }
 
     @Override
@@ -432,13 +448,25 @@ public class Main {
       byte[] bytes = new byte[readSize];
       int size;
       long start = System.currentTimeMillis();
+
       try (FSDataInputStream fos = fs.open(new Path(readPath))) {
-        while (true) {
-          size = fos.read(bytes);
-          if (size < 0) {
-            break;
+        if (random) {
+          Random rd = new Random();
+          while (count < fileSize) {
+            long offset = (long)(fileSize*rd.nextFloat());
+            fos.seek(offset);
+            size = fos.read(bytes, 0, (int)(offset+readSize>fileSize?(fileSize-offset):readSize));
+//            size = fos.read(bytes);
+            count += size;
           }
-          count += size;
+        } else {
+          while (true) {
+            size = fos.read(bytes);
+            if (size < 0) {
+              break;
+            }
+            count += size;
+          }
         }
       } catch (Exception e) {
         e.printStackTrace();
