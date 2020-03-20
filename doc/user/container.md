@@ -40,6 +40,7 @@ Chunk Size:     4096
 ## Container Properties
 
 At creation time, a list of container properties can be specified:
+
 |Container Property|Description|
 |----|----|
 |`DAOS_PROP_CO_LABEL` |A string that a user can associate with a container. e.g., "Cat Pics" or "ResNet-50 training data"|
