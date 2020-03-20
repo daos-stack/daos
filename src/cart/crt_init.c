@@ -330,10 +330,11 @@ do_init:
 
 		/* the verbs provider only works with regular EP */
 		if ((crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS_RXM ||
-		     crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS) &&
+		     crt_gdata.cg_na_plugin == CRT_NA_OFI_VERBS ||
+		     crt_gdata.cg_na_plugin == CRT_NA_OFI_TCP_RXM) &&
 		    crt_gdata.cg_share_na) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-			       "for verbs provider, ignore it.\n");
+			       "for current provider, ignore it.\n");
 			crt_gdata.cg_share_na = false;
 		}
 

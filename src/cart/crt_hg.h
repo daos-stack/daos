@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Intel Corporation
+/* Copyright (C) 2016-2020 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,14 +71,18 @@ enum crt_na_type {
 	CRT_NA_OFI_VERBS_RXM	= 2,
 	CRT_NA_OFI_VERBS	= 3,
 	CRT_NA_OFI_GNI		= 4,
-	CRT_NA_OFI_PSM2		= 5
+	CRT_NA_OFI_PSM2		= 5,
+	CRT_NA_OFI_TCP_RXM	= 6,
+
+	/* Note: This entry should be the last one in enum */
+	CRT_NA_OFI_COUNT,
 };
 
 static inline bool
 crt_na_type_is_ofi(int na_type)
 {
 	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type <= CRT_NA_OFI_PSM2);
+	       (na_type < CRT_NA_OFI_COUNT);
 }
 
 struct crt_na_dict {
