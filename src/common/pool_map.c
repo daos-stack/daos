@@ -1869,6 +1869,9 @@ update_failed_cnt_helper(struct pool_domain *dom,
 			if (pool_target_unavail(&dom->do_targets[i], false))
 				num_failed++;
 		}
+
+		fail_cnts[domain_level+1].fail_cnt += num_failed;
+		fail_cnts[domain_level+1].comp_type = PO_COMP_TP_TARGET;
 	} else {
 		for (i = 0; i < dom->do_child_nr; ++i) {
 			next_dom = &dom->do_children[i];
@@ -1898,8 +1901,7 @@ pool_map_update_failed_cnt(struct pool_map *map)
 	int rc;
 	struct pool_domain *root;
 	struct pool_fail_comp *fail_cnts = map->po_comp_fail_cnts;
-
-	memset(fail_cnts, 0, sizeof(*fail_cnts) * map->po_domain_layers);
+	memset(fail_cnts, 0, sizeof(*fail_cnts) * (map->po_domain_layers + 1));
 
 	rc = pool_map_find_domain(map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0)
@@ -2079,13 +2081,13 @@ pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type)
 	int i;
 	int fail_cnt = -1;
 
-	for (i = 0; i < map->po_domain_layers; ++i) {
+	/* +1 to include target layer. */
+	for (i = 0; i < map->po_domain_layers + 1; ++i) {
 		if (map->po_comp_fail_cnts[i].comp_type == type) {
 			fail_cnt = map->po_comp_fail_cnts[i].fail_cnt;
 			break;
 		}
 	}
-
 	if (fail_cnt == -1)
 		return -DER_NONEXIST;
 
