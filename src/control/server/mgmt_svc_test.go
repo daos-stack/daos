@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1811,7 +1812,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 		daosResp    *mgmtpb.DaosResp
 		inErr       error
 		targetState system.MemberState
-		junkRpc     bool
+		junkRPC     bool
 		expResult   *mgmtpb.RanksResp_RankResult
 	}{
 		"rank success": {
@@ -1834,7 +1835,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 			},
 		},
 		"unmarshal failure": {
-			junkRpc: true,
+			junkRPC: true,
 			expResult: &mgmtpb.RanksResp_RankResult{
 				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
@@ -1854,7 +1855,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 
 			// convert input DaosResp to drpcResponse to test
 			rb := makeBadBytes(42)
-			if !tc.junkRpc {
+			if !tc.junkRPC {
 				rb, _ = proto.Marshal(tc.daosResp)
 			}
 			resp := &drpc.Response{
@@ -1862,7 +1863,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 				Body:   rb,
 			}
 
-			gotResult := drespToRankResult(dRank, "test", resp, tc.inErr, tc.targetState)
+			gotResult := drespToRankResult(ioserver.Rank(dRank), "test", resp, tc.inErr, tc.targetState)
 			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -1888,7 +1889,7 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 		"missing superblock": {
 			missingSB: true,
 			req:       &mgmtpb.RanksReq{},
-			expErr:    errors.New("instance 0 has no superblock"),
+			expErr:    errors.New("nil superblock"),
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{},
@@ -1962,10 +1963,13 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2026,7 +2030,7 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 		"missing superblock": {
 			missingSB: true,
 			req:       &mgmtpb.RanksReq{},
-			expErr:    errors.New("instance 0 has no superblock"),
+			expErr:    errors.New("nil superblock"),
 		},
 		"dRPC resp fails": { // doesn't effect result, err logged
 			req:     &mgmtpb.RanksReq{},
@@ -2104,10 +2108,13 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2169,7 +2176,7 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 		"missing superblock": {
 			missingSB: true,
 			req:       &mgmtpb.RanksReq{},
-			expErr:    errors.New("instance 0 has no superblock"),
+			expErr:    errors.New("nil superblock"),
 		},
 		"instances stopped": {
 			req:              &mgmtpb.RanksReq{},
@@ -2257,10 +2264,13 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)
@@ -2322,7 +2332,7 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			missingSB:        true,
 			instancesStopped: true,
 			req:              &mgmtpb.RanksReq{},
-			expErr:           errors.New("instance 0 has no superblock"),
+			expErr:           errors.New("nil superblock"),
 		},
 		"instances started": {
 			req:    &mgmtpb.RanksReq{},
@@ -2354,17 +2364,20 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 			svc := newTestMgmtSvcMulti(log, ioserverCount, false)
 
 			svc.harness.setStarted()
-			svc.harness.setRestartable()
+			svc.harness.setStartable()
 
 			for i, srv := range svc.harness.instances {
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
 				}
-				if tc.instancesStopped { // real runner reports not started
-					srv.runner = ioserver.NewRunner(log,
-						ioserver.NewConfig())
+
+				trc := &ioserver.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					atomic.StoreUint32(&trc.Running, 1)
 				}
+				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
+				srv.SetIndex(uint32(i))
 
 				srv._superblock.Rank = new(ioserver.Rank)
 				*srv._superblock.Rank = ioserver.Rank(i + 1)

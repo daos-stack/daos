@@ -305,27 +305,17 @@ dss_rpc_cntr_exit(enum dss_rpc_cntr_id id, bool error)
 }
 
 static int
-dss_rpc_hdlr(crt_context_t *ctx, crt_rpc_t *rpc,
+dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	     void (*real_rpc_hdlr)(void *), void *arg)
 {
-	unsigned int		 mod_id = opc_get_mod_id(rpc->cr_opc);
-	struct dss_module	*module = dss_module_get(mod_id);
-	ABT_pool		*pools = arg;
-	ABT_pool		 pool;
-	int			 rc;
+	ABT_pool	*pools = arg;
+	ABT_pool	 pool;
+	int		 rc;
 
-	/*
-	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
-	 * will be NULL for this case.
-	 */
-	if (module != NULL && module->sm_mod_ops != NULL &&
-	    module->sm_mod_ops->dms_abt_pool_choose_cb)
-		pool = module->sm_mod_ops->dms_abt_pool_choose_cb(rpc, pools);
-	else
-		pool = pools[DSS_POOL_IO];
+	pool = pools[DSS_POOL_IO];
 
-	rc = ABT_thread_create(pool, real_rpc_hdlr, rpc, ABT_THREAD_ATTR_NULL,
-			       NULL);
+	rc = ABT_thread_create(pool, real_rpc_hdlr, hdlr_arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
 	return dss_abterr2der(rc);
 }
 
