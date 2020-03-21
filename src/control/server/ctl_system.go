@@ -37,7 +37,7 @@ import (
 const systemReqTimeout = 30 * time.Second
 
 // reportStoppedRanks populates relevant rank results indicating stopped state.
-func (svc *ControlService) reportStoppedRanks(action string, ranks []uint32, err error) system.MemberResults {
+func (svc *ControlService) reportStoppedRanks(action string, ranks []system.Rank, err error) system.MemberResults {
 	results := make(system.MemberResults, 0, len(ranks))
 	for _, rank := range ranks {
 		results = append(results, system.NewMemberResult(rank, action, err,
@@ -65,7 +65,7 @@ func (svc *ControlService) getMSMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	msMember, err := svc.membership.Get(rank.Uint32())
+	msMember, err := svc.membership.Get(rank)
 	if err != nil {
 		return nil, errors.WithMessage(err, "retrieving MS member")
 	}
@@ -103,7 +103,7 @@ func (svc *ControlService) updateMemberStatus(ctx context.Context) error {
 	// - members unresponsive to ping
 	// - members with stopped processes
 	// - members returning error from dRPC ping
-	badRanks := make(map[uint32]system.MemberState)
+	badRanks := make(map[system.Rank]system.MemberState)
 	for addr, ranks := range hostRanks {
 		hResults, err := svc.harnessClient.Query(ctx, addr)
 		if err != nil {
@@ -166,7 +166,7 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	}
 
 	members := svc.membership.Members()
-	ranks := req.GetRanks()
+	ranks := req.GetSystemRanks()
 	if len(ranks) != 0 {
 		members = make(system.Members, 0, len(ranks))
 		for _, rank := range ranks {
@@ -188,10 +188,10 @@ func (svc *ControlService) SystemQuery(parent context.Context, req *ctlpb.System
 	return resp, nil
 }
 
-func removeMSRankFromList(ranks []uint32, msRank uint32) []uint32 {
-	rankList := make([]uint32, 0, maxIOServers)
+func removeMSRankFromList(ranks []system.Rank, msRank system.Rank) []system.Rank {
+	rankList := make([]system.Rank, 0, maxIOServers)
 	for _, r := range ranks {
-		if r == msRank {
+		if r.Equals(msRank) {
 			continue // skip MS access point
 		}
 		rankList = append(rankList, r)
