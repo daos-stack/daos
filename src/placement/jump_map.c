@@ -347,7 +347,7 @@ count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	/* we might not have any valid targets left at all */
 	unusable_tgts += (layout->ol_nr - failed_in_layout);
 
-	if(unusable_tgts >= num_targets)
+	if (unusable_tgts >= num_targets)
 		return 0;
 
 	return num_targets - unusable_tgts;
@@ -611,7 +611,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		j = 0;
 	}
 
-	if(fail_tgt_cnt > 0)
+	if (fail_tgt_cnt > 0)
 		rc = obj_remap_shards(jmap, md, layout, jmop, remap_list,
 				for_reint, tgts_used, dom_used, fail_tgt_cnt);
 out:
