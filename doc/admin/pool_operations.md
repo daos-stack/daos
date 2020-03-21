@@ -285,8 +285,6 @@ These should be the same values used when reintegrating the targets.
 $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 ```
 
-
-
 ### Pool Extension
 
 #### Target Addition & Space Rebalancing

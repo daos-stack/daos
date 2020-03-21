@@ -3060,7 +3060,6 @@ rechoose:
 	if (rc) {
 		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
 			DP_UUID(pool_uuid), rc);
-		crt_req_decref(rpc);
 		D_GOTO(out_rpc, rc);
 	}
 
@@ -3839,7 +3838,6 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_INFO("calling ds pool update internal\n");
 	/* Update target by target id */
 	rc = ds_pool_update_internal(pool_uuid, &target_list, opc, map_version,
 				     hint, &updated);
