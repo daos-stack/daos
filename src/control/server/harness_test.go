@@ -26,12 +26,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -51,15 +49,12 @@ import (
 
 const testShortTimeout = 50 * time.Millisecond
 
-func TestHarnessCreateSuperblocks(t *testing.T) {
+func TestServer_HarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
 
 	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
@@ -117,6 +112,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	h.setStarted()
 	mi, err := h.GetMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +137,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 }
 
-func TestHarnessGetMSLeaderInstance(t *testing.T) {
+func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
 	for name, tc := range map[string]struct {
@@ -235,6 +231,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			h.setStarted()
 
 			_, err := h.GetMSLeaderInstance()
 			common.CmpErr(t, tc.expError, err)
@@ -242,7 +239,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 	}
 }
 
-func TestHarnessIOServerStart(t *testing.T) {
+func TestServer_HarnessIOServerStart(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trc           *ioserver.TestRunnerConfig
 		expStartErr   error
@@ -272,11 +269,8 @@ func TestHarnessIOServerStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, cleanup := common.CreateTestDir(t)
+			defer cleanup()
 
 			srvCfgs := make([]*ioserver.Config, maxIOServers)
 			for i := 0; i < maxIOServers; i++ {

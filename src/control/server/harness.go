@@ -87,6 +87,10 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 // GetMSLeaderInstance returns a managed IO Server instance to be used as a
 // management target and fails if selected instance is not MS Leader.
 func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+	if !h.IsStarted() {
+		return nil, FaultHarnessNotStarted
+	}
+
 	h.RLock()
 	defer h.RUnlock()
 
