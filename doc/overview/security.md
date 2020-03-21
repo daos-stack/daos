@@ -45,7 +45,7 @@ invoked by a component which connects with the correct certificate.
 ### Access Control Lists
 
 Client access to resources like pools and containers is controlled by
-DAOS Access Control Lists (AC). These ACLs are derived in part from NFSv4 ACLs,
+DAOS Access Control Lists (ACL). These ACLs are derived in part from NFSv4 ACLs,
 and adapted for the unique needs of a distributed system.
 
 The client may request read-only or read-write access to the resource. If the
@@ -208,5 +208,5 @@ each ACE:
 * The base size of an ACE is 256 bytes.
 * If the ACE principal is *not* one of the special principals:
   * Add the length of the principal string + 1.
-  * If that value is not 64-byte aligned, round up to the nearest 64 byte 
+  * If that value is not 64-byte aligned, round up to the nearest 64 byte
     boundary.

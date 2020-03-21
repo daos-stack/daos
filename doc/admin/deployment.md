@@ -933,6 +933,9 @@ daos_test and that the following environment variables are properly set:
 
 - `OFI_DOMAIN` must optionally be set for infiniband deployments.
 
+- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
+  non-default path for the socket.
+
 While those environment variables need to be set up for DAOS v1.0, versions 1.2
 and upward automatically set up the environment via the agent and don't require
 any special environment set up to run applications.
