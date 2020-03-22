@@ -247,8 +247,6 @@ class Dfuse(DfuseCommand):
 
         # obtain any env variables to be exported
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = self.tmp
-
         if self.log_file:
             env["D_LOG_FILE"] = self.log_file
 
