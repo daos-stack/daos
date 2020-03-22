@@ -922,8 +922,23 @@ $ sudo journalctl --unit daos-agent
 ## System Validation
 
 To validate that the DAOS system is properly installed, the daos_test
-suite can be executed. Ensure the DAOS Agent is configured and running before
-running daos_test.
+suite can be executed. Ensure the DAOS Agent is configured before running
+daos_test and that the following environment variables are properly set:
+
+- `CRT_PHY_ADDR_STR` must be set to match the provider specified in the server
+  yaml configuration file (e.g. export `CRT_PHY_ADDR_STR="ofi+sockets"`)
+
+- `OFI_INTERFACE` is set to the network interface you want to user on the client
+  node.
+
+- `OFI_DOMAIN` must optionally be set for infiniband deployments.
+
+- `DAOS_AGENT_DRPC_DIR` must also optionally be set if the agent is using a
+  non-default path for the socket.
+
+While those environment variables need to be set up for DAOS v1.0, versions 1.2
+and upward automatically set up the environment via the agent and don't require
+any special environment set up to run applications.
 
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
