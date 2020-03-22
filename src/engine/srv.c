@@ -74,6 +74,8 @@
 unsigned int	dss_tgt_offload_xs_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
+/** SWIM xstream index */
+unsigned int	dss_swim_idx = 0;
 /** Number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
 /**
@@ -98,6 +100,12 @@ unsigned int
 dss_ctx_nr_get(void)
 {
 	return DSS_CTX_NR_TOTAL;
+}
+
+unsigned int
+dss_ctx_get_swim_ctx(void)
+{
+	return dss_swim_idx == 0 ? 0 : dss_swim_idx - DRPC_XS_NR;
 }
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
@@ -603,18 +611,27 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 */
 	if (dss_helper_pool) {
 		comm = (xs_id == 0) || (xs_id >= dss_sys_xs_nr &&
-				xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
+				xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr)) ||
+			xs_id == dss_swim_idx;
 	} else {
 		int	helper_per_tgt;
 
 		helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
 		D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 ||
 			 helper_per_tgt == 2);
-		xs_offset = xs_id < dss_sys_xs_nr ? -1 :
-				(((xs_id) - dss_sys_xs_nr) %
-				 (helper_per_tgt + 1));
-		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+
+		if (xs_id >= dss_sys_xs_nr &&
+		    xs_id < (dss_sys_xs_nr + dss_tgt_offload_xs_nr))
+			xs_offset = ((xs_id) - dss_sys_xs_nr) %
+				 (helper_per_tgt + 1);
+		else
+			xs_offset = -1;
+
+		comm = xs_id < dss_sys_xs_nr ||
+		       xs_offset == 0 || xs_offset == 1 ||
+		       xs_id == dss_swim_idx;
 	}
+
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
@@ -631,7 +648,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * and monitored independently (e.g. via ps(1))
 	 */
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
-	if (xs_id < dss_sys_xs_nr) {
+	if (xs_id < dss_sys_xs_nr || xs_id == dss_swim_idx) {
 		/** system xtreams are named daos_sys_$num */
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
 			 xs_id);
@@ -935,30 +952,37 @@ dss_xstreams_init(void)
 	}
 
 	/* start offload XS if any */
-	if (dss_tgt_offload_xs_nr == 0)
-		D_GOTO(out, rc);
-	if (dss_helper_pool) {
-		for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
-			rc = dss_start_xs_id(xs_id);
-			if (rc)
-				D_GOTO(out, rc);
-		}
-	} else {
-		D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
-			  "bad dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
-			  dss_tgt_offload_xs_nr, dss_tgt_nr);
-		for (i = 0; i < dss_tgt_nr; i++) {
-			int j;
-
-			for (j = 0; j < dss_tgt_offload_xs_nr / dss_tgt_nr;
-			     j++) {
-				xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+	if (dss_tgt_offload_xs_nr > 0) {
+		if (dss_helper_pool) {
+			for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
+				xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
 				rc = dss_start_xs_id(xs_id);
 				if (rc)
 					D_GOTO(out, rc);
 			}
+		} else {
+			D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
+				  "dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
+				  dss_tgt_offload_xs_nr, dss_tgt_nr);
+			for (i = 0; i < dss_tgt_nr; i++) {
+				int j;
+
+				for (j = 0; j < dss_tgt_offload_xs_nr /
+						dss_tgt_nr; j++) {
+					xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+					rc = dss_start_xs_id(xs_id);
+					if (rc)
+						D_GOTO(out, rc);
+				}
+			}
 		}
+	}
+
+	/* If swim has separate core xstream */
+	if (dss_swim_idx != 0) {
+		rc = dss_start_xs_id(dss_swim_idx);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "

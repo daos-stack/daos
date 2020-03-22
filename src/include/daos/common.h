@@ -856,7 +856,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 #define DAOS_NVME_SHMID_NONE	-1
 #define DAOS_NVME_MEM_PRIMARY	0
 
-crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
+crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr,
+					  int swim_idx);
 
 int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
 			   struct dtx_id *dti);

@@ -172,8 +172,8 @@ out:
 	return rc;
 }
 
-int
-crt_context_provider_create(crt_context_t *crt_ctx, int provider)
+static int
+crt_context_provider_create(crt_context_t *crt_ctx, int provider, uint32_t swim_idx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -275,7 +275,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
 	    ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
-		rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
+		rc = crt_swim_init(swim_idx);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
@@ -293,7 +293,8 @@ out:
 int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov,
+					   crt_gdata.cg_swim_crt_idx);
 }
 
 int

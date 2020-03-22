@@ -927,21 +927,6 @@ static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
 static void pool_svc_get_leader(struct pool_svc *svc);
 static void pool_svc_put_leader(struct pool_svc *svc);
 
-static void
-pool_exclude_rank_ult(void *data)
-{
-	struct ds_pool_exclude_arg     *arg = data;
-	int				rc;
-
-	rc = pool_svc_exclude_rank(arg->svc, arg->rank);
-
-	D_DEBUG(DB_MGMT, DF_UUID" exclude rank %u : rc %d\n",
-		DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
-
-	pool_svc_put_leader(arg->svc);
-	D_FREE_PTR(arg);
-}
-
 /* Disable all pools exclusion */
 void
 ds_pool_disable_exclude(void)
@@ -955,25 +940,58 @@ ds_pool_enable_exclude(void)
 	pool_disable_exclude = false;
 }
 
+static void
+pool_exclude_rank_ult(void *data)
+{
+	struct ds_pool_exclude_arg     *arg = data;
+	daos_prop_t		prop = { 0 };
+	struct daos_prop_entry	*entry;
+	struct pool_svc		*svc;
+	int			rc = 0;
+
+	pool_svc_get_leader(arg->svc);
+	svc = arg->svc;
+	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+	if (rc)
+		D_GOTO(free, rc);
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+		D_DEBUG(DB_MGMT, "self healing is disabled\n");
+		D_GOTO(prop_fini, rc);
+	}
+
+	rc = pool_svc_exclude_rank(svc, arg->rank);
+	D_DEBUG(DB_MGMT, DF_UUID" exclude rank %u : rc %d\n",
+		DP_UUID(svc->ps_uuid), arg->rank, rc);
+
+prop_fini:
+	daos_prop_fini(&prop);
+free:
+	if (rc)
+		D_ERROR("pool "DF_UUID" exclud failed: rc %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+	pool_svc_put_leader(arg->svc);
+	D_FREE_PTR(arg);
+}
+
 static int
 pool_exclude_rank(struct pool_svc *svc, d_rank_t rank)
 {
-	struct ds_pool_exclude_arg	*ult_arg;
-	int				rc;
+	struct ds_pool_exclude_arg      *ult_arg;
+	int                             rc;
 
 	D_ALLOC_PTR(ult_arg);
 	if (ult_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	pool_svc_get_leader(svc);
 	ult_arg->svc = svc;
 	ult_arg->rank = rank;
-	rc = dss_ult_create(pool_exclude_rank_ult, ult_arg, DSS_XS_SELF,
+	rc = dss_ult_create(pool_exclude_rank_ult, ult_arg, DSS_XS_SYS,
 			    0, 0, NULL);
-	if (rc) {
-		pool_svc_put_leader(svc);
+	if (rc)
 		D_FREE_PTR(ult_arg);
-	}
 out:
 	if (rc)
 		D_ERROR("exclude ult failed: rc %d\n", rc);
@@ -984,37 +1002,17 @@ static void
 ds_pool_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
-	daos_prop_t		prop = { 0 };
-	struct daos_prop_entry	*entry;
-	struct pool_svc		*svc = arg;
-	int			rc = 0;
+	struct pool_svc	*svc = arg;
 
 	/* Only used for exclude the rank for the moment */
 	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
-	    type != CRT_EVT_DEAD ||
-	    pool_disable_exclude) {
+	    type != CRT_EVT_DEAD || pool_disable_exclude) {
 		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
 			src, type, pool_disable_exclude);
 		return;
 	}
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc)
-		D_GOTO(out, rc);
-
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
-		D_DEBUG(DB_MGMT, "self healing is disabled\n");
-		D_GOTO(out, rc);
-	}
-
-	rc = pool_exclude_rank(svc, rank);
-out:
-	if (rc)
-		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
-			DP_UUID(svc->ps_uuid), src, rc);
-	daos_prop_fini(&prop);
+	pool_exclude_rank(svc, rank);
 }
 
 static void

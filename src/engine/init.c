@@ -290,6 +290,12 @@ retry:
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
 		dss_helper_pool = true;
 
+	/* If there are enough cores, let's use separate cores for SWIM */
+	if (ncores > tgt_nr + dss_sys_xs_nr + dss_tgt_offload_xs_nr) {
+		dss_swim_idx = dss_sys_xs_nr + tgt_nr + dss_tgt_offload_xs_nr;
+		dss_helper_pool = true;
+	}
+
 	return tgt_nr;
 }
 
@@ -576,9 +582,10 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t		 bound;
-	unsigned int		 ctx_nr;
-	int			 rc;
+	uint64_t		bound;
+	unsigned int		ctx_nr;
+	unsigned int		crt_swim_idx;
+	int			rc;
 	struct engine_metrics	*metrics;
 
 	/*
@@ -636,9 +643,10 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
+	crt_swim_idx = dss_ctx_get_swim_ctx();
 	rc = crt_init_opt(daos_sysname,
 			  CRT_FLAG_BIT_SERVER,
-			  daos_crt_init_opt_get(true, ctx_nr));
+			  daos_crt_init_opt_get(true, ctx_nr, crt_swim_idx));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
