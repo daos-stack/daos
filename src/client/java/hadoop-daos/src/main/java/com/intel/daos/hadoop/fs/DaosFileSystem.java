@@ -153,7 +153,7 @@ public class DaosFileSystem extends FileSystem {
   public void initialize(URI name, Configuration conf)
           throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem initializing");
+      LOG.debug("DaosFileSystem initializing for " + name);
     }
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
@@ -223,6 +223,18 @@ public class DaosFileSystem extends FileSystem {
       if (StringUtils.isEmpty(svc)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_SVC +
                 " is null, need to set " + Constants.DAOS_POOL_SVC);
+      }
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(name + " configs:");
+        LOG.debug("pool uuid: " + poolUuid);
+        LOG.debug("container uuid: " + contUuid);
+        LOG.debug("pool svc: " + svc);
+        LOG.debug("read buffer size " + readBufferSize);
+        LOG.debug("write buffer size: " + writeBufferSize);
+        LOG.debug("block size: " + blockSize);
+        LOG.debug("chunk size: " + chunkSize);
+        LOG.debug("preload size: " + preLoadBufferSize);
       }
 
       // daosFSclient build

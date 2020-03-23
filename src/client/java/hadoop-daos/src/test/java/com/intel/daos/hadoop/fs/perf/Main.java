@@ -40,6 +40,10 @@ public class Main {
     if (svc != null) {
       conf.set(Constants.DAOS_POOL_SVC, svc);
     }
+    String defaultURI = System.getProperty("uri", "daos://default:1");
+    if (defaultURI != null) {
+      conf.set("fs.defaultFS", defaultURI);
+    }
   }
 
   public static void main(String args[]) throws Exception {
@@ -58,7 +62,7 @@ public class Main {
       System.out.println("in threads mode");
       FileSystem fs = null;
       if ("hadoop-api".equalsIgnoreCase(System.getProperty("api", "hadoop-api"))) {
-        Configuration conf = new Configuration();
+        Configuration conf = new Configuration(false);
         setDFSArgs(conf);
         fs = FileSystem.get(conf);
       }
