@@ -20,7 +20,7 @@ public class Test {
     while (count < fileSize) {
       long offset = (long)(fileSize*rd.nextFloat());
       round++;
-      if (offset + 131072 > fileSize) {
+      if (offset + 4*1024*1024 > fileSize) {
         exceed++;
       }
 //      System.out.println(offset);

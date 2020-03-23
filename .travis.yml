@@ -7,10 +7,13 @@ env:
 
 language: c
 
+language: java
+jdk: openjdk8
+
 services:
  - docker
 
-berfore_install:
+before_install:
  - echo $DOCKER_IMAGE
  - git submodule init
  - git submodule update

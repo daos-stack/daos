@@ -296,7 +296,12 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, preLoadBufferSize));
+            file, statistics, bufferSize, preLoadBufferSize));
+  }
+
+  @Override
+  public FSDataInputStream open(Path f) throws IOException {
+    return open(f, readBufferSize);
   }
 
   @Override
