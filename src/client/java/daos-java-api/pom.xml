@@ -113,7 +113,6 @@
                   <arg value="-L/usr/local/lib"/>
                   <arg value="-L/usr/local/lib64"/>
                   <arg value="-ldaos"/>
-                  <arg value="-lmpi"/>
                   <arg value="-luuid"/>
                   <arg value="-ldaos_common"/>
                   <arg value="-ldfs"/>
@@ -131,28 +130,10 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <systemPropertyVariables>
-            <java.library.path>${project.build.directory}/classes:${daos.install.path}/lib:${daos.install.path}/lib64
-            </java.library.path>
-          </systemPropertyVariables>
-          <argLine>
-            -Djava.library.path=${project.build.directory}/classes:${daos.install.path}/lib:${daos.install.path}/lib64
-          </argLine>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <systemPropertyVariables>
-            <java.library.path>${daos.install.path}/lib:${daos.install.path}/lib64
-            </java.library.path>
-          </systemPropertyVariables>
-          <argLine>
-            -Djava.library.path=${daos.install.path}/lib:${daos.install.path}/lib64
-          </argLine>
-        </configuration>
         <executions>
           <execution>
             <id>integration-test</id>

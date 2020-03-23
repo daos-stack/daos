@@ -474,6 +474,9 @@ public class DaosFile {
     try {
       getStatAttributes(false);
     } catch (Exception e) {
+      if (log.isDebugEnabled()) {
+        log.debug("not exists", e);
+      }
       if (!(e instanceof DaosIOException)) {
         throw new DaosIOException(e);
       }
