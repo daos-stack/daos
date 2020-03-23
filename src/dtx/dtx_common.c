@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,6 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct ds_pool_child	*pool = cont->sc_pool;
-	ABT_future		 future = dbca->dbca_deregistering;
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -123,7 +122,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	 * flush done, then free the dbca.
 	 */
 	d_list_del_init(&dbca->dbca_link);
-	rc = ABT_future_set(future, NULL);
+	rc = ABT_future_set(dbca->dbca_deregistering, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
 		  "flush on "DF_UUID": rc = %d\n", DP_UUID(cont->sc_uuid), rc);
 }

@@ -247,10 +247,12 @@ dtx_req_list_cb(void **args)
 				dra->dra_result = drr->drr_result;
 		}
 
+		drr = args[0];
 		D_CDEBUG(dra->dra_result < 0, DLOG_ERR, DB_TRACE,
-			 "DTX req for opc %x %s: rc = %d.\n", dra->dra_opc,
+			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
+			 dra->dra_opc, DP_DTI(drr->drr_dti),
 			 dra->dra_result < 0 ? "failed" : "succeed",
-			 dra->dra_result);
+			 dra->dra_length, dra->dra_result);
 	}
 }
 
