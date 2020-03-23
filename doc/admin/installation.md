@@ -201,20 +201,20 @@ container:
 $ docker exec server scons --build-deps=yes install PREFIX=/usr
 ```
 
-### Running DAOS in Docker
+### Simple Docker Setup
 
-The DAOS service can be started as follows:
+The `daos_server_local.yml` configuration file sets up a simple local DAOS
+system with a single server instance running in the container. By default, it
+uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
+/tmp. The storage size can be changed in the yaml file if necessary.
+
+The DAOS service can be started in the docker container as follows:
 
 ```bash
 $ docker exec server mkdir /var/run/daos_server
 $ docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
-
-The daos_server_local.yml configuration file sets up a simple local DAOS system
-with a single server instance running in the container. By default, it uses 4GB
-of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp.
-The storage size can be changed in the yaml file if necessary.
 
 Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
@@ -228,3 +228,6 @@ can be created using the daos admin tool (see next section).
 
 !!! note
     Please make sure that the uio_pci_generic module is loaded.
+
+For more advanced configurations involving SCM, SSD or a real fabric, please
+refer to the next section.

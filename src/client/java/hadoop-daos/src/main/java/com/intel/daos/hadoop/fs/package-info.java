@@ -24,7 +24,7 @@
 /**
  * DAOS Implementation of Hadoop File System.
  *
- * <p>
+ * <pre>
  * To get instance of DAOS Implementation, {@link com.intel.daos.hadoop.fs.DaosFileSystem}, user just needs to make
  * below statements after proper hadoop configuration.
  * <code>
@@ -34,6 +34,7 @@
  * cfg.set(Constants.DAOS_POOL_SVC, svc);
  * FileSystem fileSystem = FileSystem.get(URI.create("daos://ip:port/"), cfg);
  * </code>
+ * </pre>
  *
  * <p>
  * Be noted the schema is {@link com.intel.daos.hadoop.fs.Constants#DAOS_SCHEMA}

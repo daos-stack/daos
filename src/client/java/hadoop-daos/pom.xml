@@ -16,6 +16,8 @@
 
   <properties>
     <hadoop.version>2.7.6</hadoop.version>
+    <native.build.path>${project.basedir}/build</native.build.path>
+    <daos.install.path>/usr/local/daos</daos.install.path>
   </properties>
 
   <dependencies>
@@ -82,21 +84,35 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <configuration>
-          <forkCount>0</forkCount>
-        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
         <executions>
           <execution>
-            <id>integration-test</id>
             <goals>
-              <goal>integration-test</goal>
+              <goal>test-jar</goal>
             </goals>
           </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
           <execution>
-            <id>verify</id>
+            <phase>package</phase>
             <goals>
-              <goal>verify</goal>
+              <goal>shade</goal>
             </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <transformers>
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/org.apache.hadoop.fs.FileSystem</resource>
+                </transformer>
+              </transformers>
+            </configuration>
           </execution>
         </executions>
       </plugin>
