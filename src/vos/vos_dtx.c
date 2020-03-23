@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1521,7 +1521,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
 	rc = vos_obj_hold(occ, cont, oid, &epr, true,
-			  DAOS_INTENT_DEFAULT, true, &obj);
+			  DAOS_INTENT_DEFAULT, true, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
@@ -1568,6 +1568,14 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			int				 count;
 
 			dae_df = &dbd->dbd_active_data[i];
+			if (dae_df->dae_flags & DTX_EF_INVALID)
+				continue;
+
+			if (daos_is_zero_dti(&dae_df->dae_xid)) {
+				D_WARN("Hit zero active DTX entry.\n");
+				continue;
+			}
+
 			D_ALLOC_PTR(dae);
 			if (dae == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);

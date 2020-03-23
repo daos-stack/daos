@@ -710,8 +710,9 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
-			      io->ui_version, &io->ui_dkey, io->ui_iods_top + 1,
-			      io->ui_iods, NULL, io->ui_sgls);
+			      io->ui_version, 0 /* flags */, &io->ui_dkey,
+			      io->ui_iods_top + 1, io->ui_iods, NULL,
+			      io->ui_sgls);
 }
 
 static int
@@ -1731,10 +1732,8 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 	case -DER_NOMEM:
 	case -DER_NOSPACE:
 		if (leader) {
-			uint64_t cur_idx = raft_get_current_idx(db->d_raft);
-
-			/* No space / desperation: compact to current index */
-			(void) rdb_raft_compact_to_index(db, cur_idx);
+			/* No space / desperation: compact to committed idx */
+			rdb_raft_compact_to_index(db, committed);
 
 			raft_become_follower(db->d_raft);
 			leader = false;

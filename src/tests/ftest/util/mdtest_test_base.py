@@ -27,7 +27,7 @@ import os
 import subprocess
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
@@ -67,10 +67,14 @@ class MdtestBase(TestWithServers):
         # Until DAOS-3320 is resolved run IOR for POSIX
         # with single client node
         if self.mdtest_cmd.api.value == "POSIX":
+            self.log.info("Restricting mdtest to one node")
             self.hostlist_clients = [self.hostlist_clients[0]]
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
+
+        self.log.info('Clients %s', self.hostlist_clients)
+        self.log.info('Servers %s', self.hostlist_servers)
 
     def tearDown(self):
         """Tear down each test case."""
@@ -117,7 +121,10 @@ class MdtestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
+        self.dfuse = Dfuse(self.hostlist_clients,
+                           self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=True)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -182,7 +189,7 @@ class MdtestBase(TestWithServers):
             processes (int): number of host processes
         """
         env = self.mdtest_cmd.get_default_env(
-            str(manager), self.tmp, self.client_log)
+            str(manager), self.tmp, get_log_file(self.client_log))
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
             manager.run()
