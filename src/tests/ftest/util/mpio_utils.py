@@ -127,7 +127,7 @@ class MpioUtils():
         elif test_name == "mpi4py" and \
              os.path.isfile(os.path.join(test_repo, "test_io_daos.py")):
             cmd = "daos cont create --pool={} --svc={} --type=POSIX".format(
-                pool_uuid, 0)
+                pool_uuid, ":".join([str(item) for item in svcl]))
             try:
                 container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                              shell=True)
