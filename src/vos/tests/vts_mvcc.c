@@ -42,7 +42,8 @@ enum type {
 	T_R,	/* read */
 	T_RW,	/* readwrite */
 	T_W,	/* write */
-	T_COUNT
+
+	T_COUNT /* number of types */
 };
 
 enum level {
@@ -50,20 +51,26 @@ enum level {
 	L_O,	/* object */
 	L_D,	/* dkey */
 	L_A,	/* akey */
-	L_COUNT
+
+	L_COUNT,	/* number of levels */
+	L_NIL		/* not applicable */
 };
 
 enum read_type {
 	R_R,	/* regular */
 	R_E,	/* if empty */
 	R_NE,	/* if nonempty */
-	R_COUNT
+
+	R_COUNT,	/* number of read types */
+	R_NIL		/* not applicable */
 };
 
 enum write_type {
 	W_NE,	/* become nonempty */
 	W_E,	/* become empty */
-	W_COUNT
+
+	W_COUNT,	/* nubmer of write types */
+	W_NIL		/* not applicable */
 };
 
 typedef int (*op_func_t)(struct io_test_args *arg, char *path,
@@ -115,13 +122,14 @@ set_path(struct op *op, char *template, char *path)
 {
 	enum level level;
 
-	if (op->o_type == T_R)
+	if (is_r(op))
 		level = op->o_rlevel;
-	else if (op->o_type == T_RW)
+	else if (is_rw(op))
 		level = max(op->o_rlevel, op->o_wlevel);
 	else
 		level = op->o_wlevel;
 
+	D_ASSERTF(level < L_COUNT, "%d\n", level);
 	memcpy(path, template, level + 1);
 	path[level + 1] = '\0';
 }
@@ -338,13 +346,13 @@ static struct op operations[] = {
 	/* {name,	type,	rlevel,	wlevel,	rtype,	wtype,	func} */
 
 	/* Reads */
-	{"fetch",	T_R,	L_A,	0,	R_R,	0,	NULL},
-	{"listc",	T_R,	L_C,	0,	R_R,	0,	NULL},
-	{"listo",	T_R,	L_O,	0,	R_R,	0,	NULL},
-	{"listd",	T_R,	L_D,	0,	R_R,	0,	NULL},
-	{"queryc",	T_R,	L_C,	0,	R_R,	0,	NULL},
-	{"queryo",	T_R,	L_O,	0,	R_R,	0,	NULL},
-	{"queryd",	T_R,	L_D,	0,	R_R,	0,	NULL},
+	{"fetch",	T_R,	L_A,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"listd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryc",	T_R,	L_C,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryo",	T_R,	L_O,	L_NIL,	R_R,	W_NIL,	NULL},
+	{"queryd",	T_R,	L_D,	L_NIL,	R_R,	W_NIL,	NULL},
 
 	/*
 	 * Readwrites
@@ -365,10 +373,10 @@ static struct op operations[] = {
 	{"puncha_ane",	T_RW,	L_A,	L_A,	R_NE,	W_E,	puncha_ane_f},
 
 	/* Writes */
-	{"update",	T_W,	0,	L_A,	0,	W_NE,	update_f},
-	{"puncho",	T_W,	0,	L_O,	0,	W_E,	puncho_f},
-	{"punchd",	T_W,	0,	L_D,	0,	W_E,	punchd_f},
-	{"puncha",	T_W,	0,	L_A,	0,	W_E,	puncha_f},
+	{"update",	T_W,	L_NIL,	L_A,	R_NIL,	W_NE,	update_f},
+	{"puncho",	T_W,	L_NIL,	L_O,	R_NIL,	W_E,	puncho_f},
+	{"punchd",	T_W,	L_NIL,	L_D,	R_NIL,	W_E,	punchd_f},
+	{"puncha",	T_W,	L_NIL,	L_A,	R_NIL,	W_E,	puncha_f},
 
 	/* Terminator */
 	{NULL,		0,	0,	0,	0,	0,	NULL}
@@ -585,10 +593,10 @@ conflicting_rw(void **state)
 	struct io_test_args	*arg = *state;
 	struct op		*r;
 	struct op		*w;
-	int			 n = 0;
+	int			 i = 0;
 	int			 nfailed = 0;
 
-	/* For each readwrite... */
+	/* For each read or readwrite... */
 	for_each_op(r) {
 		if (!(is_r(r) || is_rw(r)))
 			continue;
@@ -598,8 +606,8 @@ conflicting_rw(void **state)
 			if (!(is_rw(w) || is_w(w)))
 				continue;
 
-			nfailed += conflicting_rw_exec(arg, n, r, w);
-			n++;
+			nfailed += conflicting_rw_exec(arg, i, r, w);
+			i++;
 		}
 	}
 
