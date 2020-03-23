@@ -121,7 +121,7 @@ class Soak(TestWithServers):
                 self.test_log_dir, this_host),
             self.srun_params)
         if result.exit_status == 0:
-            cmd = "cp -R {0}/ \'{1}\'; rm -rf {0}/*".format(
+            cmd = "cp -R -p {0}/ \'{1}\'; rm -rf {0}/*".format(
                 self.test_log_dir, self.outputsoakdir)
             try:
                 result = process.run(cmd, shell=True, timeout=30)
@@ -503,7 +503,7 @@ class Soak(TestWithServers):
             "srun -l --mpi=pmi2 --ntasks-per-node=1 "
             "--export=ALL {} -o {} &".format(os.path.join(
                 self.bin, "daos_agent"), os.path.join(
-                    self.tmp, "daos_agent.yml"))]
+                    self.tmp, "daos_agent.yaml"))]
         # Create the sbatch script for each cmdline
         for cmd in commands:
             output = os.path.join(self.test_log_dir, "%N_" +
