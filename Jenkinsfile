@@ -121,12 +121,15 @@ def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
                        popd
                        sudo freshclam
                        rm -f /var/tmp/clamscan.out
+                       rm /var/tmp/\\\${lmd_tarball}
+                       rm -rf /var/tmp/\\\${lmd_src}
                        sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
                                 -d /usr/local/maldetect/sigs/rfxn.hdb -r \
                                 --exclude-dir=/usr/local/maldetect \
                                 --exclude-dir=/usr/share/clamav \
-                                --infected /etc /usr | \
-                         tee /var/tmp/clamscan.out
+                                --exclude-dir=/var/lib/clamav \
+                                --exclude-dir=/sys \
+                                --infected / | tee /var/tmp/clamscan.out
                        rm -f /var/tmp/maldetect.xml
                        if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
                          cat << EOF_GOOD > /var/tmp/maldetect.xml
