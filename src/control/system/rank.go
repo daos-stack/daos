@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package ioserver
+package system
 
 import (
 	"math"
@@ -34,12 +34,14 @@ import (
 type Rank uint32
 
 const (
-	// MaxRank is the largest valid Rank value
+	// MaxRank is the largest valid Rank value.
 	MaxRank Rank = math.MaxUint32 - 1
-	// NilRank is an unset Rank (0 is a valid Rank)
+	// NilRank is an undefined Rank (0 is a valid Rank).
 	NilRank Rank = math.MaxUint32
 )
 
+// NewRankPtr creates a Rank representation of
+// the given uint32 and returns a pointer to it.
 func NewRankPtr(in uint32) *Rank {
 	r := Rank(in)
 	return &r
@@ -48,14 +50,15 @@ func NewRankPtr(in uint32) *Rank {
 func (r *Rank) String() string {
 	switch {
 	case r == nil:
-		return "nil"
-	case *r == NilRank:
+		return "NilRank"
+	case r.Equals(NilRank):
 		return "NilRank"
 	default:
 		return strconv.FormatUint(uint64(*r), 10)
 	}
 }
 
+// Uint32 returns a uint32 representation of the Rank.
 func (r *Rank) Uint32() uint32 {
 	if r == nil {
 		return uint32(NilRank)
@@ -75,13 +78,12 @@ func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// Equals compares this rank to the given rank. If either value is
-// nil, the comparison is always false.
-func (r *Rank) Equals(other *Rank) bool {
-	if r == nil || other == nil {
-		return false
+// Equals compares this rank to the given rank.
+func (r *Rank) Equals(other Rank) bool {
+	if r == nil {
+		return other.Equals(NilRank)
 	}
-	return *r == *other
+	return *r == other
 }
 
 func checkRank(r Rank) error {

@@ -257,6 +257,7 @@ func TestMgmtSvc_PoolCreate(t *testing.T) {
 				if err := harness.AddInstance(srv); err != nil {
 					panic(err)
 				}
+				harness.setStarted()
 
 				tc.mgmtSvc = newMgmtSvc(harness, nil, nil)
 			}
@@ -378,7 +379,9 @@ func TestListPools_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	svc := newMgmtSvc(NewIOServerHarness(log), nil, nil)
+	h := NewIOServerHarness(log)
+	h.setStarted()
+	svc := newMgmtSvc(h, nil, nil)
 
 	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
 
@@ -469,7 +472,7 @@ func TestListCont_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestListCont_DrpcFailed(t *testing.T) {
@@ -575,7 +578,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestPoolGetACL_DrpcFailed(t *testing.T) {
@@ -659,7 +662,7 @@ func TestPoolOverwriteACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
@@ -734,7 +737,7 @@ func TestPoolUpdateACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
@@ -816,7 +819,7 @@ func TestPoolDeleteACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	common.CmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, FaultHarnessNotStarted, err)
 }
 
 func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
@@ -1801,7 +1804,7 @@ func TestMgmtSvc_StorageSetFaulty(t *testing.T) {
 }
 
 func TestMgmtSvc_DrespToRankResult(t *testing.T) {
-	dRank := uint32(1)
+	dRank := system.Rank(1)
 	dStateGood := system.MemberStateStarted
 	dStateBad := system.MemberStateErrored
 
@@ -1814,27 +1817,27 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 	}{
 		"rank success": {
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateGood),
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateGood),
 			},
 		},
 		"rank failure": {
 			daosResp: &mgmtpb.DaosResp{Status: -1},
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC returned DER -1", dRank),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRPC: true,
 			expResult: &mgmtpb.RanksResp_RankResult{
-				Rank: dRank, Action: "test", State: uint32(dStateBad), Errored: true,
+				Rank: dRank.Uint32(), Action: "test", State: uint32(dStateBad), Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
 			},
 		},
@@ -1860,7 +1863,7 @@ func TestMgmtSvc_DrespToRankResult(t *testing.T) {
 				Body:   rb,
 			}
 
-			gotResult := drespToRankResult(ioserver.Rank(dRank), "test", resp, tc.inErr, tc.targetState)
+			gotResult := drespToRankResult(system.Rank(dRank), "test", resp, tc.inErr, tc.targetState)
 			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
@@ -1968,8 +1971,8 @@ func TestMgmtSvc_PrepShutdownRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2113,8 +2116,8 @@ func TestMgmtSvc_StopRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2269,8 +2272,8 @@ func TestMgmtSvc_PingRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -2376,8 +2379,8 @@ func TestMgmtSvc_StartRanks(t *testing.T) {
 				srv.runner = ioserver.NewTestRunner(trc, ioserver.NewConfig())
 				srv.SetIndex(uint32(i))
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 			}
 
 			svc.harness.rankReqTimeout = 50 * time.Millisecond

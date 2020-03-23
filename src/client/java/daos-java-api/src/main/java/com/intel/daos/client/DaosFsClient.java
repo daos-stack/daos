@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
@@ -111,9 +110,10 @@ public final class DaosFsClient {
 
   public static final String ROOT_CONT_UUID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
+  public static final Runnable FINALIZER;
+
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
 
-  // make it non-daemon so that all DAOS file object can be released
   private final ExecutorService cleanerExe = Executors.newSingleThreadExecutor((r) -> {
     Thread thread = new Thread(r, "DAOS file object cleaner thread");
     thread.setDaemon(true);
@@ -125,32 +125,41 @@ public final class DaosFsClient {
 
   static {
     loadLib();
-    ShutdownHookManager.addHook(() -> {
-      try {
-        daosFinalize();
-      } catch (IOException e) {
-        log.error("failed to finalize DAOS", e);
+    FINALIZER = new Runnable() {
+      @Override
+      public void run() {
+        try {
+          closeAll();
+          daosFinalize();
+          log.info("daos finalized");
+          ShutdownHookManager.removeHook(this);
+        } catch (IOException e) {
+          log.error("failed to finalize DAOS", e);
+        }
       }
-    });
+    };
+    ShutdownHookManager.addHook(FINALIZER);
+    if (log.isDebugEnabled()) {
+      log.debug("daos finalizer hook added");
+    }
   }
 
   private static void loadLib() {
     try {
-      log.info("loading lib{}.so", LIB_NAME);
       System.loadLibrary(LIB_NAME);
+      log.info("lib{}.so loaded from library", LIB_NAME);
     } catch (UnsatisfiedLinkError e) {
-      log.warn("failed to load from lib directory. Ignoring error and loading it from jar instead " + LIB_NAME);
       loadFromJar();
     }
   }
 
   private static void loadFromJar() {
     File tempDir = null;
+    String filePath = new StringBuilder("/lib").append(LIB_NAME).append(".so").toString();
 
     try {
       tempDir = Files.createTempDirectory("daos").toFile();
       tempDir.deleteOnExit();
-      String filePath = new StringBuilder("/lib").append(LIB_NAME).append(".so").toString();
       loadByPath(filePath, tempDir);
     } catch (IOException e) {
       if (tempDir != null) {
@@ -158,6 +167,7 @@ public final class DaosFsClient {
       }
       throw new RuntimeException("failed to load lib from jar, " + LIB_NAME, e);
     }
+    log.info(filePath + " loaded from jar");
   }
 
   private static void loadByPath(String path, File tempDir) throws IOException {
@@ -199,33 +209,35 @@ public final class DaosFsClient {
     poolPtr = daosOpenPool(poolId, builder.serverGroup,
             builder.ranks,
             builder.poolFlags);
-    log.info("opened pool {}", poolPtr);
+    if (log.isDebugEnabled()) {
+      log.debug("opened pool {}", poolPtr);
+    }
 
     if (contId != null && !ROOT_CONT_UUID.equals(contId)) {
       contPtr = daosOpenCont(poolPtr, contId, builder.containerFlags);
-      log.info("opened container {}", contPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("opened container {}", contPtr);
+      }
       dfsPtr = mountFileSystem(poolPtr, contPtr, builder.readOnlyFs);
-      log.info("mounted FS {}", dfsPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("mounted FS {}", dfsPtr);
+      }
     } else {
       contId = ROOT_CONT_UUID;
       contPtr = -1;
       dfsPtr = mountFileSystem(poolPtr, -1, builder.readOnlyFs);
-      log.info("mounted FS {} on root container", dfsPtr);
+      if (log.isDebugEnabled()) {
+        log.debug("mounted FS {} on root container", dfsPtr);
+      }
     }
 
     cleanerExe.execute(new Cleaner.CleanerTask());
-    log.info("cleaner task running");
-
-    ShutdownHookManager.addHook(() -> {
-      try {
-        disconnect(true);
-      } catch (IOException e) {
-        log.error("failed to disconnect FS client", e);
-      }
-    });
+    if (log.isDebugEnabled()) {
+      log.debug("cleaner task running");
+    }
 
     inited = true;
-    log.info("DaosFsClient for {}, {} inited", poolId, contId);
+    log.info("DaosFsClient for {}, {} initialized", poolId, contId);
   }
 
   public long getDfsPtr() {
@@ -289,26 +301,26 @@ public final class DaosFsClient {
     decrementRef();
     if (force || refCnt <= 0) {
       if (inited && dfsPtr != 0) {
+        cleanerExe.shutdownNow();
+        if (log.isDebugEnabled()) {
+          log.debug("cleaner stopped");
+        }
         if (contPtr == -1) {
           dfsUnmountFsOnRoot(dfsPtr);
-          log.info("FS unmounted {} from root container", dfsPtr);
+          if (log.isDebugEnabled()) {
+            log.debug("FS unmounted {} from root container", dfsPtr);
+          }
         } else {
           dfsUnmountFs(dfsPtr);
-          log.info("FS unmounted {}", dfsPtr);
+          if (log.isDebugEnabled()) {
+            log.debug("FS unmounted {}", dfsPtr);
+          }
           daosCloseContainer(contPtr);
-          log.info("closed container {}", contPtr);
+          if (log.isDebugEnabled()) {
+            log.debug("closed container {}", contPtr);
+          }
         }
         daosClosePool(poolPtr);
-        log.info("closed pool {}", poolPtr);
-        cleanerExe.shutdown();
-        try {
-          if (!cleanerExe.awaitTermination(200, TimeUnit.MILLISECONDS)) {
-            cleanerExe.shutdownNow();
-          }
-        } catch (InterruptedException e) {
-          log.error("interrupted when wait for termination");
-        }
-        log.info("cleaner task stopped");
         log.info("DaosFsClient for {}, {} disconnected", poolId, contId);
       }
       inited = false;
@@ -539,6 +551,12 @@ public final class DaosFsClient {
       if (objId > 0) {
         dfsRelease(objId);
       }
+    }
+  }
+
+  static synchronized void closeAll() throws IOException {
+    for (Map.Entry<String, DaosFsClient> entry : pcFsMap.entrySet()) {
+      entry.getValue().disconnect(true);
     }
   }
 
@@ -1002,7 +1020,7 @@ public final class DaosFsClient {
    * @throws IOException
    * {@link DaosIOException}
    */
-  static native void daosFinalize() throws IOException;
+  static synchronized native void daosFinalize() throws IOException;
 
   //------------------native methods end------------------
 

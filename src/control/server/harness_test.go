@@ -26,12 +26,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -47,19 +45,17 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const testShortTimeout = 50 * time.Millisecond
 
-func TestHarnessCreateSuperblocks(t *testing.T) {
+func TestServer_HarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDir)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
 
 	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
@@ -117,6 +113,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	h.setStarted()
 	mi, err := h.GetMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +138,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	}
 }
 
-func TestHarnessGetMSLeaderInstance(t *testing.T) {
+func TestServer_HarnessGetMSLeaderInstance(t *testing.T) {
 	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
 	for name, tc := range map[string]struct {
@@ -235,6 +232,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			h.setStarted()
 
 			_, err := h.GetMSLeaderInstance()
 			common.CmpErr(t, tc.expError, err)
@@ -242,7 +240,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 	}
 }
 
-func TestHarnessIOServerStart(t *testing.T) {
+func TestServer_HarnessIOServerStart(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trc           *ioserver.TestRunnerConfig
 		expStartErr   error
@@ -272,11 +270,8 @@ func TestHarnessIOServerStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			testDir, cleanup := common.CreateTestDir(t)
+			defer cleanup()
 
 			srvCfgs := make([]*ioserver.Config, maxIOServers)
 			for i := 0; i < maxIOServers; i++ {
@@ -370,11 +365,11 @@ func TestHarness_StopInstances(t *testing.T) {
 		ioserverCount     int
 		missingSB         bool
 		signal            os.Signal
-		ranks             []ioserver.Rank
+		ranks             []system.Rank
 		harnessNotStarted bool
 		signalErr         error
 		ctxTimeout        time.Duration
-		expRankErrs       map[ioserver.Rank]error
+		expRankErrs       map[system.Rank]error
 		expSignalsSent    map[uint32]os.Signal
 		expErr            error
 	}{
@@ -392,15 +387,15 @@ func TestHarness_StopInstances(t *testing.T) {
 			expSignalsSent:    map[uint32]os.Signal{},
 		},
 		"rank not in list": {
-			ranks:          []ioserver.Rank{ioserver.Rank(2), ioserver.Rank(3)},
+			ranks:          []system.Rank{system.Rank(2), system.Rank(3)},
 			signal:         syscall.SIGKILL,
-			expRankErrs:    map[ioserver.Rank]error{},
+			expRankErrs:    map[system.Rank]error{},
 			expSignalsSent: map[uint32]os.Signal{1: syscall.SIGKILL}, // instance 1 has rank 2
 		},
 		"signal send error": {
 			signal:    syscall.SIGKILL,
 			signalErr: errors.New("sending signal failed"),
-			expRankErrs: map[ioserver.Rank]error{
+			expRankErrs: map[system.Rank]error{
 				1: errors.New("sending signal failed"),
 				2: errors.New("sending signal failed"),
 			},
@@ -434,7 +429,7 @@ func TestHarness_StopInstances(t *testing.T) {
 				tc.ioserverCount = maxIOServers
 			}
 			if tc.ranks == nil {
-				tc.ranks = []ioserver.Rank{}
+				tc.ranks = []system.Rank{}
 			}
 			svc := newTestMgmtSvcMulti(log, tc.ioserverCount, false)
 			if !tc.harnessNotStarted {
@@ -456,8 +451,8 @@ func TestHarness_StopInstances(t *testing.T) {
 					continue
 				}
 
-				srv._superblock.Rank = new(ioserver.Rank)
-				*srv._superblock.Rank = ioserver.Rank(i + 1)
+				srv._superblock.Rank = new(system.Rank)
+				*srv._superblock.Rank = system.Rank(i + 1)
 			}
 
 			if tc.ctxTimeout == 0 {

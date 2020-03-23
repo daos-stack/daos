@@ -71,8 +71,10 @@ message GetAttachInfoResp {
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
 	string Provider = 3;
-	uint32 CrtCtxShareAddr = 4;
-	uint32 CrtTimeout = 5;
+	string Interface = 4;
+	string Domain = 5;
+	uint32 CrtCtxShareAddr = 6;
+	uint32 CrtTimeout = 7;
 }
 
 message PrepShutdownReq {

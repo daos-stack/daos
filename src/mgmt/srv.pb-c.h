@@ -173,12 +173,14 @@ struct  _Mgmt__GetAttachInfoResp
   size_t n_psrs;
   Mgmt__GetAttachInfoResp__Psr **psrs;
   char *provider;
+  char *interface;
+  char *domain;
   uint32_t crtctxshareaddr;
   uint32_t crttimeout;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__PrepShutdownReq
