@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,10 +80,7 @@ static tse_sched_t daos_sched_g;
 int
 daos_eq_lib_init()
 {
-	bool		singleton = false;
-	bool		pmixless = false;
-	uint32_t	flags = 0;
-	int		rc;
+	int rc;
 
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref > 0) {
@@ -91,27 +88,17 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	/*
-	 * If DAOS_SINGLETON_CLI ENV set as non-zero value, then daos client
-	 * works in singleton mode that without cient-side rank but with the
-	 * benefit of independent with PMIx.
-	 */
-	d_getenv_bool("DAOS_SINGLETON_CLI", &singleton);
-	if (singleton)
-		flags |= CRT_FLAG_BIT_SINGLETON;
-	d_getenv_bool("DAOS_PMIXLESS", &pmixless);
-	if (pmixless)
-		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
-	rc = crt_init_opt(NULL, flags, daos_crt_init_opt_get(false, 1));
+	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
-		D_ERROR("failed to initialize crt: %d\n", rc);
+		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 
 	/* use a global shared context for all eq for now */
 	rc = crt_context_create(&daos_eq_ctx);
 	if (rc != 0) {
-		D_ERROR("failed to create client context: %d\n", rc);
+		D_ERROR("failed to create client context: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(crt, rc);
 	}
 
@@ -149,7 +136,8 @@ daos_eq_lib_fini()
 	if (daos_eq_ctx != NULL) {
 		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
 		if (rc != 0) {
-			D_ERROR("failed to destroy client context: %d\n", rc);
+			D_ERROR("failed to destroy client context: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(unlock, rc);
 		}
 		daos_eq_ctx = NULL;
@@ -157,7 +145,7 @@ daos_eq_lib_fini()
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("failed to shutdown crt: %d\n", rc);
+		D_ERROR("failed to shutdown crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 
@@ -549,7 +537,7 @@ ev_progress_cb(void *arg)
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D_ASSERT(d_list_empty(&evx->evx_link));
-		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		return 1;
 	}
 
@@ -604,7 +592,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -740,7 +728,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1068,7 +1056,8 @@ daos_event_fini(struct daos_event *ev)
 
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
-			D_ERROR("Failed to finalize child event (%d)\n", rc);
+			D_ERROR("Failed to finalize child event "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 		tmp->evx_status = DAOS_EVS_READY;
@@ -1204,7 +1193,7 @@ daos_event_priv_wait()
 {
 	struct ev_progress_arg	epa;
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
-	int rc;
+	int rc = 0;
 
 	D_ASSERT(ev_thpriv_is_init);
 

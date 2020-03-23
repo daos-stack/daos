@@ -27,6 +27,7 @@ import (
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 
 	"github.com/pkg/errors"
 )
@@ -47,6 +48,10 @@ const (
 type TransportConfig struct {
 	AllowInsecure     bool `yaml:"allow_insecure"`
 	CertificateConfig `yaml:",inline"`
+}
+
+func (tc *TransportConfig) String() string {
+	return fmt.Sprintf("allow insecure: %v", tc.AllowInsecure)
 }
 
 //CertificateConfig contains the specific certificate information for the daos
@@ -87,6 +92,7 @@ func DefaultServerTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
+			ServerName:      defaultServer,
 			CARootPath:      defaultCACert,
 			ClientCertDir:   defaultClientCertDir,
 			CertificatePath: defaultServerCert,

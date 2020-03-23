@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -43,6 +44,7 @@ type mockDrpcClientConfig struct {
 	CloseError      error
 	SendMsgResponse *drpc.Response
 	SendMsgError    error
+	ResponseDelay   time.Duration
 }
 
 func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []byte, err error) {
@@ -51,6 +53,10 @@ func (cfg *mockDrpcClientConfig) setSendMsgResponse(status drpc.Status, body []b
 		Body:   body,
 	}
 	cfg.SendMsgError = err
+}
+
+func (cfg *mockDrpcClientConfig) setResponseDelay(duration time.Duration) {
+	cfg.ResponseDelay = duration
 }
 
 // mockDrpcClient is a mock of the DomainSocketClient interface
@@ -76,6 +82,9 @@ func (c *mockDrpcClient) Close() error {
 
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
+
+	<-time.After(c.cfg.ResponseDelay)
+
 	return c.cfg.SendMsgResponse, c.cfg.SendMsgError
 }
 
@@ -104,21 +113,50 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 	setupMockDrpcClientBytes(svc, respBytes, err)
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
-// properly set up as an MS.
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
-	r := ioserver.NewRunner(log, ioserver.NewConfig())
+// newTestIOServer returns an IOServerInstance configured for testing.
+func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
+	r := ioserver.NewTestRunner(nil, ioserver.NewConfig())
 
 	var msCfg mgmtSvcClientCfg
-	msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+	if isAP {
+		msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+	}
 
 	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
 	srv.setSuperblock(&Superblock{
-		MS: true,
+		MS: isAP,
 	})
 
+	return srv
+}
+
+// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
+// properly set up as an MS.
+func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+	srv := newTestIOServer(log, true)
+
 	harness := NewIOServerHarness(log)
-	harness.instances = append(harness.instances, srv)
+	if err := harness.AddInstance(srv); err != nil {
+		panic(err)
+	}
+	harness.setStarted()
+
+	return newMgmtSvc(harness, nil)
+}
+
+// newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
+// number of IOServerInstances. If requested, the first instance is
+// configured as an access point.
+func newTestMgmtSvcMulti(log logging.Logger, count int, isAP bool) *mgmtSvc {
+	harness := NewIOServerHarness(log)
+
+	for i := 0; i < count; i++ {
+		srv := newTestIOServer(log, i == 0 && isAP)
+
+		if err := harness.AddInstance(srv); err != nil {
+			panic(err)
+		}
+	}
 
 	return newMgmtSvc(harness, nil)
 }

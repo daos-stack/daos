@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -252,10 +252,15 @@ open(void **state)
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	/** open container in read/write mode */
+	/** open container in read/write mode - this is OK, RW on pool handle
+	 * only applies to creating/deleting containers.
+	 */
 	print_message("opening container RW with RO pool handle ...\n");
 	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_int_equal(rc, -DER_NO_PERM);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
 
 	/** invalidate pool handle */
 	poh_invalidate_local(&poh);
@@ -333,27 +338,24 @@ io_invalid_poh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
 		print_message("Updating %d bytes with invalid pool handle ..."
 			      "\n", STACK_BUF_LEN);
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
 
 		/** fetch */
 		print_message("fetching records with invalid pool handle...\n");
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -424,20 +426,17 @@ io_invalid_coh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
-		iod.iod_eprs	= NULL;
-		iod.iod_csums	= NULL;
 		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
 		print_message("Updating records with stale container handle "
 			      "...\n");
-		rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				     NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -445,7 +444,7 @@ io_invalid_coh(void **state)
 		/** fetch */
 		print_message("fetching records with stale container handle "
 			      "...\n");
-		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl,
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 				    NULL, NULL);
 		assert_int_equal(rc, -DER_NO_HDL);
 		print_message("got -DER_NO_HDL as expected\n");
@@ -503,19 +502,16 @@ update_ro(void **state)
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("Updating records with read-only container handle ...\n");
-	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 	print_message("got -DER_NO_PERM as expected\n");
 

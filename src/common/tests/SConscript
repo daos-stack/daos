@@ -1,4 +1,4 @@
-"""Build doas common tests"""
+"""Build daos common tests"""
 import daos_build
 from prereq_tools import GitRepoRetriever
 
@@ -65,6 +65,8 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv, prereqs)
 
     unit_env = tenv.Clone()
@@ -73,12 +75,19 @@ def scons():
     # The compiler decides this on its own, but let's force the issue.
     unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
 
+    acl_api = unit_env.Object('../acl_api.c')
+
     daos_build.test(unit_env, 'drpc_tests',
                     ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
                      common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', '../acl_api.c'],
+                    source=['acl_api_tests.c', acl_api,
+                            common_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    daos_build.test(unit_env, 'acl_valid_tests',
+                    source=['acl_valid_tests.c', acl_api,
+                            common_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_util_tests',
                     source=['acl_util_tests.c', '../acl_util.c'],

@@ -32,8 +32,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
 )
 
 const (
@@ -88,8 +88,8 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
-func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
-	nvmeResult := &NvmeScanResult{}
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) (nvmeResult *NvmeScanResult) {
+	nvmeResult = &NvmeScanResult{}
 
 	nState := resp.GetState()
 	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -98,15 +98,16 @@ func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
 		}
 		nvmeResult.Err = errors.Errorf(msg)
-		return nvmeResult
+		return
 	}
 
 	nvmeResult.Ctrlrs = resp.GetCtrlrs()
-	return nvmeResult
+	return
 }
 
-func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
-	scmResult := &ScmScanResult{}
+func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) (scmResult *ScmScanResult) {
+	var err error
+	scmResult = &ScmScanResult{}
 
 	sState := resp.GetState()
 	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -115,12 +116,24 @@ func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
 		scmResult.Err = errors.Errorf(msg)
-		return scmResult
+		return
 	}
 
-	scmResult.Modules = scmModulesFromPB(resp.GetModules())
-	scmResult.Namespaces = scmNamespacesFromPB(resp.GetPmems())
-	return scmResult
+	modules := resp.GetModules()
+	scmResult.Modules, err = (*proto.ScmModules)(&modules).ToNative()
+	if err != nil {
+		scmResult.Err = errors.Wrap(err, "scm modules")
+		return
+	}
+
+	namespaces := resp.GetNamespaces()
+	scmResult.Namespaces, err = (*proto.ScmNamespaces)(&namespaces).ToNative()
+	if err != nil {
+		scmResult.Err = errors.Wrap(err, "scm namespaces")
+		return
+	}
+
+	return
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each
@@ -159,9 +172,7 @@ func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
 
 	sort.Strings(servers)
 
-	return &StorageScanResp{
-		summary: p.Summary, Servers: servers, Nvme: cNvmeScan, Scm: cScmScan,
-	}
+	return &StorageScanResp{Servers: servers, Nvme: cNvmeScan, Scm: cScmScan}
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a
@@ -203,8 +214,8 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 			return // recv err
 		}
 
-		sRes.nvmeCtrlr.Responses = resp.Crets
-		sRes.scmMount.Responses = resp.Mrets
+		sRes.Nvme = resp.Crets
+		sRes.Scm = resp.Mrets
 
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
 	}
@@ -212,16 +223,14 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 
 // StorageFormat prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap) {
+func (c *connList) StorageFormat(reformat bool) StorageFormatResults {
 	req := &ctlpb.StorageFormatReq{Reformat: reformat}
 	cResults := c.makeRequests(req, StorageFormatRequest)
-	cCtrlrResults := make(ClientCtrlrMap) // srv address:NVMe SSDs
-	cMountResults := make(ClientMountMap) // srv address:SCM mounts
+	formatResults := make(StorageFormatResults)
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: res.Err}
-			cMountResults[res.Address] = types.MountResults{Err: res.Err}
+			formatResults[res.Address] = StorageFormatResult{Err: res.Err}
 			continue
 		}
 
@@ -229,15 +238,12 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 		if !ok {
 			err := fmt.Errorf(msgBadType, StorageFormatResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: err}
-			cMountResults[res.Address] = types.MountResults{Err: err}
+			formatResults[res.Address] = StorageFormatResult{Err: err}
 			continue
 		}
 
-		cCtrlrResults[res.Address] = storageRes.nvmeCtrlr
-		cMountResults[res.Address] = storageRes.scmMount
-		// storageRes.scmModule ignored for update
+		formatResults[res.Address] = storageRes
 	}
 
-	return cCtrlrResults, cMountResults
+	return formatResults
 }

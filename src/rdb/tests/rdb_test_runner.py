@@ -61,6 +61,8 @@ import string
 build_root = os.path.join(sys.path[0], "../../../")
 sys.path.insert(0, os.path.join(build_root, "scons_local"))
 from build_info import BuildInfo
+from env_modules import load_mpi
+from distutils.spawn import find_executable
 
 urifile = "/tmp/urifile"
 pid_file = "/tmp/" + str(os.getpid()) + "_output"
@@ -86,7 +88,7 @@ def set_logfile(config, logfile):
                        "  log_file: {}".format(logfile))
     f.close()
 
-def start_server(binfo):
+def start_server(binfo, orterun):
     """
     Start the DAOS server with an orterun command as a child process. We use
     subprocess.Popen since it returns control to the calling process and
@@ -100,8 +102,8 @@ def start_server(binfo):
     set_logfile(config_file, log_file) # set D_LOG_FILE through config file
 
     print("Starting DAOS server\n")
-    cmd = binfo.get("OMPI_PREFIX") + "/bin/orterun "
-    cmd += "-N 1 --report-uri {} ".format(urifile)
+    cmd = orterun
+    cmd += " -N 1 --report-uri {} ".format(urifile)
     cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
     cmd += "--debug --config {} ".format(config_file)
@@ -236,10 +238,14 @@ if __name__ == "__main__":
     binfo = BuildInfo(os.path.join(build_root, ".build_vars.json"));
     debug_cmds = "-x D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR " + \
                  "-x DD_SUBSYS=all -x DD_MASK=all"
+    load_mpi('openmpi')
+    orterun = find_executable('orterun')
+    if orterun is None:
+        raise ServerFailedToStart("No orterun installed")
 
     try:
         # Server operations
-        p = start_server(binfo)
+        p = start_server(binfo, orterun)
 
         counter = 0
         daos_server = daos_server_pid()
@@ -257,10 +263,9 @@ if __name__ == "__main__":
         print("DAOS server started")
 
         # Client operations
-        client_prefix = binfo.get("OMPI_PREFIX") + \
-                        "/bin/orterun --ompi-server " \
+        client_prefix = "{} --ompi-server " \
                         "file:{} {} --np 1 rdbt ".format(
-                        urifile, debug_cmds)
+                        orterun urifile, debug_cmds)
         client_suffix = " --group=daos_server"
         # orterun is called for the client four times: init, update, test,
         # and fini

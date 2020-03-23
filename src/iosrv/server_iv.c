@@ -35,6 +35,7 @@
 
 static d_list_t			 ds_iv_ns_list;
 static int			 ds_iv_ns_id = 1;
+static int			 ds_iv_ns_tree_topo;
 static d_list_t			 ds_iv_class_list;
 static int			 ds_iv_class_nr;
 static int			 crt_iv_class_nr;
@@ -407,8 +408,19 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	/* Forward the request to its parent if it is not root, and
 	 * let's caller decide how to deal with leader.
 	 */
-	if (!valid && ns->iv_master_rank != dss_self_rank())
-		return -DER_IVCB_FORWARD;
+	if (!valid) {
+		/* If the rank inside the iv_fetch request(key) does not
+		 * match the current ns information, then it means the new
+		 * leader just steps up.  Let's return -DER_NOTLEADER in this
+		 * case, so IV fetch can keep retry, until the IV information
+		 * is updated on all nodes.
+		 */
+		if ((key.rank == dss_self_rank() &&
+		     key.rank != ns->iv_master_rank))
+			return -DER_NOTLEADER;
+		else if (ns->iv_master_rank != dss_self_rank())
+			return -DER_IVCB_FORWARD;
+	}
 
 	rc = fetch_iv_value(entry, &key, iv_value, &entry->iv_value, priv);
 	if (rc == 0)
@@ -496,7 +508,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_MISC, DSS_TGT_SELF,
 			    0, NULL);
 	if (rc)
-		D_ERROR("dss_ult_create failed, rc %d.\n", rc);
+		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -596,6 +608,37 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	return 0;
 }
 
+static int
+ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+	     d_sg_list_t *iv_value, void *arg)
+{
+	struct ds_iv_ns		*ns;
+	struct ds_iv_entry	*entry;
+	struct ds_iv_key	key;
+	struct iv_priv_entry	*priv_entry = arg;
+	struct ds_iv_class	*class;
+	int			rc = 0;
+
+	ns = iv_ns_lookup_by_ivns(ivns);
+	D_ASSERT(ns != NULL);
+
+	iv_key_unpack(&key, iv_key);
+	if (priv_entry == NULL || priv_entry->entry == NULL) {
+		/* find and prepare entry */
+		rc = iv_entry_lookup_or_create(ns, &key, &entry);
+		if (rc < 0)
+			return rc;
+	} else {
+		entry = priv_entry->entry;
+	}
+
+	class = entry->iv_class;
+	if (class->iv_class_ops && class->iv_class_ops->ivc_pre_sync)
+		rc = class->iv_class_ops->ivc_pre_sync(entry, &key, iv_value);
+
+	return rc;
+}
+
 struct crt_iv_ops iv_cache_ops = {
 	.ivo_pre_fetch		= ivc_pre_cb,
 	.ivo_on_fetch		= ivc_on_fetch,
@@ -606,6 +649,7 @@ struct crt_iv_ops iv_cache_ops = {
 	.ivo_on_hash		= ivc_on_hash,
 	.ivo_on_get		= ivc_on_get,
 	.ivo_on_put		= ivc_on_put,
+	.ivo_pre_sync		= ivc_pre_sync
 };
 
 static void
@@ -633,13 +677,12 @@ iv_ns_destroy_internal(struct ds_iv_ns *ns)
 }
 
 static struct ds_iv_ns *
-ds_iv_ns_lookup(unsigned int ns_id, d_rank_t master_rank)
+ds_iv_ns_lookup(unsigned int ns_id)
 {
 	struct ds_iv_ns *ns;
 
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns_id == ns_id &&
-		    ns->iv_master_rank == master_rank)
+		if (ns->iv_ns_id == ns_id)
 			return ns;
 	}
 
@@ -652,7 +695,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 {
 	struct ds_iv_ns	*ns;
 
-	ns = ds_iv_ns_lookup(ns_id, master_rank);
+	ns = ds_iv_ns_lookup(ns_id);
 	if (ns)
 		return -DER_EXIST;
 
@@ -684,38 +727,22 @@ ds_iv_ns_destroy(void *ns)
 	iv_ns_destroy_internal(iv_ns);
 }
 
-/**
- * Create namespace for server IV, which will only
- * be called on master node
- */
+/** Create namespace for server IV. */
 int
 ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
-		crt_group_t *grp, unsigned int *ns_id, d_iov_t *ivns,
+		crt_group_t *grp, unsigned int *ns_id,
 		struct ds_iv_ns **p_iv_ns)
 {
-	d_iov_t			*g_ivns;
-	d_iov_t			tmp = { 0 };
 	struct ds_iv_ns		*ns = NULL;
-	int			tree_topo;
 	int			rc;
 
-	/* Create namespace on master */
-	rc = iv_ns_create_internal(ds_iv_ns_id++, pool_uuid, dss_self_rank(),
-				   &ns);
+	rc = iv_ns_create_internal(ds_iv_ns_id++, pool_uuid,
+				   -1 /* master_rank */, &ns);
 	if (rc)
 		return rc;
 
-	if (ivns == NULL)
-		g_ivns = &tmp;
-	else
-		g_ivns = ivns;
-
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	rc = crt_iv_namespace_create(ctx, grp, tree_topo, crt_iv_class,
-				     crt_iv_class_nr, &ns->iv_ns, g_ivns);
+	rc = crt_iv_namespace_create(ctx, grp, ds_iv_ns_tree_topo, crt_iv_class,
+				     crt_iv_class_nr, 0, &ns->iv_ns);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -728,98 +755,14 @@ free:
 	return rc;
 }
 
-int
-ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
-		unsigned int master_rank, d_iov_t *iv_ctxt,
-		struct ds_iv_ns **p_iv_ns)
-{
-	struct ds_iv_ns	*ns = NULL;
-	d_rank_t	myrank = dss_self_rank();
-	int		rc;
-
-	/* the ns for master will be created in ds_iv_ns_create() */
-	if (master_rank == myrank)
-		return 0;
-
-	ns = ds_iv_ns_lookup(ns_id, master_rank);
-	if (ns) {
-		D_DEBUG(DB_TRACE, "lookup iv_ns %d master rank %d"
-			" myrank %d ns %p\n", ns_id, master_rank,
-			myrank, ns);
-		*p_iv_ns = ns;
-		return 0;
-	}
-
-	rc = iv_ns_create_internal(ns_id, pool_uuid, master_rank, &ns);
-	if (rc)
-		return rc;
-
-	rc = crt_iv_namespace_attach(ctx, (d_iov_t *)iv_ctxt, crt_iv_class,
-				     crt_iv_class_nr, &ns->iv_ns);
-	if (rc)
-		D_GOTO(free, rc);
-
-	D_DEBUG(DB_TRACE, "create iv_ns %d master rank %d myrank %d ns %p\n",
-		ns_id, master_rank, myrank, ns);
-	*p_iv_ns = ns;
-
-free:
-	if (rc)
-		ds_iv_ns_destroy(ns);
-
-	return rc;
-}
-
 /* Update iv namespace */
-int
-ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
-		crt_group_t *grp, d_iov_t *iv_iov,
-		unsigned int iv_ns_id, struct ds_iv_ns **iv_ns)
+void
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
 {
-	struct ds_iv_ns	*ns;
-	int		rc;
-
-	D_ASSERT(iv_ns != NULL);
-	if (*iv_ns != NULL &&
-	    (*iv_ns)->iv_master_rank != master_rank) {
-		/* If root has been changed, let's destroy the
-		 * previous IV ns
-		 */
-		ds_iv_ns_destroy(*iv_ns);
-		*iv_ns = NULL;
-	}
-
-	if (*iv_ns != NULL)
-		return 0;
-
-	/* Create new iv_ns */
-	if (iv_iov == NULL) {
-		/* master node */
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
-				     pool_uuid, grp, &iv_ns_id, NULL, &ns);
-	} else {
-		/* other node */
-		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
-				     pool_uuid, iv_ns_id, master_rank, iv_iov,
-				     &ns);
-	}
-
-	if (rc) {
-		D_ERROR("pool iv ns create failed %d\n", rc);
-		return rc;
-	}
-
-	*iv_ns = ns;
-	return rc;
-}
-
-/**
- * Get IV ns global identifer from cart.
- */
-int
-ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *g_ivns)
-{
-	return crt_iv_global_namespace_get(ns->iv_ns, g_ivns);
+	D_DEBUG(DB_TRACE, "update iv_ns %u master rank %u new master rank %u "
+		"myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+		master_rank, dss_self_rank(), ns);
+	ns->iv_master_rank = master_rank;
 }
 
 unsigned int
@@ -832,6 +775,10 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
+	/* Let's set the topo to 32 to avoid cart IV failover,
+	 * which is not supported yet. XXX
+	 */
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
 }
 
@@ -904,8 +851,9 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 }
 
 static int
-iv_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv, d_sg_list_t *value,
-	    crt_iv_sync_t *sync, unsigned int shortcut, int opc)
+iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
+	       d_sg_list_t *value, crt_iv_sync_t *sync, unsigned int shortcut,
+	       int opc)
 {
 	struct iv_cb_info	cb_info;
 	ABT_future		future;
@@ -963,6 +911,25 @@ out:
 	return rc;
 }
 
+static int
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+{
+	int rc;
+
+retry:
+	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
+	if (retry && (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry upon %d\n", rc);
+		goto retry;
+	}
+	return rc;
+}
+
 /**
  * Fetch the value from the iv_entry, if the entry does not exist, it
  * will create the iv entry locally.
@@ -973,9 +940,10 @@ out:
  * return		0 if succeed, otherwise error code.
  */
 int
-ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value)
+ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+	    bool retry)
 {
-	return iv_internal(ns, key, value, NULL, 0, IV_FETCH);
+	return iv_op(ns, key, value, NULL, 0, retry, IV_FETCH);
 }
 
 /**
@@ -995,7 +963,7 @@ ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value)
 int
 ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	     unsigned int shortcut, unsigned int sync_mode,
-	     unsigned int sync_flags)
+	     unsigned int sync_flags, bool retry)
 {
 	crt_iv_sync_t	iv_sync;
 
@@ -1003,7 +971,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, key, value, &iv_sync, shortcut, IV_UPDATE);
+	return iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
 }
 
 /**
@@ -1022,7 +990,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 int
 ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 unsigned int shortcut, unsigned int sync_mode,
-		 unsigned int sync_flags)
+		 unsigned int sync_flags, bool retry)
 {
 	crt_iv_sync_t iv_sync;
 
@@ -1030,5 +998,5 @@ ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, key, NULL, &iv_sync, shortcut, IV_INVALIDATE);
+	return iv_op(ns, key, NULL, &iv_sync, shortcut, retry, IV_INVALIDATE);
 }

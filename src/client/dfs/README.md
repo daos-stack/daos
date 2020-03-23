@@ -14,21 +14,49 @@ container handle where the namespace will be located.
 When the file system is created (i.e. when the DAOS container is initialized as
 an encapsulated namespace), a reserved object (with a predefined object ID) will
 be added to the container and will record superblock information about the
-namespace. The SB object is replicated and has the reserved OID 0.0.
+namespace. The SB object is replicated with object class OC_RP_XSF, and has the
+reserved OID 0.0.
 
 The SB object contains an entry with a magic value to indicate it's a POSIX
 filesystem. The SB object will contain also an entry to the root directory of
 the filesystem, which will be another reserved object with a predefined oid
-(1.0) and will have the same representation as a directory (see next
-section). The oid of the root id will be inserted as an entry in the superblock
-object.
+(1.0), replicated with object class OC_RP_XSF, and will have the same
+representation as a directory (see next section). The oid of the root id will be
+inserted as an entry in the superblock object.
 
 The SB will look like this:
 
 ~~~~
-D-key: "DFS_SB_DKEY"
-A-key: "DFS_SB_AKEY"
+D-key: "DFS_SB_METADATA"
+A-key: "DFS_MAGIC"
 single-value (uint64_t): SB_MAGIC (0xda05df50da05df50)
+
+A-key: "DFS_SB_VERSION"
+single-value (uint16_t): Version number of the SB. This is used to determine the layout of the SB (the DKEYs and value sizes).
+
+A-key: "DFS_LAYOUT_VERSION"
+single-value (uint16_t): This is used to determine the format of the entries in the DFS namespace (DFS to DAOS mapping).
+
+A-key: "DFS_SB_FEAT_COMPAT"
+single-value (uint64_t): flags to indicate feature set like extended attribute support, indexing
+
+A-key: "DFS_SB_FEAT_INCOMPAT"
+single-value (uint64_t): flags
+
+A-key: "DFS_SB_MKFS_TIME"
+single-value (uint64_t): time when DFS namespace was created
+
+A-key: "DFS_SB_STATE"
+single-value (uint64_t): state of FS (clean, corrupted, etc.)
+
+A-key: "DFS_CHUNK_SIZE"
+single-value (uint64_t): Default chunk size for files in this container
+
+A-key: "DFS_OBJ_CLASS"
+single-value (uint64_t): Default object class for files in this container
+
+D-key: "/"
+// rest of akey entries for root are same as in directory entry described next.
 
 D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
@@ -39,19 +67,23 @@ D-key: "/"
 A POSIX directory will map to a DAOS object with multiple dkeys, where each dkey
 will correspond to an entry in that directory (for another subdirectory, regular
 file, or symbolic link). The dkey value will be the entry name in that
-directory. The dkey will contain several akeys of type `DAOS_IOD_SINGLE`
-(single value), where each akey contains an attribute of that entry. The mapping
-table will look like this (includes two extended attributes: xattr1, xattr2):
+directory. The dkey will contain an akey with all attributes of that entry in a
+byte array serialized format. Extended attributes will each be stored in a
+single value under a different akey. The mapping table will look like this
+(includes two extended attributes: xattr1, xattr2):
 
 ~~~~~~
 Directory Object
   D-key "entry1_name"
-    A-key "mode"	// mode_t (permission bit mask + type of entry)
-    A-key "oid"		// object id of entry (akey does not exist if symlink)
-    A-key "syml"	// symlink value (akey does not exist if not a symlink)
-    A-key "atime"	// access time
-    A-key "mtime"	// modify time
-    A-key "ctime"	// change time
+    A-key "DFS_INODE"
+      RECX (byte array starting at idx 0):
+        mode_t: permission bit mask + type of entry
+        oid: object id of entry
+        atime: access time
+        mtime: modify time
+        ctime: change time
+        chunk_size: chunk_size of file (0 if default or not a file)
+        syml: symlink value (does not exist if not a symlink)
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
@@ -82,13 +114,6 @@ Object testdir
     A-key "syml", dir1
     ...
 ~~~~~~
-
-For files, we will have an optimization in the entry by storing the first 4K of
-data in the entry itself under another akey "file_data" for the file entry. In
-this case, if the file size is less than or equal to 4K, the object ID akey will
-be empty, and the file data will be in the akey with array type of file_size
-records. Otherwise the "oid" akey will contain a valid object ID for the file
-data.
 
 Note that with this mapping, the inode information is stored with the entry that
 it corresponds to in the parent directory object. Thus, hard links won"t be
@@ -148,8 +173,8 @@ depending on the type of access being requested (R, W, X) and the object mode,
 access permission is determined. In the source code, this is implemented in the
 function `check_access()`.
 
-setuid(), setgid() programs, supplementary groups, ACLs are not supported at the
-moment.
+setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
+DFS namespace.
 
 ## DFUSE_HL
 

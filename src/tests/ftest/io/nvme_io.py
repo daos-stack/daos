@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,12 +25,12 @@ from __future__ import print_function
 
 import avocado
 
-from pydaos.raw import DaosApiError
 from ior_test_base import IorTestBase
 from test_utils import TestPool
 
 
 class NvmeIo(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -39,7 +39,6 @@ class NvmeIo(IorTestBase):
     :avocado: recursive
     """
 
-    @avocado.fail_on(DaosApiError)
     def test_nvme_io(self):
         """Jira ID: DAOS-2082.
 
@@ -51,7 +50,7 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=all,daosio,full_regression,hw,nvme_io
+        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io
         """
 
         # Test params
@@ -68,19 +67,15 @@ class NvmeIo(IorTestBase):
                     continue
 
                 # Create and connect to a pool
-                self.pool = TestPool(self.context, self.log)
+                self.pool = TestPool(
+                    self.context, dmg_command=self.get_dmg_command())
                 self.pool.get_params(self)
-                # update pool sizes
                 self.pool.scm_size.update(ior_param[0])
                 self.pool.nvme_size.update(ior_param[1])
-
-                # Create a pool
                 self.pool.create()
 
-                # get pool info
-                self.pool.get_info()
-
                 # Get the current pool sizes
+                self.pool.get_info()
                 size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
@@ -93,5 +88,8 @@ class NvmeIo(IorTestBase):
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, ior_param[4])
 
-                # destroy pool
-                self.pool.destroy()
+                errors = self.destroy_pools(self.pool)
+                if errors:
+                    self.fail(
+                        "Errors detected during destroy pool:\n  - {}".format(
+                            "\n  - ".join(errors)))

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,14 +26,17 @@ package server
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"syscall"
 
+	"github.com/dustin/go-humanize"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -47,7 +50,7 @@ type Superblock struct {
 	Version     uint8
 	UUID        string
 	System      string
-	Rank        *ioserver.Rank
+	Rank        *system.Rank
 	ValidRank   bool
 	MS          bool
 	CreateMS    bool
@@ -147,7 +150,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 
 	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
-		superblock.Rank = new(ioserver.Rank)
+		superblock.Rank = new(system.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank
 		}
@@ -157,6 +160,22 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
+}
+
+func (srv *IOServerInstance) logScmStorage() error {
+	scmMount := path.Dir(srv.superblockPath())
+	stBuf := new(syscall.Statfs_t)
+
+	if err := syscall.Statfs(scmMount, stBuf); err != nil {
+		return err
+	}
+
+	frSize := uint64(stBuf.Frsize)
+	totalBytes := frSize * stBuf.Blocks
+	availBytes := frSize * stBuf.Bavail
+	srv.log.Infof("SCM @ %s: %s Total/%s Avail", scmMount,
+		humanize.Bytes(totalBytes), humanize.Bytes(availBytes))
+	return nil
 }
 
 // WriteSuperblock writes the instance's superblock

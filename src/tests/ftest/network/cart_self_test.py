@@ -29,16 +29,20 @@ from apricot import TestWithoutServers
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosLog
+from pydaos.raw import DaosLog
+
 
 class CartSelfTest(TestWithoutServers):
-    """
+    """Run a few variations of CaRT self-test.
+
     Runs a few variations of CaRT self-test to ensure network is in a
     stable state prior to testing.
     :avocado: recursive
+
     """
 
     def __init__(self, *args, **kwargs):
+        """Class for running cart selftest."""
         super(CartSelfTest, self).__init__(*args, **kwargs)
 
         self.self_test_bin = None
@@ -50,12 +54,12 @@ class CartSelfTest(TestWithoutServers):
         self.env_dict = None
         self.env_list = None
 
-    # start servers, establish file locations, etc.
     def setUp(self):
+        """Start servers, establish file locations."""
         super(CartSelfTest, self).setUp()
         self.agent_sessions = None
 
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
@@ -64,7 +68,8 @@ class CartSelfTest(TestWithoutServers):
         # self_test params
         self.self_test_bin = os.path.join(self.prefix, "bin/self_test")
         self.endpoint = self.params.get("endpoint", "/run/testparams/")
-        self.max_rpcs = self.params.get("max_inflight_rpcs", "/run/testparams/")
+        self.max_rpcs = self.params.get(
+            "max_inflight_rpcs", "/run/testparams/")
         self.repetitions = self.params.get("repetitions", "/run/testparams/")
         self.message_size = (
             self.params.get("size", "/run/muxtestparams/message_size/*")[0])
@@ -73,7 +78,7 @@ class CartSelfTest(TestWithoutServers):
         self.env_dict = {
             "CRT_PHY_ADDR_STR":     "ofi+sockets",
             "CRT_CTX_NUM":          "8",
-            "OFI_INTERFACE":        "eth0",
+            "OFI_INTERFACE":        os.environ.get("OFI_INTERFACE", "eth0"),
             "CRT_CTX_SHARE_ADDR":   str(self.share_addr)
         }
         self.env_list = []
@@ -84,13 +89,15 @@ class CartSelfTest(TestWithoutServers):
         # daos server params
         self.server_group = self.params.get("name", 'server_config',
                                             'daos_server')
-        self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(self, self.hostfile_servers, self.server_group,
-                                uri_path=self.uri_file, env_dict=self.env_dict)
+
+        self.uri_file = os.path.join(self.tmp, "uri.txt")
+        self.agent_sessions = agent_utils.run_agent(self, self.hostlist_servers)
+        server_utils.run_server(
+            self, self.hostfile_servers, self.server_group,
+            uri_path=self.uri_file, env_dict=self.env_dict)
 
     def tearDown(self):
+        """Teardown after testcase."""
         try:
             os.remove(self.hostfile_servers)
             os.remove(self.uri_file)
@@ -101,10 +108,9 @@ class CartSelfTest(TestWithoutServers):
             super(CartSelfTest, self).tearDown()
 
     def test_self_test(self):
-        """
-        Run a few CaRT self-test scenarios
+        """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,smoke,pr,unittest,tiny,cartselftest
+        :avocado: tags=all,smoke,unittest,tiny,cartselftest
         """
         base_cmd = [self.orterun,
                     "-np", "1",

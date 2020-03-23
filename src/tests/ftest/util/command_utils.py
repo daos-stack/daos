@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import signal
 
 from avocado.utils import process
 
+from env_modules import load_mpi
+
 
 class CommandFailure(Exception):
     """Base exception for this module."""
@@ -45,7 +47,7 @@ class BasicParameter(object):
         """
         self.value = value if value is not None else default
         self._default = default
-        self.log = getLogger(__name__)
+        self.log = getLogger(self.__class__.__name__)
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -69,17 +71,64 @@ class BasicParameter(object):
         else:
             self.value = test.params.get(name, path, self._default)
 
-    def update(self, value, name=None):
+    def update(self, value, name=None, append=False):
         """Update the value of the parameter.
 
         Args:
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
                 used to display the update. Defaults to None.
+            append (bool, optional): appemnd/extend/update the current list/dict
+                with the provided value.  Defaults to False - override the
+                current value.
         """
-        self.value = value
+        if append and isinstance(self.value, list):
+            if isinstance(value, list):
+                # Add the new list of value to the existing list
+                self.value.extend(value)
+            else:
+                # Add the new value to the existing list
+                self.value.append(value)
+        elif append and isinstance(self.value, dict):
+            # Update the dictionary with the new key/value pairs
+            self.value.update(value)
+        else:
+            # Override the current value with the new value
+            self.value = value
+
         if name is not None:
             self.log.debug("Updated param %s => %s", name, self.value)
+
+
+class NamedParameter(BasicParameter):
+    # pylint: disable=too-few-public-methods
+    """A class for test parameters whose values are read from a yaml file.
+
+    This is essentially a BasicParameter object whose yaml value is obtained
+    with a different name than the one assigned to the object.
+    """
+
+    def __init__(self, name, value, default=None):
+        """Create a NamedParameter  object.
+
+        Args:
+            name (str): yaml key name
+            value (object): intial value for the parameter
+            default (object): default value for the param
+        """
+        super(NamedParameter, self).__init__(value, default)
+        self._name = name
+
+    def get_yaml_value(self, name, test, path):
+        """Get the value for the parameter from the test case's yaml file.
+
+        Args:
+            name (str): name of the value in the yaml file - not used
+            test (Test): avocado Test object to use to read the yaml file
+            path (str): yaml path where the name is to be found
+        """
+        return super(NamedParameter, self).get_yaml_value(
+            self._name, test, path)
 
 
 class FormattedParameter(BasicParameter):
@@ -104,19 +153,21 @@ class FormattedParameter(BasicParameter):
             str: if defined, the parameter, otherwise an empty string
 
         """
+        parameter = ""
         if isinstance(self._default, bool) and self.value:
-            return self._str_format
+            parameter = self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
             if isinstance(self.value, dict):
-                return " ".join([self._str_format.format("{} \"{}\"".format(
-                    key, self.value[key])) for key in self.value])
+                parameter = " ".join([
+                    self._str_format.format(
+                        "{} \"{}\"".format(key, self.value[key]))
+                    for key in self.value])
             elif isinstance(self.value, (list, tuple)):
-                return " ".join(
+                parameter = " ".join(
                     [self._str_format.format(value) for value in self.value])
             else:
-                return self._str_format.format(self.value)
-        else:
-            return ""
+                parameter = self._str_format.format(self.value)
+        return parameter
 
 
 class ObjectWithParameters(object):
@@ -129,7 +180,7 @@ class ObjectWithParameters(object):
             namespace (str): yaml namespace (path to parameters)
         """
         self.namespace = namespace
-        self.log = getLogger(__name__)
+        self.log = getLogger(self.__class__.__name__)
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
@@ -250,6 +301,7 @@ class ExecutableCommand(CommandWithParameters):
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
+        self.exit_status_exception = True
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -283,6 +335,7 @@ class ExecutableCommand(CommandWithParameters):
             "cmd": command,
             "timeout": self.timeout,
             "verbose": self.verbose,
+            "ignore_status": not self.exit_status_exception,
             "allow_output_check": "combined",
             "shell": True,
             "env": self.env,
@@ -378,6 +431,115 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
+
+
+class CommandWithSubCommand(ExecutableCommand):
+    """A class for a command with a sub command."""
+
+    def __init__(self, namespace, command, path="", subprocess=False):
+        """Create a CommandWithSubCommand object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(CommandWithSubCommand, self).__init__(namespace, command, path)
+
+        # Define the sub-command parameter whose value is used to assign the
+        # sub-command's CommandWithParameters-based class.  Use the command to
+        # create uniquely named yaml parameter names.
+        #
+        # This parameter can be specified in the test yaml like so:
+        #   <command>:
+        #       <command>_sub_command: <sub_command>
+        #       <sub_command>:
+        #           <sub_command>_sub_command: <sub_command_sub_command>
+        #
+        self.sub_command = NamedParameter(
+            "{}_sub_command".format(self._command), None)
+
+        # Define the class to represent the active sub-command and it's specific
+        # parameters.  Multiple sub-commands may be available, but only one can
+        # be active at a given time.
+        #
+        # The self.get_sub_command_class() method is called after obtaining the
+        # main command's parameter values, in self.get_params(), to assign the
+        # sub-command's class.  This is typically a class based upon the
+        # CommandWithParameters class, but can be any object with a __str__()
+        # method (including a simple str object).
+        #
+        self.sub_command_class = None
+
+    def get_param_names(self):
+        """Get a sorted list of the names of the BasicParameter attributes.
+
+        Ensure the sub command appears at the end of the list
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
+        names = self.get_attribute_names(BasicParameter)
+        names.append(names.pop(names.index("sub_command")))
+        return names
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Calls self.get_sub_command_class() to assign the self.sub_command_class
+        after obtaining the latest self.sub_command definition.  If the
+        self.sub_command_class is assigned to an ObjectWithParameters-based
+        class its get_params() method is also called.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(CommandWithSubCommand, self).get_params(test)
+        self.get_sub_command_class()
+        if isinstance(self.sub_command_class, ObjectWithParameters):
+            self.sub_command_class.get_params(test)
+
+    def get_sub_command_class(self):
+        """Get the class assignment for the sub command.
+
+        Should be overridden to assign the self.sub_command_class using the
+        latest self.sub_command definition.
+
+        Override this method with sub_command_class assignment that maps to the
+        expected sub_command value.
+        """
+        self.sub_command_class = None
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        If the sub-command parameter yields a sub-command class, replace the
+        sub-command value with the resulting string from the sub-command class
+        when assembling that command string.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        names = self.get_param_names()
+        if self.sub_command_class is not None:
+            index = names.index("sub_command")
+            names[index] = "sub_command_class"
+        return names
+
+    def set_sub_command(self, value):
+        """Set the command's sub-command value and update the sub-command class.
+
+        Args:
+            value (str): sub-command value
+        """
+        self.sub_command.value = value
+        self.get_sub_command_class()
 
 
 class DaosCommand(ExecutableCommand):
@@ -492,17 +654,17 @@ class JobManager(ExecutableCommand):
 
         return " ".join(commands)
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(subprocess)
+        return self.job.check_subprocess_status(sub_process)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the job manager command with common inputs.
@@ -532,6 +694,14 @@ class Orterun(JobManager):
         super(Orterun, self).__init__(
             "/run/orterun", "orterun", job, path, subprocess)
 
+        # Default mca values to avoid queue pair errors
+        mca_default = {
+            "btl_openib_warn_default_gid_prefix": "0",
+            "btl": "tcp,self",
+            "oob": "tcp",
+            "pml": "ob1",
+        }
+
         self.hostfile = FormattedParameter("--hostfile {}", None)
         self.processes = FormattedParameter("--np {}", 1)
         self.display_map = FormattedParameter("--display-map", False)
@@ -540,7 +710,8 @@ class Orterun(JobManager):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = FormattedParameter("--mca {}", None)
+        self.mca = FormattedParameter("--mca {}", mca_default)
+        self.pprnode = FormattedParameter("--map-by ppr:{}:node", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
@@ -560,11 +731,21 @@ class Orterun(JobManager):
         self.hostfile.value = hostfile
         self.processes.value = processes
 
+    def run(self):
+        """Run the orterun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi("openmpi")
+        return super(Orterun, self).run()
+
 
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, path="", subprocess=False):
+    def __init__(self, job, path="", subprocess=False, mpitype="openmpi"):
         """Create a Mpirun object.
 
         Args:
@@ -579,6 +760,8 @@ class Mpirun(JobManager):
 
         self.hostfile = FormattedParameter("-hostfile {}", None)
         self.processes = FormattedParameter("-np {}", 1)
+        self.ppn = FormattedParameter("-ppn {}", None)
+        self.mpitype = mpitype
 
     def setup_command(self, env, hostfile, processes):
         """Set up the mpirun command with common inputs.
@@ -595,6 +778,16 @@ class Mpirun(JobManager):
         # Setup the orterun command
         self.hostfile.value = hostfile
         self.processes.value = processes
+
+    def run(self):
+        """Run the mpirun command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        load_mpi(self.mpitype)
+        return super(Mpirun, self).run()
 
 
 class Srun(JobManager):
@@ -618,6 +811,11 @@ class Srun(JobManager):
         self.ntasks = FormattedParameter("--ntasks={}", None)
         self.distribution = FormattedParameter("--distribution={}", None)
         self.nodefile = FormattedParameter("--nodefile={}", None)
+        self.nodelist = FormattedParameter("--nodelist={}", None)
+        self.ntasks_per_node = FormattedParameter("--ntasks-per-node={}", None)
+        self.reservation = FormattedParameter("--reservation={}", None)
+        self.partition = FormattedParameter("--partition={}", None)
+        self.output = FormattedParameter("--output={}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the srun command with common inputs.
@@ -627,6 +825,7 @@ class Srun(JobManager):
                 the launch command
             hostfile (str): file defining host names and slots
             processes (int): number of host processes
+            processpernode (int): number of process per node
         """
         # Setup the env for the job to export with the srun command
         self.export.value = ",".join(["ALL"] + env.get_list())

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,18 +164,6 @@ ilog_persist(daos_handle_t loh, const struct ilog_id *id);
 int
 ilog_abort(daos_handle_t loh, const struct ilog_id *id);
 
-/**
- * Remove entries in the epoch range leaving only the latest update
- *
- *  \param	loh[in]		Open log handle
- *  \param	epr[in]		Epoch range to scan
- *
- *  \return 0 on success, error code on failure, 1 if the log is empty after
- *  completion.
- */
-int
-ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr);
-
 /** Incarnation log entry description */
 struct ilog_entry {
 	/** The epoch and tx_id for the log entry */
@@ -199,6 +187,31 @@ struct ilog_entries {
 	/** Private log data */
 	uint8_t			 ie_priv[ILOG_PRIV_SIZE];
 };
+
+/**
+ * Cleanup the incarnation log
+ *
+ *  \param	umm[in]		The umem instance
+ *  \param	root[in]	Pointer to log root
+ *  \param	cbs[in]		Incarnation log transaction log callbacks
+ *  \param	epr[in]		Epoch range for cleanup
+ *  \param	discard[in]	Normally, aggregate will only remove entries
+ *				that are provably not needed.  If discard is
+ *				set, it will remove everything in the epoch
+ *				range.
+ *  \param	punched[in]	Max punch of parent incarnation log
+ *  \param	entries[in]	Used for efficiency since aggregation is used
+ *				by vos_iterator
+ *
+ *  \return	0		success
+ *		1		success but indicates log is empty
+ *		< 0		Error
+ */
+int
+ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
+	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
+	       bool discard, daos_epoch_t punched,
+	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch
  *
@@ -247,5 +260,23 @@ ilog_fetch_finish(struct ilog_entries *entries);
 #define ilog_foreach_entry_reverse(ents, entry)				\
 	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
 	     entry != &(ents)->ie_entries[-1]; entry--)
+
+/** Fetch the address of the timestamp index from the ilog
+ *
+ * \param	entries[in]	The incarnation log
+ *
+ * \returns a pointer to the index
+ */
+uint32_t *
+ilog_ts_idx_get(struct ilog_df *ilog_df);
+
+/** Retrieve the current version of the incarnation log
+ *
+ * \param	loh[in]	Open log handle
+ *
+ * Returns the version of the log or 0 if log handle is invalid
+ **/
+uint32_t
+ilog_version_get(daos_handle_t loh);
 
 #endif /* __ILOG_H__ */

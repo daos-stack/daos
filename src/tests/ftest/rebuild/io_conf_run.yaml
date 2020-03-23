@@ -1,0 +1,53 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+    - server-G
+    - server-H
+timeout: 3600
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+pool:
+  scm_size: 14G
+  control_method: dmg
+gen_io_conf:
+  no_of_ranks: !mux
+    default_single_rank:
+      ranks:
+    all_rank:
+      ranks: "8"
+  tgts: !mux
+    remove_all_targets:
+      targets:
+    remove_single_target:
+      targets: "8"
+  no_of_dkeys:
+    large_no_dkeys:
+      dkeys: "5"
+  no_of_akeys:
+    large_no_akeys:
+      akeys: "5"
+  record:
+    large_record_no:
+      record_size: "50"
+  no_of_objects:
+    large_no_objects:
+      obj_num: "10"
+  object_class: !mux
+    replica2_group1:
+      obj_class: "RP_2G1"
+    replica2_group2:
+      obj_class: "RP_2G2"
+    replica3_group1:
+      obj_class: "RP_3G1"
+    replica3_group2:
+      obj_class: "RP_3G2"
+    replica4_group1:
+      obj_class: "RP_4G1"

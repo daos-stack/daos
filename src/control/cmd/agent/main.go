@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -34,6 +35,7 @@ import (
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -43,16 +45,26 @@ import (
 const (
 	agentSockName        = "agent.sock"
 	daosAgentDrpcSockEnv = "DAOS_AGENT_DRPC_DIR"
+	defaultConfigFile    = "daos_agent.yml"
 )
 
 type cliOptions struct {
-	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
-	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
-	Insecure   bool   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	AllowProxy bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug      bool       `short:"d" long:"debug" description:"Enable debug output"`
+	JSON       bool       `short:"j" long:"json" description:"Enable JSON output"`
+	ConfigPath string     `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure   bool       `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir string     `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string     `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Version    versionCmd `command:"version" description:"Print daos_agent version"`
+}
+
+type versionCmd struct{}
+
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("daos_agent version %s\n", build.DaosVersion)
+	os.Exit(0)
+	return nil
 }
 
 func exitWithError(log logging.Logger, err error) {
@@ -82,7 +94,7 @@ func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cl
 		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
 		c.LogFile = opts.LogFile
 	}
-	if opts.Insecure == true {
+	if opts.Insecure {
 		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
 		c.TransportConfig.AllowInsecure = true
 	}
@@ -92,6 +104,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	log.Info("Starting daos_agent:")
 
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
+	p.SubcommandsOptional = true
 
 	_, err := p.Parse()
 	if err != nil {
@@ -113,6 +126,13 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	if opts.ConfigPath == "" {
+		defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+		if _, err := os.Stat(defaultConfigPath); err == nil {
+			opts.ConfigPath = defaultConfigPath
+		}
+	}
 
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
@@ -169,6 +189,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:  log,
+		sys:  config.SystemName,
 		ap:   config.AccessPoints[0],
 		tcfg: config.TransportConfig,
 	})

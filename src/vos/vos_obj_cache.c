@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
-		D_ERROR("Error in creating lru cache: %d\n", rc);
+		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -201,12 +201,14 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
-	     uint32_t intent, bool visible_only, struct vos_object **obj_p)
+	     uint32_t intent, bool visible_only, struct vos_object **obj_p,
+	     struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
+	bool			 found;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
@@ -214,7 +216,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
-		return -DER_SHUTDOWN; /* TODO: use a more targeted errno */
+		return -DER_SHUTDOWN;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -245,8 +247,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			goto out; /* Ok to delete */
 	}
 
-	if (obj->obj_df)
+	if (obj->obj_df) {
+		found = vos_ilog_ts_lookup(ts_set, &obj->obj_df->vo_ilog);
+		if (!found)
+			vos_ilog_ts_cache(ts_set, &obj->obj_df->vo_ilog,
+					  &oid, sizeof(oid));
 		goto check_object;
+	}
 
 	 /* newly cached object */
 	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
@@ -255,15 +262,16 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	obj->obj_sync_epoch = 0;
 	if (no_create) {
-		rc = vos_oi_find(cont, oid, &obj->obj_df);
+		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
 			goto failed;
 		}
 	} else {
+
 		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, false,
-				       &obj->obj_df);
+				       &obj->obj_df, ts_set);
 		D_ASSERT(rc || obj->obj_df);
 	}
 
@@ -274,11 +282,11 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
-		goto out;
 	}
-	obj->obj_sync_epoch = obj->obj_df->vo_sync;
+
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
+	    intent == DAOS_INTENT_COS)
 		goto out;
 
 	if (no_create) {
@@ -303,14 +311,18 @@ check_object:
 	}
 
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
-			     NULL, &obj->obj_ilog_info);
+			     NULL, &obj->obj_ilog_info, 0, ts_set);
 	if (rc != 0) {
 		D_ERROR("Could not update object "DF_UOID" at "DF_U64
 			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
 			DP_RC(rc));
 		goto failed;
 	}
+
 out:
+	if (obj->obj_df != NULL)
+		obj->obj_sync_epoch = obj->obj_df->vo_sync;
+
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
 	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
 	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
@@ -337,7 +349,7 @@ failed:
 failed_2:
 	if (rc != -DER_NONEXIST)
 		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-			 "failed to hold object, rc=%d\n", rc);
+			 "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
 	return	rc;
 }
 

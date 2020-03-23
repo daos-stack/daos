@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,12 @@
 #include <daos_srv/vea.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
+#include <daos/checksum.h>
+
+enum dtx_cos_flags {
+	DCF_FOR_PUNCH	= (1 << 0),
+	DCF_HAS_ILOG	= (1 << 1),
+};
 
 enum vos_oi_attr {
 	/** Marks object as failed */
@@ -152,9 +158,63 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 enum {
+	/** Conditional Op: Punch key if it exists, fail otherwise */
+	VOS_OF_COND_PUNCH	= DAOS_COND_PUNCH,
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_DKEY_INSERT	= DAOS_COND_DKEY_INSERT,
+	/** Conditional Op: Update dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_UPDATE	= DAOS_COND_DKEY_UPDATE,
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
+	VOS_OF_COND_DKEY_FETCH	= DAOS_COND_DKEY_FETCH,
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	VOS_OF_COND_AKEY_INSERT	= DAOS_COND_AKEY_INSERT,
+	/** Conditional Op: Update akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_UPDATE	= DAOS_COND_AKEY_UPDATE,
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */
+	VOS_OF_COND_AKEY_FETCH	= DAOS_COND_AKEY_FETCH,
+	/** Indicates the operation should check mvcc timestamps */
+	VOS_OF_USE_TIMESTAMPS	= (1 << 7),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC	= (1 << 0),
+	VOS_OF_REPLAY_PC	= (1 << 8),
 };
+
+/** Mask for any conditionals passed to to the fetch */
+#define VOS_COND_FETCH_MASK	\
+	(VOS_OF_COND_AKEY_FETCH | VOS_OF_COND_DKEY_FETCH)
+
+/** Mask for akey conditionals passed to to the update */
+#define VOS_COND_AKEY_UPDATE_MASK					\
+	(VOS_OF_COND_AKEY_UPDATE | VOS_OF_COND_AKEY_INSERT)
+
+/** Mask for dkey conditionals passed to to the update */
+#define VOS_COND_DKEY_UPDATE_MASK					\
+	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_DKEY_INSERT)
+
+/** Mask for any conditionals passed to to the update */
+#define VOS_COND_UPDATE_MASK					\
+	(VOS_COND_DKEY_UPDATE_MASK | VOS_COND_AKEY_UPDATE_MASK)
+
+D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_USE_TIMESTAMPS & DAOS_COND_MASK) == 0);
+
+/** vos definitions that match daos_obj_key_query flags */
+enum {
+	/** retrieve the max of dkey, akey, and/or idx of array value */
+	VOS_GET_MAX		= DAOS_GET_MAX,
+	/** retrieve the min of dkey, akey, and/or idx of array value */
+	VOS_GET_MIN		= DAOS_GET_MIN,
+	/** retrieve the dkey */
+	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	/** retrieve the akey */
+	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	/** retrieve the idx of array value */
+	VOS_GET_RECX		= DAOS_GET_RECX,
+	/** Internal flag to indicate timestamps are used */
+	VOS_USE_TIMESTAMPS	= (1 << 5),
+};
+
+D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
+				 VOS_GET_AKEY | VOS_GET_RECX)) == 0);
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
@@ -224,32 +284,32 @@ typedef struct {
 	/** Returned epoch. It is ignored for container iteration. */
 	daos_epoch_t				ie_epoch;
 	union {
-		/** Returned earliest update epoch for a key */
-		daos_epoch_t			ie_earliest;
-		/** Return the DTX handled time for DTX iteration. */
-		uint64_t			ie_dtx_time;
-	};
-	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
+		/** Key, object, or DTX entry */
 		struct {
-			/** dkey or akey */
-			daos_key_t		ie_key;
 			/** Non-zero if punched */
-			daos_epoch_t		ie_key_punch;
+			daos_epoch_t		ie_punch;
+			union {
+				/** dkey or akey */
+				struct {
+					/** key value */
+					daos_key_t		ie_key;
+				};
+				/** object or DTX entry */
+				struct {
+					/** The DTX identifier. */
+					struct dtx_id		ie_xid;
+					/** oid */
+					daos_unit_oid_t		ie_oid;
+					/* The dkey hash for DTX iteration. */
+					uint64_t		ie_dtx_hash;
+					/* The DTX intent for DTX iteration. */
+					uint32_t		ie_dtx_intent;
+				};
+			};
 		};
-		struct {
-			/** The DTX identifier. */
-			struct dtx_id		ie_xid;
-			/** oid */
-			daos_unit_oid_t		ie_oid;
-			/** Non-zero if punched */
-			daos_epoch_t		ie_obj_punch;
-			/* The DTX dkey hash for DTX iteration. */
-			uint64_t		ie_dtx_hash;
-			/* The DTX intent for DTX iteration. */
-			uint32_t		ie_dtx_intent;
-		};
+		/** Array entry */
 		struct {
 			/** record size */
 			daos_size_t		ie_rsize;
@@ -260,7 +320,7 @@ typedef struct {
 			/** biov to return address for single value or recx */
 			struct bio_iov		ie_biov;
 			/** checksum */
-			daos_csum_buf_t		ie_csum;
+			struct dcs_csum_info	ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
 		};
@@ -290,6 +350,8 @@ enum {
  * Anchors for whole iteration, one for each entry type
  */
 struct vos_iter_anchors {
+	/** Anchor for container */
+	daos_anchor_t	ia_co;
 	/** Anchor for obj */
 	daos_anchor_t	ia_obj;
 	/** Anchor for dkey */
@@ -301,7 +363,8 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_obj:1,
+	unsigned int	ia_reprobe_co:1,
+			ia_reprobe_obj:1,
 			ia_reprobe_dkey:1,
 			ia_reprobe_akey:1,
 			ia_reprobe_sv:1,

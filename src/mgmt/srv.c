@@ -37,6 +37,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
+#include <daos_mgmt.h>
 
 #include "srv_internal.h"
 #include "drpc_internal.h"
@@ -78,8 +79,11 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * command errors should be indicated inside daos response.
 	 */
 	switch (drpc_req->method) {
-	case DRPC_METHOD_MGMT_KILL_RANK:
-		ds_mgmt_drpc_kill_rank(drpc_req, drpc_resp);
+	case DRPC_METHOD_MGMT_PREP_SHUTDOWN:
+		ds_mgmt_drpc_prep_shutdown(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_PING_RANK:
+		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
@@ -114,6 +118,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SMD_LIST_POOLS:
 		ds_mgmt_drpc_smd_list_pools(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_DEV_STATE_QUERY:
+		ds_mgmt_drpc_dev_state_query(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
+		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
 		break;
@@ -125,6 +135,18 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_POOL_UPDATE_ACL:
 		ds_mgmt_drpc_pool_update_acl(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_DELETE_ACL:
+		ds_mgmt_drpc_pool_delete_acl(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_LIST_CONTAINERS:
+		ds_mgmt_drpc_pool_list_cont(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_SET_PROP:
+		ds_mgmt_drpc_pool_set_prop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_QUERY:
+		ds_mgmt_drpc_pool_query(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
@@ -163,8 +185,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
-		if (rc == 0 && ps_in->ps_key_id == DSS_KEY_FAIL_LOC)
-			rc = dss_parameters_set(DSS_KEY_FAIL_VALUE,
+		if (rc == 0 && ps_in->ps_key_id == DMG_KEY_FAIL_LOC)
+			rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 						ps_in->ps_value_extra);
 		if (rc)
 			D_ERROR("Set parameter failed key_id %d: rc %d\n",
@@ -251,7 +273,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "profile hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -299,7 +321,7 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	}
 out:
 	out = crt_reply_get(rpc);
-	D_DEBUG(DB_MGMT, "mark hdlr: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -344,15 +366,9 @@ ds_mgmt_init()
 {
 	int rc;
 
-	rc = ds_mgmt_tgt_init();
-	if (rc)
-		return rc;
-
 	rc = ds_mgmt_system_module_init();
-	if (rc != 0) {
-		ds_mgmt_tgt_fini();
+	if (rc != 0)
 		return rc;
-	}
 
 	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
@@ -362,14 +378,21 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_system_module_fini();
-	ds_mgmt_tgt_fini();
-	D_DEBUG(DB_MGMT, "successfull fini call\n");
+
+	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
+}
+
+static int
+ds_mgmt_setup()
+{
+	return ds_mgmt_tgt_setup();
 }
 
 static int
 ds_mgmt_cleanup()
 {
+	ds_mgmt_tgt_cleanup();
 	return ds_mgmt_svc_stop();
 }
 
@@ -379,6 +402,7 @@ struct dss_module mgmt_module = {
 	.sm_ver			= DAOS_MGMT_VERSION,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
+	.sm_setup		= ds_mgmt_setup,
 	.sm_cleanup		= ds_mgmt_cleanup,
 	.sm_proto_fmt		= &mgmt_proto_fmt,
 	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,

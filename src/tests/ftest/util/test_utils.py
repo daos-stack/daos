@@ -31,6 +31,7 @@ from command_utils import BasicParameter, ObjectWithParameters
 from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
                         c_uuid_to_str)
 from general_utils import check_pool_files, get_random_string, DaosTestError
+from env_modules import load_mpi
 
 
 class CallbackHandler(object):
@@ -120,6 +121,59 @@ class TestDaosApiBase(ObjectWithParameters):
         if self.cb_handler:
             # Wait for the call back if one is provided
             self.cb_handler.wait()
+
+    def _check_info(self, check_list):
+        """Verify each info attribute value matches an expected value.
+
+        Args:
+            check_list (list): a list of tuples containing the name of the
+                information attribute to check, the current value of the
+                attribute, and the expected value of the attribute. If the
+                expected value is specified as a string with a number preceeded
+                by '<', '<=', '>', or '>=' then this comparision will be used
+                instead of the defult '=='.
+
+        Returns:
+            bool: True if at least one check has been specified and all the
+            actual and expected values match; False otherwise.
+
+        """
+        check_status = len(check_list) > 0
+        for check, actual, expect in check_list:
+            # Determine which comparision to utilize for this check
+            compare = ("==", lambda x, y: x == y, "does not match")
+            if isinstance(expect, str):
+                comparisions = {
+                    "<": (lambda x, y: x < y, "is too large"),
+                    ">": (lambda x, y: x > y, "is too small"),
+                    "<=": (
+                        lambda x, y: x <= y, "is too large or does not match"),
+                    ">=": (
+                        lambda x, y: x >= y, "is too small or does not match"),
+                }
+                for key, val in comparisions.items():
+                    # If the expected value is preceeded by one of the known
+                    # comparision keys, use the comparision and remove the key
+                    # from the expected value
+                    if expect[:len(key)] == key:
+                        compare = (key, val[0], val[1])
+                        expect = expect[len(key):]
+                        try:
+                            expect = int(expect)
+                        except ValueError:
+                            # Allow strings to be strings
+                            pass
+                        break
+            self.log.info(
+                "Verifying the %s %s: %s %s %s",
+                self.__class__.__name__.replace("Test", "").lower(),
+                check, actual, compare[0], expect)
+            if not compare[1](actual, expect):
+                msg = "  The {} {}: actual={}, expected={}".format(
+                    check, compare[2], actual, expect)
+                self.log.error(msg)
+                check_status = False
+        return check_status
 
 
 class TestPool(TestDaosApiBase):
@@ -422,58 +476,6 @@ class TestPool(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def _check_info(self, check_list):
-        """Verify each pool info attribute value matches an expected value.
-
-        Args:
-            check_list (list): a list of tuples containing the name of the pool
-                information attribute to check, the current value of the
-                attribute, and the expected value of the attribute. If the
-                expected value is specified as a string with a number preceeded
-                by '<', '<=', '>', or '>=' then this comparision will be used
-                instead of the defult '=='.
-
-        Returns:
-            bool: True if at least one check has been specified and all the
-            actual and expected values match; False otherwise.
-
-        """
-        check_status = len(check_list) > 0
-        for check, actual, expect in check_list:
-            # Determine which comparision to utilize for this check
-            compare = ("==", lambda x, y: x == y, "does not match")
-            if isinstance(expect, str):
-                comparisions = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in comparisions.items():
-                    # If the expected value is preceeded by one of the known
-                    # comparision keys, use the comparision and remove the key
-                    # from the expected value
-                    if expect[:len(key)] == key:
-                        compare = (key, val[0], val[1])
-                        expect = expect[len(key):]
-                        try:
-                            expect = int(expect)
-                        except ValueError:
-                            # Allow strings to be strings
-                            pass
-                        break
-            self.log.info(
-                "Verifying the pool %s: %s %s %s",
-                check, actual, compare[0], expect)
-            if not compare[1](actual, expect):
-                msg = "  The {} {}: actual={}, expected={}".format(
-                    check, compare[2], actual, expect)
-                self.log.error(msg)
-                check_status = False
-        return check_status
-
     def rebuild_complete(self):
         """Determine if the pool rebuild is complete.
 
@@ -579,9 +581,9 @@ class TestPool(TestDaosApiBase):
         env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
-            "DAOS_SINGLETON_CLI": "1",
             "PYTHONPATH": os.getenv("PYTHONPATH", ""),
         }
+        load_mpi("openmpi")
         current_path = os.path.dirname(os.path.abspath(__file__))
         command = "{} --np {} --hostfile {} {} {} testfile".format(
             orterun, processes, hostfile,
@@ -888,6 +890,7 @@ class TestContainer(TestDaosApiBase):
 
         self.container = None
         self.uuid = None
+        self.info = None
         self.opened = False
         self.written_data = []
 
@@ -924,9 +927,11 @@ class TestContainer(TestDaosApiBase):
             container_uuid (hex, optional): Container UUID. Defaults to None.
                 If you want to use certain container's UUID, pass in
                 something like uuid.UUID(self.container[-1].uuid)
+
         Returns:
             bool: True if the container has been opened; False if the container
                 is already opened.
+
         """
         if self.container and not self.opened:
             self.log.info("Opening container %s", self.uuid)
@@ -972,9 +977,70 @@ class TestContainer(TestDaosApiBase):
             if self.container.attached:
                 self._call_method(self.container.destroy, {"force": force})
             self.container = None
+            self.uuid = None
+            self.info = None
             self.written_data = []
             return True
         return False
+
+    @fail_on(DaosApiError)
+    def get_info(self, coh=None):
+        """Query the container for information.
+
+        Sets the self.info attribute.
+
+        Args:
+            coh (str, optional): container handle override. Defaults to None.
+        """
+        if self.container:
+            self.open()
+            self.log.info("Querying container %s", self.uuid)
+            self._call_method(self.container.query, {"coh": coh})
+            self.info = self.container.info
+
+    def check_container_info(self, ci_uuid=None, es_hce=None, es_lre=None,
+                             es_lhe=None, es_ghce=None, es_glre=None,
+                             es_ghpce=None, ci_nsnapshots=None,
+                             ci_min_slipped_epoch=None):
+        # pylint: disable=unused-argument
+        """Check the container info attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
+        Args:
+            ci_uuid (str, optional): container uuid. Defaults to None.
+            es_hce (int, optional): hc epoch?. Defaults to None.
+            es_lre (int, optional): lr epoch?. Defaults to None.
+            es_lhe (int, optional): lh epoch?. Defaults to None.
+            es_ghce (int, optional): ghc epoch?. Defaults to None.
+            es_glre (int, optional): glr epoch?. Defaults to None.
+            es_ghpce (int, optional): ghpc epoch?. Defaults to None.
+            ci_nsnapshots (int, optional): number of snapshots.
+                Defaults to None.
+            ci_min_slipped_epoch (int, optional): . Defaults to None.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
+        Returns:
+            bool: True if at least one expected value is specified and all the
+                specified values match; False otherwise
+
+        """
+        self.get_info()
+        checks = [
+            (key,
+             c_uuid_to_str(getattr(self.info, key))
+             if key == "ci_uuid" else getattr(self.info, key),
+             val)
+            for key, val in locals().items()
+            if key != "self" and val is not None]
+        return self._check_info(checks)
 
     @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None, debug=False):

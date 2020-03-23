@@ -1,21 +1,16 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 hosts:
-  test_machines:
-    - boro-A
-    - boro-B
+  test_servers:
+    - server-A
+    - server-B
 #JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:
    name: daos_server
 pool:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 8000000000
+  mode: 511
+  name: daos_server
+  scm_size: 8000000000
+  control_method: dmg
 array_size:
   size: 10
 dkeys: !mux

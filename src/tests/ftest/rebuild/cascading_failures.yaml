@@ -1,13 +1,13 @@
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
-    - boro-F
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
   test_clients:
-    - boro-G
+    - client-G
 timeout: 360
 server_config:
   name: daos_server
@@ -18,6 +18,7 @@ pool:
   name: daos_server
   scm_size: 1073741824
   svcn: 2
+  control_method: dmg
 container:
   akey_size: 5
   dkey_size: 5

@@ -38,8 +38,6 @@
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
-#else
-#include "daos_uns_lustre.h"
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
@@ -48,23 +46,23 @@
 #include "daos_fs.h"
 #include "daos_uns.h"
 
-#define DUNS_XATTR_NAME		"user.daos"
 #define DUNS_MAX_XATTR_LEN	170
-#define DUNS_MIN_XATTR_LEN	90
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
-#define LIBLUSTRE		"liblustreapi.so"
+#define DUNS_MIN_XATTR_LEN	85
+#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
 
-/* XXX may need to use ioctl() direct method instead of Lustre
- * API if moving from Lustre build/install dependency to pure
- * dynamic/run-time discovery+binding of/with liblustreapi.so
- */
+#ifndef FUSE_SUPER_MAGIC
+#define FUSE_SUPER_MAGIC	0x65735546
+#endif
+
+#ifdef LUSTRE_INCLUDE
+#define LIBLUSTRE		"liblustreapi.so"
 
 static bool liblustre_notfound = false;
 /* need to protect against concurent/multi-threaded attempts to bind ? */
 static bool liblustre_binded = false;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
-int (*unlink_foreign)(char *) = NULL;
+static int (*unlink_foreign)(char *) = NULL;
 
 static int
 bind_liblustre()
@@ -133,8 +131,6 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	 * with LMV, both LOV and LMV will need to be queried if ENODATA is
 	 * returned at 1st, as the file/dir type is hidden to help decide before
 	 * due to the symlink fake !!
-	 * Also, querying/checking container's type/oclass/chunk_size/...
-	 * vs EA content could be a good idea ?
 	 */
 
 	/* XXX if liblustreapi is not binded, do it now ! */
@@ -199,11 +195,11 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 			/** TODO - convert errno to rc */
 			return -DER_INVAL;
 		}
-	
+
 		lfm = (struct lmv_foreign_md *)buf;
 		/* sanity check */
 		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
-		    lfm->lfm_type != LU_FOREIGN_TYPE_DAOS ||
+		    lfm->lfm_type != LU_FOREIGN_TYPE_SYMLINK ||
 		    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
 		    snprintf(str, DUNS_MAX_XATTR_LEN, "%s",
 			     lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
@@ -257,117 +253,135 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		return -DER_INVAL;
 	}
 
-	t = strtok_r(NULL, "/", &saveptr);
-	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
-		return -DER_INVAL;
-	}
-
 	/* path is DAOS-foreign and will need to be unlinked using
 	 * unlink_foreign API
 	 */
 	attr->da_on_lustre = true;
 
-	attr->da_oclass_id = daos_oclass_name2id(t);
-
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_chunk_size = strtoull(t, NULL, 10);
-
 	return 0;
 }
+#endif
 
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
 	ssize_t	s;
 	char	str[DUNS_MAX_XATTR_LEN];
-	char	*saveptr, *t;
 	struct statfs fs;
-	char *dir, *dirp;
+	char	*dir, *dirp;
 	int	rc;
 
-	dir = malloc(PATH_MAX);
+	dir = strdup(path);
 	if (dir == NULL) {
-		D_ERROR("Failed to allocate %d bytes for required copy of "
-			"path %s: %s\n", PATH_MAX, path, strerror(errno));
-		/** TODO - convert errno to rc */
-		return -DER_NOSPACE;
+		D_ERROR("Failed to copy path\n");
+		return -DER_NOMEM;
 	}
 
-	dirp = strcpy(dir, path);
-	/* dirname() may modify dir content or not, so use an
-	 * alternate pointer (see dirname() man page)
-	 */
 	dirp = dirname(dir);
 	rc = statfs(dirp, &fs);
 	if (rc == -1) {
 		D_ERROR("Failed to statfs %s: %s\n", path, strerror(errno));
 		/** TODO - convert errno to rc */
+		free(dir);
 		return -DER_INVAL;
 	}
 
+#ifdef LUSTRE_INCLUDE
 	if (fs.f_type == LL_SUPER_MAGIC) {
 		rc = duns_resolve_lustre_path(path, attr);
-		if (rc == 0)
+		if (rc == 0) {
+			free(dir);
 			return 0;
+		}
 		/* if Lustre specific method fails, fallback to try
 		 * the normal way...
 		 */
 	}
+#endif
 
 	s = lgetxattr(path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
 	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
-		if (s == ENOTSUP)
+		int err = errno;
+
+		if (err == ENOTSUP)
 			D_ERROR("Path is not in a filesystem that supports the"
 				" DAOS unified namespace\n");
-		else if (s == ENODATA)
+		else if (err == ENODATA)
 			D_ERROR("Path does not represent a DAOS link\n");
 		else if (s > DUNS_MAX_XATTR_LEN)
 			D_ERROR("Invalid xattr length\n");
 		else
 			D_ERROR("Invalid DAOS unified namespace xattr\n");
+
+		free(dir);
 		return -DER_INVAL;
 	}
 
-	t = strtok_r(str, ".", &saveptr);
+	free(dir);
+	return duns_parse_attr(&str[0], s, attr);
+}
+
+int
+duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
+{
+	char *local;
+	char	*saveptr, *t;
+	int rc;
+
+	D_STRNDUP(local, str, len);
+	if (!local)
+		return -DER_NOMEM;
+
+	t = strtok_r(local, ".", &saveptr);
 	if (t == NULL) {
 		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, ":", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 	daos_parse_ctype(t, &attr->da_type);
 	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
 		D_ERROR("Invalid DAOS xattr format: Container layout cannot be"
 			" unknown\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
+
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be"
 			" parsed\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
+		D_GOTO(err, rc = -DER_INVAL);
+	}
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be"
 			" parsed\n");
-		return -DER_INVAL;
+		D_GOTO(err, rc = -DER_INVAL);
 	}
 
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_oclass_id = daos_oclass_name2id(t);
-
-	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_chunk_size = strtoull(t, NULL, 10);
-
 	return 0;
+err:
+	D_FREE(local);
+	return rc;
 }
 
+#ifdef LUSTRE_INCLUDE
 static int
 duns_create_lustre_path(daos_handle_t poh, const char *path,
 			struct duns_attr_t *attrp)
@@ -411,25 +425,39 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
@@ -444,15 +472,14 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	/* XXX should file with foreign LOV be expected/supoorted here ? */
 
 	/** create dir and store the daos attributes in the path LMV */
-	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-		      attrp->da_chunk_size);
+	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
 	if (len < DUNS_MIN_XATTR_LEN) {
 		D_ERROR("Failed to create LMV value\n");
 		D_GOTO(err_cont, rc = -DER_INVAL);
 	}
 
 	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_DAOS, 0xda05, str);
+				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
 	if (rc) {
 		D_ERROR("Failed to create Lustre dir '%s' with foreign "
 			"LMV '%s' (rc = %d).\n", path, str, rc);
@@ -466,6 +493,7 @@ err_cont:
 err:
 	return rc;
 }
+#endif
 
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
@@ -476,6 +504,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	int			len;
 	int			try_multiple = 1;		/* boolean */
 	int			rc;
+	bool			backend_dfuse = false;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -521,6 +550,11 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return -DER_INVAL;
 		}
 
+		if (fs.f_type == FUSE_SUPER_MAGIC) {
+			backend_dfuse = true;
+		}
+
+#ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_create_lustre_path(poh, path, attrp);
 			if (rc == 0)
@@ -529,6 +563,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			 * the normal way...
 			 */
 		}
+#endif
 
 		/** create a new directory if POSIX/MPI-IO container */
 		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -566,8 +601,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		/** store the daos attributes in the path xattr */
-		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-			      attrp->da_chunk_size);
+		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont);
 		if (len < DUNS_MIN_XATTR_LEN) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_link, rc = -DER_INVAL);
@@ -575,33 +609,68 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
-			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+			int err = errno;
+
+			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", err);
 			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr;
+			dfs_attr_t	dfs_attr = { 0 };
 
 			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			dfs_attr.da_props = attrp->da_props;
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
 					     NULL, NULL);
 		} else {
 			daos_prop_t	*prop;
+			int		 nr = 1;
 
-			prop = daos_prop_alloc(1);
+			if (attrp->da_props != NULL)
+				nr = attrp->da_props->dpp_nr + 1;
+
+			prop = daos_prop_alloc(nr);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err_link, rc = -DER_NOMEM);
 			}
-			prop->dpp_entries[0].dpe_type =
+			if (attrp->da_props != NULL) {
+				rc = daos_prop_copy(prop, attrp->da_props);
+				if (rc) {
+					daos_prop_free(prop);
+					D_ERROR("failed to copy properties (%d)\n", rc);
+					return daos_der2errno(rc);
+				}
+			}
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
+				attrp->da_type;
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 			daos_prop_free(prop);
 		}
+
+		if (rc == -DER_SUCCESS && backend_dfuse) {
+			/* This next setxattr will cause dfuse to lookup the
+			 * entry point and perform a container connect,
+			 * therefore this xattr will be set in the root of the
+			 * new container, not the directory.
+			 */
+
+			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
+				       len + 1, XATTR_CREATE);
+			if (rc) {
+				int err = errno;
+
+				D_ERROR("Failed to set DAOS xattr (rc = %d).\n",
+					err);
+				D_GOTO(err_link, rc = -DER_IO);
+			}
+		}
+
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
@@ -640,9 +709,11 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	}
 
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+#ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
 		else
+#endif
 			rc = unlink(path);
 		if (rc) {
 			D_ERROR("Failed to unlink %sfile %s: %s\n",
@@ -651,9 +722,11 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 			return -DER_INVAL;
 		}
 	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+#ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
 		else
+#endif
 			rc = rmdir(path);
 		if (rc) {
 			D_ERROR("Failed to remove %sdir %s: %s\n",

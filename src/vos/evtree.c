@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,7 +285,6 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 */
 		size *= 3;
 		ent_array->ea_max = size;
-		ent_array->ea_inob = tcx->tc_inob;
 	}
 	if (ent_array->ea_ent_nr == ent_array->ea_size) {
 		/** We should never exceed the maximum number of entries. */
@@ -876,7 +875,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -926,7 +926,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	return 0;
 
  failed:
-	V_TRACE(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	V_TRACE(DB_TRACE, "Failed to create tree context: "DF_RC"\n",
+		DP_RC(rc));
 	evt_tcx_decref(tcx);
 	return rc;
 }
@@ -1390,13 +1391,14 @@ out:
 static int
 evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
-	struct evt_root		*root;
-	umem_off_t		 nd_off;
-	int			 rc;
+	struct evt_root			*root;
+	umem_off_t			 nd_off;
+	int				 rc;
+	const struct dcs_csum_info	*csum;
 
 	root = tcx->tc_root;
 	uint32_t inob = ent->ei_inob;
-	const daos_csum_buf_t *csum = &ent->ei_csum;
+	csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
 	D_ASSERT(UMOFF_IS_NULL(root->tr_node));
@@ -1414,7 +1416,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (dcb_is_valid(csum)) {
+	if (ci_is_valid((struct dcs_csum_info *) csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -1609,7 +1611,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 
 		rc = evt_node_split(tcx, leaf, nd_cur, nd_new);
 		if (rc != 0) {
-			V_TRACE(DB_TRACE, "Failed to split node: %d\n", rc);
+			V_TRACE(DB_TRACE, "Failed to split node: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(failed, rc);
 		}
 
@@ -1675,7 +1678,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
  out:
 	return 0;
  failed:
-	D_ERROR("Failed to insert entry to level %d: %d\n", level, rc);
+	D_ERROR("Failed to insert entry to level %d: "DF_RC"\n", level,
+		DP_RC(rc));
 	return rc;
 }
 
@@ -1720,6 +1724,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 				nm_dst = nm_cur;
 				nd_dst = nd_cur;
 			} else {
+				D_ASSERT(nd_dst != NULL);
 				nd_dst = evt_select_node(tcx, &ent->ei_rect,
 							 nd_dst, nd_cur);
 				if (nd_dst == nd_cur)
@@ -1920,6 +1925,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		return 0; /* empty tree */
 
 	evt_tcx_reset_trace(tcx);
+	ent_array->ea_inob = tcx->tc_inob;
 
 	level = at = 0;
 	nd_off = tcx->tc_root->tr_node;
@@ -3025,10 +3031,10 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t	*csum = &ent->ei_csum;
-	daos_size_t		 csum_buf_len;
+	const struct dcs_csum_info	*csum = &ent->ei_csum;
+	daos_size_t			 csum_buf_len;
 
-	if (!dcb_is_valid(csum))
+	if (!ci_is_valid(csum))
 		return;
 
 	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
@@ -3045,25 +3051,43 @@ void
 evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		    struct evt_entry *entry)
 {
-	if (tcx->tc_root->tr_csum_len > 0 &&
-		tcx->tc_root->tr_csum_chunk_size) {
-		D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
-		daos_off_t lo_offset = evt_entry_selected_offset(entry);
-		uint32_t csum_count = evt_csum_count(tcx, &entry->en_ext);
-		uint32_t chunk_len = tcx->tc_root->tr_csum_chunk_size;
+	daos_off_t	lo_offset;
+	uint32_t	csum_count;
+	uint32_t	chunk_len;
+	uint64_t	csum_start;
 
-		uint64_t csum_start = lo_offset / chunk_len;
+	if (tcx->tc_root->tr_csum_len <= 0 || !tcx->tc_root->tr_csum_chunk_size)
+		return;
 
-		entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
-		entry->en_csum.cs_nr = csum_count;
-		entry->en_csum.cs_buf_len = csum_count *
-			tcx->tc_root->tr_csum_len;
-		entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
-		entry->en_csum.cs_chunksize = chunk_len;
-		entry->en_csum.cs_csum =
-			&desc->pt_csum[0] + csum_start *
-					    tcx->tc_root->tr_csum_len;
-	}
+	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
+	lo_offset = evt_entry_selected_offset(entry);
+	csum_count = evt_csum_count(tcx, &entry->en_ext);
+	chunk_len = tcx->tc_root->tr_csum_chunk_size;
+	csum_start = lo_offset / chunk_len;
+
+	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
+	entry->en_csum.cs_nr = csum_count;
+	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_chunksize = chunk_len;
+	entry->en_csum.cs_csum = &desc->pt_csum[0] + csum_start *
+						     tcx->tc_root->tr_csum_len;
+}
+
+struct evt_extent
+evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
+{
+	struct evt_extent	result;
+
+	struct daos_csum_range chunk = csum_align_boundaries(
+		entry->en_sel_ext.ex_lo, entry->en_sel_ext.ex_hi,
+		entry->en_ext.ex_lo, entry->en_ext.ex_hi,
+		record_size, entry->en_csum.cs_chunksize);
+
+	result.ex_hi = chunk.dcr_hi;
+	result.ex_lo = chunk.dcr_lo;
+
+	return result;
 }
 
 int

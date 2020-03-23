@@ -3,12 +3,15 @@
 server_config:
    name: scott_server
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 timeout: 700
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 1073741824
+  name: daos_server
 connecttests:
-   createmode:
-     mode: 511
    connectmode: !mux
      testmode1:
           mode:
@@ -57,16 +60,3 @@ connecttests:
           uuid:
              - JUNK
              - FAIL
-   uids:
-     createuid:
-         uid: 11374638
-   gids:
-     creategid:
-         gid: 11374638
-   setnames:
-     createset:
-          setname: scott_server
-   psize:
-     createsize:
-         size: 1073741824
-

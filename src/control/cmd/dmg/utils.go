@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,44 +24,126 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
+	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-func hasConns(results client.ResultMap) (bool, string) {
-	out := sprintConns(results)
-	for _, res := range results {
-		if res.Err == nil {
-			return true, out
+// hostsByPort takes slice of address patterns and returns a HostGroups mapping
+// of ports to HostSets.
+func hostsByPort(addrPatterns string, defaultPort int) (portHosts hostlist.HostGroups, err error) {
+	var hostSet, port string
+	var inHostSet *hostlist.HostList
+	portHosts = make(hostlist.HostGroups)
+
+	inHostSet, err = hostlist.Create(addrPatterns)
+	if err != nil {
+		return
+	}
+
+	for _, ptn := range strings.Split(inHostSet.DerangedString(), ",") {
+		hostSet, port, err = common.SplitPort(ptn, defaultPort)
+		if err != nil {
+			return
+		}
+
+		if err = portHosts.AddHost(port, hostSet); err != nil {
+			return
 		}
 	}
 
-	// notify if there have been no successful connections
-	return false, fmt.Sprintf("%sNo active connections!", out)
+	return
 }
 
-func sprintConns(results client.ResultMap) (out string) {
-	// map keys always processed in order
-	var addrs []string
-	for addr := range results {
-		addrs = append(addrs, addr)
+// flattenHostAddrs takes nodeset:port patterns and returns individual addresses
+// after expanding nodesets and mapping to ports.
+func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err error) {
+	var portHosts hostlist.HostGroups
+
+	// expand any compressed nodesets for specific ports, should fail if no
+	// port in pattern.
+	portHosts, err = hostsByPort(addrPatterns, defaultPort)
+	if err != nil {
+		return
 	}
+
+	// reconstruct slice of all "host:port" addresses from map
+	for _, port := range portHosts.Keys() {
+		hosts := strings.Split(portHosts[port].DerangedString(), ",")
+		for _, host := range hosts {
+			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
+		}
+	}
+
 	sort.Strings(addrs)
 
-	i := 0
-	for _, addr := range addrs {
-		if results[addr].Err != nil {
-			out = fmt.Sprintf(
-				"%sfailed to connect to %s (%s)\n",
-				out, addr, results[addr].Err)
+	return
+}
+
+// checkConns analyses connection results and returns summary compressed active
+// and inactive hostlists (but disregards connection port).
+func checkConns(results client.ResultMap) (connStates hostlist.HostGroups, err error) {
+	connStates = make(hostlist.HostGroups)
+
+	for addr := range results {
+		resultErr := results[addr].Err
+		if resultErr != nil {
+			if err = connStates.AddHost(resultErr.Error(), addr); err != nil {
+				return
+			}
 			continue
 		}
-		addrs[i] = addr
-		i++
+		if err = connStates.AddHost("connected", addr); err != nil {
+			return
+		}
 	}
-	addrs = addrs[:i]
 
-	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
+	return
+}
+
+// formatHostGroups adds group title header per group results.
+func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
+	for _, res := range groups.Keys() {
+		hostset := groups[res].RangedString()
+		lineBreak := strings.Repeat("-", len(hostset))
+		fmt.Fprintf(buf, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
+	}
+
+	return buf.String()
+}
+
+// tabulateHostGroups is a helper function representing hostgroups in a tabular form.
+func tabulateHostGroups(groups hostlist.HostGroups, titles ...string) (string, error) {
+	if len(titles) < 2 {
+		return "", errors.New("insufficient number of column titles")
+	}
+	groupTitle := titles[0]
+	columnTitles := titles[1:]
+
+	formatter := txtfmt.NewTableFormatter(titles...)
+	var table []txtfmt.TableRow
+
+	for _, result := range groups.Keys() {
+		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, rowFieldSep)
+		if len(summary) != len(columnTitles) {
+			return "", errors.New("unexpected summary format")
+		}
+		for i, title := range columnTitles {
+			row[title] = summary[i]
+		}
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
 }

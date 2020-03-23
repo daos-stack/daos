@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -304,7 +304,8 @@ rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
 	rdb_vos_set_sgls(RDB_VOS_QUERY, 1 /* n */, value, &sgl);
-	rc = vos_obj_fetch(cont, uoid, epoch, &rdb_dkey, 1 /* n */, &iod, &sgl);
+	rc = vos_obj_fetch(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			   1 /* n */, &iod, &sgl);
 	if (rc != 0)
 		return rc;
 
@@ -332,14 +333,14 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_QUERY, 1 /* n */, akey, value, &iod);
-	rc = vos_fetch_begin(cont, uoid, epoch, &rdb_dkey, 1 /* n */,
-			     &iod, false /* size_fetch */, &io);
+	rc = vos_fetch_begin(cont, uoid, epoch, 0 /* flags */, &rdb_dkey,
+			     1 /* n */, &iod, false /* size_fetch */, &io);
 	if (rc != 0)
 		return rc;
 
 	rc = bio_iod_prep(vos_ioh2desc(io));
 	if (rc) {
-		D_ERROR("prep io descriptor error:%d\n", rc);
+		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -355,21 +356,21 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		struct bio_iov *biov = &bsgl->bs_iovs[0];
 
 		D_ASSERTF(bsgl->bs_nr_out == 1, "%u\n", bsgl->bs_nr_out);
-		D_ASSERTF(iod.iod_size == biov->bi_data_len,
+		D_ASSERTF(iod.iod_size == bio_iov2len(biov),
 			  DF_U64" == "DF_U64"\n", iod.iod_size,
-			  biov->bi_data_len);
+			  bio_iov2len(biov));
 		D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_SCM);
 
-		value->iov_buf = biov->bi_buf;
-		value->iov_buf_len = biov->bi_data_len;
-		value->iov_len = biov->bi_data_len;
+		value->iov_buf = bio_iov2raw_buf(biov);
+		value->iov_buf_len = bio_iov2len(biov);
+		value->iov_len = bio_iov2len(biov);
 	}
 
 	rc = bio_iod_post(vos_ioh2desc(io));
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, 0 /* err */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
 }
@@ -513,8 +514,8 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, &rdb_dkey, n,
-			      iods, sgls);
+	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, 0 /* flags */,
+			      &rdb_dkey, n, iods, NULL, sgls);
 }
 
 int
@@ -551,5 +552,5 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr);
+	return vos_aggregate(cont, &epr, NULL);
 }

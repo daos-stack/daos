@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,11 +75,11 @@ ctl_update(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_update(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				     &cred->tc_iod, &cred->tc_sgl, NULL);
 	} else {
-		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
-				    0xcafe, &cred->tc_dkey, 1, &cred->tc_iod,
+		rc = vos_obj_update(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0xcafe,
+				    0, &cred->tc_dkey, 1, &cred->tc_iod, NULL,
 				    &cred->tc_sgl);
 	}
 	return rc;
@@ -91,10 +91,10 @@ ctl_fetch(struct dts_io_credit *cred)
 	int	rc;
 
 	if (daos_mode) {
-		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, &cred->tc_dkey, 1,
+		rc = daos_obj_fetch(ctl_oh, DAOS_TX_NONE, 0, &cred->tc_dkey, 1,
 				    &cred->tc_iod, &cred->tc_sgl, NULL, NULL);
 	} else {
-		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch,
+		rc = vos_obj_fetch(ctl_ctx.tsc_coh, ctl_oid, ctl_epoch, 0,
 				   &cred->tc_dkey, 1, &cred->tc_iod,
 				   &cred->tc_sgl);
 	}
@@ -116,13 +116,13 @@ ctl_punch(struct dts_io_credit *cred)
 
 	if (daos_mode) {
 		if (!dkey) {
-			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, NULL);
+			rc = daos_obj_punch(ctl_oh, DAOS_TX_NONE, 0, NULL);
 
 		} else if (!akey) {
-			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 1,
+			rc = daos_obj_punch_dkeys(ctl_oh, DAOS_TX_NONE, 0, 1,
 						  dkey, NULL);
 		} else {
-			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, dkey,
+			rc = daos_obj_punch_akeys(ctl_oh, DAOS_TX_NONE, 0, dkey,
 						  1, akey, NULL);
 		}
 	} else {
@@ -234,7 +234,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	daos_key_desc_t	 kds[KDS_NR];
 	daos_anchor_t	 anchor;
 	int		 i;
-	int		 rc;
+	int		 rc = 0;
 	int		 total = 0;
 
 	memset(&anchor, 0, sizeof(anchor));
@@ -258,7 +258,8 @@ ctl_daos_list(struct dts_io_credit *cred)
 		}
 
 		if (rc) {
-			fprintf(stderr, "Failed to list keys: %d\n", rc);
+			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 
@@ -311,7 +312,8 @@ ctl_cmd_run(char opc, char *args)
 	bool			 opened = false;
 
 	if (args) {
-		strcpy(buf, args);
+		strncpy(buf, args, CTL_BUF_LEN);
+		buf[CTL_BUF_LEN - 1] = '\0';
 		str = daos_str_trimwhite(buf);
 	} else {
 		str = NULL;
@@ -370,14 +372,16 @@ ctl_cmd_run(char opc, char *args)
 		}
 	}
 
-	if (ctl_abits & CTL_ARG_DKEY) {
-		strcpy(cred->tc_dbuf, dkey);
+	if ((ctl_abits & CTL_ARG_DKEY) && dkey != NULL) {
+		strncpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
+		cred->tc_dbuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			     strlen(cred->tc_dbuf) + 1);
 	}
 
-	if (ctl_abits & CTL_ARG_AKEY) {
-		strcpy(cred->tc_abuf, akey);
+	if ((ctl_abits & CTL_ARG_AKEY) && akey != NULL) {
+		strncpy(cred->tc_abuf, akey, DTS_KEY_LEN);
+		cred->tc_abuf[DTS_KEY_LEN - 1] = '\0';
 		d_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
 			     strlen(cred->tc_abuf) + 1);
 
@@ -388,9 +392,10 @@ ctl_cmd_run(char opc, char *args)
 		cred->tc_recx.rx_nr	= 1;
 	}
 
-	if (ctl_abits & CTL_ARG_VAL) {
+	if ((ctl_abits & CTL_ARG_VAL) && val != NULL) {
 		cred->tc_iod.iod_size = strlen(val) + 1;
-		strcpy(cred->tc_vbuf, val);
+		strncpy(cred->tc_vbuf, val, ctl_ctx.tsc_cred_vsize);
+		cred->tc_vbuf[ctl_ctx.tsc_cred_vsize - 1] = '\0';
 		d_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     strlen(cred->tc_vbuf) + 1);
 	} else {
@@ -471,7 +476,8 @@ out:
 
 	switch (rc) {
 	case -2: /* real failure */
-		D_PRINT("Operation failed, rc=%d\n", rc);
+		D_PRINT("Operation failed, rc="DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case -1: /* invalid input */
@@ -533,7 +539,8 @@ main(int argc, char **argv)
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to initialize utility: %d\n", rc);
+		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

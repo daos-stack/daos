@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,10 @@ enum daos_pool_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_PO_OWNER_GROUP,
+	/**
+	 * The pool svc rank list.
+	 */
+	DAOS_PROP_PO_SVC_LIST,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -89,6 +93,8 @@ enum daos_pool_props {
 
 /** DAOS space reclaim strategy */
 enum {
+	DAOS_RECLAIM_DISABLED = 0,
+	DAOS_RECLAIM_LAZY,
 	DAOS_RECLAIM_SNAPSHOT,
 	DAOS_RECLAIM_BATCH,
 	DAOS_RECLAIM_TIME,
@@ -136,8 +142,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 	/**
 	 * Redundancy factor:
-	 * RF1: no data protection. scratched data.
-	 * RF3: 3-way replication, EC 4+2, 8+2, 16+2
+	 * RF(n): Container I/O restricted after n faults.
 	 * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
 	 */
 	DAOS_PROP_CO_REDUN_FAC,
@@ -150,14 +155,34 @@ enum daos_cont_props {
 	 * Maximum number of snapshots to retain.
 	 */
 	DAOS_PROP_CO_SNAPSHOT_MAX,
-	/** ACL: access control list for container */
+	/**
+	 * ACL: access control list for container
+	 * An ordered list of access control entries detailing user and group
+	 * access privileges.
+	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
+	 */
 	DAOS_PROP_CO_ACL,
 	/** Compression on/off + compression type */
 	DAOS_PROP_CO_COMPRESS,
 	/** Encryption on/off + encryption type */
 	DAOS_PROP_CO_ENCRYPT,
+	/**
+	 * The user who acts as the owner of the container.
+	 * Format: user@[domain]
+	 */
+	DAOS_PROP_CO_OWNER,
+	/**
+	 * The group that acts as the owner of the container.
+	 * Format: group@[domain]
+	 */
+	DAOS_PROP_CO_OWNER_GROUP,
 	DAOS_PROP_CO_MAX,
 };
+
+/**
+ * Number of container property types
+ */
+#define DAOS_PROP_CO_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 typedef uint16_t daos_cont_layout_t;
 
@@ -196,8 +221,11 @@ enum {
 
 /** container redundancy factor */
 enum {
+	DAOS_PROP_CO_REDUN_RF0,
 	DAOS_PROP_CO_REDUN_RF1,
+	DAOS_PROP_CO_REDUN_RF2,
 	DAOS_PROP_CO_REDUN_RF3,
+	DAOS_PROP_CO_REDUN_RF4,
 };
 
 enum {
@@ -253,6 +281,45 @@ daos_prop_alloc(uint32_t entries_nr);
  */
 void
 daos_prop_free(daos_prop_t *prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ *
+ * \return	Newly allocated merged property
+ */
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
+
+/**
+ * Duplicate a generic pointer value from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in][out]	entry_dst	Destination entry
+ * \param[in]		entry_src	Entry to be copied
+ * \param[in]		len		Length of the memory to be copied
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
+			struct daos_prop_entry *entry_src, size_t len);
+
+/**
+ * Compare a pair of daos_prop_entry that contain ACLs.
+ *
+ * \param	entry1	DAOS prop entry for ACL
+ * \param	entry2	DAOS prop entry for ACL
+ *
+ * \return	0		Entries match
+ *		-DER_MISMATCH	Entries do NOT match
+ */
+int
+daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
+			struct daos_prop_entry *entry2);
 
 #if defined(__cplusplus)
 }

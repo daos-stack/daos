@@ -43,7 +43,7 @@ static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC,
+		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -710,6 +710,17 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_17, NULL, test_case_teardown},
 };
 
+static int
+dtx_test_setup(void **state)
+{
+	int     rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			NULL);
+
+	return rc;
+}
+
 int
 run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
@@ -721,9 +732,9 @@ run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(dtx_tests, ARRAY_SIZE(dtx_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+	rc = run_daos_sub_tests("DAOS dtx tests", dtx_tests,
+				ARRAY_SIZE(dtx_tests), sub_tests,
+				sub_tests_size, dtx_test_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

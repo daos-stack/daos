@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,20 +26,70 @@ package main
 import (
 	"fmt"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
 func TestSystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"system member query with no arguments",
-			"system member-query",
-			"ConnectClients SystemMemberQuery",
+			"system query with no arguments",
+			"system query",
+			"ConnectClients SystemQuery-{[]}",
+			nil,
+		},
+		{
+			"system query with single rank",
+			"system query --ranks 0",
+			"ConnectClients SystemQuery-{[0]}",
+			nil,
+		},
+		{
+			"system query with multiple ranks",
+			"system query --ranks 0,1,4",
+			"ConnectClients SystemQuery-{[0 1 4]}",
+			nil,
+		},
+		{
+			"system query with bad rank option",
+			"system query --rank 0",
+			"ConnectClients SystemQuery-{[0]}",
+			errors.New("unknown flag `rank'"),
+		},
+		{
+			"system query verbose",
+			"system query --verbose",
+			"ConnectClients SystemQuery-{[]}",
 			nil,
 		},
 		{
 			"system stop with no arguments",
 			"system stop",
-			"ConnectClients SystemStop",
+			"ConnectClients SystemStop-{true true [] false}",
+			nil,
+		},
+		{
+			"system stop with force",
+			"system stop --force",
+			"ConnectClients SystemStop-{true true [] true}",
+			nil,
+		},
+		{
+			"system start with no arguments",
+			"system start",
+			"ConnectClients SystemStart-{[]}",
+			nil,
+		},
+		{
+			"leader query",
+			"system leader-query",
+			"ConnectClients LeaderQuery-daos_server",
+			nil,
+		},
+		{
+			"system list-pools with default config",
+			"system list-pools",
+			"ConnectClients ListPools-{daos_server}",
 			nil,
 		},
 		{

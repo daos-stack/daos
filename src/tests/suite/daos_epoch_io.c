@@ -143,8 +143,15 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	struct ioreq			 req;
 	struct test_punch_arg		*pu_arg = &op->pu_arg;
 
-	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
+	if (pu_arg->pa_singv) {
+		ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_SINGLE,
+			   arg);
+		punch_single(key_rec->or_dkey, key_rec->or_akey, 0,
+			     DAOS_TX_NONE, &req);
+		goto fini;
+	}
 
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
 	if (pu_arg->pa_recxs_num == 0)
 		punch_akey(key_rec->or_dkey, key_rec->or_akey,
 			   DAOS_TX_NONE, &req);
@@ -153,6 +160,7 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 			    pu_arg->pa_recxs, pu_arg->pa_recxs_num,
 			    DAOS_TX_NONE, &req);
 
+fini:
 	ioreq_fini(&req);
 	return 0;
 }
@@ -869,6 +877,7 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 		{"--akey",	true,	'a'},
 		{"--tx",	true,	'e'},
 		{"--recx",	true,	'r'},
+		{"--single",	false,	's'},
 		{0}
 	};
 
@@ -899,6 +908,9 @@ cmd_parse_punch(test_arg_t *arg, int argc, char **argv,
 			}
 			pu_arg->pa_recxs = recxs;
 			pu_arg->pa_recxs_num = recxs_num;
+			break;
+		case 's':
+			pu_arg->pa_singv = true;
 			break;
 		default:
 			print_message("Unknown Option %c\n", opt);
@@ -1175,13 +1187,15 @@ out:
 }
 
 static int
-cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
+cmd_line_parse(test_arg_t *arg, const char *cmd_line,
+	       struct test_op_record **op)
 {
 	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
 	struct test_op_record	*op_rec = NULL;
 	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
+	size_t			 cmd_size;
 	int			 argc = 0;
 	int			 rc = 0;
 
@@ -1189,6 +1203,13 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 #if CMD_LINE_DBG
 	print_message("parsing cmd: %s.\n", cmd);
 #endif
+	cmd_size = strnlen(cmd, CMD_LINE_LEN_MAX);
+	if (cmd_size == 0)
+		return 0;
+	if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+		print_message("bad cmd_line.\n");
+		return -1;
+	}
 	rc = cmd_parse_argv(cmd, &argc, argv);
 	if (rc != 0) {
 		print_message("bad format %s.\n", cmd);
@@ -1364,7 +1385,8 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	D_ASSERT(lvl == TEST_LVL_DAOS || lvl == TEST_LVL_VOS);
 
 	/* for modification OP, just go through DAOS stack and return */
-	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY)
+	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY ||
+	    op == TEST_OP_ADD || op == TEST_OP_EXCLUDE)
 		return op_dict[op].op_cb[lvl](arg, op_rec, NULL, 0);
 
 	/* for verification OP, firstly retrieve it through DAOS stack */
@@ -1448,10 +1470,18 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	}
 
 	do {
+		size_t	cmd_size;
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		if (cmd_size == 0)
+			continue;
+		if (cmd_size < 0 || cmd_size >= CMD_LINE_LEN_MAX) {
+			print_message("bad cmd_line, exit.\n");
+			break;
+		}
 		rc = cmd_line_parse(arg, cmd_line, &op);
 		if (rc != 0) {
 			print_message("bad cmd_line %s, exit.\n", cmd_line);

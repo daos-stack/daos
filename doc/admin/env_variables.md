@@ -1,4 +1,4 @@
-# DAOS Environment Variables
+# Environment Variables
 
 This section lists the environment variables used by DAOS. Many of them
 are used for development purposes only and may be removed or changed in
@@ -23,9 +23,8 @@ This table defines a type:
 |BOOL3|set to empty, or any value means true; unset means false|
 |INTEGER|Non-negative decimal integer|
 |STRING|String|
-                
 
-## Common environment variables 
+## Common environment variables
 
 Environment variables in this section apply to both the server-side and the client-side.
 
@@ -55,7 +54,7 @@ Environment variables in this section only apply to the client-side.
 
 |Variable|Description|
 |----|----| 
-|DAOS\_SINGLETON\_CLI |Determines whether to run in the singleton mode, in which the client does not need to be launched by orterun. BOOL. Default to false.|
+|N/A |N/A|
 
 ## Debug System (Client & Server)
 |Variable |Description|

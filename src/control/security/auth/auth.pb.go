@@ -3,9 +3,11 @@
 
 package auth
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,9 +18,9 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-// Authentication token includes a packed structure of the specified flavor
+// Types of authentication token
 type Flavor int32
 
 const (
@@ -30,6 +32,7 @@ var Flavor_name = map[int32]string{
 	0: "AUTH_NONE",
 	1: "AUTH_SYS",
 }
+
 var Flavor_value = map[string]int32{
 	"AUTH_NONE": 0,
 	"AUTH_SYS":  1,
@@ -38,8 +41,9 @@ var Flavor_value = map[string]int32{
 func (x Flavor) String() string {
 	return proto.EnumName(Flavor_name, int32(x))
 }
+
 func (Flavor) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_auth_5b74f72543a36804, []int{0}
+	return fileDescriptor_8bbd6f3875b0e874, []int{0}
 }
 
 type Token struct {
@@ -54,16 +58,17 @@ func (m *Token) Reset()         { *m = Token{} }
 func (m *Token) String() string { return proto.CompactTextString(m) }
 func (*Token) ProtoMessage()    {}
 func (*Token) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_5b74f72543a36804, []int{0}
+	return fileDescriptor_8bbd6f3875b0e874, []int{0}
 }
+
 func (m *Token) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Token.Unmarshal(m, b)
 }
 func (m *Token) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Token.Marshal(b, m, deterministic)
 }
-func (dst *Token) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Token.Merge(dst, src)
+func (m *Token) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Token.Merge(m, src)
 }
 func (m *Token) XXX_Size() int {
 	return xxx_messageInfo_Token.Size(m)
@@ -88,7 +93,7 @@ func (m *Token) GetData() []byte {
 	return nil
 }
 
-// Token structure for AUTH_SYS flavor
+// Token structure for AUTH_SYS flavor cred
 type Sys struct {
 	Stamp                uint64   `protobuf:"varint,1,opt,name=stamp,proto3" json:"stamp,omitempty"`
 	Machinename          string   `protobuf:"bytes,2,opt,name=machinename,proto3" json:"machinename,omitempty"`
@@ -105,16 +110,17 @@ func (m *Sys) Reset()         { *m = Sys{} }
 func (m *Sys) String() string { return proto.CompactTextString(m) }
 func (*Sys) ProtoMessage()    {}
 func (*Sys) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_5b74f72543a36804, []int{1}
+	return fileDescriptor_8bbd6f3875b0e874, []int{1}
 }
+
 func (m *Sys) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Sys.Unmarshal(m, b)
 }
 func (m *Sys) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Sys.Marshal(b, m, deterministic)
 }
-func (dst *Sys) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Sys.Merge(dst, src)
+func (m *Sys) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Sys.Merge(m, src)
 }
 func (m *Sys) XXX_Size() int {
 	return xxx_messageInfo_Sys.Size(m)
@@ -167,46 +173,6 @@ func (m *Sys) GetSecctx() string {
 	return ""
 }
 
-type SysVerifier struct {
-	Signature            []byte   `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *SysVerifier) Reset()         { *m = SysVerifier{} }
-func (m *SysVerifier) String() string { return proto.CompactTextString(m) }
-func (*SysVerifier) ProtoMessage()    {}
-func (*SysVerifier) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_5b74f72543a36804, []int{2}
-}
-func (m *SysVerifier) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SysVerifier.Unmarshal(m, b)
-}
-func (m *SysVerifier) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SysVerifier.Marshal(b, m, deterministic)
-}
-func (dst *SysVerifier) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SysVerifier.Merge(dst, src)
-}
-func (m *SysVerifier) XXX_Size() int {
-	return xxx_messageInfo_SysVerifier.Size(m)
-}
-func (m *SysVerifier) XXX_DiscardUnknown() {
-	xxx_messageInfo_SysVerifier.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SysVerifier proto.InternalMessageInfo
-
-func (m *SysVerifier) GetSignature() []byte {
-	if m != nil {
-		return m.Signature
-	}
-	return nil
-}
-
-// SecurityCredential includes the auth token and a verifier that can be used by
-// the server to verify the integrity of the token.
 // Token and verifier are expected to have the same flavor type.
 type Credential struct {
 	Token                *Token   `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
@@ -221,16 +187,17 @@ func (m *Credential) Reset()         { *m = Credential{} }
 func (m *Credential) String() string { return proto.CompactTextString(m) }
 func (*Credential) ProtoMessage()    {}
 func (*Credential) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_5b74f72543a36804, []int{3}
+	return fileDescriptor_8bbd6f3875b0e874, []int{2}
 }
+
 func (m *Credential) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Credential.Unmarshal(m, b)
 }
 func (m *Credential) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Credential.Marshal(b, m, deterministic)
 }
-func (dst *Credential) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Credential.Merge(dst, src)
+func (m *Credential) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Credential.Merge(m, src)
 }
 func (m *Credential) XXX_Size() int {
 	return xxx_messageInfo_Credential.Size(m)
@@ -262,35 +229,181 @@ func (m *Credential) GetOrigin() string {
 	return ""
 }
 
-func init() {
-	proto.RegisterType((*Token)(nil), "auth.Token")
-	proto.RegisterType((*Sys)(nil), "auth.Sys")
-	proto.RegisterType((*SysVerifier)(nil), "auth.SysVerifier")
-	proto.RegisterType((*Credential)(nil), "auth.Credential")
-	proto.RegisterEnum("auth.Flavor", Flavor_name, Flavor_value)
+// GetCredResp represents the result of a request to fetch authentication
+// credentials.
+type GetCredResp struct {
+	Status               int32       `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Cred                 *Credential `protobuf:"bytes,2,opt,name=cred,proto3" json:"cred,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
-func init() { proto.RegisterFile("auth.proto", fileDescriptor_auth_5b74f72543a36804) }
+func (m *GetCredResp) Reset()         { *m = GetCredResp{} }
+func (m *GetCredResp) String() string { return proto.CompactTextString(m) }
+func (*GetCredResp) ProtoMessage()    {}
+func (*GetCredResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8bbd6f3875b0e874, []int{3}
+}
 
-var fileDescriptor_auth_5b74f72543a36804 = []byte{
-	// 300 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x5c, 0x51, 0xdd, 0x4a, 0xc3, 0x30,
-	0x14, 0xb6, 0xae, 0x2d, 0xeb, 0x69, 0x95, 0x71, 0x10, 0xe9, 0x85, 0x17, 0xb5, 0x28, 0x0e, 0x85,
-	0x5d, 0xcc, 0x27, 0x18, 0xa2, 0x78, 0x35, 0x21, 0x9d, 0x82, 0x57, 0x12, 0xb7, 0x6c, 0x0b, 0x6e,
-	0x4d, 0x49, 0xd2, 0xe1, 0x9e, 0xc4, 0xd7, 0x95, 0x9c, 0x06, 0x15, 0xef, 0xbe, 0xbf, 0x7e, 0xe4,
-	0x7c, 0x05, 0xe0, 0xad, 0x5d, 0x8f, 0x1a, 0xad, 0xac, 0xc2, 0xd0, 0xe1, 0x72, 0x02, 0xd1, 0x4c,
-	0x7d, 0x88, 0x1a, 0x2f, 0x20, 0x5e, 0x6e, 0xf8, 0x4e, 0xe9, 0x3c, 0x28, 0x82, 0xe1, 0xf1, 0x38,
-	0x1b, 0x51, 0xf6, 0x81, 0x34, 0xe6, 0x3d, 0x44, 0x08, 0x17, 0xdc, 0xf2, 0xfc, 0xb0, 0x08, 0x86,
-	0x19, 0x23, 0x5c, 0x7e, 0x05, 0xd0, 0xab, 0xf6, 0x06, 0x4f, 0x20, 0x32, 0x96, 0x6f, 0x1b, 0x2a,
-	0x08, 0x59, 0x47, 0xb0, 0x80, 0x74, 0xcb, 0xe7, 0x6b, 0x59, 0x8b, 0x9a, 0x6f, 0x05, 0x7d, 0x98,
-	0xb0, 0xbf, 0x92, 0xeb, 0x6c, 0x8d, 0xd0, 0x79, 0x8f, 0x2c, 0xc2, 0xae, 0x6b, 0xa5, 0x55, 0xdb,
-	0xe4, 0x21, 0x89, 0x1d, 0xc1, 0x53, 0x88, 0x09, 0x98, 0x3c, 0x2a, 0x7a, 0xc3, 0x84, 0x79, 0xe6,
-	0x74, 0x23, 0xe6, 0x73, 0xfb, 0x99, 0xc7, 0x14, 0xf7, 0xac, 0xbc, 0x81, 0xb4, 0xda, 0x9b, 0x17,
-	0xa1, 0xe5, 0x52, 0x0a, 0x8d, 0x67, 0x90, 0x18, 0xb9, 0xaa, 0xb9, 0x6d, 0xb5, 0xa0, 0x47, 0x66,
-	0xec, 0x57, 0x28, 0x1b, 0x80, 0x3b, 0x2d, 0x16, 0xa2, 0xb6, 0x92, 0x6f, 0xf0, 0x1c, 0x22, 0xeb,
-	0x76, 0xa1, 0x5c, 0x3a, 0x4e, 0xbb, 0x35, 0x68, 0x2a, 0xd6, 0x39, 0x78, 0x05, 0xfd, 0x9d, 0xaf,
-	0xa6, 0xb3, 0xfe, 0xa5, 0x7e, 0x4c, 0xf7, 0x3c, 0xa5, 0xe5, 0x4a, 0xd6, 0xfe, 0x44, 0xcf, 0xae,
-	0x2f, 0x21, 0xee, 0xe6, 0xc5, 0x23, 0x48, 0x26, 0xcf, 0xb3, 0xc7, 0xb7, 0xe9, 0xd3, 0xf4, 0x7e,
-	0x70, 0x80, 0x19, 0xf4, 0x89, 0x56, 0xaf, 0xd5, 0x20, 0x78, 0x8f, 0xe9, 0x7f, 0xdd, 0x7e, 0x07,
-	0x00, 0x00, 0xff, 0xff, 0x40, 0x3e, 0xe9, 0x5a, 0xbd, 0x01, 0x00, 0x00,
+func (m *GetCredResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetCredResp.Unmarshal(m, b)
+}
+func (m *GetCredResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetCredResp.Marshal(b, m, deterministic)
+}
+func (m *GetCredResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetCredResp.Merge(m, src)
+}
+func (m *GetCredResp) XXX_Size() int {
+	return xxx_messageInfo_GetCredResp.Size(m)
+}
+func (m *GetCredResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetCredResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetCredResp proto.InternalMessageInfo
+
+func (m *GetCredResp) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *GetCredResp) GetCred() *Credential {
+	if m != nil {
+		return m.Cred
+	}
+	return nil
+}
+
+// ValidateCredReq represents a request to verify a set of authentication
+// credentials.
+type ValidateCredReq struct {
+	Cred                 *Credential `protobuf:"bytes,1,opt,name=cred,proto3" json:"cred,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
+}
+
+func (m *ValidateCredReq) Reset()         { *m = ValidateCredReq{} }
+func (m *ValidateCredReq) String() string { return proto.CompactTextString(m) }
+func (*ValidateCredReq) ProtoMessage()    {}
+func (*ValidateCredReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8bbd6f3875b0e874, []int{4}
+}
+
+func (m *ValidateCredReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ValidateCredReq.Unmarshal(m, b)
+}
+func (m *ValidateCredReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ValidateCredReq.Marshal(b, m, deterministic)
+}
+func (m *ValidateCredReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ValidateCredReq.Merge(m, src)
+}
+func (m *ValidateCredReq) XXX_Size() int {
+	return xxx_messageInfo_ValidateCredReq.Size(m)
+}
+func (m *ValidateCredReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_ValidateCredReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ValidateCredReq proto.InternalMessageInfo
+
+func (m *ValidateCredReq) GetCred() *Credential {
+	if m != nil {
+		return m.Cred
+	}
+	return nil
+}
+
+// ValidateCredResp represents the result of a request to validate
+// authentication credentials.
+type ValidateCredResp struct {
+	Status               int32    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Token                *Token   `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ValidateCredResp) Reset()         { *m = ValidateCredResp{} }
+func (m *ValidateCredResp) String() string { return proto.CompactTextString(m) }
+func (*ValidateCredResp) ProtoMessage()    {}
+func (*ValidateCredResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8bbd6f3875b0e874, []int{5}
+}
+
+func (m *ValidateCredResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ValidateCredResp.Unmarshal(m, b)
+}
+func (m *ValidateCredResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ValidateCredResp.Marshal(b, m, deterministic)
+}
+func (m *ValidateCredResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ValidateCredResp.Merge(m, src)
+}
+func (m *ValidateCredResp) XXX_Size() int {
+	return xxx_messageInfo_ValidateCredResp.Size(m)
+}
+func (m *ValidateCredResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ValidateCredResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ValidateCredResp proto.InternalMessageInfo
+
+func (m *ValidateCredResp) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *ValidateCredResp) GetToken() *Token {
+	if m != nil {
+		return m.Token
+	}
+	return nil
+}
+
+func init() {
+	proto.RegisterEnum("auth.Flavor", Flavor_name, Flavor_value)
+	proto.RegisterType((*Token)(nil), "auth.Token")
+	proto.RegisterType((*Sys)(nil), "auth.Sys")
+	proto.RegisterType((*Credential)(nil), "auth.Credential")
+	proto.RegisterType((*GetCredResp)(nil), "auth.GetCredResp")
+	proto.RegisterType((*ValidateCredReq)(nil), "auth.ValidateCredReq")
+	proto.RegisterType((*ValidateCredResp)(nil), "auth.ValidateCredResp")
+}
+
+func init() {
+	proto.RegisterFile("auth.proto", fileDescriptor_8bbd6f3875b0e874)
+}
+
+var fileDescriptor_8bbd6f3875b0e874 = []byte{
+	// 348 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x52, 0x4d, 0x4b, 0xeb, 0x40,
+	0x14, 0x7d, 0x69, 0x93, 0xd0, 0xde, 0xf4, 0xbd, 0x17, 0x06, 0x91, 0x2c, 0x63, 0xa8, 0x58, 0x5c,
+	0x74, 0x51, 0x17, 0xae, 0x8b, 0xf8, 0x01, 0x62, 0x85, 0x69, 0x15, 0x5c, 0xc9, 0x98, 0x4c, 0xdb,
+	0xc1, 0x36, 0x89, 0x33, 0x93, 0xa2, 0xbf, 0xc4, 0xbf, 0x2b, 0x73, 0x67, 0xa8, 0x1f, 0x60, 0x77,
+	0xf7, 0xdc, 0x73, 0xef, 0x39, 0xe7, 0x0e, 0x03, 0xc0, 0x1a, 0xbd, 0x1c, 0xd6, 0xb2, 0xd2, 0x15,
+	0xf1, 0x4d, 0x9d, 0x8d, 0x21, 0x98, 0x55, 0xcf, 0xbc, 0x24, 0x7d, 0x08, 0xe7, 0x2b, 0xb6, 0xa9,
+	0x64, 0xe2, 0xa5, 0xde, 0xe0, 0xdf, 0xa8, 0x37, 0xc4, 0xd9, 0x0b, 0xec, 0x51, 0xc7, 0x11, 0x02,
+	0x7e, 0xc1, 0x34, 0x4b, 0x5a, 0xa9, 0x37, 0xe8, 0x51, 0xac, 0xb3, 0x77, 0x0f, 0xda, 0xd3, 0x37,
+	0x45, 0xf6, 0x20, 0x50, 0x9a, 0xad, 0x6b, 0x14, 0xf0, 0xa9, 0x05, 0x24, 0x85, 0x68, 0xcd, 0xf2,
+	0xa5, 0x28, 0x79, 0xc9, 0xd6, 0x1c, 0x17, 0xbb, 0xf4, 0x6b, 0xcb, 0x68, 0x36, 0x8a, 0xcb, 0xa4,
+	0x8d, 0x14, 0xd6, 0x46, 0x6b, 0x21, 0xab, 0xa6, 0x4e, 0x7c, 0x6c, 0x5a, 0x40, 0xf6, 0x21, 0xc4,
+	0x42, 0x25, 0x41, 0xda, 0x1e, 0x74, 0xa9, 0x43, 0xa6, 0xaf, 0x78, 0x9e, 0xeb, 0xd7, 0x24, 0xc4,
+	0x71, 0x87, 0xb2, 0x1a, 0xe0, 0x4c, 0xf2, 0x82, 0x97, 0x5a, 0xb0, 0x15, 0x39, 0x80, 0x40, 0x9b,
+	0x53, 0x31, 0x5f, 0x34, 0x8a, 0xec, 0x81, 0x78, 0x3d, 0xb5, 0x0c, 0x39, 0x82, 0xce, 0x86, 0x4b,
+	0x31, 0x17, 0x5c, 0x62, 0xd2, 0x1f, 0x53, 0x5b, 0xd2, 0x38, 0x56, 0x52, 0x2c, 0x44, 0xe9, 0x52,
+	0x3b, 0x94, 0x5d, 0x43, 0x74, 0xc9, 0xb5, 0x31, 0xa5, 0x5c, 0x61, 0x60, 0xa5, 0x99, 0x6e, 0x14,
+	0x7a, 0x06, 0xd4, 0x21, 0xd2, 0x07, 0x3f, 0x97, 0xbc, 0x70, 0x1e, 0xb1, 0xf5, 0xf8, 0x8c, 0x4a,
+	0x91, 0xcd, 0x4e, 0xe1, 0xff, 0x3d, 0x5b, 0x89, 0x82, 0x69, 0x6e, 0x15, 0x5f, 0xb6, 0x8b, 0xde,
+	0xce, 0xc5, 0x1b, 0x88, 0xbf, 0x2f, 0xee, 0x88, 0xb2, 0x7d, 0x95, 0xd6, 0x6f, 0xaf, 0x72, 0x7c,
+	0x08, 0xa1, 0xfd, 0x06, 0xe4, 0x2f, 0x74, 0xc7, 0x77, 0xb3, 0xab, 0xc7, 0xc9, 0xed, 0xe4, 0x3c,
+	0xfe, 0x43, 0x7a, 0xd0, 0x41, 0x38, 0x7d, 0x98, 0xc6, 0xde, 0x53, 0x88, 0xff, 0xea, 0xe4, 0x23,
+	0x00, 0x00, 0xff, 0xff, 0x0f, 0xe4, 0xc6, 0x1f, 0x65, 0x02, 0x00, 0x00,
 }

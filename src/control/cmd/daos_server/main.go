@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,15 +24,25 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
+)
+
+const (
+	defaultConfigFile = "daos_server.yml"
 )
 
 type mainOpts struct {
@@ -48,6 +58,15 @@ type mainOpts struct {
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
 	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version versionCmd `command:"version" description:"Print daos_server version"`
+}
+
+type versionCmd struct{}
+
+func (cmd *versionCmd) Execute(_ []string) error {
+	fmt.Printf("daos_server version %s\n", build.DaosVersion)
+	os.Exit(0)
+	return nil
 }
 
 type cmdLogger interface {
@@ -91,6 +110,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.setLog(log)
 		}
 
+		if opts.ConfigPath == "" {
+			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+			if _, err := os.Stat(defaultConfigPath); err == nil {
+				opts.ConfigPath = defaultConfigPath
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
@@ -124,7 +150,16 @@ func main() {
 	log := logging.NewCommandLineLogger()
 	var opts mainOpts
 
+	// Check this right away to avoid lots of annoying failures later.
+	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
+		exitWithError(log, err)
+	}
+
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+		if errors.Cause(err) == context.Canceled {
+			log.Infof("%s (pid %d) shutting down", server.ControlPlaneName, os.Getpid())
+			os.Exit(0)
+		}
 		exitWithError(log, err)
 	}
 }

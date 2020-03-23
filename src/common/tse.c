@@ -46,7 +46,7 @@ struct tse_task_link {
 	tse_task_t		*tl_task;
 };
 
-static void tse_sched_decref(struct tse_sched_private *dsp);
+static void tse_sched_priv_decref(struct tse_sched_private *dsp);
 
 int
 tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
@@ -193,6 +193,24 @@ tse_task_set_priv(tse_task_t *task, void *priv)
 	return old;
 }
 
+void *
+tse_task_get_priv_internal(tse_task_t *task)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+
+	return dtp->dtp_priv_internal;
+}
+
+void *
+tse_task_set_priv_internal(tse_task_t *task, void *priv)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+	void			*old = dtp->dtp_priv_internal;
+
+	dtp->dtp_priv_internal = priv;
+	return old;
+}
+
 tse_sched_t *
 tse_task2sched(tse_task_t *task)
 {
@@ -266,13 +284,13 @@ tse_sched_fini(tse_sched_t *sched)
 }
 
 static inline void
-tse_sched_addref_locked(struct tse_sched_private *dsp)
+tse_sched_priv_addref_locked(struct tse_sched_private *dsp)
 {
 	dsp->dsp_refcount++;
 }
 
 static void
-tse_sched_decref(struct tse_sched_private *dsp)
+tse_sched_priv_decref(struct tse_sched_private *dsp)
 {
 	bool	finalize;
 
@@ -286,6 +304,22 @@ tse_sched_decref(struct tse_sched_private *dsp)
 
 	if (finalize)
 		tse_sched_fini(tse_priv2sched(dsp));
+}
+
+void
+tse_sched_addref(tse_sched_t *sched)
+{
+	struct tse_sched_private *dsp = tse_sched2priv(sched);
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	tse_sched_priv_addref_locked(dsp);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+}
+
+void
+tse_sched_decref(tse_sched_t *sched)
+{
+	tse_sched_priv_decref(tse_sched2priv(sched));
 }
 
 int
@@ -641,6 +675,8 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 
 		tse_task_post_process(task);
 		d_list_del_init(&dtp->dtp_list);
+		/* addref when the task add to dsp (tse_task_schedule) */
+		tse_sched_priv_decref(dsp);
 		tse_task_decref(task);  /* drop final ref */
 		processed++;
 	}
@@ -680,7 +716,7 @@ tse_sched_run(tse_sched_t *sched)
 	};
 
 	/* drop reference of tse_sched_init() */
-	tse_sched_decref(dsp);
+	tse_sched_priv_decref(dsp);
 }
 
 /*
@@ -697,14 +733,14 @@ tse_sched_progress(tse_sched_t *sched)
 
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 	/** +1 for tse_sched_run() */
-	tse_sched_addref_locked(dsp);
+	tse_sched_priv_addref_locked(dsp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling)
 		tse_sched_run(sched);
 	/** If another thread canceled, drop the ref count */
 	else
-		tse_sched_decref(dsp);
+		tse_sched_priv_decref(dsp);
 }
 
 static int
@@ -749,7 +785,7 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 	/** Wait for all in-flight tasks */
 	while (1) {
 		/** +1 for tse_sched_run */
-		tse_sched_addref_locked(dsp);
+		tse_sched_priv_addref_locked(dsp);
 		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 		tse_sched_run(sched);
@@ -763,7 +799,7 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 
 	tse_sched_complete_cb(sched);
 	sched->ds_udata = NULL;
-	tse_sched_decref(dsp);
+	tse_sched_priv_decref(dsp);
 }
 
 void
@@ -771,7 +807,6 @@ tse_task_complete(tse_task_t *task, int ret)
 {
 	struct tse_task_private		*dtp	= tse_task2priv(task);
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
-	bool				bumped  = false;
 	bool				done;
 
 	if (dtp->dtp_completed)
@@ -787,11 +822,6 @@ tse_task_complete(tse_task_t *task, int ret)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling) {
-		/** +1 for tse_sched_run() */
-		tse_sched_addref_locked(dsp);
-		/** track in case another thread cancels */
-		bumped = true;
-
 		/** if task reinserted itself in scheduler, don't complete */
 		if (done)
 			tse_task_complete_locked(dtp, dsp);
@@ -803,13 +833,6 @@ tse_task_complete(tse_task_t *task, int ret)
 	/** update task in scheduler lists. */
 	if (!dsp->dsp_cancelling && done)
 		tse_sched_process_complete(dsp);
-	/** If another thread canceled, make sure we drop the ref count */
-	else if (bumped)
-		tse_sched_decref(dsp);
-
-	/** -1 from tse_task_create() if it has not been reinitialized */
-	if (done)
-		tse_sched_decref(dsp);
 }
 
 /**
@@ -926,7 +949,8 @@ tse_task_schedule(tse_task_t *task, bool instant)
 		/** Otherwise, scheduler will process it from init list */
 		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
 	}
-	tse_sched_addref_locked(dsp);
+	/* decref when remove the task from dsp (tse_sched_process_complete) */
+	tse_sched_priv_addref_locked(dsp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/* if caller wants to run the task instantly, call the task body
@@ -971,6 +995,8 @@ tse_task_reinit(tse_task_t *task)
 		D_ASSERT(d_list_empty(&dtp->dtp_list));
 		/* +1 ref for valid until complete */
 		tse_task_addref_locked(dtp);
+		/* +1 dsp ref as will add back to dsp again below */
+		tse_sched_priv_addref_locked(dsp);
 	} else if (dtp->dtp_running) {
 		/** Task not in-flight anymore */
 		dsp->dsp_inflight--;

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
+
 
 class PunchTest(TestWithServers):
     """
@@ -35,27 +35,13 @@ class PunchTest(TestWithServers):
     :avocado: recursive
     """
     def setUp(self):
+        super(PunchTest, self).setUp()
+        self.prepare_pool()
+
         try:
-            super(PunchTest, self).setUp()
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/pool/createmode/')
-            createsetid = self.params.get("setname", '/run/pool/createset/')
-            createsize = self.params.get("size", '/run/pool/createsize/')
-
-            createuid = os.geteuid()
-            creategid = os.getegid()
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                             createsize, createsetid, None)
-            self.pool.connect(1 << 1)
-
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.handle)
+            self.container.create(self.pool.pool.handle)
 
             # now open it
             self.container.open()
@@ -76,20 +62,22 @@ class PunchTest(TestWithServers):
             thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
+            tx_handle = self.container.get_new_tx()
 
-            obj, txn = self.container.write_an_obj(thedata, len(thedata)+1,
-                                                   dkey, akey, obj_cls=1)
+            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+                                              akey, obj_cls=1, txn=tx_handle)
+            self.container.commit_tx(tx_handle)
 
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, txn)
+                                                  obj, txn=tx_handle)
             if thedata != thedata2.value:
                 print("data I wrote:" + thedata)
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
             # now punch this data, should fail, can't punch committed data
-            obj.punch_dkeys(txn, [dkey])
+            obj.punch_dkeys(tx_handle, [dkey])
 
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")
@@ -124,7 +112,10 @@ class PunchTest(TestWithServers):
             data1 = [("this is akey 1", "this is data value 1"),
                      ("this is akey 2", "this is data value 2"),
                      ("this is akey 3", "this is data value 3")]
-            obj, txn = self.container.write_multi_akeys(dkey, data1, obj_cls=1)
+            tx_handle = self.container.get_new_tx()
+            obj = self.container.write_multi_akeys(dkey, data1, obj_cls=1,
+                                                   txn=tx_handle)
+            self.container.commit_tx(tx_handle)
 
             # read back the 1st epoch's data and check 1 value just to make sure
             # everything is on the up and up
@@ -132,13 +123,13 @@ class PunchTest(TestWithServers):
                        (data1[1][0], len(data1[1][1]) + 1),
                        (data1[2][0], len(data1[2][1]) + 1)]
             retrieved_data = self.container.read_multi_akeys(dkey, readbuf, obj,
-                                                             txn)
+                                                             txn=tx_handle)
             if retrieved_data[data1[1][0]] != data1[1][1]:
                 print("middle akey: {}".format(retrieved_data[data1[1][0]]))
                 self.fail("data retrieval failure")
 
             # now punch one akey from this data
-            obj.punch_akeys(txn, dkey, [data1[1][0]])
+            obj.punch_akeys(tx_handle, dkey, [data1[1][0]])
 
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")
@@ -169,20 +160,20 @@ class PunchTest(TestWithServers):
             thedata = "a string that I want to stuff into an object"
             dkey = "this is the dkey"
             akey = "this is the akey"
-
-            obj, txn = self.container.write_an_obj(thedata, len(thedata)+1,
-                                                   dkey, akey, obj_cls=1)
-
+            tx_handle = self.container.get_new_tx()
+            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+                                              akey, obj_cls=1, txn=tx_handle)
+            self.container.commit_tx(tx_handle)
             # read the data back and make sure its correct
             thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
-                                                  obj, txn)
+                                                  obj, txn=tx_handle)
             if thedata != thedata2.value:
                 print("data I wrote:" + thedata)
                 print("data I read back" + thedata2.value)
                 self.fail("Wrote data, read it back, didn't match\n")
 
             # now punch the object, commited so not expecting it to work
-            obj.punch(txn)
+            obj.punch(tx_handle)
 
             # expecting punch of commit data above to fail
             self.fail("Punch should have failed but it didn't.\n")

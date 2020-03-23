@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,8 +84,8 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 
 		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
-				blk_off, blk_cnt, rc);
+			D_ERROR("Error on block ["DF_U64", %u] free. "DF_RC"\n",
+				blk_off, blk_cnt, DP_RC(rc));
 	}
 	return rc;
 }
@@ -134,14 +134,16 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = d_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
 			    &imem_inst->vis_pool_hhash);
 	if (rc) {
-		D_ERROR("Error in creating POOL ref hash: %d\n", rc);
+		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
 	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
 			    &imem_inst->vis_cont_hhash);
 	if (rc) {
-		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
+		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
@@ -177,6 +179,15 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	}
 
 	tls->vtl_dth = NULL;
+
+	rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+	if (rc) {
+		umem_fini_txd(&tls->vtl_txd);
+		vos_imem_strts_destroy(&tls->vtl_imems_inst);
+		D_FREE(tls);
+		return NULL;
+	}
+
 	return tls;
 }
 
@@ -189,6 +200,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
+	vos_ts_table_free(&tls->vtl_ts_table);
 
 	D_FREE(tls);
 }
@@ -200,10 +212,15 @@ struct dss_module_key vos_module_key = {
 	.dmk_fini = vos_tls_fini,
 };
 
+daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
+
 static int
 vos_mod_init(void)
 {
 	int	 rc = 0;
+
+	if (vos_start_epoch == DAOS_EPOCH_MAX)
+		vos_start_epoch = crt_hlc_get();
 
 	rc = vos_cont_tab_register();
 	if (rc) {
@@ -277,6 +294,7 @@ vos_nvme_fini(void)
 #define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
+#define VOS_NVME_MEM_SIZE	DAOS_NVME_MEM_PRIMARY
 
 static int
 vos_nvme_init(void)
@@ -285,12 +303,13 @@ vos_nvme_init(void)
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID,
+		VOS_NVME_MEM_SIZE);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;
@@ -347,6 +366,8 @@ vos_init(void)
 		D_MUTEX_UNLOCK(&mutex);
 		return rc;
 	}
+
+	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
 	standalone_tls = vos_tls_init(NULL, NULL);

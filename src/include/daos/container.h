@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@
  * dc_cont: Container Client API
  */
 
-#ifndef __DAOS_CONTAINER_H__
-#define __DAOS_CONTAINER_H__
+#ifndef __DD_CONT_H__
+#define __DD_CONT_H__
 
 #include <daos/common.h>
 #include <daos/pool_map.h>
@@ -60,6 +60,9 @@ int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
+int dc_cont_set_prop(tse_task_t *task);
+int dc_cont_update_acl(tse_task_t *task);
+int dc_cont_delete_acl(tse_task_t *task);
 int dc_cont_aggregate(tse_task_t *task);
 int dc_cont_rollback(tse_task_t *task);
 int dc_cont_subscribe(tse_task_t *task);
@@ -80,4 +83,4 @@ int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);
 
-#endif /* __DAOS_CONTAINER_H__ */
+#endif /* __DD_CONT_H__ */

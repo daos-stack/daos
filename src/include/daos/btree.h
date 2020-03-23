@@ -88,7 +88,7 @@ struct btr_node {
 
 enum {
 	BTR_ORDER_MIN			= 3,
-	BTR_ORDER_MAX			= 255
+	BTR_ORDER_MAX			= 63
 };
 
 /**
@@ -465,6 +465,13 @@ dbtree_key_cmp_rc(int rc)
 		return BTR_CMP_LT;
 	else
 		return BTR_CMP_GT;
+}
+
+static inline int
+dbtree_is_empty_inplace(const struct btr_root *root)
+{
+	D_ASSERT(root != NULL);
+	return root->tr_depth == 0;
 }
 
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,

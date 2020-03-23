@@ -78,14 +78,12 @@ co_ops_run(void **state)
 				break;
 			case QUERY:
 				ret = vos_cont_query(arg->coh[i], &cinfo);
-				assert_int_equal(ret, 0);
 				assert_int_equal(cinfo.ci_nobjs, 0);
 				assert_int_equal(cinfo.ci_used, 0);
 				break;
 			case DESTROY:
 				ret = vos_cont_destroy(arg->poh,
 						     arg->uuid[i].uuid);
-				assert_int_equal(ret, 0);
 				uuid_clear(arg->uuid[i].uuid);
 				if (!uuid_is_null(arg->uuid[i].uuid))
 					printf("UUID clear did not work\n");
@@ -94,9 +92,7 @@ co_ops_run(void **state)
 				fail_msg("Unkown Ops!\n");
 				break;
 			}
-			if (arg->ops_seq[i][j] != QUERY ||
-			    arg->ops_seq[i][j] != DESTROY)
-				assert_int_equal(ret, 0);
+			assert_int_equal(ret, 0);
 		}
 	}
 	D_PRINT("Finished all create and discards\n");
@@ -206,13 +202,13 @@ teardown(void **state)
 	ret = vos_pool_close(test_arg->poh);
 	assert_int_equal(ret, 0);
 
+	D_ASSERT(test_arg->fname != NULL);
 	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
 	assert_int_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);
-	if (test_arg->fname)
-		D_FREE(test_arg->fname);
+	D_FREE(test_arg->fname);
 
 	D_FREE(test_arg);
 	return 0;
@@ -258,7 +254,8 @@ co_uuid_iter_test(struct vc_test_args *arg)
 
 	rc = vos_iter_probe(ih, NULL);
 	if (rc != 0) {
-		print_error("Failed to set iterator cursor: %d\n", rc);
+		print_error("Failed to set iterator cursor: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -273,7 +270,8 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 		if (rc != 0) {
-			print_error("Failed to fetch co uuid: %d\n", rc);
+			print_error("Failed to fetch co uuid: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -289,7 +287,8 @@ co_uuid_iter_test(struct vc_test_args *arg)
 			break;
 
 		if (rc != 0) {
-			print_error("Failed to move cursor: %d\n", rc);
+			print_error("Failed to move cursor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -299,14 +298,16 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		rc = vos_iter_fetch(ih, &ent, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
-			print_error("Failed to fetch anchor: %d\n", rc);
+			print_error("Failed to fetch anchor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
 		rc = vos_iter_probe(ih, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
-			print_error("Failed to probe anchor: %d\n", rc);
+			print_error("Failed to probe anchor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}

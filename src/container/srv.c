@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,22 +42,17 @@ init(void)
 	if (rc)
 		D_GOTO(err, rc);
 
-	rc = ds_cont_cache_init();
-	if (rc)
-		D_GOTO(err_oid_iv, rc);
-
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err_cont_cache, rc);
+		D_GOTO(err, rc);
+
+	rc = ds_cont_prop_default_init();
+	if (rc)
+		D_GOTO(err, rc);
 
 	return 0;
-
-err_cont_cache:
-	ds_cont_cache_fini();
-
-err_oid_iv:
-	ds_oid_iv_fini();
 err:
+	ds_oid_iv_fini();
 	return rc;
 }
 
@@ -65,8 +60,9 @@ static int
 fini(void)
 {
 	ds_cont_iv_fini();
-	ds_cont_cache_fini();
 	ds_oid_iv_fini();
+	ds_cont_prop_default_fini();
+
 	return 0;
 }
 
@@ -139,7 +135,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
 		D_ERROR("failed to create thread-local container handle cache:"
-			" %d\n", rc);
+			" "DF_RC"\n", DP_RC(rc));
 		ds_cont_child_cache_destroy(tls->dt_cont_cache);
 		D_FREE(tls);
 		return NULL;

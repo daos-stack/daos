@@ -67,6 +67,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+	DFUSE_TRA_UP(oh, ie, "open handle");
+
 	DFUSE_TRA_INFO(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags,
 		       mode);
 
@@ -96,6 +99,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
+	ie->ie_truncated = false;
 	atomic_fetch_add(&ie->ie_ref, 1);
 
 	rc = dfs_ostat(oh->doh_dfs, oh->doh_obj, &ie->ie_stat);

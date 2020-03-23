@@ -3,14 +3,14 @@
 timeout: 120
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
-    - boro-F
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
   test_clients:
-    - boro-G
+    - client-G
 server_config:
   name: daos_server
   servers:
@@ -19,6 +19,7 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 16428800
+  control_method: dmg
 testparams:
   rank_to_kill: 0
   # rank_to_kill: 1

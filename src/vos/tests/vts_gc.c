@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include "csum_extent_tests.h"
 #include <daos_api.h>
 
 #define NO_FLAGS	    (0)
@@ -108,8 +107,8 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		iod->iod_size = singv_size;
 
 		gc_add_stat(STAT_SINGV);
-		rc = vos_obj_update(coh, oid, epoch, 0, &cred->tc_dkey, 1,
-				    &cred->tc_iod, sgl);
+		rc = vos_obj_update(coh, oid, epoch, 0, 0, &cred->tc_dkey, 1,
+				    &cred->tc_iod, NULL, sgl);
 		if (rc != 0) {
 			print_error("Failed to update\n");
 			return rc;
@@ -124,8 +123,8 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		cred->tc_recx.rx_nr = recx_size;
 
 		gc_add_stat(STAT_RECX);
-		rc = vos_update_begin(coh, oid, epoch, &cred->tc_dkey, 1,
-				      &cred->tc_iod, &ioh, NULL);
+		rc = vos_update_begin(coh, oid, epoch, 0, &cred->tc_dkey, 1,
+				      &cred->tc_iod, NULL, &ioh, NULL);
 		if (rc != 0) {
 			print_error("Failed to prepare ZC update\n");
 			return rc;

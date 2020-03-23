@@ -1,22 +1,21 @@
 hosts:
   test_servers:
-    - boro-A
-    - boro-B
-    - boro-C
-    - boro-D
-    - boro-E
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
   test_clients:
-    - boro-F
+    - client-F
 timeout: 700
 server_config:
   name: daos_server
-  servers:
-    targets: 1
 pool:
   mode: 511
   name: daos_server
   scm_size: 8589934592
   svcn: 3
+  control_method: dmg
 container:
   object_qty: 1
   record_qty: 1

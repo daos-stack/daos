@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,6 +94,8 @@ enum {
 	DAOS_OF_ARRAY		= (1 << 5),
 	/** reserved: Multi Dimensional Array */
 	DAOS_OF_ARRAY_MD	= (1 << 6),
+	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
+	DAOS_OF_ARRAY_BYTE	= (1 << 7),
 	/**
 	 * benchmark-only feature bit, I/O is a network echo, no data is going
 	 * to be stored/returned
@@ -103,6 +105,28 @@ enum {
 	DAOS_OF_ECHO		= (1 << 15),
 	/** Mask for convenience (16-bit) */
 	DAOS_OF_MASK		= ((1 << OID_FMT_FEAT_BITS) - 1),
+};
+
+/** Number of bits reserved in IO flags bitmap for conditional checks.  */
+#define IO_FLAGS_COND_BITS	7
+
+enum {
+	/* Conditional Op: Punch key if it exists, fail otherwise */
+	DAOS_COND_PUNCH		= (1 << 0),
+	/* Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
+	DAOS_COND_DKEY_INSERT	= (1 << 1),
+	/* Conditional Op: Update dkey if it exists, fail otherwise */
+	DAOS_COND_DKEY_UPDATE	= (1 << 2),
+	/* Conditional Op: Fetch dkey if it exists, fail otherwise */
+	DAOS_COND_DKEY_FETCH	= (1 << 3),
+	/* Conditional Op: Insert akey if it doesn't exist, fail otherwise */
+	DAOS_COND_AKEY_INSERT	= (1 << 4),
+	/* Conditional Op: Update akey if it exists, fail otherwise */
+	DAOS_COND_AKEY_UPDATE	= (1 << 5),
+	/* Conditional Op: Fetch akey if it exists, fail otherwise */
+	DAOS_COND_AKEY_FETCH	= (1 << 6),
+	/** Mask for convenience */
+	DAOS_COND_MASK		= ((1 << IO_FLAGS_COND_BITS) - 1),
 };
 
 /**
@@ -188,8 +212,6 @@ typedef enum {
 typedef struct {
 	/** akey for this iod */
 	daos_key_t		iod_name;
-	/** akey checksum */
-	daos_csum_buf_t		iod_kcsum;
 	/*
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
@@ -205,8 +227,8 @@ typedef struct {
 	/** Size of the single value or the record size of the array */
 	daos_size_t		iod_size;
 	/*
-	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
-	 * arrays, should be 1 if single value.
+	 * Number of entries in the \a iod_recxs for arrays,
+	 * should be 1 if single value.
 	 */
 	unsigned int		iod_nr;
 	/*
@@ -215,13 +237,6 @@ typedef struct {
 	 * type of the iod is single, this is ignored.
 	 */
 	daos_recx_t		*iod_recxs;
-	/*
-	 * Checksum associated with each extent. If the type of the iod is
-	 * single, will only have a single checksum.
-	 */
-	daos_csum_buf_t		*iod_csums;
-	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*iod_eprs;
 } daos_iod_t;
 
 /**
@@ -375,6 +390,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch object in.
  *			Use DAOS_TX_NONE for an independent transaction.
+ * \param[in]	flags	Punch flags (currently ignored).
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -390,7 +406,8 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
+daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+	       daos_event_t *ev);
 
 /**
  * Punch dkeys (with all akeys) from an object.
@@ -398,6 +415,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch dkeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
+ * \param[in]	flags	Punch flags (currently ignored).
  * \param[in]	nr	number of dkeys to punch.
  * \param[in]	dkeys	Array of dkeys to punch.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -415,8 +433,8 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
-		     daos_key_t *dkeys, daos_event_t *ev);
+daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		     unsigned int nr, daos_key_t *dkeys, daos_event_t *ev);
 
 /**
  * Punch akeys (with all records) from an object.
@@ -424,6 +442,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch akeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
+ * \param[in]	flags	Punch flags (currently ignored).
  * \param[in]	dkey	dkey to punch akeys from.
  * \param[in]	nr	number of akeys to punch.
  * \param[in]	akeys	Array of akeys to punch.
@@ -442,8 +461,9 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
  *					aggregated. Punch result is undefined.
  */
 int
-daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev);
+daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		     daos_key_t *dkey, unsigned int nr, daos_key_t *akeys,
+		     daos_event_t *ev);
 
 /**
  * Query attributes of an object.
@@ -480,6 +500,8 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  * \param[in]	th	Optional transaction handle to fetch with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
+ * \param[in]	flags	Fetch flags (currently ignored).
+ *
  * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
  * \param[in]	nr	Number of I/O descriptor and scatter/gather lists in
@@ -508,15 +530,14 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param[out]	map	Optional, upper layers can simply pass in NULL.
+ * \param[out]	maps	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
- *			index layouts and their epoch validities. The returned
- *			layout covers the record extents as \a iods.
- *			However, the returned extents could be fragmented if
- *			these extents were partially updated in different
- *			epochs. Additionally, the returned extents should also
- *			allow to discriminate punched extents from punched
- *			holes.
+ *			layout of the iods used in fetch. It gives information
+ *			for every iod on the highest/lowest extent in that dkey,
+ *			in additional to the valid extents from the ones fetched
+ *			(if asked for). If the extents don't fit in the io_map,
+ *			the number required is set on the fetch in
+ *			\a maps[]::iom_nr for that particular iod.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -532,9 +553,9 @@ daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-	       daos_iom_t *maps, daos_event_t *ev);
+daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev);
 
 /**
  * Insert or update object records stored in co-located arrays.
@@ -543,6 +564,8 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *
  * \param[in]	th	Optional transaction handle to update with.
  *			Use DAOS_TX_NONE for an independent transaction.
+ *
+ * \param[in]	flags	Update flags (currently ignored).
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *
@@ -586,9 +609,9 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *					aggregated. Update result is undefined.
  */
 int
-daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-		daos_event_t *ev);
+daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		d_sg_list_t *sgls, daos_event_t *ev);
 
 /**
  * Distribution key enumeration.
@@ -656,12 +679,11 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
  *
  * \param[in,out]
  *		kds	[in]: preallocated array of \nr key descriptors. [out]:
- *			size of each individual key along with checksum type,
- *			size, and type stored just after the key in \a sgl.
+ *			size of each individual key in \a sgl.
  *
  * \param[in]	sgl	Scatter/gather list to store the akey list.
- *			All akeys are written contiguously with their checksum,
- *			actual boundaries can be calculated thanks to \a kds.
+ *			All akeys are written contiguously, actual boundaries
+ *			can be calculated thanks to \a kds.
  *
  * \param[in,out]
  *		anchor	Hash anchor for the next call, it should be set to
@@ -791,7 +813,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
+daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 

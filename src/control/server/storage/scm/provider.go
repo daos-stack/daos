@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -40,7 +40,7 @@ import (
 
 const (
 	defaultUnmountFlags = 0
-	defaultMountFlags   = 0
+	defaultMountFlags   = unix.MS_NOATIME
 
 	defaultMountPointPerms = 0700
 
@@ -51,7 +51,7 @@ const (
 	fsTypeTmpfs = "tmpfs"
 
 	dcpmFsType    = fsTypeExt4
-	dcpmMountOpts = "dax"
+	dcpmMountOpts = "dax,nodelalloc"
 
 	ramFsType = fsTypeTmpfs
 
@@ -65,7 +65,7 @@ const (
 type (
 	// PrepareRequest defines the parameters for a Prepare opration.
 	PrepareRequest struct {
-		Forwarded bool
+		pbin.ForwardableRequest
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
 		Reset bool
 	}
@@ -79,8 +79,8 @@ type (
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Forwarded bool
-		Rescan    bool
+		pbin.ForwardableRequest
+		Rescan bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -104,7 +104,7 @@ type (
 
 	// FormatRequest defines the parameters for a Format operation or query.
 	FormatRequest struct {
-		Forwarded  bool
+		pbin.ForwardableRequest
 		Reformat   bool
 		Mountpoint string
 		OwnerUID   int
@@ -123,24 +123,18 @@ type (
 
 	// MountRequest defines the parameters for a Mount operation.
 	MountRequest struct {
-		Forwarded bool
-		Source    string
-		Target    string
-		FsType    string
-		Flags     uintptr
-		Data      string
+		pbin.ForwardableRequest
+		Source string
+		Target string
+		FsType string
+		Flags  uintptr
+		Data   string
 	}
 
 	// MountResponse contains the results of a successful Mount operation.
 	MountResponse struct {
 		Target  string
 		Mounted bool
-	}
-
-	// forwardableRequest defines an interface for any request that
-	// could have been forwarded.
-	forwardableRequest interface {
-		isForwarded() bool
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
@@ -175,11 +169,10 @@ type (
 		modules       storage.ScmModules
 		namespaces    storage.ScmNamespaces
 
-		log               logging.Logger
-		backend           Backend
-		sys               SystemProvider
-		fwd               *Forwarder
-		disableForwarding bool
+		log     logging.Logger
+		backend Backend
+		sys     SystemProvider
+		fwd     *Forwarder
 	}
 )
 
@@ -212,48 +205,32 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 }
 
 // Validate checks the request for validity.
-func (fr FormatRequest) Validate() error {
-	if fr.Mountpoint == "" {
+func (r FormatRequest) Validate() error {
+	if r.Mountpoint == "" {
 		return FaultFormatMissingMountpoint
 	}
 
-	if fr.Ramdisk != nil && fr.Dcpm != nil {
+	if r.Ramdisk != nil && r.Dcpm != nil {
 		return FaultFormatConflictingParam
 	}
 
-	if fr.Ramdisk == nil && fr.Dcpm == nil {
+	if r.Ramdisk == nil && r.Dcpm == nil {
 		return FaultFormatMissingParam
 	}
 
-	if fr.Ramdisk != nil {
-		if fr.Ramdisk.Size == 0 {
+	if r.Ramdisk != nil {
+		if r.Ramdisk.Size == 0 {
 			return FaultFormatInvalidSize
 		}
 	}
 
-	if fr.Dcpm != nil {
-		if fr.Dcpm.Device == "" {
+	if r.Dcpm != nil {
+		if r.Dcpm.Device == "" {
 			return FaultFormatInvalidDeviceCount
 		}
 	}
 
 	return nil
-}
-
-func (fr FormatRequest) isForwarded() bool {
-	return fr.Forwarded
-}
-
-func (sr ScanRequest) isForwarded() bool {
-	return sr.Forwarded
-}
-
-func (pr PrepareRequest) isForwarded() bool {
-	return pr.Forwarded
-}
-
-func (mr MountRequest) isForwarded() bool {
-	return mr.Forwarded
 }
 
 func checkDevice(device string) error {
@@ -284,7 +261,13 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// TODO: Think about a way to allow for some kind of progress
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
-	args := []string{device}
+	args := []string{
+		"-m", "0", // don't reserve blocks for super-user
+		"-E", "lazy_itable_init=0,lazy_journal_init=0", // disable lazy initialization (hurts perf)
+		"-O", "bigalloc", // bigalloc with 1M cluster size (reduce ext4 metadata overhead)
+		"-C", "1M",
+		device, // device always comes last
+	}
 	if force {
 		args = append([]string{"-F"}, args...)
 	}
@@ -348,33 +331,21 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	p := &Provider{
+	return &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     &Forwarder{log: log},
+		fwd:     NewForwarder(log),
 	}
-
-	if val, set := os.LookupEnv(pbin.DisableReqFwdEnvVar); set {
-		disabled, err := strconv.ParseBool(val)
-		if err != nil {
-			log.Errorf("%s was set to non-boolean value (%q); not disabling",
-				pbin.DisableReqFwdEnvVar, val)
-			return p
-		}
-		p.disableForwarding = disabled
-	}
-
-	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
-	p.disableForwarding = true
+	p.fwd.Disabled = true
 	return p
 }
 
-func (p *Provider) shouldForward(req forwardableRequest) bool {
-	return !p.disableForwarding && !req.isForwarded()
+func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
+	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
 func (p *Provider) isInitialized() bool {
@@ -586,7 +557,7 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	fsType, err := p.sys.Getfs(req.Dcpm.Device)
 	if err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
-			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+			return nil, FaultFormatMissingDevice(req.Dcpm.Device)
 		}
 		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
 	}

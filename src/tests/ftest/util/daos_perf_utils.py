@@ -26,6 +26,9 @@ from __future__ import print_function
 import os
 import subprocess
 import json
+from distutils.spawn import find_executable
+
+from env_modules import load_mpi
 
 class DaosPerfFailed(Exception):
     """Raise if daos_perf failed"""
@@ -136,18 +139,18 @@ class DaosPerfCommand(object):
         Returns:
             str: returns daos_perf command
         """
-        with open(os.path.join(basepath, ".build_vars.json")) as afile:
-            build_paths = json.load(afile)
         attach_info_path = os.path.join(basepath, "install/tmp")
 
+        load_mpi('openmpi')
+        orterun_bin = find_executable('orterun')
+        if orterun_bin is None:
+            raise DaosPerfFailed("orterun not found")
+
         orterun_cmd = [
-            os.path.join(runpath if runpath else build_paths[
-                "OMPI_PREFIX"], "bin/orterun"),
+            orterun_bin,
             "-np {}".format(processes),
             "--hostfile {}".format(hostfile),
-            "--map-by node",
-            "-x DAOS_SINGLETON_CLI=1",
-            "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
+            "--map-by node"
         ]
         command = " ".join(orterun_cmd + [self.__str__()])
 

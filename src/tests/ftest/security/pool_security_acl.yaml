@@ -1,0 +1,62 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - server-B   #server client different host
+  transport_config:
+    - allow_insecure: False
+    - ca_cert: ~/.daos/daosCA.crt
+    - cert: ~/.daos/daos_agent.crt
+    - key: ~/.daos/daos_agent.key
+    - server_name: server
+timeout: 1200
+server_config:
+  name: daos_server
+  port: 10001
+daos_server:
+  start:
+     insecure: False
+pool_acl:
+  scm_size: 16777216
+  user_prefix: daos_ci
+  num_user: 5
+  num_group: 5
+  test_users: !mux
+    user_type1:
+      user:
+         - owner
+    user_type2:
+      user:
+         - user
+    user_type3:
+      user:
+         - ownergroup
+    user_type4:
+      user:
+         - group
+    user_type5:
+      user:
+         - everyone
+  permissions: !mux
+    permission_none:
+      name:
+         - none
+         - deny   #read
+         - deny   #write
+    permission_r:
+      name:
+         - r
+         - pass
+         - deny
+    permission_w:
+      name:
+         - w
+         - deny
+         - deny
+    permission_rw:
+      name:
+         - rw
+         - pass
+         - pass

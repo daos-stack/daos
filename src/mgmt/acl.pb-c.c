@@ -142,7 +142,52 @@ void   mgmt__modify_aclreq__free_unpacked
   assert(message->base.descriptor == &mgmt__modify_aclreq__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[2] =
+void   mgmt__delete_aclreq__init
+                     (Mgmt__DeleteACLReq         *message)
+{
+  static const Mgmt__DeleteACLReq init_value = MGMT__DELETE_ACLREQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__delete_aclreq__get_packed_size
+                     (const Mgmt__DeleteACLReq *message)
+{
+  assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__delete_aclreq__pack
+                     (const Mgmt__DeleteACLReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__delete_aclreq__pack_to_buffer
+                     (const Mgmt__DeleteACLReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__DeleteACLReq *
+       mgmt__delete_aclreq__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__DeleteACLReq *)
+     protobuf_c_message_unpack (&mgmt__delete_aclreq__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__delete_aclreq__free_unpacked
+                     (Mgmt__DeleteACLReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__delete_aclreq__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[4] =
 {
   {
     "status",
@@ -168,15 +213,41 @@ static const ProtobufCFieldDescriptor mgmt__aclresp__field_descriptors[2] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "ownerUser",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ACLResp, owneruser),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ownerGroup",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ACLResp, ownergroup),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__aclresp__field_indices_by_name[] = {
   1,   /* field[1] = ACL */
+  3,   /* field[3] = ownerGroup */
+  2,   /* field[2] = ownerUser */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__aclresp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
 {
@@ -186,7 +257,7 @@ const ProtobufCMessageDescriptor mgmt__aclresp__descriptor =
   "Mgmt__ACLResp",
   "mgmt",
   sizeof(Mgmt__ACLResp),
-  2,
+  4,
   mgmt__aclresp__field_descriptors,
   mgmt__aclresp__field_indices_by_name,
   1,  mgmt__aclresp__number_ranges,
@@ -280,5 +351,56 @@ const ProtobufCMessageDescriptor mgmt__modify_aclreq__descriptor =
   mgmt__modify_aclreq__field_indices_by_name,
   1,  mgmt__modify_aclreq__number_ranges,
   (ProtobufCMessageInit) mgmt__modify_aclreq__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[2] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DeleteACLReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "principal",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__DeleteACLReq, principal),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__delete_aclreq__field_indices_by_name[] = {
+  1,   /* field[1] = principal */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange mgmt__delete_aclreq__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__delete_aclreq__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.DeleteACLReq",
+  "DeleteACLReq",
+  "Mgmt__DeleteACLReq",
+  "mgmt",
+  sizeof(Mgmt__DeleteACLReq),
+  2,
+  mgmt__delete_aclreq__field_descriptors,
+  mgmt__delete_aclreq__field_indices_by_name,
+  1,  mgmt__delete_aclreq__number_ranges,
+  (ProtobufCMessageInit) mgmt__delete_aclreq__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

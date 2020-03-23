@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2019 Intel Corporation.
+ * (C) Copyright 2015-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@
 #include <pthread.h>
 #include <byteswap.h>
 
+#include <daos_errno.h>
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
@@ -48,11 +49,6 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-
-#ifndef DF_RC
-#define DF_RC "%s(%d)"
-#define DP_RC(rc) d_errstr(rc), rc
-#endif /* DF_RC */
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -85,8 +81,8 @@ struct daos_tree_overhead {
 
 /** Points to a byte in an iov, in an sgl */
 struct daos_sgl_idx {
-	uint32_t	iov_idx;
-	daos_off_t	iov_offset;
+	uint32_t	iov_idx; /** index of iov */
+	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
 /*
@@ -109,8 +105,10 @@ char *DP_UUID(const void *uuid);
 
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %s"
-#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+#define DF_KEY			"[%d] %.*s"
+#define DP_KEY(key)		(int)(key)->iov_len,	\
+		                (int)(key)->iov_len,	\
+		                daos_key2str(key)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -216,6 +214,69 @@ daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
 
+/** Move to next iov, it's caller's responsibility to ensure the idx boundary */
+#define daos_sgl_next_iov(iov_idx, iov_off)				\
+	do {								\
+		(iov_idx)++;						\
+		(iov_off) = 0;						\
+	} while (0)
+/** Get the leftover space in an iov of sgl */
+#define daos_iov_left(sgl, iov_idx, iov_off)				\
+	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/**
+ * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
+ * caller's responsibility to check the boundary.
+ */
+#define daos_sgl_move(sgl, iov_idx, iov_off, move_dist)			       \
+	do {								       \
+		uint64_t moved = 0, step, iov_left;			       \
+		if ((move_dist) <= 0)					       \
+			break;						       \
+		while (moved < (move_dist)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (move_dist) - moved);	       \
+			(iov_off) += step;				       \
+			moved += step;					       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		D_ASSERT(moved == (move_dist));				       \
+	} while (0)
+
+/**
+ * Consume buffer of length\a size for \a sgl with \a iov_idx and \a iov_off.
+ * The consumed buffer location will be returned by \a iovs and \a iov_nr.
+ */
+#define daos_sgl_consume(sgl, iov_idx, iov_off, size, iovs, iov_nr)	       \
+	do {								       \
+		uint64_t consumed = 0, step, iov_left;			       \
+		uint32_t consume_idx = 0;				       \
+		if ((size) <= 0)					       \
+			break;						       \
+		while (consumed < (size)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (size) - consumed);	       \
+			iovs[consume_idx].iov_buf =			       \
+				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
+			iovs[consume_idx].iov_len = step;		       \
+			iovs[consume_idx].iov_buf_len = step;		       \
+			consume_idx++;					       \
+			(iov_off) += step;				       \
+			consumed += step;				       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		(iov_nr) = consume_idx;					       \
+		D_ASSERT(consumed == (size));				       \
+	} while (0)
+
+#ifndef roundup
+#define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
+#endif
+#ifndef rounddown
+#define rounddown(x, y)		(((x) / (y)) * (y))
+#endif
+
 /**
  * Request a buffer of length \a bytes_needed from the sgl starting at
  * index \a idx. The length of the resulting buffer will be the number
@@ -262,10 +323,6 @@ void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 
 #define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
-
-/* The DAOS BITS is composed by uint32_t[x] */
-#define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
-int daos_first_unset_bit(uint32_t *bits, unsigned int size);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
@@ -419,18 +476,6 @@ daos_crt_network_error(int err)
 #define daos_rank_in_rank_list		d_rank_in_rank_list
 #define daos_rank_list_append		d_rank_list_append
 
-/* the key of various type of parameters, used by DAOS client to set
- * different parameters globally on all servers.
- */
-enum {
-	DSS_KEY_FAIL_LOC = 0,
-	DSS_KEY_FAIL_VALUE,
-	DSS_KEY_FAIL_NUM,
-	DSS_REBUILD_RES_PERCENTAGE,
-	DSS_DISABLE_AGGREGATION,
-	DSS_KEY_NUM,
-};
-
 void
 daos_fail_loc_set(uint64_t id);
 void
@@ -521,6 +566,12 @@ enum {
 
 #define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
 #define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+#define DAOS_CHECKSUM_CDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x22)
+#define DAOS_CHECKSUM_SDATA_CORRUPT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x23)
+#define DAOS_CHECKSUM_UPDATE_AKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x24)
+#define DAOS_CHECKSUM_FETCH_AKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x25)
+#define DAOS_CHECKSUM_UPDATE_DKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
+#define DAOS_CHECKSUM_FETCH_DKEY_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -535,6 +586,19 @@ enum {
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+
+#define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
+#define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
+#define DAOS_POOL_CONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x62)
+#define DAOS_POOL_DISCONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x63)
+#define DAOS_POOL_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x64)
+#define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
+#define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
+#define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+
+/** interoperability failure inject */
+#define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
+#define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -576,6 +640,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
+#define DAOS_NVME_MEM_PRIMARY	0
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
@@ -586,6 +651,8 @@ bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
 struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+int daos_prop_entry_copy(struct daos_prop_entry *entry,
+			 struct daos_prop_entry *entry_dup);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

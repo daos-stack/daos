@@ -95,7 +95,7 @@ func drpcSetup(ctx context.Context, log logging.Logger, sockDir string, iosrvs [
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
+	drpcServer.RegisterRPCModule(NewSecurityModule(log, tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
 

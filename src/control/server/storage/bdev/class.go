@@ -222,7 +222,7 @@ func (p *ClassProvider) PrepareDevices() error {
 	return p.bdev.prep(p.log, p.cfg)
 }
 
-func (p *ClassProvider) GenConfigFile() error {
+func (p *ClassProvider) GenConfigFile() (err error) {
 	if p.cfgPath == "" {
 		return nil
 	}
@@ -237,7 +237,12 @@ func (p *ClassProvider) GenConfigFile() error {
 	}
 
 	f, err := os.Create(p.cfgPath)
-	defer f.Close()
+	defer func() {
+		ce := f.Close()
+		if err == nil {
+			err = ce
+		}
+	}()
 	if err != nil {
 		return errors.Wrapf(err, "spdk: failed to create NVMe config file %s", p.cfgPath)
 	}

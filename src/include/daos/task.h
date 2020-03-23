@@ -33,6 +33,63 @@
 #include <daos/common.h>
 #include <daos_task.h>
 
+/**
+ * Push to task stack space. This API only reserves space on the task stack, no
+ * data copy involved.
+ *
+ * \param task [in] task to push the buffer.
+ * \param size [in] buffer size.
+ *
+ * \return	pointer to the pushed buffer in task stack.
+ */
+void *
+tse_task_stack_push(tse_task_t *task, uint32_t size);
+
+/**
+ * Pop from task stack space. This API only reserves space on the task stack, no
+ * data copy involved.
+ *
+ * \param task [in] task to pop the buffer.
+ * \param size [in] buffer size.
+ *
+ * \return	pointer to the poped buffer in task stack.
+ */
+void *
+tse_task_stack_pop(tse_task_t *task, uint32_t size);
+
+/**
+ * Push data to task stack space, will copy the data to stack.
+ *
+ * \param task [in]	task to push the buffer.
+ * \param data [in]	pointer of data to push
+ * \param len  [in]	length of data
+ */
+void
+tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
+
+/**
+ * Pop data from task stack space, will copy the data from stack.
+ *
+ * \param task [in]	task to push the buffer.
+ * \param data [in/out]	pointer of value to store the poped data
+ * \param len  [in]	length of data
+ */
+void
+tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t len);
+
+/**
+ * Return the internal private data of the task.
+ */
+void *
+tse_task_get_priv_internal(tse_task_t *task);
+
+/**
+ * Set or change the internal private data of the task. The original internal
+ * private data will be returned.
+ */
+void *
+tse_task_set_priv_internal(tse_task_t *task, void *priv);
+
 struct daos_task_api {
 	tse_task_func_t		task_func;
 	daos_size_t		arg_size;
@@ -55,22 +112,23 @@ int
 dc_obj_close_task_create(daos_handle_t oh, daos_event_t *ev,
 			 tse_sched_t *tse, tse_task_t **task);
 int
-dc_obj_punch_task_create(daos_handle_t oh, daos_handle_t th,
+dc_obj_punch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			 daos_event_t *ev, tse_sched_t *tse,
 			 tse_task_t **task);
 int
 dc_obj_punch_dkeys_task_create(daos_handle_t oh, daos_handle_t th,
-			       unsigned int nr, daos_key_t *dkeys,
+			       uint64_t flags, unsigned int nr,
+			       daos_key_t *dkeys, daos_event_t *ev,
+			       tse_sched_t *tse, tse_task_t **task);
+int
+dc_obj_punch_akeys_task_create(daos_handle_t oh, daos_handle_t th,
+			       uint64_t flags, daos_key_t *dkey,
+			       unsigned int nr, daos_key_t *akeys,
 			       daos_event_t *ev, tse_sched_t *tse,
 			       tse_task_t **task);
 int
-dc_obj_punch_akeys_task_create(daos_handle_t oh, daos_handle_t th,
-			       daos_key_t *dkey, unsigned int nr,
-			       daos_key_t *akeys, daos_event_t *ev,
-			       tse_sched_t *tse, tse_task_t **task);
-int
 dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
-			     uint32_t flags, daos_key_t *dkey, daos_key_t *akey,
+			     uint64_t flags, daos_key_t *dkey, daos_key_t *akey,
 			     daos_recx_t *recx, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
@@ -86,13 +144,13 @@ dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
 			       tse_sched_t *tse, tse_task_t **task);
 
 int
-dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th,
+dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			 daos_key_t *dkey, unsigned int nr,
 			 daos_iod_t *iods, d_sg_list_t *sgls,
 			 daos_iom_t *maps, daos_event_t *ev,
 			 tse_sched_t *tse, tse_task_t **task);
 int
-dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th,
+dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			  daos_key_t *dkey, unsigned int nr,
 			  daos_iod_t *iods, d_sg_list_t *sgls,
 			  daos_event_t *ev, tse_sched_t *tse,
@@ -119,8 +177,8 @@ dc_obj_list_recx_task_create(daos_handle_t oh, daos_handle_t th,
 			     tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
-			    daos_key_t *dkey, daos_key_t *akey,
-			    daos_size_t *size, uint32_t *nr,
+			    daos_epoch_range_t *epr, daos_key_t *dkey,
+			    daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 			    daos_key_desc_t *kds, d_sg_list_t *sgl,
 			    daos_anchor_t *anchor,
 			    daos_anchor_t *dkeay_anchor,

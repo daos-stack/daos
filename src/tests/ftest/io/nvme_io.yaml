@@ -3,12 +3,12 @@
 
 hosts:
  test_servers:
-  - boro-A
-  - boro-B
-  - boro-C
-  - boro-D
+  - server-A
+  - server-B
+  - server-C
+  - server-D
  test_clients:
-  - boro-E
+  - client-E
 timeout: 28800
 server_config:
  name: daos_server
@@ -17,12 +17,10 @@ server_config:
    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
    scm_size: 64
 pool:
- createmode:
-  mode: 511
- createset:
-  setname: daos_server
- createsvc:
-  svcn: 1
+ mode: 511
+ name: daos_server
+ svcn: 1
+ control_method: dmg
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1
