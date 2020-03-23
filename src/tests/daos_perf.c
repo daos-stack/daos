@@ -755,6 +755,12 @@ ts_class_name(void)
 		return "DAOS R3S (full stack, 3 replica)";
 	case OC_RP_4G1:
 		return "DAOS R4S (full stack, 4 replics)";
+	case OC_EC_2P2G1:
+		return "DAOS OC_EC_2P2G1 (full stack 2+2 EC)";
+	case OC_EC_4P2G1:
+		return "DAOS OC_EC_4P2G1 (full stack 4+2 EC)";
+	case OC_EC_8P2G1:
+		return "DAOS OC_EC_8P2G1 (full stack 8+2 EC)";
 	}
 }
 
@@ -803,7 +809,7 @@ The options are as follows:\n\
 	and 64. The utility runs in synchronous mode if credits is set to 0.\n\
 	This option is ignored for mode 'vos'.\n\
 \n\
--c TINY|LARGE|R2S|R3S|R4S\n\
+-c TINY|LARGE|R2S|R3S|R4S|EC2P2|EC4P2|EC8P2\n\
 	Object class for DAOS full stack test.\n\
 \n\
 -o number\n\
@@ -971,6 +977,7 @@ main(int argc, char **argv)
 	daos_size_t	nvme_size = (8ULL << 30); /* default pool NVMe size */
 	int		credits   = -1;	/* sync mode */
 	int		vsize	   = 32;	/* default value size */
+	int		ec_vsize = 0;
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	double		then;
 	double		now;
@@ -1037,6 +1044,12 @@ main(int argc, char **argv)
 				ts_class = OC_S1;
 			} else if (!strcasecmp(optarg, "LARGE")) {
 				ts_class = OC_SX;
+			} else if (!strcasecmp(optarg, "EC2P2")) {
+				ts_class = OC_EC_2P2G1;
+			} else if (!strcasecmp(optarg, "EC4P2")) {
+				ts_class = OC_EC_4P2G1;
+			} else if (!strcasecmp(optarg, "EC8P2")) {
+				ts_class = OC_EC_8P2G1;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();
@@ -1205,9 +1218,23 @@ main(int argc, char **argv)
 		ts_ctx.tsc_svc.rl_nr = 1;
 		ts_ctx.tsc_svc.rl_ranks  = &svc_rank;
 	}
+
+	if (ts_class == OC_EC_2P2G1)
+		ec_vsize = (1 << 15) * 2;
+	else if (ts_class == OC_EC_4P2G1)
+		ec_vsize = (1 << 15) * 4;
+	else if (ts_class == OC_EC_8P2G1)
+		ec_vsize = (1 << 15) * 8;
+
+	if (ec_vsize != 0 && vsize % ec_vsize != 0)
+		fprintf(stdout, "for EC obj perf test, vsize (-s) %d should be "
+			"multiple of %d (full-stripe size) to get better "
+			"performance.\n", vsize, ec_vsize);
+
 	ts_ctx.tsc_cred_vsize	= vsize;
 	ts_ctx.tsc_scm_size	= scm_size;
 	ts_ctx.tsc_nvme_size	= nvme_size;
+
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,

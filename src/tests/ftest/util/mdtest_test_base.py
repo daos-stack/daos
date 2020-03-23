@@ -192,7 +192,10 @@ class MdtestBase(TestWithServers):
             str(manager), get_log_file(self.client_log))
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
+            self.pool.display_pool_daos_space()
             manager.run()
         except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+        finally:
+            self.pool.display_pool_daos_space()

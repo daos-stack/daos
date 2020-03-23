@@ -59,6 +59,9 @@ public final class Constants {
   public static final ErrorCode CUSTOM_ERR_TOO_LONG_VALUE =
           new ErrorCode(-1000004, "value length greater than expected");
 
+  public static final int FILE_NAME_LEN_MAX = 255;
+  public static final int FILE_PATH_LEN_MAX = 4096;
+
   public static final int ACCESS_FLAG_FILE_READONLY = 01;
   public static final int ACCESS_FLAG_FILE_READWRITE = 02;
   public static final int ACCESS_FLAG_FILE_CREATE = 0100;
