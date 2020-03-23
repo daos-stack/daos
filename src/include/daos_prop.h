@@ -79,6 +79,10 @@ enum daos_pool_props {
 	 * Format: group@[domain]
 	 */
 	DAOS_PROP_PO_OWNER_GROUP,
+	/**
+	 * The pool svc rank list.
+	 */
+	DAOS_PROP_PO_SVC_LIST,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -174,6 +178,11 @@ enum daos_cont_props {
 	DAOS_PROP_CO_OWNER_GROUP,
 	DAOS_PROP_CO_MAX,
 };
+
+/**
+ * Number of container property types
+ */
+#define DAOS_PROP_CO_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 typedef uint16_t daos_cont_layout_t;
 

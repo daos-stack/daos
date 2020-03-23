@@ -4,8 +4,6 @@ hosts:
     - server-B
     - server-C
     - server-D
-server_manager:
-    recreate: true
 server_config:
     name: daos_server
 timeout: 180
@@ -13,7 +11,7 @@ pool:
     control_method: dmg
     mode: 146
     name: daos_server
-    scm_size: 1073741
+    scm_size: 134217728
 createtests:
     createsvc: !mux
         svc0:

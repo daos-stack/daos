@@ -29,12 +29,8 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
-
-#include "obj_internal.h"
-
-/** proc functions defined in other files */
-int
-crt_proc_struct_dcs_iod_csums(crt_proc_t proc, struct dcs_iod_csums *iod_csum);
+#include "obj_rpc.h"
+#include "rpc_csum.h"
 
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
@@ -166,7 +162,10 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 	uint32_t	i;
 	int		rc;
 
-	rc = crt_proc_uint32_t(proc, &oiod->oiod_nr);
+	rc = crt_proc_uint16_t(proc, &oiod->oiod_nr);
+	if (rc)
+		return -DER_HG;
+	rc = crt_proc_uint16_t(proc, &oiod->oiod_tgt_idx);
 	if (rc)
 		return -DER_HG;
 	rc = crt_proc_uint32_t(proc, &oiod->oiod_flags);
@@ -199,31 +198,33 @@ crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
 
 #define IOD_REC_EXIST	(1 << 0)
 static int
-crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
-		    struct obj_io_desc *oiod)
+crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
+			   daos_iod_t *iod, struct dcs_iod_csums *iod_csum,
+			   struct obj_io_desc *oiod)
 {
 	uint32_t	i, start, nr;
 	bool		proc_one = false;
+	bool		singv = false;
 	uint32_t	existing_flags = 0;
 	int		rc;
 
-	if (proc == NULL || dvi == NULL) {
-		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, dvi);
+	if (proc == NULL || iod == NULL) {
+		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, iod);
 		return -DER_INVAL;
 	}
 
-	rc = crt_proc_d_iov_t(proc, &dvi->iod_name);
+	rc = crt_proc_d_iov_t(proc, &iod->iod_name);
 	if (rc != 0)
 		return rc;
 
 	if (rc != 0)
 		return rc;
 
-	rc = crt_proc_memcpy(proc, &dvi->iod_type, sizeof(dvi->iod_type));
+	rc = crt_proc_memcpy(proc, &iod->iod_type, sizeof(iod->iod_type));
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &dvi->iod_size);
+	rc = crt_proc_uint64_t(proc, &iod->iod_size);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -233,24 +234,30 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 		if (oiod->oiod_siods != NULL) {
 			start = oiod->oiod_siods[0].siod_idx;
 			nr = oiod->oiod_siods[0].siod_nr;
+			D_ASSERT(start < iod->iod_nr &&
+				 start + nr <= iod->iod_nr);
 		} else {
 			D_ASSERT(oiod->oiod_flags & OBJ_SIOD_SINGV);
-			start = 0;
+			if (iod_csum != NULL && iod_csum->ic_data != NULL &&
+			    iod_csum->ic_data[0].cs_nr > 1) {
+				start = oiod->oiod_tgt_idx;
+				singv = true;
+			} else {
+				start = 0;
+			}
 			nr = 1;
 		}
-		D_ASSERT(start < dvi->iod_nr &&
-			 start + nr <= dvi->iod_nr);
 		rc = crt_proc_uint32_t(proc, &nr);
 	} else {
 		start = 0;
-		rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
-		nr = dvi->iod_nr;
+		rc = crt_proc_uint32_t(proc, &iod->iod_nr);
+		nr = iod->iod_nr;
 	}
 	if (rc != 0)
 		return -DER_HG;
 
 #if 0
-	if (dvi->iod_nr == 0 && dvi->iod_type != DAOS_IOD_ARRAY) {
+	if (iod->iod_nr == 0 && iod->iod_type != DAOS_IOD_ARRAY) {
 		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
 		return -DER_HG;
 	}
@@ -266,7 +273,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 #endif
 
 	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
-		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
+		if (iod->iod_type == DAOS_IOD_ARRAY && iod->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 	}
 
@@ -276,20 +283,31 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 
 	if (proc_op == CRT_PROC_DECODE) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D_ALLOC_ARRAY(dvi->iod_recxs, nr);
-			if (dvi->iod_recxs == NULL)
+			D_ALLOC_ARRAY(iod->iod_recxs, nr);
+			if (iod->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 	}
 
 	if (existing_flags & IOD_REC_EXIST) {
+		D_ASSERT(iod->iod_recxs != NULL || nr == 0);
 		for (i = start; i < start + nr; i++) {
-			rc = crt_proc_daos_recx_t(proc, &dvi->iod_recxs[i]);
+			rc = crt_proc_daos_recx_t(proc, &iod->iod_recxs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
 				return rc;
 			}
+		}
+	}
+
+	if (iod_csum) {
+		rc = crt_proc_struct_dcs_iod_csums_adv(proc, proc_op, iod_csum,
+						       singv, start, nr);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				D_GOTO(free, rc);
+			return rc;
 		}
 	}
 
@@ -304,8 +322,8 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *dvi,
 
 	if (proc_op == CRT_PROC_FREE) {
 free:
-		if ((existing_flags & IOD_REC_EXIST) && dvi->iod_recxs != NULL)
-			D_FREE(dvi->iod_recxs);
+		if ((existing_flags & IOD_REC_EXIST) && iod->iod_recxs != NULL)
+			D_FREE(iod->iod_recxs);
 	}
 
 	return rc;
@@ -317,7 +335,8 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 	struct obj_io_desc	*oiod;
 	void			*buf;
 	crt_proc_op_t		 proc_op;
-	daos_size_t		 iod_size, off_size, buf_size;
+	daos_size_t		 iod_size, off_size, buf_size, csum_size;
+	uint8_t			 with_iod_csums = 0;
 	uint32_t		 off_nr;
 	bool			 proc_one = false;
 	int			 i, rc;
@@ -347,6 +366,10 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			 iod_array->oia_iod_nr : 0;
 		if (crt_proc_uint32_t(proc, &off_nr) != 0)
 			return -DER_HG;
+		with_iod_csums = iod_array->oia_iod_csums != NULL ? 1 : 0;
+		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
+			return -DER_HG;
+		D_ASSERT(iod_array->oia_offs != NULL || off_nr == 0);
 		for (i = 0; i < off_nr; i++) {
 			if (crt_proc_uint64_t(proc, &iod_array->oia_offs[i]))
 				return -DER_HG;
@@ -354,10 +377,17 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 	} else if (proc_op == CRT_PROC_DECODE) {
 		if (crt_proc_uint32_t(proc, &off_nr) != 0)
 			return -DER_HG;
+		if (crt_proc_uint8_t(proc, &with_iod_csums) != 0)
+			return -DER_HG;
 		iod_size = roundup(sizeof(daos_iod_t) * iod_array->oia_iod_nr,
 				   8);
 		off_size = sizeof(uint64_t) * off_nr;
-		buf_size = iod_size + off_size;
+		if (with_iod_csums)
+			csum_size = roundup(sizeof(struct dcs_iod_csums) *
+					    iod_array->oia_iod_nr, 8);
+		else
+			csum_size = 0;
+		buf_size = iod_size + off_size + csum_size;
 		if (iod_array->oia_oiod_nr != 0)
 			buf_size += sizeof(struct obj_io_desc) *
 				    iod_array->oia_oiod_nr;
@@ -375,13 +405,22 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 		} else {
 			iod_array->oia_offs = NULL;
 		}
+
+		if (with_iod_csums)
+			iod_array->oia_iod_csums = buf + iod_size + off_size;
+		else
+			iod_array->oia_iod_csums = NULL;
+
 		if (iod_array->oia_oiod_nr != 0)
-			iod_array->oia_oiods = buf + iod_size + off_size;
+			iod_array->oia_oiods = buf + iod_size + off_size +
+					       csum_size;
 		else
 			iod_array->oia_oiods = NULL;
 	}
 
 	for (i = 0; i < iod_array->oia_iod_nr; i++) {
+		struct dcs_iod_csums	*iod_csum;
+
 		if (iod_array->oia_oiod_nr != 0 || proc_one) {
 			D_ASSERT(iod_array->oia_oiods != NULL);
 			oiod = &iod_array->oia_oiods[i];
@@ -389,8 +428,13 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			oiod = NULL;
 		}
 
-		rc = crt_proc_daos_iod_t(proc, proc_op, &iod_array->oia_iods[i],
-					 oiod);
+		iod_csum = (iod_array->oia_iod_csums != NULL) ?
+			   (&iod_array->oia_iod_csums[i]) :
+			   NULL;
+		rc = crt_proc_daos_iod_and_csum(proc, proc_op,
+						&iod_array->oia_iods[i],
+						iod_csum,
+						oiod);
 		if (rc)
 			break;
 	}
@@ -489,6 +533,8 @@ CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
+CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
+
 
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition

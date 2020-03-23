@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ from __future__ import print_function
 import subprocess
 
 from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
+from apricot import TestWithServers, get_log_file
 from test_utils_pool import TestPool
 from fio_utils import FioCommand
 from command_utils import CommandFailure
@@ -55,9 +55,6 @@ class FioBase(TestWithServers):
         # Start the servers and agents
         super(FioBase, self).setUp()
 
-        # removing runner node from hostlist_client, only need one client node.
-        self.hostlist_clients = self.hostlist_clients[:-1]
-
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
         self.fio_cmd.get_params(self)
@@ -76,7 +73,7 @@ class FioBase(TestWithServers):
         """Create a pool and execute Fio."""
         # Get the pool params
         # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, self.log)
+        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
         self.pool.get_params(self)
 
         # Create a pool
@@ -111,7 +108,9 @@ class FioBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp,
+                           log_file=get_log_file(self.client_log),
+                           dfuse_env=self.basepath)
         self.dfuse.get_params(self)
 
         # update dfuse params

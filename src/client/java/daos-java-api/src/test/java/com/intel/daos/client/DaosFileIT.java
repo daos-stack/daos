@@ -6,7 +6,9 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -29,6 +31,7 @@ public class DaosFileIT {
   public void testMkdir()throws Exception{
     DaosFile daosFile = client.getFile("/root/");
     daosFile.mkdir();
+    Assert.assertTrue(daosFile.exists());
   }
 
   @Test
@@ -222,6 +225,16 @@ public class DaosFileIT {
     DaosFile file = client.getFile("/dir11");
     file.mkdir();
     Assert.assertTrue(file.isDirectory());
+    DaosFile rootFile = client.getFile("/");
+    rootFile.exists();
+    String[] children = rootFile.listChildren();
+    boolean found = false;
+    for(String child : children) {
+      if (file.getName().equals(child)) {
+        found = true;
+      }
+    }
+    Assert.assertTrue(found);
   }
 
   @Test(expected = IOException.class)
@@ -278,6 +291,15 @@ public class DaosFileIT {
     Assert.assertTrue(Math.abs(time - mdTime) < 1000);
     long acTime = DaosUtils.toMilliSeconds(attributes.getAccessTime());
     Assert.assertTrue(Math.abs(time - acTime) < 1000);
+
+    Assert.assertEquals(system.getUsername(), attributes.getUsername());
+
+    Process process = Runtime.getRuntime().exec("groups");
+    process.waitFor();
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+      String line = reader.readLine();
+      Assert.assertEquals(line.split(" ")[0], attributes.getGroupname());
+    }
   }
 
   @Test

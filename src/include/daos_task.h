@@ -78,6 +78,8 @@ typedef enum {
 	DAOS_OPC_CONT_DESTROY,
 	DAOS_OPC_CONT_QUERY,
 	DAOS_OPC_CONT_SET_PROP,
+	DAOS_OPC_CONT_UPDATE_ACL,
+	DAOS_OPC_CONT_DELETE_ACL,
 	DAOS_OPC_CONT_AGGREGATE,
 	DAOS_OPC_CONT_ROLLBACK,
 	DAOS_OPC_CONT_SUBSCRIBE,
@@ -297,6 +299,17 @@ typedef struct {
 	daos_handle_t		coh;
 	daos_prop_t		*prop;
 } daos_cont_set_prop_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	struct daos_acl		*acl;
+} daos_cont_update_acl_t;
+
+typedef struct {
+	daos_handle_t		coh;
+	uint8_t			type;
+	d_string_t		name;
+} daos_cont_delete_acl_t;
 
 typedef struct {
 	daos_handle_t		coh;

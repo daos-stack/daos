@@ -20,19 +20,51 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
+// Package code is a central repository for all control plane fault codes.
 package code
+
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // Code represents a stable fault code.
 //
 // NB: All control plane errors should register their codes in the
 // following block in order to avoid conflicts.
+//
+// Also note that new codes should always be added at the bottom of
+// their respective blocks. This ensures stability of fault codes
+// over time.
 type Code int
+
+// UnmarshalJSON implements a custom unmarshaler
+// to convert an int or string code to a Code.
+func (c *Code) UnmarshalJSON(data []byte) (err error) {
+	var ic int
+	if err = json.Unmarshal(data, &ic); err == nil {
+		*c = Code(ic)
+		return
+	}
+
+	var sc string
+	if err = json.Unmarshal(data, &sc); err != nil {
+		return
+	}
+
+	if ic, err = strconv.Atoi(sc); err == nil {
+		*c = Code(ic)
+	}
+	return
+}
 
 const (
 	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
+	PrivilegedHelperNotPrivileged
+	PrivilegedHelperNotAvailable
+	PrivilegedHelperRequestFailed
 
 	// generic storage fault codes
 	StorageUnknown Code = iota + 100
@@ -77,11 +109,17 @@ const (
 	ServerConfigBadProvider
 	ServerConfigNoServers
 	ServerScmUnmanaged
+	ServerBdevNotFound
 	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerIommuDisabled
+	ServerPoolScmTooSmall
+	ServerPoolNvmeTooSmall
+	ServerInsufficientFreeHugePages
+	ServerHarnessNotStarted
 
 	// spdk library bindings codes
 	SpdkUnknown Code = iota + 700

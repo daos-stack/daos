@@ -30,6 +30,16 @@ public final class Constants {
 
   public static final String DAOS_SCHEMA = "daos";
 
+  public static final String DAOS_CONFIG_FILE_NAME = "daos-site.xml";
+
+  public static final String DAOS_CONFIG_POOL_KEY_DEFAULT = "default";
+
+  // cannot be zero which is deemed as empty value in hadoop
+  public static final String DAOS_CONFIG_CONTAINER_KEY_DEFAULT = "1";
+
+  public static final String DAOS_CONFIG_CONTAINER_KEY_PREFIX = "c";
+
+  public static final String DAOS_DEFAULT_FS = "fs.defaultFS";
   // daos pool
   public static final String DAOS_POOL_UUID = "fs.daos.pool.uuid";
 
@@ -52,23 +62,18 @@ public final class Constants {
   public static final String DAOS_READ_BUFFER_SIZE = "fs.daos.read.buffer.size";
   public static final int DEFAULT_DAOS_READ_BUFFER_SIZE = 8 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_READ_BUFFER_SIZE = Integer.MAX_VALUE;
-  public static final int MINIMUM_DAOS_READ_BUFFER_SIZE = 1 * 1024 * 1024;
+  public static final int MINIMUM_DAOS_READ_BUFFER_SIZE = 64 * 1024;
 
   // the minimum and default preload size, maximum size
   public static final String DAOS_PRELOAD_SIZE = "fs.daos.preload.size";
   public static final int DEFAULT_DAOS_PRELOAD_SIZE = 4 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_PRELOAD_SIZE = Integer.MAX_VALUE;
-  public static final int MINIMUM_DAOS_PRELOAD_SIZE = 1 * 1024 * 1024;
-
-  // the minimum and default preload size, maximum size
-  public static final String DAOS_BUFFERED_READ_ENABLED = "fs.daos.io.bufferedReadEnabled";
-  public static final boolean DEFAULT_BUFFERED_READ_ENABLED = true;
 
   // the minimum and default internal write buffer size, maximum size
   public static final String DAOS_WRITE_BUFFER_SIZE = "fs.daos.write.buffer.size";
   public static final int DEFAULT_DAOS_WRITE_BUFFER_SIZE = 8 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_WRITE_BUFFER_SIZE = Integer.MAX_VALUE;
-  public static final int MINIMUM_DAOS_WRITE_BUFFER_SIZE = 1 * 1024 * 1024;
+  public static final int MINIMUM_DAOS_WRITE_BUFFER_SIZE = 64 * 1024;
 
   // default file block size
   public static final String DAOS_BLOCK_SIZE = "fs.daos.block.size";

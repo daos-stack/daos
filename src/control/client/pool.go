@@ -64,9 +64,15 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
-	poolUUID, err := uuid.NewRandom()
+	poolUUID, err := uuid.Parse(req.UUID)
+
 	if err != nil {
-		return nil, errors.Wrap(err, "generating pool uuid")
+		if req.UUID == "" {
+			poolUUID, err = uuid.NewRandom()
+		}
+		if err != nil {
+			return nil, errors.Wrapf(err, "bad pool UUID: %q", req.UUID)
+		}
 	}
 	poolUUIDStr := poolUUID.String()
 

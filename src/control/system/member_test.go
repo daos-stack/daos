@@ -42,7 +42,7 @@ func mockMember(t *testing.T, idx uint32, state MemberState) *Member {
 		t.Fatal(err)
 	}
 
-	return NewMember(idx, fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
+	return NewMember(Rank(idx), fmt.Sprintf("abcd-efgh-ijkl-mno%d", idx),
 		addr, state)
 }
 
@@ -75,7 +75,7 @@ func TestMember_Stringify(t *testing.T) {
 func TestMember_AddRemove(t *testing.T) {
 	for name, tc := range map[string]struct {
 		membersToAdd  Members
-		ranksToRemove []uint32
+		ranksToRemove []Rank
 		expMembers    Members
 		expAddErrs    []error
 	}{
@@ -84,7 +84,7 @@ func TestMember_AddRemove(t *testing.T) {
 				mockMember(t, 1, MemberStateUnknown),
 				mockMember(t, 2, MemberStateUnknown),
 			},
-			[]uint32{1, 2},
+			[]Rank{1, 2},
 			Members{},
 			[]error{nil, nil},
 		},
@@ -102,7 +102,7 @@ func TestMember_AddRemove(t *testing.T) {
 				mockMember(t, 1, MemberStateUnknown),
 				mockMember(t, 2, MemberStateUnknown),
 			},
-			[]uint32{3},
+			[]Rank{3},
 			Members{
 				mockMember(t, 1, MemberStateUnknown),
 				mockMember(t, 2, MemberStateUnknown),
@@ -242,9 +242,12 @@ func TestMember_RanksHostsMembers(t *testing.T) {
 		}
 	}
 
-	AssertEqual(t, []uint32{1, 2, 3}, ms.Ranks(), "ranks")
-	AssertEqual(t, []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
-		ms.Hosts(), "hosts")
+	AssertEqual(t, []Rank{1, 2, 3}, ms.Ranks(), "ranks")
+	AssertEqual(t, map[string][]Rank{
+		"127.0.0.1:10001": {1},
+		"127.0.0.2:10001": {2},
+		"127.0.0.3:10001": {3},
+	}, ms.HostRanks(), "host ranks")
 	AssertEqual(t, members, ms.Members(), "members")
 }
 

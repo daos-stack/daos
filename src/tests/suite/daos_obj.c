@@ -578,7 +578,7 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 #endif
 }
 
-#define OW_IOD_SIZE	1024 /* used for mixed record overwrite */
+#define OW_IOD_SIZE	1024ULL /* used for mixed record overwrite */
 /**
  * Test mixed SCM & NVMe overwrites in different transactions with a large
  * record size. Iod size is needed for insert/lookup since the same akey is
@@ -1147,7 +1147,7 @@ iterate_records(struct ioreq *req)
 		if (number == 0)
 			continue;
 
-		for (i = 0; i < number; i++) {
+		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == ENUM_IOD_SIZE);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
@@ -1927,8 +1927,10 @@ next_step:
 	sgl.sg_nr = 2;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
-	print_message("fetch with less buffer got %d.\n", rc);
+	print_message("fetch with less buffer got rc %d, iod_size %d.\n",
+		      rc, (int)iod.iod_size);
 	assert_int_equal(rc, -DER_REC2BIG);
+	assert_int_equal(iod.iod_size, 1);
 
 	print_message("reading un-existed record ...\n");
 	recx[3].rx_idx	= 2 * buf_len + 40960;
@@ -1954,7 +1956,7 @@ next_step:
 	print_message("validating data ... sg_nr_out %d, iod_size %d.\n",
 		      sgl.sg_nr_out, (int)iod.iod_size);
 	assert_int_equal(sgl.sg_nr_out, 2);
-	assert_memory_equal(buf, buf_out, sizeof(buf));
+	assert_memory_equal(buf, buf_out, buf_len);
 
 	print_message("short read should get iov_len with tail hole trimmed\n");
 	memset(buf_out, 0, buf_len);
@@ -2092,7 +2094,7 @@ fetch_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		 dkey;
 	d_sg_list_t	 sgl[NUM_AKEYS];
 	d_iov_t	 sg_iov[NUM_AKEYS];
 	daos_iod_t	 iod[NUM_AKEYS];
@@ -2145,6 +2147,16 @@ fetch_size(void **state)
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_int_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++)
+		assert_int_equal(iod[i].iod_size, size * (i+1));
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
+		iod[i].iod_size	= DAOS_REC_ANY;
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_int_equal(rc, -DER_REC2BIG);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
@@ -3618,6 +3630,95 @@ io_capa_iv_fetch(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+io_invalid(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t	 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t	 sg_iov[2];
+	daos_iod_t	 iod;
+	daos_recx_t	 recx[10];
+	char		 buf[32];
+	char		 buf1[32];
+	char		 large_buf[8192];
+	char		 origin_buf[8192];
+	int		 rc;
+
+	/** open object */
+	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+
+	/** smaller buffer */
+	d_iov_set(&sg_iov[0], buf, 12);
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov[0];
+	iod.iod_size	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= 32;
+	iod.iod_nr	= 1;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, -DER_REC2BIG);
+
+	/** more buffers */
+	memset(buf, 'b', 32);
+	memset(buf1, 'b', 32);
+	d_iov_set(&sg_iov[0], buf, 32);
+	d_iov_set(&sg_iov[1], buf1, 32);
+	sgl.sg_nr		= 2;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= sg_iov;
+	iod.iod_size	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= 32;
+	iod.iod_nr	= 1;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(buf, 'a', 32);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			    NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(buf, buf1, 32);
+
+	/* larger buffer */
+	memset(large_buf, 'a', 8192);
+	memset(origin_buf, 'a', 8192);
+	d_iov_set(&sg_iov[0], large_buf, 8192);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov[0];
+	iod.iod_size	= 1;
+	iod.iod_recxs	= recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= 12;
+	iod.iod_nr	= 1;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(large_buf, 'b', 12);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			    NULL, NULL);
+	assert_memory_equal(large_buf, origin_buf, 8192);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -3694,6 +3795,8 @@ static const struct CMUnitTest io_tests[] = {
 	  fetch_mixed_keys, async_disable, test_case_teardown},
 	{ "IO38: force capablity IV fetch",
 	  io_capa_iv_fetch, async_disable, test_case_teardown},
+	{ "IO39: Update with invalid sg and record",
+	  io_invalid, async_disable, test_case_teardown},
 };
 
 int
@@ -3729,15 +3832,13 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
-		rc = cmocka_run_group_tests_name("DAOS IO tests", io_tests,
-						 obj_setup, test_teardown);
-		MPI_Barrier(MPI_COMM_WORLD);
-		return rc;
+		sub_tests_size = ARRAY_SIZE(io_tests);
+		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(io_tests, ARRAY_SIZE(io_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				obj_setup_internal, NULL);
+	rc = run_daos_sub_tests("DAOS IO tests", io_tests,
+				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
+				obj_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
