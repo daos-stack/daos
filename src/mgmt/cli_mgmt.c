@@ -373,11 +373,20 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 		strncpy(sy_info->provider, resp->provider, size);
 		sy_info->provider[size-1] = '\0';
 
+		size = sizeof(sy_info->interface);
+		strncpy(sy_info->interface, resp->interface, size);
+		sy_info->interface[size-1] = '\0';
+
+		size = sizeof(sy_info->domain);
+		strncpy(sy_info->domain, resp->domain, size);
+		sy_info->domain[size-1] = '\0';
+
 		sy_info->crt_ctx_share_addr = resp->crtctxshareaddr;
 		sy_info->crt_timeout = resp->crttimeout;
 		D_DEBUG(DB_MGMT,
-			"GetAttachInfo Provider: %s, CRT_CTX_SHARE_ADDR: %u,"
-			" CRT_TIMEOUT: %u\n", sy_info->provider,
+			"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
+			"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+			sy_info->provider, sy_info->interface, sy_info->domain,
 			sy_info->crt_ctx_share_addr, sy_info->crt_timeout);
 	}
 

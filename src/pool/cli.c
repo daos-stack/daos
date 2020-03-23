@@ -514,6 +514,8 @@ dc_pool_connect(tse_task_t *task)
 
 		/** Agent configuration data from pool->dp_sys->sy_info */
 		/** sy_info.provider */
+		/** sy_info.interface */
+		/** sy_info.domain */
 		/** sy_info.crt_ctx_share_addr */
 		/** sy_info.crt_timeout */
 
