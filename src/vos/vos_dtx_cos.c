@@ -439,7 +439,7 @@ add:
 	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
-	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
+	D_DEBUG(DB_IO, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
 		"intent %s, %s ilog entry: rc = "DF_RC"\n",
 		DP_DTI(dti), (unsigned long long)dkey_hash,
 		flags & DCF_FOR_PUNCH ? "Punch" : "Update",
@@ -576,7 +576,7 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
 			continue;
 
-		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
+		D_DEBUG(DB_IO, "Remove DTX "DF_DTI" from CoS cache, "
 			"key %llu, intent %s, has ilog entry\n",
 			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
 			punch ? "Punch" : "Update");
@@ -607,7 +607,7 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
 			continue;
 
-		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
+		D_DEBUG(DB_IO, "Remove DTX "DF_DTI" from CoS cache, "
 			"key %llu, intent Update, has not ilog entry\n",
 			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash);
 

@@ -32,6 +32,8 @@
 #include <daos_fs.h>
 #include <daos_jni_common.h>
 #include <fcntl.h>
+#include <pwd.h>
+#include <grp.h>
 
 static jclass daos_io_exception_class;
 
@@ -231,7 +233,7 @@ Java_com_intel_daos_client_DaosFsClient_daosOpenPool(JNIEnv *env,
 			char *msg = (char *)malloc(strlen(tmp) +
 					strlen(pool_str));
 
-			sprintf(msg, tmp, svc_ranks, pool_str);
+			sprintf(msg, tmp, pool_str);
 			throw_exception_base(env, msg, rc, 1, 0);
 			ret = -1;
 		} else {
@@ -607,7 +609,7 @@ static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
 		if (!recursive) {
 			goto out;
 		}
-		// recursively create it
+		/* recursively create it */
 		dirs = strdup(path);
 		dir = dirname(dirs);
 		bases = strdup(path);
@@ -632,8 +634,8 @@ static int mkdirs(dfs_t *dfs, char *path, int mode, unsigned char recursive,
 			goto out;
 		}
 		rc = dfs_mkdir(dfs, parent_handle, base, mode, 0);
-		// code to mitigate DAOS concurrency issue
-		// to be fixed by the conditional update feature in DAOS
+		/* code to mitigate DAOS concurrency issue */
+		/* to be fixed by the conditional update feature in DAOS */
 		if (rc == ERROR_NOT_EXIST) {
 			int count = 0;
 
@@ -845,33 +847,21 @@ Java_com_intel_daos_client_DaosFsClient_delete(JNIEnv *env, jobject client,
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
 	int rc;
-	int ret;
 
 	if ((strlen(parent_path) > 0) &&
 			(strcmp(parent_path, "/") != 0)) {
 		rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent, &tmp_mode,
 				NULL);
 		if (rc) {
-			printf("Failed to open parent dir, %s, when delete, " \
-					"rc: %d, error msg: %s\n",
-					parent_path, rc, strerror(rc));
-			ret = 0;
 			goto out;
 		}
 	}
-	rc = dfs_remove(dfs, parent, file_name, force, NULL);
-	if (rc) {
-		printf("Failed to delete %s from %s, rc: %d, error msg: %s\n",
-				file_name, parent_path, rc, strerror(rc));
-		ret = 0;
-		goto out;
-	}
-	ret = 1;
+	dfs_remove(dfs, parent, file_name, force, NULL);
 out:
 	(*env)->ReleaseStringUTFChars(env, parentPath, parent_path);
 	(*env)->ReleaseStringUTFChars(env, name, file_name);
 	if (parent) dfs_release(parent);
-	return ret;
+	return 1;
 }
 
 /**
@@ -1175,7 +1165,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		total += nr;
 		int i;
 		for(i=0; i<nr; i++){
-			// exactly 1 for each file because ',' and \0
+			/* exactly 1 for each file because ',' and \0 */
 			acc += strlen(entries[i].d_name) + 1;
 			if (acc >= size) {
 				size += READ_DIR_INITIAL_BUFFER_SIZE;
@@ -1219,6 +1209,32 @@ static void cpyfield(JNIEnv *env, char *buffer, int *value,
 		return;
 	}
 	memcpy(buffer, value, valueLen);
+}
+
+static void set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
+{
+	struct passwd *uentry = getpwuid(stat->st_uid);
+	struct group *gentry = getgrgid(stat->st_gid);
+	int inc = 4;
+	int len = 0;
+
+	if (uentry != NULL) {
+		len = strlen(uentry->pw_name);
+		cpyfield(env, buffer, &len, 4, 4);
+		memcpy(buffer+4, uentry->pw_name, len);
+		inc += len;
+	} else {
+		len = 0;
+		cpyfield(env, buffer, &len, 4, 4);
+	}
+	if (gentry != NULL) {
+		len = strlen(gentry->gr_name);
+		cpyfield(env, buffer+inc, &len, 4, 4);
+		memcpy(buffer+inc+4, gentry->gr_name, len);
+	} else {
+		len = 0;
+		cpyfield(env, buffer+inc, &len, 4, 4);
+	}
 }
 
 /**
@@ -1271,6 +1287,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
 		cpyfield(env, buffer+76, &stat.st_ctim,
 				sizeof(stat.st_ctim), 16);
 		buffer[92] = S_ISDIR(stat.st_mode) ? '\0':'1';
+		set_user_group_name(env, buffer+93, &stat);
 	}
 }
 
@@ -1333,7 +1350,7 @@ Java_com_intel_daos_client_DaosFsClient_dfsGetExtAttr(JNIEnv *env,
 	dfs_obj_t *file = *(dfs_obj_t **)&objId;
 	const char *attr_name = (*env)->GetStringUTFChars(env, name, NULL);
 	long value_len = expectedValueLen;
-	char *value = (char *)malloc(value_len+1); // 1 for \0
+	char *value = (char *)malloc(value_len+1); /* 1 for \0 */
 	jstring ret = NULL;
 
 	if (value == NULL) {

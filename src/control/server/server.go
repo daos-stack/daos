@@ -33,6 +33,7 @@ import (
 	"os/user"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -60,6 +61,8 @@ const (
 	iommuPath        = "/sys/class/iommu"
 	minHugePageCount = 128
 )
+
+var ioserverShutdownTimeout = 15 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -225,7 +228,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
-	var opts []grpc.ServerOption
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryErrorInterceptor,
+	}
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		streamErrorInterceptor,
+	}
+	opts := []grpc.ServerOption{}
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
@@ -237,15 +246,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 	if uintOpt != nil {
-		opts = append(opts, uintOpt)
+		unaryInterceptors = append(unaryInterceptors, uintOpt)
 	}
 	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
 	if sintOpt != nil {
-		opts = append(opts, sintOpt)
+		streamInterceptors = append(streamInterceptors, sintOpt)
 	}
+	opts = append(opts, []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+	}...)
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
@@ -261,12 +274,24 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
+		var err error
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
-			log.Errorf("error during dRPC cleanup: %s", err)
+
+		defer func() {
+			if errors.Cause(err) == context.DeadlineExceeded {
+				log.Debug("resorting to kill signal")
+			}
+			shutdown() // Kill I/O servers if running after graceful shutdown.
+		}()
+
+		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
+		defer cancel()
+
+		// Attampt graceful shutdown of I/O servers.
+		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
+			log.Error(errors.Wrap(err, "graceful shutdown").Error())
 		}
-		shutdown()
 	}()
 
 	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {

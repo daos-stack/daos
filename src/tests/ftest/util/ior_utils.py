@@ -41,7 +41,7 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
         >>> log = get_log_file(self.client_log)
-        >>> env = self.ior_cmd.get_default_env(self.tmp, log)
+        >>> env = self.ior_cmd.get_default_env(log)
         >>> processes = len(self.hostlist_clients)
         >>> mpirun.setup_command(env, self.hostfile_clients, processes)
         >>> mpirun.run()
@@ -213,12 +213,11 @@ class IorCommand(ExecutableCommand):
 
         return total
 
-    def get_default_env(self, manager_cmd, attach_info, log_file=None):
+    def get_default_env(self, manager_cmd, log_file=None):
         """Get the default enviroment settings for running IOR.
 
         Args:
             manager_cmd (str): job manager command
-            attach_info (str): CART attach info path
             log_file (str, optional): log file. Defaults to None.
 
         Returns:
@@ -226,9 +225,7 @@ class IorCommand(ExecutableCommand):
 
         """
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["MPI_LIB"] = "\"\""
-        env["DAOS_SINGLETON_CLI"] = 1
         env["FI_PSM2_DISCONNECT"] = 1
         if log_file:
             env["D_LOG_FILE"] = log_file
