@@ -53,6 +53,11 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 #define DAOS_NVME_MAX_CTRLRS	1024		/* Max read from nvme_conf */
 
+/* Max inflight blob IOs per io channel */
+#define BIO_BS_MAX_CHANNEL_OPS	(4096)
+/* Schedule a NVMe poll when so many blob IOs queued for an io channel */
+#define BIO_BS_POLL_WATERMARK	(2048)
+
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -280,6 +285,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts);
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
+	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
@@ -386,6 +392,14 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		bio_bs_monitor(ctxt, now);
 
 	return rc;
+}
+
+bool
+bio_need_nvme_poll(struct bio_xs_context *ctxt)
+{
+	if (ctxt == NULL)
+		return false;
+	return ctxt->bxc_blob_rw > BIO_BS_POLL_WATERMARK;
 }
 
 struct common_cp_arg {

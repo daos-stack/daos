@@ -588,4 +588,6 @@ int bio_get_dev_state(struct bio_dev_state *dev_state,
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
 
+/* Too many blob IO queued, need to schedule a NVMe poll? */
+bool bio_need_nvme_poll(struct bio_xs_context *xs);
 #endif /* __BIO_API_H__ */

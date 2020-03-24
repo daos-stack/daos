@@ -210,6 +210,8 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 static bool
 need_nvme_poll(struct sched_cycle *cycle)
 {
+	struct dss_module_info	*dmi;
+
 	/* Need net poll to start new cycle */
 	if (!cycle->sc_cycle_started) {
 		D_ASSERT(cycle->sc_ults_tot == 0);
@@ -220,16 +222,9 @@ need_nvme_poll(struct sched_cycle *cycle)
 	if (cycle->sc_ults_tot == 0)
 		return true;
 
-	/*
-	 * Need extra NVMe poll when too many ULTs are processed in
-	 * current cycle.
-	 */
-	if (cycle->sc_age_nvme > cycle->sc_age_nvme_bound[1])
-		return true;
-
-	/* TODO: Take NVMe I/O statistics into account */
-
-	return false;
+	dmi = dss_get_module_info();
+	D_ASSERT(dmi != NULL);
+	return bio_need_nvme_poll(dmi->dmi_nvme_ctxt);
 }
 
 static ABT_unit
