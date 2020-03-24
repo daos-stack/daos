@@ -109,7 +109,7 @@ with preload enabled in the daos-site.xml. The other instance is preload disable
 different URIs, "daos://default:1" and "daos://default:2". In the daos-site.xml, you can set "fs.daos.container.uuid"
 and "c2.fs.daos.container.uuid" to same container UUID. Then set "fs.daos.preload.size" to a value greater than 0 and
 "c2.fs.daos.preload.size" to 0.
-           
+ 
 ##Access DAOS in Spark
 
 All Spark APIs that works with Hadoop filesystem will work with DAOS. We use the "daos://" URI to access files stored in
