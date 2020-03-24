@@ -4,11 +4,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.net.InetAddress;
-import java.nio.file.Files;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.*;
 
+import com.intel.daos.client.DaosFile;
+import com.intel.daos.client.DaosFsClient;
 import com.intel.daos.hadoop.fs.Constants;
 import com.intel.daos.hadoop.fs.DaosConfig;
 import org.apache.hadoop.conf.Configuration;
@@ -37,6 +40,10 @@ public class Main {
     if (svc != null) {
       conf.set(Constants.DAOS_POOL_SVC, svc);
     }
+    String defaultURI = System.getProperty("uri", "daos://default:1");
+    if (defaultURI != null) {
+      conf.set("fs.defaultFS", defaultURI);
+    }
   }
 
   public static void main(String args[]) throws Exception {
@@ -53,9 +60,12 @@ public class Main {
 
     if (threads != null) {
       System.out.println("in threads mode");
-      Configuration conf = new Configuration();
-      setDFSArgs(conf);
-      FileSystem fs = FileSystem.get(conf);
+      FileSystem fs = null;
+      if ("hadoop-api".equalsIgnoreCase(System.getProperty("api", "hadoop-api"))) {
+        Configuration conf = new Configuration(false);
+        setDFSArgs(conf);
+        fs = FileSystem.get(conf);
+      }
 
       if ("write".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
         Runner runner = new ThreadsWriteRunner(fs);
@@ -87,6 +97,9 @@ public class Main {
     protected String path;
     protected int parallel;
     protected String seq;
+    protected int jvmThreads;
+    protected String api;
+    protected String scriptPath;
 
     protected Runner(FileSystem fs){
       this.fs = fs;
@@ -99,6 +112,12 @@ public class Main {
       String hostname = InetAddress.getLocalHost().getHostName();
       path = path + "/" + hostname + "/" + (seq==null?"":seq);
       System.out.println("write path: " + path);
+      jvmThreads = Integer.valueOf(System.getProperty("jvmThreads", "1"));
+      System.out.println("JVM threads: " + jvmThreads);
+      api = System.getProperty("api", "hadoop-api");
+      System.out.println("api: " + api);
+      scriptPath = System.getProperty("scriptPath", "/root/daos");
+      System.out.println("script path: " + scriptPath);
     }
 
     public abstract void run() throws Exception;
@@ -114,8 +133,9 @@ public class Main {
 
     protected void prepare() throws Exception {
       super.prepare();
-      writeSize = Integer.parseInt(System.getProperty("writeSize", String.valueOf(8*1024*1024)));
-      System.out.println("write size: " + writeSize);
+      writeSize = Integer.parseInt(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
+              String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
+      System.out.println("write buffer size: " + writeSize);
       fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
       System.out.println("file size: " + fileSize);
     }
@@ -181,7 +201,7 @@ public class Main {
         File err = new File(dir, "err");
 
         List<String> list = new ArrayList<>();
-        list.add("/root/daos/java-test.sh");
+        list.add(scriptPath + "/java-test.sh");
         list.add("write");
         list.add("jvm");
         list.add(out.getAbsolutePath());
@@ -189,9 +209,10 @@ public class Main {
         list.add("-DwriteSize=" + writeSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
-        list.add("-Dthreads=1");
+        list.add("-Dthreads=" + jvmThreads);
         list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
+        list.add("-Dapi=" + api);
         executors.add(new ShellExecutor(i, list, out, err, WRITE_PERF_PREFIX, FINAL_WRITE_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -266,6 +287,8 @@ public class Main {
 
   static abstract class ReadRunner extends Runner {
     protected int readSize;
+    protected boolean random;
+    protected long fileSize;
 
     protected ReadRunner(FileSystem fs){
       super(fs);
@@ -276,7 +299,11 @@ public class Main {
       super.prepare();
       readSize = Integer.valueOf(DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
               String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
-      System.out.println("read size: " + readSize);
+      System.out.println("read buffer size: " + readSize);
+      random = "true".equalsIgnoreCase(System.getProperty("random"));
+      System.out.println("random: " + random);
+      fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L*1024L*1024L)));
+      System.out.println("file size: " + fileSize);
     }
   }
 
@@ -300,7 +327,8 @@ public class Main {
       ExecutorService executor = Executors.newFixedThreadPool(parallel);
       List<Future<Double>> futures = new ArrayList<>();
       for (int i=0; i<parallel; i++) {
-        Future<Double> future = executor.submit(new ReadTask(i, fs, path+"/thread"+i, readSize));
+        Future<Double> future = executor.submit(
+                new ReadTask(i, fs, path+"/thread"+i, readSize, random, fileSize));
         futures.add(future);
       }
 
@@ -339,7 +367,7 @@ public class Main {
         File out = new File(dir, "out");
         File err = new File(dir, "err");
         List<String> list = new ArrayList<>();
-        list.add("/root/daos/java-test.sh");
+        list.add(scriptPath + "/java-test.sh");
         list.add("read");
         list.add("jvm");
         list.add(out.getAbsolutePath());
@@ -347,8 +375,10 @@ public class Main {
         list.add("-DreadSize=" + readSize);
         list.add("-Dpid=" + System.getProperty("pid"));
         list.add("-Duid=" + System.getProperty("uid"));
-        list.add("-Dthreads=1");
+        list.add("-Dthreads=" + jvmThreads);
         list.add("-Dseq=" + i);
+        list.add("-Drandom=" + (random?"true":"false"));
+        list.add("-Dapi=" + api);
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -406,6 +436,7 @@ public class Main {
       long end = System.currentTimeMillis();
 
       double rst = count*1.0/((end-start)*1.0/1000);
+      System.out.println("write path: " + writePath);
       System.out.println(WRITE_PERF_PREFIX + "file size(" + id + "): " + count);
       System.out.println(WRITE_PERF_PREFIX + "time(" + id + "): " + ((end-start)*1.0/1000));
       System.out.println(WRITE_PERF_PREFIX + "perf(" + id + "): " + rst);
@@ -418,34 +449,102 @@ public class Main {
     FileSystem fs;
     String readPath;
     int readSize;
-    ReadTask(int id, FileSystem fs, String readPath, int readSize) {
+    boolean random;
+    long fileSize;
+
+    ReadTask(int id, FileSystem fs, String readPath, int readSize, boolean random, long fileSize) {
       this.id = id;
       this.fs = fs;
       this.readPath = readPath;
       this.readSize = readSize;
+      this.random = random;
+      this.fileSize = fileSize;
     }
 
     @Override
     public Double call() throws Exception {
       //read
       long count = 0;
+      int times = 0;
       byte[] bytes = new byte[readSize];
-      int size;
+
       long start = System.currentTimeMillis();
-      try (FSDataInputStream fos = fs.open(new Path(readPath))) {
-        while (true) {
-          size = fos.read(bytes);
-          if (size < 0) {
-            break;
+      long end;
+
+      String api = System.getProperty("api", "hadoop-api");
+
+      if ("java-api".equalsIgnoreCase(api)) {
+        String poolId = System.getProperty("pid",
+                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
+        String contId = System.getProperty("uid",
+                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
+        String svc = System.getProperty("svc",
+                DaosConfig.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
+        DaosFsClient client = new DaosFsClient.DaosFsClientBuilder().poolId(poolId).containerId(contId)
+                .ranks(svc).build();
+
+        start = System.currentTimeMillis();
+
+        DaosFile file = client.getFile(readPath);
+        long size;
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(readSize);
+        if (random) {
+          Random rd = new Random();
+
+          while (count < fileSize) {
+            long offset = (long) (fileSize * rd.nextFloat());
+            size = file.read(byteBuffer, 0, offset,
+                    offset + readSize > fileSize ? (fileSize - offset) : readSize);
+//            size = fos.read(bytes);
+            count += size;
+            times++;
           }
-          count += size;
+        } else {
+          while (count < fileSize) {
+            size = file.read(byteBuffer, 0, count, readSize);
+            if (size < 0) {
+              break;
+            }
+            count += size;
+            times++;
+          }
         }
-      } catch (Exception e) {
-        e.printStackTrace();
+        end = System.currentTimeMillis();
+      } else {
+        int size;
+        try (FSDataInputStream fos = fs.open(new Path(readPath))) {
+          if (random) {
+            Random rd = new Random();
+            while (count < fileSize) {
+              long offset = (long) (fileSize * rd.nextFloat());
+              fos.seek(offset);
+              size = fos.read(bytes, 0, (int) (offset + readSize > fileSize ? (fileSize - offset) : readSize));
+//            size = fos.read(bytes);
+              count += size;
+              times++;
+            }
+          } else {
+            while (count < fileSize) {
+              size = fos.read(bytes);
+              if (size < 0) {
+                break;
+              }
+              count += size;
+              times++;
+            }
+          }
+          end = System.currentTimeMillis();
+        } catch (Exception e) {
+          e.printStackTrace();
+          end = System.currentTimeMillis();
+        }
       }
-      long end = System.currentTimeMillis();
+
 
       double rst = count*1.0/((end-start)*1.0/1000);
+      System.out.println("api: " + api);
+      System.out.println("read path: " + readPath);
+      System.out.println("number of reads: " + times);
       System.out.println(READ_PERF_PREFIX + "file size(" + id + "): " + count);
       System.out.println(READ_PERF_PREFIX + "time(" + id + "): " + ((end-start)*1.0/1000));
       System.out.println(READ_PERF_PREFIX + "perf(" + id + "): " + rst);
