@@ -193,6 +193,24 @@ tse_task_set_priv(tse_task_t *task, void *priv)
 	return old;
 }
 
+void *
+tse_task_get_priv_internal(tse_task_t *task)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+
+	return dtp->dtp_priv_internal;
+}
+
+void *
+tse_task_set_priv_internal(tse_task_t *task, void *priv)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+	void			*old = dtp->dtp_priv_internal;
+
+	dtp->dtp_priv_internal = priv;
+	return old;
+}
+
 tse_sched_t *
 tse_task2sched(tse_task_t *task)
 {

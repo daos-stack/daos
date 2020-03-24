@@ -33,6 +33,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
+#include <daos/task.h>
 #include <daos/placement.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
