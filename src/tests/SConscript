@@ -16,6 +16,9 @@ def scons():
         print("Install and load mpich or openmpi\n")
         return
 
+    # Clear out any compiler specific flags used, as mpicc might not support them.
+    denv.Replace(CCFLAGS="")
+
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
