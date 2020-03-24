@@ -6,8 +6,7 @@ def scons():
     Import('denv')
 
     libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'mpi']
-    libraries += ['cmocka']
+    libraries += ['uuid', 'cmocka']
 
     Import('daos_test_tgt')
     Import('daos_epoch_io')
