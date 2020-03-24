@@ -821,7 +821,8 @@ class PreReqComponent():
         # disable the warning about Cilk since we don't use it
         self.__env.AppendUnique(LINKFLAGS=["-static-intel",
                                            "-diag-disable=10237"])
-
+        self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
+                                         "-diag-disable:188"])
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
