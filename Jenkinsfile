@@ -130,7 +130,7 @@ def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
                                 --exclude-dir=/var/lib/clamav \
                                 --exclude-dir=/sys \
                                 --exclude-dir=/proc \
-                                --exclude-der=/dev \
+                                --exclude-dir=/dev \
                                 --infected / | tee /var/tmp/clamscan.out
                        rm -f /var/tmp/maldetect.xml
                        if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
