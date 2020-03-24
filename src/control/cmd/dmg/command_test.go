@@ -214,6 +214,11 @@ func (tc *testConn) ListPools(req client.ListPoolsReq) (*client.ListPoolsResp, e
 	return &client.ListPoolsResp{}, nil
 }
 
+func (tc *testConn) ContSetOwner(req client.ContSetOwnerReq) error {
+	tc.appendInvocation(fmt.Sprintf("ContSetOwner-%+v", req))
+	return nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }

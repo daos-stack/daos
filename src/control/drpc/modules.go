@@ -98,6 +98,8 @@ const (
 	MethodPoolQuery = C.DRPC_METHOD_MGMT_POOL_QUERY
 	// MethodPoolSetProp defines a method for setting a pool property
 	MethodPoolSetProp = C.DRPC_METHOD_MGMT_POOL_SET_PROP
+	// MethodContSetOwner defines a method for setting the container's owner
+	MethodContSetOwner = C.DRPC_METHOD_MGMT_CONT_SET_OWNER
 )
 
 const (

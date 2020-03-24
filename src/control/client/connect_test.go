@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
@@ -697,6 +698,133 @@ func TestPoolSetProp(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestContSetOwner(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	testPoolUUID := uuid.New().String()
+	testContUUID := uuid.New().String()
+
+	defaultReq := ContSetOwnerReq{
+		PoolUUID: testPoolUUID,
+		ContUUID: testContUUID,
+		User:     "testuser@",
+		Group:    "testgroup@",
+	}
+
+	defaultMC := &mockConnectConfig{
+		addresses: MockServers,
+		svcClientCfg: MockMgmtSvcClientConfig{
+			ContSetOwnerResult: &mgmtpb.ContSetOwnerResp{Status: 0},
+		},
+	}
+
+	for name, tt := range map[string]struct {
+		mc          *mockConnectConfig
+		req         ContSetOwnerReq
+		expectedErr string
+	}{
+		"no service leader": {
+			mc: &mockConnectConfig{
+				addresses: nil,
+			},
+			req:         defaultReq,
+			expectedErr: "no active connections",
+		},
+		"gRPC call failed": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: MockMgmtSvcClientConfig{
+					ContSetOwnerErr: MockErr,
+				},
+			},
+			req:         defaultReq,
+			expectedErr: MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			mc: &mockConnectConfig{
+				addresses: MockServers,
+				svcClientCfg: MockMgmtSvcClientConfig{
+					ContSetOwnerResult: &mgmtpb.ContSetOwnerResp{Status: -1000},
+				},
+			},
+			req:         defaultReq,
+			expectedErr: "DAOS returned error code: -1000",
+		},
+		"success": {
+			mc:  defaultMC,
+			req: defaultReq,
+		},
+		"bad pool UUID": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: "junk",
+				ContUUID: testContUUID,
+			},
+			expectedErr: "bad pool UUID: \"junk\": invalid UUID length: 4",
+		},
+		"bad container UUID": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: testPoolUUID,
+				ContUUID: "junk",
+			},
+			expectedErr: "bad container UUID: \"junk\": invalid UUID length: 4",
+		},
+		"no pool UUID": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				ContUUID: testContUUID,
+			},
+			expectedErr: "bad pool UUID: \"\": invalid UUID length: 0",
+		},
+		"no container UUID": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: testPoolUUID,
+			},
+			expectedErr: "bad container UUID: \"\": invalid UUID length: 0",
+		},
+		"no user or group": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: testPoolUUID,
+				ContUUID: testContUUID,
+			},
+			expectedErr: "no user or group specified",
+		},
+		"only user is OK": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: testPoolUUID,
+				ContUUID: testContUUID,
+				User:     "someone@",
+			},
+		},
+		"only group is OK": {
+			mc: defaultMC,
+			req: ContSetOwnerReq{
+				PoolUUID: testPoolUUID,
+				ContUUID: testContUUID,
+				Group:    "somegroup@",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+
+			cc := newMockConnectCfg(log, tt.mc)
+
+			err := cc.ContSetOwner(tt.req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
 			}
 		})
 	}
