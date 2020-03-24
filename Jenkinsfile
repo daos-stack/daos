@@ -374,7 +374,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=' + env.QUICKBUILD +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -992,7 +992,7 @@ pipeline {
                                                 '$BUILDARGS ' +
                                                 '--build-arg QUICKBUILD=true' +
                                                 ' --build-arg QUICKBUILD_DEPS="' + env.QUICKBUILD_DEPS +
-                                                ' --build-arg REPOS="' + component_repos + '"'
+                                                '" --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -1050,7 +1050,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1136,7 +1136,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-small:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1240,7 +1240,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-medium:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1344,7 +1344,7 @@ pipeline {
                                        inst_repos: el7_daos_repos,
                                        inst_rpms: 'daos-' + daos_packages_version +
                                                   ' daos-client-' + daos_packages_version +
-                                                  functional_rpms
+                                                  ' ' + functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw-large:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then

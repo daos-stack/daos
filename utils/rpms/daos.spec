@@ -14,8 +14,9 @@ License:       Apache
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 
-BuildRequires: scons >= w.4
+BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
+BuildRequires: boost-devel
 BuildRequires: mercury-devel = %{mercury_version}
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -70,7 +71,6 @@ BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
 %if 0%{?is_opensuse}
-BuildRequires: boost-devel
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
 # have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
@@ -92,7 +92,7 @@ Requires: protobuf-c
 Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
 Requires: openssl
-# This should only be temporary until we can get a stable upstream releas    e
+# This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
 Requires: mercury = %{mercury_version}
@@ -200,8 +200,6 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 # you might think libvio.so goes in the server RPM but
 # the 2 tools following it need it
 %{_libdir}/daos_srv/libbio.so
-%{_libdir}/libcart.so
-%{_libdir}/libgurt.so
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so

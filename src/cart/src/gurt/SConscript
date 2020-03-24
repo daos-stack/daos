@@ -49,7 +49,7 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/cart/src/gurt'])
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     denv.AppendUnique(LIBS=['pthread', 'yaml'])
     prereqs.require(denv, 'uuid')
 
