@@ -1127,7 +1127,7 @@ func DetectNetworkInterface(provider string, numaNode uint32) (string, string, e
 			continue
 		}
 		log.Debugf("DeviceName %s, Priority %d\n", fs.DeviceName, fs.Priority)
-		if (fs.Priority < priority) {
+		if fs.Priority < priority {
 			priority = fs.Priority
 			deviceName = fs.DeviceName
 		}
@@ -1138,7 +1138,7 @@ func DetectNetworkInterface(provider string, numaNode uint32) (string, string, e
 		priority = math.MaxInt32
 		for _, fs := range fabricScan {
 			log.Debugf("DeviceName %s, Priority %d, NUMA node %d\n", fs.DeviceName, fs.Priority, fs.NUMANode)
-			if (fs.Priority < priority) {
+			if fs.Priority < priority {
 				priority = fs.Priority
 				deviceName = fs.DeviceName
 			}
