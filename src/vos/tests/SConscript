@@ -17,9 +17,9 @@ def scons():
 
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
                     denv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',
-                    'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c',
-                    'vts_array.c', 'vts_pm.c',
-                    '../../container/srv_csum_recalc.c']
+                    'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
+                    'vts_pm.c', 'vts_ts.c', '../../container/srv_csum_recalc.c',
+                    'vts_mvcc.c']
     vos_tests = daos_build.program(vtsenv, 'vos_tests', vos_test_src,
                                    LIBS=libraries)
     denv.AppendUnique(CPPPATH=["../../common/tests"])

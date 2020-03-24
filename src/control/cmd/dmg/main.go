@@ -34,6 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -112,7 +113,11 @@ func (cmd *versionCmd) Execute(_ []string) error {
 }
 
 func exitWithError(log logging.Logger, err error) {
-	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
+	cmdName := path.Base(os.Args[0])
+	log.Errorf("%s: %v", cmdName, err)
+	if fault.HasResolution(err) {
+		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
+	}
 	os.Exit(1)
 }
 

@@ -67,7 +67,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) error {
 
 // addRankPrefix is a hack, but don't want to modify the hostlist library to
 // accept invalid hostnames.
-func addRankPrefix(rank uint32) string {
+func addRankPrefix(rank system.Rank) string {
 	return fmt.Sprintf("r-%d", rank)
 }
 
@@ -148,8 +148,8 @@ type systemQueryCmd struct {
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	ranks, err := common.ParseInts(cmd.Ranks)
-	if err != nil {
+	var ranks []uint32
+	if err := common.ParseNumberList(cmd.Ranks, &ranks); err != nil {
 		return errors.Wrap(err, "parsing input ranklist")
 	}
 
