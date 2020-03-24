@@ -23,10 +23,8 @@
 """
 from __future__ import print_function
 
-import avocado
-
 from ior_test_base import IorTestBase
-from test_utils import TestPool
+from test_utils_pool import TestPool
 
 
 class NvmeIo(IorTestBase):
