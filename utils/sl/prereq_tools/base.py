@@ -822,7 +822,8 @@ class PreReqComponent():
         self.__env.AppendUnique(LINKFLAGS=["-static-intel",
                                            "-diag-disable=10237"])
         self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
-                                         "-diag-disable:188"])
+                                         "-diag-disable:188",
+                                         "-diag-disable:1338"])
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
