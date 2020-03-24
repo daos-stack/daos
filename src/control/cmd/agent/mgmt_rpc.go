@@ -45,10 +45,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap               string
-	tcfg             *security.TransportConfig
-	cachedAttachInfo bool
-	resmgmtpb        []byte
+	ap                string
+	tcfg              *security.TransportConfig
+	cachedAttachInfo  bool
+	resmgmtpb         []byte
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
