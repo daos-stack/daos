@@ -65,7 +65,7 @@ func TestSystemCommands(t *testing.T) {
 		{
 			"system stop with no arguments",
 			"system stop",
-			"ConnectClients SystemStop-{true true [] false}",
+			"ConnectClients SystemStop-{true true [] true}",
 			nil,
 		},
 		{
