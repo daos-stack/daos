@@ -219,6 +219,32 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
+			"Reintegrate a target with single target idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate a target with multiple idx",
+			"pool reintegrate --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolReintegrate-%+v", &client.PoolReintegrateReq{
+					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Rank:      0,
+					Targetidx: []uint32{1, 2, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
