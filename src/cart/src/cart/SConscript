@@ -92,10 +92,9 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=['#/src/cart'])
+    denv.AppendUnique(CPPPATH=['#/src/cart/src/include'])
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
-    denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
     cart_targets = denv.SharedObject(SRC)
 
@@ -115,7 +114,7 @@ def scons():
     cart_lib = denv.SharedLibrary('libcart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
     denv.Requires(cart_lib, [swim_targets, gurt_lib])
-    denv.InstallVersionedLib('$PREFIX/lib/', cart_lib,
+    denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)

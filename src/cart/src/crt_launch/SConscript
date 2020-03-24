@@ -63,11 +63,10 @@ def scons():
             return
         prereqs.require(tenv, 'ompi')
 
-    tenv.AppendUnique(CPPPATH=['#/src/cart'])
+    tenv.AppendUnique(CPPPATH=['#/src/cart/src/cart'])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart'])
-    tenv.AppendUnique(RPATH="$PREFIX/lib")
+    tenv.AppendUnique(LIBPATH=['#/src/cart/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
     crt_launch = tenv.Program(CRT_LAUNCH)

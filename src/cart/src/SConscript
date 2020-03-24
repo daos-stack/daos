@@ -48,7 +48,12 @@ def scons():
 
     Import('env')
 
-    env.Append(CPPPATH=['#src/include'])
+    # There is probably a better way to do this but let's get it linking first
+    env.AppendUnique(LIBPATH=[Dir('cart')])
+    env.AppendUnique(LIBPATH=[Dir('gurt')])
+    env.AppendUnique(RPATH=[Dir('cart')])
+    env.AppendUnique(RPATH=[Dir('gurt')])
+    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('include', 'cart', header))
