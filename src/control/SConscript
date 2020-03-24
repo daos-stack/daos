@@ -139,10 +139,20 @@ def scons():
     # Version-controlled DAOS Go source directory src/control
     gosrc = Dir('.').srcnode().abspath
 
-    prereqs.require(denv, 'cart')
+    prereqs.require(denv, 'cart', 'ofi', 'hwloc')
 
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$CART_PREFIX/include"),
+    denv.AppendENVPath("CGO_CFLAGS",
+                       denv.subst("-I$CART_PREFIX/include "
+                                  "-I$HWLOC_PREFIX/include "
+                                  "-I$OFI_PREFIX/include"),
                        sep=" ")
+
+    cgolibdirs = denv.subst("-L$PREFIX/lib64 "
+                            "-L$HWLOC_PREFIX/lib -L$OFI_PREFIX/lib "
+                            "$_RPATH")
+
+
+    denv.AppendENVPath("CGO_LDFLAGS", cgolibdirs, sep=" ")
 
     agentbin = install_go_bin(denv, gosrc, None, "agent", "daos_agent")
     dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
@@ -159,6 +169,7 @@ def scons():
                             "-L$PREFIX/lib64 -L$SPDK_PREFIX/lib "
                             "-L$HWLOC_PREFIX/lib -L$OFI_PREFIX/lib "
                             "-L$ISAL_PREFIX/lib $_RPATH")
+
     # Explicitly link RTE & SPDK libs for CGO access.
     senv.AppendENVPath("CGO_LDFLAGS", cgolibdirs + \
                        " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev" + \

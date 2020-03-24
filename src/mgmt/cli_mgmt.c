@@ -302,6 +302,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs,
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
+	req.numa = 1; // to be replaced by this client's numa node
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {

@@ -61,6 +61,7 @@ import "C"
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"unsafe"
@@ -1103,4 +1104,60 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// DetectNetworkInterface scans the fabric to find the highest performance network interface
+// matching the provider and NUMA node.  If no devices match the criteria then the NUMA node is ignored.
+func DetectNetworkInterface(provider string, numaNode uint32) (string, string, error) {
+	var deviceName string
+	var domain string
+
+	if provider == "" {
+		return "", "", errors.Errorf("no provider specified")
+	}
+
+	fabricScan, err := ScanFabric(provider)
+	if err != nil {
+		return "", "", errors.Wrapf(err, "unable to perform fabric scan")
+	}
+
+	priority := math.MaxInt32
+	for _, fs := range fabricScan {
+		if uint32(fs.NUMANode) != numaNode {
+			continue
+		}
+		log.Debugf("DeviceName %s, Priority %d\n", fs.DeviceName, fs.Priority)
+		if (fs.Priority < priority) {
+			priority = fs.Priority
+			deviceName = fs.DeviceName
+		}
+	}
+
+	if deviceName == "" {
+		log.Debugf("No matching device found for provider %s on NUMA node %d.  Scanning all NUMA nodes.", provider, numaNode)
+		priority = math.MaxInt32
+		for _, fs := range fabricScan {
+			log.Debugf("DeviceName %s, Priority %d, NUMA node %d\n", fs.DeviceName, fs.Priority, fs.NUMANode)
+			if (fs.Priority < priority) {
+				priority = fs.Priority
+				deviceName = fs.DeviceName
+			}
+		}
+	}
+
+	log.Debugf("Best device found for provider %s is %s on NUMA node %d", provider, deviceName, numaNode)
+
+	// by default, the domain is the deviceName
+	domain = deviceName
+
+	if strings.HasPrefix(provider, "ofi+verbs") {
+		deviceAlias, err := GetDeviceAlias(deviceName)
+		if err != nil {
+			log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, deviceName)
+		} else {
+			domain = deviceAlias
+			log.Debugf("OFI_DOMAIN has been detected as: %s", domain)
+		}
+	}
+	return deviceName, domain, nil
 }

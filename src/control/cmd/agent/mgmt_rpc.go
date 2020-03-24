@@ -33,6 +33,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -44,10 +45,10 @@ type mgmtModule struct {
 	log logging.Logger
 	sys string
 	// The access point
-	ap               string
-	tcfg             *security.TransportConfig
-	cachedAttachInfo bool
-	resmgmtpb        []byte
+	ap                string
+	tcfg              *security.TransportConfig
+	cachedAttachInfo  bool
+	resmgmtpb         []byte
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
@@ -102,6 +103,19 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
+
+	if resp.Provider == "" {
+		return nil, errors.Errorf("GetAttachInfo %s %v contained no provider.", mod.ap, *req)
+	}
+
+	mod.log.Debugf("daos_server provider is: %s", resp.Provider)
+
+	resp.Interface, resp.Domain, err = netdetect.DetectNetworkInterface(resp.Provider, req.Numa)
+	if err != nil {
+		return nil, errors.Errorf("GetAttachInfo %s %v failure in detectNetworkInterface: %v", mod.ap, *req, err)
+	}
+
+	mod.log.Infof("Provider: %s, NUMA node: %d, auto-detected network device %s and domain: %s", resp.Provider, req.Numa, resp.Interface, resp.Domain)
 
 	mod.resmgmtpb, err = proto.Marshal(resp)
 	if err != nil {
