@@ -68,8 +68,8 @@ class LlnlMpi4pyHdf5(TestWithServers):
         try:
             # running tests
             self.mpio.run_llnl_mpi4py_hdf5(
-                self.hostfile_clients, self.pool.uuid, test_repo, test_name,
-                client_processes)
+                self.hostfile_clients, self.pool.uuid, self.pool.svc_ranks,
+                test_repo, test_name, client_processes)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 

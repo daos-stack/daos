@@ -45,56 +45,84 @@ import org.slf4j.LoggerFactory;
  *
  * <p>
  * Before instantiating this class, we need to do some configuration visible to
- * Hadoop. See below table for all mandatory and optional configuration items.
+ * Hadoop. They are configured in daos-site.xml. See below table for
+ * all mandatory and optional configuration items.
  *
  * <table>
- * <th><td>Item</td><td>Default</td><td>Range</td><td>Mandatory</td><td>Description</td></th>
+ * <thead>
+ *   <tr>
+ *   <td>Item</td>
+ *   <td>Default</td>
+ *   <td>Range</td>
+ *   <td>mandatory</td>
+ *   <td>Description</td>
+ *   </tr>
+ * </thead>
+ * <tbody>
  * <tr>
- * <td>{@link Constants#DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
+ *   <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_POOL_UUID}</td>
+ *   <td></td>
+ *   <td></td>
+ *   <td>true</td>
+ *   <td>UUID of DAOS pool</td>
+ * </tr>
+ * <tr>
+ *   <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_CONTAINER_UUID}</td>
+ *   <td></td>
+ *   <td></td>
+ *   <td>true</td>
+ *   <td>UUID od DAOS container which created with "--type posix"</td>
+ * </tr>
+ * <tr>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_READ_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
  * <td>false</td>
  * <td>size of direct buffer for reading data from DAOS</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} - {@link Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
  * <td>false</td>
  * <td>size of direct buffer for writing data to DAOS</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_BLOCK_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_BLOCK_SIZE} - {@link Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_BLOCK_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
+ * <td>false</td>
  * <td>size for splitting large file into blocks when read by Hadoop</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_CHUNK_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_CHUNK_SIZE} - {@link Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#MINIMUM_DAOS_CHUNK_SIZE} -
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
+ * <td>false</td>
  * <td>size of DAOS file chunk</td>
  * </tr>
  * <tr>
- * <td>{@link Constants#DAOS_PRELOAD_SIZE}</td>
- * <td>{@link Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
- * <td>{@link Constants#MINIMUM_DAOS_PRELOAD_SIZE} - {@link Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DAOS_PRELOAD_SIZE}</td>
+ * <td>{@value com.intel.daos.hadoop.fs.Constants#DEFAULT_DAOS_PRELOAD_SIZE}</td>
+ * <td> maximum is
+ * {@value com.intel.daos.hadoop.fs.Constants#MAXIMUM_DAOS_PRELOAD_SIZE}</td>
+ * <td>false</td>
  * <td>size for pre-loading more than requested data from DAOS into internal buffer when read</td>
  * </tr>
- * <tr>
- * <td>{@link Constants#DAOS_BUFFERED_READ_ENABLED}</td>
- * <td>true</td>
- * <td>true or false</td>
- * <td>true for pre-loading more than requested data. false for loading exactly requested data</td>
- * </tr>
+ * </tbody>
  * </table>
  *
- * <p>
+ * <pre>
  * User can use below statement to make their configuration visible to Hadoop.
  * <code>
  * Configuration cfg = new Configuration();
  * cfg.addResource("path to your configuration file");
  * </code>
+ * </pre>
  *
  * <p>
  * To get instance of this class via Hadoop FileSystem, please refer to the package description.
@@ -106,36 +134,57 @@ public class DaosFileSystem extends FileSystem {
   private DaosFsClient daos;
   private int readBufferSize;
   private int preLoadBufferSize;
-  private boolean bufferedReadEnabled;
   private int writeBufferSize;
   private int blockSize;
   private int chunkSize;
+
+  static {
+    if (ShutdownHookManager.removeHook(DaosFsClient.FINALIZER)) {
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosFsClient.FINALIZER, 0);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
+      }
+    } else {
+      LOG.error("failed to relocate daos finalizer");
+    }
+  }
 
   @Override
   public void initialize(URI name, Configuration conf)
           throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("DaosFileSystem initialize");
+      LOG.debug("DaosFileSystem initializing");
     }
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
     if (StringUtils.isEmpty(name.getAuthority())) {
       throw new IllegalArgumentException("authority (ip:port) cannot be empty. we need it to identify a " +
-              "unique DAOS File System");
+              "unique DAOS File System.");
+    }
+    String[] ipPort = name.getAuthority().split(":");
+    if (ipPort.length != 2 || StringUtils.isEmpty(ipPort[0]) || StringUtils.isEmpty(ipPort[1])) {
+      throw new IllegalArgumentException("authority should be in format ip:port. No colon in ip or port");
     }
 
+    try {
+      if (Integer.valueOf(ipPort[1]) < Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT)) {
+        throw new IllegalArgumentException("container key " + ipPort[1] + " should be no less than " +
+                Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
+      }
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("container key should be a integer. " + ipPort[1]);
+    }
+
+    conf = DaosConfig.getInstance().parseConfig(ipPort[0], ipPort[1], conf);
     super.initialize(name, conf);
 
     try {
-
       this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
       this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
       this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
       this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
       this.preLoadBufferSize = conf.getInt(Constants.DAOS_PRELOAD_SIZE, Constants.DEFAULT_DAOS_PRELOAD_SIZE);
-      this.bufferedReadEnabled = conf.getBoolean(Constants.DAOS_BUFFERED_READ_ENABLED,
-              Constants.DEFAULT_BUFFERED_READ_ENABLED);
 
       checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE,
               "internal read buffer size should be no less than ");
@@ -145,8 +194,6 @@ public class DaosFileSystem extends FileSystem {
               "block size should be no less than ");
       checkSizeMin(chunkSize, Constants.MINIMUM_DAOS_CHUNK_SIZE,
               "daos chunk size should be no less than ");
-      checkSizeMin(preLoadBufferSize, Constants.MINIMUM_DAOS_PRELOAD_SIZE,
-              "preload buffer size should be no less than ");
 
       checkSizeMax(readBufferSize, Constants.MAXIMUM_DAOS_READ_BUFFER_SIZE,
               "internal read buffer size should not be greater than ");
@@ -165,17 +212,17 @@ public class DaosFileSystem extends FileSystem {
       String poolUuid = conf.get(Constants.DAOS_POOL_UUID);
       if (StringUtils.isEmpty(poolUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_UUID +
-                " is null , need to set up " + Constants.DAOS_POOL_UUID + " in hdfs.xml .");
+                " is null , need to set " + Constants.DAOS_POOL_UUID);
       }
       String contUuid = conf.get(Constants.DAOS_CONTAINER_UUID);
       if (StringUtils.isEmpty(contUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_CONTAINER_UUID +
-                " is null, need to set up " + Constants.DAOS_CONTAINER_UUID + " in hdfs.xml .");
+                " is null, need to set " + Constants.DAOS_CONTAINER_UUID);
       }
       String svc = conf.get(Constants.DAOS_POOL_SVC);
       if (StringUtils.isEmpty(svc)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_SVC +
-                " is null, need to set up " + Constants.DAOS_POOL_SVC + " in hdfs.xml .");
+                " is null, need to set " + Constants.DAOS_POOL_SVC);
       }
 
       // daosFSclient build
@@ -186,9 +233,15 @@ public class DaosFileSystem extends FileSystem {
       //mkdir workingDir in DAOS
       daos.mkdir(workingDir.toUri().getPath(), true);
       setConf(conf);
+      LOG.info("DaosFileSystem initialized");
     } catch (IOException e) {
       throw new IOException("failed to initialize " + this.getClass().getName(), e);
     }
+  }
+
+  @Override
+  public int getDefaultPort() {
+    return Integer.valueOf(Constants.DAOS_CONFIG_CONTAINER_KEY_DEFAULT);
   }
 
   private void checkSizeMin(int size, int min, String msg) {
@@ -218,6 +271,17 @@ public class DaosFileSystem extends FileSystem {
     return uri;
   }
 
+  /**
+   * This method make sure schema and authority are prepended to path.
+   * @param p
+   * @return path with schema and authority
+   * @throws IOException
+   */
+  @Override
+  public Path resolvePath(final Path p) throws IOException {
+    return p.makeQualified(getUri(), this.getWorkingDirectory());
+  }
+
   @Override
   public FSDataInputStream open(
           Path f,
@@ -232,7 +296,7 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, preLoadBufferSize, bufferedReadEnabled));
+            file, statistics, readBufferSize, preLoadBufferSize));
   }
 
   @Override
@@ -313,7 +377,6 @@ public class DaosFileSystem extends FileSystem {
     }
 
     DaosFile file = daos.getFile(f.toUri().getPath());
-
     final List<FileStatus> result = Lists.newArrayList();
     try {
       if (file.isDirectory()) {
@@ -356,11 +419,16 @@ public class DaosFileSystem extends FileSystem {
       LOG.debug("DaosFileSystem mkdirs: Making directory = {} ", f.toUri().getPath());
     }
     String key = f.toUri().getPath();
-
     daos.mkdir(key, com.intel.daos.client.Constants.FILE_DEFAULT_FILE_MODE, true);
     return true;
   }
 
+  /**
+   * get DAOS file status with detailed info, like modification time, access time, names.
+   * @param f
+   * @return file status with times and username and groupname
+   * @throws IOException
+   */
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
     if (LOG.isDebugEnabled()) {
@@ -384,10 +452,17 @@ public class DaosFileSystem extends FileSystem {
     if (!file.exists()) {
       throw new FileNotFoundException(file + "doesn't exist");
     }
-
     StatAttributes attributes = file.getStatAttributes();
-    return new FileStatus(attributes.getLength(), !attributes.isFile(), 1,
-            attributes.isFile() ? blockSize : 0, DaosUtils.toMilliSeconds(attributes.getModifyTime()), path);
+    return new FileStatus(attributes.getLength(),
+            !attributes.isFile(),
+            1,
+            attributes.isFile() ? blockSize : 0,
+            DaosUtils.toMilliSeconds(attributes.getModifyTime()),
+            DaosUtils.toMilliSeconds(attributes.getAccessTime()),
+            null,
+            attributes.getUsername(),
+            attributes.getGroupname(),
+            path);
   }
 
   @Override
@@ -408,13 +483,13 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem close");
     }
+    super.close();
     if (daos != null) {
       daos.disconnect();
     }
-    super.close();
   }
 
-  public boolean isBufferedReadEnabled() {
-    return bufferedReadEnabled;
+  public boolean isPreloadEnabled() {
+    return preLoadBufferSize > 0;
   }
 }

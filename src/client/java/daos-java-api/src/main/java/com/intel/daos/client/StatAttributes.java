@@ -39,6 +39,8 @@ import java.nio.ByteOrder;
  * * struct timespec st_mtim;   (16 bytes)
  * * struct timespec st_ctim;   (16 bytes)
  * * file      boolean          (1 byte)
+ * * username string            (32 bytes max)
+ * * groupname string           (32 bytes max)
  *
  * <p>
  * This Java representative adds two more fields, object id and file (is file).
@@ -67,6 +69,10 @@ public class StatAttributes {
 
   private final boolean file;
 
+  private final String username;
+
+  private final String groupname;
+
   private static final ByteOrder DEFAULT_ORDER = ByteOrder.nativeOrder();
 
   protected StatAttributes(ByteBuffer buffer) {
@@ -82,6 +88,18 @@ public class StatAttributes {
     modifyTime = new TimeSpec(buffer.getLong(), buffer.getLong());
     createTime = new TimeSpec(buffer.getLong(), buffer.getLong());
     file = buffer.get() > 0;
+    username = getName(buffer);
+    groupname = getName(buffer);
+  }
+
+  private String getName(ByteBuffer buffer) {
+    int len = buffer.getInt();
+    if (len > 0) {
+      byte[] bytes = new byte[len];
+      buffer.get(bytes);
+      return new String(bytes);
+    }
+    return "";
   }
 
   public int getMode() {
@@ -128,6 +146,14 @@ public class StatAttributes {
     return file;
   }
 
+  public String getUsername() {
+    return username;
+  }
+
+  public String getGroupname() {
+    return groupname;
+  }
+
   /**
    * buffer size in bytes to hold all fields in binary.
    * see the class description for size of each field.
@@ -135,7 +161,7 @@ public class StatAttributes {
    * @return total buffer size
    */
   public static int objectSize() {
-    return 4 * 8 + 3 * 4 + 3 * 16 + 1; //93
+    return 4 * 8 + 3 * 4 + 3 * 16 + 1 + 64; //157
   }
 
   /**

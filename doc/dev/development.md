@@ -23,7 +23,7 @@ Installing the components into seperate directories allow upgrading the
 components individually by replacing --build-deps=yes with
 --update-prereq={component\_name}. This requires a change to the environment
 configuration from before. For automated environment setup, source
-scons_local/utils/setup_local.sh.
+utils/sl/utils/setup_local.sh.
 
 ```bash
 ARGOBOTS=${daos_prefix_path}/opt/argobots
@@ -138,10 +138,12 @@ Protobuf compiler compatible with proto3 syntax.
 
 The recommended installation method is to clone the git repositories, check out
 the tagged releases noted below, and install from source. Later versions may
-work, but are not guaranteed.
+work, but are not guaranteed.  You may encounter installation errors when
+building from source relating to insufficient permissions.  If that occurs,
+you may try relocating the repo to /var/tmp/ in order to build and install from there.
 
-- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.5.1. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
-- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.1. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
+- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
+- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
 - gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) v1.3.4. **Must match the proto version in
 src/control/go.mod.** Install the specific version using GIT_TAG instructions
 [here](https://github.com/golang/protobuf/blob/master/README.md).
