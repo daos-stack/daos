@@ -1145,8 +1145,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERT(ext1_covers_ext2(&mw->mw_ext, &lgc_ent->le_ext));
 		D_ASSERT(phy_ent->pe_ref > 0);
-		phy_ent->pe_ref--;
-		phy_ent->pe_trunc_head = true;
+		if (!phy_ent->pe_retain) {
+			phy_ent->pe_ref--;
+			phy_ent->pe_trunc_head = true;
+		}
 	}
 	mw->mw_lgc_cnt = 0;
 
@@ -1185,8 +1187,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 
 		/* Physical entry is in window */
-		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi ||
-						 phy_ent->pe_retain) {
+		if (rect.rc_ex.ex_hi <= mw->mw_ext.ex_hi) {
 			d_list_del(&phy_ent->pe_link);
 			D_FREE_PTR(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);

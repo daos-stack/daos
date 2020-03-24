@@ -3052,9 +3052,8 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 			csum->cs_buf_len, csum_buf_len);
 	} else {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
-		if (csum_bufp != NULL) {
+		if (csum_bufp != NULL)
 			*csum_bufp = desc->pt_csum;
-		}
 	}
 }
 
