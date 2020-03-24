@@ -18,7 +18,7 @@ def scons():
     dc_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
     libdaos = daos_build.library(env, 'daos', dc_tgts,
                                  SHLIBVERSION=API_VERSION,
-                                 LIBS=['daos_common', 'cart', 'gurt'])
+                                 LIBS=['daos_common'])
     if hasattr(env, 'InstallVersionedLib'):
         env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
                                 SHLIBVERSION=API_VERSION)
