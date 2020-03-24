@@ -23,7 +23,7 @@ Installing the components into seperate directories allow upgrading the
 components individually by replacing --build-deps=yes with
 --update-prereq={component\_name}. This requires a change to the environment
 configuration from before. For automated environment setup, source
-scons_local/utils/setup_local.sh.
+utils/sl/utils/setup_local.sh.
 
 ```bash
 ARGOBOTS=${daos_prefix_path}/opt/argobots
