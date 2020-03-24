@@ -383,7 +383,11 @@ pipeline {
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
-                                    includes: '''build/src/rdb/raft/src/tests_main,
+                                    includes: '''build/src/cart/src/utest/test_linkage,
+                                                 build/src/cart/src/utest/test_gurt,
+                                                 build/src/cart/src/utest/utest_hlc,
+                                                 build/src/cart/src/utest/utest_swim,
+                                                 build/src/rdb/raft/src/tests_main,
                                                  build/src/common/tests/btree_direct,
                                                  build/src/common/tests/btree,
                                                  build/src/common/tests/sched,
