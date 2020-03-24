@@ -843,15 +843,15 @@ class PreReqComponent():
         if compiler == 'icc':
             self._setup_intelc()
 
-        if warning_level == 'ERROR':
+        env = self.__env.Clone()
+        config = Configure(env)
+
+        if warning_level == 'error':
             if compiler == 'icc':
                 warning_flag = '-Werror-all'
             else:
                 warning_flag = '-Werror'
-            env.AppendUnique(CCFLAGS=warning_flag)
-
-        env = self.__env.Clone()
-        config = Configure(env)
+            self.__env.AppendUnique(CCFLAGS=warning_flag)
 
         if self.__check_only:
             # Have to temporarily turn off dry run to allow this check.
