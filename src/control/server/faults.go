@@ -27,6 +27,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -66,10 +67,15 @@ var (
 		"no DAOS IO Servers specified in configuration",
 		"specify at least one IO Server configuration ('servers' list parameter) and restart the control server",
 	)
-	FaultServerIommuDisabled = serverFault(
+	FaultIommuDisabled = serverFault(
 		code.ServerIommuDisabled,
 		"no IOMMU detected while running as non-root user with NVMe devices",
 		"enable IOMMU per the DAOS Admin Guide or run daos_server as root",
+	)
+	FaultHarnessNotStarted = serverFault(
+		code.ServerHarnessNotStarted,
+		fmt.Sprintf("%s harness not started", DataPlaneName),
+		"retry the operation or check server logs for more details",
 	)
 )
 
@@ -95,6 +101,14 @@ func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
 	)
 }
 
+func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+	return serverFault(
+		code.ServerInsufficientFreeHugePages,
+		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
+		"reboot the system or manually clear /dev/hugepages as appropriate",
+	)
+}
+
 func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
 		code.ServerScmUnmanaged,
@@ -104,16 +118,10 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 }
 
 func FaultBdevNotFound(bdevs []string) *fault.Fault {
-	plural := ""
-	if len(bdevs) > 1 {
-		plural = "s"
-	}
-
 	return serverFault(
 		code.ServerBdevNotFound,
-		fmt.Sprintf("NVMe SSD%s %v not found", plural, bdevs),
-		fmt.Sprintf("check SSD%s %v that are specified in server config "+
-			"exist and are accessible by SPDK", plural, bdevs),
+		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
 	)
 }
 

@@ -1,0 +1,164 @@
+{
+    dlopen leaks
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    ...
+    fun:_dl_open
+}
+{
+   FI leak 0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlopen@@GLIBC_2.2.5
+   fun:fi_ini
+   ...
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}
+{
+   FI leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:ibv_fork_init
+   fun:fi_ibv_init_info
+   fun:fi_ibv_getinfo
+   ...
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}
+{
+   FI leak 2
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:ibv_fork_init
+   fun:fi_ibv_init_info
+   fun:fi_verbs_ini
+   fun:fi_ini
+   ...
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}
+{
+   FI leak 3
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:sock_rx_new_buffered_entry
+   fun:sock_pe_progress_rx_pe_entry
+   fun:sock_pe_progress_rx_ctx
+   fun:sock_pe_progress_thread
+   fun:start_thread
+   fun:clone
+}
+{
+   FI leak 4
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:calloc
+   fun:sock_rx_new_buffered_entry
+   fun:sock_pe_progress_rx_pe_entry
+   fun:sock_pe_progress_rx_ctx
+   fun:sock_pe_progress_thread
+   fun:start_thread
+   fun:clone
+}
+{
+   FI leak 5
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:strdup
+   fun:fi_param_define@@FABRIC_1.0
+   fun:ofi_hook_init
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_1.2
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}
+{
+    CRYPTO leaks malloc
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    fun:malloc
+    ...
+    obj:*/libcrypto.so.1.*
+    ...
+}
+{
+    CRYPTO leaks calloc
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    fun:calloc
+    ...
+    obj:*/libcrypto.so.1.*
+    ...
+}
+{
+   PSM2 leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:sysfs_init
+   fun:_dl_init
+   obj:/usr/lib64/ld-2.17.so
+}
+{
+   mercury bug/leak 1
+   Memcheck:Addr4
+   fun:OPA_load_int
+   fun:hg_atomic_get32
+   fun:na_ofi_cq_process_event
+   fun:na_ofi_progress
+   fun:NA_Progress
+}
+{
+   mercury bug/leak 2
+   Memcheck:Addr8
+   fun:na_ofi_complete
+   fun:na_ofi_cq_process_event
+   fun:na_ofi_progress
+   fun:NA_Progress
+}
+{
+   orterun --mca pml ob1 leak
+   Memcheck:Param
+   socketcall.sendto(msg)
+   fun:send
+   fun:mca_btl_tcp_send_blocking
+   obj:/usr/lib64/openmpi3/lib/openmpi/mca_btl_tcp.so
+   fun:opal_libevent2022_event_base_loop
+   fun:opal_progress
+   ...
+}
+{
+   libfabric leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:ofi_rbmap_insert
+   fun:ofi_mr_map_insert
+   fun:sock_regattr
+   fun:sock_reg
+   fun:fi_mr_reg
+   fun:na_ofi_domain_open
+   fun:na_ofi_initialize
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}

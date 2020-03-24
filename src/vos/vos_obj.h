@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <daos/lru.h>
 #include "vos_layout.h"
 #include "vos_ilog.h"
+#include "vos_ts.h"
 
 #define LRU_CACHE_BITS 16
 
@@ -86,6 +87,7 @@ struct vos_object {
  * \param intent	[IN]		The request intent.
  * \param visible_only	[IN]		Return the object only if it's visible
  * \param obj_p		[OUT]		Returned object cache reference.
+ * \param ts_set	[IN]		Timestamp set
  *
  * \return	0			The object is visible or, if
  *					\p visible_only is false, it has
@@ -98,7 +100,8 @@ struct vos_object {
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
-	     uint32_t intent, bool visible_only, struct vos_object **obj_p);
+	     uint32_t intent, bool visible_only, struct vos_object **obj_p,
+	     struct vos_ts_set *ts_set);
 
 /**
  * Release the object cache reference.
@@ -178,13 +181,15 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  * \param epoch [IN]	Epoch for the lookup
  * \param log   [IN]	Add entry to ilog
  * \param obj	[OUT]	Direct pointer to VOS object
+ * \param ts_set[IN]	Timestamp sets
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj);
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj,
+		  struct vos_ts_set *ts_set);
 
 /**
  * Find an enty in the obj_index by @oid
@@ -194,20 +199,22 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param obj	[OUT]	Direct pointer to VOS object
+ * \param ts_set[IN]	Timestamp sets
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    struct vos_obj_df **obj);
+	    struct vos_obj_df **obj, struct vos_ts_set *ts_set);
 
 /**
  * Punch an object from the OI table
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj);
+	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj,
+	     struct vos_ilog_info *info, struct vos_ts_set *ts_set);
 
 
 /** delete an object from OI table */

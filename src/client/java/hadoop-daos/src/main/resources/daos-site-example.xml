@@ -1,0 +1,83 @@
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>daos://default:1</value>
+    <description>Unique DAOS server URI which follows standard URI format, schema://ip:port.
+      For now, ip and port are not actually used by DAOS to connect to DAOS server since DAOS uses shared file
+      to connect to server. Instead ip and port here are used for representing pool uuid and container uuid on
+      which DAOS FS mounted. To make it flexible, ip and port are not real pool uuid and container  uuid, but
+      keys which are mapped to real uuids. Here is the convention.
+
+      IP:
+      default means value of "fs.daos.pool.uuid".
+      pkey means value of "pkey.fs.daos.pool.uuid".
+
+      Port:
+      1 means value of "fs.daos.container.uuid".
+      ckey (positive integer) means value of "cckey.fs.daos.container.uuid". (additional c due to  ckey is integer)
+
+      Other configuration (fs.daos.*) values will be read first from pkeycckey.fs.daos.* and fall back to default
+      fs.daos.*.
+
+      For example,
+      daos://default:1 uses default values of "fs.daos.pool.uuid" and "fs.daos.container.uuid". And read other
+      default configurations.
+      daos://pool1:2 uses values of "pool1.fs.daos.pool.uuid" and "c2.fs.daos.container.uuid". And try to read
+      other configurations from pool1c2.fs.daos.* first and fall back to defaults.
+    </description>
+  </property>
+  <property>
+    <name>fs.daos.pool.uuid</name>
+    <value>uuid of pool</value>
+    <description>UUID of DAOS pool</description>
+  </property>
+  <property>
+    <name>fs.daos.container.uuid</name>
+    <value>uuid of container</value>
+    <description>UUID od DAOS container which created with "--type posix"</description>
+  </property>
+  <property>
+    <name>fs.daos.pool.svc</name>
+    <value>0</value>
+    <description>service list separated by ":" if more than one service</description>
+  </property>
+  <property>
+    <name>fs.daos.read.buffer.size</name>
+    <value>8388608</value>
+    <description>size of direct buffer for reading data from DAOS. Default is 8m.
+      Value range is 64k - 2g.
+    </description>
+  </property>
+  <property>
+    <name>fs.daos.write.buffer.size</name>
+    <value>8388608</value>
+    <description>size of direct buffer for writing data to DAOS. Default is 8m.
+      Value range is 64k - 2g.
+    </description>
+  </property>
+  <property>
+    <name>fs.daos.block.size</name>
+    <value>134217728</value>
+    <description>
+      size for splitting large file into blocks when read by Hadoop. Default is 128m.
+      Value range is 16m - 2m.
+    </description>
+  </property>
+  <property>
+    <name>fs.daos.chunk.size</name>
+    <value>1048576</value>
+    <description>
+      size of DAOS file chunk. Default is 1m.
+      Value range is 4k - 2g.
+    </description>
+  </property>
+  <property>
+    <name>fs.daos.preload.size</name>
+    <value>4194304</value>
+    <description>
+      size for pre-loading more than requested data from DAOS into internal buffer when read.
+      value should not be greater than "fs.daos.read.buffer.size".
+      Maximum is 2g.
+    </description>
+  </property>
+</configuration>
