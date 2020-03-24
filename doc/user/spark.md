@@ -1,9 +1,11 @@
 #Get Started with DAOS Hadoop Filesystem
+
 Here, we describe the steps required to build and deploy the DAOS Hadoop filesystem, and the configurations to access
 DAOS in Spark. We assume DAOS servers and agents have already been deployed in the environment, otherwise they can be
 deployed by following the [DAOS installation guide](https://daos-stack.github.io/admin/installation/).
 
 ##Build DAOS Hadoop Filesystem
+
 The DAOS DFS Java API and Hadoop filesystem implementation have been merged into DAOS repository. Below are the steps
 to build the java jar files for the DFS Java API and DAOS Hadoop filesystem. These jar files are required when running
 Spark. You can ignore this section if you already have the pre-built jars.
@@ -19,6 +21,7 @@ Spark. You can ignore this section if you already have the pre-built jars.
 After build, the package daos-java-<version>-assemble.tgz will be available under distribution/target.
 
 ##Deploy DAOS Hadoop Filesystem Jars
+
 After unzipping daos-java-<version>-assemble.tgz, you’ll get the following files.
 * daos-java-api-<version>.jar and hadoop-daos-<version>.jar
 These files need to be deployed on every compute node that runs Spark. Place them in a directory, e.g.,
@@ -29,6 +32,7 @@ The file contains DAOS configuration and needs to be properly configured with th
 few other settings. Rename it to daos-site.xml and place it in Spark’s conf ($SPARK_HOME/conf) directory.
 
 ##Configure Spark to use DAOS
+
 * To access DAOS Hadoop filesystem in Spark, add the jar files to the classpath of the Spark executor and driver. This
 can be configured in Spark’s configuration file spark-defaults.conf.
 
@@ -107,6 +111,7 @@ and "c2.fs.daos.container.uuid" to same container UUID. Then set "fs.daos.preloa
 "c2.fs.daos.preload.size" to 0.
            
 ##Access DAOS in Spark
+
 All Spark APIs that works with Hadoop filesystem will work with DAOS. We use the "daos://" URI to access files stored in
 DAOS. For example, to read people.json file from the root directory of DAOS filesystem, we can use the following pySpark
 code:
