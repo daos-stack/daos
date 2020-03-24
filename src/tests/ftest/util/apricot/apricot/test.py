@@ -35,7 +35,7 @@ from avocado import skip, TestFail
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
-import fault_config_utils
+# import fault_config_utils
 import agent_utils
 import write_host_file
 
@@ -46,6 +46,7 @@ from env_modules import load_mpi
 from distutils.spawn import find_executable
 from dmg_utils import DmgCommand
 from test_utils_pool import TestPool
+from command_utils import FaultInjection
 
 
 # pylint: disable=invalid-name
@@ -165,14 +166,17 @@ class TestWithoutServers(Test):
             os.makedirs(self.tmp)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*/')
-        if fault_list:
+        # fault_list = self.params.get("fault_list", '/run/faults/*/')
+        # if fault_list:
             # not using workdir because the huge path was messing up
             # orterun or something, could re-evaluate this later
-            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
-                                                                  fault_list,
-                                                                  None)
-            os.environ["D_FI_CONFIG"] = self.fault_file
+        #    self.fault_file = fault_config_utils.write_fault_file(self.tmp,
+        #                                                          fault_list,
+        #                                                          None)
+        #    os.environ["D_FI_CONFIG"] = self.fault_file
+
+        self.fault_injection = FaultInjection(os.path.join(self.tmp))
+        self.fault_injection.activate(self)
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)

@@ -34,7 +34,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXVizADKCoROdrFNv"
+#define TESTS "mpceXVIizADKCoROdrFNv"
 /**
  * These tests will only be run if explicity specified. They don't get
  * run if no test is specified.
@@ -47,6 +47,9 @@ enum {
 	CHECKSUM_ARG_VAL_TYPE		= 0x2713,
 	CHECKSUM_ARG_VAL_CHUNKSIZE	= 0x2714,
 	CHECKSUM_ARG_VAL_SERVERVERIFY	= 0x2715,
+	ENABLE_FAULT_ARG_VALUE		= 0x2716,
+	DISABLE_FAULT_ARG_VALUE		= 0x2717,
+	SLEEP_AFTER_FAULT		= 0x2718,
 };
 
 
@@ -78,6 +81,7 @@ print_usage(int rank)
 	print_message("daos_test -v|--rebuild_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -a|--daos_all_tests\n");
+	print_message("daos_test -I|--daos_fault_inject\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
 			"tests that are run\n");
@@ -90,6 +94,9 @@ print_usage(int rank)
 	print_message("daos_test --csum_type CSUM_TYPE\n");
 	print_message("daos_test --csum_cs CHUNKSIZE\n");
 	print_message("daos_test --csum_sv\n");
+	print_message("daos_test --enable_fault ENABLE_FAULT_ARG_VALUE\n");
+	print_message("daos_test --disable_fault DISABLE_FAULT_ARG_VALUE\n");
+	print_message("daos_test --sleep_after_fault SLEEP_AFTER_FAULT\n");
 	print_message("\n=============================\n");
 }
 
@@ -211,6 +218,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_degraded_test(rank, size);
 			break;
+		case 'I':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS fault inject tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_fault_injection(rank, size);
+			break;
 		case 'r':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS rebuild tests..");
@@ -299,6 +312,13 @@ main(int argc, char **argv)
 		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
+		{"fault_inject",	required_argument,	NULL,	'I'},
+		{"enable_fault",	required_argument,	NULL,
+						ENABLE_FAULT_ARG_VALUE},
+		{"disable_fault",	required_argument,	NULL,
+						DISABLE_FAULT_ARG_VALUE},
+		{"sleep_after_fault",	required_argument,	NULL,
+						SLEEP_AFTER_FAULT},
 		{"csum_type",	required_argument,	NULL,
 						CHECKSUM_ARG_VAL_TYPE},
 		{"csum_cs",	required_argument,	NULL,
@@ -325,7 +345,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hrNv",
+				  "ampcCdXVIizxADKeoROg:s:u:E:f:Fw:W:hrNv",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -380,6 +400,14 @@ main(int argc, char **argv)
 		case CHECKSUM_ARG_VAL_SERVERVERIFY:
 			dt_csum_server_verify = true;
 			break;
+		case ENABLE_FAULT_ARG_VALUE:
+			dt_inject_fault = atoi(optarg);
+			break;
+		case DISABLE_FAULT_ARG_VALUE:
+			dt_inject_fault = 65536;
+			break;
+		case SLEEP_AFTER_FAULT:
+			dt_inject_fault = atoi(optarg);
 		default:
 			daos_test_print(rank, "Unknown Option\n");
 			print_usage(rank);

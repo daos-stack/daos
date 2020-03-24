@@ -838,3 +838,156 @@ class Srun(JobManager):
             self.distribution.value = "cyclic"
         if hostfile is not None:
             self.nodefile.value = hostfile
+
+
+class YamlParameters(ObjectWithParameters):
+    """A class of parameters used to create a yaml file."""
+
+    def __init__(self, namespace, filename=None, title=None,
+                 other_params=None):
+        """Create a YamlParameters object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            filename (str): the yaml file to generate with the parameters
+            title (str, optional): namespace under which to place the
+                parameters when creating the yaml file. Defaults to None.
+            other_params (YamlParameters, optional): yaml parameters to
+                include with these yaml parameters. Defaults to None.
+        """
+        super(YamlParameters, self).__init__(namespace)
+        self.filename = filename
+        self.title = title
+        self.other_params = other_params
+
+    def get_params(self, test):
+        """Get values for the yaml parameters from the test yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        # Get the values for the yaml parameters defined by this class
+        super(YamlParameters, self).get_params(test)
+
+        # Get the values for the yaml parameters defined by the other class
+        if self.other_params is not None:
+            self.other_params.get_params(test)
+
+    def get_yaml_data(self):
+        """Convert parameters into a dictionary to use to write yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        if isinstance(self.other_params, YamlParameters):
+            yaml_data = self.other_params.get_yaml_data()
+        else:
+            yaml_data = {}
+        for name in self.get_param_names():
+            value = getattr(self, name).value
+            if value is not None and value is not False:
+                yaml_data[name] = value
+
+        return yaml_data if self.title is None else {self.title: yaml_data}
+
+    def create_yaml(self):
+        """Create a yaml file from the parameter values.
+
+        Raises:
+            CommandFailure: if there is an error creating the yaml file
+
+        """
+        yaml_data = self.get_yaml_data()
+        self.log.info("Writing yaml configuration file %s", self.filename)
+        try:
+            with open(self.filename, 'w') as write_file:
+                yaml_data.dump(yaml_data, write_file, default_flow_style=False)
+        except Exception as error:
+            raise CommandFailure(
+                "Error writing the yaml file {}: {}".format(
+                    self.filename, error))
+
+    def set_value(self, name, value):
+        """Set the value for a specified attribute name.
+
+        Args:
+            name (str): name of the attribute for which to set the value
+            value (object): the value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        status = False
+        setting = getattr(self, name, None)
+        if isinstance(setting, BasicParameter):
+            setting.update(value, name)
+            status = True
+        elif setting is not None:
+            setattr(self, name, value)
+            self.log.debug("Updated param %s => %s", name, value)
+            status = True
+        elif self.other_params is not None:
+            status = self.other_params.set_value(name, value)
+        return status
+
+    def get_value(self, name):
+        """Get the value of the specified attribute name.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            object: the object's value referenced by the attribute name
+
+        """
+        setting = getattr(self, name, None)
+        if isinstance(setting, BasicParameter):
+            value = setting.value
+        elif setting is not None:
+            value = setting
+        elif self.other_params is not None:
+            value = self.other_params.get_value(name)
+        else:
+            value = None
+        return value
+
+
+class FaultInjection(YamlParameters):
+    def __init__(self, fault_yaml_file):
+        super(FaultInjection, self).__init__('/run/fault_injection/*',
+                                             "fault_config")
+        self.id = BasicParameter(0, 0)
+        self.probability_x = BasicParameter(0, 0)
+        self.probability_y = BasicParameter(0, 0)
+        self.interval = BasicParameter(30, 30)
+        self.max_faults = BasicParameter(1, 1)
+        self.saved_probability = {"x": 0, "y": 0}
+
+    def get_params(self, test):
+        super(FaultInjection, self).get_params(test)
+        self.saved_probability["x"] = self.probability_x.value
+        self.saved_probability["y"] = self.probability_y.value
+        self.enable()
+
+    def enable(self):
+        self.log.info("Enabling fault injection for %s", self.id.value)
+        self.probability_x.update(self.saved_probability["x"],
+                                  "saved_probability_x")
+        self.probability_y.update(self.saved_probability["y"],
+                                  "saved_probability_y")
+
+    def activate(self):
+        self.disable()
+        os.environ["D_FI_CONFIG"] = self.filename
+        self.create_yaml()
+
+    def disable(self):
+        self.log.info("Disabling fault injection for %s", self.id.value)
+        self.probability_x.update(0, "saved_probability_x")
+        self.probability_y.update(0, "saved_probability_y")
+
+    @property
+    def enabled(self):
+        return self.probability_x.value != 0 or self.probability_y.value != 0

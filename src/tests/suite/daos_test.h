@@ -77,6 +77,10 @@ extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 
+/** Fault injection value */
+extern uint64_t dt_inject_fault;
+extern unsigned int dt_fi_sleep;
+
 /* the temporary IO dir*/
 extern char *test_io_dir;
 /* the IO conf file*/
@@ -295,6 +299,7 @@ int run_daos_fs_test(int rank, int size, int *tests, int test_size);
 int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 			     int sub_tests_size);
 int run_daos_rebuild_simple_test(int rank, int size, int *tests, int test_size);
+int run_daos_fault_injection(int rank, int size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);

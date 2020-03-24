@@ -43,6 +43,10 @@ unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
 
+/** Fault injection value */
+uint64_t dt_inject_fault;
+unsigned int dt_fi_sleep;
+
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
  * ipool (optional): import pool: store info for an existing pool to arg->pool.
