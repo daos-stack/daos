@@ -40,19 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def doc_only_change() {
-    def rc = sh script: '''git diff-tree --no-commit-id --name-only        \
-                               $(git merge-base origin/master HEAD) HEAD |
-                               grep -q -v -e "^doc$"''',
-                returnStatus: true
-
-    return rc == 1
-}
-
-def skip_stage(String stage) {
-    return commitPragma(pragma: 'Skip-' + stage).contains('true')
-}
-
+def daos_branch = "master"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -66,7 +54,10 @@ def functional_rpms  = "--exclude openmpi openmpi3 hwloc ndctl spdk-tools " +
                        "romio-tests-cart-4-daos-0 hdf5-tests-cart-4-daos-0 " +
                        "mpi4py-tests-cart-4-daos-0 testmpio-cart-4-daos-0"
 
-def rpm_test_pre = '''nodelist=(${NODELIST//,/ })
+def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
+                          exit 0
+                      fi
+                      nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
                                     jenkins@${nodelist[0]}:/tmp
                       scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
@@ -218,17 +209,16 @@ pipeline {
                 beforeAgent true
                 allOf {
                     not { branch 'weekly-testing' }
-                    not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                    expression { env.CHANGE_TARGET != 'weekly-testing' }
                 }
             }
             parallel {
                 stage('checkpatch') {
                     when {
-                        beforeAgent true
-                        allOf {
-                            expression { ! skip_stage('checkpatch') }
-                            expression { ! doc_only_change() }
-                        }
+                      beforeAgent true
+                      expression {
+                        ! commitPragma(pragma: 'Skip-checkpatch').contains('true')
+                      }
                     }
                     agent {
                         dockerfile {
@@ -239,9 +229,6 @@ pipeline {
                         }
                     }
                     steps {
-                        sh label: "Environment",
-                           script: 'echo BRANCH_NAME=' + env.BRANCH_NAME + '\n' +
-                                   'echo CHANGE_TARGET=' + env.CHANGE_TARGET
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
@@ -288,15 +275,8 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                anyOf {
-                    // always build branch landings as we depend on lastSuccessfulBuild
-                    // always having RPMs in it
-                    branch env.CHANGE_TARGET
-                    allOf {
-                        expression { ! skip_stage('build') }
-                        expression { ! doc_only_change() }
-                    }
-                }
+                // expression { skipTest != true }
+                expression { ! commitPragma(pragma: 'Skip-build').contains('true') }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -337,7 +317,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'el-7',
-                                                publish_branch: env.CHANGE_TARGET,
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -373,7 +353,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -397,6 +377,9 @@ pipeline {
                             sh label: env.STAGE_NAME,
                                script: '''rm -rf artifacts/leap15/
                                   mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
                                   make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
@@ -414,7 +397,7 @@ pipeline {
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
-                                                publish_branch: env.CHANGE_TARGET,
+                                                publish_branch: daos_branch,
                                                 repo_dir: 'artifacts/leap15/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -539,8 +522,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -600,8 +583,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -662,8 +645,8 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -723,8 +706,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -784,8 +767,8 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            branch env.CHANGE_TARGET
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            branch 'master'
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -846,8 +829,8 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            not { environment name: 'QUICKBUILD', value: 'true' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -909,20 +892,17 @@ pipeline {
         stage('Unit Test') {
             when {
                 beforeAgent true
-                allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
-                }
+                // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
+                expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
             }
             parallel {
                 stage('run_test.sh') {
                     when {
                       beforeAgent true
-                      expression { ! skip_stage('run_test') }
+                      expression {
+                        ! commitPragma(pragma: 'Skip-run_test').contains('true')
+                      }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1043,12 +1023,9 @@ pipeline {
             when {
                 beforeAgent true
                 allOf {
-                    not { environment name: 'NO_CI_TESTING', value: 'true' }
-                    // nothing to test if build was skipped
-                    expression { ! skip_stage('build') }
-                    // or it's a doc-only change
-                    expression { ! doc_only_change() }
-                    expression { ! skip_stage('test') }
+                    // expression { skipTest != true }
+                    expression { env.NO_CI_TESTING != 'true' }
+                    expression { ! commitPragma(pragma: 'Skip-test').contains('true') }
                 }
             }
             parallel {
@@ -1060,7 +1037,7 @@ pipeline {
 //                    when {
 //                        beforeAgent true
 //                        anyOf {
-//                            branch env.CHANGE_TARGET
+//                            branch 'master'
 //                            not {
 //                                // expression returns false on grep match
 //                                expression {
@@ -1119,7 +1096,9 @@ pipeline {
                 stage('Functional') {
                     when {
                         beforeAgent true
-                        expression { ! skip_stage('func-test') }
+                        expression {
+                            ! commitPragma(pragma: 'Skip-func-test').contains('true')
+                        }
                     }
                     agent {
                         label 'ci_vm9'
@@ -1199,9 +1178,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-small') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-small').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1300,9 +1283,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-medium') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-medium').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1401,9 +1388,13 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            not { environment name: 'DAOS_STACK_CI_HARDWARE_SKIP', value: 'true' }
-                            expression { ! skip_stage('func-hw-test') }
-                            expression { ! skip_stage('func-hw-test-large') }
+                            expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test').contains('true')
+                            }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-func-hw-test-large').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1502,8 +1493,10 @@ pipeline {
                         beforeAgent true
                         allOf {
                             not { branch 'weekly-testing' }
-                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
-                            expression { ! skip_stage('test-centos-rpms') }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression {
+                                ! commitPragma(pragma: 'Skip-test-centos-rpms').contains('true')
+                            }
                         }
                     }
                     agent {
@@ -1581,7 +1574,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: env.CHANGE_TARGET
+            notifyBrokenBranch branches: daos_branch
         }
     }
 }
