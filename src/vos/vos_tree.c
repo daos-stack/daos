@@ -893,6 +893,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	d_iov_t			 riov;
 	bool			 found;
 	int			 rc;
+	int			 tmprc;
 
 	/** reset the saved hash */
 	vos_kh_set(0);
@@ -936,7 +937,13 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/** Key hash already be calculated by dbtree_fetch so no need
 		 *  to pass in the key here.
 		 */
-		vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		tmprc = vos_ilog_ts_cache(ts_set, ilog, NULL, 0);
+		if (tmprc != 0) {
+			rc = tmprc;
+			D_ASSERT(tmprc == -DER_NO_PERM);
+			D_ASSERT(tclass == VOS_BTR_AKEY);
+			goto out;
+		}
 		break;
 	}
 
@@ -952,7 +959,6 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			goto out;
 		}
 		krec = rbund.rb_krec;
-
 		vos_ilog_ts_mark(ts_set, &krec->kr_ilog);
 	}
 

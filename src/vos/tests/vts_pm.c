@@ -1245,6 +1245,16 @@ cond_test(void **state)
 			VOS_OF_COND_DKEY_INSERT | VOS_OF_USE_TIMESTAMPS,
 			0, sgl, 5, "a", "foo", "b", "bar", "c",
 			"foobar", "d", "value", "e", "abc");
+
+	oid = gen_oid(0);
+	/** Test duplicate akey */
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 17, "a",
+			VOS_OF_USE_TIMESTAMPS, -DER_NO_PERM, sgl, 5, "c", "foo",
+			"c", "bar", "d", "val", "e", "flag", "f", "temp");
+	cond_updaten_op(state, arg->ctx.tc_co_hdl, oid, 17, "a",
+			VOS_OF_USE_TIMESTAMPS, -DER_NO_PERM, sgl, 5, "new",
+			"foo", "f", "bar", "d", "val", "e", "flag", "new",
+			"temp");
 }
 
 static const struct CMUnitTest punch_model_tests[] = {
