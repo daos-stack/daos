@@ -191,22 +191,26 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
-	log        logging.Logger
-	harness    *IOServerHarness
-	membership *system.Membership // if MS leader, system membership list
-	agentCfg   *AgentCfg
+	log              logging.Logger
+	harness          *IOServerHarness
+	membership       *system.Membership // if MS leader, system membership list
+	clientNetworkCfg *ClientNetworkCfg
 }
 
-func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *AgentCfg) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *system.Membership, c *ClientNetworkCfg) *mgmtSvc {
 	return &mgmtSvc{
-		log:        h.log,
-		harness:    h,
-		membership: m,
-		agentCfg:   c,
+		log:              h.log,
+		harness:          h,
+		membership:       m,
+		clientNetworkCfg: c,
 	}
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	if svc.clientNetworkCfg == nil {
+		return nil, errors.New("clientNetworkCfg is missing")
+	}
+
 	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
@@ -222,13 +226,9 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
 	}
 
-	if svc.agentCfg == nil {
-		return nil, errors.New("agentCfg in GetAttachInfo response was empty")
-	}
-
-	resp.Provider = svc.agentCfg.Provider
-	resp.CrtCtxShareAddr = svc.agentCfg.CrtCtxShareAddr
-	resp.CrtTimeout = svc.agentCfg.CrtTimeout
+	resp.Provider = svc.clientNetworkCfg.Provider
+	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
+	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
 
 	return resp, nil
 }

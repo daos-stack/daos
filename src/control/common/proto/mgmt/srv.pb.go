@@ -38,7 +38,7 @@ func (x JoinResp_State) String() string {
 	return proto.EnumName(JoinResp_State_name, int32(x))
 }
 func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{2, 0}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{2, 0}
 }
 
 // Generic response just containing DER from IO server.
@@ -53,7 +53,7 @@ func (m *DaosResp) Reset()         { *m = DaosResp{} }
 func (m *DaosResp) String() string { return proto.CompactTextString(m) }
 func (*DaosResp) ProtoMessage()    {}
 func (*DaosResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{0}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{0}
 }
 func (m *DaosResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosResp.Unmarshal(m, b)
@@ -95,7 +95,7 @@ func (m *JoinReq) Reset()         { *m = JoinReq{} }
 func (m *JoinReq) String() string { return proto.CompactTextString(m) }
 func (*JoinReq) ProtoMessage()    {}
 func (*JoinReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{1}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{1}
 }
 func (m *JoinReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinReq.Unmarshal(m, b)
@@ -163,7 +163,7 @@ func (m *JoinResp) Reset()         { *m = JoinResp{} }
 func (m *JoinResp) String() string { return proto.CompactTextString(m) }
 func (*JoinResp) ProtoMessage()    {}
 func (*JoinResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{2}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{2}
 }
 func (m *JoinResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinResp.Unmarshal(m, b)
@@ -215,7 +215,7 @@ func (m *LeaderQueryReq) Reset()         { *m = LeaderQueryReq{} }
 func (m *LeaderQueryReq) String() string { return proto.CompactTextString(m) }
 func (*LeaderQueryReq) ProtoMessage()    {}
 func (*LeaderQueryReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{3}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{3}
 }
 func (m *LeaderQueryReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LeaderQueryReq.Unmarshal(m, b)
@@ -254,7 +254,7 @@ func (m *LeaderQueryResp) Reset()         { *m = LeaderQueryResp{} }
 func (m *LeaderQueryResp) String() string { return proto.CompactTextString(m) }
 func (*LeaderQueryResp) ProtoMessage()    {}
 func (*LeaderQueryResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{4}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{4}
 }
 func (m *LeaderQueryResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LeaderQueryResp.Unmarshal(m, b)
@@ -300,7 +300,7 @@ func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
 func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoReq) ProtoMessage()    {}
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{5}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{5}
 }
 func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoReq.Unmarshal(m, b)
@@ -335,23 +335,25 @@ func (m *GetAttachInfoReq) GetNuma() uint32 {
 }
 
 type GetAttachInfoResp struct {
-	Status               int32                    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	Psrs                 []*GetAttachInfoResp_Psr `protobuf:"bytes,2,rep,name=psrs,proto3" json:"psrs,omitempty"`
-	Provider             string                   `protobuf:"bytes,3,opt,name=Provider,proto3" json:"Provider,omitempty"`
-	Interface            string                   `protobuf:"bytes,4,opt,name=Interface,proto3" json:"Interface,omitempty"`
-	Domain               string                   `protobuf:"bytes,5,opt,name=Domain,proto3" json:"Domain,omitempty"`
-	CrtCtxShareAddr      uint32                   `protobuf:"varint,6,opt,name=CrtCtxShareAddr,proto3" json:"CrtCtxShareAddr,omitempty"`
-	CrtTimeout           uint32                   `protobuf:"varint,7,opt,name=CrtTimeout,proto3" json:"CrtTimeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
+	Status int32                    `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Psrs   []*GetAttachInfoResp_Psr `protobuf:"bytes,2,rep,name=psrs,proto3" json:"psrs,omitempty"`
+	// These CaRT settings are shared with the
+	// libdaos client to aid in CaRT initialization.
+	Provider             string   `protobuf:"bytes,3,opt,name=Provider,proto3" json:"Provider,omitempty"`
+	Interface            string   `protobuf:"bytes,4,opt,name=Interface,proto3" json:"Interface,omitempty"`
+	Domain               string   `protobuf:"bytes,5,opt,name=Domain,proto3" json:"Domain,omitempty"`
+	CrtCtxShareAddr      uint32   `protobuf:"varint,6,opt,name=CrtCtxShareAddr,proto3" json:"CrtCtxShareAddr,omitempty"`
+	CrtTimeout           uint32   `protobuf:"varint,7,opt,name=CrtTimeout,proto3" json:"CrtTimeout,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
 func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp) ProtoMessage()    {}
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{6}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{6}
 }
 func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp.Unmarshal(m, b)
@@ -432,7 +434,7 @@ func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
 func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
 func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{6, 0}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{6, 0}
 }
 func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp_Psr.Unmarshal(m, b)
@@ -477,7 +479,7 @@ func (m *PrepShutdownReq) Reset()         { *m = PrepShutdownReq{} }
 func (m *PrepShutdownReq) String() string { return proto.CompactTextString(m) }
 func (*PrepShutdownReq) ProtoMessage()    {}
 func (*PrepShutdownReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{7}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{7}
 }
 func (m *PrepShutdownReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepShutdownReq.Unmarshal(m, b)
@@ -515,7 +517,7 @@ func (m *PingRankReq) Reset()         { *m = PingRankReq{} }
 func (m *PingRankReq) String() string { return proto.CompactTextString(m) }
 func (*PingRankReq) ProtoMessage()    {}
 func (*PingRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{8}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{8}
 }
 func (m *PingRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingRankReq.Unmarshal(m, b)
@@ -553,7 +555,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{9}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{9}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -593,7 +595,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_eb3b47b66b01ccce, []int{10}
+	return fileDescriptor_srv_8401beb4aed3192a, []int{10}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -650,9 +652,9 @@ func init() {
 	proto.RegisterEnum("mgmt.JoinResp_State", JoinResp_State_name, JoinResp_State_value)
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_eb3b47b66b01ccce) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_8401beb4aed3192a) }
 
-var fileDescriptor_srv_eb3b47b66b01ccce = []byte{
+var fileDescriptor_srv_8401beb4aed3192a = []byte{
 	// 498 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x53, 0xdd, 0x6e, 0x13, 0x3d,
 	0x10, 0xfd, 0xb2, 0x9b, 0xbf, 0x9d, 0xa8, 0x4d, 0x3e, 0xab, 0x42, 0xab, 0x52, 0xa1, 0x60, 0x81,

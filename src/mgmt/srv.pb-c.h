@@ -176,10 +176,29 @@ struct  _Mgmt__GetAttachInfoResp
    */
   size_t n_psrs;
   Mgmt__GetAttachInfoResp__Psr **psrs;
+  /*
+   * These CaRT settings are shared with the
+   * libdaos client to aid in CaRT initialization.
+   */
+  /*
+   * CaRT OFI provider
+   */
   char *provider;
+  /*
+   * CaRT OFI_INTERFACE
+   */
   char *interface;
+  /*
+   * CaRT OFI_DOMAIN for given OFI_INTERFACE
+   */
   char *domain;
+  /*
+   * CaRT CRT_CTX_SHARE_ADDR
+   */
   uint32_t crtctxshareaddr;
+  /*
+   * CaRT CRT_TIMEOUT
+   */
   uint32_t crttimeout;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \

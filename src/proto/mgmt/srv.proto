@@ -73,11 +73,13 @@ message GetAttachInfoResp {
 		string uri = 2;
 	}
 	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
-	string Provider = 3;
-	string Interface = 4;
-	string Domain = 5;
-	uint32 CrtCtxShareAddr = 6;
-	uint32 CrtTimeout = 7;
+				// These CaRT settings are shared with the
+				// libdaos client to aid in CaRT initialization.
+	string Provider = 3;	// CaRT OFI provider
+	string Interface = 4;	// CaRT OFI_INTERFACE
+	string Domain = 5;	// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 CrtCtxShareAddr = 6; // CaRT CRT_CTX_SHARE_ADDR
+	uint32 CrtTimeout = 7;	// CaRT CRT_TIMEOUT
 }
 
 message PrepShutdownReq {

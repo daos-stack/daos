@@ -53,9 +53,9 @@ const (
 type networkProviderValidation func(string, string) error
 type networkNUMAValidation func(string, uint) error
 
-// AgentCfg elements are used by the libdaos clients to help initialize CaRT.
+// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
 // These settings bring coherence between the client and server network configuration.
-type AgentCfg struct {
+type ClientNetworkCfg struct {
 	Provider        string
 	CrtCtxShareAddr uint32
 	CrtTimeout      uint32
