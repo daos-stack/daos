@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
  test_servers:
   - server-A
@@ -10,6 +8,7 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 16777216
+  control_method: dmg
   tests: !mux
       user_root:
         ids:
