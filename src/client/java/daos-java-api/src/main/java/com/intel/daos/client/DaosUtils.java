@@ -32,7 +32,8 @@ import java.util.regex.Pattern;
  */
 public final class DaosUtils {
 
-  public static final Pattern PAT_PATH = Pattern.compile("^(/|(/[a-zA-Z0-9_\\.-]+)|[a-zA-Z0-9_\\.-]+)+$");
+  public static final Pattern PAT_FILENAME = Pattern.compile(
+          "^[\\x{0}-\\x{2e},\\x{30}-\\x{ff}]{1," + Constants.FILE_NAME_LEN_MAX + "}$");
 
   private DaosUtils() {
   }
@@ -50,9 +51,21 @@ public final class DaosUtils {
     }
     path = path.replaceAll("\\\\{1,}", "/");
     path = path.replaceAll("/{2,}", "/");
-    Matcher m = PAT_PATH.matcher(path);
-    if (!m.matches()) {
-      throw new IllegalArgumentException("Invalid path. only characters / a-z A-Z 0-9 _ - . are valid");
+
+    if (path.length() > Constants.FILE_PATH_LEN_MAX) {
+      throw new IllegalArgumentException("path length should not exceed " + Constants.FILE_PATH_LEN_MAX);
+    }
+
+    String[] paths = path.split("/");
+    for (String p : paths) {
+      if (p == null || p.length() == 0) {
+        continue;
+      }
+      Matcher m = PAT_FILENAME.matcher(p);
+      if (!m.matches()) {
+        throw new IllegalArgumentException("Invalid file name. " +
+                "only characters with hexadecimal [x00 to xff] are valid. max length is " + Constants.FILE_NAME_LEN_MAX);
+      }
     }
     if (path.length() > 1 && path.endsWith("/")) {
       path = path.substring(0, path.length() - 1);

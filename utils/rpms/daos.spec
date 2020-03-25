@@ -5,13 +5,12 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
-Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
@@ -173,8 +172,6 @@ This is the package needed to build software with the DAOS library.
 
 %prep
 %setup -q
-%setup -q -a 1
-
 
 %build
 # remove rpathing from the build
@@ -336,6 +333,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
+- Remove scons_local as depedency
+
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12
 

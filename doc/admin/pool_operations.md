@@ -104,21 +104,26 @@ metadata, many of them are still under development. Moreover, the
 ability to modify some of those properties on an existing pool will also
 be provided in a future release.
 
-## Pool Access Control Lists
+## Access Control Lists
 
-Client user and group access for pools is controlled by 
-[Access Control Lists (ACLs)](/doc/user/acl.md). Most pool-related tasks are
-performed using the DMG administrative tool, which is authenticated by the
-administrative certificate rather than user-specific credentials.
+Client user and group access for pools is controlled by
+[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+Most pool-related tasks are performed using the DMG administrative tool, which
+is authenticated by the administrative certificate rather than user-specific
+credentials.
 
 Access-controlled client pool accesses include:
+
 * Connecting to the pool.
+
 * Querying the pool.
+
 * Creating containers in the pool.
+
 * Deleting containers in the pool.
 
-This is reflected in the set of supported 
-[pool permissions](/doc/user/acl.md#permissions).
+This is reflected in the set of supported
+[pool permissions](https://daos-stack.github.io/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -131,7 +136,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
-The ACL file format is detailed in the [User Guide](/doc/user/acl.md#acl-file).
+The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
 
 ### Displaying a pool's ACL
 
@@ -211,6 +216,7 @@ $ dmg pool query --pool <UUID>
 
 Below is the output for a pool created with SCM space only.
 
+```bash
     pool=47293abe-aa6f-4147-97f6-42a9f796d64a
     Pool 47293abe-aa6f-4147-97f6-42a9f796d64a, ntarget=64, disabled=8
     Pool space info:
@@ -222,6 +228,7 @@ Below is the output for a pool created with SCM space only.
         Total size: 0
         Free: 0, min:0, max:0, mean:0
     Rebuild done, 10 objs, 1026 recs
+```
 
 The total and free sizes are the sum across all the targets whereas
 min/max/mean gives information about individual targets. A min value
@@ -229,6 +236,7 @@ close to 0 means that one target is running out of space.
 
 The example below shows a rebuild in progress and NVMe space allocated.
 
+```bash
     pool=95886b8b-7eb8-454d-845c-fc0ae0ba5671
     Pool 95886b8b-7eb8-454d-845c-fc0ae0ba5671, ntarget=64, disabled=8
     Pool space info:
@@ -240,6 +248,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
         Total size: 56GB
         Free: 28GB, min:470MB, max:512MB, mean:509MB
     Rebuild busy, 75 objs, 9722 recs
+```
 
 Additional status and telemetry data are planned to be exported through
 the management API and tool and will be documented here once available.
@@ -250,7 +259,7 @@ the management API and tool and will be documented here once available.
 
 **To exclude a target from a pool:**
 
-```
+```bash
 $ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
 ```
 
