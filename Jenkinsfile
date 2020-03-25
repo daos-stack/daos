@@ -227,6 +227,9 @@ pipeline {
                         }
                     }
                     steps {
+                        sh label: "Environment",
+                           script: 'echo BRANCH_NAME=' + env.BRANCH_NAME + '\n' +
+                                   'echo CHANGE_TARGET=' + env.CHANGE_TARGET
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
