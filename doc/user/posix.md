@@ -156,7 +156,7 @@ Information about a container, for example the presence of a entry point between
 containers, or the pool and container uuids of the container linked to can be
 read with the following command:
 ```bash
-daos container info --svc --path <path to entry point>
+daos container query --svc --path <path to entry point>
 ```
 
 ### Enabling caching
