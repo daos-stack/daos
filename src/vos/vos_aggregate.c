@@ -1196,12 +1196,12 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		}
 
 		/* Update extent start of truncated physical entry */
-
-		D_ASSERT(!phy_ent->pe_retain);
-		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
-		phy_ent->pe_off = rect.rc_ex.ex_lo -
-				phy_ent->pe_rect.rc_ex.ex_lo;
-		phy_ent->pe_trunc_head = false;
+		if (!phy_ent->pe_retain) {
+			rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
+			phy_ent->pe_off = rect.rc_ex.ex_lo -
+					phy_ent->pe_rect.rc_ex.ex_lo;
+			phy_ent->pe_trunc_head = false;
+		}
 		leftovers++;
 	}
 	D_ASSERT(leftovers == mw->mw_phy_cnt);
