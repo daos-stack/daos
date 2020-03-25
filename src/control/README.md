@@ -12,27 +12,27 @@ run on the same host.
 
 ## Code Organization
 
-The control directory contains a "cmd" subdirectory for server, agent
+The control directory contains a "cmd" subdirectory for server, agent,
 and dmg applications. These applications import the client or server
 packages along with peripheral shared packages common, drpc, fault,
-logging and security where necessary to provide the given features.
+logging, and security where necessary to provide the given features.
 
 Specific library packages can be found in lib/ which provide access
-to native storage libraries through language bindings e.g. lib/spdk
-or specific formatting capabilities e.g. lib/hostlist or lib/txtfmt.
+to native storage libraries through language bindings, e.g. lib/spdk
+or specific formatting capabilities e.g., lib/hostlist or lib/txtfmt.
 
-The pbin package provides framework for forwarding of requests to be
+The pbin package provides a framework for forwarding of requests to be
 executed by the privileged binary `daos_admin` on behalf of `daos_server`.
 
 The provider package contains interface shims to the external environment,
 initially just to the Linux operating system.
 
-The system package encapsulates the concept of the DAOS system and
+The system package encapsulates the concept of the DAOS system, and
 it's associated membership.
 
 ## Developer Documentation
 
-Please refer to package specific README's.
+Please refer to package-specific README's.
 
 - [server](/src/control/server/README.md)
 - [godoc reference](https://godoc.org/github.com/daos-stack/daos/src/control)
