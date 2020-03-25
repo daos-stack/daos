@@ -184,16 +184,11 @@ cont_cmp(struct d_ulink *ulink, void *cmp_args)
 	return !uuid_compare(cont->vc_pool->vp_id, pkey->uuid);
 }
 
-/**
- * Container cache functions
- */
-void
-cont_free(struct d_ulink *ulink)
+static void
+cont_free_internal(struct vos_container *cont)
 {
-	struct vos_container		*cont;
-	int				 i;
+	int i;
 
-	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	D_ASSERT(cont->vc_open_count == 0);
 
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
@@ -215,6 +210,18 @@ cont_free(struct d_ulink *ulink)
 	}
 
 	D_FREE(cont);
+}
+
+/**
+ * Container cache functions
+ */
+void
+cont_free(struct d_ulink *ulink)
+{
+	struct vos_container		*cont;
+
+	cont = container_of(ulink, struct vos_container, vc_uhlink);
+	cont_free_internal(cont);
 }
 
 struct d_ulink_ops   co_hdl_uh_ops = {
@@ -460,7 +467,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 exit:
 	if (rc != 0 && cont)
-		cont_decref(cont);
+		cont_free_internal(cont);
 
 	return rc;
 }
