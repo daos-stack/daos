@@ -169,9 +169,7 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 	int                     tgt;
 	int                     current_index;
 
-	D_ASSERT(daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-		 daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK);
+	D_ASSERT(daos_obj_is_srank(oid));
 
 	/* locate rank in the pool map targets */
 	tgts = pool_map_targets(pl_poolmap);

@@ -1327,7 +1327,7 @@ insert_records(daos_obj_id_t oid, struct ioreq *req, char *data_buf,
 }
 
 static int
-iterate_records(struct ioreq *req)
+iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
 	int		key_nr;
@@ -1343,13 +1343,13 @@ iterate_records(struct ioreq *req)
 		daos_size_t		size;
 
 		number = 5;
-		enumerate_rec(DAOS_TX_NONE, "d_key", "a_rec", &size,
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
 			      &number, recxs, eprs, &anchor, true, req);
 		if (number == 0)
 			continue;
 
 		for (i = 0; i < (number - 1); i++) {
-			assert_true(size == ENUM_IOD_SIZE);
+			assert_true(size == iod_size);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1370,7 +1370,7 @@ iterate_records(struct ioreq *req)
 	return key_nr;
 }
 
-
+#define ENUM_BUF_SIZE (128 * 1024)
 /** very basic enumerate */
 static void
 enumerate_simple(void **state)
@@ -1402,9 +1402,9 @@ enumerate_simple(void **state)
 	large_key[ENUM_LARGE_KEY_BUF - 1] = '\0';
 	D_ALLOC(large_buf, ENUM_LARGE_KEY_BUF * 2);
 
-	D_ALLOC(data_buf, IO_SIZE_NVME);
+	D_ALLOC(data_buf, ENUM_BUF_SIZE);
 	assert_non_null(data_buf);
-	dts_buf_render(data_buf, IO_SIZE_NVME);
+	dts_buf_render(data_buf, ENUM_BUF_SIZE);
 
 	/**
 	 * Insert 1000 dkey records, all with the same key value and the same
@@ -1554,7 +1554,7 @@ enumerate_simple(void **state)
 	 * Insert N mixed NVMe and SCM records, all with same dkey and akey.
 	 */
 	insert_records(oid, &req, data_buf, 0);
-	key_nr = iterate_records(&req);
+	key_nr = iterate_records(&req, "d_key", "a_rec", ENUM_IOD_SIZE);
 	assert_int_equal(key_nr, ENUM_KEY_REC_NR);
 
 	/**
@@ -1562,7 +1562,7 @@ enumerate_simple(void **state)
 	 * all with same dkey and akey.
 	 */
 	insert_records(oid, &req, data_buf, 1);
-	key_nr = iterate_records(&req);
+	key_nr = iterate_records(&req, "d_key", "a_rec", ENUM_IOD_SIZE);
 	/** Records could be merged with previous updates by aggregation */
 	print_message("key_nr = %d\n", key_nr);
 
@@ -1571,10 +1571,16 @@ enumerate_simple(void **state)
 	 * all with same dkey and akey.
 	 */
 	insert_records(oid, &req, data_buf, 2);
-	key_nr = iterate_records(&req);
+	key_nr = iterate_records(&req, "d_key", "a_rec", ENUM_IOD_SIZE);
 	/** Records could be merged with previous updates by aggregation */
 	print_message("key_nr = %d\n", key_nr);
 
+	for (i = 0; i < 5; i++)
+		insert_single_with_rxnr("d_key", "a_lrec", i * 128 * 1024,
+					data_buf, 1, 128 * 1024, DAOS_TX_NONE,
+					&req);
+	key_nr = iterate_records(&req, "d_key", "a_lrec", 1);
+	print_message("key_nr = %d\n", key_nr);
 	D_FREE(small_buf);
 	D_FREE(large_buf);
 	D_FREE(large_key);
@@ -4106,8 +4112,8 @@ obj_setup_internal(void **state)
 
 	if (arg->pool.pool_info.pi_nnodes < 2)
 		dts_obj_class = OC_S1;
-	else if (arg->objclass != OC_UNKNOWN)
-		dts_obj_class = arg->objclass;
+	else if (arg->obj_class != OC_UNKNOWN)
+		dts_obj_class = arg->obj_class;
 
 	return 0;
 }

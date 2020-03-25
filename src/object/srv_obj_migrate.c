@@ -853,6 +853,7 @@ out:
 static int
 rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, d_sg_list_t *sgls)
 {
+	struct daos_oclass_attr *oca;
 	int idx = mrone->mo_iod_num;
 	int rec_cnt = 0;
 	uint64_t total_size = 0;
@@ -864,6 +865,22 @@ rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, d_sg_list_t *sgls)
 	rc = daos_iod_copy(&mrone->mo_iods[idx], iod);
 	if (rc)
 		return rc;
+
+	if (daos_oclass_is_ec(mrone->mo_oid.id_pub, &oca)) {
+		daos_recx_t *recxs;
+		int nr = 0;
+
+		rc = obj_ec_tgt_daos_off(mrone->mo_oid.id_shard,
+				     obj_ec_cell_rec_nr(oca),
+				     obj_ec_stripe_rec_nr(oca),
+				     iod->iod_recxs, iod->iod_nr,
+				     &recxs, &nr);
+		if (rc != 0)
+			return rc;
+		D_FREE(mrone->mo_iods[idx].iod_recxs);
+		mrone->mo_iods[idx].iod_recxs = recxs;
+		mrone->mo_iods[idx].iod_nr = nr;
+	}
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		rec_cnt += iod->iod_recxs[i].rx_nr;
@@ -956,7 +973,7 @@ migrate_one_queue(struct iter_obj_arg *iter_arg, daos_epoch_t epoch,
 	if (iod_eph_total == 0 || tls->mpt_version <= version ||
 	    tls->mpt_fini) {
 		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
-			" migrate ver %ui fini %d\n", iod_eph_total, version,
+			" migrate ver %u fini %d\n", iod_eph_total, version,
 			tls->mpt_version, tls->mpt_fini);
 		D_GOTO(put, rc = 0);
 	}

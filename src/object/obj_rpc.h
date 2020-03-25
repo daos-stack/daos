@@ -388,4 +388,12 @@ obj_rpc_is_migrate(crt_rpc_t *rpc)
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
 }
 
+static inline bool
+obj_is_enum_opc(uint32_t opc)
+{
+	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
+}
 #endif /* __DAOS_OBJ_RPC_H__ */

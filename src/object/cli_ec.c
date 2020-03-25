@@ -2390,3 +2390,59 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 
 	return tgt_oiods;
 }
+
+/* Get all of recxs of the specific target from the daos offset */
+int
+obj_ec_tgt_daos_off(int shard, int cell_bytes, int stripe_bytes,
+		    daos_recx_t *recxs, int nr, daos_recx_t **output_recxs,
+		    int *output_nr)
+{
+	daos_recx_t *tgt_recxs;
+	int total = 0;
+	int idx = 0;
+	int i;
+
+	*output_nr = 0;
+	for (i = 0; i < nr; i++) {
+		daos_off_t cur_off = recxs[i].rx_idx;
+		daos_off_t cur_end = cur_off + recxs[i].rx_nr;
+
+		while (cur_off < cur_end) {
+			int tgt = obj_ec_tgt_of_recx_idx(cur_off, stripe_bytes,
+							 cell_bytes);
+
+			cur_off += cell_bytes;
+			if (tgt != shard)
+				continue;
+			total++;
+		}
+	}
+
+	D_ALLOC_ARRAY(tgt_recxs, total);
+	if (tgt_recxs == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < nr; i++) {
+		daos_off_t cur_off = recxs[i].rx_idx;
+		daos_off_t cur_end = cur_off + recxs[i].rx_nr;
+
+		while (cur_off < cur_end) {
+			int tgt = obj_ec_tgt_of_recx_idx(cur_off, stripe_bytes,
+							 cell_bytes);
+
+			if (tgt != shard) {
+				cur_off += cell_bytes;
+				continue;
+			}
+			tgt_recxs[idx].rx_idx = cur_off;
+			tgt_recxs[idx].rx_nr = min(cur_end - cur_off,
+						   cell_bytes);
+			idx++;
+			cur_off += cell_bytes;
+		}
+	}
+
+	*output_nr = total;
+	*output_recxs = tgt_recxs;
+	return 0;
+}

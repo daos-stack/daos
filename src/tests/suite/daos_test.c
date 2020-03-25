@@ -323,8 +323,8 @@ main(int argc, char **argv)
 		{"dfs",		no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
+		{"obj_class",	required_argument,	NULL,	'l'},
 		{"help",	no_argument,		NULL,	'h'},
-		{"object",	required_argument,	NULL,	'X'},
 		{NULL,		0,			NULL,	0}
 	};
 
@@ -337,7 +337,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvb",
+				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbl:",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -386,9 +386,9 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
-		case 'X':
-			objclass = daos_oclass_name2id(optarg);
-			if (objclass == OC_UNKNOWN)
+		case 'l':
+			dt_obj_class = daos_oclass_name2id(optarg);
+			if (dt_obj_class == OC_UNKNOWN)
 				return -1;
 			break;
 		case CHECKSUM_ARG_VAL_TYPE:

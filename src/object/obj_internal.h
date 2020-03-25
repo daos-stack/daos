@@ -307,6 +307,13 @@ struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
 	struct dtx_id		 la_dti;
+	daos_recx_t		*la_recxs;
+	uint32_t		la_nr;
+	d_sg_list_t		*la_sgl;
+	daos_key_desc_t		*la_kds;
+	daos_anchor_t		*la_anchor;
+	daos_anchor_t		*la_akey_anchor;
+	daos_anchor_t		*la_dkey_anchor;
 };
 
 struct ec_bulk_spec {
@@ -412,6 +419,9 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+int obj_ec_tgt_daos_off(int shard, int cell_bytes, int stripe_bytes,
+			daos_recx_t *recxs, int nr, daos_recx_t **output_recxs,
+			int *output_nr);
 
 static inline bool
 obj_retry_error(int err)

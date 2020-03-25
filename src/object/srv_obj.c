@@ -1914,6 +1914,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		recursive = true;
 		enum_arg->chk_key2big = true;
 		enum_arg->need_punch = true;
+		enum_arg->copy_data_cb = vos_iter_copy;
 	}
 
 	/*
@@ -1941,7 +1942,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, NULL, &dth);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg, &dth);
+	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg,
+			   vos_iterate, &dth);
 
 	/* dss_enum_pack may return 1. */
 	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);

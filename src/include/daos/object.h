@@ -94,6 +94,8 @@ enum {
 	DAOS_OC_EC_K8P2_L1M,	/* Erasure code, 8 data cells, 2 parity cells,
 				 * cell size 1MB.
 				 */
+
+	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
 };
 
 static inline bool
@@ -115,7 +117,8 @@ daos_obj_is_srank(daos_obj_id_t oid)
 	int	oc = daos_obj_id2class(oid);
 
 	return oc == DAOS_OC_R3S_SPEC_RANK || oc == DAOS_OC_R1S_SPEC_RANK ||
-	       oc == DAOS_OC_R2S_SPEC_RANK;
+	       oc == DAOS_OC_R2S_SPEC_RANK ||
+	       oc == DAOS_OC_EC_K2P1_SPEC_RANK_L32K;
 }
 
 enum daos_io_mode {

@@ -607,18 +607,13 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	 * hand picked because there is no other way to specify a starting
 	 * location.
 	 */
-	if (daos_obj_id2class(oid) == DAOS_OC_R3S_SPEC_RANK ||
-	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
-	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
-
+	if (daos_obj_is_srank(oid)) {
 		rc = jump_map_obj_spec_place_get(jmap, oid, &target, dom_used,
 						 dom_used_length);
-
 		if (rc) {
 			D_ERROR("special oid "DF_OID" failed: rc %d\n",
 				DP_OID(oid), rc);
 			D_GOTO(out, rc);
-
 		}
 
 		layout->ol_shards[0].po_target = target->ta_comp.co_id;

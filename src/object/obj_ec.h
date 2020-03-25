@@ -287,6 +287,9 @@ struct obj_reasb_req;
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
 
+#define obj_ec_parity_off_to_daos_off(vos_off, e_len, stripe_rec_nr)	\
+	(((vos_off) / e_len) * stripe_rec_nr)
+
 /**
  * Threshold size of EC single-value layout (even distribution).
  * When record_size <= OBJ_EC_SINGV_EVENDIST_SZ then stored in one data

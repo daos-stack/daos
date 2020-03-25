@@ -570,6 +570,9 @@ crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
 	if (crt_proc_uint32_t(proc, &anchor->da_flags) != 0)
 		return -DER_HG;
 
+	if (crt_proc_uint64_t(proc, &anchor->da_sub_anchors) != 0)
+		return -DER_HG;
+
 	if (crt_proc_raw(proc, anchor->da_buf, sizeof(anchor->da_buf)) != 0)
 		return -DER_HG;
 

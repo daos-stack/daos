@@ -556,7 +556,7 @@ struct vos_rec_bundle {
  * Inline data structure for embedding the key bundle and key into an anchor
  * for serialization.
  */
-#define	EMBEDDED_KEY_MAX	96
+#define	EMBEDDED_KEY_MAX	80
 struct vos_embedded_key {
 	/** Inlined iov key references */
 	d_iov_t		ek_kiov;
