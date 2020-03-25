@@ -116,6 +116,7 @@ Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
+Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= 1.8.0
@@ -126,6 +127,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
+Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 
 %description client
