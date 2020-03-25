@@ -821,7 +821,10 @@ class PreReqComponent():
         # disable the warning about Cilk since we don't use it
         self.__env.AppendUnique(LINKFLAGS=["-static-intel",
                                            "-diag-disable=10237"])
-
+        self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
+                                         "-diag-disable:188",
+                                         "-diag-disable:2405",
+                                         "-diag-disable:1338"])
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
@@ -843,12 +846,12 @@ class PreReqComponent():
         if compiler == 'icc':
             self._setup_intelc()
 
-        if warning_level == 'ERROR':
+        if warning_level == 'error':
             if compiler == 'icc':
                 warning_flag = '-Werror-all'
             else:
                 warning_flag = '-Werror'
-            env.AppendUnique(CCFLAGS=warning_flag)
+            self.__env.AppendUnique(CCFLAGS=warning_flag)
 
         env = self.__env.Clone()
         config = Configure(env)

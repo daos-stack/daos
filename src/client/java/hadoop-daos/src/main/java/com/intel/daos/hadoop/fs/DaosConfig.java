@@ -67,6 +67,16 @@ public class DaosConfig {
   private DaosConfig() {
     defaultConfig = new Configuration(false);
     defaultConfig.addResource("daos-site.xml");
+    if (log.isDebugEnabled()) {
+      log.debug("configs from daos-site.xml");
+      Iterator<Map.Entry<String, String>> it = defaultConfig.iterator();
+      while (it.hasNext()) {
+        Map.Entry<String, String> item = it.next();
+        if (item.getKey().startsWith("fs.daos.")) {
+          log.debug(item.getKey() + "=" + item.getValue());
+        }
+      }
+    }
     String exampleFile = "daos-site-example.xml";
     try (InputStream is = this.getClass().getResourceAsStream("/" + exampleFile)) {
       Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is);
