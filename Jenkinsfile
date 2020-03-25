@@ -169,7 +169,8 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
-     env.BRANCH_NAME != env.CHANGE_TARGET)) {
+     !env.BRANCH_NAME.startsWith("release/") &&
+     env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -238,6 +239,9 @@ pipeline {
                         }
                     }
                     steps {
+                        sh label: "Environment",
+                           script: 'echo BRANCH_NAME=' + env.BRANCH_NAME + '\n' +
+                                   'echo CHANGE_TARGET=' + env.CHANGE_TARGET
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
