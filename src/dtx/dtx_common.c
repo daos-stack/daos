@@ -261,11 +261,12 @@ int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
-		 struct dtx_leader_handle *dlh)
+		 bool cond_check, struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
 	struct dtx_id		*dti_cos = NULL;
 	int			 dti_cos_count = 0;
+	uint32_t		 type = DCLT_PUNCH;
 	int			 i;
 
 	/* Single replica case. */
@@ -297,10 +298,12 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	 *	replicas can commit them before real modifications
 	 *	to avoid availability trouble.
 	 */
-	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-			intent == DAOS_INTENT_UPDATE ? DCLT_PUNCH :
-						       DCLT_PUNCH | DCLT_UPDATE,
-			DTX_THRESHOLD_COUNT, &dti_cos);
+
+	if (intent == DAOS_INTENT_PUNCH || cond_check)
+		type |= DCLT_UPDATE;
+
+	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash, type,
+					 DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_count < 0) {
 		D_FREE(dlh->dlh_subs);
 		return dti_cos_count;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ import (
 type IOServerRunner interface {
 	Start(context.Context, chan<- error) error
 	IsRunning() bool
-	Stop(bool) error
+	Signal(os.Signal) error
+	Wait() error
 	GetConfig() *ioserver.Config
 }
 
@@ -223,10 +224,16 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 	return srv.runner.Start(ctx, errChan)
 }
 
-func (srv *IOServerInstance) Stop(force bool) error {
-	return srv.runner.Stop(force)
+// Stop sends signal to stop IOServerInstance runner.
+func (srv *IOServerInstance) Stop(signal os.Signal) error {
+	if err := srv.runner.Signal(signal); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// IsStarted indicates whether IOServerInstance is in a running state.
 func (srv *IOServerInstance) IsStarted() bool {
 	return srv.runner.IsRunning()
 }
@@ -277,7 +284,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		return errors.New("nil superblock in SetRank()")
 	}
 
-	r := ioserver.NilRank
+	r := system.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
 	}
@@ -295,10 +302,10 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		} else if resp.State == mgmtpb.JoinResp_OUT {
 			return errors.Errorf("rank %d excluded", resp.Rank)
 		}
-		r = ioserver.Rank(resp.Rank)
+		r = system.Rank(resp.Rank)
 
 		if !superblock.ValidRank {
-			superblock.Rank = new(ioserver.Rank)
+			superblock.Rank = new(system.Rank)
 			*superblock.Rank = r
 			superblock.ValidRank = true
 			srv.setSuperblock(superblock)
@@ -315,7 +322,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
+func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
 	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
@@ -330,6 +337,25 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 	}
 
 	return nil
+}
+
+// GetRank returns a valid instance rank or error.
+func (srv *IOServerInstance) GetRank() (system.Rank, error) {
+	var err error
+	sb := srv.getSuperblock()
+
+	switch {
+	case sb == nil:
+		err = errors.New("nil superblock")
+	case sb.Rank == nil:
+		err = errors.New("nil rank in superblock")
+	}
+
+	if err != nil {
+		return system.NilRank, err
+	}
+
+	return *sb.Rank, nil
 }
 
 // SetTargetCount updates target count in ioserver config.
@@ -465,6 +491,7 @@ func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) 
 	return makeDrpcCall(dc, module, method, body)
 }
 
+// BioErrorNotify logs a blob I/O error.
 func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
 	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
@@ -489,6 +516,10 @@ func (srv *IOServerInstance) newMember() (*system.Member, error) {
 		return nil, err
 	}
 
-	return system.NewMember(sb.Rank.Uint32(), sb.UUID, addr,
-		system.MemberStateStarted), nil
+	rank, err := srv.GetRank()
+	if err != nil {
+		return nil, err
+	}
+
+	return system.NewMember(rank, sb.UUID, addr, system.MemberStateStarted), nil
 }
