@@ -69,16 +69,17 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
     prereqs.require(tenv, 'crypto', 'mercury')
 
+    tests_dir = os.path.join("$PREFIX", 'lib', 'cart', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
-        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+        tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
-        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+        tenv.Install(tests_dir, target)
 
 #    for test in CRT_RPC_TESTS:
 #        target = tenv.Program(test)
@@ -88,17 +89,17 @@ def scons():
     for test in SWIM_TESTS:
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
-        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+        tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
-        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+        tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
         target = tenv.Program(test)
         tenv.Requires(target, [cart_lib, gurt_lib])
-        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+        tenv.Install(tests_dir, target)
 #    test_rpc_err = tenv.Program([TEST_RPC_ERR_SRC])
 #    tenv.Requires(test_rpc_err, [cart_lib, gurt_lib])
 #    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_rpc_err)
