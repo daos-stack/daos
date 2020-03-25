@@ -132,14 +132,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	if (strcmp(smod->sm_name, modname) != 0) {
 		D_ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
-		D_GOTO(err_hdl, rc = -DER_INVAL);
+		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
 		D_ERROR("failed to init %s: "DF_RC"\n", modname, DP_RC(rc));
-		D_GOTO(err_hdl, rc = -DER_INVAL);
+		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
 	if (smod->sm_key != NULL)

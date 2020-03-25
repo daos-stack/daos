@@ -45,3 +45,7 @@ pylint.log
 tags
 *.code-workspace
 utils/rpms/_topdir/
+test/tool/build/
+foo
+foo2
+foo.o

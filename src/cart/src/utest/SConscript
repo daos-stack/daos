@@ -53,7 +53,7 @@ def scons():
     #cmocka header can't be included without including other headers,
     #this test can't be generalized
     wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
-    prereqs.define('cmocka', headers=[wrap_cmocka], libs=['cmocka'],
+    prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
                    package='libcmocka-devel')
     if not prereqs.check_component('cmocka'):
         print("\n***************************************************")
@@ -87,18 +87,6 @@ def scons():
 
     test_env.Requires(tests, cart_lib)
     Default(tests)
-
-    # Run tests in a new environment so a rebuilt of the tests isn't triggered
-    # by changes to the environment
-    run_env = test_env.Clone()
-    run_env.Append(ENV={'D_LOG_FILE':os.path.join(Dir('.').abspath,
-                                                  "utest.log"),
-                        'D_LOG_MASK':'DEBUG'})
-
-    run_tests = run_env.RunTests(tests)
-    run_env.Alias('utest', run_tests)
-
-    AlwaysBuild(run_tests)
 
 if __name__ == "SCons.Script":
     scons()

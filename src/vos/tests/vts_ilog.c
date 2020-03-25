@@ -190,6 +190,17 @@ fake_tx_log_del(struct umem_instance *umm, umem_off_t offset, umem_off_t tx_id,
 	return 0;
 }
 
+static void
+commit_all(void)
+{
+	struct fake_tx_entry	*entry;
+
+	d_list_for_each_entry(entry, &fake_tx_list, link) {
+		/** Mark the entry as committed */
+		entry->status = COMMITTED;
+	}
+}
+
 static struct ilog_desc_cbs ilog_callbacks = {
 	.dc_log_status_cb	= fake_tx_status_get,
 	.dc_is_same_tx_cb	= fake_tx_is_same_tx,
@@ -857,6 +868,7 @@ ilog_test_aggregate(void **state)
 	struct vos_pool		*pool;
 	struct umem_instance	*umm;
 	struct ilog_df		*ilog;
+	struct version_cache	 version_cache;
 	struct ilog_entries	 ilents;
 	struct entries		*entries = args->custom;
 	struct ilog_id		 id;
@@ -864,6 +876,7 @@ ilog_test_aggregate(void **state)
 	daos_handle_t		 loh;
 	int			 rc;
 
+	version_cache_init(&version_cache);
 	assert_non_null(entries);
 	pool = vos_hdl2pool(args->ctx.tc_po_hdl);
 	assert_non_null(pool);
@@ -888,12 +901,14 @@ ilog_test_aggregate(void **state)
 	}
 
 	id.id_epoch = 1;
-	current_status = COMMITTED;
+	current_status = PREPARED;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 2;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -901,6 +916,7 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 3;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -908,6 +924,7 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 4;
 	rc = ilog_update(loh, NULL, id.id_epoch, true);
@@ -915,7 +932,9 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
+	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0,
@@ -925,6 +944,7 @@ ilog_test_aggregate(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 4, true, ENTRIES_END);
 	assert_int_equal(rc, 0);
@@ -937,6 +957,7 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 6;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -944,6 +965,9 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
+
+	commit_all();
 
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
@@ -954,6 +978,7 @@ ilog_test_aggregate(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 	rc = entries_set(entries, ENTRY_NEW, 6, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
@@ -965,7 +990,8 @@ ilog_test_aggregate(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
-
+	version_cache_fetch(&version_cache, loh, true);
+	commit_all();
 	epr.epr_hi = 7;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0,
 			    &ilents);
@@ -974,6 +1000,7 @@ ilog_test_aggregate(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
 	assert_int_equal(rc, 0);
@@ -997,6 +1024,7 @@ ilog_test_discard(void **state)
 	struct vos_pool		*pool;
 	struct umem_instance	*umm;
 	struct ilog_df		*ilog;
+	struct version_cache	 version_cache;
 	struct ilog_entries	 ilents;
 	struct entries		*entries = args->custom;
 	struct ilog_id		 id;
@@ -1004,6 +1032,7 @@ ilog_test_discard(void **state)
 	daos_handle_t		 loh;
 	int			 rc;
 
+	version_cache_init(&version_cache);
 	assert_non_null(entries);
 	pool = vos_hdl2pool(args->ctx.tc_po_hdl);
 	assert_non_null(pool);
@@ -1028,12 +1057,14 @@ ilog_test_discard(void **state)
 	}
 
 	id.id_epoch = 1;
-	current_status = COMMITTED;
+	current_status = PREPARED;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 2;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -1041,6 +1072,7 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 3;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -1048,6 +1080,7 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 4;
 	rc = ilog_update(loh, NULL, id.id_epoch, true);
@@ -1055,7 +1088,9 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
+	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
@@ -1064,6 +1099,7 @@ ilog_test_discard(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
@@ -1076,6 +1112,7 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	id.id_epoch = 6;
 	rc = ilog_update(loh, NULL, id.id_epoch, false);
@@ -1083,7 +1120,9 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
+	commit_all();
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
@@ -1092,6 +1131,7 @@ ilog_test_discard(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
 	assert_int_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
@@ -1104,6 +1144,8 @@ ilog_test_discard(void **state)
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
+	commit_all();
 
 	epr.epr_hi = 7;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, &ilents);
@@ -1112,6 +1154,7 @@ ilog_test_discard(void **state)
 			      DP_RC(rc));
 		assert(0);
 	}
+	version_cache_fetch(&version_cache, loh, true);
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
 	assert_int_equal(rc, 0);
