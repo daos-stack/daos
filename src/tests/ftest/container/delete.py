@@ -39,7 +39,7 @@ class DeleteContainerTest(TestWithServers):
         """
         Test basic container delete
 
-        :avocado: tags=all,container,tiny,smoke,pr,contdelete
+        :avocado: tags=all,container,tiny,smoke,full_regression,contdelete
         """
         expected_for_param = []
         uuidlist = self.params.get("uuid",
@@ -58,15 +58,16 @@ class DeleteContainerTest(TestWithServers):
 
         forcelist = self.params.get("force", "/run/createtests/ForceDestroy/*/")
         force = forcelist[0]
-        expected_for_param.append(forcelist[1])
 
-        if force >= 1:
-            self.cancel("Force >= 1 blocked by issue described in "
-                        "https://jira.hpdd.intel.com/browse/DAOS-689")
+        # force=0 in .yaml file specifies FAIL, however:
+        # if not opened and force=0 expect pass
+        if force == 0 and not opened:
+            expected_for_param.append('PASS')
+        else:
+            expected_for_param.append(forcelist[1])
 
-        if force == 0:
-            self.cancel("Force = 0 blocked by "
-                        "https://jira.hpdd.intel.com/browse/DAOS-1935")
+        # opened=True in .yaml file specifies PASS, however
+        # if it is also the case force=0, then FAIL is expected
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -78,15 +79,18 @@ class DeleteContainerTest(TestWithServers):
         # daos storage and connect to it
         self.prepare_pool()
 
+        passed = False
         try:
             self.container = DaosContainer(self.context)
 
             # create should always work (testing destroy)
             if not cont_uuid == 'INVALID':
                 cont_uuid = uuid.UUID(uuidlist[0])
+                save_cont_uuid = cont_uuid
                 self.container.create(self.pool.pool.handle, cont_uuid)
             else:
                 self.container.create(self.pool.pool.handle)
+                save_cont_uuid = uuid.UUID(self.container.get_uuid_str())
 
             # Opens the container if required
             if opened:
@@ -102,13 +106,22 @@ class DeleteContainerTest(TestWithServers):
                 cont_uuid = uuid.uuid4()
 
             self.container.destroy(force=force, poh=poh, con_uuid=cont_uuid)
-            self.container = None
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            passed = True
 
         except DaosApiError as excep:
-            self.d_log.error(excep)
-            self.d_log.error(traceback.format_exc())
-            if expected_result == 'PASS':
+            self.log.info(excep, traceback.format_exc())
+            self.container.destroy(force=1, poh=self.pool.pool.handle, con_uuid=save_cont_uuid)
+
+        finally:
+            # close container handle, release a reference on pool in client lib
+            # Otherwise test will ERROR in tearDown (pool disconnect -DER_BUSY)
+            if opened:
+                self.container.close()
+
+            self.container = None
+
+            if expected_result == 'PASS' and not passed:
                 self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == 'FAIL' and passed:
+                self.fail("Test was expected to fail but it passed.\n")

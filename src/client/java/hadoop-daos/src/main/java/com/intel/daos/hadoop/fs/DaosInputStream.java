@@ -275,7 +275,9 @@ public class DaosInputStream extends FSInputStream {
     this.stats.incrementBytesRead(actualLen);
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosInputStream :reading from daos_api spend time is :  " +
-              (System.currentTimeMillis() - currentTime) + " ; read data size : " + actualLen);
+              (System.currentTimeMillis() - currentTime) + " ;" +
+              " requested data size: " + length +
+              " actual data size : " + actualLen);
     }
     return actualLen;
   }
