@@ -159,6 +159,28 @@ read with the following command:
 daos container info --svc --path <path to entry point>
 ```
 
+### Enabling caching
+
+dfuse in normal mode simply provides a communication path between the kernel and
+DAOS, however this can come with a performance impact, and to help alleviate this
+it is possible to turn on caching, both within dfuse itself, and by allowing the
+kernel to cache certain data.  Where and when data is cached there is no attempt
+made to invalidate the caches based on changes to DAOS, other than simple timeouts.
+
+Enabling this option will turn on the following features.
+
+* Kernel caching of dentries.
+* Kernel caching of negative dentries
+* Kernel caching of inodes (file sizes, permissions etc)
+* Kernel caching of file contents
+* Readahead in dfuse and inserting data into kernel cache.
+* MMAP write optimisation
+
+To turn on caching use the `--enable-caching` command line option for dfuse, this
+will enable the feature for all accessed containers.  When this option is used
+then the containers accessed should only be accessed from one none, so it may
+be necessairy to create a container per node in this model.
+
 ### Stopping dfuse.
 
 When done, the file system can be unmounted via fusermount:
