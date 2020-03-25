@@ -26,6 +26,7 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                     'include/daos_srv/%s' % header)
 
+    SConscript('cart/SConscript')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
