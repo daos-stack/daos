@@ -53,8 +53,5 @@ def scons():
     # ftest
     SConscript('ftest/SConscript')
 
-    # dfio
-    SConscript('dfio/SConscript')
-
 if __name__ == "SCons.Script":
     scons()
