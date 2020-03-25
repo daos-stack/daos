@@ -69,7 +69,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
     prereqs.require(tenv, 'crypto', 'mercury')
 
-    tests_dir = os.path.join("$PREFIX", 'lib', 'TESTING', 'cart', 'tests')
+    tests_dir = os.path.join("$PREFIX", 'lib', 'cart', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
         target = tenv.Program(test)
