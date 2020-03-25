@@ -310,7 +310,35 @@ struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
 	struct dtx_id		 la_dti;
+	daos_recx_t		*la_recxs;
+	uint32_t		la_nr;
+	d_sg_list_t		*la_sgl;
+	daos_key_desc_t		*la_kds;
+	daos_anchor_t		*la_anchor;
+	daos_anchor_t		*la_akey_anchor;
+	daos_anchor_t		*la_dkey_anchor;
 };
+
+struct obj_auxi_list_recx {
+	daos_recx_t	recx;
+	d_list_t	recx_list;
+};
+
+struct obj_auxi_list_key {
+	d_iov_t		key;
+	d_list_t	key_list;
+};
+
+struct obj_auxi_list_obj_enum {
+	d_iov_t		dkey;
+	d_list_t	enum_list;
+	daos_iod_t	*iods;
+	d_list_t	*recx_lists;
+	int		iods_nr;
+};
+
+int
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -414,7 +442,12 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
+
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
+
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
+		      daos_recx_t *recxs, int nr, daos_recx_t **output_recxs,
+		      int *output_nr);
 
 static inline bool
 obj_retry_error(int err)
@@ -571,4 +604,7 @@ dc_tx_attach(daos_handle_t th, void *args, enum obj_rpc_opc opc,
 void
 dc_tx_check_existence_cb(void *data, tse_task_t *task);
 
+/* obj_enum.c */
+int
+fill_oid(daos_unit_oid_t oid, struct dss_enum_arg *arg);
 #endif /* __DAOS_OBJ_INTENRAL_H__ */
