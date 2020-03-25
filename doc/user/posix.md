@@ -79,7 +79,10 @@ be accessing it, and that owns any pools that will be used.
 There are two mandatory command line options, these are
 
 * --svc=RANKS  <service replicas>
-* --mountpount=PATH <path to mount DAOS>
+* --mountpoint=PATH <path to mount DAOS>
+
+The mount point specified should be en empty directory on the local node that
+is owned by the user.
 
 In addition, there are several optional command line options
 
@@ -117,6 +120,44 @@ accessed by the path `<mount point>/<container uuid`
 
 It is anticipated that in most cases both pool and container uuids shall be
 used, so the mount point itself will map directly onto a POSIX container.
+
+### Links into other containers.
+
+It is possible to link to other containers in dfuse, where subdirectories
+within a container resolve not to regular directories as normal, but rather to
+the root of entirely different POSIX containers.
+
+To create a new container and link it into the namespace of an existing one
+use the following command.
+
+```bash
+daos container create --svc <svc> --type POSIX --pool <pool uuid> --path <path to entry point>
+```
+
+The pool uuid should already exist, and the path should specify a location
+somewhere within a dfuse mount point that resolves to a POSIX container.
+Once a link is created it can be accessed through the new path, and following
+the link is virtually transparent.  No container uuid is required, if not is
+not supplied it will be created.
+
+To destroy a container again the following command should be used.
+
+```bash
+daos container destroy --svc --path <path to entry point>
+```
+
+This will both remove the link between the containers and remove the container
+that was linked to.
+
+There is no support for adding links to already existing containers, or removing
+links to containers without also removing the container itself.
+
+Information about a container, for example the presence of a entry point between
+containers, or the pool and container uuids of the container linked to can be
+read with the following command:
+```bash
+daos container info --svc --path <path to entry point>
+```
 
 ### Stopping dfuse.
 
