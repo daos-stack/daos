@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -241,16 +241,18 @@ dtx_req_list_cb(void **args)
 	} else {
 		for (i = 0; i < dra->dra_length; i++) {
 			drr = args[i];
-			if ((drr->drr_result < 0) &&
-			    (dra->dra_result == 0 ||
-			     dra->dra_result == -DER_NONEXIST))
+			if (dra->dra_result == 0)
 				dra->dra_result = drr->drr_result;
+
+			if (dra->dra_result != 0) {
+				D_ERROR("DTX req for opc %x failed: rc = %d.\n",
+					dra->dra_opc, dra->dra_result);
+				return;
+			}
 		}
 
-		D_CDEBUG(dra->dra_result < 0, DLOG_ERR, DB_TRACE,
-			 "DTX req for opc %x %s: rc = %d.\n", dra->dra_opc,
-			 dra->dra_result < 0 ? "failed" : "succeed",
-			 dra->dra_result);
+		D_DEBUG(DB_TRACE, "DTX req for opc %x succeed.\n",
+			dra->dra_opc);
 	}
 }
 
@@ -609,20 +611,13 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	}
 
 	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
-	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
-	if (rc1 == -DER_NONEXIST)
-		rc1 = 0;
 
-	if (dra.dra_future != ABT_FUTURE_NULL) {
+	if (dra.dra_future != ABT_FUTURE_NULL)
 		rc2 = dtx_req_wait(&dra);
-		if (rc2 == -DER_NONEXIST)
-			rc2 = 0;
-	}
 
 out:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
+	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -635,7 +630,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
+	return rc > 0 ? 0 : rc;
 }
 
 int
@@ -685,16 +680,12 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	if (rc1 == -DER_NONEXIST)
 		rc1 = 0;
 
-	if (dra.dra_future != ABT_FUTURE_NULL) {
+	if (dra.dra_future != ABT_FUTURE_NULL)
 		rc2 = dtx_req_wait(&dra);
-		if (rc2 == -DER_NONEXIST)
-			rc2 = 0;
-	}
 
 out:
-	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
-		 DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
+	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -707,7 +698,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
+	return rc > 0 ? 0 : rc;
 }
 
 int
