@@ -758,6 +758,7 @@ ik_btr_batch_oper(void **state)
 		}
 	}
 	ik_btr_query(NULL);
+	D_FREE(arr);
 }
 
 static void
@@ -872,6 +873,8 @@ ik_btr_drain(void **state)
 		if (empty)
 			break;
 	}
+
+	D_FREE(arr);
 }
 
 static int

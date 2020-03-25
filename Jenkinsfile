@@ -95,6 +95,68 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             trap 'set -x; kill -INT \\\$AGENT_PID \\\$COPROC_PID' EXIT
                             OFI_INTERFACE=eth0 daos_test -m'''
 
+def rpm_scan_pre = '''set -ex
+                      lmd_tarball='maldetect-current.tar.gz'
+                      if test -e "${lmd_tarball}"; then
+                        zflag="-z ${lmd_tarball}"
+                      else
+                        zflag=
+                      fi
+                      curl http://rfxn.com/downloads/${lmd_tarball} \
+                        ${zflag} --silent --show-error --fail -o ${lmd_tarball}
+                      nodelist=(${NODELIST//,/ })
+                      scp -i ci_key ${lmd_tarball} \
+                        jenkins@${nodelist[0]}:/var/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
+
+def rpm_scan_test = '''lmd_src=\\\"maldet-current\\\"
+                       lmd_tarball=\\\"maldetect-current.tar.gz\\\"
+                       rm -rf /var/tmp/\\\${lmd_src}
+                       mkdir -p /var/tmp/\\\${lmd_src}
+                       tar -C /var/tmp/\\\${lmd_src} --strip-components=1 \
+                         -xf /var/tmp/\\\${lmd_tarball}
+                       pushd /var/tmp/\\\${lmd_src}
+                         sudo ./install.sh
+                         sudo ln -s /usr/local/maldetect/ /bin/maldet
+                       popd
+                       sudo freshclam
+                       rm -f /var/tmp/clamscan.out
+                       rm /var/tmp/\\\${lmd_tarball}
+                       rm -rf /var/tmp/\\\${lmd_src}
+                       sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb \
+                                -d /usr/local/maldetect/sigs/rfxn.hdb -r \
+                                --exclude-dir=/usr/local/maldetect \
+                                --exclude-dir=/usr/share/clamav \
+                                --exclude-dir=/var/lib/clamav \
+                                --exclude-dir=/sys \
+                                --exclude-dir=/proc \
+                                --exclude-dir=/dev \
+                                --infected / | tee /var/tmp/clamscan.out
+                       rm -f /var/tmp/maldetect.xml
+                       if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+                         cat << EOF_GOOD > /var/tmp/maldetect.xml
+<testsuite skip=\\\"0\\\" failures=\\\"0\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\"/>
+</testsuite>
+EOF_GOOD
+                       else
+                         cat << EOF_BAD > /var/tmp/maldetect.xml
+<testsuite skip=\\\"0\\\" failures=\\\"1\\\" errors=\\\"0\\\" tests=\\\"1\\\" name=\\\"Malware_Scan\\\">
+  <testcase name=\\\"Malware_scan\\\" classname=\\\"ClamAV\\\">
+    <failure message=\\\"Malware Detected\\\" type=\\\"error\\\">
+      <![CDATA[ \\\"\\\$(cat /var/tmp/clamscan.out)\\\" ]]>
+    </failure>
+  </testcase>
+</testsuite>
+EOF_BAD
+                       fi'''
+
+def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
+                       scp -i ci_key \
+                         jenkins@${nodelist[0]}:/var/tmp/maldetect.xml \
+                         ${WORKSPACE}/maldetect.xml'''
+
+
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
@@ -121,7 +183,7 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-       QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
+        QUICKBUILD = commitPragma(pragma: 'Quick-build').contains('true')
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config",
@@ -1463,7 +1525,50 @@ pipeline {
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
                         }
                     }
-                }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Scan CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            not { environment name: 'CHANGE_TARGET', value: 'weekly-testing' }
+                            // expression { ! skip_stage('scan-centos-rpms') }
+                        }
+                    }
+                    agent {
+                        label 'ci_vm1'
+                    }
+                    steps {
+                        unstash 'CentOS-rpm-version'
+                        script {
+                            daos_packages_version = readFile('centos7-rpm-version').trim()
+                        }
+                        provisionNodes NODELIST: env.NODELIST,
+                                       node_count: 1,
+                                       profile: 'daos_ci',
+                                       distro: 'el7',
+                                       snapshot: true,
+                                       inst_repos: el7_daos_repos,
+                                       inst_rpms: 'environment-modules ' +
+                                                  'clamav clamav-devel'
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: rpm_scan_pre +
+                                            "sudo yum -y install " +
+                                            "daos-client-${daos_packages_version} " +
+                                            "daos-server-${daos_packages_version} " +
+                                            "daos-tests-${daos_packages_version}\n" +
+                                            rpm_scan_test + '"\n' +
+                                            rpm_scan_post,
+                                    junit_files: 'maldetect.xml',
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 7 RPMs')
             }
         }
     }
