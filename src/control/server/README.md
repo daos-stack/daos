@@ -1,7 +1,7 @@
 # DAOS Server
 
 The server package implements the internals of the DAOS control server,
-the `daos_server` user-facing application is implemented by the
+and the `daos_server` user-facing application is implemented by the
 [`daos_server`](/src/control/cmd/daos_server/README.md) package.
 
 ## I/O Server Instances
@@ -38,7 +38,7 @@ channel to listen for requests from control plane client
 applications.
 
 [`server.go`](/src/control/server/server.go) contains main setup
-routines including establishment of the gRPC server and registering
+routines, including the establishment of the gRPC server and registering
 of RPCs.
 
 ### Control Service
