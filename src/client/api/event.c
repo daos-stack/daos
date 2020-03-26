@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -537,7 +537,7 @@ ev_progress_cb(void *arg)
 	if (eqx->eqx_finalizing) {
 		evx->evx_status = DAOS_EVS_READY;
 		D_ASSERT(d_list_empty(&evx->evx_link));
-		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
+		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		return 1;
 	}
 
@@ -1193,7 +1193,7 @@ daos_event_priv_wait()
 {
 	struct ev_progress_arg	epa;
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
-	int rc;
+	int rc = 0;
 
 	D_ASSERT(ev_thpriv_is_init);
 

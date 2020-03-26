@@ -9,17 +9,16 @@ nr_hugepages: 4096
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
 helper_log_file: /tmp/daos_admin.log
-## uncomment to drop privileges before starting data plane
-## (if started as root to perform hardware provisioning)
-# user_name: daosuser
-# group_name: daosgroup # (optional)
+
+transport_config:
+  allow_insecure: true
 
 # single server instance per config file for now
 servers:
 -
   targets: 8                # count of VOS targets
   first_core: 0             # starting index for targets
-  nr_xs_helpers: 2          # offload helpers per target
+  nr_xs_helpers: 16         # offload helpers per server
   fabric_iface: eth0        # map to OFI_INTERFACE=eth0
   fabric_iface_port: 31416  # map to OFI_PORT=31416
   log_mask: DEBUG,RPC=ERR,MEM=ERR  # map to D_LOG_MASK=ERR

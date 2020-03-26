@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,15 +21,13 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-import os
 import time
 import traceback
 import uuid
 
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError, DaosContainer
 
-from pydaos.raw import DaosPool, DaosApiError, DaosContainer
 
 class DeleteContainerTest(TestWithServers):
     """
@@ -37,24 +35,11 @@ class DeleteContainerTest(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
-        super(DeleteContainerTest, self).setUp()
-
-        # parameters used in pool create
-        self.createmode = self.params.get("mode",
-                                          '/run/createtests/createmode/')
-        self.createuid = os.geteuid()
-        self.creategid = os.getegid()
-        self.createsetid = self.params.get("setname",
-                                           '/run/createtests/createset/')
-        self.createsize = self.params.get("size",
-                                          '/run/createtests/createsize/')
-
     def test_container_delete(self):
         """
         Test basic container delete
 
-        :avocado: tags=all,container,tiny,smoke,pr,contdelete
+        :avocado: tags=all,container,tiny,smoke,full_regression,contdelete
         """
         expected_for_param = []
         uuidlist = self.params.get("uuid",
@@ -73,15 +58,16 @@ class DeleteContainerTest(TestWithServers):
 
         forcelist = self.params.get("force", "/run/createtests/ForceDestroy/*/")
         force = forcelist[0]
-        expected_for_param.append(forcelist[1])
 
-        if force >= 1:
-            self.cancel("Force >= 1 blocked by issue described in "
-                        "https://jira.hpdd.intel.com/browse/DAOS-689")
+        # force=0 in .yaml file specifies FAIL, however:
+        # if not opened and force=0 expect pass
+        if force == 0 and not opened:
+            expected_for_param.append('PASS')
+        else:
+            expected_for_param.append(forcelist[1])
 
-        if force == 0:
-            self.cancel("Force = 0 blocked by "
-                        "https://jira.hpdd.intel.com/browse/DAOS-1935")
+        # opened=True in .yaml file specifies PASS, however
+        # if it is also the case force=0, then FAIL is expected
 
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -89,45 +75,53 @@ class DeleteContainerTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.pool = DaosPool(self.context)
-            self.pool.create(self.createmode, self.createuid, self.creategid,
-                             self.createsize, self.createsetid, None)
+        # initialize a python pool object then create the underlying
+        # daos storage and connect to it
+        self.prepare_pool()
 
-            # need a connection to create container
-            self.pool.connect(1 << 1)
+        passed = False
+        try:
             self.container = DaosContainer(self.context)
 
             # create should always work (testing destroy)
             if not cont_uuid == 'INVALID':
                 cont_uuid = uuid.UUID(uuidlist[0])
-                self.container.create(self.pool.handle, cont_uuid)
+                save_cont_uuid = cont_uuid
+                self.container.create(self.pool.pool.handle, cont_uuid)
             else:
-                self.container.create(self.pool.handle)
+                self.container.create(self.pool.pool.handle)
+                save_cont_uuid = uuid.UUID(self.container.get_uuid_str())
 
             # Opens the container if required
             if opened:
-                self.container.open(self.pool.handle)
+                self.container.open(self.pool.pool.handle)
 
             # wait a few seconds and then attempts to destroy container
             time.sleep(5)
             if poh == 'VALID':
-                poh = self.pool.handle
+                poh = self.pool.pool.handle
 
             # if container is INVALID, overwrite with non existing UUID
             if cont_uuid == 'INVALID':
                 cont_uuid = uuid.uuid4()
 
             self.container.destroy(force=force, poh=poh, con_uuid=cont_uuid)
-            self.container = None
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            passed = True
 
         except DaosApiError as excep:
-            self.d_log.error(excep)
-            self.d_log.error(traceback.format_exc())
-            if expected_result == 'PASS':
+            self.log.info(excep, traceback.format_exc())
+            self.container.destroy(force=1, poh=self.pool.pool.handle, con_uuid=save_cont_uuid)
+
+        finally:
+            # close container handle, release a reference on pool in client lib
+            # Otherwise test will ERROR in tearDown (pool disconnect -DER_BUSY)
+            if opened:
+                self.container.close()
+
+            self.container = None
+
+            if expected_result == 'PASS' and not passed:
                 self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == 'FAIL' and passed:
+                self.fail("Test was expected to fail but it passed.\n")

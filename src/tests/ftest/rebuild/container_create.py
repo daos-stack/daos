@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019 Intel Corporation.
+  (C) Copyright 2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@
 import os
 
 from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure, Mpirun
 from ior_utils import IorCommand
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class ContainerCreate(TestWithServers):
@@ -149,7 +149,8 @@ class ContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(TestPool(self.context, self.log))
+            self.pool.append(
+                TestPool(self.context, dmg_command=self.get_dmg_command()))
             self.pool[-1].get_params(self)
 
         if use_ior:
@@ -227,7 +228,7 @@ class ContainerCreate(TestWithServers):
                 self.container[-1].object_qty.value = 8
                 self.container[-1].record_qty.value = 64
                 self.container[-1].data_size.value = 1024 * 1024
-                self.container[-1].write_objects(rank, cont_obj_cls, False)
+                self.container[-1].write_objects(rank, cont_obj_cls)
                 rank_list = self.container[-1].get_target_rank_lists(
                     " after writing data")
                 self.container[-1].get_target_rank_count(rank, rank_list)
@@ -290,7 +291,6 @@ class ContainerCreate(TestWithServers):
 
             # Destroy the pools
             for pool in self.pool:
-                pool.disconnect()
                 pool.destroy(1)
 
             self.log.info(

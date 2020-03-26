@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2018-2020 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -22,10 +22,12 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from apricot import TestWithServers
-from test_utils import TestPool, TestContainer
+from test_utils_pool import TestPool
+from test_utils_container import TestContainer
 
 
 class SimpleCreateDeleteTest(TestWithServers):
+    # pylint: disable=too-few-public-methods
     """Tests container basics including create, destroy, open, query and close.
 
     :avocado: recursive
@@ -44,40 +46,26 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.pool.create()
+        self.prepare_pool()
 
         # Check that the pool was created
         self.assertTrue(
             self.pool.check_files(self.hostlist_servers),
-            "Pool data not was created")
-
-        # Connect to the pool
-        self.pool.connect()
+            "Pool data was not created")
 
         # Create a container
         self.container = TestContainer(self.pool)
         self.container.get_params(self)
         self.container.create()
 
-	# TODO: the cont info is out of date (see C version daos_cont_info_t)
-        # Open and query the container.  Verify the UUID from the query.
-        #checks = {
-        #    "ci_uuid": self.container.uuid,
-        #    "es_hce": 0,
-        #    "es_lre": 0,
-        #    "es_lhe": 0,
-        #    "es_ghce": 0,
-        #    "es_glre": 0,
-        #    "es_ghpce": 0,
-        #    "ci_nsnapshots": 0,
-        #    "ci_min_slipped_epoch": 0,
-        #}
+        # TO Be Done:the cont info needs update (see C version daos_cont_info_t)
+        # Open and query the container.Verify the UUID & No of Snapshot.
+        checks = {
+            "ci_uuid": self.container.uuid,
+            "ci_nsnapshots": 0}
 
-        #self.assertTrue(
-        #    self.container.check_container_info(**checks),
-        #    "Error confirming container info from query")
+        self.assertTrue(self.container.check_container_info(**checks),
+                        "Error confirming container info from query")
 
         # Close and destroy the container
         self.container.close()

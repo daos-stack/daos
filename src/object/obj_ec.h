@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,8 @@ struct obj_shard_iod {
 #define OBJ_SIOD_EVEN_DIST	((uint32_t)1 << 0)
 /** Flag used only for proc func, to only proc to one specific target */
 #define OBJ_SIOD_PROC_ONE	((uint32_t)1 << 1)
+/** Flag of single value EC */
+#define OBJ_SIOD_SINGV		((uint32_t)1 << 2)
 
 /**
  * Object IO descriptor.
@@ -78,7 +80,12 @@ struct obj_io_desc {
 	 * fetch targeted with only one shard, oiod_siods should be NULL as need
 	 * not carry extra info.
 	 */
-	uint32_t		 oiod_nr;
+	uint16_t		 oiod_nr;
+	/**
+	 * the target index [0, tgt_nr), only used for EC evenly distributed
+	 * single value.
+	 */
+	uint16_t		 oiod_tgt_idx;
 	/**
 	 * Flags, OBJ_SIOD_EVEN_DIST is for a special case that the extends
 	 * only cover full stripe(s), then each target has same number of
@@ -134,7 +141,6 @@ struct obj_tgt_oiod {
 	uint32_t		 oto_tgt_idx;
 	/* number of iods */
 	uint32_t		 oto_iod_nr;
-	uint32_t		 oto_tgt_nr;
 	/* offset array, oto_iod_nr offsets for each target */
 	uint64_t		*oto_offs;
 	/* oiod array, oto_iod_nr oiods for each target,
@@ -156,6 +162,10 @@ struct obj_ec_split_req {
 	daos_iod_t		*osr_iods;
 	/* leader shard's offsets (one for each iod) */
 	uint64_t		*osr_offs;
+	/* leader shard's iod_csums */
+	struct dcs_iod_csums	*osr_iod_csums;
+	/* csum_info for singvs */
+	struct dcs_csum_info	*osr_singv_cis;
 };
 
 /**
@@ -193,13 +203,13 @@ struct obj_reasb_req;
 #define obj_ec_stripe_rec_nr(oca)					\
 	((oca)->u.ec.e_k * (oca)->u.ec.e_len)
 /** Query the number of records in one EC cell/target */
-#define obj_ec_cell_rec_nr(oca)					\
+#define obj_ec_cell_rec_nr(oca)						\
 	((oca)->u.ec.e_len)
 /** Query the number of targets of EC obj class */
-#define obj_ec_tgt_nr(oca)					\
+#define obj_ec_tgt_nr(oca)						\
 	((oca)->u.ec.e_k + (oca)->u.ec.e_p)
 /** Query the number of data targets of EC obj class */
-#define obj_ec_data_tgt_nr(oca)					\
+#define obj_ec_data_tgt_nr(oca)						\
 	((oca)->u.ec.e_k)
 /** Query the number of parity targets of EC obj class */
 #define obj_ec_parity_tgt_nr(oca)					\
@@ -223,6 +233,79 @@ struct obj_reasb_req;
 #define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
+
+/**
+ * Threshold size of EC single-value layout (even distribution).
+ * When record_size <= OBJ_EC_SINGV_EVENDIST_SZ then stored in one data
+ * target, or will evenly distributed to all data targets.
+ */
+#define OBJ_EC_SINGV_EVENDIST_SZ(data_tgt_nr)	(((data_tgt_nr) / 8 + 1) * 4096)
+/** Alignment size of sing value local size */
+#define OBJ_EC_SINGV_CELL_ALIGN			(8)
+
+/** Local rec size, padding bytes and offset in the global record */
+struct obj_ec_singv_local {
+	uint64_t	esl_off;
+	uint64_t	esl_size;
+	uint32_t	esl_bytes_pad;
+};
+
+/** Query the target index for small sing-value record */
+#define obj_ec_singv_small_idx(oca, iod)	(0)
+
+/** Query if the single value record is stored in one data target */
+static inline bool
+obj_ec_singv_one_tgt(daos_iod_t *iod, d_sg_list_t *sgl,
+		     struct daos_oclass_attr *oca)
+{
+	uint64_t size = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca));
+
+	if ((iod->iod_size != DAOS_REC_ANY && iod->iod_size <= size) ||
+	    (sgl != NULL && daos_sgl_buf_size(sgl) <= size))
+		return true;
+
+	return false;
+}
+
+/* Query the cell size (#bytes) of evenly distributed singv */
+static inline uint64_t
+obj_ec_singv_cell_bytes(uint64_t rec_gsize, struct daos_oclass_attr *oca)
+{
+	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
+	uint64_t	cell_size;
+
+	cell_size = rec_gsize / data_tgt_nr;
+	if ((rec_gsize % data_tgt_nr) != 0)
+		cell_size++;
+	cell_size = roundup(cell_size, OBJ_EC_SINGV_CELL_ALIGN);
+
+	return cell_size;
+}
+
+/** Query local record size and needed padding for evenly distributed singv */
+static inline void
+obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
+		      uint32_t tgt_idx, struct obj_ec_singv_local *loc)
+{
+	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
+	uint64_t	cell_size;
+
+	D_ASSERT(tgt_idx < obj_ec_tgt_nr(oca));
+
+	cell_size = obj_ec_singv_cell_bytes(rec_gsize, oca);
+	if (tgt_idx >= data_tgt_nr)
+		loc->esl_off = rec_gsize + (tgt_idx - data_tgt_nr) * cell_size;
+	else
+		loc->esl_off = tgt_idx * cell_size;
+	if (tgt_idx == data_tgt_nr - 1) {
+		/* the last data target possibly with less size and padding */
+		loc->esl_size = rec_gsize - (data_tgt_nr - 1) * cell_size;
+		loc->esl_bytes_pad = cell_size - loc->esl_size;
+	} else {
+		loc->esl_size = cell_size;
+		loc->esl_bytes_pad = 0;
+	}
+}
 
 /** Query the number of data cells the recx covers */
 static inline uint32_t
@@ -252,9 +335,12 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 		return 0;
 	}
 #endif
-	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
-	if (oiod->oiod_siods == NULL)
-		return -DER_NOMEM;
+	if ((flags & OBJ_SIOD_SINGV) == 0) {
+		D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
+		if (oiod->oiod_siods == NULL)
+			return -DER_NOMEM;
+	}
+	oiod->oiod_flags = flags;
 	oiod->oiod_nr = tgt_nr;
 	return 0;
 }

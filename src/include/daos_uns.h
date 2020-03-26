@@ -48,18 +48,22 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass_id;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
+	/** container properties **/
+	daos_prop_t		*da_props;
 	/** Path is on Lustre */
 	bool			da_on_lustre;
 };
+
+#define DUNS_XATTR_NAME		"user.daos"
+#define DUNS_MAX_XATTR_LEN	170
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container
  * type, and create a new DAOS container in the pool that is passed in \a
  * attr.da_puuid. The uuid of the container is returned in \a attr.da_cuuid. Set
  * extended attributes on the dir/file created that points to pool uuid,
- * container uuid, and default object class to be used for object in that
- * container. This is to be used in a unified namespace solution to be able to
- * map a path in the unified namespace to a location in the DAOS tier.
+ * container uuid. This is to be used in a unified namespace solution to be able
+ * to map a path in the unified namespace to a location in the DAOS tier.
  *
  * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
@@ -75,7 +79,8 @@ duns_create_path(daos_handle_t poh, const char *path,
 
 /**
  * Retrieve the extended attributes on a path corresponding to DAOS location and
- * properties of that path.
+ * properties of that path. This includes the pool and container uuid and the
+ * container type. The rest of the fields are not populated in attr struct.
  *
  * \param[in]	path	Valid path in an existing namespace.
  * \param[out]	attr	Struct containing the xattrs on the path.
@@ -95,6 +100,18 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
  */
 int
 duns_destroy_path(daos_handle_t poh, const char *path);
+
+/**
+ * Convert a string into duns_attr_t.
+ *
+ * \param[in]	str	Input string
+ * \param[in]	len	Length of input string
+ * \param[out]	attr	Struct containing the xattrs on the path.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
 
 #if defined(__cplusplus)
 }

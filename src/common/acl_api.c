@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -504,6 +504,7 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 	}
 
 	/* there is no next item */
+	D_ASSERT(current_ace != NULL);
 	offset = sizeof(struct daos_ace) + current_ace->dae_principal_len;
 	if (!is_in_ace_list((uint8_t *)current_ace + offset, acl)) {
 		return NULL;
@@ -773,6 +774,50 @@ daos_acl_validate(struct daos_acl *acl)
 }
 
 static bool
+perms_valid_for_ace(struct daos_ace *ace, uint64_t valid_perms)
+{
+	if ((ace->dae_allow_perms & ~valid_perms) ||
+	    (ace->dae_audit_perms & ~valid_perms) ||
+	    (ace->dae_alarm_perms & ~valid_perms))
+		return false;
+
+	return true;
+}
+
+static int
+validate_acl_with_special_perms(struct daos_acl *acl, uint64_t valid_perms)
+{
+	int		rc;
+	struct daos_ace	*ace;
+
+	rc = daos_acl_validate(acl);
+	if (rc != 0)
+		return rc;
+
+	ace = daos_acl_get_next_ace(acl, NULL);
+	while (ace != NULL) {
+		if (!perms_valid_for_ace(ace, valid_perms))
+			return -DER_INVAL;
+
+		ace = daos_acl_get_next_ace(acl, ace);
+	}
+
+	return 0;
+}
+
+int
+daos_acl_pool_validate(struct daos_acl *acl)
+{
+	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_POOL_ALL);
+}
+
+int
+daos_acl_cont_validate(struct daos_acl *acl)
+{
+	return validate_acl_with_special_perms(acl, DAOS_ACL_PERM_CONT_ALL);
+}
+
+static bool
 type_is_group(enum daos_acl_principal_type type)
 {
 	if (type == DAOS_ACL_GROUP || type == DAOS_ACL_OWNER_GROUP) {
@@ -1000,6 +1045,27 @@ get_perm_string(uint64_t perm)
 	case DAOS_ACL_PERM_WRITE:
 		return "Write";
 
+	case DAOS_ACL_PERM_CREATE_CONT:
+		return "Create Container";
+
+	case DAOS_ACL_PERM_DEL_CONT:
+		return "Delete Container";
+
+	case DAOS_ACL_PERM_GET_PROP:
+		return "Get Prop";
+
+	case DAOS_ACL_PERM_SET_PROP:
+		return "Set Prop";
+
+	case DAOS_ACL_PERM_GET_ACL:
+		return "Get ACL";
+
+	case DAOS_ACL_PERM_SET_ACL:
+		return "Set ACL";
+
+	case DAOS_ACL_PERM_SET_OWNER:
+		return "Set Owner";
+
 	default:
 		break;
 	}
@@ -1127,57 +1193,45 @@ access_matches_flags(struct daos_ace *ace)
 bool
 daos_ace_is_valid(struct daos_ace *ace)
 {
-	uint8_t		valid_types =	DAOS_ACL_ACCESS_ALLOW |
-					DAOS_ACL_ACCESS_AUDIT |
-					DAOS_ACL_ACCESS_ALARM;
-	uint16_t	valid_flags =	DAOS_ACL_FLAG_GROUP |
-					DAOS_ACL_FLAG_POOL_INHERIT |
-					DAOS_ACL_FLAG_ACCESS_FAIL |
-					DAOS_ACL_FLAG_ACCESS_SUCCESS;
-	uint64_t	valid_perms =	DAOS_ACL_PERM_READ |
-					DAOS_ACL_PERM_WRITE;
+	uint8_t		valid_types = DAOS_ACL_ACCESS_ALL;
+	uint16_t	valid_flags = DAOS_ACL_FLAG_ALL;
+	uint64_t	valid_perms = DAOS_ACL_PERM_ALL;
 	bool		name_exists;
 	bool		flag_exists;
 
-	if (ace == NULL) {
+	if (ace == NULL)
 		return false;
-	}
 
 	/* Check for invalid bits in bit fields */
-	if (ace->dae_access_types & ~valid_types) {
+	if (ace->dae_access_types & ~valid_types)
 		return false;
-	}
 
-	if (ace->dae_access_flags & ~valid_flags) {
+	/* No access type defined */
+	if (ace->dae_access_types == 0)
 		return false;
-	}
 
-	if ((ace->dae_allow_perms & ~valid_perms) ||
-	    (ace->dae_audit_perms & ~valid_perms) ||
-	    (ace->dae_alarm_perms & ~valid_perms)) {
+	if (ace->dae_access_flags & ~valid_flags)
 		return false;
-	}
+
+	if (!perms_valid_for_ace(ace, valid_perms))
+		return false;
 
 	/* Name should only exist for types that require it */
 	name_exists = ace->dae_principal_len != 0;
-	if (type_needs_name(ace->dae_principal_type) != name_exists) {
+	if (type_needs_name(ace->dae_principal_type) != name_exists)
 		return false;
-	}
 
 	/* Only principal types that are groups should have the group flag */
 	flag_exists = (ace->dae_access_flags & DAOS_ACL_FLAG_GROUP) != 0;
-	if (type_is_group(ace->dae_principal_type) != flag_exists) {
+	if (type_is_group(ace->dae_principal_type) != flag_exists)
 		return false;
-	}
 
 	/* overall structure must be kept 64-bit aligned */
-	if (ace->dae_principal_len % 8 != 0) {
+	if (ace->dae_principal_len % 8 != 0)
 		return false;
-	}
 
-	if (ace->dae_principal_len > 0 && !principal_is_null_terminated(ace)) {
+	if (ace->dae_principal_len > 0 && !principal_is_null_terminated(ace))
 		return false;
-	}
 
 	if (ace->dae_principal_len > 0 &&
 	    !daos_acl_principal_is_valid(ace->dae_principal))
@@ -1185,13 +1239,11 @@ daos_ace_is_valid(struct daos_ace *ace)
 
 	if (!permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALLOW) ||
 	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_AUDIT) ||
-	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALARM)) {
+	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALARM))
 		return false;
-	}
 
-	if (!access_matches_flags(ace)) {
+	if (!access_matches_flags(ace))
 		return false;
-	}
 
 	return true;
 }

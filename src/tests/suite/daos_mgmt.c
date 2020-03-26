@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ setup_pools(void **state, daos_size_t npools)
 		lparg->tpools[i].poh = DAOS_HDL_INVAL;
 		lparg->tpools[i].svc.rl_ranks = lparg->tpools[i].ranks;
 		lparg->tpools[i].svc.rl_nr = svc_nreplicas;
-		lparg->tpools[i].pool_size = 1 << 30;	/* 1GB SCM */
+		lparg->tpools[i].pool_size = 1 << 28;	/* 256MB SCM */
 
 		/* Create the pool */
 		rc = test_setup_pool_create(state, NULL /* ipool */,
@@ -156,7 +156,7 @@ teardown_pools(void **state)
 	test_arg_t		*arg = *state;
 	struct test_list_pools	*lparg = arg->mgmt_lp_args;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	if (lparg == NULL)
 		return 0;

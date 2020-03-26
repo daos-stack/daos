@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,6 +179,15 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	}
 
 	tls->vtl_dth = NULL;
+
+	rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+	if (rc) {
+		umem_fini_txd(&tls->vtl_txd);
+		vos_imem_strts_destroy(&tls->vtl_imems_inst);
+		D_FREE(tls);
+		return NULL;
+	}
+
 	return tls;
 }
 
@@ -191,6 +200,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
+	vos_ts_table_free(&tls->vtl_ts_table);
 
 	D_FREE(tls);
 }
@@ -202,10 +212,15 @@ struct dss_module_key vos_module_key = {
 	.dmk_fini = vos_tls_fini,
 };
 
+daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
+
 static int
 vos_mod_init(void)
 {
 	int	 rc = 0;
+
+	if (vos_start_epoch == DAOS_EPOCH_MAX)
+		vos_start_epoch = crt_hlc_get();
 
 	rc = vos_cont_tab_register();
 	if (rc) {
@@ -288,7 +303,7 @@ vos_nvme_init(void)
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY,
+				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
@@ -351,6 +366,8 @@ vos_init(void)
 		D_MUTEX_UNLOCK(&mutex);
 		return rc;
 	}
+
+	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
 	standalone_tls = vos_tls_init(NULL, NULL);

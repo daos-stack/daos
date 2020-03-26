@@ -17,32 +17,26 @@
 
 # Management server access points
 # Must have the same value for all agents and servers in a system.
-# default: hostname of this node at port 10001 for local testing
-#access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#access_points: [hostname1,hostname2,hostname3]
+# default: hostname of this node
+#access_points: ['hostname1']
 
 # Force different port number to connect to access points.
-# default: 10000
+# default: 10001
 #port: 10001
-
-# Hostlist
-# comma separated list of addresses <ipv4addr/hostname:port>
-# default: ['localhost:10001']
-#hostlist: ['localhost:10001']
 
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
-#  # Specify to bypass loading certificates and use insecure communications channnels
+#  # In order to disable transport security, uncomment and set allow_insecure
+#  # to true. Not recommended for production configurations.
 #  allow_insecure: false
+#
 #  # Custom CA Root certificate for generated certs
 #  ca_cert: .daos/daosCA.crt
 #  # Agent certificate for use in TLS handshakes
-#  cert: .daos/daos_agent.crt
-#  # Key portion of Server Certificate
-#  key: .daos/daos_agent.key
-#  # Name of server accodring to its certificate
-#  server_name: server
+#  cert: .daos/agent.crt
+#  # Key portion of Agent Certificate
+#  key: .daos/agent.key
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent

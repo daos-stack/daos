@@ -69,9 +69,11 @@ void ds_pool_put(struct ds_pool *pool);
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
-	uint64_t		sph_capas;
+	uint64_t		sph_flags;	/* user-provided flags */
+	uint64_t		sph_sec_capas;	/* access capabilities */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
+	d_iov_t			sph_cred;
 };
 
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
@@ -98,25 +100,11 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_fence;
 
 	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the 
+	 * with the aggregation full scan start HLC to know whether the
 	 * aggregation needs to be restarted from 0. */
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
-};
-
-/*
- * Pool properties uid/gid/mode
- *
- * Stores per-pool access control information
- *
- * This is only being exposed until the access control attributes are
- * proper encapsulated in the security module.
- */
-struct pool_prop_ugm {
-	uint32_t	pp_uid;
-	uint32_t	pp_gid;
-	uint32_t	pp_mode;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -166,6 +154,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 		      daos_pool_info_t *pool_info);
 
+int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
+		       daos_prop_t **prop_out);
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -186,6 +176,11 @@ int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
 void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+
+int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
+		       uint32_t map_ver);
+int ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop);
+int ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
@@ -222,5 +217,8 @@ void
 ds_pool_disable_evict(void);
 void
 ds_pool_enable_evict(void);
+
+int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
+			    uint32_t force);
 
 #endif /* __DAOS_SRV_POOL_H__ */

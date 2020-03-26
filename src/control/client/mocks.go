@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,11 +57,11 @@ var (
 	MockScmModules    = ScmModules{MockScmModule()}
 	MockModuleResults = ScmModuleResults{
 		&ctlpb.ScmModuleResult{
-			Loc:   &ctlpb.ScmModule_Location{},
-			State: &MockState,
+			Physicalid: 1234,
+			State:      &MockState,
 		},
 	}
-	MockScmNamespaces = ScmNamespaces{MockPmemDevice()}
+	MockScmNamespaces = ScmNamespaces{MockScmNamespace()}
 	MockMounts        = ScmMounts{MockScmMount()}
 	MockMountResults  = ScmMountResults{
 		&ctlpb.ScmMountResult{
@@ -138,9 +138,9 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageS
 			Ctrlrs: m.cfg.nvmeControllers,
 		},
 		Scm: &ctlpb.ScanScmResp{
-			State:   &MockSuccessState,
-			Modules: m.cfg.scmModules,
-			Pmems:   m.cfg.scmNamespaces,
+			State:      &MockSuccessState,
+			Modules:    m.cfg.scmModules,
+			Namespaces: m.cfg.scmNamespaces,
 		},
 	}, m.cfg.scanRet
 }
@@ -306,16 +306,20 @@ func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) PrepShutdown(ctx context.Context, req *mgmtpb.PrepShutdownReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
-	return &mgmtpb.DaosResp{}, nil
+func (m *mockMgmtSvcClient) PrepShutdownRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
-	return &mgmtpb.DaosResp{}, nil
+func (m *mockMgmtSvcClient) StopRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.StartRanksReq, o ...grpc.CallOption) (*mgmtpb.StartRanksResp, error) {
-	return &mgmtpb.StartRanksResp{}, nil
+func (m *mockMgmtSvcClient) PingRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StartRanks(ctx context.Context, req *mgmtpb.RanksReq, o ...grpc.CallOption) (*mgmtpb.RanksResp, error) {
+	return &mgmtpb.RanksResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
@@ -476,17 +480,19 @@ func defaultMockConnect(log logging.Logger) Connect {
 
 // MockScanResp mocks scan results from scm and nvme for multiple servers.
 // Each result indicates success or failure through presence of Err.
-func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses) *StorageScanResp {
+func MockScanResp(cs *NvmeControllers, ms *ScmModules, nss *ScmNamespaces, addrs Addresses) *StorageScanResp {
 	nvmeResults := make(NvmeScanResults)
 	scmResults := make(ScmScanResults)
 
 	for _, addr := range addrs {
-		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: cs}
+		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: *cs}
 
-		scmResults[addr] = &ScmScanResult{
-			Modules:    scmModulesFromPB(ms),
-			Namespaces: scmNamespacesFromPB(nss),
-		}
+		sResult := &ScmScanResult{}
+		modules, _ := ms.ToNative()
+		namespaces, _ := nss.ToNative()
+		sResult.Modules = modules
+		sResult.Namespaces = namespaces
+		scmResults[addr] = sResult
 	}
 
 	sort.Strings(addrs)

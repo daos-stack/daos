@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func FaultFormatBadPciAddr(pciAddr string) *fault.Fault {
 
 func FaultFormatUnknownClass(class string) *fault.Fault {
 	return bdevFault(
-		code.BdevFormatBadParam,
+		code.BdevFormatUnknownClass,
 		fmt.Sprintf("format request contains unhandled block device class %q", class),
 		"check your configuration and restart the server",
 	)

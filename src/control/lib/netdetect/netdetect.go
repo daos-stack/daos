@@ -318,22 +318,26 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 }
 
 // getNodeAlias finds a node object that is the sibling of the device being matched.
-// This function is less restrictive than getNodeSibling because it does not require that the search device
-// be a member of the systemDeviceNamesMap.
+// This function is now tuned to search in one direction, from a system device to a sibling
+// that is not also a system device.  This allows differentiating between multiple devices
+// "ib0, ib1 ..." and the interface adapter they are connected to "hfi1_0, mlx4_0 ..."
 func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
 		return nil
 	}
 	// This node will have a sibling if its parent has more than one child (arity > 0)
-	// Search for the first sibling node that has a different name than the search node name.
+	// Search for the first sibling node that has a different name than the search node name
+	// and is not found on the systemDeviceNames map.
 	if node.parent.arity > 0 {
 		count := C.uint(node.parent.arity)
 		log.Debugf("There are %d children of this parent node.", int(count))
 		children := (*[1 << 30]C.hwloc_obj_t)(unsafe.Pointer(node.parent.children))[:count:count]
 		for _, child := range children {
 			if C.GoString(node.name) != C.GoString(child.name) {
-				return child
+				if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; !found {
+					return child
+				}
 			}
 		}
 	}
@@ -507,10 +511,20 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	return affinity, nil
 }
 
-// GetDeviceAlias is a complete method to find an alias for the device name provided.
-// For example, the device alias for "ib0" is a sibling node in the hwloc topology
-// with the name "hfi1_0".
+// GetDeviceAlias is a wrapper for getDeviceAliasWithSystemList.  This interface
+// specifies an empty additionalSystemDevices list which allows for the default behavior we want
+// for normal use.  Test functions can call getDeviceAliasWithSystemList() directly and specify
+// an arbitrary additionalSystemDevice list as necessary.
 func GetDeviceAlias(device string) (string, error) {
+	additionalSystemDevices := []string{}
+	return getDeviceAliasWithSystemList(device, additionalSystemDevices)
+}
+
+// getDeviceAliasWithSystemList is a complete method to find an alias for the device name provided.
+// For example, the device alias for "ib0" is a sibling node in the hwloc topology
+// with the name "hfi1_0".  Any devices specified by additionalSystemDevices are added
+// to the system device list that is automatically determined.
+func getDeviceAliasWithSystemList(device string, additionalSystemDevices []string) (string, error) {
 	var node C.hwloc_obj_t
 
 	log.Debugf("Searching for a device alias for: %s", device)
@@ -527,6 +541,11 @@ func GetDeviceAlias(device string) (string, error) {
 	// If "lo" is specified, it is treated specially.
 	if deviceScanCfg.targetDevice == "lo" {
 		return "lo", nil
+	}
+
+	// Add any additional system devices to the map
+	for _, deviceName := range additionalSystemDevices {
+		deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
 	}
 
 	node = getNodeAlias(deviceScanCfg)
@@ -784,6 +803,13 @@ func ValidateProviderConfig(device string, provider string) error {
 
 	if provider == "" {
 		return errors.New("provider required")
+	}
+
+	// Allow provider 'sm' (shared memory) to pass validation without passing any of the checks
+	// The provider is valid to use, but does not use devices.  Therefore, it is handled specially to avoid
+	// flagging it as an error.
+	if provider == "sm" {
+		return nil
 	}
 
 	if device == "" {

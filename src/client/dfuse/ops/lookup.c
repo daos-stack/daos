@@ -24,6 +24,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#include "daos_uns.h"
+
 void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *ie,
@@ -37,6 +39,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
+
+	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
+	entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
@@ -71,7 +76,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_INFO(inode,
-			       "Maybe updating parent %lu %lu",
+			       "Maybe updating parent inode %lu dfs_root %lu",
 			       entry.ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
@@ -89,14 +94,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		atomic_fetch_sub(&ie->ie_ref, 1);
 		ie->ie_parent = 0;
-
+		ie->ie_root = 0;
 		ie_close(fs_handle, ie);
+		ie = inode;
 	}
 
 	if (fi_out)
-		DFUSE_REPLY_CREATE(req, entry, fi_out);
+		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
-		DFUSE_REPLY_ENTRY(req, entry);
+		DFUSE_REPLY_ENTRY(ie, req, entry);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -119,83 +125,119 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 {
 	daos_obj_id_t		oid;
 	int			rc;
-	char			pool[40] = {};
-	size_t			pool_size = 40;
-	char			cont[40] = {};
-	size_t			cont_size = 40;
+	char			str[DUNS_MAX_XATTR_LEN];
+	daos_size_t		str_len = DUNS_MAX_XATTR_LEN;
+	struct duns_attr_t	dattr = {};
 	struct dfuse_dfs	*dfs = NULL;
+	struct dfuse_dfs	*dfsi;
+	struct dfuse_pool	*dfp = NULL;
+	struct dfuse_pool	*dfpi;
+	int			new_pool = false;
+	int			new_cont = false;
 	int ret;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_UNS_POOL_ATTR,
-			  &pool, &pool_size);
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DUNS_XATTR_NAME,
+			  &str, &str_len);
 
 	if (rc == ENODATA)
 		return 0;
 	if (rc)
 		return rc;
 
-	if (pool_size != 36)
-		return EINVAL;
+	rc = duns_parse_attr(&str[0], str_len, &dattr);
+	if (rc != -DER_SUCCESS)
+		return daos_der2errno(rc);
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
-			  DFUSE_UNS_CONTAINER_ATTR, &cont, &cont_size);
-	if (rc == ENODATA)
-		return 0;
-	if (rc)
-		return rc;
+	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
+		return ENOTSUP;
 
-	if (cont_size != 36)
-		return EINVAL;
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 
-	DFUSE_TRA_DEBUG(ie, "'%s' '%s'", pool, cont);
+	/* Search the currently connect dfp list, if one matches then use that
+	 * and drop the locally allocated one.  If there is no match then
+	 * properly initialize the local one ready for use.
+	 */
+	d_list_for_each_entry(dfpi, &fs_handle->dpi_info->di_dfp_list,
+			      dfp_list) {
 
-	D_ALLOC_PTR(dfs);
-	if (dfs == NULL)
-		return ENOMEM;
+		DFUSE_TRA_DEBUG(ie, "Checking dfp %p", dfpi);
 
-	if (uuid_parse(pool, dfs->dfs_pool) < 0) {
-		DFUSE_LOG_ERROR("Invalid pool uuid");
-		D_GOTO(out_err, ret = EINVAL);
+		if (uuid_compare(dattr.da_puuid, dfpi->dfp_pool) != 0) {
+			continue;
+		}
+
+		DFUSE_TRA_DEBUG(ie, "Reusing dfp %p", dfpi);
+		dfp = dfpi;
+		break;
 	}
 
-	if (uuid_parse(cont, dfs->dfs_cont) < 0) {
-		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(out_err, ret = EINVAL);
+	if (!dfp) {
+		D_ALLOC_PTR(dfp);
+		if (dfp == NULL)
+			D_GOTO(out_err, ret = ENOMEM);
+
+		DFUSE_TRA_UP(dfp, ie->ie_dfs->dfs_dfp, "dfp");
+		D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+		d_list_add(&dfp->dfp_list, &fs_handle->dpi_info->di_dfp_list);
+		uuid_copy(dfp->dfp_pool, dattr.da_puuid);
+
+		/* Connect to DAOS pool */
+		rc = daos_pool_connect(dfp->dfp_pool,
+				       fs_handle->dpi_info->di_group,
+				       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+				       &dfp->dfp_poh, &dfp->dfp_pool_info,
+				       NULL);
+		if (rc != -DER_SUCCESS) {
+			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			D_GOTO(out_err, ret = daos_der2errno(rc));
+		}
+		new_pool = true;
 	}
 
-	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+	d_list_for_each_entry(dfsi, &dfp->dfp_dfs_list,	dfs_list) {
 
-	/* Connect to DAOS pool */
-	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
-			       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
-			       &dfs->dfs_poh, &dfs->dfs_pool_info,
-			       NULL);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
-		D_GOTO(out_err, ret = rc);
+		if (uuid_compare(dattr.da_cuuid, dfsi->dfs_cont) != 0)
+			continue;
+
+		DFUSE_TRA_DEBUG(ie, "Reusing dfs %p", dfsi);
+		dfs = dfsi;
+		break;
 	}
 
-	/* Try to open the DAOS container (the mountpoint) */
-	rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont, DAOS_COO_RW,
-			    &dfs->dfs_coh, &dfs->dfs_co_info,
-			    NULL);
-	if (rc) {
-		DFUSE_LOG_ERROR("Failed container open (%d)",
-				rc);
-		D_GOTO(out_pool, ret = rc);
-	}
+	if (!dfs) {
+		D_ALLOC_PTR(dfs);
+		if (dfs == NULL)
+			D_GOTO(out_pool, ret = ENOMEM);
 
-	rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
-		       &dfs->dfs_ns);
-	if (rc) {
-		daos_cont_close(dfs->dfs_coh, NULL);
-		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
-		D_GOTO(out_cont, ret = rc);
+		dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+		DFUSE_TRA_UP(dfs, dfp, "dfs");
+		d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+		uuid_copy(dfs->dfs_cont, dattr.da_cuuid);
+
+		dfuse_dfs_init(dfs, ie->ie_dfs);
+
+		/* Try to open the DAOS container (the mountpoint) */
+		rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont, DAOS_COO_RW,
+				    &dfs->dfs_coh, &dfs->dfs_co_info,
+				    NULL);
+		if (rc) {
+			DFUSE_LOG_ERROR("Failed container open (%d)",
+					rc);
+			D_GOTO(out_pool, ret = daos_der2errno(rc));
+		}
+
+		rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
+			       &dfs->dfs_ns);
+		if (rc) {
+			DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
+			D_GOTO(out_cont, ret = rc);
+		}
+		ie->ie_root = true;
 	}
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)",
 				strerror(rc));
 		D_GOTO(out_umount, ret = rc);
 	}
@@ -203,7 +245,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
 			NULL, NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
 				strerror(rc));
 		D_GOTO(out_umount, ret = rc);
 	}
@@ -214,36 +256,48 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
-	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
-	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
-	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
-
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
 	dfs->dfs_root = ie->ie_stat.st_ino;
+	dfs->dfs_dfp = dfp;
 
-	DFUSE_TRA_INFO(ie, "UNS entry point activated, root %lu",
+	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %lu",
 		       dfs->dfs_root);
 
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return 0;
-
 out_umount:
-	rc = dfs_umount(dfs->dfs_ns);
-	if (rc)
-		DFUSE_TRA_ERROR(dfs, "dfs_umount() failed %d", rc);
+	if (new_cont) {
+		rc = dfs_umount(dfs->dfs_ns);
+		if (rc)
+			DFUSE_TRA_ERROR(dfs, "dfs_umount() failed %d", rc);
+	}
 out_cont:
-	rc = daos_cont_close(dfs->dfs_coh, NULL);
-	if (rc)
-		DFUSE_TRA_ERROR(dfs, "daos_cont_close() failed %d", rc);
+	if (new_cont) {
+		rc = daos_cont_close(dfs->dfs_coh, NULL);
+		if (rc)
+			DFUSE_TRA_ERROR(dfs, "daos_cont_close() failed %d", rc);
+	}
 out_pool:
-	rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
-	if (rc)
-		DFUSE_TRA_ERROR(dfs, "daos_pool_disconnect() failed %d", rc);
+	if (new_pool) {
+		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+		if (rc)
+			DFUSE_TRA_ERROR(dfs,
+					"daos_pool_disconnect() failed %d", rc);
+	}
 out_err:
-	D_FREE(dfs);
+	if (new_cont) {
+		d_list_del(&dfs->dfs_list);
+		D_FREE(dfs);
+	}
+	if (new_pool) {
+		d_list_del(&dfp->dfp_list);
+		D_FREE(dfp);
+	}
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 	return ret;
 }
 
@@ -272,8 +326,18 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup_rel(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
 			    O_RDONLY, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_INFO(fs_handle, "dfs_lookup() failed: (%s)",
+		DFUSE_TRA_INFO(parent, "dfs_lookup() failed: (%s)",
 			       strerror(rc));
+
+		if (rc == ENOENT && ie->ie_dfs->dfs_attr_timeout > 0) {
+			struct fuse_entry_param entry = {};
+
+			entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+
+			DFUSE_REPLY_ENTRY(parent, req, entry);
+			D_GOTO(free, 0);
+		}
+
 		D_GOTO(err, rc);
 	}
 
@@ -283,11 +347,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (S_ISDIR(ie->ie_stat.st_mode)) {
 		rc = check_for_uns_ep(fs_handle, ie);
-		if (rc) {
-			D_GOTO(err, 0);
-			DFUSE_TRA_INFO(ie,
-				       "check_for_uns_ep() returned %d", rc);
-		}
+		DFUSE_TRA_INFO(ie,
+			       "check_for_uns_ep() returned %d", rc);
+		if (rc)
+			D_GOTO(err, rc);
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
@@ -295,6 +358,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+free:
 	D_FREE(ie);
 	return;
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,18 +26,21 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
 	"os/user"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -48,9 +51,18 @@ import (
 )
 
 const (
+	// ControlPlaneName defines a consistent name for the control plane server.
 	ControlPlaneName = "DAOS Control Server"
-	DataPlaneName    = "DAOS I/O Server"
+	// DataPlaneName defines a consistent name for the ioserver.
+	DataPlaneName = "DAOS I/O Server"
+	// define supported maximum number of I/O servers
+	maxIOServers = 2
+
+	iommuPath        = "/sys/class/iommu"
+	minHugePageCount = 128
 )
+
+var ioserverShutdownTimeout = 15 * time.Second
 
 func cfgHasBdev(cfg *Configuration) bool {
 	for _, srvCfg := range cfg.Servers {
@@ -66,12 +78,20 @@ func instanceShmID(idx int) int {
 	return os.Getpid() + idx + 1
 }
 
-// define supported maximum number of I/O servers
-const maxIoServers = 2
+func iommuDetected() bool {
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(iommuPath)
+	if err != nil {
+		return false
+	}
+
+	return len(dmars) > 0
+}
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	err := cfg.Validate()
+	err := cfg.Validate(log)
 	if err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
@@ -102,18 +122,20 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to lookup current user")
 	}
 
-	if !cfgHasBdev(cfg) {
-		// If there are no bdevs in the config, don't waste memory on configuring
-		// hugepages (1 is minimum to avoid default).
-		cfg.NrHugepages = 1
-	}
-
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
-		HugePageCount: cfg.NrHugepages,
+		// Default to minimum necessary for scan to work correctly.
+		HugePageCount: minHugePageCount,
 		TargetUser:    runningUser.Username,
 		PCIWhitelist:  strings.Join(cfg.BdevInclude, ","),
 	}
+
+	if cfgHasBdev(cfg) {
+		// The config value is intended to be per-ioserver, so we need to adjust
+		// based on the number of ioservers.
+		prepReq.HugePageCount = cfg.NrHugepages * len(cfg.Servers)
+	}
+
 	log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 	if _, err := bdevProvider.Prepare(prepReq); err != nil {
 		log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
@@ -126,16 +148,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// Don't bother with these checks if there aren't any block devices configured.
 	if cfgHasBdev(cfg) {
-		if hugePages.Free != hugePages.Total {
-			// Not sure if this should be an error, per se, but I think we want to display it
-			// on the console to let the admin know that there might be something that needs
-			// to be cleaned up?
-			log.Errorf("free hugepages does not match total (%d != %d)", hugePages.Free, hugePages.Total)
+		if hugePages.Free < prepReq.HugePageCount {
+			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 		}
 
-		if hugePages.FreeMB() == 0 {
-			// Is this appropriate? Or should we bomb out?
-			log.Error("no free hugepages -- NVMe performance may suffer")
+		if runningUser.Uid != "0" && !iommuDetected() {
+			return FaultIommuDisabled
 		}
 	}
 
@@ -145,8 +163,21 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
-		if i+1 > maxIoServers {
+		if i+1 > maxIOServers {
 			break
+		}
+
+		// Provide special handling for the ofi+verbs provider.
+		// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
+		// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+		// specify the correct device for each.
+		if strings.HasPrefix(srvCfg.Fabric.Provider, "ofi+verbs") && !srvCfg.HasEnvVar("OFI_DOMAIN") {
+			deviceAlias, err := netdetect.GetDeviceAlias(srvCfg.Fabric.Interface)
+			if err != nil {
+				return errors.Wrapf(err, "failed to resolve alias for %s", srvCfg.Fabric.Interface)
+			}
+			envVar := "OFI_DOMAIN=" + deviceAlias
+			srvCfg.WithEnvVars(envVar)
 		}
 
 		// If the configuration specifies that we should explicitly set hugepage values
@@ -197,7 +228,13 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create new grpc server, register services and start serving.
-	var opts []grpc.ServerOption
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryErrorInterceptor,
+	}
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		streamErrorInterceptor,
+	}
+	opts := []grpc.ServerOption{}
 	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
@@ -209,15 +246,19 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return err
 	}
 	if uintOpt != nil {
-		opts = append(opts, uintOpt)
+		unaryInterceptors = append(unaryInterceptors, uintOpt)
 	}
 	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
 	if sintOpt != nil {
-		opts = append(opts, sintOpt)
+		streamInterceptors = append(streamInterceptors, sintOpt)
 	}
+	opts = append(opts, []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+	}...)
 
 	grpcServer := grpc.NewServer(opts...)
 	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
@@ -233,12 +274,24 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	go func() {
+		var err error
 		sig := <-sigChan
 		log.Debugf("Caught signal: %s", sig)
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
-			log.Errorf("error during dRPC cleanup: %s", err)
+
+		defer func() {
+			if errors.Cause(err) == context.DeadlineExceeded {
+				log.Debug("resorting to kill signal")
+			}
+			shutdown() // Kill I/O servers if running after graceful shutdown.
+		}()
+
+		stopCtx, cancel := context.WithTimeout(ctx, ioserverShutdownTimeout)
+		defer cancel()
+
+		// Attampt graceful shutdown of I/O servers.
+		if _, err = harness.StopInstances(stopCtx, sig); err != nil {
+			log.Error(errors.Wrap(err, "graceful shutdown").Error())
 		}
-		shutdown()
 	}()
 
 	if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {

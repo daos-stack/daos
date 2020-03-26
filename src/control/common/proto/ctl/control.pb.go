@@ -24,7 +24,9 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_0c5120591600887d) }
+func init() {
+	proto.RegisterFile("control.proto", fileDescriptor_0c5120591600887d)
+}
 
 var fileDescriptor_0c5120591600887d = []byte{
 	// 292 bytes of a gzipped FileDescriptorProto
@@ -51,11 +53,11 @@ var fileDescriptor_0c5120591600887d = []byte{
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
-var _ grpc.ClientConn
+var _ grpc.ClientConnInterface
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // MgmtCtlClient is the client API for MgmtCtl service.
 //
@@ -67,7 +69,7 @@ type MgmtCtlClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
-	// Query DAOS system membership (joined data-plane instances)
+	// Query DAOS system status
 	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
@@ -80,10 +82,10 @@ type MgmtCtlClient interface {
 }
 
 type mgmtCtlClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewMgmtCtlClient(cc *grpc.ClientConn) MgmtCtlClient {
+func NewMgmtCtlClient(cc grpc.ClientConnInterface) MgmtCtlClient {
 	return &mgmtCtlClient{cc}
 }
 
@@ -213,7 +215,7 @@ type MgmtCtlServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
-	// Query DAOS system membership (joined data-plane instances)
+	// Query DAOS system status
 	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)

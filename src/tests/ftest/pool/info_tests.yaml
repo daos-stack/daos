@@ -1,6 +1,7 @@
 hosts:
   test_servers:
     - server-A
+timeout: 120
 server_config:
   name: daos_server
   servers:
@@ -15,6 +16,7 @@ pool:
       mode: 146
   createset:
     name: daos_server
+  control_method: dmg
   createsize: !mux
     size1gb:
       scm_size: 1073741824

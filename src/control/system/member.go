@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
@@ -62,10 +63,56 @@ func (ms MemberState) String() string {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank  uint32
+	Rank  Rank
 	UUID  string
 	Addr  net.Addr
 	state MemberState
+}
+
+func (sm *Member) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON Member
+	return json.Marshal(&struct {
+		Addr  string
+		State int
+		*toJSON
+	}{
+		Addr:   sm.Addr.String(),
+		State:  int(sm.state),
+		toJSON: (*toJSON)(sm),
+	})
+}
+
+func (sm *Member) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON Member
+	from := &struct {
+		Addr  string
+		State int
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sm),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	addr, err := net.ResolveTCPAddr("tcp", from.Addr)
+	if err != nil {
+		return err
+	}
+	sm.Addr = addr
+
+	sm.state = MemberState(from.State)
+
+	return nil
 }
 
 func (sm *Member) String() string {
@@ -83,7 +130,7 @@ func (sm *Member) SetState(s MemberState) {
 }
 
 // NewMember returns a reference to a new member struct.
-func NewMember(rank uint32, uuid string, addr net.Addr, state MemberState) *Member {
+func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
 	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
 }
 
@@ -93,14 +140,59 @@ type Members []*Member
 // MemberResult refers to the result of an action on a Member identified
 // its string representation "address/rank".
 type MemberResult struct {
-	Rank   uint32
-	Action string
-	Err    error
+	Rank    Rank
+	Action  string
+	Errored bool
+	Msg     string
+	State   MemberState
+}
+
+func (mr *MemberResult) MarshalJSON() ([]byte, error) {
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON MemberResult
+	return json.Marshal(&struct {
+		State int
+		*toJSON
+	}{
+		State:  int(mr.State),
+		toJSON: (*toJSON)(mr),
+	})
+}
+
+func (mr *MemberResult) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON MemberResult
+	from := &struct {
+		State int
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(mr),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	mr.State = MemberState(from.State)
+
+	return nil
 }
 
 // NewMemberResult returns a reference to a new member result struct.
-func NewMemberResult(rank uint32, action string, err error) *MemberResult {
-	return &MemberResult{Rank: rank, Action: action, Err: err}
+func NewMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
+	result := MemberResult{Rank: rank, Action: action, State: state}
+	if err != nil {
+		result.Errored = true
+		result.Msg = err.Error()
+	}
+
+	return &result
 }
 
 // MemberResults is a type alias for a slice of member result references.
@@ -109,10 +201,11 @@ type MemberResults []*MemberResult
 // HasErrors returns true if any of the member results errored.
 func (smr MemberResults) HasErrors() bool {
 	for _, res := range smr {
-		if res.Err != nil {
+		if res.Errored {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -120,7 +213,7 @@ func (smr MemberResults) HasErrors() bool {
 type Membership struct {
 	sync.RWMutex
 	log     logging.Logger
-	members map[uint32]*Member
+	members map[Rank]*Member
 }
 
 // Add adds member to membership, returns member count.
@@ -138,7 +231,7 @@ func (m *Membership) Add(member *Member) (int, error) {
 }
 
 // SetMemberState updates existing member state in membership.
-func (m *Membership) SetMemberState(rank uint32, state MemberState) error {
+func (m *Membership) SetMemberState(rank Rank, state MemberState) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -172,7 +265,7 @@ func (m *Membership) AddOrUpdate(member *Member) (bool, *MemberState) {
 }
 
 // Remove removes member from membership, idempotent.
-func (m *Membership) Remove(rank uint32) {
+func (m *Membership) Remove(rank Rank) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -180,7 +273,7 @@ func (m *Membership) Remove(rank uint32) {
 }
 
 // Get retrieves member reference from membership based on Rank.
-func (m *Membership) Get(rank uint32) (*Member, error) {
+func (m *Membership) Get(rank Rank) (*Member, error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -193,11 +286,11 @@ func (m *Membership) Get(rank uint32) (*Member, error) {
 }
 
 // Ranks returns slice of ordered member ranks.
-func (m *Membership) Ranks() (ranks []uint32) {
+func (m *Membership) Ranks() (ranks []Rank) {
 	m.RLock()
 	defer m.RUnlock()
 
-	for rank, _ := range m.members {
+	for rank := range m.members {
 		ranks = append(ranks, rank)
 	}
 
@@ -206,15 +299,53 @@ func (m *Membership) Ranks() (ranks []uint32) {
 	return
 }
 
-// Members returns slice of references to all system members.
-func (m *Membership) Members() (ms Members) {
+func mapMemberStates(states ...MemberState) map[MemberState]struct{} {
+	stateMap := make(map[MemberState]struct{})
+	for _, s := range states {
+		stateMap[s] = struct{}{}
+	}
+
+	return stateMap
+}
+
+// HostRanks returns mapping of control addresses to ranks managed by harness at
+// that address.
+func (m *Membership) HostRanks() map[string][]Rank {
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, r := range m.Ranks() {
-		m, err := m.Get(r)
-		if err != nil {
-			panic(err) // should never happen
+	hostRanks := make(map[string][]Rank)
+	for _, member := range m.members {
+		addr := member.Addr.String()
+		if _, exists := hostRanks[addr]; exists {
+			hostRanks[addr] = append(hostRanks[addr], member.Rank)
+			continue
+		}
+		hostRanks[addr] = []Rank{member.Rank}
+	}
+
+	return hostRanks
+}
+
+// Members returns slice of references to all system members filtering members
+// with excluded states. Results ordered by member rank.
+func (m *Membership) Members(excludedStates ...MemberState) (ms Members) {
+	var ranks []Rank
+
+	m.RLock()
+	defer m.RUnlock()
+
+	for rank := range m.members {
+		ranks = append(ranks, rank)
+	}
+
+	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
+
+	es := mapMemberStates(excludedStates...)
+	for _, r := range ranks {
+		m := m.members[r]
+		if _, exclude := es[m.State()]; exclude {
+			continue
 		}
 		ms = append(ms, m)
 	}
@@ -222,7 +353,25 @@ func (m *Membership) Members() (ms Members) {
 	return ms
 }
 
+// UpdateMemberStates updates member's state according to result state.
+//
+// TODO: store error message in membership
+func (m *Membership) UpdateMemberStates(results MemberResults) error {
+	m.Lock()
+	defer m.Unlock()
+
+	for _, result := range results {
+		if _, found := m.members[result.Rank]; !found {
+			return errors.Wrapf(FaultMemberMissing, "rank %d", result.Rank)
+		}
+
+		m.members[result.Rank].SetState(result.State)
+	}
+
+	return nil
+}
+
 // NewMembership returns a reference to a new DAOS system membership.
 func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[uint32]*Member), log: log}
+	return &Membership{members: make(map[Rank]*Member), log: log}
 }

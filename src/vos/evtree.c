@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2017-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1391,13 +1391,14 @@ out:
 static int
 evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 {
-	struct evt_root		*root;
-	umem_off_t		 nd_off;
-	int			 rc;
+	struct evt_root			*root;
+	umem_off_t			 nd_off;
+	int				 rc;
+	const struct dcs_csum_info	*csum;
 
 	root = tcx->tc_root;
 	uint32_t inob = ent->ei_inob;
-	const daos_csum_buf_t *csum = &ent->ei_csum;
+	csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
 	D_ASSERT(UMOFF_IS_NULL(root->tr_node));
@@ -1415,7 +1416,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (dcb_is_valid(csum)) {
+	if (ci_is_valid((struct dcs_csum_info *) csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -1723,6 +1724,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 				nm_dst = nm_cur;
 				nd_dst = nd_cur;
 			} else {
+				D_ASSERT(nd_dst != NULL);
 				nd_dst = evt_select_node(tcx, &ent->ei_rect,
 							 nd_dst, nd_cur);
 				if (nd_dst == nd_cur)
@@ -3029,10 +3031,10 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t	*csum = &ent->ei_csum;
-	daos_size_t		 csum_buf_len;
+	const struct dcs_csum_info	*csum = &ent->ei_csum;
+	daos_size_t			 csum_buf_len;
 
-	if (!dcb_is_valid(csum))
+	if (!ci_is_valid(csum))
 		return;
 
 	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);

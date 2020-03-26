@@ -51,7 +51,8 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 		ret = fuse_session_loop(dfuse_info->di_session);
 	}
 	if (ret != 0)
-		DFUSE_LOG_ERROR("Fuse loop exited with return code: %d", ret);
+		DFUSE_TRA_ERROR(dfuse_info,
+				"Fuse loop exited with return code: %d", ret);
 
 	return ret;
 }
@@ -110,7 +111,8 @@ show_help(char *name)
 		"	   --container=UUID	container UUID\n"
 		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
-		"	-f --foreground		Run in foreground\n",
+		"	-f --foreground		Run in foreground\n"
+		"	   --enable-caching	Enable node-local caching (experimental)\n",
 		name);
 }
 
@@ -119,7 +121,10 @@ main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
 	char			*svcl = NULL;
+	struct dfuse_pool	*dfp = NULL;
+	struct dfuse_pool	*dfpn;
 	struct dfuse_dfs	*dfs = NULL;
+	struct dfuse_dfs	*dfsn;
 	char			c;
 	int			ret = -DER_SUCCESS;
 	int			rc;
@@ -136,6 +141,7 @@ main(int argc, char **argv)
 		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"enable-caching",	no_argument,	   0, 'A'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{0, 0, 0, 0}
@@ -147,12 +153,12 @@ main(int argc, char **argv)
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(out, ret = -DER_NOMEM);
+		D_GOTO(out_debug, ret = -DER_NOMEM);
 
-	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+	D_INIT_LIST_HEAD(&dfuse_info->di_dfp_list);
 	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
 	if (rc != -DER_SUCCESS) {
-		D_GOTO(out, ret = rc);
+		D_GOTO(out_debug, ret = rc);
 	}
 
 	dfuse_info->di_threaded = true;
@@ -177,6 +183,9 @@ main(int argc, char **argv)
 		case 'G':
 			dfuse_info->di_group = optarg;
 			break;
+		case 'A':
+			dfuse_info->di_caching = true;
+			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
 			break;
@@ -197,8 +206,14 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (dfuse_info->di_caching && !dfuse_info->di_threaded) {
+		printf("Caching not compatible with single-threaded mode\n");
+		exit(1);
+	}
+
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
-		DFUSE_LOG_WARNING("Not running in background under orterun");
+		DFUSE_TRA_WARNING(dfuse_info,
+				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
 	}
 
@@ -231,58 +246,77 @@ main(int argc, char **argv)
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
-		DFUSE_LOG_ERROR("Invalid pool service rank list");
+		DFUSE_TRA_ERROR(dfuse_info,
+				"Invalid pool service rank list");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
 	}
 
 	D_ALLOC_PTR(dfs);
 	if (!dfs) {
-		D_GOTO(out_svcl, 0);
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
 	}
 
-	DFUSE_TRA_UP(dfs, dfuse_info, "dfs");
+	if (dfuse_info->di_caching)
+		dfs->dfs_attr_timeout = 5;
 
-	d_list_add(&dfs->dfs_list, &dfuse_info->di_dfs_list);
+	D_ALLOC_PTR(dfp);
+	if (!dfp) {
+		D_GOTO(out_svcl, ret = -DER_NOMEM);
+	}
+
+	D_INIT_LIST_HEAD(&dfp->dfp_dfs_list);
+
+	d_list_add(&dfp->dfp_list, &dfuse_info->di_dfp_list);
+	d_list_add(&dfs->dfs_list, &dfp->dfp_dfs_list);
+
+	dfs->dfs_dfp = dfp;
+
+	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
+	DFUSE_TRA_UP(dfs, dfp, "dfs");
 
 	if (dfuse_info->di_pool) {
-		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
-			DFUSE_LOG_ERROR("Invalid pool uuid");
+
+		if (uuid_parse(dfuse_info->di_pool, dfp->dfp_pool) < 0) {
+			DFUSE_TRA_ERROR(dfp, "Invalid pool uuid");
 			D_GOTO(out_dfs, ret = -DER_INVAL);
 		}
 
 		/** Connect to DAOS pool */
-		rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
+		rc = daos_pool_connect(dfp->dfp_pool, dfuse_info->di_group,
 				       dfuse_info->di_svcl, DAOS_PC_RW,
-				       &dfs->dfs_poh, &dfs->dfs_pool_info,
+				       &dfp->dfp_poh, &dfp->dfp_pool_info,
 				       NULL);
 		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
+			DFUSE_TRA_ERROR(dfp,
+					"Failed to connect to pool (%d)", rc);
 			D_GOTO(out_dfs, 0);
 		}
 
 		if (dfuse_info->di_cont) {
 
 			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
-				DFUSE_LOG_ERROR("Invalid container uuid");
-				D_GOTO(out_pool, ret = -DER_INVAL);
+				DFUSE_TRA_ERROR(dfp, "Invalid container uuid");
+				D_GOTO(out_dfs, ret = -DER_INVAL);
 			}
 
 			/** Try to open the DAOS container (the mountpoint) */
-			rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont,
+			rc = daos_cont_open(dfp->dfp_poh, dfs->dfs_cont,
 					    DAOS_COO_RW, &dfs->dfs_coh,
 					    &dfs->dfs_co_info, NULL);
 			if (rc) {
-				DFUSE_LOG_ERROR("Failed container open (%d)",
+				DFUSE_TRA_ERROR(dfp,
+						"Failed container open (%d)",
 						rc);
-				D_GOTO(out_pool, 0);
+				D_GOTO(out_dfs, ret = rc);
 			}
 
-			rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
+			rc = dfs_mount(dfp->dfp_poh, dfs->dfs_coh, O_RDWR,
 				       &dfs->dfs_ns);
 			if (rc) {
 				daos_cont_close(dfs->dfs_coh, NULL);
-				DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
-				D_GOTO(out_pool, 0);
+				DFUSE_TRA_ERROR(dfp,
+						"dfs_mount failed (%d)", rc);
+				D_GOTO(out_dfs, ret = rc);
 			}
 			dfs->dfs_ops = &dfuse_dfs_ops;
 		} else {
@@ -292,63 +326,55 @@ main(int argc, char **argv)
 		dfs->dfs_ops = &dfuse_pool_ops;
 	}
 
+	dfuse_dfs_init(dfs, NULL);
+
 	rc = dfuse_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out_cont, ret = rc);
+		D_GOTO(out_dfs, ret = rc);
 
+	/* Remove all inodes from the hash tables */
 	ret = dfuse_destroy_fuse(dfuse_info->di_handle);
 
 	fuse_session_destroy(dfuse_info->di_session);
 
-	D_GOTO(out_dfs, 0);
-
-out_cont:
-	if (dfuse_info->di_cont) {
-		dfs_umount(dfs->dfs_ns);
-		daos_cont_close(dfs->dfs_coh, NULL);
-	}
-out_pool:
-	if (dfuse_info->di_pool)
-		daos_pool_disconnect(dfs->dfs_poh, NULL);
 out_dfs:
-	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
-				       struct dfuse_dfs, dfs_list))) {
-		/* Try and close/disconnect all container/pool handles and free
-		 * the dfs struct.
-		 *
-		 * dfuse_destroy_fuse() has already been called here which will
-		 * have iterated the inode table and should have dropped all
-		 * references to the dfs entries, however depending on the order
-		 * some pools/containers may be left open here so check for this
-		 * and try them again.
-		 */
-		if (!daos_handle_is_inval(dfs->dfs_coh)) {
 
-			if (dfs->dfs_ns) {
+	d_list_for_each_entry_safe(dfp, dfpn, &dfuse_info->di_dfp_list,
+				   dfp_list) {
+		DFUSE_TRA_ERROR(dfp, "DFP left at the end");
+		d_list_for_each_entry_safe(dfs, dfsn, &dfp->dfp_dfs_list,
+					   dfs_list) {
+			DFUSE_TRA_ERROR(dfs, "DFS left at the end");
+			if (!daos_handle_is_inval(dfs->dfs_coh)) {
+
 				rc = dfs_umount(dfs->dfs_ns);
 				if (rc != 0)
 					DFUSE_TRA_ERROR(dfs,
 							"dfs_umount() failed (%d)",
 							rc);
-			}
 
-			rc = daos_cont_close(dfs->dfs_coh, NULL);
-			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfs,
-						"daos_cont_close() failed: (%d)",
-						rc);
+				rc = daos_cont_close(dfs->dfs_coh, NULL);
+				if (rc != -DER_SUCCESS) {
+					DFUSE_TRA_ERROR(dfs,
+							"daos_cont_close() failed: (%d)",
+							rc);
+				}
 			}
+			D_MUTEX_DESTROY(&dfs->dfs_read_mutex);
+			DFUSE_TRA_DOWN(dfs);
+			D_FREE(dfs);
+		}
 
-		} else if (!daos_handle_is_inval(dfs->dfs_poh)) {
-			rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+		if (!daos_handle_is_inval(dfp->dfp_poh)) {
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfs,
+				DFUSE_TRA_ERROR(dfp,
 						"daos_pool_disconnect() failed: (%d)",
 						rc);
 			}
 		}
-
-		D_FREE(dfs);
+		DFUSE_TRA_DOWN(dfp);
+		D_FREE(dfp);
 	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
@@ -358,13 +384,13 @@ out_dfuse:
 	D_FREE(dfuse_info);
 	daos_fini();
 out_debug:
+	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	daos_debug_fini();
 out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
 	 * DAOS error numbers.
 	 */
-	DFUSE_LOG_INFO("Exiting with status %d", ret);
 	if (ret)
 		return -(ret + DER_ERR_GURT_BASE);
 	else

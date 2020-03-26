@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		strncpy(fake_update_buf, (char *)buf, buf_len);
 		fake_update_buf += buf_len;
 		fake_update_bytes += buf_len;
-		strncpy(fake_update_buf, "|", 1);
+		fake_update_buf[0] = '|';
 		fake_update_buf++;
 		fake_update_bytes++;
 	}
@@ -126,11 +126,12 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
  * -------------------------------------------------------------------------
  */
 struct vos_fetch_test_context {
-	size_t		 nr; /** Number of bsgl.bio_iov/biov_dcb pairs */
+	size_t			 nr; /** Num of bsgl.bio_iov/biov_csums pairs */
 	struct bio_sglist	 bsgl;
-	daos_csum_buf_t	*biov_dcbs;
+	struct dcs_csum_info	*biov_csums;
 	daos_iod_t		 iod;
 	struct daos_csummer	*csummer;
+	struct dcs_iod_csums	*iod_csum;
 };
 
 struct extent_info {
@@ -139,7 +140,7 @@ struct extent_info {
 	struct evt_extent ful;
 };
 
-struct test_setup {
+struct array_test_case_args {
 	int request_idx;
 	int request_len;
 	uint64_t chunksize;
@@ -147,11 +148,12 @@ struct test_setup {
 	struct extent_info layout[24];
 };
 
-#define	TEST_CASE_CREATE(ctx, ...) test_case_create(ctx, \
-	&(struct test_setup)__VA_ARGS__)
+#define	ARRAY_TEST_CASE_CREATE(ctx, ...) array_test_case_create(ctx, \
+	&(struct array_test_case_args)__VA_ARGS__)
 
 static void
-test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
+array_test_case_create(struct vos_fetch_test_context *ctx,
+		 struct array_test_case_args *setup)
 {
 	uint32_t	 csum_len;
 	uint64_t	 rec_size;
@@ -165,6 +167,7 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 
 	csum_len = daos_csummer_get_csum_len(ctx->csummer);
 	cs = daos_csummer_get_chunksize(ctx->csummer);
+	assert_true(cs != 0);
 	dummy_csums = (uint8_t *) "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	rec_size = setup->rec_size;
 
@@ -176,13 +179,13 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 	ctx->nr = nr;
 	bio_sgl_init(&ctx->bsgl, nr);
 	ctx->bsgl.bs_nr_out = nr;
-	D_ALLOC_ARRAY(ctx->biov_dcbs, nr);
+	D_ALLOC_ARRAY(ctx->biov_csums, nr);
 
 	for (i = 0; i < nr; i++) {
 		struct extent_info	*l;
 		char			*data;
 		struct bio_iov		*biov;
-		daos_csum_buf_t		*dcb;
+		struct dcs_csum_info	*info;
 		size_t			 data_len;
 		size_t			 num_of_csum;
 		bio_addr_t		 addr = {0};
@@ -207,16 +210,16 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 		/** Just a rough count */
 		num_of_csum = data_len / cs + 1;
 
-		dcb = &ctx->biov_dcbs[i];
-		D_ALLOC(dcb->cs_csum, csum_len * num_of_csum);
-		dcb->cs_buf_len = csum_len * num_of_csum;
-		dcb->cs_nr = num_of_csum;
-		dcb->cs_len = csum_len;
-		dcb->cs_chunksize = cs;
+		info = &ctx->biov_csums[i];
+		D_ALLOC(info->cs_csum, csum_len * num_of_csum);
+		info->cs_buf_len = csum_len * num_of_csum;
+		info->cs_nr = num_of_csum;
+		info->cs_len = csum_len;
+		info->cs_chunksize = cs;
 
 		for (j = 0; j < num_of_csum; j++) {
 			/** All csums will be the same so verify correctly */
-			dcb_insert(dcb, j, dummy_csums, csum_len);
+			ci_insert(info, j, dummy_csums, csum_len);
 		}
 	}
 
@@ -227,8 +230,8 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup *setup)
 	ctx->iod.iod_recxs->rx_idx = setup->request_idx;
 	ctx->iod.iod_recxs->rx_nr = setup->request_len;
 
-	daos_csummer_alloc_dcbs(ctx->csummer, &ctx->iod, 1,
-				&ctx->iod.iod_csums, NULL);
+	daos_csummer_alloc_iods_csums(ctx->csummer, &ctx->iod, 1, false,
+				      NULL, &ctx->iod_csum);
 }
 
 static void
@@ -236,7 +239,7 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 {
 	int i;
 
-	daos_csummer_free_dcbs(ctx->csummer, &ctx->iod.iod_csums);
+	daos_csummer_free_ic(ctx->csummer, &ctx->iod_csum);
 
 	for (i = 0; i < ctx->nr; i++) {
 		void *bio_buf = bio_iov2raw_buf(&ctx->bsgl.bs_iovs[i]);
@@ -244,8 +247,8 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 		if (bio_buf)
 			D_FREE(bio_buf);
 
-		if (ctx->biov_dcbs[i].cs_csum)
-			D_FREE(ctx->biov_dcbs[i].cs_csum);
+		if (ctx->biov_csums[i].cs_csum)
+			D_FREE(ctx->biov_csums[i].cs_csum);
 	}
 
 	if (ctx->iod.iod_recxs)
@@ -256,11 +259,11 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 }
 
 static int
-vos_fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
+fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 {
 	return ds_csum_add2iod(
-		&ctx->iod, ctx->csummer, &ctx->bsgl,
-		ctx->biov_dcbs, NULL);
+		&ctx->iod, ctx->csummer, &ctx->bsgl, ctx->biov_csums, NULL,
+		ctx->iod_csum);
 }
 
 /**
@@ -414,8 +417,8 @@ need_new_checksum_tests(void **state)
 }
 
 struct csum_idx {
-	int dcb_idx;
-	int csum_idx;
+	uint32_t ci_idx;
+	uint32_t csum_idx;
 };
 
 struct biov_iod_csum_compare {
@@ -430,13 +433,17 @@ void
 iod_biov_csum_same(struct vos_fetch_test_context *ctx,
 		   struct biov_iod_csum_compare idxs)
 {
-	daos_csum_buf_t *biov = &ctx->biov_dcbs[idxs.biov_csum.dcb_idx];
-	daos_csum_buf_t *iod = &ctx->iod.iod_csums[idxs.iod_csum.dcb_idx];
-	uint32_t csum_len = biov->cs_len;
+	struct dcs_csum_info	*biov;
+	struct dcs_csum_info	*iod;
+	uint32_t		 csum_len;
+
+	iod = &ctx->iod_csum->ic_data[idxs.iod_csum.ci_idx];
+	biov = &ctx->biov_csums[idxs.biov_csum.ci_idx];
+	csum_len = biov->cs_len;
 
 	assert_memory_equal(
-		dcb_idx2csum(biov, idxs.biov_csum.csum_idx),
-		dcb_idx2csum(iod, idxs.iod_csum.csum_idx), csum_len);
+		ci_idx2csum(biov, idxs.biov_csum.csum_idx),
+		ci_idx2csum(iod, idxs.iod_csum.csum_idx), csum_len);
 }
 
 /** Test cases */
@@ -446,7 +453,7 @@ with_extent_smaller_than_chunk(void **state)
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 1,
 		.request_len = 3,
 		.chunksize = 8,
@@ -458,7 +465,7 @@ with_extent_smaller_than_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 0}, .iod_csum = {0, 0} });
@@ -484,7 +491,7 @@ with_aligned_chunks_csums_are_copied(void **state)
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 6,
 		.chunksize = 2,
@@ -497,7 +504,7 @@ with_aligned_chunks_csums_are_copied(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	IOD_BIOV_CSUM_SAME(&ctx, { .biov_csum = {0, 0}, .iod_csum = {0, 0} });
@@ -525,7 +532,7 @@ with_unaligned_chunks_csums_new_csum_is_created(void **state)
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 4,
 		.chunksize = 2,
@@ -538,7 +545,7 @@ with_unaligned_chunks_csums_new_csum_is_created(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("1|A|12|A|");
@@ -569,7 +576,7 @@ with_extent_larger_than_request(void **state)
 	 * the whole chunk from the first.
 	 *
 	 */
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 4,
 		.chunksize = 8,
@@ -584,7 +591,7 @@ with_extent_larger_than_request(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("5|ABC|56\0|ABCDEFG|");
@@ -612,7 +619,7 @@ with_unaligned_first_chunk(void **state)
 	struct vos_fetch_test_context ctx;
 
 	/** Setup */
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 1,
 		.request_len = 3,
 		.chunksize = 2,
@@ -625,7 +632,7 @@ with_unaligned_first_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -651,7 +658,7 @@ with_fetch_smaller_than_chunk(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 1,
 		.request_len = 6,
 		.chunksize = 8,
@@ -664,7 +671,7 @@ with_fetch_smaller_than_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("BCDEFG|ABCDEFGH|");
@@ -688,7 +695,7 @@ more_partial_extent_tests(void **state)
 {
 	struct vos_fetch_test_context ctx;
 
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 3,
 		.chunksize = 2,
@@ -703,7 +710,7 @@ more_partial_extent_tests(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("0|A|01|A|");
@@ -729,7 +736,7 @@ test_larger_records(void **state)
 		large_data02[i] = 'a' + i % ('z' + 1 - 'a');
 	}
 
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 8,
 		.chunksize = 12,
@@ -744,7 +751,7 @@ test_larger_records(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	/** 1 record from 1st extent (mnop) and 2 records from 2nd extent
@@ -769,7 +776,7 @@ test_larger_records2(void **state)
 	memset(large_data01, 'A', 1024 * 16);
 	memset(large_data02, 'B', 1024 * 16);
 
-	TEST_CASE_CREATE(&ctx, {
+	ARRAY_TEST_CASE_CREATE(&ctx, {
 		.request_idx = 0,
 		.request_len = 12,
 		.chunksize = 1024*32,
@@ -784,7 +791,7 @@ test_larger_records2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	assert_int_equal(4, fake_update_called);
@@ -808,32 +815,100 @@ int teardown(void **state)
 }
 
 /* Convenience macros for unit tests */
-#define	T(desc, test_fn) \
-	{ "SRV_CSUM" desc, test_fn, setup, teardown}
+#define	TA(desc, test_fn) \
+	{ "SRV_CSUM_ARRAY" desc, test_fn, setup, teardown }
 
-static const struct CMUnitTest tests[] = {
-	T("01: Partial Extents, but chunks align",
+static const struct CMUnitTest array_tests[] = {
+	TA("01: Partial Extents, but chunks align",
 	  with_aligned_chunks_csums_are_copied),
-	T("02: Partial Extents, chunks don't align",
+	TA("02: Partial Extents, chunks don't align",
 	  with_unaligned_chunks_csums_new_csum_is_created),
-	T("03: Partial Extents, first extent isn't aligned",
+	TA("03: Partial Extents, first extent isn't aligned",
 	  with_unaligned_first_chunk),
-	T("04: Partial Extents, extent smaller than chunk",
+	TA("04: Partial Extents, extent smaller than chunk",
 	  with_extent_smaller_than_chunk),
-	T("05: Extent is larger than chunk", with_extent_larger_than_request),
-	T("06: Fetch smaller than chunk", with_fetch_smaller_than_chunk),
-	T("07: Partial extent/unaligned extent", more_partial_extent_tests),
-	T("08: Fetch with larger records", test_larger_records),
-	T("09: Fetch with larger records", test_larger_records2),
-	T("10: Determine if need new checksum", need_new_checksum_tests),
+	TA("05: Extent is larger than chunk", with_extent_larger_than_request),
+	TA("06: Fetch smaller than chunk", with_fetch_smaller_than_chunk),
+	TA("07: Partial extent/unaligned extent", more_partial_extent_tests),
+	TA("08: Fetch with larger records", test_larger_records),
+	TA("09: Fetch with larger records", test_larger_records2),
+	TA("10: Determine if need new checksum", need_new_checksum_tests),
+};
+
+/**
+ * ----------------------------------------------------------------------------
+ * Single Value Test
+ * ----------------------------------------------------------------------------
+ */
+static void
+update_fetch_sv(void **state)
+{
+	struct daos_csummer	*csummer;
+	struct bio_iov		 biov = {0};
+	struct bio_sglist	 bsgl = {0};
+	/** vos_update_begin will populate a list of csum_infos (one for each
+	 * biov 'extent'
+	 */
+	struct dcs_csum_info	 from_vos_begin = {0};
+	struct dcs_csum_info	 csum_info = {0};
+	struct dcs_iod_csums	 iod_csums = {0};
+
+	uint32_t		 iod_csum_value = 0;
+	daos_iod_t		 iod = {0};
+	char			*data = "abcd";
+	uint32_t		 csum = 0x12345678;
+
+	daos_csummer_init(&csummer, &fake_algo, 4);
+
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = strlen(data);
+	iod.iod_nr = 1;
+
+	ci_set(&csum_info, &iod_csum_value, sizeof(uint32_t), sizeof(uint32_t),
+	       1, CSUM_NO_CHUNK, 1);
+	iod_csums.ic_data = &csum_info;
+
+	biov.bi_buf = data;
+	biov.bi_data_len = strlen(data);
+
+	bsgl.bs_iovs = &biov;
+	bsgl.bs_nr_out = 1;
+	bsgl.bs_nr = 1;
+
+	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1,
+	       CSUM_NO_CHUNK, 1);
+
+	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin, NULL,
+			&iod_csums);
+
+	assert_memory_equal(csum_info.cs_csum, from_vos_begin.cs_csum,
+			    from_vos_begin.cs_len);
+
+	daos_csummer_destroy(&csummer);
+}
+
+
+#define	TS(desc, test_fn) \
+	{ "SRV_CSUM_SV" desc, test_fn, setup, teardown }
+
+static const struct CMUnitTest sv_tests[] = {
+	TS("01: Various scenarios for update/fetch with fault injection",
+	   update_fetch_sv),
 };
 
 int
 main(void)
 {
+	int rc = 0;
 
-	return cmocka_run_group_tests_name(
+	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Array Type",
-		tests, NULL, NULL);
+		array_tests, NULL, NULL);
+
+	rc += cmocka_run_group_tests_name(
+		"Storage and retrieval of checksums for Single Value Type",
+		sv_tests, NULL, NULL);
+
+	return rc;
 
 }

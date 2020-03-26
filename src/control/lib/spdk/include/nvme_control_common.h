@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019 Intel Corporation.
+* (C) Copyright 2019-2020 Intel Corporation.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -26,8 +26,6 @@
 
 #include <stdbool.h>
 
-#define NVMECONTROL_GBYTE_BYTES 1000000000
-
 /**
  * \brief NVMECONTROL return codes
  */
@@ -41,6 +39,12 @@ enum NvmeControlStatusCode {
 	NVMEC_ERR_NS_NOT_FOUND		= 6,
 	NVMEC_ERR_NOT_SUPPORTED		= 7,
 	NVMEC_ERR_BAD_LBA		= 8,
+	NVMEC_ERR_ALLOC_IO_QPAIR	= 9,
+	NVMEC_ERR_NS_ID_UNEXPECTED	= 10,
+	NVMEC_ERR_NS_WRITE_FAIL		= 11,
+	NVMEC_ERR_MULTIPLE_ACTIVE_NS	= 12,
+	NVMEC_ERR_NULL_NS		= 13,
+	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 14,
 	NVMEC_LAST_STATUS_VALUE
 };
 
@@ -62,8 +66,8 @@ struct ctrlr_t {
  * \brief NVMe namespace details
  */
 struct ns_t {
-	int		id;
-	int		size;
+	uint32_t	id;
+	uint64_t	size;
 	struct ns_t    *next;
 };
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,8 @@ type (
 	Runner struct {
 		Config  *Config
 		log     logging.Logger
-		started uint32
+		running uint32
+		cmd     *exec.Cmd
 	}
 )
 
@@ -114,14 +115,19 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)
 
-	r.setStarted()
+	if err := cmd.Start(); err != nil {
+		return errors.Wrapf(exitStatus(err),
+			"%s (instance %d) failed to start", binPath, r.Config.Index)
+	}
+	r.cmd = cmd
+
+	r.setRunning()
 	defer r.setStopped()
 
-	return errors.Wrapf(exitStatus(cmd.Run()), "%s (instance %d) exited", binPath, r.Config.Index)
+	return errors.Wrapf(exitStatus(cmd.Wait()), "%s (instance %d) exited", binPath, r.Config.Index)
 }
 
-// Start asynchronously starts the IOServer instance
-// and reports any errors on the output channel
+// Start asynchronously starts the IOServer instance.
 func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
@@ -139,16 +145,37 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	return nil
 }
 
-func (r *Runner) setStarted() {
-	atomic.StoreUint32(&r.started, 1)
+func (r *Runner) setRunning() {
+	atomic.StoreUint32(&r.running, 1)
 }
 
 func (r *Runner) setStopped() {
-	atomic.StoreUint32(&r.started, 0)
+	atomic.StoreUint32(&r.running, 0)
 }
 
-func (r *Runner) IsStarted() bool {
-	return atomic.LoadUint32(&r.started) == 1
+// IsRunning indicates whether the Runner process is running or not.
+func (r *Runner) IsRunning() bool {
+	return atomic.LoadUint32(&r.running) != 0
+}
+
+// Signal sends relevant signal to the Runner process (idempotent).
+func (r *Runner) Signal(signal os.Signal) error {
+	if !r.IsRunning() {
+		return nil
+	}
+
+	r.log.Debugf("Signalling I/O server instance %d (%s)", r.Config.Index, signal)
+
+	return r.cmd.Process.Signal(signal)
+}
+
+// Wait waits for the process to exit.
+func (r *Runner) Wait() error {
+	if !r.IsRunning() {
+		return nil
+	}
+
+	return r.cmd.Wait()
 }
 
 // GetConfig returns the runner's configuration

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(initShmID ...int) (err error) {
+func (w *spdkWrapper) init(log logging.Logger, initShmID ...int) (err error) {
 	if w.initialized {
 		return nil
 	}
@@ -105,7 +105,7 @@ func (w *spdkWrapper) init(initShmID ...int) (err error) {
 		return errors.Wrap(err, "failed to initialize SPDK")
 	}
 
-	cs, err := w.Discover()
+	cs, err := w.Discover(log)
 	if err != nil {
 		return errors.Wrap(err, "failed to discover NVMe")
 	}
@@ -141,7 +141,7 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 }
 
 func (b *spdkBackend) Init(shmID ...int) error {
-	if err := b.binding.init(shmID...); err != nil {
+	if err := b.binding.init(b.log, shmID...); err != nil {
 		return err
 	}
 
@@ -217,7 +217,7 @@ func (b *spdkBackend) Format(pciAddr string) (*storage.NvmeController, error) {
 		return nil, FaultFormatBadPciAddr(pciAddr)
 	}
 
-	if err := b.binding.Format(pciAddr); err != nil {
+	if err := b.binding.Format(b.log, pciAddr); err != nil {
 		return nil, err
 	}
 

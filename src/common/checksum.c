@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,13 @@ trace_chars(const uint8_t *buf, const size_t buf_len, const uint32_t max)
 	str[i] = '\0';
 	C_TRACE("%s", str);
 }
+
+static bool
+is_array(const daos_iod_t *iod)
+{
+	return iod->iod_type == DAOS_IOD_ARRAY;
+}
+
 
 static void
 daos_csummer_trace_csum(struct daos_csummer *obj, uint8_t *csum)
@@ -153,6 +160,7 @@ static int
 crc16_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	uint16_t *crc16 = (uint16_t *)obj->dcs_csum_buf;
+
 	*crc16 = crc16_t10dif(*crc16, buf, (int)buf_len);
 	return 0;
 }
@@ -289,19 +297,24 @@ daos_csummer_initialized(struct daos_csummer *obj)
 uint16_t
 daos_csummer_get_type(struct daos_csummer *obj)
 {
-	return obj->dcs_algo->cf_type;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_algo->cf_type;
+	return 0;
 }
 
 uint32_t
 daos_csummer_get_chunksize(struct daos_csummer *obj)
 {
-	return obj->dcs_chunk_size;
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_chunk_size;
+	return 0;
 }
 
 char *
 daos_csummer_get_name(struct daos_csummer *obj)
 {
-	if (obj->dcs_algo->cf_name)
+
+	if (daos_csummer_initialized(obj) && obj->dcs_algo->cf_name)
 		return obj->dcs_algo->cf_name;
 	return csum_unknown_name;
 }
@@ -329,13 +342,15 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 	int rc = 0;
 
 	if (C_TRACE_ENABLED()) {
-		C_TRACE("Buffer (len=%lu):\n", buf_len);
+		C_TRACE("Buffer (buf=%p len=%lu) (type=%s): ", buf, buf_len,
+			daos_csummer_get_name(obj));
 		trace_chars(buf, buf_len, 50);
 		C_TRACE("\n");
 	}
 
-	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
+	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0) {
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
+	}
 
 	if (C_TRACE_ENABLED()) {
 		C_TRACE("CSUM: ...");
@@ -354,8 +369,9 @@ daos_csummer_finish(struct daos_csummer *obj)
 }
 
 bool
-daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
-			 daos_csum_buf_t *b)
+daos_csummer_compare_csum_info(struct daos_csummer *obj,
+			       struct dcs_csum_info *a,
+			       struct dcs_csum_info *b)
 {
 	uint32_t	a_len = a->cs_len * a->cs_nr;
 	uint32_t	b_len = b->cs_len * b->cs_nr;
@@ -368,8 +384,8 @@ daos_csummer_compare_dcb(struct daos_csummer *obj, daos_csum_buf_t *a,
 		return false;
 
 	for (i = 0; i < a->cs_nr && match; i++) {
-		match = daos_csummer_csum_compare(obj, dcb_idx2csum(a, i),
-						  dcb_idx2csum(b, i),
+		match = daos_csummer_csum_compare(obj, ci_idx2csum(a, i),
+						  ci_idx2csum(b, i),
 						  a->cs_len);
 	}
 
@@ -392,146 +408,164 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 	return memcmp(a, b, csum_len) == 0;
 }
 
-/**
- * Assign values for each daos_csum_buf_t using info from daos_csummer and
- * appropriate iod/recx
- */
-static void
-daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
-		      uint32_t dcb_nr, daos_iod_t *iods, uint32_t iods_nr,
-		      uint8_t *csum_buf, size_t csum_buf_len)
+static uint32_t
+daos_singv_calc_chunks(struct dcs_singv_layout *singv_los, int idx)
 {
-	uint32_t	chunksize;
-	size_t		csum_len;
-	uint8_t		*buf_end;
-	uint8_t		*buf_ptr;
-	uint32_t	iod_idx;
-	uint32_t	recx_idx;
-	uint32_t	cd_idx;
+	if (singv_los == NULL || singv_los[idx].cs_even_dist == 0)
+		return 1;
 
-	chunksize	= daos_csummer_get_chunksize(obj);
-	csum_len	= daos_csummer_get_csum_len(obj);
-	buf_end		= csum_buf + csum_buf_len;
-	buf_ptr		= csum_buf;
-
-	iod_idx = recx_idx = 0;
-	for (cd_idx = 0; cd_idx < dcb_nr; cd_idx++) {
-		daos_csum_buf_t	*dcb;
-		daos_iod_t	*iod;
-		daos_recx_t	*recx;
-		uint32_t	 csum_nr;
-		size_t		 buf_len;
-
-		dcb = &dcbs[cd_idx];
-		iod = &iods[iod_idx];
-		D_ASSERT(recx_idx < iod->iod_nr);
-		recx = &iod->iod_recxs[recx_idx];
-
-		if (!csum_iod_is_supported(obj->dcs_chunk_size, iod))
-			continue;
-		csum_nr = daos_recx_calc_chunks(*recx, iod->iod_size,
-						chunksize);
-		buf_len = csum_len * csum_nr;
-
-		dcb->cs_type = daos_csummer_get_type(obj);
-		dcb->cs_chunksize = chunksize;
-		dcb->cs_len = csum_len;
-
-		dcb->cs_nr = csum_nr;
-		dcb->cs_buf_len = buf_len;
-		dcb->cs_csum = buf_ptr;
-
-		buf_ptr += buf_len;
-		D_ASSERT(buf_ptr <= buf_end);
-
-		/** go to the next recx/iod as needed */
-		recx_idx++;
-		if (recx_idx == iod->iod_nr) {
-			recx_idx = 0;
-			iod_idx++;
-			D_ASSERT(iod_idx <= iods_nr);
-		}
-	}
+	D_ASSERT(singv_los[idx].cs_nr > 1);
+	return singv_los[idx].cs_nr;
 }
 
-int
-daos_csummer_alloc_dcbs(struct daos_csummer *obj,
-			daos_iod_t *iods, uint32_t nr,
-			daos_csum_buf_t **p_dcbs, uint32_t *p_dcbs_nr)
+uint64_t
+daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
+			     uint32_t nr, bool akey_only,
+			     struct dcs_singv_layout *singv_los)
 {
-	daos_csum_buf_t *dcbs = NULL;
-	uint8_t		*csum_buf;
-	size_t		 csum_len;
-	uint32_t	 alloc_size;
-	size_t		 csum_buf_len;
-	uint32_t	 total_dcb_nr = 0;
-	uint32_t	 total_csum_nr = 0;
+	int		i, j;
+	uint64_t	result = 0;
+	uint32_t	chunksize = daos_csummer_get_chunksize(obj);
+	uint16_t	csum_size = daos_csummer_get_csum_len(obj);
 
-	int rc = 0;
+	for (i = 0; i < nr; i++) {
+		daos_iod_t *iod = &iods[i];
 
-	if (!(daos_csummer_initialized(obj)) || iods == NULL)
+		result += sizeof(struct dcs_iod_csums);
+		if (!csum_iod_is_supported(chunksize, iod))
+			continue;
+
+		result += csum_size; /** akey csum */
+
+		if (akey_only)
+			continue;
+
+		/** calc needed memory for the recx csums */
+		for (j = 0; j < iod->iod_nr; j++) {
+			daos_recx_t	*recx = &iod->iod_recxs[j];
+			uint32_t	 csum_count;
+
+			csum_count = is_array(iod) ?
+				     daos_recx_calc_chunks(*recx, iod->iod_size,
+							   chunksize) :
+				     daos_singv_calc_chunks(singv_los, i);
+
+			result += sizeof(struct dcs_csum_info) +
+				  csum_count * csum_size;
+		}
+	}
+
+	return result;
+}
+
+#define	setptr(ptr, buf, len, used, total_len) do {\
+	D_ASSERT(used + len <= total_len);\
+	ptr = (__typeof__(ptr))buf; \
+	buf += (len); \
+	used += len; } while (0)
+
+int
+daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
+			      uint32_t nr, bool akey_only,
+			      struct dcs_singv_layout *singv_los,
+			      struct dcs_iod_csums **p_iods_csums)
+{
+	int			 i, j, rc = 0;
+	uint32_t		 chunksize;
+	uint16_t		 csum_size;
+	uint16_t		 csum_type;
+	struct dcs_iod_csums	*iods_csums = NULL;
+	uint8_t			*buf;
+	uint64_t		 buf_len;
+	uint64_t		 used = 0;
+
+	if (!(daos_csummer_initialized(obj)) || iods == NULL || nr == 0)
 		goto done;
 
-	csum_len = daos_csummer_get_csum_len(obj);
-	daos_iods_count_needed_csum(iods, nr, obj->dcs_chunk_size,
-				    &total_dcb_nr, &total_csum_nr);
+	rc = nr;
 
-	/** Allocate enough memory for the csum desc struct and
-	 * the actual checksums
+	chunksize = daos_csummer_get_chunksize(obj);
+	csum_size = daos_csummer_get_csum_len(obj);
+	csum_type = daos_csummer_get_type(obj);
+
+	/**
+	 * allocate enough memory for all iod checksums at once, then update
+	 * pointers appropriately
 	 */
-	csum_buf_len = csum_len * total_csum_nr;
-	alloc_size = sizeof(daos_csum_buf_t) * total_dcb_nr +
-		     csum_buf_len;
-	D_ALLOC(dcbs, alloc_size);
+	buf_len = daos_csummer_allocation_size(obj, iods, nr, akey_only,
+					       singv_los);
+	D_ALLOC(buf, buf_len);
+	if (buf == NULL)
+		return -DER_NOMEM;
 
-	if (dcbs == NULL)
-		D_GOTO(done, rc = -DER_NOMEM);
+	setptr(iods_csums, buf, sizeof(*iods_csums) * nr, used, buf_len);
 
-	/** initialize the daos_csum_buf_t's with the info in the iods */
-	csum_buf = (uint8_t *) (dcbs + total_dcb_nr);
-	daos_csummer_set_dcbs(obj, dcbs, total_dcb_nr, iods, nr, csum_buf,
-			      csum_buf_len);
+	for (i = 0; i < nr; i++) {
+		daos_iod_t		*iod = &iods[i];
+		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
+
+		if (!csum_iod_is_supported(chunksize, iod))
+			continue;
+
+		/** setup akey csum  */
+		ci_set(&iod_csum->ic_akey, NULL, csum_size, csum_size, 1,
+		       CSUM_NO_CHUNK, csum_type);
+		setptr(iod_csum->ic_akey.cs_csum, buf, csum_size, used,
+		       buf_len);
+
+		if (akey_only)
+			continue;
+
+		/** setup data csum infos */
+		setptr(iod_csum->ic_data, buf,
+		       sizeof(*iod_csum->ic_data) * iod->iod_nr,
+		       used, buf_len);
+
+		for (j = 0; j < iod->iod_nr; j++) {
+			struct dcs_csum_info	*csum_info;
+			uint32_t		 csum_count;
+
+			csum_info = &iod_csum->ic_data[j];
+			if (is_array(iod)) {
+
+				daos_recx_t *recx;
+
+				recx = &iod->iod_recxs[j];
+				csum_count = daos_recx_calc_chunks(*recx,
+						iod->iod_size, chunksize);
+				ci_set(csum_info, NULL, csum_count * csum_size,
+				       csum_size, csum_count,
+				       chunksize, csum_type);
+			} else { /** single value */
+				csum_count = daos_singv_calc_chunks(singv_los,
+								    i);
+				ci_set(csum_info, NULL, csum_count * csum_size,
+				       csum_size, csum_count,
+				       CSUM_NO_CHUNK, csum_type);
+			}
+
+			/**
+			 * buffer set to null first by ci_set, now set it using
+			 * the setptr macro so that amount of memory
+			 * used from allocated buffer is tracked.
+			 */
+			setptr(csum_info->cs_csum, buf, csum_count * csum_size,
+			       used, buf_len);
+		}
+		iod_csum->ic_nr = iod->iod_nr;
+	}
 
 done:
-	if (p_dcbs != NULL)
-		*p_dcbs = dcbs;
-	if (p_dcbs_nr != NULL)
-		*p_dcbs_nr = total_dcb_nr;
+	if (p_iods_csums != NULL)
+		*p_iods_csums = iods_csums;
 
 	return rc;
 }
 
-void
-daos_iods_link_dcbs(daos_iod_t *iods, uint32_t iods_nr, daos_csum_buf_t *dcbs,
-		    uint32_t dcbs_nr)
-{
-	uint32_t iod_idx;
-	uint32_t next_cd;
-
-	if (dcbs_nr == 0)
-		return;
-
-	next_cd = 0;
-	for (iod_idx = 0; iod_idx < iods_nr; iod_idx++) {
-		iods[iod_idx].iod_csums = &dcbs[next_cd];
-		next_cd += iods[iod_idx].iod_nr;
-		D_ASSERT(next_cd <= dcbs_nr);
-	}
-}
-
-void
-daos_iods_unlink_dcbs(daos_iod_t *iods, uint32_t iods_nr)
-{
-	uint32_t iod_idx = 0;
-
-	for (; iod_idx < iods_nr; iod_idx++)
-		iods[iod_idx].iod_csums = NULL;
-}
-
 static int
-calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
-	  size_t rec_len, daos_recx_t *recxs, size_t nr,
-	  daos_csum_buf_t *csums)
+calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl,
+	       size_t rec_len, daos_recx_t *recxs, size_t nr,
+	       struct dcs_csum_info *csums)
 {
 	uint8_t			*buf;
 	size_t			 bytes_for_csum;
@@ -555,15 +589,17 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 			struct daos_csum_range chunk = csum_recx_chunkidx2range(
 				&recxs[i], rec_len, chunk_size, j);
 
-			buf = dcb_idx2csum(&csums[i], j);
+			buf = ci_idx2csum(&csums[i], j);
 			daos_csummer_set_buffer(obj, buf, csums->cs_len);
 			daos_csummer_reset(obj);
 
 			bytes_for_csum = chunk.dcr_nr * rec_len;
 			rc = daos_sgl_processor(sgl, &idx, bytes_for_csum,
 						checksum_sgl_cb, obj);
-			if (rc)
+			if (rc != 0) {
+				D_ERROR("daos_sgl_processor error: %d", rc);
 				return rc;
+			}
 
 			daos_csummer_finish(obj);
 			bytes -= bytes_for_csum;
@@ -573,52 +609,266 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 	return 0;
 }
 
-int
-daos_csummer_calc(struct daos_csummer *obj, d_sg_list_t *sgl,
-		  daos_iod_t *iod, daos_csum_buf_t **pcsum_bufs)
+static int
+calc_csum_sv(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
+	     struct dcs_singv_layout *singv_lo, int singv_idx,
+	     struct dcs_csum_info *csums)
 {
-	int		rc = 0;
-	uint32_t	csum_nr = 0;
+	size_t			 bytes_for_csum, csum_buf_len;
+	size_t			 skip_size, last_size = -1;
+	struct daos_sgl_idx	 sgl_idx = {0};
+	uint32_t		 idx, last_idx = -1;
+	uint8_t			*csum_buf;
+	int			 rc;
 
-	if (!daos_csummer_initialized(obj) ||
-	    !csum_iod_is_supported(obj->dcs_chunk_size, iod) ||
-	    sgl == NULL)
+	if (!(daos_csummer_initialized(obj)))
 		return 0;
 
-	rc = daos_csummer_alloc_dcbs(obj, iod, 1, pcsum_bufs, &csum_nr);
-	if (rc != 0)
-		return rc;
+	if (singv_lo != NULL && singv_lo->cs_even_dist == 1) {
+		D_ASSERT(singv_lo->cs_bytes > 0 &&
+			 singv_lo->cs_bytes < rec_len);
+		D_ASSERT(singv_lo->cs_nr > 1);
+		last_idx = rec_len / singv_lo->cs_bytes;
+		D_ASSERT(last_idx >= 1);
+		if (singv_idx == -1) {
+			D_ASSERT(csums->cs_nr == singv_lo->cs_nr);
+			last_size = rec_len - last_idx * singv_lo->cs_bytes;
+		} else {
+			D_ASSERT(csums->cs_nr == 1);
+			/* skip to the sgl location of singv_idx, the last
+			 * data cell possibly with less valid bytes, and
+			 * followed by parity cells.
+			 */
+			if (singv_idx <= last_idx)
+				skip_size = singv_idx * singv_lo->cs_bytes;
+			else
+				skip_size = rec_len + (singv_idx - last_idx) *
+						      singv_lo->cs_bytes;
+			rc = daos_sgl_processor(sgl, &sgl_idx, skip_size,
+						NULL, NULL);
+			if (rc)
+				return rc;
+		}
+		bytes_for_csum = singv_lo->cs_bytes;
+	} else {
+		D_ASSERT(csums->cs_nr == 1);
+		bytes_for_csum = rec_len;
+	}
 
-	return calc_csum(obj, sgl, iod->iod_size,
-			 iod->iod_recxs, iod->iod_nr,
-			 *pcsum_bufs);
+	csum_buf_len = bytes_for_csum;
+	for (idx = 0; idx < csums->cs_nr; idx++) {
+		if (idx == last_idx)
+			csum_buf_len = last_size;
+		csum_buf = ci_idx2csum(&csums[0], idx);
+		daos_csummer_set_buffer(obj, csum_buf, csums->cs_len);
+		daos_csummer_reset(obj);
+
+		rc = daos_sgl_processor(sgl, &sgl_idx, csum_buf_len,
+					checksum_sgl_cb, obj);
+		if (rc)
+			return rc;
+
+		daos_csummer_finish(obj);
+	}
+
+	return 0;
 }
 
+/** Using the data from the iov, calculate the checksum */
+static int
+calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
+	     uint8_t *csum_buf, uint16_t csum_buf_len)
+{
+	int rc;
+
+	memset(csum_buf, 0, csum_buf_len);
+
+	daos_csummer_set_buffer(csummer, csum_buf, csum_buf_len);
+	rc = daos_csummer_update(csummer, iov->iov_buf, iov->iov_len);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_update error: %d", rc);
+		return rc;
+	}
+	rc = daos_csummer_finish(csummer);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_finish error: %d", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+int
+daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
+		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
+		       size_t idx)
+{
+	daos_recx_t recx = { 0 };
+
+	recx.rx_idx = idx;
+	recx.rx_nr = nr;
+	return calc_csum_recx(obj, sgl, rec_len, &recx, 1, csums);
+}
+
+int
+daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
+		       daos_iod_t *iods, uint32_t nr, bool akey_only,
+		       struct dcs_singv_layout *singv_los, int singv_idx,
+		       struct dcs_iod_csums **p_iods_csums)
+{
+	int			 rc = 0;
+	int			 i;
+	struct dcs_iod_csums	*iods_csums = NULL;
+	struct dcs_singv_layout	*singv_lo, *los;
+	uint32_t		 iods_csums_nr;
+	uint32_t		 chunksize = daos_csummer_get_chunksize(obj);
+	uint16_t		 csum_len = daos_csummer_get_csum_len(obj);
+
+	if (!daos_csummer_initialized(obj))
+		return 0;
+
+	*p_iods_csums = NULL;
+
+	if (singv_los == NULL || singv_idx != -1)
+		los = NULL;
+	else
+		los = singv_los;
+	rc = daos_csummer_alloc_iods_csums(obj, iods, nr, akey_only,
+					   los, &iods_csums);
+	if (rc < 0) {
+		D_ERROR("daos_csummer_alloc_iods_csums error: %d", rc);
+		return rc;
+	}
+
+	iods_csums_nr = (uint32_t) rc;
+
+	for (i = 0; i < iods_csums_nr; i++) {
+		daos_iod_t		*iod = &iods[i];
+		struct dcs_iod_csums	*csums = &iods_csums[i];
+
+		if (!csum_iod_is_supported(chunksize, iod))
+			continue;
+
+		/** akey */
+		rc = calc_for_iov(obj, &iod->iod_name,
+			     csums->ic_akey.cs_csum, csum_len);
+		if (rc != 0) {
+			D_ERROR("calc_for_iov error: %d", rc);
+			goto error;
+		}
+
+		if (akey_only)
+			continue;
+
+		/** data */
+		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
+		rc = is_array(iod) ?
+		     calc_csum_recx(obj, &sgls[i], iod->iod_size,
+				    iod->iod_recxs, iod->iod_nr,
+				    csums->ic_data) :
+		     calc_csum_sv(obj, &sgls[i], iod->iod_size, singv_lo,
+				  singv_idx, csums->ic_data);
+		csums->ic_nr = iod->iod_nr;
+		/* Corrupt data after calculating checksum */
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_CDATA_CORRUPT))
+			((char *)sgls[i].sg_iovs[0].iov_buf)[0] += 0x2;
+
+		if (rc != 0) {
+			D_ERROR("calc_csum error: %d", rc);
+			goto error;
+		}
+	}
+
+	*p_iods_csums = iods_csums;
+
+	return 0;
+
+error:
+	daos_csummer_free_ic(obj, &iods_csums);
+	return rc;
+}
+
+
+int
+daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
+		      struct dcs_csum_info **p_csum)
+{
+	struct dcs_csum_info	*csum_info;
+	uint8_t			*dkey_csum_buf;
+	uint16_t		 size = daos_csummer_get_csum_len(csummer);
+	uint16_t		 type = daos_csummer_get_type(csummer);
+	int			 rc;
+
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	D_ALLOC(csum_info, sizeof(*csum_info) + size);
+	if (csum_info == NULL)
+		return -DER_NOMEM;
+
+	dkey_csum_buf = (uint8_t *) &csum_info[1];
+
+	ci_set(csum_info, dkey_csum_buf, size, size, 1, CSUM_NO_CHUNK, type);
+
+	rc = calc_for_iov(csummer, key, dkey_csum_buf, size);
+	if (rc == 0) {
+		*p_csum = csum_info;
+	} else {
+		D_ERROR("calc_for_iov error: %d", rc);
+		*p_csum = NULL;
+		D_FREE(csum_info);
+	}
+
+	return rc;
+}
+
+
 void
-daos_csummer_free_dcbs(struct daos_csummer *obj,
-		       daos_csum_buf_t **p_cds)
+daos_csummer_free_ic(struct daos_csummer *obj, struct dcs_iod_csums **p_cds)
 {
 	if (!(daos_csummer_initialized(obj) && *p_cds))
 		return;
 	D_FREE((*p_cds));
 }
 
-int
-daos_csummer_verify(struct daos_csummer *obj,
-		    daos_iod_t *iod, d_sg_list_t *sgl)
+
+void
+daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
 {
-	daos_csum_buf_t		*csum_bufs;
+	if (!(daos_csummer_initialized(obj) && *p_cis))
+		return;
+	D_FREE((*p_cis));
+}
+
+int
+daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
+			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
+			struct dcs_singv_layout *singv_lo, int singv_idx)
+{
+	struct dcs_iod_csums	*new_iod_csums;
 	int			 i;
 	int			 rc;
 	bool			 match;
 
-	rc = daos_csummer_calc(obj, sgl, iod, &csum_bufs);
-	if (rc != 0)
+	if (!daos_csummer_initialized(obj))
+		return 0;
+
+	if (iod == NULL || sgl == NULL || iod_csum == NULL) {
+		D_ERROR("Invalid params");
+		return -DER_INVAL;
+	}
+
+	rc = daos_csummer_calc_iods(obj, sgl, iod, 1, 0, singv_lo, singv_idx,
+				    &new_iod_csums);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_calc_iods error: %d", rc);
 		return rc;
+	}
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		match = daos_csummer_compare_dcb(obj, &csum_bufs[i],
-						 &iod->iod_csums[i]);
+		match = daos_csummer_compare_csum_info(obj,
+				&new_iod_csums->ic_data[i],
+				&iod_csum->ic_data[i]);
 		if (!match) {
 			D_ERROR("Data corruption found\n");
 			D_GOTO(done, rc = -DER_CSUM);
@@ -626,35 +876,88 @@ daos_csummer_verify(struct daos_csummer *obj,
 	}
 
 done:
-	daos_csummer_free_dcbs(obj, &csum_bufs);
+	daos_csummer_free_ic(obj, &new_iod_csums);
+
 	return rc;
 }
 
+int
+daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
+			struct dcs_csum_info *csum)
+{
+	struct dcs_csum_info	*csum_info_verify;
+	bool			 match;
+	int			rc;
+
+	if (!daos_csummer_initialized(obj))
+		return 0;
+
+	if (!ci_is_valid(csum)) {
+		D_ERROR("checksums is enabled, but dcs_csum_info is invalid");
+		return -DER_CSUM;
+	}
+
+	rc = daos_csummer_calc_key(obj, key, &csum_info_verify);
+	if (rc != 0) {
+		D_ERROR("daos_csummer_calc error: %d", rc);
+		return rc;
+	}
+
+	match = daos_csummer_compare_csum_info(obj, csum, csum_info_verify);
+	daos_csummer_free_ci(obj, &csum_info_verify);
+	if (!match) {
+		D_ERROR("Key checksums don't match");
+		return -DER_CSUM;
+	}
+
+	return 0;
+}
+
 /**
- * daos_csum_buf_t functions
+ * -----------------------------------------------------------------------------
+ * struct dcs_iod_csums Functions
+ * -----------------------------------------------------------------------------
+ */
+
+uint8_t *
+ic_idx2csum(struct dcs_iod_csums *iod_csum, uint32_t iod_idx,
+	    uint32_t csum_idx)
+{
+	struct dcs_csum_info *csum_info = &iod_csum->ic_data[iod_idx];
+	uint32_t offset = csum_info->cs_len * csum_idx;
+
+	/** Make sure the buffer is big enough for the indexed checksum */
+	if (csum_info->cs_buf_len < offset + csum_info->cs_len)
+		return NULL;
+	return csum_info->cs_csum + offset;
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * struct daos_csum_info functions
+ * -----------------------------------------------------------------------------
  */
 void
-dcb_set(daos_csum_buf_t *csum_buf, void *buf,
-	uint32_t csum_buf_size,
-	uint16_t csum_size,
-	uint32_t csum_count,
-	uint32_t chunksize)
+ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
+	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
+	uint16_t type)
 {
 	csum_buf->cs_csum = buf;
 	csum_buf->cs_len = csum_size;
 	csum_buf->cs_buf_len = csum_buf_size;
 	csum_buf->cs_nr = csum_count;
 	csum_buf->cs_chunksize = chunksize;
+	csum_buf->cs_type = type;
 }
 
 void
-dcb_set_null(daos_csum_buf_t *csum_buf)
+ci_set_null(struct dcs_csum_info *csum_buf)
 {
-	dcb_set(csum_buf, NULL, 0, 0, 0, 0);
+	ci_set(csum_buf, NULL, 0, 0, 0, 0, 0);
 }
 
 bool
-dcb_is_valid(const daos_csum_buf_t *csum)
+ci_is_valid(const struct dcs_csum_info *csum)
 {
 	return csum != NULL &&
 	       csum->cs_len > 0 &&
@@ -665,7 +968,7 @@ dcb_is_valid(const daos_csum_buf_t *csum)
 }
 
 void
-dcb_insert(daos_csum_buf_t *dcb, int idx, uint8_t *csum_buf, size_t len)
+ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
@@ -676,7 +979,7 @@ dcb_insert(daos_csum_buf_t *dcb, int idx, uint8_t *csum_buf, size_t len)
 }
 
 uint32_t
-dcb_off2idx(daos_csum_buf_t *csum_buf, uint32_t offset_bytes)
+ci_off2idx(struct dcs_csum_info *csum_buf, uint32_t offset_bytes)
 {
 	if (csum_buf->cs_chunksize == 0)
 		return 0;
@@ -684,7 +987,7 @@ dcb_off2idx(daos_csum_buf_t *csum_buf, uint32_t offset_bytes)
 }
 
 uint8_t *
-dcb_idx2csum(daos_csum_buf_t *csum_buf, uint32_t idx)
+ci_idx2csum(struct dcs_csum_info *csum_buf, uint32_t idx)
 {
 	uint32_t offset = csum_buf->cs_len * idx;
 
@@ -695,10 +998,10 @@ dcb_idx2csum(daos_csum_buf_t *csum_buf, uint32_t idx)
 }
 
 uint8_t *
-dcb_off2csum(daos_csum_buf_t *csum_buf, uint32_t offset)
+ci_off2csum(struct dcs_csum_info *csum_buf, uint32_t offset)
 {
-	return dcb_idx2csum(csum_buf,
-			    dcb_off2idx(csum_buf, offset));
+	return ci_idx2csum(csum_buf,
+			   ci_off2idx(csum_buf, offset));
 }
 
 /** Other Functions */
@@ -815,34 +1118,6 @@ csum_recx_chunkidx2range(daos_recx_t *recx, uint32_t rec_size,
 				   recx->rx_idx + recx->rx_nr - 1);
 }
 
-void
-daos_iods_count_needed_csum(daos_iod_t *iods, int nr, int chunksize,
-			    uint32_t *p_dcb_nr, uint32_t *p_csum_nr)
-{
-	uint32_t dcb_nr = 0;
-	uint32_t csum_nr = 0;
-	int i, j;
-
-	for (i = 0; i < nr; i++) {
-		daos_iod_t *iod = &iods[i];
-
-		dcb_nr += iod->iod_nr;
-
-		for (j = 0; j < iod->iod_nr; j++) {
-			if (csum_iod_is_supported(chunksize, iod)) {
-				csum_nr +=
-					daos_recx_calc_chunks(iod->iod_recxs[j],
-							      iod->iod_size,
-							      chunksize);
-			}
-		}
-	}
-
-	*p_dcb_nr = dcb_nr;
-	*p_csum_nr = csum_nr;
-
-}
-
 uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size)
@@ -863,30 +1138,4 @@ checksum_sgl_cb(uint8_t *buf, size_t len, void *args)
 	struct daos_csummer *obj = args;
 
 	return daos_csummer_update(obj, buf, len);
-}
-
-int
-daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl)
-{
-	struct daos_csummer	*csummer;
-	daos_csum_buf_t		*csum = iod->iod_csums;
-	int			 rc;
-
-	if (!dcb_is_valid(csum))
-		return 0;
-
-	rc = daos_csummer_type_init(&csummer,
-				    (enum DAOS_CSUM_TYPE) csum->cs_type,
-				    csum->cs_chunksize);
-	if (rc != 0) {
-		D_ERROR("Issue initializing csummer. Unable to check data. "
-			"Error: %d", rc);
-		return -DER_MISC;
-	}
-
-	rc = daos_csummer_verify(csummer, iod, sgl);
-
-	daos_csummer_destroy(&csummer);
-
-	return rc;
 }

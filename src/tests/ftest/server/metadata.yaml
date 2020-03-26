@@ -5,18 +5,26 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
+    - server-D
   test_clients:
     - client-C
 timeout: 1800
 server_config:
-   name: daos_server
+  name: daos_server
+  servers_per_host: 1
+  servers:
+    0:
+      log_mask: ERR
+      env_vars:
+        - DAOS_MD_CAP=128
 pool:
   createmode:
     mode: 511
   createset:
     group: daos_server
   createsvc:
-    svcn: 1
+    svcn: 3
   createsize:
     scm_size: 1073741824
     nvme_size: 1073741824
