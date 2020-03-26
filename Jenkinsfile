@@ -212,8 +212,11 @@ pipeline {
                 }
             }
             steps {
-                sh label: "Send environment",
-                   script: 'env | sort | mail -s env brian.murrell@intel.com'
+                emailext subject: "environment",
+                         to: 'brian.murrell@intel.com',
+                         body: sh(script: 'echo foo')
+                //sh label: "Send environment",
+                //   script: 'env | sort | mail -s env brian.murrell@intel.com'
                 sh label: "Playground",
                    script: '''git merge-base origin/master HEAD
                               git log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit | head'''
