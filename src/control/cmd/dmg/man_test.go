@@ -26,7 +26,9 @@ import (
 	"bufio"
 	"bytes"
 	"flag"
+	"fmt"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -35,9 +37,18 @@ import (
 var update = flag.Bool("update", false, "update dmg manpage")
 
 func TestDmg_ManPageIsCurrent(t *testing.T) {
-
 	var manBytes bytes.Buffer
 	goldenPath := "../../../../doc/man/man8/dmg.8"
+
+	stripDate := func(in []byte) []byte {
+		var out bytes.Buffer
+		for _, line := range strings.Split(string(in), "\n") {
+			if !strings.HasPrefix(line, ".TH dmg 1") {
+				fmt.Fprintln(&out, line)
+			}
+		}
+		return out.Bytes()
+	}
 
 	writeManPage(bufio.NewWriter(&manBytes))
 	if *update {
@@ -46,13 +57,15 @@ func TestDmg_ManPageIsCurrent(t *testing.T) {
 			t.Error("failed to updated dmg manpage")
 		}
 	}
+	strippedGenerated := stripDate(manBytes.Bytes())
 
 	goldenBytes, err := ioutil.ReadFile(goldenPath)
 	if err != nil {
 		t.Error("failed to read dmg manpage")
 	}
+	strippedGolden := stripDate(goldenBytes)
 
-	if bytes.Compare(manBytes.Bytes(), goldenBytes) != 0 {
-		t.Errorf("dmg manpage does not match expected output. If this is intentional rerun this test with -args --update\n Diff:\n%s", cmp.Diff(goldenBytes, manBytes.Bytes()))
+	if diff := cmp.Diff(strippedGolden, strippedGenerated); diff != "" {
+		t.Fatalf("unexpected manpage diff. If this is intentional rerun this test with -args --update\n Diff (-want, +got):\n%s", diff)
 	}
 }
