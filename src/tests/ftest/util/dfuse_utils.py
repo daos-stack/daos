@@ -215,6 +215,7 @@ class Dfuse(DfuseCommand):
         Finally, try and remove the mount point, and that itself should work.
         """
         self.log.info('Stopping dfuse at %s', self.mount_dir.value)
+        general_utils.pcmd(self.hosts, "ps auwx", timeout=30)
 
         if self.mount_dir.value is None:
             return
