@@ -41,26 +41,24 @@ For exhaustive subcommand listings please see output of
 
 ### Network
 
-- scan, retrieves details of available network devices.
+Provides capability to manage and enumerate available network
+devices.
 
 ### Pool
 
-- create, creates a DAOS storage pool across targets in the system.
-- destroy, destroys a given pool identified by its UUID.
-- query, queries details of given pool identified by its UUID.
-- set and get prop, manages update and retrieval of DAOS storage pool
-properties.
+Provides capability to create, destroy and manage DAOS storage pools
+including ability to manage individual properties and pool Access
+Control Lists.
 
 ### Storage
 
-- scan, retrieve storage device details relevant to DAOS configuration.
-- prepare, provision storage devices for use with DAOS.
-- format, format allocated storage for use with DAOS.
-- query, gather detailed information on specific hardware devices.
-- set, set property on a given hardware device.
+Provides capability to scan available storage devices, provision
+relevant hardware and format allocated storage for use with DAOS.
+The capability to run queries on a particular device as well as
+setting particular device properties is also provided.
 
 ### System
 
-- query, list system members/ranks that have previously joined.
-- stop, perform controlled shutdown on system members/ranks.
-- start, start previously stopped system members/ranks.
+Provides capability to query system members/ranks that have
+previously joined the DAOS system. Additionally perform controlled
+stop and start on members/ranks recorded in the system membership.
