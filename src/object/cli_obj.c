@@ -84,6 +84,7 @@ struct obj_auxi_args {
 					 is_ec_obj:1,
 					 csum_retry:1,
 					 csum_report:1,
+					 check_pm_ver:1,
 					 no_retry:1;
 	/* request flags. currently only: ORF_RESEND, ORF_CSUM_REPORT */
 	uint32_t			 flags;
@@ -2291,6 +2292,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
+
+		if (task->dt_result == -DER_EVICTED)
+			obj_auxi->check_pm_ver = 1;
 	}
 
 	if (pm_stale || obj_auxi->io_retry)
@@ -2341,9 +2345,23 @@ obj_reg_comp_cb(tse_task_t *task, int opc, uint32_t map_ver,
 	struct obj_auxi_args	*obj_auxi;
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
+
+	/* XXX: It is used for RPC retry case: if I was told that the pool
+	 *	map version has been updated, but I still use the old pool
+	 *	map to retry the RPC, then either the client failed to fetch
+	 *	the pool map from server or the server is out of space as to
+	 *	the pool map cannot be refreshed properly. For the 1st case,
+	 *	related RPC will not be retried, so it is the 2nd case.
+	 */
+	if (obj_auxi->check_pm_ver && obj_auxi->map_ver_req == map_ver) {
+		D_ERROR("Fail to refresh pm version because of out of space\n");
+		return -DER_NOSPACE;
+	}
+
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = task;
+	obj_auxi->check_pm_ver = 0;
 	shard_task_list_init(obj_auxi);
 	*auxi = obj_auxi;
 	return tse_task_register_comp_cb(task, obj_comp_cb, cb_arg, arg_sz);

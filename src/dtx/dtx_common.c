@@ -999,7 +999,8 @@ int
 dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 	     daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver)
 {
-	int	rc = 0;
+	struct dtx_id	saved_dtx = { 0 };
+	int		rc = 0;
 
 	while (1) {
 		struct dtx_entry	*dtes = NULL;
@@ -1015,7 +1016,15 @@ dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 		if (rc == 0)
 			break;
 
+		if (daos_dti_equal(&saved_dtx, &dtes[0].dte_xid)) {
+			D_ERROR("obj_sync "DF_UOID" fall into dead loop.\n",
+				DP_UOID(oid));
+			dtx_free_committable(dtes);
+			return -DER_NOSPACE;
+		}
+
 		rc = dtx_commit(po_uuid, co_uuid, dtes, rc, map_ver);
+		daos_dti_copy(&saved_dtx, &dtes[0].dte_xid);
 		dtx_free_committable(dtes);
 		if (rc < 0) {
 			D_ERROR(DF_UOID" fail to commit dtx: rc = %d\n",

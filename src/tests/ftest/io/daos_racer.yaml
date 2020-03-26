@@ -18,4 +18,4 @@ server_config:
         scm_list: ["/dev/pmem0"]
 daos_racer:
   runtime: 600
-  clush_timeout: 1500
+  clush_timeout: 900
