@@ -70,7 +70,7 @@ When run with Hadoop yarn, you need to add below configuration to core-site.xml.
 ```xml
 <property>
 <name>fs.AbstractFileSystem.daos.impl</name>
-<value>com.intel.daos.hadoop.fs.DaosAbsFsImpl</value>
+<value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
 </property>
   ```
 
