@@ -161,6 +161,7 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      !env.BRANCH_NAME.startsWith("release/") &&
+     env.BRANCH_NAME != "master-sandbox" &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
