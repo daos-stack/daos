@@ -295,9 +295,9 @@ vos_ilog_ts_lookup(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  *  \param	record[in]	The record to hash
  *  \param	rec_size[in]	The size of the record to hash
  *
- *  \return the existing or new entry
+ *  \return 0 on success or an error
  */
-void
+int
 vos_ilog_ts_cache(struct vos_ts_set *ts_set, struct ilog_df *ilog,
 		  void *record, daos_size_t rec_size);
 

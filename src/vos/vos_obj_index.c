@@ -195,6 +195,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
 	int			 rc;
+	int			 tmprc;
 	bool			 found = false;
 
 	*obj_p = NULL;
@@ -215,7 +216,9 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 			goto out;
 	}
 
-	vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+	tmprc = vos_ilog_ts_cache(ts_set, ilog, &oid, sizeof(oid));
+
+	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
 out:
 	return rc;
 }

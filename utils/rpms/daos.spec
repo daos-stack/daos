@@ -1,25 +1,26 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
+%global mercury_version 2.0.0a1-0.7.git.41caa14%{?dist}
+
 # Unlimited maximum version
 %global spdk_max_version 1000
 
 Name:          daos
 Version:       1.1.0
-Release:       3%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
-Source1:       scons_local-%{version}.tar.gz
 
-BuildRequires: scons
+BuildRequires: scons >= 2.4
+BuildRequires: libfabric-devel
+BuildRequires: boost-devel
+BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: openpa-devel
+BuildRequires: libpsm2-devel
 BuildRequires: gcc-c++
-%if %{defined cart_sha1}
-BuildRequires: cart-devel-%{cart_sha1}
-%else
-BuildRequires: cart-devel
-%endif
 BuildRequires: openmpi3-devel
 BuildRequires: hwloc-devel
 BuildRequires: libpsm2-devel
@@ -58,6 +59,10 @@ BuildRequires: python-devel python36-devel
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
+# prefer over libpsm2-compat
+BuildRequires: libpsm_infinipath1
+# prefer over libcurl4-mini
+BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
@@ -66,8 +71,6 @@ BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 BuildRequires: Modules
 %if 0%{?is_opensuse}
-# have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
-BuildRequires: boost-devel
 %else
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
 # have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
@@ -89,11 +92,10 @@ Requires: protobuf-c
 Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
 Requires: openssl
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
-
+# This should only be temporary until we can get a stable upstream release
+# of mercury, at which time the autoprov shared library version should
+# suffice
+Requires: mercury = %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -114,12 +116,9 @@ Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires: hwloc
+Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
 Requires: libfabric >= 1.8.0
 
 %description server
@@ -128,10 +127,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
-%endif
+Requires: mercury = %{mercury_version}
 Requires: libfabric >= 1.8.0
 
 %description client
@@ -143,10 +139,6 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
-%endif
-# ensure we get exactly the right cart RPM
-%if %{defined cart_sha1}
-Requires: cart-%{cart_sha1}
 %endif
 
 
@@ -162,19 +154,12 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
 %endif
 Summary: The DAOS development libraries and headers
-%if %{defined cart_sha1}
-Requires: cart-devel-%{cart_sha1}
-%else
-Requires: cart-devel
-%endif
 
 %description devel
 This is the package needed to build software with the DAOS library.
 
 %prep
 %setup -q
-%setup -q -a 1
-
 
 %build
 # remove rpathing from the build
@@ -228,6 +213,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so
+%{_libdir}/libcart*
+%{_libdir}/libgurt*
+%{_prefix}/etc/memcheck-cart.supp
 %dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
@@ -266,6 +254,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
+%{_bindir}/cart_ctl
+%{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/dmg_old
 %{_bindir}/daosctl
@@ -316,6 +306,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
+%{_prefix}/lib/cart/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -326,6 +317,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
+%{_bindir}/crt_launch
+%{_prefix}/etc/fault-inject-cart.yaml
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
@@ -336,6 +329,15 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
+- Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0
+
+* Tue Mar 24 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-5
+- Remove cart as an external dependence
+
+* Mon Mar 23 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-4
+- Remove scons_local as depedency
+
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.1.0-3
 - bump up go minimum version to 1.12
 
