@@ -131,11 +131,11 @@ the address contained in the request as a new system member.
 ## Storage Management
 
 Operations on NVMe SSD devices are performed using
-[go-spdk bindings](https://github.com/daos-stack/go-spdk)
+[go-spdk bindings](/src/control/lib/spdk)
 to issue commands through the SPDK framework native C libraries.
 
 Operations on SCM persistent memory modules are performed using
-[go-ipmctl bindings](https://github.com/daos-stack/daos/src/control/lib/ipmctl)
+[go-ipmctl bindings](/src/control/lib/ipmctl)
 to issue commands through the ipmctl native C libraries.
 
 ### Storage Format
