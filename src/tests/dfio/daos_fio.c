@@ -187,11 +187,20 @@ static void
 daos_fio_cleanup(struct thread_data *td)
 {
 	struct daos_data *dd = td->io_ops_data;
+	int rc;
 
-	dfs_umount(dd->dfs);
-	daos_cont_close(dd->coh, NULL);
-	daos_pool_disconnect(dd->poh, NULL);
-	daos_fini();
+	rc = dfs_umount(dd->dfs);
+	if (rc)
+		D_ERROR("failed to umount dfs: rc = %d\n", rc);
+	rc = daos_cont_close(dd->coh, NULL);
+	if (rc)
+		D_ERROR("failed to close container: "DF_RC"\n", DP_RC(rc));
+	rc = daos_pool_disconnect(dd->poh, NULL);
+	if (rc)
+		D_ERROR("failed to disconnect pool: "DF_RC"\n", DP_RC(rc));
+	rc = daos_fini();
+	if (rc)
+		D_ERROR("failed to finalize daos: "DF_RC"\n", DP_RC(rc));
 
 	free(dd->io_us);
 	free(dd);
