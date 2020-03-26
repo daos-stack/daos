@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('env')
 
-    env.Install("$PREFIX/usr/share/man/", ['man8'])
+    env.Install("$PREFIX/share/man/", ['man8'])
 
 if __name__ == "SCons.Script":
     scons()

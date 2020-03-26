@@ -27,16 +27,17 @@ import (
 	"bytes"
 	"flag"
 	"io/ioutil"
-	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var update = flag.Bool("update", false, "update dmg manpage")
 
-func TestManPage(t *testing.T) {
+func TestDmg_ManPageIsCurrent(t *testing.T) {
 
 	var manBytes bytes.Buffer
-	goldenPath := filepath.Join("testdata", "dmg.8")
+	goldenPath := "../../../../doc/man/man8/dmg.8"
 
 	writeManPage(bufio.NewWriter(&manBytes))
 	if *update {
@@ -52,6 +53,6 @@ func TestManPage(t *testing.T) {
 	}
 
 	if bytes.Compare(manBytes.Bytes(), goldenBytes) != 0 {
-		t.Error("dmg manpage does not match expected output. If this is intentional rerun this test with -args --update and then copy the resulting file to doc/share/man/man8")
+		t.Errorf("dmg manpage does not match expected output. If this is intentional rerun this test with -args --update\n Diff:\n%s", cmp.Diff(goldenBytes, manBytes.Bytes()))
 	}
 }
