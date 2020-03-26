@@ -53,6 +53,7 @@ class FioBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
+        # obtain separate logs
         self.update_log_file_names()
 
         # Start the servers and agents
