@@ -9,7 +9,7 @@
 
 Name:          daos
 Version:       1.1.0
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -347,8 +347,11 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
-* Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-6
+* Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
 - Add systemd scriptlets for managing daos_server/daos_admin services
+
+* Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
+- Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0
 
 * Tue Mar 24 2020 Jeffrey V. Olivier <jeffrey.v.olivier@intel.com> - 1.1.0-5
 - Remove cart as an external dependence
