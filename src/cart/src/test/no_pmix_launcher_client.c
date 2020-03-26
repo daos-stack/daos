@@ -265,4 +265,6 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("Client successfully finished\n");
 	d_log_fini();
+
+	return 0;
 }
