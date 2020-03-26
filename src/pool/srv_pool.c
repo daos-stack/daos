@@ -63,7 +63,7 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 };
 
-static bool pool_disable_evict = false;
+static bool pool_disable_evict = true;
 
 static struct pool_svc *
 pool_svc_obj(struct ds_rsvc *rsvc)

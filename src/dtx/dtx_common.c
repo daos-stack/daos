@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2020 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 {
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct ds_pool_child	*pool = cont->sc_pool;
-	ABT_future		 future = dbca->dbca_deregistering;
+	struct dtx_id		 saved_dtx = { 0 };
 	int			 rc;
 
 	D_ASSERT(dbca->dbca_deregistering != NULL);
@@ -109,6 +109,15 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 		if (rc <= 0)
 			break;
 
+		if (daos_dti_equal(&saved_dtx, &dtes[0].dte_xid)) {
+			dtx_free_committable(dtes);
+			D_ERROR("dtx_flush fall into loop, "DF_DTI"\n",
+				DP_DTI(&saved_dtx));
+			rc = -DER_NOSPACE;
+			break;
+		}
+
+		daos_dti_copy(&saved_dtx, &dtes[0].dte_xid);
 		rc = dtx_commit(pool->spc_uuid, cont->sc_uuid,
 				dtes, rc, pool->spc_map_version);
 		dtx_free_committable(dtes);
@@ -123,7 +132,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	 * flush done, then free the dbca.
 	 */
 	d_list_del_init(&dbca->dbca_link);
-	rc = ABT_future_set(future, NULL);
+	rc = ABT_future_set(dbca->dbca_deregistering, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed for DTX "
 		  "flush on "DF_UUID": rc = %d\n", DP_UUID(cont->sc_uuid), rc);
 }
@@ -997,7 +1006,8 @@ int
 dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 	     daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver)
 {
-	int	rc = 0;
+	struct dtx_id	saved_dtx = { 0 };
+	int		rc = 0;
 
 	while (1) {
 		struct dtx_entry	*dtes = NULL;
@@ -1013,6 +1023,14 @@ dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 		if (rc == 0)
 			break;
 
+		if (daos_dti_equal(&saved_dtx, &dtes[0].dte_xid)) {
+			D_ERROR("obj_sync "DF_UOID" fall into loop, "DF_DTI"\n",
+				DP_UOID(oid), DP_DTI(&saved_dtx));
+			dtx_free_committable(dtes);
+			return -DER_NOSPACE;
+		}
+
+		daos_dti_copy(&saved_dtx, &dtes[0].dte_xid);
 		rc = dtx_commit(po_uuid, co_uuid, dtes, rc, map_ver);
 		dtx_free_committable(dtes);
 		if (rc < 0) {
