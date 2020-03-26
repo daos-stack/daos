@@ -36,14 +36,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -221,55 +217,55 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "setup control service")
 	}
 
-	// Create and start listener on management network.
-	lis, err := net.Listen("tcp4", controlAddr.String())
-	if err != nil {
-		return errors.Wrap(err, "unable to listen on management interface")
-	}
-
-	// Create new grpc server, register services and start serving.
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		unaryErrorInterceptor,
-	}
-	streamInterceptors := []grpc.StreamServerInterceptor{
-		streamErrorInterceptor,
-	}
-	opts := []grpc.ServerOption{}
-	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
-	if err != nil {
-		return err
-	}
-	opts = append(opts, tcOpt)
-
-	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
-	if err != nil {
-		return err
-	}
-	if uintOpt != nil {
-		unaryInterceptors = append(unaryInterceptors, uintOpt)
-	}
-	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
-	if err != nil {
-		return err
-	}
-	if sintOpt != nil {
-		streamInterceptors = append(streamInterceptors, sintOpt)
-	}
-	opts = append(opts, []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(unaryInterceptors...),
-		grpc.ChainStreamInterceptor(streamInterceptors...),
-	}...)
-
-	grpcServer := grpc.NewServer(opts...)
-	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
-	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
-
-	go func() {
-		_ = grpcServer.Serve(lis)
-	}()
-	defer grpcServer.GracefulStop()
-
-	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
+	//	// Create and start listener on management network.
+	//	lis, err := net.Listen("tcp4", controlAddr.String())
+	//	if err != nil {
+	//		return errors.Wrap(err, "unable to listen on management interface")
+	//	}
+	//
+	//	// Create new grpc server, register services and start serving.
+	//	unaryInterceptors := []grpc.UnaryServerInterceptor{
+	//		unaryErrorInterceptor,
+	//	}
+	//	streamInterceptors := []grpc.StreamServerInterceptor{
+	//		streamErrorInterceptor,
+	//	}
+	//	opts := []grpc.ServerOption{}
+	//	tcOpt, err := security.ServerOptionForTransportConfig(cfg.TransportConfig)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	opts = append(opts, tcOpt)
+	//
+	//	uintOpt, err := unaryInterceptorForTransportConfig(cfg.TransportConfig)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if uintOpt != nil {
+	//		unaryInterceptors = append(unaryInterceptors, uintOpt)
+	//	}
+	//	sintOpt, err := streamInterceptorForTransportConfig(cfg.TransportConfig)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	if sintOpt != nil {
+	//		streamInterceptors = append(streamInterceptors, sintOpt)
+	//	}
+	//	opts = append(opts, []grpc.ServerOption{
+	//		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+	//		grpc.ChainStreamInterceptor(streamInterceptors...),
+	//	}...)
+	//
+	//	grpcServer := grpc.NewServer(opts...)
+	//	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	//	mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
+	//
+	//	go func() {
+	//		_ = grpcServer.Serve(lis)
+	//	}()
+	//	defer grpcServer.GracefulStop()
+	//
+	//	log.Infof("%s (pid %d) listening on %s", ControlPlaneName, os.Getpid(), controlAddr)
 
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
