@@ -40,7 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def daos_branch = "master"
+def daos_branch = "master-sandbox"
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
@@ -161,8 +161,7 @@ def rpm_scan_post = '''rm -f ${WORKSPACE}/maldetect.xml
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      !env.BRANCH_NAME.startsWith("release/") &&
-     env.BRANCH_NAME != "master-sandbox" &&
-     env.BRANCH_NAME != "master")) {
+     env.BRANCH_NAME != daos_branch)) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -228,9 +227,8 @@ pipeline {
                         }
                     }
                     steps {
-                        sh label: "Environment",
-                           script: 'echo BRANCH_NAME=' + env.BRANCH_NAME + '\n' +
-                                   'echo CHANGE_TARGET=' + env.CHANGE_TARGET
+                        sh label: "Send environment",
+                           script: 'env | sort | mail -s env brian.murrell@intel.com" 
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/include/daos/*.pb-c.h:src/common/*.pb-c.[ch]:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem:*_test.go"
