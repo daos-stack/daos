@@ -1411,9 +1411,35 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	link = d_hash_rec_find(&tls->mpt_cont_init_tab, cont_uuid,
 			       sizeof(uuid_t));
 	if (!link) {
-		rc = migrate_cont_ensure_created(tls, cont_uuid, false);
-		if (rc)
+		/* Not actually storing anything in the table - just using it
+		 * to test set membership. The link stored is just the simplest
+		 * base list type
+		 */
+		d_list_t *rlink;
+
+		D_DEBUG(DB_TRACE,
+			"Migration ensure container "DF_UUID" created\n",
+			DP_UUID(cont_uuid));
+
+		//rc = migrate_cont_ensure_created(tls, cont_uuid, false);
+		//if (rc)
+		//	D_GOTO(free, rc);
+
+		/* Insert a link into the hash table to mark this cont_uuid as
+		 * having already been initialized
+		 */
+		D_ALLOC_PTR(rlink);
+		if (rlink == NULL)
+			D_GOTO(free, rc=-DER_NOMEM);
+
+		rc = d_hash_rec_insert(&tls->mpt_cont_init_tab, cont_uuid,
+				       sizeof(uuid_t), rlink, true);
+		if (rc) {
+			D_ERROR("Failed to insert uuid table entry "DF_RC"\n",
+				DP_RC(rc));
+			D_FREE(rlink);
 			D_GOTO(free, rc);
+		}
 	}
 
 	/*

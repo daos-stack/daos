@@ -262,13 +262,12 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			D_DEBUG(DF_DSMS, "change target %u/%u to UP %p\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index, map);
+			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_fseq = ++version;
+
 			D_PRINT("Target (rank %u idx %u) is added.\n",
 				target->ta_comp.co_rank,
 				target->ta_comp.co_index);
-			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_fseq = ++version;
-			target->ta_comp.co_ver = version;
-
 		} else if (opc == POOL_ADD_IN &&
 			   target->ta_comp.co_status == PO_COMP_ST_UP) {
 			D_DEBUG(DF_DSMS, "change target %u/%u to UPIN %p\n",
