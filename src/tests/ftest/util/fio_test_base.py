@@ -63,9 +63,6 @@ class FioBase(TestWithServers):
         # initialise daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
-        # Start the servers and agents
-        super(FioBase, self).setUp()
-
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
         self.fio_cmd.get_params(self)
