@@ -6,6 +6,7 @@ hosts:
         - server-D
     test_clients:
         - client-E
+        - client-F
 timeout: 1800
 server_config:
     name: daos_server
@@ -22,6 +23,6 @@ pool:
     svcn: 1
     control_method: dmg
 client_processes:
-    np: 8
+    np: 12
 test_repo:
     hdf5: "/usr/lib64/hdf5/tests"
