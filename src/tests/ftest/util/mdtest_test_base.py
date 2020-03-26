@@ -116,6 +116,9 @@ class MdtestBase(TestWithServers):
         except subprocess.CalledProcessError as err:
             self.fail("Container create failed:{}".format(err))
 
+        self.log.info(output)
+        self.log.info(err)
+
         return output.split()[3]
 
     def _start_dfuse(self):
