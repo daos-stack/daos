@@ -810,11 +810,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	/* Check if the container attribute KVS exists. */
 	rc = cont_lookup(tx, svc, in->cdi_op.ci_uuid, &cont);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
+	if (rc != 0)
 		goto out;
-	}
 
 	rc = evict_hdls(tx, cont, in->cdi_force, rpc->cr_ctx);
 	if (rc != 0)

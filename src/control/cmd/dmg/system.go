@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -141,13 +142,18 @@ func displaySystemQuerySingle(log logging.Logger, members system.Members) error 
 type systemQueryCmd struct {
 	logCmd
 	connectedCmd
-	Verbose bool  `long:"verbose" short:"v" description:"Display more member details"`
-	Rank    int32 `long:"rank" short:"r" default:"-1" description:"System member rank to query"`
+	Verbose bool   `long:"verbose" short:"v" description:"Display more member details"`
+	Ranks   string `long:"ranks" short:"r" description:"Comma separated list of system ranks to query"`
 }
 
 // Execute is run when systemQueryCmd activates
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	req := client.SystemQueryReq{Rank: cmd.Rank}
+	ranks, err := common.ParseInts(cmd.Ranks)
+	if err != nil {
+		return errors.Wrap(err, "parsing input ranklist")
+	}
+
+	req := client.SystemQueryReq{Ranks: ranks}
 
 	resp, err := cmd.conns.SystemQuery(req)
 	if err != nil {
@@ -160,7 +166,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	if cmd.Rank >= 0 {
+	if len(ranks) == 1 {
 		return displaySystemQuerySingle(cmd.log, resp.Members)
 	}
 
@@ -208,7 +214,8 @@ type systemStopCmd struct {
 //
 // Perform prep and kill stages with stop command.
 func (cmd *systemStopCmd) Execute(_ []string) error {
-	req := client.SystemStopReq{Prep: true, Kill: true, Force: cmd.Force}
+	// always force stop while daos_io_server shutdown is broken.
+	req := client.SystemStopReq{Prep: true, Kill: true, Force: true}
 	resp, err := cmd.conns.SystemStop(req)
 	if err != nil {
 		return errors.Wrap(err, "System-Stop command failed")

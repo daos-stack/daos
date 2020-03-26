@@ -4,8 +4,8 @@
 %global spdk_max_version 1000
 
 Name:          daos
-Version:       0.9.0
-Release:       4%{?relval}%{?dist}
+Version:       0.9.1
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -337,6 +337,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Mar 18 2020 Johann Lombardi <johann.lombardi@intel.com> - 0.9.1-1
+- Version bump up to 0.9.1
+
 * Tue Mar 03 2020 Brian J. Murrell <brian.murrell@intel.com> - 0.9.0-4
 - bump up go minimum version to 1.12
 

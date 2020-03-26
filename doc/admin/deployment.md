@@ -166,7 +166,7 @@ DAOS server configuration and how to start it on all the storage nodes.
 The `daos_server` configuration file is parsed when starting the
 `daos_server` process. The configuration file location can be specified
 on the command line (`daos_server -h` for usage) or default location
-(`install/etc/daos_server.yml`).
+(`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
@@ -329,24 +329,26 @@ If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_server binary.
 
+ExecStart=/usr/bin/daos_server start
+
 Once the service file is installed you can start daos_server
 with the following commands:
 
 ```bash
-$ systemctl enable daos-server
-$ systemctl start daos-server
+$ systemctl enable daos_server
+$ systemctl start daos_server
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-server
+$ systemctl status daos_server
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-$ journalctl --unit daos-server
+$ journalctl --unit daos_server
 ```
 
 #### Kubernetes Pod
@@ -825,7 +827,8 @@ support is to pass the -i flag to daos_agent.
 The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
 on the command line (`daos_agent -h` for usage) or default location
-(`install/etc/daos_agent.yml`).
+(`install/etc/daos_agent.yml`). If installed from rpms the default location is
+(`/etc/daos/daos_agent.yml`).
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
@@ -856,12 +859,19 @@ DAOS Agent is a standalone application to be run on each compute node.
 It can be configured to use secure communications (default) or can be allowed
 to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release.
+incomplete integration of certificate support as of the 0.9 release and
+configured to use a non-default agent configuration file.
 
-To start the DAOS Agent from the command line, run:
+To start the DAOS Agent from the command line using the default config file,
+/etc/daos/daos_agent.yaml, run:
 
 ```bash
-$ daos_agent -i
+$ daos_agent &
+```
+Or to specify a non-default configuration file, use the -o parameter
+
+```bash
+$ daos_agent -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -870,24 +880,26 @@ If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_agent binary.
 
+ExecStart=/usr/bin/daos_agent
+
 Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
-$ systemctl enable daos-agent
-$ systemctl start daos-agent
+$ sudo systemctl enable daos_agent
+$ sudo systemctl start daos_agent
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos-agent
+$ sudo systemctl status daos_agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-$ journalctl --unit daos-agent
+$ sudo journalctl --unit daos_agent
 ```
 
 ## System Validation

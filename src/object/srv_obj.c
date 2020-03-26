@@ -256,6 +256,11 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	crt_bulk_perm_t		bulk_perm;
 	int			i, rc, *status, ret;
 
+	if (remote_bulks == NULL) {
+		D_ERROR("No remote bulks provided\n");
+		return -DER_INVAL;
+	}
+
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
 	rc = ABT_eventual_create(sizeof(*status), &arg.eventual);
 	if (rc != 0)
@@ -308,6 +313,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		while (idx < sgl->sg_nr_out) {
 			d_sg_list_t	sgl_sent;
 			daos_size_t	length = 0;
+			size_t		remote_bulk_size;
 			unsigned int	start;
 
 			/**
@@ -332,6 +338,17 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				idx++;
 			}
 
+			rc = crt_bulk_get_len(remote_bulks[i],
+						&remote_bulk_size);
+			if (rc)
+				break;
+
+			if (length > remote_bulk_size) {
+				D_ERROR(DF_U64 "> %zu : %d\n", length,
+					remote_bulk_size, -DER_OVERFLOW);
+				rc = -DER_OVERFLOW;
+				break;
+			}
 			sgl_sent.sg_nr = idx - start;
 			sgl_sent.sg_nr_out = idx - start;
 
@@ -966,11 +983,13 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
-	if (rc == -DER_OVERFLOW) {
-		rc = -DER_REC2BIG;
-		D_ERROR(DF_UOID" bio_iod_copy failed, rc "DF_RC"",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
-		goto post;
+	if (rc) {
+		if (rc == -DER_OVERFLOW)
+			rc = -DER_REC2BIG;
+
+		D_ERROR(DF_UOID" data transfer failed, dma %d rc "DF_RC"",
+			DP_UOID(orw->orw_oid), rma, DP_RC(rc));
+		D_GOTO(post, rc);
 	}
 
 	rc = obj_verify_bio_csum(rpc, biod, cont_hdl->sch_csummer);
@@ -1168,7 +1187,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
 
-		buf[0] += 1;
+		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(dkey);
 	}
 
@@ -1727,8 +1746,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	rc = obj_enum_reply_bulk(rpc);
 out:
 	/* for KEY2BIG case, just reuse the oeo_size to reply the key len */
-	if (rc == -DER_KEY2BIG)
+	if (rc == -DER_KEY2BIG) {
+		D_ASSERT(enum_arg.kds != NULL);
 		oeo->oeo_size = enum_arg.kds[0].kd_key_len;
+	}
 	obj_enum_complete(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }

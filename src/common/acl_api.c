@@ -504,6 +504,7 @@ daos_acl_get_next_ace(struct daos_acl *acl, struct daos_ace *current_ace)
 	}
 
 	/* there is no next item */
+	D_ASSERT(current_ace != NULL);
 	offset = sizeof(struct daos_ace) + current_ace->dae_principal_len;
 	if (!is_in_ace_list((uint8_t *)current_ace + offset, acl)) {
 		return NULL;
