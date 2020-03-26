@@ -261,6 +261,15 @@ ilog_fetch_finish(struct ilog_entries *entries);
 	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
 	     entry != &(ents)->ie_entries[-1]; entry--)
 
+/** Fetch the address of the timestamp index from the ilog
+ *
+ * \param	entries[in]	The incarnation log
+ *
+ * \returns a pointer to the index
+ */
+uint32_t *
+ilog_ts_idx_get(struct ilog_df *ilog_df);
+
 /** Retrieve the current version of the incarnation log
  *
  * \param	loh[in]	Open log handle

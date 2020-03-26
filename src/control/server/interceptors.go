@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2020 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -77,7 +78,7 @@ func componentFromContext(ctx context.Context) (comp *security.Component, err er
 	return &component, nil
 }
 
-func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func unaryAccessInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 
 	err := checkAccess(ctx, info.FullMethod)
 
@@ -88,7 +89,7 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 	return handler(ctx, req)
 }
 
-func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamAccessInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	ctx := ss.Context()
 	err := checkAccess(ctx, info.FullMethod)
 
@@ -99,7 +100,7 @@ func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamS
 	return handler(srv, ss)
 }
 
-func unaryInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.ServerOption, error) {
+func unaryInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.UnaryServerInterceptor, error) {
 	if cfg == nil {
 		return nil, errors.New("nil TransportConfig")
 	}
@@ -108,10 +109,10 @@ func unaryInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.Ser
 		return nil, nil
 	}
 
-	return grpc.UnaryInterceptor(unaryInterceptor), nil
+	return unaryAccessInterceptor, nil
 }
 
-func streamInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.ServerOption, error) {
+func streamInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.StreamServerInterceptor, error) {
 	if cfg == nil {
 		return nil, errors.New("nil TransportConfig")
 	}
@@ -120,5 +121,15 @@ func streamInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.Se
 		return nil, nil
 	}
 
-	return grpc.StreamInterceptor(streamInterceptor), nil
+	return streamAccessInterceptor, nil
+}
+
+func unaryErrorInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	res, err := handler(ctx, req)
+	return res, proto.AnnotateError(err)
+}
+
+func streamErrorInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	err := handler(srv, ss)
+	return proto.AnnotateError(err)
 }

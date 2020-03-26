@@ -21,6 +21,8 @@ def build_shim_module(env, lib_prefix, version):
     new_env.AppendUnique(LIBPATH=["../dfs"])
     new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../../..')])
 
+    daos_build.clear_icc_env(new_env)
+
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
                                CC='gcc -pthread',
                                SHLINKFLAGS=[],
