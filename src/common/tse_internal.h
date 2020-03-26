@@ -34,7 +34,7 @@
  */
 
 /* NB: tse_task_private is TSE_PRIV_SIZE = 1016 bytes for now */
-#define TSE_TASK_ARG_LEN		880
+#define TSE_TASK_ARG_LEN		888
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
