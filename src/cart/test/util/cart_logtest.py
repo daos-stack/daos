@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import pprint
 from collections import OrderedDict
 
 import cart_logparse
@@ -75,21 +76,26 @@ WARN_FUNCTIONS = ['crt_grp_lc_addr_insert',
 # error lines.
 shown_logs = set()
 
-# List of known free locations where there may be a mismatch, this is a
+# List of known locations where there may be a mismatch, this is a
 # dict of functions, each with a unordered list of variables that are
 # freed by the function.
 # Typically this is where memory is allocated in one file, and freed in
 # another.
-mismatch_free_ok = {'crt_plugin_fini': ('timeout_cb_priv',
-                                        'cb_priv',
-                                        'prog_cb_priv',
-                                        'event_cb_priv'),
-                    'crt_finalize': ('crt_gdata.cg_addr'),
-                    'crt_rpc_priv_free': ('rpc_priv'),
-                    'crt_grp_priv_destroy': ('grp_priv->gp_pub.cg_grpid',
-                                             'grp_priv->gp_psr_phy_addr'),
+mismatch_alloc_ok = {'crt_self_uri_get': ('tmp_uri'),
+                     'crt_rpc_handler_common': ('rpc_priv'),
+                     'crt_proc_d_iov_t': ('div->iov_buf'),
+                     'grp_add_to_membs_list': ('tmp'),
+                     'grp_regen_linear_list': ('tmp_ptr'),
+                     'crt_proc_d_string_t': ('*data'),
+                     'crt_hg_init': ('*addr')}
+mismatch_free_ok = {'crt_finalize': ('crt_gdata.cg_addr'),
+                    'crt_group_psr_set': ('uri'),
                     'crt_hdlr_uri_lookup': ('tmp_uri'),
-                    'crt_init_opt': ('crt_gdata.cg_addr')}
+                    'd_rank_list_free': ('rank_list->rl_ranks'),
+                    'crt_rpc_priv_free': ('rpc_priv')}
+
+mismatch_alloc_seen = {}
+mismatch_free_seen = {}
 
 def show_line(line, sev, msg):
     """Output a log line in gcc error format"""
@@ -109,6 +115,18 @@ def show_line(line, sev, msg):
 def show_bug(line, bug_id):
     """Mark output with a known bug"""
     show_line(line, 'error', 'Known bug {}'.format(bug_id))
+
+def add_line_count_to_dict(line, target):
+    """Add entry for a output line into a dict"""
+
+    # This is used for keeping tabs on how many allocations/frees there
+    # have been.
+    if line.function not in target:
+        target[line.function] = {}
+    var = line.get_field(3).strip("':")
+    if var not in target[line.function]:
+        target[line.function][var] = 0
+    target[line.function][var] += 1
 
 class hwm_counter():
     """Class to track integer values, with high-water mark"""
@@ -234,6 +252,8 @@ class LogTest():
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
+                        if line.parent in regions:
+                            show_line(regions[line.parent], 'warning', 'used as parent without registering')
                         err_count += 1
                     active_desc[desc] = line
                 elif line.is_link():
@@ -285,9 +305,13 @@ class LogTest():
                         del active_desc[pointer]
                     if pointer in regions:
                         if line.mask != regions[pointer].mask:
-                            var = line.get_field(3).strip("'")
+                            fvar = line.get_field(3).strip("'")
+                            afunc = regions[pointer].function
+                            avar = regions[pointer].get_field(3).strip("':")
                             if line.function in mismatch_free_ok and \
-                               var in mismatch_free_ok[line.function]:
+                               fvar in mismatch_free_ok[line.function] and \
+                               afunc in mismatch_alloc_ok and \
+                               avar in mismatch_alloc_ok[afunc]:
                                 pass
                             else:
                                 show_line(regions[pointer], 'warning',
@@ -295,6 +319,8 @@ class LogTest():
                                 show_line(line, 'warning',
                                           'mask mismatch in alloc/free')
                                 err_count += 1
+                            add_line_count_to_dict(line, mismatch_free_seen)
+                            add_line_count_to_dict(regions[pointer], mismatch_alloc_seen)
                         if line.level != regions[pointer].level:
                             show_line(regions[pointer], 'warning',
                                       'level mismatch in alloc/free')
@@ -349,6 +375,12 @@ class LogTest():
             else:
                 show_line(line, 'error', 'memory not freed')
             lost_memory = True
+
+        pp = pprint.PrettyPrinter()
+        print('Mismatched allocations were allocated at the following locations')
+        print(pp.pformat(mismatch_alloc_seen))
+        print('Mismatched allocations were freed at the following locations')
+        print(pp.pformat(mismatch_free_seen))
 
         if active_desc:
             for (_, line) in active_desc.items():

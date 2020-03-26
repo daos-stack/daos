@@ -12,6 +12,9 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import pickle
+
+from collections import OrderedDict
 
 class DFTestFail(Exception):
     """Used to indicate test failure"""
@@ -61,12 +64,12 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
-        # Wipe out any existing contents.
-        for fname in os.listdir('/mnt/daos'):
-            try:
-                shutil.rmtree(os.path.join('/mnt/daos', fname))
-            except NotADirectoryError:
-                os.remove(os.path.join('/mnt/daos', fname))
+        if True:
+            for fname in os.listdir('/mnt/daos'):
+                try:
+                    shutil.rmtree(os.path.join('/mnt/daos', fname))
+                except NotADirectoryError:
+                    os.remove(os.path.join('/mnt/daos', fname))
         daos_server = os.path.join(self._conf['PREFIX'], 'bin', 'daos_server')
         config_file = os.path.expanduser(os.path.join('~', 'daos_server.yml.works'))
 
@@ -160,7 +163,7 @@ class DFuse():
         pre_inode = os.stat(self.dir).st_ino
 
         my_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
-        my_env['OFI_INTERFACE'] = 'enp0s5'
+        my_env['OFI_INTERFACE'] = 'eth0'
         my_env['D_LOG_MASK'] = 'INFO,dfuse=DEBUG,dfs=DEBUG'
         my_env['DD_MASK'] = 'all'
         my_env['DD_SUBSYS'] = 'all'
@@ -168,13 +171,16 @@ class DFuse():
 
         cmd = ['valgrind', '--quiet']
 
-        if True:
+        if False:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
 
         if True:
             cmd.extend(['--suppressions={}'.format(os.path.join(self._conf['CART_PREFIX'], 'etc', 'memcheck-cart.supp')),
                         '--suppressions={}'.format(os.path.join('utils', 'memcheck-daos-client.supp'))])
 
+#        if self.container:
+#            cmd.extend([dfuse_bin, '-s', '0', '-m', 'bob', '-f'])
+#        else:
         cmd.extend([dfuse_bin, '-s', '0', '-m', self.dir, '-f'])
 
         if single_threaded:
@@ -234,6 +240,13 @@ class DFuse():
         self._sp = None
         log_test(self._conf, self.log_file)
 
+
+    def wait_for_exit(self):
+
+        ret = self._sp.wait()
+        print('rc from dfuse {}'.format(ret))
+        self._sp = None
+
 def get_pool_list():
     """Return a list of valid pool names"""
     pools = []
@@ -271,6 +284,18 @@ def import_daos(server, conf):
     import pydaos
     daos = __import__('pydaos')
     return daos
+
+def show_cont(conf, pool):
+
+    daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
+    cmd = [daos_bin, 'container', 'create', '--svc', '0', '--pool', pool]
+    rc = subprocess.run(cmd, capture_output=True)
+    print('rc is {}'.format(rc))
+
+    cmd = [daos_bin, 'pool', 'list-containers', '--svc', '0', '--pool', pool]
+    rc = subprocess.run(cmd, capture_output=True)
+    print('rc is {}'.format(rc))
+    return rc.stdout.strip()
 
 def make_pool(daos, conf):
 
@@ -451,7 +476,12 @@ def log_test(conf, filename):
 
     if not sys.path:
         return
-    sys.path.append(os.path.join(conf['CART_PREFIX'], 'TESTING', 'util'))
+    if 'CART_PREFIX' in conf:
+        sys.path.append(os.path.join(conf['CART_PREFIX'], 'TESTING', 'util'))
+    else:
+        file_self = os.path.dirname(os.path.abspath(__file__))
+        logparse_dir = os.path.join(os.dirname(file_self, '../../../../src/cart/util/test')
+        sys.path.append(os.realpath(logparse_dir)
 
     lp = __import__('cart_logparse')
     lt = __import__('cart_logtest')
@@ -535,6 +565,8 @@ def run_dfuse(server, conf):
     while len(pools) < 1:
         pools = make_pool(daos, conf)
 
+    #dfuse = DFuse(server, conf, pool=pools[0])
+
     dfuse = DFuse(server, conf)
     try:
         pre_stat = os.stat(dfuse.dir)
@@ -543,6 +575,10 @@ def run_dfuse(server, conf):
         raise
     container = str(uuid.uuid4())
     dfuse.start()
+    print(os.statvfs(dfuse.dir))
+    subprocess.run(['df', '-h'])
+    subprocess.run(['df', '-i', dfuse.dir])
+#    return
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
@@ -552,7 +588,7 @@ def run_dfuse(server, conf):
         print(pool_stat)
         cdir = os.path.join(dfuse.dir, pool, container)
         os.mkdir(cdir)
-        create_and_read_via_il(dfuse, cdir)
+        #create_and_read_via_il(dfuse, cdir)
     dfuse = None
 
     uns_container = container
@@ -566,10 +602,10 @@ def run_dfuse(server, conf):
     check_no_file(dfuse)
     cpath = os.path.join(dfuse.dir, container2)
     os.mkdir(cpath)
-    cstat = os.stat(cpath)
-    print(cstat)
+    #cstat = os.stat(cpath)
+    #print(cstat)
     cdir = os.path.join(dfuse.dir, container)
-    create_and_read_via_il(dfuse, cdir)
+    #create_and_read_via_il(dfuse, cdir)
 
     dfuse = None
 
@@ -577,6 +613,13 @@ def run_dfuse(server, conf):
     pre_stat = os.stat(dfuse.dir)
     dfuse.start()
     print('Running fuse with both')
+
+#    try:
+#        print('Waiting')
+#        dfuse.wait_for_exit()
+#    except KeyboardInterrupt:
+#        pass
+
     stat_and_check(dfuse, pre_stat)
 
     create_and_read_via_il(dfuse, dfuse.dir)
@@ -586,6 +629,7 @@ def run_dfuse(server, conf):
 #    uns_container = str(uuid.uuid4())
 #    # Make a container for UNS to connect to.
 #    os.mkdir(os.path.join(dfuse.dir, pools[0], uns_container))
+    return
 
     daos_bin = os.path.join(conf['PREFIX'], 'bin', 'daos')
 
@@ -608,6 +652,8 @@ def run_dfuse(server, conf):
     print(os.listdir(dfuse.dir))
 
     dfuse = None
+
+
 
     print('Trying UNS')
     dfuse = DFuse(server, conf)
@@ -698,19 +744,107 @@ def run_il_test(server, conf):
 #    il_cmd(dfuse, ['md5sum', os.path.join(dirs[-1], 'bash')])
     dfuse = None
 
+def run_in_fg(server, conf):
+
+    daos = import_daos(server, conf)
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(daos, conf)
+
+    dfuse = DFuse(server, conf, pool=pools[0])
+    dfuse.start()
+    container = str(uuid.uuid4())
+    t_dir = os.path.join(dfuse.dir, container)
+    os.mkdir(t_dir)
+    print('Running at {}'.format(t_dir))
+    print('daos container create --svc 0 --type POSIX --pool {} --path {}/uns-link'.format(
+        pools[0], t_dir))
+    print('cd {}/uns-link'.format(t_dir))
+    print('daos container destroy --svc 0 --path {}/uns-link'.format(t_dir))
+    print('daos pool list-containers --svc 0 --pool {}'.format(pools[0]))
+    try:
+        dfuse.wait_for_exit()
+    except KeyboardInterrupt:
+        pass
+    dfuse = None
+
+def test_pydaos_kv(server, conf):
+
+    daos = import_daos(server, conf)
+
+    dbm = __import__('daosdbm')
+
+    pools = get_pool_list()
+
+    while len(pools) < 1:
+        pools = make_pool(daos, conf)
+
+    pool = pools[0]
+        
+    container = show_cont(conf, pool)
+
+    print(container)
+    print(container.decode())
+    kvg = dbm.daos_named_kv('ofi+sockets', 'lo', pool, container.decode())
+
+    kv = kvg.get_kv_by_name('Dave')
+    kv['a'] = 'a'
+    kv['b'] = 'b'
+    kv['list'] = pickle.dumps(list(range(1,100000)))
+    for k in range(1,100):
+        kv[str(k)] = pickle.dumps(list(range(1,10)))
+    print(type(kv))
+    print(kv)
+    print(kv['a'])
+
+    print("First iteration")
+    data = OrderedDict()
+    for key in kv:
+        print('key is {}, len {}'.format(key, len(kv[key])))
+        print(type(kv[key]))
+        data[key] = None
+
+    print("Bulk loading")
+
+    data['no-key'] = None
+
+#    kv.bget(data, value_size=368870);
+    kv.bget(data, value_size=16);
+    print("Second iteration")
+    failed = False
+    for key in data:
+        if data[key]:
+            print('key is {}, len {}'.format(key, len(data[key])))
+        elif key == 'no-key':
+            pass
+        else:
+            failed = True
+            print('Key is None {}'.format(key))
+
+    if failed:
+        print("That's not good")
+
 def main():
     """Main entry point"""
+
     conf = load_conf()
     server = DaosServer(conf)
     server.start()
 
-    #run_il_test(server, conf)
-    #(pool, cont) = inspect_daos(conf, daos)
-    run_dfuse(server, conf)
+    if len(sys.argv) == 2 and sys.argv[1] == 'launch':
+        run_in_fg(server, conf)
+    elif len(sys.argv) == 2 and sys.argv[1] == 'kv':
+        test_pydaos_kv(server, conf)
+    else:
+        #run_il_test(server, conf)
+        #(pool, cont) = inspect_daos(conf, daos)
+        run_dfuse(server, conf)
 
-    #(pool, cont) = inspect_daos(conf, daos)
-    #print('{} {}'.format(pool, cont))
-    #run_cmd(pool, cont)
+        #(pool, cont) = inspect_daos(conf, daos)
+        #print('{} {}'.format(pool, cont))
+        #run_cmd(pool, cont)
 
 if __name__ == '__main__':
     main()

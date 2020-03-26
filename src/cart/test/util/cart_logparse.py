@@ -53,12 +53,13 @@ class InvalidLogFile(Exception):
     pass
 
 LOG_LEVELS = {'FATAL' :1,
-              'CRIT'  :2,
-              'ERR'   :3,
-              'WARN'  :4,
-              'NOTE'  :5,
-              'INFO'  :6,
-              'DBUG'  :7}
+              'EMRG'  :2,
+              'CRIT'  :3,
+              'ERR'   :4,
+              'WARN'  :5,
+              'NOTE'  :6,
+              'INFO'  :7,
+              'DBUG'  :8}
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -142,6 +143,10 @@ class LogLine():
     def __getattr__(self, attr):
         if attr == 'parent':
             if self._fields[2] == 'Registered':
+                # This is a bit of a hack but handle the case where descriptor
+                # names contain spaces.
+                if self._fields[6] == 'from':
+                    return self._fields[7]
                 return self._fields[6]
             if self._fields[2] == 'Link':
                 return self._fields[5]
@@ -247,10 +252,13 @@ class LogLine():
         if self.function != 'crt_hg_req_destroy':
             return False
 
-        return self._is_type(['destroying'])
+        return self._fields[-1] == 'destroying'
 
     def is_callback(self):
         """Returns true if line is RPC callback"""
+
+        # TODO: This is broken for now but the RPCtrace has not been ported yet
+        # so there are no current users of it.
 
         return self._is_type(['Invoking', 'RPC', 'callback'])
 
@@ -377,7 +385,22 @@ class LogIter():
         # or do a first pass checking the pid list.  This allows the same
         # iterator to work fast if the file can be kept in memory, or the
         # same, bug slower if it needs to be re-read each time.
-        self._fd = open(fname, 'r')
+        #
+        # Try and open the file as utf-8, but if that doesn't work then
+        # find and report the error, then continue with the file open as
+        # latin-1
+        try:
+            self._fd = open(fname, 'r', encoding='utf-8')
+            self._fd.read()
+        except UnicodeDecodeError as err:
+            print('ERROR: Invalid data in server.log on following line')
+            self._fd = open(fname, 'r', encoding='latin-1')
+            self._fd.read(err.start - 200)
+            data = self._fd.read(199)
+            lines = data.splitlines()
+            print(lines[-1])
+
+        self._fd.seek(0)
         self.fname = fname
         self._data = []
         index = 0
