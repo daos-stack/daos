@@ -63,18 +63,18 @@ static inline int
 dtx_inprogress(struct dtx_handle *dth, struct vos_dtx_act_ent *dae, int pos)
 {
 	if (dae != NULL) {
-		D_DEBUG(DB_TRACE, "Hit uncommitted DTX "DF_DTI" at %d\n",
+		D_DEBUG(DB_IO, "Hit uncommitted DTX "DF_DTI" at %d\n",
 			DP_DTI(&DAE_XID(dae)), pos);
 
 		if (dth != NULL && dth->dth_conflict != NULL) {
-			D_DEBUG(DB_TRACE, "Record conflict DTX "DF_DTI"\n",
+			D_DEBUG(DB_IO, "Record conflict DTX "DF_DTI"\n",
 				DP_DTI(&DAE_XID(dae)));
 			daos_dti_copy(&dth->dth_conflict->dce_xid,
 				      &DAE_XID(dae));
 			dth->dth_conflict->dce_dkey = DAE_DKEY_HASH(dae);
 		}
 	} else {
-		D_DEBUG(DB_TRACE, "Hit uncommitted (unknown) DTX at %d\n", pos);
+		D_DEBUG(DB_IO, "Hit uncommitted (unknown) DTX at %d\n", pos);
 	}
 
 	return -DER_INPROGRESS;
@@ -539,8 +539,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		goto out;
 
 	dtx_rec_release(cont, dae, false, &offset);
-	vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
+	rc = vos_dtx_del_cos(cont, &DAE_OID(dae), dti, DAE_DKEY_HASH(dae),
 			DAE_INTENT(dae) == DAOS_INTENT_PUNCH ? true : false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/* If dbtree_delete() failed, the @dae will be left in the active DTX
 	 * table until close the container. It is harmless but waste some DRAM.
@@ -551,8 +553,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		umem_free(vos_cont2umm(cont), offset);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
-		DP_DTI(dti), DP_RC(rc));
+	D_CDEBUG(rc != 0 && rc != DER_NONEXIST, DLOG_ERR, DB_IO,
+		 "Commit the DTX "DF_DTI": rc = "DF_RC"\n",
+		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0) {
 		if (dce != NULL)
 			D_FREE_PTR(dce);
@@ -590,7 +593,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		dtx_rec_release(cont, dae, true, NULL);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
+	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti),
 		DP_RC(rc));
 
 	return rc;
@@ -952,7 +955,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			dth->dth_has_ilog = 1;
 	}
 
-	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
+	D_DEBUG(DB_IO, "Register DTX record for "DF_DTI
 		": entry %p, type %d, %s ilog entry, rc %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ent, type,
 		dth->dth_has_ilog ? "has" : "has not", rc);
@@ -1250,12 +1253,15 @@ again:
 		dce_df = &dbd->dbd_commmitted_data[dbd->dbd_count];
 	}
 
-	for (i = 0, j = 0; i < slots; i++, cur++) {
+	for (i = 0, j = 0; i < slots && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
@@ -1282,7 +1288,7 @@ again:
 	if (j > 0)
 		dbd->dbd_count += j;
 
-	if (count == 0)
+	if (count == 0 || rc1 != 0)
 		return committed > 0 ? 0 : rc1;
 
 	if (j < slots) {
@@ -1342,12 +1348,15 @@ new_blob:
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
 
-	for (i = 0, j = 0; i < count; i++, cur++) {
+	for (i = 0, j = 0; i < count && rc1 == 0; i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce);
 		if (rc == 0 && dce != NULL)
 			committed++;
+
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 
 		if (rc1 == 0)
 			rc1 = rc;
