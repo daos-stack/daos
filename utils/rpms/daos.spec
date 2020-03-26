@@ -320,8 +320,8 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos.yml
 %{_unitdir}/%{agent_svc_name}
-%{_mandir}/man8/daos.8
-%{_mandir}/man8/dmg.8
+%{_mandir}/man8/daos.8*
+%{_mandir}/man8/dmg.8*
 
 %files tests
 %dir %{_prefix}/lib/daos
